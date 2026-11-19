@@ -157,6 +157,7 @@ export const SWIFT_TARGET_PURITY: Record<string, TargetPurity> = {
   OpenCodeServer: "host",
   OpenCodeSDK: "host",
   OpenCodeTUI: "host",
+  OpenCodeCLIKit: "host",
   OpenCodeCLI: "host",
 }
 

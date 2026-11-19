@@ -28,6 +28,7 @@ let package = Package(
         .library(name: "OpenCodeServer", targets: ["OpenCodeServer"]),
         .library(name: "OpenCodeSDK", targets: ["OpenCodeSDK"]),
         .library(name: "OpenCodeTUI", targets: ["OpenCodeTUI"]),
+        .library(name: "OpenCodeCLIKit", targets: ["OpenCodeCLIKit"]),
 
         // Executables
         .executable(name: "opencode", targets: ["OpenCodeCLI"]),
@@ -85,7 +86,9 @@ let package = Package(
             dependencies: [
                 "OpenCodeUtil",
                 "OpenCodeSchema",
+                "OpenCodeProtocol",
                 "OpenCodeClient",
+                "OpenCodeCore",
                 "OpenCodePlatform",
                 .product(name: "OpenTUICore", package: "OpenTUI"),
                 .product(name: "OpenTUIKeymap", package: "OpenTUI"),
@@ -95,15 +98,34 @@ let package = Package(
                 .product(name: "OpenTUIView", package: "OpenTUI"),
             ]
         ),
-        .executableTarget(
-            name: "OpenCodeCLI",
+        .target(
+            name: "OpenCodeCLIKit",
             dependencies: [
                 "OpenCodeUtil",
                 "OpenCodeSchema",
+                "OpenCodeProtocol",
                 "OpenCodePlatform",
                 "OpenCodeClient",
                 "OpenCodeCore",
                 "OpenCodeServer",
+                "OpenCodeSDK",
+                "OpenCodeTUI",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+                .product(name: "OpenTUITerminal", package: "OpenTUI"),
+            ]
+        ),
+        .executableTarget(
+            name: "OpenCodeCLI",
+            dependencies: [
+                "OpenCodeCLIKit",
+                "OpenCodeUtil",
+                "OpenCodeSchema",
+                "OpenCodeProtocol",
+                "OpenCodePlatform",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeServer",
+                "OpenCodeSDK",
                 "OpenCodeTUI",
             ]
         ),
@@ -158,11 +180,32 @@ let package = Package(
             dependencies: [
                 "OpenCodeTUI",
                 "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeProtocol",
                 "OpenCodeSchema",
                 "OpenCodePlatform",
                 "OpenCodeUtil",
                 .product(name: "OpenTUICore", package: "OpenTUI"),
+                .product(name: "OpenTUIKeymap", package: "OpenTUI"),
+                .product(name: "OpenTUILayout", package: "OpenTUI"),
                 .product(name: "OpenTUIRenderables", package: "OpenTUI"),
+                .product(name: "OpenTUITerminal", package: "OpenTUI"),
+                .product(name: "OpenTUIView", package: "OpenTUI"),
+            ]
+        ),
+        .testTarget(
+            name: "OpenCodeCLITests",
+            dependencies: [
+                "OpenCodeCLIKit",
+                "OpenCodeSDK",
+                "OpenCodeServer",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeProtocol",
+                "OpenCodeSchema",
+                "OpenCodePlatform",
+                "OpenCodeTUI",
+                "OpenCodeUtil",
             ]
         ),
         .testTarget(
