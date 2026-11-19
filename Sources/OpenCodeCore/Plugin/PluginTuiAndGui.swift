@@ -257,7 +257,7 @@ public enum PluginTui {
     }
 
     /// Options passed to `ui.toast.show(...)`.
-    // parity: plugin/src/tui/context.ts#ToastOptions [status=implemented hash=1b5dd814b48a]
+    // parity: plugin/src/tui/context.ts#ToastOptions [status=implemented hash=9f7efd00e21f]
     public struct ToastOptions: Equatable, Hashable, Sendable, Codable {
         public let title: String?
         public let message: String
@@ -507,7 +507,7 @@ public enum PluginTui {
     }
 
     /// TUI modal dialog controller.
-    // parity: plugin/src/tui/context.ts#Dialog [status=adapted hash=2ff6812ca5aa]
+    // parity: plugin/src/tui/context.ts#Dialog [status=adapted hash=37e826e3f087]
     public struct Dialog: Sendable {
         public let show: @Sendable (_ render: @escaping @Sendable () -> RenderNode, _ onClose: (@Sendable () -> Void)?) -> Void
         public let set: @Sendable (DialogOptions) -> Void
@@ -649,7 +649,7 @@ public enum PluginTui {
     }
 
     /// TUI keymap service supporting reactive layers, command dispatch, and input mode stack.
-    // parity: plugin/src/tui/context.ts#Keymap [status=implemented hash=7d0799284d5a]
+    // parity: plugin/src/tui/context.ts#Keymap [status=implemented hash=89075acd8c28]
     public struct Keymap: Sendable {
         public let layer: @Sendable (@escaping @Sendable () -> KeymapLayer) -> Void
         public let dispatch: @Sendable (String, String?) -> Void
@@ -757,6 +757,10 @@ public enum PluginTui {
     }
 
     // MARK: - tui/plugin.ts
+
+    /// Re-exported TUI plugin context type (`plugin/src/tui/plugin.ts#Context`).
+    // parity: plugin/src/tui/plugin.ts#Context [status=implemented hash=18b1edea4b4f]
+    public typealias PluginContext = Context
 
     /// Optional async cleanup closure returned by a TUI plugin's `setup`.
     // parity: plugin/src/tui/plugin.ts#Cleanup [status=implemented hash=ebf6dc2dbce3]
@@ -1152,7 +1156,7 @@ public enum PluginGui {
     }
 
     /// Typed contribution list token defined via `Registry.define(id)`.
-    // parity: plugin/src/gui/core.ts#Registry [status=implemented hash=c591f943d3b4]
+    // parity: plugin/src/gui/core.ts#Registry [status=implemented hash=67e7d16a024f]
     public struct Registry<T: Sendable>: Equatable, Hashable, Sendable {
         public let kind: String = "registry"
         public let id: String
@@ -1167,7 +1171,7 @@ public enum PluginGui {
     }
 
     /// In-process window contract token defined via `Contract.define(id)`.
-    // parity: plugin/src/gui/core.ts#Contract [status=implemented hash=4f6a5a308411]
+    // parity: plugin/src/gui/core.ts#Contract [status=implemented hash=5c487522eb38]
     public struct Contract<T: Sendable>: Equatable, Hashable, Sendable {
         public let kind: String = "contract"
         public let id: String
@@ -1215,7 +1219,7 @@ public enum PluginGui {
     }
 
     /// Token for a main-process IPC service defined via `Ipc.define(spec)`.
-    // parity: plugin/src/gui/core.ts#Ipc [status=implemented hash=8162ef5a2d87]
+    // parity: plugin/src/gui/core.ts#Ipc [status=implemented hash=e964c53ceee5]
     public struct Ipc: Equatable, Hashable, Sendable, Codable {
         public let kind: String
         public let id: String
@@ -1247,7 +1251,7 @@ public enum PluginGui {
     }
 
     /// Per-call cancellation options for GUI IPC calls.
-    // parity: plugin/src/gui/core.ts#IpcCallOptions [status=implemented hash=7df3954b7d02]
+    // parity: plugin/src/gui/core.ts#IpcCallOptions [status=implemented hash=d71aeb0b97a5]
     public struct IpcCallOptions: Sendable {
         public let signal: AbortSignal?
 
@@ -1257,7 +1261,7 @@ public enum PluginGui {
     }
 
     /// Client handle used by window entries to invoke main-process IPC methods and read synced state.
-    // parity: plugin/src/gui/core.ts#IpcClient [status=adapted hash=eaca1beffd24]
+    // parity: plugin/src/gui/core.ts#IpcClient [status=adapted hash=018db7462cd3]
     public struct IpcClient: Sendable {
         public let id: String
         public let call: @Sendable (_ method: String, _ input: JSONValue?, _ options: IpcCallOptions?) async throws -> JSONValue
@@ -1295,7 +1299,7 @@ public enum PluginGui {
     }
 
     /// Identifies the window that initiated an IPC call into main.
-    // parity: plugin/src/gui/core.ts#Caller [status=implemented hash=22ad7b2087a1]
+    // parity: plugin/src/gui/core.ts#Caller [status=implemented hash=779a6c1fd1df]
     public struct Caller: Sendable {
         public let window: Int
         public let signal: AbortSignal
@@ -1340,7 +1344,7 @@ public enum PluginGui {
     }
 
     /// Shared context base exposed to both window and main GUI plugin setups.
-    // parity: plugin/src/gui/core.ts#BaseContext [status=adapted hash=7fc9e60ccd82]
+    // parity: plugin/src/gui/core.ts#BaseContext [status=adapted hash=7b314cc17827]
     public protocol BaseContext: Sendable {
         var options: PluginOptions { get }
         var id: String { get }
@@ -1680,7 +1684,7 @@ public enum PluginGui {
 
     /// Structured teardown scope matching upstream `gui/scope.ts`: aborts `signal`, runs finalizers in reverse order
     /// with error isolation and deadline enforcement, and supports nested child scopes via `fork`.
-    // parity: plugin/src/gui/scope.ts#Scope [status=implemented hash=b4a7ed0b4e00]
+    // parity: plugin/src/gui/scope.ts#Scope [status=implemented hash=d90c11c63627]
     public final class Scope: Sendable {
         public struct Options: Sendable {
             public let timeoutMs: Int
@@ -1904,7 +1908,7 @@ public enum PluginGui {
     }
 
     /// File content loaded by the GUI file model.
-    // parity: plugin/src/gui/host-apis.ts#FileContent [status=implemented hash=07242d584cdf]
+    // parity: plugin/src/gui/host-apis.ts#FileContent [status=implemented hash=bad5265fbe94]
     public struct FileContent: Equatable, Hashable, Sendable, Codable {
         public enum ContentType: String, Equatable, Hashable, Sendable, Codable {
             case text
@@ -2016,7 +2020,7 @@ public enum PluginGui {
     }
 
     /// Session screen workspace file model API.
-    // parity: plugin/src/gui/host-apis.ts#Files [status=adapted hash=85dfac63aa8e]
+    // parity: plugin/src/gui/host-apis.ts#Files [status=adapted hash=af8d77e5951b]
     public struct Files: Sendable {
         public let root: String
         public let ready: @Sendable () -> Bool
@@ -2055,7 +2059,7 @@ public enum PluginGui {
     }
 
     /// Line comment left on a workspace file before sending.
-    // parity: plugin/src/gui/host-apis.ts#Comment [status=implemented hash=cb2831904699]
+    // parity: plugin/src/gui/host-apis.ts#Comment [status=implemented hash=31a068379005]
     public struct Comment: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let time: Int64
@@ -2073,7 +2077,7 @@ public enum PluginGui {
     }
 
     /// Session screen line-comment controller.
-    // parity: plugin/src/gui/host-apis.ts#Comments [status=adapted hash=e489e8ab991a]
+    // parity: plugin/src/gui/host-apis.ts#Comments [status=adapted hash=12fbdd4c3331]
     public struct Comments: Sendable {
         public let list: @Sendable (String?) -> [Comment]
         public let add: @Sendable (_ file: String, _ selection: LineRange, _ comment: String) -> Comment
@@ -2096,7 +2100,7 @@ public enum PluginGui {
     }
 
     /// File attachment in the session composer.
-    // parity: plugin/src/gui/host-apis.ts#ComposerFile [status=implemented hash=e103b84602b4]
+    // parity: plugin/src/gui/host-apis.ts#ComposerFile [status=implemented hash=2b155765e141]
     public struct ComposerFile: Equatable, Hashable, Sendable, Codable {
         public let path: String
         public let preview: String?
@@ -2156,7 +2160,7 @@ public enum PluginGui {
     }
 
     /// Quoted text attachment in the session composer.
-    // parity: plugin/src/gui/host-apis.ts#ComposerQuote [status=implemented hash=ec4c6305a15e]
+    // parity: plugin/src/gui/host-apis.ts#ComposerQuote [status=implemented hash=1e87ce9fc740]
     public struct ComposerQuote: Equatable, Hashable, Sendable, Codable {
         public struct Source: Equatable, Hashable, Sendable, Codable {
             public let label: String
@@ -2212,7 +2216,7 @@ public enum PluginGui {
     }
 
     /// Session screen prompt composer controller.
-    // parity: plugin/src/gui/host-apis.ts#Composer [status=adapted hash=b6ec04586a4c]
+    // parity: plugin/src/gui/host-apis.ts#Composer [status=adapted hash=9889379b7a3b]
     public struct Composer: Sendable {
         public enum Attachment: Equatable, Hashable, Sendable, Codable {
             case file(ComposerFile)
@@ -2260,7 +2264,7 @@ public enum PluginGui {
     }
 
     /// Active background shell or subagent task displayed in a session.
-    // parity: plugin/src/gui/host-apis.ts#BackgroundTask [status=implemented hash=25d6c51be94a]
+    // parity: plugin/src/gui/host-apis.ts#BackgroundTask [status=implemented hash=256a9898e381]
     public struct BackgroundTask: Equatable, Hashable, Sendable, Codable {
         public enum TaskType: String, Equatable, Hashable, Sendable, Codable {
             case shell
@@ -2281,7 +2285,7 @@ public enum PluginGui {
     }
 
     /// Routed session mounted on the session screen.
-    // parity: plugin/src/gui/host-apis.ts#MountedSession [status=implemented hash=7cbb7d9bd0f4]
+    // parity: plugin/src/gui/host-apis.ts#MountedSession [status=implemented hash=eb9474ce136b]
     public struct MountedSession: Equatable, Hashable, Sendable, Codable {
         public let session: SessionRef
         public let visitID: String
@@ -2308,7 +2312,7 @@ public enum PluginGui {
     }
 
     /// Route-following session screen owning workspace files, comments, and composer.
-    // parity: plugin/src/gui/host-apis.ts#SessionScreen [status=implemented hash=5a2145a0becd]
+    // parity: plugin/src/gui/host-apis.ts#SessionScreen [status=implemented hash=a9df1a818777]
     public struct SessionScreen: Sendable {
         public let file: Files
         public let comment: Comments
@@ -2322,7 +2326,7 @@ public enum PluginGui {
     }
 
     /// Accessor for the currently mounted session screen.
-    // parity: plugin/src/gui/host-apis.ts#Screen [status=implemented hash=9cafd3c24665]
+    // parity: plugin/src/gui/host-apis.ts#Screen [status=implemented hash=139af89dc516]
     public struct Screen: Sendable {
         public let current: @Sendable () -> SessionScreen?
 
@@ -2332,7 +2336,7 @@ public enum PluginGui {
     }
 
     /// Open shell-tab sessions accessor.
-    // parity: plugin/src/gui/host-apis.ts#Sessions [status=implemented hash=558212a9de7e]
+    // parity: plugin/src/gui/host-apis.ts#Sessions [status=implemented hash=72d2f0f7e84e]
     public struct Sessions: Sendable {
         public let list: @Sendable () -> [SessionRef]
         public let current: @Sendable () -> MountedSession?
@@ -2375,7 +2379,7 @@ public enum PluginGui {
     }
 
     /// Session layout controller managing side panel tabs, scroll offsets, settings, and drafts.
-    // parity: plugin/src/gui/host-apis.ts#Layout [status=adapted hash=3497c0fa0e9c]
+    // parity: plugin/src/gui/host-apis.ts#Layout [status=adapted hash=341b52e646f9]
     public struct Layout: Sendable {
         public let narrow: @Sendable () -> Bool
         public let ready: @Sendable () -> Bool
@@ -2455,7 +2459,7 @@ public enum PluginGui {
     }
 
     /// Cross-platform clipboard, file save, and external URL opening services.
-    // parity: plugin/src/gui/host-apis.ts#System [status=implemented hash=3bde05ec8a8a]
+    // parity: plugin/src/gui/host-apis.ts#System [status=implemented hash=4fb9a736b5bb]
     public struct System: Sendable {
         public let copy: @Sendable (String) async throws -> Void
         public let save: @Sendable (_ name: String, _ content: String) async throws -> Bool
@@ -2541,7 +2545,7 @@ public enum PluginGui {
     }
 
     /// User appearance settings (mono font family and resolved color scheme).
-    // parity: plugin/src/gui/host-apis.ts#Appearance [status=implemented hash=265da56e9aab]
+    // parity: plugin/src/gui/host-apis.ts#Appearance [status=implemented hash=edc53c235b0e]
     public struct Appearance: Sendable {
         public enum Mode: String, Equatable, Hashable, Sendable, Codable {
             case light
@@ -2609,7 +2613,7 @@ public enum PluginGui {
     }
 
     /// Workspace lifecycle event subscription service.
-    // parity: plugin/src/gui/host-apis.ts#Workspaces [status=implemented hash=b5fc77978bd0]
+    // parity: plugin/src/gui/host-apis.ts#Workspaces [status=implemented hash=472d9c3d0e70]
     public struct Workspaces: Sendable {
         public let onRemove: @Sendable (@escaping @Sendable (_ server: String, _ directory: String) -> Void) -> Cleanup
 
@@ -2621,7 +2625,7 @@ public enum PluginGui {
     }
 
     /// Local link routing service backed by `LinkHandler` contributions.
-    // parity: plugin/src/gui/host-apis.ts#Links [status=implemented hash=5fe1de6ecf06]
+    // parity: plugin/src/gui/host-apis.ts#Links [status=implemented hash=14661ad0fe55]
     public struct Links: Sendable {
         public let open: @Sendable (Link) -> Bool
         public let exists: @Sendable (Link) async -> Bool
@@ -2653,23 +2657,954 @@ public enum PluginGui {
         public let confirm: @Sendable (_ title: String, _ description: String?) async -> Bool
         public let alert: @Sendable (_ title: String, _ description: String?) async -> Void
         public let prompt: @Sendable (_ title: String, _ placeholder: String?) async -> String?
+        public let confirmWithOptions: @Sendable (ConfirmOptions) async -> Bool
+        public let alertWithOptions: @Sendable (AlertOptions) async -> Void
+        public let promptWithOptions: @Sendable (PromptOptions) async -> String?
+        public let selectString: @Sendable (SelectOptions<String>) async -> String?
 
         public init(
             open: @escaping @Sendable (_ render: @escaping @Sendable (DialogHandle) -> ViewNode, _ replace: Bool) -> DialogHandle = { _, _ in DialogHandle() },
             active: @escaping @Sendable () -> Bool = { false },
             confirm: @escaping @Sendable (_ title: String, _ description: String?) async -> Bool = { _, _ in false },
             alert: @escaping @Sendable (_ title: String, _ description: String?) async -> Void = { _, _ in },
-            prompt: @escaping @Sendable (_ title: String, _ placeholder: String?) async -> String? = { _, _ in nil }
+            prompt: @escaping @Sendable (_ title: String, _ placeholder: String?) async -> String? = { _, _ in nil },
+            confirmWithOptions: (@Sendable (ConfirmOptions) async -> Bool)? = nil,
+            alertWithOptions: (@Sendable (AlertOptions) async -> Void)? = nil,
+            promptWithOptions: (@Sendable (PromptOptions) async -> String?)? = nil,
+            selectString: @escaping @Sendable (SelectOptions<String>) async -> String? = { _ in nil }
         ) {
             self.open = open
             self.active = active
             self.confirm = confirm
             self.alert = alert
             self.prompt = prompt
+            self.confirmWithOptions = confirmWithOptions ?? { opts in await confirm(opts.title, opts.description) }
+            self.alertWithOptions = alertWithOptions ?? { opts in await alert(opts.title, opts.description) }
+            self.promptWithOptions = promptWithOptions ?? { opts in await prompt(opts.title, opts.placeholder) }
+            self.selectString = selectString
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#ConfirmOptions [status=implemented hash=8ed96dbfff25]
+    public struct ConfirmOptions: Equatable, Hashable, Sendable, Codable {
+        public let title: String
+        public let description: String?
+        public let confirm: String?
+        public let cancel: String?
+        public let danger: Bool?
+
+        public init(
+            title: String,
+            description: String? = nil,
+            confirm: String? = nil,
+            cancel: String? = nil,
+            danger: Bool? = nil
+        ) {
+            self.title = title
+            self.description = description
+            self.confirm = confirm
+            self.cancel = cancel
+            self.danger = danger
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#AlertOptions [status=implemented hash=95497e50381d]
+    public struct AlertOptions: Equatable, Hashable, Sendable, Codable {
+        public let title: String
+        public let description: String?
+        public let ok: String?
+
+        public init(title: String, description: String? = nil, ok: String? = nil) {
+            self.title = title
+            self.description = description
+            self.ok = ok
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#PromptOptions [status=implemented hash=99e5f95ff946]
+    public struct PromptOptions: Equatable, Hashable, Sendable, Codable {
+        public let title: String
+        public let description: String?
+        public let placeholder: String?
+        public let value: String?
+        public let secret: Bool?
+        public let submit: String?
+
+        public init(
+            title: String,
+            description: String? = nil,
+            placeholder: String? = nil,
+            value: String? = nil,
+            secret: Bool? = nil,
+            submit: String? = nil
+        ) {
+            self.title = title
+            self.description = description
+            self.placeholder = placeholder
+            self.value = value
+            self.secret = secret
+            self.submit = submit
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#SelectOption [status=implemented hash=a59bb1d199a3]
+    public struct SelectOption<T: Sendable>: Sendable {
+        public let title: String
+        public let value: T
+        public let description: String?
+        public let group: String?
+
+        public init(title: String, value: T, description: String? = nil, group: String? = nil) {
+            self.title = title
+            self.value = value
+            self.description = description
+            self.group = group
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#SelectOptions [status=implemented hash=61f283ed958e]
+    public struct SelectOptions<T: Sendable>: Sendable {
+        public let title: String
+        public let placeholder: String?
+        public let options: [SelectOption<T>]
+        public let current: T?
+
+        public init(
+            title: String,
+            placeholder: String? = nil,
+            options: [SelectOption<T>],
+            current: T? = nil
+        ) {
+            self.title = title
+            self.placeholder = placeholder
+            self.options = options
+            self.current = current
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#ToastAction [status=implemented hash=a40d83277393]
+    public struct ToastAction: Sendable {
+        public let label: String
+        public let run: @Sendable () -> Void
+
+        public init(label: String, run: @escaping @Sendable () -> Void = {}) {
+            self.label = label
+            self.run = run
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#ToastOptions [status=implemented hash=548bae29f7a4]
+    public struct ToastOptions: Sendable {
+        public enum Variant: String, Equatable, Hashable, Sendable, Codable {
+            case `default`
+            case success
+            case error
+            case loading
+        }
+
+        public let title: String
+        public let description: String?
+        public let variant: Variant?
+        public let icon: IconName?
+        public let duration: Double?
+        public let persistent: Bool?
+        public let actions: [ToastAction]?
+
+        public init(
+            title: String,
+            description: String? = nil,
+            variant: Variant? = nil,
+            icon: IconName? = nil,
+            duration: Double? = nil,
+            persistent: Bool? = nil,
+            actions: [ToastAction]? = nil
+        ) {
+            self.title = title
+            self.description = description
+            self.variant = variant
+            self.icon = icon
+            self.duration = duration
+            self.persistent = persistent
+            self.actions = actions
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#ToastHandle [status=implemented hash=31b2c7bcea2a]
+    public struct ToastHandle: Sendable {
+        public let dismiss: @Sendable () -> Void
+
+        public init(dismiss: @escaping @Sendable () -> Void = {}) {
+            self.dismiss = dismiss
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Toasts [status=implemented hash=1c71b40f2238]
+    public struct Toasts: Sendable {
+        public let show: @Sendable (ToastOptions) -> ToastHandle
+
+        public init(show: @escaping @Sendable (ToastOptions) -> ToastHandle = { _ in ToastHandle() }) {
+            self.show = show
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#NotifyOptions [status=implemented hash=0f04004c9a98]
+    public struct NotifyOptions: Equatable, Hashable, Sendable, Codable {
+        public enum Variant: String, Equatable, Hashable, Sendable, Codable {
+            case `default`
+            case error
+        }
+
+        public struct SessionTarget: Equatable, Hashable, Sendable, Codable {
+            public let server: String
+            public let id: String
+
+            public init(server: String, id: String) {
+                self.server = server
+                self.id = id
+            }
+        }
+
+        public let title: String
+        public let message: String?
+        public let variant: Variant?
+        public let session: SessionTarget?
+        public let sound: Bool?
+        public let id: String?
+
+        public init(
+            title: String,
+            message: String? = nil,
+            variant: Variant? = nil,
+            session: SessionTarget? = nil,
+            sound: Bool? = nil,
+            id: String? = nil
+        ) {
+            self.title = title
+            self.message = message
+            self.variant = variant
+            self.session = session
+            self.sound = sound
+            self.id = id
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#NotifyResult [status=implemented hash=ee22f0e2abe7]
+    public struct NotifyResult: Equatable, Hashable, Sendable, Codable {
+        public let notification: Bool
+        public let sound: Bool
+
+        public init(notification: Bool = false, sound: Bool = false) {
+            self.notification = notification
+            self.sound = sound
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Attention [status=implemented hash=ba44e984d899]
+    public struct Attention: Sendable {
+        public let notify: @Sendable (NotifyOptions) async -> NotifyResult
+
+        public init(notify: @escaping @Sendable (NotifyOptions) async -> NotifyResult = { _ in NotifyResult() }) {
+            self.notify = notify
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Commands [status=implemented hash=8a9108b52c43]
+    public struct Commands: Sendable {
+        public let run: @Sendable (String) -> Bool
+
+        public init(run: @escaping @Sendable (String) -> Bool = { _ in false }) {
+            self.run = run
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#ShellTab [status=implemented hash=120ca1f46d50]
+    public struct ShellTab: Sendable {
+        public let key: String
+        public let session: SessionRef?
+        public let active: Bool
+
+        public init(key: String, session: SessionRef? = nil, active: Bool = false) {
+            self.key = key
+            self.session = session
+            self.active = active
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Tabs [status=implemented hash=c5d535d8aebb]
+    public struct Tabs: Sendable {
+        public let list: @Sendable () -> [ShellTab]
+        public let open: @Sendable (_ server: String, _ id: String, _ focus: Bool) -> Void
+        public let focus: @Sendable (String) -> Void
+        public let move: @Sendable (String, Int) -> Void
+        public let close: @Sendable (String) -> Void
+
+        public init(
+            list: @escaping @Sendable () -> [ShellTab] = { [] },
+            open: @escaping @Sendable (_ server: String, _ id: String, _ focus: Bool) -> Void = { _, _, _ in },
+            focus: @escaping @Sendable (String) -> Void = { _ in },
+            move: @escaping @Sendable (String, Int) -> Void = { _, _ in },
+            close: @escaping @Sendable (String) -> Void = { _ in }
+        ) {
+            self.list = list
+            self.open = open
+            self.focus = focus
+            self.move = move
+            self.close = close
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#EmbedProps [status=implemented hash=bc50d9dd84bb]
+    public struct EmbedProps: Sendable {
+        public let id: String?
+        public let visible: Bool
+        public let frozen: Bool?
+        public let page: String?
+        public let radius: Double?
+        public let background: String?
+        public let className: String?
+        public let children: ViewNode?
+
+        public init(
+            id: String? = nil,
+            visible: Bool,
+            frozen: Bool? = nil,
+            page: String? = nil,
+            radius: Double? = nil,
+            background: String? = nil,
+            className: String? = nil,
+            children: ViewNode? = nil
+        ) {
+            self.id = id
+            self.visible = visible
+            self.frozen = frozen
+            self.page = page
+            self.radius = radius
+            self.background = background
+            self.className = className
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Embeds [status=implemented hash=fd4f59f3942d]
+    public struct WindowEmbeds: Sendable {
+        public let View: @Sendable (EmbedProps) -> ViewNode
+        public let capture: @Sendable (String) async -> [UInt8]?
+
+        public init(
+            View: @escaping @Sendable (EmbedProps) -> ViewNode = { props in
+                ViewNode(component: "embed", props: ["id": props.id.map(JSONValue.string) ?? .null, "visible": .bool(props.visible)])
+            },
+            capture: @escaping @Sendable (String) async -> [UInt8]? = { _ in nil }
+        ) {
+            self.View = View
+            self.capture = capture
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiIconProps [status=implemented hash=eb2b9d8405df]
+    public struct UiIconProps: Equatable, Hashable, Sendable, Codable {
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case small
+            case normal
+            case large
+        }
+
+        public let name: IconName
+        public let size: Size?
+        public let className: String?
+
+        public init(name: IconName, size: Size? = nil, className: String? = nil) {
+            self.name = name
+            self.size = size
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiButtonProps [status=implemented hash=f7ce78cc0375]
+    public struct UiButtonProps: Sendable {
+        public enum Variant: String, Equatable, Hashable, Sendable, Codable {
+            case neutral
+            case contrast
+            case ghost
+            case ghostMuted = "ghost-muted"
+            case danger
+        }
+
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case small
+            case normal
+            case large
+        }
+
+        public enum ButtonType: String, Equatable, Hashable, Sendable, Codable {
+            case button
+            case submit
+        }
+
+        public let children: ViewNode
+        public let onClick: (@Sendable () -> Void)?
+        public let variant: Variant?
+        public let size: Size?
+        public let icon: IconName?
+        public let disabled: Bool?
+        public let busy: Bool?
+        public let type: ButtonType?
+        public let autofocus: Bool?
+        public let className: String?
+
+        public init(
+            children: ViewNode,
+            onClick: (@Sendable () -> Void)? = nil,
+            variant: Variant? = nil,
+            size: Size? = nil,
+            icon: IconName? = nil,
+            disabled: Bool? = nil,
+            busy: Bool? = nil,
+            type: ButtonType? = nil,
+            autofocus: Bool? = nil,
+            className: String? = nil
+        ) {
+            self.children = children
+            self.onClick = onClick
+            self.variant = variant
+            self.size = size
+            self.icon = icon
+            self.disabled = disabled
+            self.busy = busy
+            self.type = type
+            self.autofocus = autofocus
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiIconButtonProps [status=implemented hash=daecb685bee8]
+    public struct UiIconButtonProps: Sendable {
+        public enum Variant: String, Equatable, Hashable, Sendable, Codable {
+            case neutral
+            case ghost
+            case ghostMuted = "ghost-muted"
+        }
+
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case small
+            case normal
+            case large
+        }
+
+        public let icon: IconName
+        public let label: String
+        public let onClick: (@Sendable () -> Void)?
+        public let variant: Variant?
+        public let size: Size?
+        public let disabled: Bool?
+        public let pressed: Bool?
+        public let busy: Bool?
+        public let className: String?
+
+        public init(
+            icon: IconName,
+            label: String,
+            onClick: (@Sendable () -> Void)? = nil,
+            variant: Variant? = nil,
+            size: Size? = nil,
+            disabled: Bool? = nil,
+            pressed: Bool? = nil,
+            busy: Bool? = nil,
+            className: String? = nil
+        ) {
+            self.icon = icon
+            self.label = label
+            self.onClick = onClick
+            self.variant = variant
+            self.size = size
+            self.disabled = disabled
+            self.pressed = pressed
+            self.busy = busy
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiTooltipProps [status=implemented hash=39c9e3f707b7]
+    public struct UiTooltipProps: Sendable {
+        public enum Placement: String, Equatable, Hashable, Sendable, Codable {
+            case top
+            case bottom
+            case left
+            case right
+        }
+
+        public let value: ViewNode
+        public let keys: [String]?
+        public let placement: Placement?
+        public let children: ViewNode
+
+        public init(value: ViewNode, keys: [String]? = nil, placement: Placement? = nil, children: ViewNode) {
+            self.value = value
+            self.keys = keys
+            self.placement = placement
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuItem [status=implemented hash=60416cc03b26]
+    public struct UiMenuItem: Sendable {
+        public let type: String?
+        public let label: String
+        public let icon: IconName?
+        public let keys: [String]?
+        public let disabled: Bool?
+        public let onSelect: @Sendable () -> Void
+
+        public init(
+            label: String,
+            icon: IconName? = nil,
+            keys: [String]? = nil,
+            disabled: Bool? = nil,
+            onSelect: @escaping @Sendable () -> Void = {}
+        ) {
+            self.type = "item"
+            self.label = label
+            self.icon = icon
+            self.keys = keys
+            self.disabled = disabled
+            self.onSelect = onSelect
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuSeparator [status=implemented hash=51205e7bb9b3]
+    public struct UiMenuSeparator: Equatable, Hashable, Sendable, Codable {
+        public let type: String
+
+        public init() {
+            self.type = "separator"
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuGroup [status=implemented hash=4a4899729435]
+    public struct UiMenuGroup: Sendable {
+        public let type: String
+        public let label: String
+        public let items: [UiMenuItem]
+
+        public init(label: String, items: [UiMenuItem]) {
+            self.type = "group"
+            self.label = label
+            self.items = items
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuEntry [status=implemented hash=4f2d77952220]
+    public enum UiMenuEntry: Sendable {
+        case item(UiMenuItem)
+        case separator(UiMenuSeparator)
+        case group(UiMenuGroup)
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuProps [status=implemented hash=c79e57d24034]
+    public struct UiMenuProps: Sendable {
+        public enum Trigger: String, Equatable, Hashable, Sendable, Codable {
+            case icon
+            case button
+        }
+
+        public enum Placement: String, Equatable, Hashable, Sendable, Codable {
+            case bottomStart = "bottom-start"
+            case bottomEnd = "bottom-end"
+            case topStart = "top-start"
+            case topEnd = "top-end"
+        }
+
+        public let label: String
+        public let items: [UiMenuEntry]
+        public let trigger: Trigger?
+        public let icon: IconName?
+        public let placement: Placement?
+        public let disabled: Bool?
+
+        public init(
+            label: String,
+            items: [UiMenuEntry],
+            trigger: Trigger? = nil,
+            icon: IconName? = nil,
+            placement: Placement? = nil,
+            disabled: Bool? = nil
+        ) {
+            self.label = label
+            self.items = items
+            self.trigger = trigger
+            self.icon = icon
+            self.placement = placement
+            self.disabled = disabled
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuGroupProps [status=implemented hash=35b8ecb1ddc7]
+    public struct UiMenuGroupProps: Sendable {
+        public let label: String
+        public let children: ViewNode
+
+        public init(label: String, children: ViewNode) {
+            self.label = label
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMenuSubProps [status=implemented hash=ed3f8fd6b42e]
+    public struct UiMenuSubProps: Sendable {
+        public let label: String
+        public let icon: IconName?
+        public let disabled: Bool?
+        public let onOpenChange: (@Sendable (Bool) -> Void)?
+        public let children: ViewNode
+
+        public init(
+            label: String,
+            icon: IconName? = nil,
+            disabled: Bool? = nil,
+            onOpenChange: (@Sendable (Bool) -> Void)? = nil,
+            children: ViewNode
+        ) {
+            self.label = label
+            self.icon = icon
+            self.disabled = disabled
+            self.onOpenChange = onOpenChange
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiLoaderProps [status=implemented hash=b8d172b94b5a]
+    public struct UiLoaderProps: Equatable, Hashable, Sendable, Codable {
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case small
+            case normal
+            case large
+        }
+
+        public let size: Size?
+        public let className: String?
+
+        public init(size: Size? = nil, className: String? = nil) {
+            self.size = size
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiDialogProps [status=implemented hash=1f2736806c35]
+    public struct UiDialogProps: Sendable {
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case fit
+            case normal
+            case large
+            case xLarge = "x-large"
+        }
+
+        public let title: String
+        public let description: String?
+        public let children: ViewNode?
+        public let footer: ViewNode?
+        public let size: Size?
+        public let closable: Bool?
+
+        public init(
+            title: String,
+            description: String? = nil,
+            children: ViewNode? = nil,
+            footer: ViewNode? = nil,
+            size: Size? = nil,
+            closable: Bool? = nil
+        ) {
+            self.title = title
+            self.description = description
+            self.children = children
+            self.footer = footer
+            self.size = size
+            self.closable = closable
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSwitchProps [status=implemented hash=44d2c50bf7bf]
+    public struct UiSwitchProps: Sendable {
+        public let checked: Bool
+        public let onChange: @Sendable (Bool) -> Void
+        public let label: String
+        public let hideLabel: Bool?
+        public let description: String?
+        public let disabled: Bool?
+
+        public init(
+            checked: Bool,
+            onChange: @escaping @Sendable (Bool) -> Void = { _ in },
+            label: String,
+            hideLabel: Bool? = nil,
+            description: String? = nil,
+            disabled: Bool? = nil
+        ) {
+            self.checked = checked
+            self.onChange = onChange
+            self.label = label
+            self.hideLabel = hideLabel
+            self.description = description
+            self.disabled = disabled
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiTextInputProps [status=implemented hash=540e26f510a9]
+    public struct UiTextInputProps: Sendable {
+        public enum InputType: String, Equatable, Hashable, Sendable, Codable {
+            case text
+            case password
+            case search
+            case url
+        }
+
+        public enum Size: String, Equatable, Hashable, Sendable, Codable {
+            case normal
+            case large
+        }
+
+        public let value: String
+        public let onInput: @Sendable (String) -> Void
+        public let label: String
+        public let placeholder: String?
+        public let onSubmit: (@Sendable (String) -> Void)?
+        public let type: InputType?
+        public let size: Size?
+        public let disabled: Bool?
+        public let invalid: Bool?
+        public let autofocus: Bool?
+        public let className: String?
+
+        public init(
+            value: String,
+            onInput: @escaping @Sendable (String) -> Void = { _ in },
+            label: String,
+            placeholder: String? = nil,
+            onSubmit: (@Sendable (String) -> Void)? = nil,
+            type: InputType? = nil,
+            size: Size? = nil,
+            disabled: Bool? = nil,
+            invalid: Bool? = nil,
+            autofocus: Bool? = nil,
+            className: String? = nil
+        ) {
+            self.value = value
+            self.onInput = onInput
+            self.label = label
+            self.placeholder = placeholder
+            self.onSubmit = onSubmit
+            self.type = type
+            self.size = size
+            self.disabled = disabled
+            self.invalid = invalid
+            self.autofocus = autofocus
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiKeybindProps [status=implemented hash=8dfa70669b9f]
+    public struct UiKeybindProps: Equatable, Hashable, Sendable, Codable {
+        public let keys: [String]
+        public let className: String?
+
+        public init(keys: [String], className: String? = nil) {
+            self.keys = keys
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiMarkdownProps [status=implemented hash=99a1729839cc]
+    public struct UiMarkdownProps: Equatable, Hashable, Sendable, Codable {
+        public let text: String
+        public let className: String?
+
+        public init(text: String, className: String? = nil) {
+            self.text = text
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiCodeProps [status=implemented hash=d85acc1a8359]
+    public struct UiCodeProps: Equatable, Hashable, Sendable, Codable {
+        public let content: String
+        public let language: String?
+        public let className: String?
+
+        public init(content: String, language: String? = nil, className: String? = nil) {
+            self.content = content
+            self.language = language
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSelectOption [status=implemented hash=0de538965baa]
+    public struct UiSelectOption<T: Hashable & Sendable>: Equatable, Hashable, Sendable {
+        public let value: T
+        public let label: String
+
+        public init(value: T, label: String) {
+            self.value = value
+            self.label = label
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSelectProps [status=implemented hash=754fa83b485f]
+    public struct UiSelectProps<T: Hashable & Sendable>: Sendable {
+        public enum Placement: String, Equatable, Hashable, Sendable, Codable {
+            case bottomStart = "bottom-start"
+            case bottomEnd = "bottom-end"
+            case topStart = "top-start"
+            case topEnd = "top-end"
+        }
+
+        public let options: [UiSelectOption<T>]
+        public let value: T?
+        public let onChange: @Sendable (T) -> Void
+        public let label: String
+        public let placeholder: String?
+        public let disabled: Bool?
+        public let invalid: Bool?
+        public let placement: Placement?
+        public let className: String?
+
+        public init(
+            options: [UiSelectOption<T>],
+            value: T? = nil,
+            onChange: @escaping @Sendable (T) -> Void = { _ in },
+            label: String,
+            placeholder: String? = nil,
+            disabled: Bool? = nil,
+            invalid: Bool? = nil,
+            placement: Placement? = nil,
+            className: String? = nil
+        ) {
+            self.options = options
+            self.value = value
+            self.onChange = onChange
+            self.label = label
+            self.placeholder = placeholder
+            self.disabled = disabled
+            self.invalid = invalid
+            self.placement = placement
+            self.className = className
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSettingsLayoutProps [status=implemented hash=1bda58553cfe]
+    public struct UiSettingsLayoutProps: Sendable {
+        public let title: String
+        public let description: String?
+        public let actions: ViewNode?
+        public let children: ViewNode
+
+        public init(title: String, description: String? = nil, actions: ViewNode? = nil, children: ViewNode) {
+            self.title = title
+            self.description = description
+            self.actions = actions
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSettingsSectionProps [status=implemented hash=42e942e2ccba]
+    public struct UiSettingsSectionProps: Sendable {
+        public let title: String?
+        public let children: ViewNode
+        public let footer: ViewNode?
+
+        public init(title: String? = nil, children: ViewNode, footer: ViewNode? = nil) {
+            self.title = title
+            self.children = children
+            self.footer = footer
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#UiSettingsRowProps [status=implemented hash=b8b11ad49e00]
+    public struct UiSettingsRowProps: Sendable {
+        public let title: ViewNode
+        public let description: ViewNode?
+        public let id: String?
+        public let children: ViewNode?
+
+        public init(title: ViewNode, description: ViewNode? = nil, id: String? = nil, children: ViewNode? = nil) {
+            self.title = title
+            self.description = description
+            self.id = id
+            self.children = children
+        }
+    }
+
+    // parity: plugin/src/gui/host-apis.ts#Ui [status=implemented hash=9065676c179c]
+    public struct Ui: Sendable {
+        public let Icon: @Sendable (UiIconProps) -> ViewNode
+        public let Button: @Sendable (UiButtonProps) -> ViewNode
+        public let IconButton: @Sendable (UiIconButtonProps) -> ViewNode
+        public let Tooltip: @Sendable (UiTooltipProps) -> ViewNode
+        public let Menu: @Sendable (UiMenuProps) -> ViewNode
+        public let MenuItem: @Sendable (UiMenuItem) -> ViewNode
+        public let MenuSeparator: @Sendable () -> ViewNode
+        public let MenuGroup: @Sendable (UiMenuGroupProps) -> ViewNode
+        public let MenuSub: @Sendable (UiMenuSubProps) -> ViewNode
+        public let Loader: @Sendable (UiLoaderProps) -> ViewNode
+        public let Dialog: @Sendable (UiDialogProps) -> ViewNode
+        public let Switch: @Sendable (UiSwitchProps) -> ViewNode
+        public let TextInput: @Sendable (UiTextInputProps) -> ViewNode
+        public let Select: @Sendable (UiSelectProps<String>) -> ViewNode
+        public let Keybind: @Sendable (UiKeybindProps) -> ViewNode
+        public let Markdown: @Sendable (UiMarkdownProps) -> ViewNode
+        public let Code: @Sendable (UiCodeProps) -> ViewNode
+        public let SettingsLayout: @Sendable (UiSettingsLayoutProps) -> ViewNode
+        public let SettingsSection: @Sendable (UiSettingsSectionProps) -> ViewNode
+        public let SettingsRow: @Sendable (UiSettingsRowProps) -> ViewNode
+
+        public init(
+            Icon: @escaping @Sendable (UiIconProps) -> ViewNode = { props in ViewNode(component: "ui.icon", props: ["name": .string(props.name.rawString)]) },
+            Button: @escaping @Sendable (UiButtonProps) -> ViewNode = { props in ViewNode(component: "ui.button", label: props.children.label) },
+            IconButton: @escaping @Sendable (UiIconButtonProps) -> ViewNode = { props in ViewNode(component: "ui.iconButton", label: props.label) },
+            Tooltip: @escaping @Sendable (UiTooltipProps) -> ViewNode = { props in ViewNode(component: "ui.tooltip", label: props.value.label) },
+            Menu: @escaping @Sendable (UiMenuProps) -> ViewNode = { props in ViewNode(component: "ui.menu", label: props.label) },
+            MenuItem: @escaping @Sendable (UiMenuItem) -> ViewNode = { props in ViewNode(component: "ui.menuItem", label: props.label) },
+            MenuSeparator: @escaping @Sendable () -> ViewNode = { ViewNode(component: "ui.menuSeparator") },
+            MenuGroup: @escaping @Sendable (UiMenuGroupProps) -> ViewNode = { props in ViewNode(component: "ui.menuGroup", label: props.label) },
+            MenuSub: @escaping @Sendable (UiMenuSubProps) -> ViewNode = { props in ViewNode(component: "ui.menuSub", label: props.label) },
+            Loader: @escaping @Sendable (UiLoaderProps) -> ViewNode = { _ in ViewNode(component: "ui.loader") },
+            Dialog: @escaping @Sendable (UiDialogProps) -> ViewNode = { props in ViewNode(component: "ui.dialog", label: props.title) },
+            Switch: @escaping @Sendable (UiSwitchProps) -> ViewNode = { props in ViewNode(component: "ui.switch", label: props.label, props: ["checked": .bool(props.checked)]) },
+            TextInput: @escaping @Sendable (UiTextInputProps) -> ViewNode = { props in ViewNode(component: "ui.textInput", label: props.label, props: ["value": .string(props.value)]) },
+            Select: @escaping @Sendable (UiSelectProps<String>) -> ViewNode = { props in ViewNode(component: "ui.select", label: props.label) },
+            Keybind: @escaping @Sendable (UiKeybindProps) -> ViewNode = { props in ViewNode(component: "ui.keybind", props: ["keys": .array(props.keys.map(JSONValue.string))]) },
+            Markdown: @escaping @Sendable (UiMarkdownProps) -> ViewNode = { props in ViewNode(component: "ui.markdown", props: ["text": .string(props.text)]) },
+            Code: @escaping @Sendable (UiCodeProps) -> ViewNode = { props in ViewNode(component: "ui.code", props: ["content": .string(props.content)]) },
+            SettingsLayout: @escaping @Sendable (UiSettingsLayoutProps) -> ViewNode = { props in ViewNode(component: "ui.settingsLayout", label: props.title) },
+            SettingsSection: @escaping @Sendable (UiSettingsSectionProps) -> ViewNode = { props in ViewNode(component: "ui.settingsSection", label: props.title) },
+            SettingsRow: @escaping @Sendable (UiSettingsRowProps) -> ViewNode = { props in ViewNode(component: "ui.settingsRow", label: props.title.label) }
+        ) {
+            self.Icon = Icon
+            self.Button = Button
+            self.IconButton = IconButton
+            self.Tooltip = Tooltip
+            self.Menu = Menu
+            self.MenuItem = MenuItem
+            self.MenuSeparator = MenuSeparator
+            self.MenuGroup = MenuGroup
+            self.MenuSub = MenuSub
+            self.Loader = Loader
+            self.Dialog = Dialog
+            self.Switch = Switch
+            self.TextInput = TextInput
+            self.Select = Select
+            self.Keybind = Keybind
+            self.Markdown = Markdown
+            self.Code = Code
+            self.SettingsLayout = SettingsLayout
+            self.SettingsSection = SettingsSection
+            self.SettingsRow = SettingsRow
         }
     }
 
     // MARK: - gui/registries.ts
+
+    /// Re-exported built-in app icon name (`plugin/src/gui/registries.ts#AppIconName`).
+    // parity: plugin/src/gui/registries.ts#AppIconName [status=implemented hash=92d9d391493d]
+    public typealias RegistryAppIconName = AppIconName
 
     /// Either a built-in app icon name or a plugin-declared `<plugin>:<name>` icon.
     // parity: plugin/src/gui/registries.ts#IconName [status=implemented hash=cc62a02fe23e]
@@ -2686,7 +3621,7 @@ public enum PluginGui {
     }
 
     /// Palette command contribution (`Command` registry).
-    // parity: plugin/src/gui/registries.ts#Command [status=implemented hash=5224acd2fd58]
+    // parity: plugin/src/gui/registries.ts#Command [status=implemented hash=8b91e4096e08]
     public struct Command: Sendable {
         public static let registry = Registry<Command>.define("command")
 
@@ -2739,7 +3674,7 @@ public enum PluginGui {
     }
 
     /// Item contributed to the `session.panel` launcher menu.
-    // parity: plugin/src/gui/registries.ts#SessionPanelMenuItem [status=implemented hash=bf6fb57f4007]
+    // parity: plugin/src/gui/registries.ts#SessionPanelMenuItem [status=implemented hash=624183d6cd2d]
     public struct SessionPanelMenuItem: Sendable {
         public let id: String
         public let title: String
@@ -2791,7 +3726,7 @@ public enum PluginGui {
     }
 
     /// Item contributed to each Settings `server.row` menu.
-    // parity: plugin/src/gui/registries.ts#ServerRowMenuItem [status=implemented hash=fb36beb0ce3f]
+    // parity: plugin/src/gui/registries.ts#ServerRowMenuItem [status=implemented hash=6324b5c80661]
     public struct ServerRowMenuItem: Sendable {
         public let id: String
         public let title: String
@@ -2873,7 +3808,7 @@ public enum PluginGui {
     }
 
     /// Narrow-screen mobile presentation metadata for a `Panel`.
-    // parity: plugin/src/gui/registries.ts#MobileView [status=implemented hash=d33d1e1edb26]
+    // parity: plugin/src/gui/registries.ts#MobileView [status=implemented hash=232e1f14cf4f]
     public struct MobileView: Equatable, Hashable, Sendable, Codable {
         public enum Kind: String, Equatable, Hashable, Sendable, Codable {
             case tab
@@ -2897,7 +3832,7 @@ public enum PluginGui {
     }
 
     /// Props passed to a `Panel`'s render and lifecycle callbacks.
-    // parity: plugin/src/gui/registries.ts#PanelProps [status=implemented hash=b998a1c73b46]
+    // parity: plugin/src/gui/registries.ts#PanelProps [status=implemented hash=65ef512001bd]
     public struct PanelProps: Sendable {
         public let tab: PanelTab
         public let session: MountedSession
@@ -2911,7 +3846,7 @@ public enum PluginGui {
     }
 
     /// Reopenable closed-tab descriptor recorded when a user closes a panel tab.
-    // parity: plugin/src/gui/registries.ts#ClosedPanelTab [status=implemented hash=bb873fb2c60c]
+    // parity: plugin/src/gui/registries.ts#ClosedPanelTab [status=implemented hash=ceb30e558477]
     public struct ClosedPanelTab: Equatable, Hashable, Sendable, Codable {
         public let title: String
         public let file: String?
@@ -2927,7 +3862,7 @@ public enum PluginGui {
     }
 
     /// Side-region panel contribution (`Panel` registry).
-    // parity: plugin/src/gui/registries.ts#Panel [status=implemented hash=d983c6702b88]
+    // parity: plugin/src/gui/registries.ts#Panel [status=implemented hash=175c2598e33d]
     public struct Panel: Sendable {
         public static let registry = Registry<Panel>.define("panel")
 
@@ -2956,7 +3891,7 @@ public enum PluginGui {
     }
 
     /// Search index entry of a contributed `SettingsPage`.
-    // parity: plugin/src/gui/registries.ts#SettingEntry [status=implemented hash=d7bd9469590c]
+    // parity: plugin/src/gui/registries.ts#SettingEntry [status=implemented hash=5af1076a1a74]
     public struct SettingEntry: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let title: String
@@ -3034,7 +3969,7 @@ public enum PluginGui {
     }
 
     /// Host parts provided to a contributed server's settings row.
-    // parity: plugin/src/gui/registries.ts#ServerRow [status=adapted hash=a749b7df927a]
+    // parity: plugin/src/gui/registries.ts#ServerRow [status=adapted hash=db65b2490c76]
     public struct ServerRow: Sendable {
         public let key: String
         public let health: @Sendable () -> ServerHealth?
@@ -3052,7 +3987,7 @@ public enum PluginGui {
     }
 
     /// One server entry contributed through a `Server` source.
-    // parity: plugin/src/gui/registries.ts#ServerEntry [status=implemented hash=e45a7d0eedcd]
+    // parity: plugin/src/gui/registries.ts#ServerEntry [status=implemented hash=95f424000e2c]
     public struct ServerEntry: Sendable {
         public struct HttpEndpoint: Equatable, Hashable, Sendable, Codable {
             public let url: String
@@ -3089,7 +4024,7 @@ public enum PluginGui {
     }
 
     /// Source of contributed servers (`Server` registry).
-    // parity: plugin/src/gui/registries.ts#Server [status=implemented hash=8c5b2fc5f859]
+    // parity: plugin/src/gui/registries.ts#Server [status=implemented hash=200b0dc5f83b]
     public struct Server: Sendable {
         public static let registry = Registry<Server>.define("server")
 
@@ -3132,7 +4067,7 @@ public enum PluginGui {
     }
 
     /// Priority-ordered handler opening local links (`LinkHandler` registry).
-    // parity: plugin/src/gui/registries.ts#LinkHandler [status=implemented hash=052ba3b139ba]
+    // parity: plugin/src/gui/registries.ts#LinkHandler [status=implemented hash=3774595cdba7]
     public struct LinkHandler: Sendable {
         public static let registry = Registry<LinkHandler>.define("link-handler")
 
@@ -3155,7 +4090,7 @@ public enum PluginGui {
     }
 
     /// Pill contributed to the window titlebar or tabs footer (`TitlebarItem` registry).
-    // parity: plugin/src/gui/registries.ts#TitlebarItem [status=implemented hash=fcc1a6eed85d]
+    // parity: plugin/src/gui/registries.ts#TitlebarItem [status=implemented hash=8a62edd8a551]
     public struct TitlebarItem: Sendable {
         public static let registry = Registry<TitlebarItem>.define("titlebar-item")
 
@@ -3207,7 +4142,7 @@ public enum PluginGui {
     }
 
     /// Row inside a `ComposerPill` menu popover.
-    // parity: plugin/src/gui/registries.ts#ComposerPillRow [status=implemented hash=20ecc73035ae]
+    // parity: plugin/src/gui/registries.ts#ComposerPillRow [status=implemented hash=b1e3cb45e0a3]
     public struct ComposerPillRow: Sendable {
         public let id: String
         public let label: String
@@ -3298,7 +4233,7 @@ public enum PluginGui {
     }
 
     /// Props passed to a fenced `CodeBlock` renderer or `CodeBlockAction`.
-    // parity: plugin/src/gui/registries.ts#CodeBlockProps [status=implemented hash=1c2f5113e493]
+    // parity: plugin/src/gui/registries.ts#CodeBlockProps [status=implemented hash=46565f5af123]
     public struct CodeBlockProps: Equatable, Hashable, Sendable, Codable {
         public let code: String
         public let language: String
@@ -3312,7 +4247,7 @@ public enum PluginGui {
     }
 
     /// Custom fenced code-block renderer contribution (`CodeBlock` registry).
-    // parity: plugin/src/gui/registries.ts#CodeBlock [status=implemented hash=eca92bc67444]
+    // parity: plugin/src/gui/registries.ts#CodeBlock [status=implemented hash=68a6d9eb04e9]
     public struct CodeBlock: Sendable {
         public static let registry = Registry<CodeBlock>.define("code-block")
 
@@ -3326,7 +4261,7 @@ public enum PluginGui {
     }
 
     /// Button beside a fenced code block's Copy button (`CodeBlockAction` registry).
-    // parity: plugin/src/gui/registries.ts#CodeBlockAction [status=implemented hash=a8030c831cb7]
+    // parity: plugin/src/gui/registries.ts#CodeBlockAction [status=implemented hash=d95090440f6d]
     public struct CodeBlockAction: Sendable {
         public static let registry = Registry<CodeBlockAction>.define("code-block-action")
 
@@ -3440,7 +4375,7 @@ public enum PluginGui {
     }
 
     /// Color theme contribution listed in Settings › Appearance › Theme (`Theme` registry).
-    // parity: plugin/src/gui/registries.ts#Theme [status=implemented hash=0b32e4eee324]
+    // parity: plugin/src/gui/registries.ts#Theme [status=implemented hash=0a937bd6f5ec]
     public struct Theme: Equatable, Hashable, Sendable, Codable {
         public static let registry = Registry<Theme>.define("theme")
 
@@ -3466,7 +4401,7 @@ public enum PluginGui {
     }
 
     /// Places a GUI `Slot` contribution renders with typed slot inputs.
-    // parity: plugin/src/gui/registries.ts#SlotMap [status=implemented hash=12f5f8960d04]
+    // parity: plugin/src/gui/registries.ts#SlotMap [status=implemented hash=93546b7b769e]
     public enum SlotMap: Sendable {
         case windowBottom
         case sessionHeader(screen: SessionScreen, session: MountedSession, active: Bool, compact: Bool)
@@ -3484,7 +4419,7 @@ public enum PluginGui {
     }
 
     /// Slot contribution (`Slot` registry).
-    // parity: plugin/src/gui/registries.ts#Slot [status=implemented hash=0a5982820cd6]
+    // parity: plugin/src/gui/registries.ts#Slot [status=implemented hash=47160f314fe0]
     public struct Slot: Sendable {
         public static let registry = Registry<Slot>.define("slot")
 
@@ -3506,7 +4441,7 @@ public enum PluginGui {
     // MARK: - gui/browser.ts
 
     /// Built-in browser contract (`browser`) exposed via `ctx.use(Browser.contract)`.
-    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=eabc313a3831]
+    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=6fb8c5357cfd]
     public struct Browser: Sendable {
         public static let contract = Contract<Browser>.define("browser")
 
@@ -3539,7 +4474,7 @@ public enum PluginGui {
     }
 
     /// Built-in review changes contract (`review.changes`).
-    // parity: plugin/src/gui/review.ts#Changes [status=implemented hash=39da9c0339ad]
+    // parity: plugin/src/gui/review.ts#Changes [status=implemented hash=2ea3329e256b]
     public struct Changes: Sendable {
         public static let contract = Contract<Changes>.define("review.changes")
 
@@ -3576,7 +4511,7 @@ public enum PluginGui {
     // MARK: - gui/file.ts
 
     /// Props passed to `FileTree.tree`.
-    // parity: plugin/src/gui/file.ts#FileTreeProps [status=implemented hash=00e31e3a0a81]
+    // parity: plugin/src/gui/file.ts#FileTreeProps [status=implemented hash=3f927e5d77ff]
     public struct FileTreeProps: Sendable {
         public let screen: SessionScreen
         public let session: MountedSession
@@ -3677,7 +4612,7 @@ public enum PluginGui {
     }
 
     /// Props passed to a custom `FileViewer` view component.
-    // parity: plugin/src/gui/file.ts#FileViewerProps [status=implemented hash=5a188bf64bf8]
+    // parity: plugin/src/gui/file.ts#FileViewerProps [status=implemented hash=f950c06d1bdc]
     public struct FileViewerProps: Sendable {
         public let bytes: [UInt8]
         public let onDetails: @Sendable ([String]) -> Void
@@ -3717,7 +4652,7 @@ public enum PluginGui {
     // MARK: - gui/context.ts
 
     /// Window plugin context passed to window `setup(ctx)` and returned by `usePlugin()`.
-    // parity: plugin/src/gui/context.ts#Context [status=adapted hash=364c088fdac1]
+    // parity: plugin/src/gui/context.ts#Context [status=adapted hash=272f2438eb28]
     public struct Context: BaseContext, Sendable {
         public let id: String
         public let options: PluginOptions
@@ -3730,7 +4665,13 @@ public enum PluginGui {
         public let system: System
         public let desktop: Desktop?
         public let dialogs: Dialogs
+        public let toast: Toasts
+        public let tabs: Tabs
+        public let attention: Attention
+        public let commands: Commands
         public let links: Links
+        public let embeds: WindowEmbeds
+        public let ui: Ui
         public let locale: Locale
         public let appearance: Appearance
         public let router: Router
@@ -3760,7 +4701,13 @@ public enum PluginGui {
             system: System = System(),
             desktop: Desktop? = nil,
             dialogs: Dialogs = Dialogs(),
+            toast: Toasts = Toasts(),
+            tabs: Tabs = Tabs(),
+            attention: Attention = Attention(),
+            commands: Commands = Commands(),
             links: Links = Links(),
+            embeds: WindowEmbeds = WindowEmbeds(),
+            ui: Ui = Ui(),
             locale: Locale = Locale(),
             appearance: Appearance = Appearance(),
             router: Router = Router(),
@@ -3788,7 +4735,13 @@ public enum PluginGui {
             self.system = system
             self.desktop = desktop
             self.dialogs = dialogs
+            self.toast = toast
+            self.tabs = tabs
+            self.attention = attention
+            self.commands = commands
             self.links = links
+            self.embeds = embeds
+            self.ui = ui
             self.locale = locale
             self.appearance = appearance
             self.router = router
@@ -3843,7 +4796,7 @@ public enum PluginGui {
     // MARK: - gui/main.ts
 
     /// Main-process open window inspector.
-    // parity: plugin/src/gui/main.ts#Windows [status=adapted hash=0458ffeb921d]
+    // parity: plugin/src/gui/main.ts#Windows [status=adapted hash=38ed341a508b]
     public struct Windows: Sendable {
         public let get: @Sendable (Int) -> String?
         public let list: @Sendable () -> [Int]
@@ -3898,7 +4851,7 @@ public enum PluginGui {
     }
 
     /// Synchronous main-process persistent storage (`plugin.<id>`).
-    // parity: plugin/src/gui/main.ts#Storage [status=adapted hash=5595e5c95930]
+    // parity: plugin/src/gui/main.ts#Storage [status=adapted hash=bdd75e1956a4]
     public struct MainStorage: Sendable {
         public let store: @Sendable (_ key: String, _ initial: JSONValue) -> Persisted<JSONValue>
         public let remove: @Sendable (_ key: String) -> Void
@@ -3913,7 +4866,7 @@ public enum PluginGui {
     }
 
     /// Resolved server endpoint with credentials accessible from main.
-    // parity: plugin/src/gui/main.ts#ServerEndpoint [status=implemented hash=88bfef5a18e3]
+    // parity: plugin/src/gui/main.ts#ServerEndpoint [status=implemented hash=2507b3b1987c]
     public struct ServerEndpoint: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let url: String
@@ -3953,7 +4906,7 @@ public enum PluginGui {
     }
 
     /// Lookup table for server endpoints configured by open windows.
-    // parity: plugin/src/gui/main.ts#ServerEndpoints [status=implemented hash=26ec7137bba6]
+    // parity: plugin/src/gui/main.ts#ServerEndpoints [status=implemented hash=8f56aba6da53]
     public struct ServerEndpoints: Sendable {
         public let get: @Sendable (String) -> ServerEndpoint?
 
@@ -4077,6 +5030,14 @@ public enum PluginGui {
 
     // MARK: - gui/plugin.ts
 
+    /// Re-exported cleanup callback (`plugin/src/gui/plugin.ts#Cleanup`).
+    // parity: plugin/src/gui/plugin.ts#Cleanup [status=implemented hash=d994f8b7c86a]
+    public typealias PluginCleanup = Cleanup
+
+    /// Re-exported plugin declarations (`plugin/src/gui/plugin.ts#Declarations`).
+    // parity: plugin/src/gui/plugin.ts#Declarations [status=implemented hash=d994f8b7c86a]
+    public typealias PluginDeclarations = Declarations
+
     /// Synchronous window setup function type.
     // parity: plugin/src/gui/plugin.ts#Setup [status=implemented hash=cf5c9157e457]
     public typealias Setup = @Sendable (SetupContext) -> Cleanup?
@@ -4086,7 +5047,7 @@ public enum PluginGui {
     public typealias MainSetup = @Sendable (MainContext) async throws -> Cleanup?
 
     /// Complete GUI plugin definition (`declarations` plus optional `setup` and/or `main`).
-    // parity: plugin/src/gui/plugin.ts#Definition [status=implemented hash=3b26207b8042]
+    // parity: plugin/src/gui/plugin.ts#Definition [status=implemented hash=2f085e7629e2]
     public struct Definition: Sendable {
         public let declarations: Declarations
         public let setup: Setup?
@@ -4136,7 +5097,7 @@ public enum PluginGui {
     }
 
     /// Active panel placement frame read via `usePanel()`.
-    // parity: plugin/src/gui/solid.ts#PanelFrame [status=implemented hash=502c6cf9a66b]
+    // parity: plugin/src/gui/solid.ts#PanelFrame [status=implemented hash=97c67d068c0d]
     public struct PanelFrame: Sendable {
         public enum Placement: String, Equatable, Hashable, Sendable, Codable {
             case side
@@ -4229,7 +5190,7 @@ public enum PluginGui {
     public static var PanelContext: PanelFrame?
 
     /// Task-local context binding for the active narrow-screen drawer.
-    // parity: plugin/src/gui/internal.ts#DrawerContext [status=adapted hash=dc4ee4975b2c]
+    // parity: plugin/src/gui/internal.ts#DrawerContext [status=adapted hash=826698e80968]
     @TaskLocal
     public static var DrawerContext: DrawerHandle?
 
@@ -4312,7 +5273,7 @@ public enum PluginGui {
     public typealias KeyedValue<T: Sendable> = T
 
     /// Runs `fn` when `source()` yields a value (with a dedicated `LifetimeMarker`), or `otherwise` when `nil`.
-    // parity: plugin/src/gui/reactive.ts#createKeyed [status=adapted hash=7e1911576e27]
+    // parity: plugin/src/gui/reactive.ts#createKeyed [status=adapted hash=867aa0e80e28]
     @discardableResult
     public static func createKeyed<T: Sendable>(
         _ source: KeyedSource<T>,
@@ -4406,7 +5367,7 @@ public enum PluginGui {
     }
 
     /// Built-in command contribution supporting `follows` shortcut inheritance.
-    // parity: plugin/src/gui/builtin.ts#BuiltinCommand [status=implemented hash=3e63ca19eadd]
+    // parity: plugin/src/gui/builtin.ts#BuiltinCommand [status=implemented hash=f823e8c11f44]
     public struct BuiltinCommand: Sendable {
         public static let registry = Registry<BuiltinCommand>.define("command")
 
@@ -4450,7 +5411,7 @@ public enum PluginGui {
     }
 
     /// Built-in extended GUI slot map.
-    // parity: plugin/src/gui/builtin.ts#BuiltinSlotMap [status=implemented hash=4a56ec0b6314]
+    // parity: plugin/src/gui/builtin.ts#BuiltinSlotMap [status=implemented hash=2d012e7b1413]
     public enum BuiltinSlotMap: Sendable {
         case publicSlot(SlotMap)
         case sessionLocationBranchMenu(screen: SessionScreen, session: MountedSession, shown: Bool)
@@ -4459,7 +5420,7 @@ public enum PluginGui {
     }
 
     /// Built-in slot contribution (`BuiltinSlot` registry).
-    // parity: plugin/src/gui/builtin.ts#BuiltinSlot [status=implemented hash=e52149587836]
+    // parity: plugin/src/gui/builtin.ts#BuiltinSlot [status=implemented hash=8d0195d70465]
     public struct BuiltinSlot: Sendable {
         public static let registry = Registry<BuiltinSlot>.define("slot")
 
@@ -4494,7 +5455,7 @@ public enum PluginGui {
     }
 
     /// Factory namespace for built-in window stores (`BuiltinStore.global`, `BuiltinStore.session`).
-    // parity: plugin/src/gui/builtin.ts#BuiltinStore [status=implemented hash=5a08dfeeb223]
+    // parity: plugin/src/gui/builtin.ts#BuiltinStore [status=implemented hash=a97ffaedb8a4]
     public enum BuiltinStore {
         public static func global(
             schema: ToolSchema.ValueSchema = .jsonSchema([:]),
@@ -4532,7 +5493,7 @@ public enum PluginGui {
     }
 
     /// Window storage surface extended for built-in plugins.
-    // parity: plugin/src/gui/builtin.ts#BuiltinStorage [status=adapted hash=06348d1a7387]
+    // parity: plugin/src/gui/builtin.ts#BuiltinStorage [status=adapted hash=22588a9d1a1d]
     public struct BuiltinStorage: Sendable {
         public let base: Storage
         public let store: @Sendable (String, BuiltinStoreOptions) -> Persisted<JSONValue>
@@ -4606,20 +5567,20 @@ public enum PluginGui {
     }
 
     /// Projects a window `Context` into `BuiltinContext` for built-in plugins.
-    // parity: plugin/src/gui/builtin.ts#builtinContext [status=implemented hash=b9b766135a80]
+    // parity: plugin/src/gui/builtin.ts#builtinContext [status=implemented hash=edd46a99dc9a]
     public static func builtinContext(_ ctx: Context) -> BuiltinContext {
         BuiltinContext(base: ctx)
     }
 
     /// Legacy migration source for built-in main-process stores.
-    // parity: plugin/src/gui/builtin.ts#MainStoreFrom [status=implemented hash=5b3dee3587af]
+    // parity: plugin/src/gui/builtin.ts#MainStoreFrom [status=implemented hash=743c0d6a9a60]
     public enum MainStoreFrom: Equatable, Hashable, Sendable, Codable {
         case settings(key: String, file: String? = nil)
         case state(namespace: String, key: String)
     }
 
     /// Main-process storage extended with legacy migration sources.
-    // parity: plugin/src/gui/builtin.ts#BuiltinMainStorage [status=adapted hash=3860a502d762]
+    // parity: plugin/src/gui/builtin.ts#BuiltinMainStorage [status=adapted hash=ac40ebc51e1a]
     public struct BuiltinMainStorage: Sendable {
         public let base: MainStorage
         public let store: @Sendable (_ key: String, _ initial: JSONValue, _ from: [MainStoreFrom]) -> Persisted<JSONValue>
@@ -4758,7 +5719,7 @@ public enum PluginGui {
     }
 
     /// Resolves GUI enable state: built-ins always run; other plugins follow saved rows (defaulting to enabled).
-    // parity: plugin/src/gui/host.ts#pluginEnabled [status=implemented hash=e4c847bdd9ac]
+    // parity: plugin/src/gui/host.ts#pluginEnabled [status=implemented hash=92aa82c83d78]
     public static func pluginEnabled(id: String, builtin: Bool, state: [EnableState]) -> Bool {
         if builtin { return true }
         return state.first(where: { $0.id == id })?.enabled ?? true
@@ -4795,13 +5756,13 @@ public enum PluginGui {
     }
 
     /// Constructs an inert module placeholder labeled `[inert module <name>]`.
-    // parity: plugin/src/gui/host.ts#inertModule [status=adapted hash=22770286913e]
+    // parity: plugin/src/gui/host.ts#inertModule [status=adapted hash=8ddf90690d14]
     public static func inertModule(_ name: String) -> InertModule {
         InertModule(moduleName: name)
     }
 
     /// Checked result of evaluating a plugin's `./gui-experimental` bundle.
-    // parity: plugin/src/gui/host.ts#PluginBundle [status=implemented hash=52aa8dfecbdc]
+    // parity: plugin/src/gui/host.ts#PluginBundle [status=implemented hash=ec690fbb60e1]
     public struct PluginBundle: Sendable {
         public let definition: Declarations
         public let setup: Setup?
@@ -4857,7 +5818,7 @@ public enum PluginGui {
     }
 
     /// Evaluates and validates a plugin's `./gui-experimental` bundle via the host evaluator or JSON descriptor manifest.
-    // parity: plugin/src/gui/host.ts#evaluatePluginBundle [status=adapted hash=cb8c247d3c8c]
+    // parity: plugin/src/gui/host.ts#evaluatePluginBundle [status=adapted hash=424112e38700]
     public static func evaluatePluginBundle(_ code: String, host: PluginBundleHost) throws -> PluginBundle {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -4986,7 +5947,7 @@ public enum PluginGui {
     }
 
     /// Returns whether a server `PluginSchema.Info` ships an active non-builtin `./gui-experimental` bundle.
-    // parity: plugin/src/gui/host.ts#shipsPluginGui [status=implemented hash=fc761aabb003]
+    // parity: plugin/src/gui/host.ts#shipsPluginGui [status=implemented hash=05a6934e29ee]
     public static func shipsPluginGui(_ plugin: PluginSchema.Info) -> Bool {
         guard let id = plugin.id, !id.rawValue.isEmpty else { return false }
         if case .builtin = plugin.source { return false }
@@ -4995,7 +5956,7 @@ public enum PluginGui {
     }
 
     /// Server plugin GUI bundle transferred over the desktop bridge.
-    // parity: plugin/src/gui/host.ts#BridgePluginGui [status=implemented hash=5c378c23d39a]
+    // parity: plugin/src/gui/host.ts#BridgePluginGui [status=implemented hash=6f4daaa5e118]
     public struct BridgePluginGui: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let revision: String
@@ -5011,7 +5972,7 @@ public enum PluginGui {
     }
 
     /// Active server plugin GUIs and reserved-ID conflicts reported by main.
-    // parity: plugin/src/gui/host.ts#BridgePluginGuis [status=implemented hash=009c347c0395]
+    // parity: plugin/src/gui/host.ts#BridgePluginGuis [status=implemented hash=ea93701fc000]
     public struct BridgePluginGuis: Equatable, Hashable, Sendable, Codable {
         public let plugins: [BridgePluginGui]
         public let reserved: [String]
@@ -5053,7 +6014,7 @@ public enum PluginGui {
     }
 
     /// Preload bridge interface connecting desktop main and renderer hosts.
-    // parity: plugin/src/gui/host.ts#Bridge [status=adapted hash=191b953cb4f6]
+    // parity: plugin/src/gui/host.ts#Bridge [status=adapted hash=2761c3d25d5b]
     public struct Bridge: Sendable {
         public let packaged: Bool
         public let call: @Sendable (_ ipc: String, _ method: String, _ input: JSONValue?, _ signal: AbortSignal?) async throws -> JSONValue
@@ -5132,7 +6093,7 @@ public enum PluginGui {
     // MARK: - gui/vite.ts
 
     /// Build configuration options for bundling a plugin's `./gui-experimental` CJS output.
-    // parity: plugin/src/gui/vite.ts#GuiOptions [status=implemented hash=8bf211e40665]
+    // parity: plugin/src/gui/vite.ts#GuiOptions [status=implemented hash=a6e854a0284b]
     public struct GuiOptions: Equatable, Hashable, Sendable, Codable {
         public let entry: String?
         public let outFile: String?

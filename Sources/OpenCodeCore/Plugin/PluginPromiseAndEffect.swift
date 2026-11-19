@@ -1007,7 +1007,7 @@ public enum PluginEffect {
     }
 
     /// Base mutable session model request payload (`system`, `messages`, `options`).
-    // parity: plugin/src/effect/session.ts#SessionRequest [status=implemented hash=a0a3e13ed41f]
+    // parity: plugin/src/effect/session.ts#SessionRequest [status=implemented hash=3d2e16cf132a]
     public struct SessionRequest: Equatable, Sendable, Codable {
         public let sessionID: SessionID
         public let model: ModelSchema.Ref
@@ -1423,6 +1423,7 @@ public enum PluginEffect {
         public let list: @Sendable () async throws -> [SessionSchema.Info]
         public let get: @Sendable (SessionID) async throws -> SessionSchema.Info
         public let create: @Sendable (_ title: String?, _ agent: AgentSchema.ID?, _ model: ModelSchema.Ref?) async throws -> SessionSchema.Info
+        public let update: @Sendable (SessionID, SessionSchema.PermissionRuleset?) async throws -> Void
         public let remove: @Sendable (SessionID) async throws -> Void
         public let prompt: @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void
         public let synthetic: @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void
@@ -1439,6 +1440,7 @@ public enum PluginEffect {
                 _, _, _ in
                 throw ToolSchema.ToolError(message: "Session creation unavailable")
             },
+            update: @escaping @Sendable (SessionID, SessionSchema.PermissionRuleset?) async throws -> Void = { _, _ in },
             remove: @escaping @Sendable (SessionID) async throws -> Void = { _ in },
             prompt: @escaping @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void = { _, _, _ in },
             synthetic: @escaping @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void = { _, _, _, _, _ in },
@@ -1449,6 +1451,7 @@ public enum PluginEffect {
             self.list = list
             self.get = get
             self.create = create
+            self.update = update
             self.remove = remove
             self.prompt = prompt
             self.synthetic = synthetic
@@ -2460,7 +2463,7 @@ public enum PluginPromise {
     // parity: plugin/src/promise/session.ts#SessionRequestMessage [status=implemented hash=e2c105118de9]
     public typealias SessionRequestMessage = PluginEffect.SessionRequestMessage
 
-    // parity: plugin/src/promise/session.ts#SessionRequest [status=implemented hash=a0a3e13ed41f]
+    // parity: plugin/src/promise/session.ts#SessionRequest [status=implemented hash=3d2e16cf132a]
     public typealias SessionRequest = PluginEffect.SessionRequest
 
     // parity: plugin/src/promise/session.ts#SessionContext [status=implemented hash=cbe372bc8267]
@@ -3004,7 +3007,7 @@ public enum PluginPromise {
 
     /// Adapts a Promise-style plugin into an Effect-style plugin so the core plugin host runs both uniformly.
     /// Every hook/transform registration attaches to the plugin scope, and returned `Cleanup` runs on scope disposal.
-    // parity: plugin/src/promise/adapter.ts#fromPromise [status=adapted hash=6f6da91f4f58]
+    // parity: plugin/src/promise/adapter.ts#fromPromise [status=adapted hash=21d1b641f38d]
     public static func fromPromise(_ plugin: Plugin) -> PluginEffect.Plugin {
         let effectBody: @Sendable (PluginEffect.Context) async throws -> Void = { host in
             let promiseContext = makePromiseContext(from: host)

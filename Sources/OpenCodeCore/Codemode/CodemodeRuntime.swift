@@ -132,7 +132,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/tool.ts#Options [status=implemented hash=a163abca2528]
+        // parity: codemode/src/codemode/tool.ts#Options [status=implemented hash=0fc73ea97293]
         public struct Options: Sendable {
             public let description: String
             public let input: SchemaType
@@ -275,7 +275,7 @@ public enum CodemodeEngine {
             case constant(CodemodeLanguage.Value)
         }
 
-        // parity: codemode/src/codemode/extension.ts#Extension [status=implemented hash=769ff6810793]
+        // parity: codemode/src/codemode/extension.ts#Extension [status=implemented hash=1ea19f6722da]
         public struct Definition: Sendable {
             public let name: String
             public let globals: [String: GlobalItem]
@@ -1250,7 +1250,7 @@ public enum CodemodeEngine {
 
     // MARK: - Static Tool Call Scanner (src/codemode/scan.ts)
 
-    // parity: codemode/src/codemode/scan.ts#scanTools [status=implemented hash=8fd600da75d3]
+    // parity: codemode/src/codemode/scan.ts#scanTools [status=implemented hash=5b538093f5cf]
     public static func scanTools(_ code: String) -> Result<[String], CodemodeLanguage.Diagnostic> {
         if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .failure(CodemodeLanguage.Diagnostic(kind: "ParseError", message: "Code cannot be empty."))
@@ -1563,6 +1563,33 @@ public enum CodemodeEngine {
         }
     }
 
+    // MARK: - CodeMode Top-Level Re-Exports (src/codemode/codemode.ts)
+
+    // parity: codemode/src/codemode/codemode.ts#Snapshot [status=implemented hash=ef64402c2c5c]
+    public typealias Snapshot = CodemodeLanguage.Snapshot
+
+    // parity: codemode/src/codemode/codemode.ts#SnapshotHeader [status=implemented hash=ef64402c2c5c]
+    public typealias SnapshotHeader = CodemodeLanguage.Header
+
+    // parity: codemode/src/codemode/codemode.ts#SnapshotError [status=implemented hash=3b5dae691337]
+    public typealias SnapshotError = CodemodeLanguage.SnapshotError
+
+    // parity: codemode/src/codemode/codemode.ts#SuspendError [status=implemented hash=3b5dae691337]
+    public typealias SuspendError = CodemodeLanguage.SuspendError
+
+    // parity: codemode/src/codemode/codemode.ts#fromBytes [status=implemented hash=3b5dae691337]
+    public static func fromBytes(_ bytes: [UInt8]) throws -> Snapshot {
+        try CodemodeLanguage.fromBytes(bytes)
+    }
+
+    // parity: codemode/src/codemode/codemode.ts#toBytes [status=implemented hash=3b5dae691337]
+    public static func toBytes(_ snapshot: Snapshot) throws -> [UInt8] {
+        try CodemodeLanguage.toBytes(snapshot)
+    }
+
+    // parity: codemode/src/codemode/codemode.ts#scanTools [status=implemented hash=3b5dae691337]
+    public static let scanCodeModeTools: @Sendable (String) -> Result<[String], CodemodeLanguage.Diagnostic> = scanTools
+
     // parity: codemode/src/codemode/codemode.ts#RunOptions [status=implemented hash=e17ea202c38d]
     public struct RunOptions: Sendable {
         public let extensions: [Extension.Definition]?
@@ -1572,7 +1599,7 @@ public enum CodemodeEngine {
         }
     }
 
-    // parity: codemode/src/codemode/codemode.ts#ProgramOptions [status=implemented hash=7f4704673644]
+    // parity: codemode/src/codemode/codemode.ts#ProgramOptions [status=implemented hash=598f433044a4]
     public struct ProgramOptions: Sendable {
         public let extensions: [Extension.Definition]?
         public let runId: String?
@@ -1805,7 +1832,7 @@ public enum CodemodeEngine {
         }
     }
 
-    // parity: codemode/src/codemode/codemode.ts#Runtime [status=implemented hash=06dca549638b]
+    // parity: codemode/src/codemode/codemode.ts#Runtime [status=implemented hash=26711fad6596]
     public struct Runtime: Sendable {
         public let catalog: [ToolRuntime.ToolDescription]
         public let execute: @Sendable (String, [String: DataValue]?, RunOptions?) async -> ExecutionResult

@@ -177,7 +177,7 @@ public enum PluginContract {
         }
 
         /// Resolved module entrypoints exported by a plugin package or directory.
-        // parity: plugin/src/host.ts#Entrypoints [status=implemented hash=e0f457e5105e]
+        // parity: plugin/src/host.ts#Entrypoints [status=implemented hash=8dfdd89faaba]
         public struct Entrypoints: Equatable, Hashable, Sendable, Codable {
             public let server: String?
             public let tui: String?

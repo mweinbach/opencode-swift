@@ -613,19 +613,26 @@ public enum CodemodeLanguage {
     public final class Source: Sendable {
         public let id: String
         public let code: String
-        public let program: ProgramAST
-        public let nodes: [AstNode]
+        private let storedProgram: ProgramAST
+        private let storedNodes: [AstNode]
+
+        // parity: codemode/src/language/runtime/source.ts#Source.program [status=implemented hash=f8e23bf26c60]
+        public var program: ProgramAST { storedProgram }
+
+        // parity: codemode/src/language/runtime/source.ts#Source.nodes [status=implemented hash=6b00ceea4e28]
+        public var nodes: [AstNode] { storedNodes }
 
         public init(id: String, code: String, program: ProgramAST) {
             self.id = id
             self.code = code
-            self.program = program
-            self.nodes = Self.collectNodes(program: program, sourceId: id)
+            self.storedProgram = program
+            self.storedNodes = Self.collectNodes(program: program, sourceId: id)
         }
 
+        // parity: codemode/src/language/runtime/source.ts#Source.node [status=implemented hash=0ddf33fcbec0]
         public func node(_ id: NodeId) -> AstNode? {
-            guard id.source == self.id, id.index >= 0, id.index < nodes.count else { return nil }
-            return nodes[id.index]
+            guard id.source == self.id, id.index >= 0, id.index < storedNodes.count else { return nil }
+            return storedNodes[id.index]
         }
 
         private static func collectNodes(program: ProgramAST, sourceId: String) -> [AstNode] {
@@ -2859,7 +2866,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/code.ts#Code [status=implemented hash=91a7ebc36a19]
+    // parity: codemode/src/language/code.ts#Code [status=implemented hash=6e5476af5885]
     public final class Code: Sendable {
         public let source: SourceRef
         public let index: Int
@@ -2920,6 +2927,7 @@ public enum CodemodeLanguage {
             self.sourceObj = sourceObj
         }
 
+        // parity: codemode/src/language/code.ts#Code.nodeIndexAt [status=implemented hash=344825e16d88]
         public func nodeIndexAt(_ pc: Int) -> Int {
             let count = sites.count >> 1
             if count == 0 { return -1 }
@@ -2939,12 +2947,14 @@ public enum CodemodeLanguage {
             return best
         }
 
+        // parity: codemode/src/language/code.ts#Code.siteAt [status=implemented hash=e284696db5cf]
         public func siteAt(_ pc: Int) -> AstNode? {
             let idx = nodeIndexAt(pc)
             guard idx >= 0, let nodes = sourceObj?.nodes, idx < nodes.count else { return nil }
             return nodes[idx]
         }
 
+        // parity: codemode/src/language/code.ts#Code.withSource [status=implemented hash=57a886457613]
         public func withSource(_ sourceObj: Source) -> Code {
             Code(
                 source: source,
@@ -3048,7 +3058,7 @@ public enum CodemodeLanguage {
         public var description: String { message }
     }
 
-    // parity: codemode/src/language/code.ts#CodeBuilder [status=implemented hash=7b1063e21ad5]
+    // parity: codemode/src/language/code.ts#CodeBuilder [status=implemented hash=02b61e5d8310]
     public final class CodeBuilder: Sendable {
         private struct State: Sendable {
             var words: [Int32] = []
@@ -3104,7 +3114,35 @@ public enum CodemodeLanguage {
             self.state = Mutex(State(flags: flags, locals: locals))
         }
 
-        public func addConst(_ value: ConstValue) -> Int {
+        // parity: codemode/src/language/code.ts#CodeBuilder.pc [status=implemented hash=e0470568ca97]
+        public var pc: Int {
+            state.withLock { $0.words.count }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.adjustDepth [status=implemented hash=7fa0637432fe]
+        public func adjustDepth(_ delta: Int) {
+            state.withLock { s in
+                if s.depth < 0 { return }
+                s.depth += delta
+                if s.depth > s.maxStack { s.maxStack = s.depth }
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.setDepth [status=implemented hash=79e9c28719e9]
+        public func setDepth(_ depth: Int) {
+            state.withLock { s in
+                s.depth = depth
+                if s.depth > s.maxStack { s.maxStack = s.depth }
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.unreachable [status=implemented hash=2395e07d6869]
+        public func unreachable() {
+            state.withLock { $0.depth = -1 }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.constant [status=implemented hash=554a260e76fd]
+        public func constant(_ value: ConstValue) -> Int {
             state.withLock { s in
                 switch value {
                 case .string(let str):
@@ -3128,19 +3166,182 @@ public enum CodemodeLanguage {
             }
         }
 
-        public func emit(_ op: OpCode, a: Int32 = 0, bx: Int32 = 0, nodeIndex: Int = -1) throws {
-            let word = try packWord(op, a, bx)
-            state.withLock { s in
-                if nodeIndex >= 0 && nodeIndex != s.lastNodeIndex {
-                    s.sitePairs.append(Int32(s.words.count))
-                    s.sitePairs.append(Int32(nodeIndex))
-                    s.lastNodeIndex = nodeIndex
-                }
-                s.words.append(word)
+        public func addConst(_ value: ConstValue) -> Int {
+            constant(value)
+        }
+
+        private static func recordSiteLocked(_ s: inout State, pc: Int, nodeIndex: Int) {
+            if nodeIndex < 0 || nodeIndex == s.lastNodeIndex { return }
+            s.sitePairs.append(Int32(pc))
+            s.sitePairs.append(Int32(nodeIndex))
+            s.lastNodeIndex = nodeIndex
+        }
+
+        private static func pushOpLocked(
+            _ s: inout State,
+            op: OpCode,
+            a: Int,
+            bx: Int,
+            nodeIndex: Int,
+            forceWide: Bool
+        ) throws -> Int {
+            if op == Op.EXTRA {
+                throw CodemodeLanguage.rangeError("Invalid opcode: \(op)")
+            }
+            if op == Op.NEW && a > 0xff {
+                throw CodemodeLanguage.rangeError("Op.NEW operand a out of range: \(a)")
+            }
+            if a > 0xffff {
+                recordSiteLocked(&s, pc: s.words.count, nodeIndex: nodeIndex)
+                s.words.append(try packWord(Op.EXTRA, 0, Int32((a >> 16) & 0xffff)))
+                s.words.append(try packWord(Op.EXTRA, Int32((a >> 8) & 0xff), Int32((bx >> 16) & 0xffff)))
+            } else if forceWide || a > 0xff || (op != Op.PUSH_INT && bx > 0xffff) {
+                recordSiteLocked(&s, pc: s.words.count, nodeIndex: nodeIndex)
+                s.words.append(try packWord(Op.EXTRA, Int32((a >> 8) & 0xff), Int32((bx >> 16) & 0xffff)))
+            }
+            let emittedPc = s.words.count
+            recordSiteLocked(&s, pc: emittedPc, nodeIndex: nodeIndex)
+            s.words.append(try packWord(op, Int32(a & 0xff), Int32(bx & 0xffff)))
+            if !s.wideJumps && !s.forceExtra && s.words.count > 0xffff {
+                throw CodeSizeOverflow()
+            }
+            return emittedPc
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.emit [status=implemented hash=5c6bfb2bd79d]
+        @discardableResult
+        public func emit(_ op: OpCode, a: Int32 = 0, bx: Int32 = 0, nodeIndex: Int = -1, stackDelta: Int = 0) throws -> Int {
+            try state.withLock { s in
+                if s.depth < 0 { return s.words.count }
+                let emitted = try Self.pushOpLocked(&s, op: op, a: Int(a), bx: Int(bx), nodeIndex: nodeIndex, forceWide: s.forceExtra)
+                s.depth += stackDelta
+                if s.depth > s.maxStack { s.maxStack = s.depth }
+                return emitted
             }
         }
 
-        public func build() -> Code {
+        // parity: codemode/src/language/code.ts#CodeBuilder.emitNumber [status=implemented hash=e748b2ea3481]
+        public func emitNumber(_ value: Double, nodeIndex: Int = -1) throws {
+            let isNegZero = value == 0 && value.sign == .minus
+            let forceExtra = state.withLock { $0.forceExtra }
+            if value.isFinite && value.rounded(.towardZero) == value && !isNegZero && value >= -32768 && value <= 32767 && !forceExtra {
+                let raw = Int32(Int(value)) & 0xffff
+                try emit(Op.PUSH_INT, a: 0, bx: raw, nodeIndex: nodeIndex, stackDelta: 1)
+                return
+            }
+            let k = constant(.number(value))
+            try emit(Op.PUSH_CONST, a: 0, bx: Int32(k), nodeIndex: nodeIndex, stackDelta: 1)
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.emitString [status=implemented hash=60cf4472f289]
+        public func emitString(_ value: String, nodeIndex: Int = -1) throws {
+            let k = constant(.string(value))
+            try emit(Op.PUSH_CONST, a: 0, bx: Int32(k), nodeIndex: nodeIndex, stackDelta: 1)
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.newLabel [status=implemented hash=a91cbd8fdc92]
+        public func newLabel(depth: Int? = nil) -> Label {
+            Label(pc: -1, patches: [], depth: depth)
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.mark [status=implemented hash=e53bac945b16]
+        public func mark(_ label: inout Label) throws {
+            try state.withLock { s in
+                let target = s.words.count
+                label.pc = target
+                if let labelDepth = label.depth {
+                    s.depth = labelDepth
+                    if s.depth > s.maxStack { s.maxStack = s.depth }
+                } else if s.depth >= 0 {
+                    label.depth = s.depth
+                }
+                for patchPc in label.patches {
+                    let hasExtra = patchPc > 0 && UInt8(truncatingIfNeeded: s.words[patchPc - 1]) == Op.EXTRA
+                    if !hasExtra {
+                        if target > 0xffff { throw CodeSizeOverflow() }
+                        s.words[patchPc] = (s.words[patchPc] & 0xffff) | Int32(truncatingIfNeeded: (target & 0xffff) << 16)
+                    } else {
+                        let hi = (target >> 16) & 0xffff
+                        let lo = target & 0xffff
+                        s.words[patchPc - 1] = (s.words[patchPc - 1] & 0xffff) | Int32(truncatingIfNeeded: hi << 16)
+                        s.words[patchPc] = (s.words[patchPc] & 0xffff) | Int32(truncatingIfNeeded: lo << 16)
+                    }
+                }
+                label.patches.removeAll()
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.emitJump [status=implemented hash=6a47273cb977]
+        public func emitJump(
+            _ op: OpCode,
+            a: Int = 0,
+            label: inout Label,
+            nodeIndex: Int = -1,
+            jumpDelta: Int = 0,
+            fallDelta: Int? = 0
+        ) throws {
+            try state.withLock { s in
+                if s.depth < 0 { return }
+                let targetDepth = s.depth + jumpDelta
+                if label.depth == nil { label.depth = targetDepth }
+                let known = label.pc >= 0
+                if known && !s.wideJumps && !s.forceExtra && label.pc > 0xffff {
+                    throw CodeSizeOverflow()
+                }
+                let emittedPc = try Self.pushOpLocked(
+                    &s,
+                    op: op,
+                    a: a,
+                    bx: known ? label.pc : 0,
+                    nodeIndex: nodeIndex,
+                    forceWide: s.wideJumps || s.forceExtra
+                )
+                if !known { label.patches.append(emittedPc) }
+                if let fallDelta {
+                    s.depth += fallDelta
+                    if s.depth > s.maxStack { s.maxStack = s.depth }
+                } else {
+                    s.depth = -1
+                }
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.addHandler [status=implemented hash=d6c8c036040e]
+        public func addHandler(start: Int, end: Int, target: Int, depth: Int) {
+            guard start < end, target >= 0 else { return }
+            state.withLock { s in
+                s.handlerWords.append(contentsOf: [Int32(start), Int32(end), Int32(target), Int32(depth)])
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.reserveFinally [status=implemented hash=1a29d03d9c34]
+        public func reserveFinally() -> Int {
+            state.withLock { s in
+                let level = s.finallyLevelOffsets.count
+                s.finallyLevelOffsets.append(-1)
+                return level
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.setFinally [status=implemented hash=f4e15a96829c]
+        public func setFinally(level: Int, tagSlot: Int, valSlot: Int, entryDepth: Int, targets: [Int]) throws {
+            try state.withLock { s in
+                guard level >= 0, level < s.finallyLevelOffsets.count else {
+                    throw CodemodeLanguage.rangeError("Finally level out of range: \(level)")
+                }
+                s.finallyLevelOffsets[level] = Int32(s.finallyWords.count)
+                s.finallyWords.append(contentsOf: [Int32(tagSlot), Int32(valSlot), Int32(entryDepth), Int32(targets.count)])
+                for t in targets {
+                    guard t >= -1 && t <= 0x7fffffff else {
+                        throw CodemodeLanguage.rangeError("Finally target out of range: \(t)")
+                    }
+                    s.finallyWords.append(Int32(t))
+                }
+            }
+        }
+
+        // parity: codemode/src/language/code.ts#CodeBuilder.finish [status=implemented hash=875080499824]
+        public func finish() -> Code {
             state.withLock { s in
                 Code(
                     source: source,
@@ -3163,6 +3364,10 @@ public enum CodemodeLanguage {
                     sourceObj: sourceObj
                 )
             }
+        }
+
+        public func build() -> Code {
+            finish()
         }
     }
 
@@ -3313,7 +3518,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#analyzeScopes [status=implemented hash=b13f4d4b187d]
+    // parity: codemode/src/language/compiler/scope.ts#analyzeScopes [status=implemented hash=31dcea3b40aa]
     public static func analyzeScopes(_ source: Source, internal isInternal: Bool = false) -> ScopeAnalysis {
         var functions: [FunctionInfo] = []
         var globalsSet: Set<String> = []
@@ -3571,7 +3776,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/compile.ts#compileSource [status=adapted hash=47866649aa85]
+    // parity: codemode/src/language/compiler/compile.ts#compileSource [status=adapted hash=962946c12371]
     public static func compileSource(_ source: Source, options: CompileOptions = CompileOptions()) -> [Code] {
         let analysis = analyzeScopes(source, internal: options.isInternal)
         let ref = SourceRef(id: source.id, hash: snapshotHash(source.code))
@@ -3587,7 +3792,7 @@ public enum CodemodeLanguage {
                 locals: fn.localNames.count,
                 localNames: fn.localNames
             )
-            try? builder.emit(fn.index == 0 ? Op.END_PROGRAM : Op.RETURN)
+            _ = try? builder.emit(fn.index == 0 ? Op.END_PROGRAM : Op.RETURN)
             return builder.build()
         }
     }
@@ -3819,22 +4024,27 @@ public enum CodemodeLanguage {
         private struct State: Sendable {
             var entries: [Entry] = []
             var keyIndex: [SameValueZeroKey: Int] = [:]
+            var cursors: [TableCursor] = []
             var tombstones: Int = 0
+            var pruneAt: Int = 16
         }
 
         private let state = Mutex(State())
 
         public init() {}
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.size [status=implemented hash=abef89851de1]
         public var size: Int {
             state.withLock { $0.keyIndex.count }
         }
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.has [status=implemented hash=04808716ce43]
         public func has(_ key: Value) -> Bool {
             let k = SameValueZeroKey(key)
             return state.withLock { $0.keyIndex[k] != nil }
         }
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.get [status=implemented hash=551651e498b4]
         public func get(_ key: Value) -> Value {
             let k = SameValueZeroKey(key)
             return state.withLock { s in
@@ -3843,6 +4053,7 @@ public enum CodemodeLanguage {
             }
         }
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.set [status=implemented hash=aed8fd42d5dd]
         public func set(_ key: Value, _ value: Value) {
             let normalizedKey: Value = if case .number(let n) = key, n == 0 { .number(0) } else { key }
             let k = SameValueZeroKey(normalizedKey)
@@ -3856,6 +4067,7 @@ public enum CodemodeLanguage {
             }
         }
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.add [status=implemented hash=79e0fb8c9603]
         public func add(_ key: Value) {
             if !has(key) { set(key, .undefined) }
         }
@@ -3874,11 +4086,57 @@ public enum CodemodeLanguage {
             }
         }
 
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.clear [status=implemented hash=545c4123e6dd]
         public func clear() {
             state.withLock { s in
                 s.entries.removeAll(keepingCapacity: false)
                 s.keyIndex.removeAll(keepingCapacity: false)
                 s.tombstones = 0
+                for c in s.cursors where !c.done {
+                    c.index = 0
+                }
+            }
+        }
+
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.cursor [status=implemented hash=0f5fc2e15b83]
+        public func cursor() -> TableCursor {
+            track(TableCursor(index: 0, done: false))
+        }
+
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.track [status=implemented hash=f013c2b6971b]
+        @discardableResult
+        public func track(_ cursor: TableCursor) -> TableCursor {
+            state.withLock { s in
+                if s.cursors.count >= s.pruneAt {
+                    s.cursors = s.cursors.filter { !$0.done }
+                    s.pruneAt = max(16, s.cursors.count * 2)
+                }
+                s.cursors.append(cursor)
+            }
+            return cursor
+        }
+
+        // parity: codemode/src/language/runtime/table.ts#OrderedTable.advance [status=implemented hash=4eaec371c00a]
+        public func advance(_ cursor: TableCursor) -> Int {
+            if cursor.done { return -1 }
+            return state.withLock { s in
+                var at = cursor.index
+                while at < s.entries.count {
+                    if case .live = s.entries[at] {
+                        cursor.index = at + 1
+                        return at
+                    }
+                    at += 1
+                }
+                cursor.done = true
+                return -1
+            }
+        }
+
+        public func entry(at index: Int) -> (Value, Value)? {
+            state.withLock { s in
+                guard index >= 0, index < s.entries.count, case .live(let k, let v) = s.entries[index] else { return nil }
+                return (k, v)
             }
         }
 
@@ -3902,14 +4160,21 @@ public enum CodemodeLanguage {
         }
 
         private static func compactLocked(_ s: inout State) {
+            var remap = [Int](repeating: 0, count: s.entries.count + 1)
             var compacted: [Entry] = []
             compacted.reserveCapacity(s.keyIndex.count)
             s.keyIndex.removeAll(keepingCapacity: true)
-            for e in s.entries {
+            for (oldIdx, e) in s.entries.enumerated() {
+                remap[oldIdx] = compacted.count
                 if case .live(let k, let v) = e {
                     s.keyIndex[SameValueZeroKey(k)] = compacted.count
                     compacted.append(.live(key: k, value: v))
                 }
+            }
+            remap[s.entries.count] = compacted.count
+            for c in s.cursors where !c.done {
+                let idx = max(0, min(c.index, s.entries.count))
+                c.index = remap[idx]
             }
             s.entries = compacted
             s.tombstones = 0
@@ -4038,7 +4303,7 @@ public enum CodemodeLanguage {
 
     // MARK: - Intrinsic Names (src/language/runtime/intrinsic-names.ts)
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#Roots [status=implemented hash=4ca606ee0f94]
+    // parity: codemode/src/language/runtime/intrinsic-names.ts#Roots [status=implemented hash=f676632bc1ea]
     public struct Roots: Sendable {
         public let globals: [(String, Value)]
         public let builtins: Builtins
@@ -4068,7 +4333,7 @@ public enum CodemodeLanguage {
         cachedStaticNames.withLock { $0 }
     }
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames [status=implemented hash=98a15b15c913]
+    // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames [status=implemented hash=7c80d701b4a8]
     public final class IntrinsicNames: Sendable {
         private let byName: [String: Obj]
         private let byId: [ObjectIdentifier: String]
@@ -4113,17 +4378,28 @@ public enum CodemodeLanguage {
             }
         }
 
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.values [status=implemented hash=2cd16b96586f]
         public var values: [Obj] { orderedValues }
+
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.nameOf [status=implemented hash=f493d7c263ea]
         public func nameOf(_ value: Obj) -> String? { byId[ObjectIdentifier(value)] }
+
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.valueOf [status=implemented hash=ef3c97e74236]
         public func valueOf(_ name: String) -> Obj? { byName[name] }
+
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.all [status=implemented hash=ee4528ee2d26]
         public func all() -> [String] { orderedNames }
+
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.hosts [status=implemented hash=bb983fed8080]
         public func hosts() -> [String] { hostNamesList }
+
+        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.changed [status=implemented hash=dbb048db447c]
         public func changed() -> [Obj] { orderedValues.filter { !CodemodeLanguage.unchanged($0) } }
     }
 
     // MARK: - Prelude & Internal Prelude (src/language/prelude/*, internal-prelude.ts)
 
-    // parity: codemode/src/language/prelude/source.ts#code [status=adapted hash=e9a0dd2421d6]
+    // parity: codemode/src/language/prelude/source.ts#code [status=adapted hash=4564f3791d24]
     public static let preludeSourceCode: String = """
     // Code Mode built-in JavaScript prelude helpers
     """
@@ -4161,7 +4437,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/prelude/helpers.ts#helpers [status=adapted hash=5df84e3064e4]
+    // parity: codemode/src/language/prelude/helpers.ts#helpers [status=adapted hash=bb972f38545b]
     public static func helpers() -> [String: String] {
         [
             "toPrimitive": "internal:toPrimitive",
@@ -4184,6 +4460,7 @@ public enum CodemodeLanguage {
             self.functions = functions
         }
 
+        // parity: codemode/src/language/prelude/prelude.ts#Prelude.fn [status=implemented hash=3b62689aafb9]
         public func fn(_ name: String) -> Callable? {
             functions[name]
         }
@@ -4200,7 +4477,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#INTERNAL_SOURCE [status=adapted hash=f193b53f9711]
+    // parity: codemode/src/language/internal-prelude.ts#INTERNAL_SOURCE [status=adapted hash=bd689653a7c6]
     public static let INTERNAL_SOURCE: String = "// Code Mode internal VM prelude"
 
     // parity: codemode/src/language/internal-prelude.ts#getInternalPrelude [status=implemented hash=305e479371fd]
@@ -4213,7 +4490,7 @@ public enum CodemodeLanguage {
         getInternalPrelude().first { $0.name == name }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#registerVmIntrinsics [status=implemented hash=12599e77f7cc]
+    // parity: codemode/src/language/internal-prelude.ts#registerVmIntrinsics [status=implemented hash=65955908b6ea]
     public static func registerVmIntrinsics(_ registry: inout [String: VmIntrinsic]) {
         registry["isArray"] = VmIntrinsic(name: "isArray") { args in
             if case .object(let obj) = args.first { return .bool(obj is Arr) }

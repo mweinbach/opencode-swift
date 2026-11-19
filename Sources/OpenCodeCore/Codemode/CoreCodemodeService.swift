@@ -194,8 +194,10 @@ public enum CoreCodemode {
         private static let charactersPerToken = 4.0
         private static let inlineBudget = 2_000
 
+        /// Estimates token cost of a catalog line (`Math.round(text.length / 4)` over UTF-16 code units).
+        // parity: core/src/codemode/catalog.ts#cost [status=implemented hash=08eb9a5f4685]
         public static func cost(_ text: String) -> Int {
-            Int((Double(text.utf16.count) / charactersPerToken).rounded())
+            Int((Double(text.utf16.count) / charactersPerToken + 0.5).rounded(.down))
         }
 
         private static func listing(path: String, tool: ToolEntry) -> Listing {
@@ -377,7 +379,7 @@ public enum CoreCodemode {
             return "\(prompt(hasMoreTools: !isComplete(catalog)))\n\n\(lines.joined(separator: "\n"))"
         }
 
-        // parity: core/src/codemode/instructions.ts#update [status=implemented hash=1243994d15f1]
+        // parity: core/src/codemode/instructions.ts#update [status=implemented hash=c6ffc98f61de]
         public static func update(
             previous: Catalog.Summary,
             current: Catalog.Summary,
@@ -1049,10 +1051,53 @@ public enum CoreCodemode {
             )
         }
 
+        /// Default Bun file & glob extension definition backed by the current host filesystem.
+        // parity: core/src/codemode/bun.ts#extension [status=implemented hash=029d3fbd8e14]
+        public static let `extension`: CodemodeEngine.Extension.Definition = {
+            let defaultContext = ToolSchema.Context(
+                sessionID: SessionID.create(),
+                agent: AgentSchema.ID(rawValue: "build"),
+                messageID: "msg_default",
+                id: ToolSchema.CallID(rawValue: "call_default"),
+                progress: { _ in }
+            )
+            return makeExtension(
+                services: Services(
+                    directory: CorePlugin.Host.currentEnvironment.homeDirectory ?? "/",
+                    fileSystem: CorePlugin.Host.currentFileSystem
+                ),
+                execution: Execution.Service(context: defaultContext)
+            )
+        }()
+
+        private static func handleName(of value: CodemodeLanguage.Value?) -> String? {
+            guard case .object(let obj) = value,
+                  case .string(let name) = CodemodeLanguage.get(obj, "name")
+            else {
+                return nil
+            }
+            return name
+        }
+
+        /// Formats a Bun call for user display: method name, path/pattern, and optional `from` file handle for `Bun.write`.
+        // parity: core/src/codemode/bun.ts#display [status=implemented hash=874e4d886fe8]
         public static func display(name: String, args: [CodemodeLanguage.Value]) -> [String: JSONValue] {
-            let method = name.split(separator: ".").last.map(String.init) ?? name
-            let path = args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
-            return ["method": .string(method), "path": .string(path)]
+            let method: String
+            if let dot = name.lastIndex(of: ".") {
+                method = String(name[name.index(after: dot)...])
+            } else {
+                method = name
+            }
+            let firstArg = args.first
+            let path = handleName(of: firstArg) ?? firstArg.map { CodemodeLanguage.coerceToString($0) } ?? "undefined"
+            var result: [String: JSONValue] = [
+                "method": .string(method),
+                "path": .string(path),
+            ]
+            if name == "Bun.write", args.count > 1, let from = handleName(of: args[1]) {
+                result["from"] = .string(from)
+            }
+            return result
         }
     }
 
@@ -1107,7 +1152,7 @@ public enum CoreCodemode {
             @TaskLocal public static var run: RunFn? = nil
         }
 
-        // parity: core/src/codemode/job.ts#make [status=adapted hash=90243c1fe394]
+        // parity: core/src/codemode/job.ts#make [status=adapted hash=c0d8f0048fe8]
         public static func make(
             fullCodemode: Bool,
             onBackgroundNotice: (@Sendable (Notice) async -> Void)? = nil
@@ -1370,7 +1415,7 @@ public enum CoreCodemode {
             return Catalog.Inventory(tools: render(root))
         }
 
-        // parity: core/src/codemode/tool.ts#create [status=adapted hash=c3ceb22567df]
+        // parity: core/src/codemode/tool.ts#create [status=adapted hash=13a29b18c4fc]
         public static func create(
             inventory: Inventory,
             transport: any HTTPTransport,

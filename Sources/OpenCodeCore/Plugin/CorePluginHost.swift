@@ -58,7 +58,7 @@ public enum CorePlugin {
     }
 
     /// Versioned plugin generation handed to the core plugin registry for activation.
-    // parity: core/src/plugin/service.ts#Generation [status=implemented hash=835c6f9987c0]
+    // parity: core/src/plugin/service.ts#Generation [status=implemented hash=c7777720a44e]
     public struct Generation: Sendable {
         public struct GuiDescriptor: Equatable, Hashable, Sendable, Codable {
             public let file: String
@@ -136,7 +136,7 @@ public enum CorePlugin {
     /// CRITICAL INVARIANT: `list()` and `gui(_:)` return currently loaded state immediately and NEVER wait
     /// for in-flight async plugin activation (`awaitActivation()`). Only one-shot CLI/SDK callers and tests
     /// wait on `awaitActivation()`.
-    // parity: core/src/plugin/service.ts#Interface [status=implemented hash=6a9c9d123088]
+    // parity: core/src/plugin/service.ts#Interface [status=implemented hash=b381deb0a113]
     public protocol ServiceInterface: Sendable {
         func activate(_ plugins: [Generation], failures: [Failure]) async throws
         func startBackgroundActivation(_ plugins: [Generation], failures: [Failure])
@@ -1211,6 +1211,9 @@ public enum CorePlugin {
                 var artifactProviders: [String: PluginEffect.ArtifactProviderDefinition] = [:]
                 var defaultArtifactProvider: String?
                 var rpcDefinitions: [String: (definition: RpcSchema.Definition, handlers: PluginEffect.RpcHandlers)] = [:]
+                var rpcEventContinuations: [String: [UUID: AsyncStream<RpcSchema.EventPayload>.Continuation]] = [:]
+                var eventContinuations: [UUID: (types: Set<String>?, continuation: AsyncStream<PluginSDK.EventPayload>.Continuation)] = [:]
+                var sessions: [SessionID: SessionSchema.Info] = [:]
                 var recordedPrompts: [RecordedSessionPrompt] = []
             }
 
@@ -1315,6 +1318,71 @@ public enum CorePlugin {
 
             public func recordedSessionPrompts() -> [RecordedSessionPrompt] {
                 state.withLock { $0.recordedPrompts }
+            }
+
+            public func registerSession(_ session: SessionSchema.Info) {
+                state.withLock { $0.sessions[session.id] = session }
+            }
+
+            public func session(id: SessionID) -> SessionSchema.Info? {
+                state.withLock { $0.sessions[id] }
+            }
+
+            public func updateSessionPermissions(id: SessionID, permissions: SessionSchema.PermissionRuleset?) {
+                state.withLock { s in
+                    guard let existing = s.sessions[id] else { return }
+                    s.sessions[id] = SessionSchema.Info(
+                        id: existing.id,
+                        parentID: existing.parentID,
+                        fork: existing.fork,
+                        projectID: existing.projectID,
+                        agent: existing.agent,
+                        model: existing.model,
+                        cost: existing.cost,
+                        tokens: existing.tokens,
+                        outcome: existing.outcome,
+                        time: existing.time,
+                        title: existing.title,
+                        location: existing.location,
+                        subpath: existing.subpath,
+                        metadata: existing.metadata,
+                        permissions: permissions,
+                        revert: existing.revert
+                    )
+                }
+            }
+
+            public func emitEvent(_ event: PluginSDK.EventPayload) {
+                let targets = state.withLock { s -> [AsyncStream<PluginSDK.EventPayload>.Continuation] in
+                    s.eventContinuations.values.compactMap { entry in
+                        if let types = entry.types, !types.contains(event.type) {
+                            return nil
+                        }
+                        return entry.continuation
+                    }
+                }
+                for continuation in targets {
+                    continuation.yield(event)
+                }
+            }
+
+            public func subscribeRpc(namespace: String, event: String) -> AsyncStream<RpcSchema.EventPayload> {
+                let key = "\(namespace)::\(event)"
+                let token = UUID()
+                return AsyncStream { continuation in
+                    self.state.withLock { s in
+                        s.rpcEventContinuations[key, default: [:]][token] = continuation
+                    }
+                    continuation.onTermination = { [weak self] _ in
+                        self?.state.withLock { s in
+                            _ = s.rpcEventContinuations[key]?.removeValue(forKey: token)
+                        }
+                    }
+                }
+            }
+
+            public func registeredToolNamespaces() -> [ToolSchema.Namespace] {
+                state.withLock { Array($0.toolNamespaces.values).sorted { $0.name < $1.name } }
             }
 
             public func registeredTools() -> [PluginEffect.DynamicToolInfo] {
@@ -1855,8 +1923,19 @@ public enum CorePlugin {
                         reload: {}
                     ),
                     credential: PluginEffect.Context.CredentialAPI(activate: { _ in }),
-                    event: PluginEffect.EventDomain(subscribe: { _ in
-                        AsyncStream { $0.finish() }
+                    event: PluginEffect.EventDomain(subscribe: { [self] types in
+                        let token = UUID()
+                        let typeSet = types.map { Set($0) }
+                        return AsyncStream { continuation in
+                            self.state.withLock { s in
+                                s.eventContinuations[token] = (typeSet, continuation)
+                            }
+                            continuation.onTermination = { [weak self] _ in
+                                self?.state.withLock { s in
+                                    _ = s.eventContinuations.removeValue(forKey: token)
+                                }
+                            }
+                        }
                     }),
                     experimental: PluginEffect.Context.Experimental(
                         artifact: PluginEffect.ExperimentalArtifactDomain(
@@ -1936,14 +2015,43 @@ public enum CorePlugin {
                         call: { [self] ns, method, input in
                             try await self.callRpc(namespace: ns, method: method, input: input)
                         },
-                        subscribe: { _, _ in AsyncStream { $0.finish() } },
+                        subscribe: { [self] ns, event in
+                            self.subscribeRpc(namespace: ns, event: event)
+                        },
                         register: { [self] def, handlers in
                             self.state.withLock { $0.rpcDefinitions[def.id] = (def, handlers) }
                             let dispose: @Sendable () async -> Void = { [self] in
                                 self.state.withLock { _ = $0.rpcDefinitions.removeValue(forKey: def.id) }
                             }
                             addFinalizer(dispose)
-                            return PluginEffect.RpcRegistration(dispose: dispose, emit: { _, _ in })
+                            return PluginEffect.RpcRegistration(
+                                dispose: dispose,
+                                emit: { [self] eventName, payload in
+                                    let key = "\(def.id)::\(eventName)"
+                                    let eventData: RpcSchema.EventData
+                                    if case .object(let dict) = payload {
+                                        eventData = dict
+                                    } else {
+                                        eventData = ["value": payload]
+                                    }
+                                    let envelope = RpcSchema.EventPayload(
+                                        id: uuid(),
+                                        type: RpcSchema.EventPayload.eventType(rpcID: def.id, eventName: eventName),
+                                        created: Date().timeIntervalSince1970 * 1000,
+                                        data: eventData,
+                                        location: LocationSchema.Ref(
+                                            directory: loc.directory,
+                                            workspaceID: loc.workspaceID
+                                        )
+                                    )
+                                    let continuations = self.state.withLock { s -> [AsyncStream<RpcSchema.EventPayload>.Continuation] in
+                                        Array((s.rpcEventContinuations[key] ?? [:]).values)
+                                    }
+                                    for continuation in continuations {
+                                        continuation.yield(envelope)
+                                    }
+                                }
+                            )
                         }
                     ),
                     session: PluginEffect.SessionDomain(
@@ -1951,6 +2059,18 @@ public enum CorePlugin {
                             let reg = hookService.registerSession(name: name, options: options, callback: callback)
                             addFinalizer(reg.dispose)
                             return reg
+                        },
+                        list: { [self] in
+                            self.state.withLock { Array($0.sessions.values) }
+                        },
+                        get: { [self] sessionID in
+                            guard let session = self.state.withLock({ $0.sessions[sessionID] }) else {
+                                throw ToolSchema.ToolError(message: "Session not found: \(sessionID.rawValue)")
+                            }
+                            return session
+                        },
+                        update: { [self] sessionID, permissions in
+                            self.updateSessionPermissions(id: sessionID, permissions: permissions)
                         },
                         prompt: { [self] sessionID, prompt, delivery in
                             self.state.withLock {
@@ -2007,7 +2127,7 @@ public enum CorePlugin {
         }
 
         /// Creates a `PluginEffect.Context` scoped to `pluginID` on top of `environment`.
-        // parity: core/src/plugin/host.ts#make [status=adapted hash=5aab2d2d0bf1]
+        // parity: core/src/plugin/host.ts#make [status=adapted hash=ef02c47c7e15]
         public static func make(
             environment: Environment,
             pluginID: String,
@@ -3096,6 +3216,7 @@ public enum CorePlugin {
                     WarmingPlugin.Plugin,
                 ]
             let postPlugins: [InternalPlugin] = [
+                BrowserPlugin.Plugin,
                 DynamicProviderPlugin,
             ]
             return Partition(
@@ -3227,7 +3348,7 @@ public enum CorePlugin {
         }
 
         /// Supervisor runtime layer descriptor.
-        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=6f1b0fa70e95]
+        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=450d1d8b61ce]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: "plugin-supervisor",
             value: "plugin-supervisor"
@@ -3599,7 +3720,7 @@ public enum CorePlugin {
         public static let WAIT_LIMIT: Int64 = 30 * 60 * 1_000
 
         /// Built-in autonomous goal loop plugin (`opencode.goal`).
-        // parity: core/src/plugin/goal.ts#Plugin [status=adapted hash=2966674b3fd3]
+        // parity: core/src/plugin/goal.ts#Plugin [status=adapted hash=4e1a370b9955]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.goal") { ctx in
                 _ = await ctx.command.transform { editor in
@@ -4169,7 +4290,7 @@ public enum CorePlugin {
         """
 
         /// Built-in Plan mode agent & read-only guardrails plugin (`opencode.plan`).
-        // parity: core/src/plugin/plan.ts#Plugin [status=adapted hash=ce3d530b95e0]
+        // parity: core/src/plugin/plan.ts#Plugin [status=adapted hash=7ddb7627ecbc]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.plan") { ctx in
                 let planID = AgentSchema.ID(rawValue: "plan")
@@ -4331,7 +4452,7 @@ public enum CorePlugin {
 
     public enum WarmingPlugin {
         /// Built-in prompt-cache keep-alive warming plugin (`opencode.warming`).
-        // parity: core/src/plugin/warming.ts#Plugin [status=adapted hash=0c5c942d7545]
+        // parity: core/src/plugin/warming.ts#Plugin [status=adapted hash=9a79c366abf0]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.warming") { ctx in
                 _ = await ctx.session.hook("context", { event in
@@ -5145,20 +5266,46 @@ public enum CorePlugin {
     }
 
     public enum ProviderLocal {
-        // parity: core/src/plugin/provider/local.ts#LocalModel [status=implemented hash=cd4854f6acf6]
+        public enum ModelType: String, Equatable, Hashable, Sendable, Codable {
+            case chat
+            case decision
+        }
+
+        // parity: core/src/plugin/provider/local.ts#LocalModel [status=implemented hash=6a5c87748921]
         public struct LocalModel: Equatable, Hashable, Sendable, Codable {
             public let id: String
             public let name: String?
+            public let family: String?
+            public let tools: Bool?
+            public let vision: Bool?
+            public let context: Int?
+            public let type: ModelType?
             public let contextWindow: Int?
             public let reasoning: Bool?
             public let toolCall: Bool?
 
-            public init(id: String, name: String? = nil, contextWindow: Int? = nil, reasoning: Bool? = nil, toolCall: Bool? = nil) {
+            public init(
+                id: String,
+                name: String? = nil,
+                family: String? = nil,
+                tools: Bool? = nil,
+                vision: Bool? = nil,
+                context: Int? = nil,
+                type: ModelType? = nil,
+                contextWindow: Int? = nil,
+                reasoning: Bool? = nil,
+                toolCall: Bool? = nil
+            ) {
                 self.id = id
                 self.name = name
-                self.contextWindow = contextWindow
+                self.family = family
+                self.tools = tools ?? toolCall
+                self.vision = vision
+                self.context = context ?? contextWindow
+                self.type = type
+                self.contextWindow = contextWindow ?? context
                 self.reasoning = reasoning
-                self.toolCall = toolCall
+                self.toolCall = toolCall ?? tools
             }
         }
 
@@ -5253,7 +5400,7 @@ public enum CorePlugin {
         // parity: core/src/plugin/provider/opencode-artifacts.ts#header [status=implemented hash=dcf1b7c5cffb]
         public static let header = "x-opencode-artifacts"
 
-        // parity: core/src/plugin/provider/opencode-artifacts.ts#make [status=adapted hash=7d037913b597]
+        // parity: core/src/plugin/provider/opencode-artifacts.ts#make [status=adapted hash=6b493bf790dd]
         public static func make(ctx: PluginEffect.Context) async {
             _ = ctx
         }
@@ -5289,7 +5436,7 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/opencode-watches.ts#make [status=adapted hash=67a014eaed1e]
+        // parity: core/src/plugin/provider/opencode-watches.ts#make [status=adapted hash=6071671cca75]
         public static func make(ctx: PluginEffect.Context) async {
             _ = ctx
         }
@@ -5300,48 +5447,54 @@ public enum CorePlugin {
         }
 
         /// Detects a watchable GitHub PR URL (`gh pr create`) or pushed branch (`git push`) from shell output.
-        // parity: core/src/plugin/provider/opencode-watches.ts#shellTarget [status=implemented hash=ba2e1d2754d1]
+        // parity: core/src/plugin/provider/opencode-watches.ts#shellTarget [status=implemented hash=2ccd5aed80f7]
         public static func shellTarget(command: String, exitCode: Int, output: String) -> WatchTarget? {
             guard exitCode == 0 else { return nil }
-            if command.contains("gh pr create") {
-                var urls: Set<String> = []
-                for token in output.split(whereSeparator: { $0.isWhitespace }) {
-                    let s = String(token)
-                    if s.hasPrefix("https://github.com/"), s.contains("/pull/") {
-                        urls.insert(s)
-                    }
+            func matchesRegex(_ text: String, pattern: String) -> Bool {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return false }
+                let range = NSRange(text.utf16.startIndex..<text.utf16.endIndex, in: text)
+                return regex.firstMatch(in: text, options: [], range: range) != nil
+            }
+            func captureAll(_ text: String, pattern: String, options: NSRegularExpression.Options = [], group: Int = 0) -> [String] {
+                guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+                let range = NSRange(text.utf16.startIndex..<text.utf16.endIndex, in: text)
+                return regex.matches(in: text, options: [], range: range).compactMap { match in
+                    guard match.numberOfRanges > group,
+                          let r = Range(match.range(at: group), in: text)
+                    else { return nil }
+                    return String(text[r])
                 }
+            }
+
+            if matchesRegex(command, pattern: #"(?:^|[\s;&|(])gh\s+pr\s+create\b"#) {
+                let urls = Set(captureAll(output, pattern: #"https://github\.com/[\w.-]+/[\w.-]+/pull/\d+"#))
                 if urls.count == 1, let only = urls.first {
                     return .pullRequestURL(only)
                 }
                 return nil
             }
-            if command.contains("git ") && command.contains("push") {
-                var repos: [String] = []
-                var branches: [String] = []
-                for rawLine in output.split(separator: "\n") {
-                    let line = String(rawLine)
-                    if line.hasPrefix("To ") {
-                        let rest = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-                        if let range = rest.range(of: "github.com") {
-                            var slug = String(rest[range.upperBound...])
-                            if slug.hasPrefix(":") || slug.hasPrefix("/") { slug.removeFirst() }
-                            if slug.hasSuffix("/") { slug.removeLast() }
-                            if slug.hasSuffix(".git") { slug = String(slug.dropLast(4)) }
-                            if slug.contains("/") { repos.append(slug.lowercased()) }
-                        }
-                    } else if let arrow = line.range(of: " -> ") {
-                        let after = line[arrow.upperBound...].split(whereSeparator: { $0.isWhitespace }).first
-                        if let branch = after {
-                            branches.append(String(branch))
-                        }
-                    }
-                }
-                if repos.count == 1, branches.count == 1 {
-                    return .githubBranch(repo: repos[0], branch: branches[0])
-                }
+            guard matchesRegex(command, pattern: #"(?:^|[\s;&|(])git\s+(?:-C\s+\S+\s+)?push\b"#) else {
+                return nil
             }
-            return nil
+            let remotes = captureAll(
+                output,
+                pattern: #"^To (?:https://github\.com/|(?:ssh://)?(?:git@)?github\.com[:/])([\w.-]+/[\w.-]+?)(?:\.git)?/?$"#,
+                options: [.anchorsMatchLines],
+                group: 1
+            )
+            let branches = captureAll(
+                output,
+                pattern: #"^\s*[+*]?\s*(?:[0-9a-f]+\.\.\.?[0-9a-f]+|\[new branch\])\s+\S+\s+->\s+(\S+)"#,
+                options: [.anchorsMatchLines],
+                group: 1
+            )
+            guard remotes.count == 1, branches.count == 1,
+                  let repo = remotes.first, !repo.isEmpty,
+                  let branch = branches.first, !branch.isEmpty
+            else {
+                return nil
+            }
+            return .githubBranch(repo: repo.lowercased(), branch: branch)
         }
 
         /// Fences text with a backtick run strictly longer than any run inside `text`.
@@ -5459,7 +5612,7 @@ public enum CorePlugin {
     }
 
     public enum ChatGPTProvider {
-        // parity: core/src/plugin/provider/chatgpt.ts#ChatGPTPlugin [status=adapted hash=db34d234cf3d]
+        // parity: core/src/plugin/provider/chatgpt.ts#ChatGPTPlugin [status=adapted hash=e82603f31d14]
         public static let ChatGPTPlugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.provider.chatgpt") { ctx in
                 await registerCloudProvider(
@@ -5580,7 +5733,7 @@ public enum CorePlugin {
         public static let VLLMPlugin = make()
     }
 
-    // parity: core/src/plugin/provider/amazon-bedrock.ts#AmazonBedrockPlugin [status=adapted hash=89ede1e2363a]
+    // parity: core/src/plugin/provider/amazon-bedrock.ts#AmazonBedrockPlugin [status=adapted hash=a455915afee1]
     public static let AmazonBedrockPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.amazon.bedrock") { ctx in
             let env = Host.currentEnvironment
@@ -5641,7 +5794,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/cloudflare-ai-gateway.ts#CloudflareAIGatewayPlugin [status=adapted hash=af69e6f552db]
+    // parity: core/src/plugin/provider/cloudflare-ai-gateway.ts#CloudflareAIGatewayPlugin [status=adapted hash=3d3202c2b2f3]
     public static let CloudflareAIGatewayPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.cloudflare.ai.gateway") { ctx in
             let env = Host.currentEnvironment
@@ -5660,7 +5813,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/cloudflare-workers-ai.ts#CloudflareWorkersAIPlugin [status=adapted hash=afc33db85050]
+    // parity: core/src/plugin/provider/cloudflare-workers-ai.ts#CloudflareWorkersAIPlugin [status=adapted hash=63d2375f1a34]
     public static let CloudflareWorkersAIPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.cloudflare.workers.ai") { ctx in
             let env = Host.currentEnvironment
@@ -5735,7 +5888,216 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/github-copilot.ts#GithubCopilotPlugin [status=adapted hash=434a0c6a7d92]
+    public enum GithubCopilot {
+        public static let apiVersion = "2026-08-01"
+
+        public struct EntitlementUser: Equatable, Hashable, Sendable, Codable {
+            public let chatEnabled: Bool?
+            public let canSignupForLimited: Bool?
+
+            enum CodingKeys: String, CodingKey {
+                case chatEnabled = "chat_enabled"
+                case canSignupForLimited = "can_signup_for_limited"
+            }
+
+            public init(chatEnabled: Bool? = nil, canSignupForLimited: Bool? = nil) {
+                self.chatEnabled = chatEnabled
+                self.canSignupForLimited = canSignupForLimited
+            }
+        }
+
+        public struct UtilityTitleError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
+            public let message: String
+            public init(_ message: String) { self.message = message }
+            public var description: String { message }
+        }
+
+        public struct UtilityTitleInput: Sendable {
+            public let baseURL: String
+            public let token: String
+            public let model: String
+            public let app: PluginContract.App
+            public let transport: (any HTTPTransport)?
+
+            public init(
+                baseURL: String,
+                token: String,
+                model: String,
+                app: PluginContract.App = PluginContract.App(name: "opencode", version: "2.0.0", channel: "local"),
+                transport: (any HTTPTransport)? = nil
+            ) {
+                self.baseURL = baseURL
+                self.token = token
+                self.model = model
+                self.app = app
+                self.transport = transport
+            }
+        }
+
+        public struct UtilityTitleMessage: Equatable, Hashable, Sendable, Codable {
+            public let role: String
+            public let parts: [UtilityTitlePart]
+
+            public init(role: String, parts: [UtilityTitlePart]) {
+                self.role = role
+                self.parts = parts
+            }
+        }
+
+        public struct UtilityTitlePart: Equatable, Hashable, Sendable, Codable {
+            public let type: String
+            public let text: String?
+
+            public init(type: String = "text", text: String? = nil) {
+                self.type = type
+                self.text = text
+            }
+        }
+
+        public struct UtilityTitleRequest: Equatable, Hashable, Sendable {
+            public let sessionID: SessionID
+            public let system: [UtilityTitlePart]
+            public let messages: [UtilityTitleMessage]
+            public let maxTokens: Int?
+
+            public init(
+                sessionID: SessionID,
+                system: [UtilityTitlePart] = [],
+                messages: [UtilityTitleMessage] = [],
+                maxTokens: Int? = nil
+            ) {
+                self.sessionID = sessionID
+                self.system = system
+                self.messages = messages
+                self.maxTokens = maxTokens
+            }
+        }
+
+        private static func normalizeDomain(_ input: String) -> String {
+            var s = input
+            if s.hasPrefix("https://") {
+                s = String(s.dropFirst(8))
+            } else if s.hasPrefix("http://") {
+                s = String(s.dropFirst(7))
+            }
+            if s.hasSuffix("/") {
+                s.removeLast()
+            }
+            return s
+        }
+
+        /// Returns a user-facing entitlement error when `/copilot_internal/user` reports `chat_enabled === false`.
+        // parity: core/src/plugin/provider/github-copilot.ts#copilotEntitlementError [status=implemented hash=7342f68756a3]
+        public static func copilotEntitlementError(_ user: EntitlementUser) -> String? {
+            guard user.chatEnabled == false else { return nil }
+            if user.canSignupForLimited == true {
+                return "This GitHub account is not signed up for GitHub Copilot. Sign up for Copilot Free at https://github.com/features/copilot/plans and connect again."
+            }
+            return "This GitHub account does not have GitHub Copilot access. It needs an active Copilot subscription or a seat assigned by an organization."
+        }
+
+        /// Resolves the GitHub Copilot API base URL from OAuth credential metadata (`apiEndpoint` or `enterpriseUrl`).
+        // parity: core/src/plugin/provider/github-copilot.ts#copilotBaseURL [status=implemented hash=4716ebfbdbac]
+        public static func copilotBaseURL(_ metadata: [String: JSONValue]? = nil) -> String {
+            if case .string(let endpoint) = metadata?["apiEndpoint"], !endpoint.isEmpty {
+                return endpoint
+            }
+            if case .string(let enterprise) = metadata?["enterpriseUrl"], !enterprise.isEmpty {
+                return "https://copilot-api.\(normalizeDomain(enterprise))"
+            }
+            return "https://api.githubcopilot.com"
+        }
+
+        /// Small utility models preferred for stateless non-streaming Copilot session title generation.
+        // parity: core/src/plugin/provider/github-copilot.ts#utilityTitleModels [status=implemented hash=086efb264f5b]
+        public static let utilityTitleModels: [String] = ["gpt-4o-mini"]
+
+        /// Issues a stateless, non-streaming `/chat/completions` title generation request against GitHub Copilot.
+        // parity: core/src/plugin/provider/github-copilot.ts#utilityTitle [status=implemented hash=75ffb9fc153a]
+        public static func utilityTitle(
+            _ input: UtilityTitleInput,
+            request: UtilityTitleRequest
+        ) async throws -> String {
+            func joinText(_ parts: [UtilityTitlePart]) -> String {
+                parts.compactMap { part in
+                    part.type == "text" ? part.text : nil
+                }.joined(separator: "\n")
+            }
+
+            var wireMessages: [[String: String]] = []
+            if !request.system.isEmpty {
+                wireMessages.append(["role": "system", "content": joinText(request.system)])
+            }
+            for message in request.messages {
+                wireMessages.append(["role": message.role, "content": joinText(message.parts)])
+            }
+
+            var payload: [String: JSONValue] = [
+                "model": .string(input.model),
+                "messages": .array(wireMessages.map { msg in
+                    .object([
+                        "role": .string(msg["role"] ?? "user"),
+                        "content": .string(msg["content"] ?? ""),
+                    ])
+                }),
+                "stream": .bool(false),
+            ]
+            if let maxTokens = request.maxTokens {
+                payload["max_tokens"] = .int(Int64(maxTokens))
+            }
+            let bodyData = try JSONEncoder().encode(payload)
+            let userAgent = "\(input.app.name)/\(input.app.version)"
+            let httpRequest = HTTPRequest(
+                method: "POST",
+                url: "\(input.baseURL)/chat/completions",
+                headers: [
+                    "Authorization": "Bearer \(input.token)",
+                    "Content-Type": "application/json",
+                    "User-Agent": userAgent,
+                    "X-GitHub-Api-Version": apiVersion,
+                    "Openai-Intent": "conversation-edits",
+                    "X-Interaction-Type": "agent-session-name-generation",
+                    "X-Interaction-Id": request.sessionID.rawValue,
+                    "x-initiator": "agent",
+                ],
+                body: Array(bodyData)
+            )
+            let transport = input.transport ?? Host.currentHTTPTransport
+            let response = try await transport.send(httpRequest)
+            guard (200..<300).contains(response.head.statusCode) else {
+                throw UtilityTitleError("Utility title request failed: \(response.head.statusCode)")
+            }
+            struct CompletionChoice: Decodable {
+                struct Message: Decodable {
+                    let content: String?
+                }
+                let message: Message
+            }
+            struct CompletionResponse: Decodable {
+                let choices: [CompletionChoice]
+            }
+            let decoded = try JSONDecoder().decode(CompletionResponse.self, from: Data(response.body))
+            let rawTitle = decoded.choices.first?.message.content ?? ""
+            let title = rawTitle.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            guard !title.isEmpty else {
+                throw UtilityTitleError("Utility title response was empty")
+            }
+            return title
+        }
+
+        /// Maps an OpenCode session request kind and child-session flag to Copilot's `X-Interaction-Type` header value.
+        // parity: core/src/plugin/provider/github-copilot.ts#interactionType [status=implemented hash=653959c8253a]
+        public static func interactionType(_ kind: PluginEffect.SessionRequestKind, child: Bool) -> String {
+            switch kind {
+            case .title: return "conversation-background"
+            case .compaction: return "conversation-compaction"
+            case .primary, .generate:
+                return child ? "conversation-subagent" : "conversation-agent"
+            }
+        }
+    }
+
+    // parity: core/src/plugin/provider/github-copilot.ts#GithubCopilotPlugin [status=adapted hash=a6cdfb8f7e9f]
     public static let GithubCopilotPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.github.copilot") { ctx in
             await registerCloudProvider(
@@ -5743,13 +6105,13 @@ public enum CorePlugin {
                 providerID: "github-copilot",
                 name: "GitHub Copilot",
                 package: "@opencode/ai/providers/openai-compatible",
-                defaultBaseURL: "https://api.githubcopilot.com",
+                defaultBaseURL: GithubCopilot.copilotBaseURL(),
                 envVars: ["GITHUB_TOKEN", "GH_TOKEN"]
             )
         }
     )
 
-    // parity: core/src/plugin/provider/gitlab.ts#GitLabPlugin [status=adapted hash=0097e4be13e7]
+    // parity: core/src/plugin/provider/gitlab.ts#GitLabPlugin [status=adapted hash=9021a382fffa]
     public static let GitLabPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.gitlab") { ctx in
             await registerCloudProvider(
@@ -5764,7 +6126,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/google-vertex.ts#GoogleVertexPlugin [status=adapted hash=dfec8e2885c5]
+    // parity: core/src/plugin/provider/google-vertex.ts#GoogleVertexPlugin [status=adapted hash=e1ee3cf7df5c]
     public static let GoogleVertexPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.google.vertex") { ctx in
             let env = Host.currentEnvironment
@@ -5939,7 +6301,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/openai.ts#OpenAIPlugin [status=adapted hash=8a973d504967]
+    // parity: core/src/plugin/provider/openai.ts#OpenAIPlugin [status=adapted hash=4a6e5dd63a10]
     public static let OpenAIPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.openai") { ctx in
             await registerCloudProvider(
@@ -6017,7 +6379,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/poe.ts#PoePlugin [status=adapted hash=5662129bfdc4]
+    // parity: core/src/plugin/provider/poe.ts#PoePlugin [status=adapted hash=213d50e06d2a]
     public static let PoePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.poe") { ctx in
             await registerCloudProvider(
@@ -6084,7 +6446,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/snowflake-cortex.ts#SnowflakeCortexPlugin [status=adapted hash=2c9a4f07d5c9]
+    // parity: core/src/plugin/provider/snowflake-cortex.ts#SnowflakeCortexPlugin [status=adapted hash=efd6863b9c96]
     public static let SnowflakeCortexPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.snowflake.cortex") { ctx in
             await registerCloudProvider(
@@ -6434,7 +6796,7 @@ public enum CorePlugin {
                 tokenSource != "none" || apiKeySource != nil
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#run [status=adapted hash=28ea2c766a3e]
+            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#run [status=adapted hash=e1f57a4615bb]
             public static func run(probe: @Sendable () async throws -> Result) async throws -> Result {
                 do {
                     return try await probe()
@@ -6464,15 +6826,38 @@ public enum CorePlugin {
         }
 
         public enum IO {
-            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#Interface [status=adapted hash=4305af04bb9a]
+            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#Interface [status=adapted hash=6b304eb2cf16]
             public struct Interface: Sendable {
+                public let which: @Sendable () -> String?
+                public let env: @Sendable () -> [String: String]
+                public let sessionExists: @Sendable (String) async -> Bool
+                public let fork: @Sendable (String, String) async -> Fork.Result?
+                public let remove: @Sendable (String) async -> Void
                 public let probe: @Sendable () async throws -> Probe.Result
 
                 public init(
+                    which: @escaping @Sendable () -> String? = { Host.currentEnvironment.variable("OPENCODE_CLAUDE_PATH") },
+                    env: @escaping @Sendable () -> [String: String] = {
+                        #if os(WASI)
+                        return [:]
+                        #else
+                        return ProcessInfo.processInfo.environment
+                        #endif
+                    },
+                    sessionExists: @escaping @Sendable (String) async -> Bool = { _ in false },
+                    fork: @escaping @Sendable (String, String) async -> Fork.Result? = { sessionID, messageID in
+                        await Fork.create(sessionID: sessionID, messageID: messageID)
+                    },
+                    remove: @escaping @Sendable (String) async -> Void = { _ in },
                     probe: @escaping @Sendable () async throws -> Probe.Result = {
                         Probe.Result(version: nil, tokenSource: "none", apiKeySource: nil, models: [])
                     }
                 ) {
+                    self.which = which
+                    self.env = env
+                    self.sessionExists = sessionExists
+                    self.fork = fork
+                    self.remove = remove
                     self.probe = probe
                 }
             }
@@ -6526,7 +6911,7 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/session.ts#start [status=adapted hash=67f6cb8b905a]
+            // parity: core/src/plugin/provider/claude-agent/claude/session.ts#start [status=adapted hash=1890d48a66ba]
             public static func start(id: String = UUID().uuidString) async -> Interface {
                 Interface(id: id)
             }
@@ -6574,7 +6959,7 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#registry [status=implemented hash=932cb3b742a1]
+            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#registry [status=implemented hash=cc326c5851ed]
             public static func registry() -> Registry {
                 Registry()
             }
@@ -6589,7 +6974,7 @@ public enum CorePlugin {
                 case unavailable(message: String)
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#Interface [status=implemented hash=b5382208039f]
+            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#Interface [status=implemented hash=243171849b11]
             public protocol Interface: Sendable {
                 func current() async -> State
                 func refresh() async -> State
@@ -6647,31 +7032,218 @@ public enum CorePlugin {
         }
 
         public enum LanguageModel {
+            public enum EffortLevel: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
+                case low
+                case medium
+                case high
+                case xhigh
+                case max
+            }
+
+            public struct LanguageModelError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
+                public let message: String
+                public init(_ message: String) { self.message = message }
+                public var description: String { message }
+            }
+
+            public struct CallOptions: Equatable, Sendable {
+                public let headers: [String: String]
+                public let providerOptions: [String: [String: JSONValue]]
+                public let prompt: [String]
+                public let tools: [String]
+                public let toolChoiceNone: Bool
+                public let maxOutputTokens: Int?
+
+                public init(
+                    headers: [String: String] = [:],
+                    providerOptions: [String: [String: JSONValue]] = [:],
+                    prompt: [String] = [],
+                    tools: [String] = [],
+                    toolChoiceNone: Bool = false,
+                    maxOutputTokens: Int? = nil
+                ) {
+                    self.headers = headers
+                    self.providerOptions = providerOptions
+                    self.prompt = prompt
+                    self.tools = tools
+                    self.toolChoiceNone = toolChoiceNone
+                    self.maxOutputTokens = maxOutputTokens
+                }
+            }
+
+            public enum StreamPart: Equatable, Hashable, Sendable {
+                case streamStart(warnings: [String])
+                case textDelta(String)
+                case toolCall(name: String, arguments: JSONValue)
+                case finish(reason: String)
+            }
+
+            public struct StreamRunRequest: Sendable {
+                public let sessionID: String?
+                public let sourceID: String?
+                public let model: String
+                public let effort: EffortLevel?
+                public let maxOutputTokens: Int?
+                public let connection: [String: String]
+                public let system: String
+                public let prompt: [String]
+                public let tools: [String]
+                public let emit: @Sendable (StreamPart) -> Void
+
+                public init(
+                    sessionID: String?,
+                    sourceID: String?,
+                    model: String,
+                    effort: EffortLevel?,
+                    maxOutputTokens: Int?,
+                    connection: [String: String],
+                    system: String,
+                    prompt: [String],
+                    tools: [String],
+                    emit: @escaping @Sendable (StreamPart) -> Void
+                ) {
+                    self.sessionID = sessionID
+                    self.sourceID = sourceID
+                    self.model = model
+                    self.effort = effort
+                    self.maxOutputTokens = maxOutputTokens
+                    self.connection = connection
+                    self.system = system
+                    self.prompt = prompt
+                    self.tools = tools
+                    self.emit = emit
+                }
+            }
+
+            public struct StreamResult: Sendable {
+                public let stream: AsyncThrowingStream<StreamPart, Error>
+
+                public init(stream: AsyncThrowingStream<StreamPart, Error>) {
+                    self.stream = stream
+                }
+            }
+
             // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-language-model.ts#Dependencies [status=adapted hash=9e0da3285c5a]
             public struct Dependencies: Sendable {
                 public let sessions: any Sessions.Interface
+                public let run: @Sendable (StreamRunRequest) async throws -> Void
 
-                public init(sessions: any Sessions.Interface = Sessions.registry()) {
+                public init(
+                    sessions: any Sessions.Interface = Sessions.registry(),
+                    run: @escaping @Sendable (StreamRunRequest) async throws -> Void = { _ in }
+                ) {
                     self.sessions = sessions
+                    self.run = run
                 }
             }
 
             // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-language-model.ts#Model [status=adapted hash=11758fccebf4]
             public final class Model: Sendable {
+                public let specificationVersion = "v3"
                 public let modelId: String
                 public let provider: String
                 public let dependencies: Dependencies
+                public let connection: [String: String]
 
-                public init(modelId: String, provider: String = "claude-agent", dependencies: Dependencies = Dependencies()) {
+                public init(
+                    modelId: String,
+                    provider: String = "claude-agent",
+                    dependencies: Dependencies = Dependencies(),
+                    connection: [String: String] = [:]
+                ) {
                     self.modelId = modelId
                     self.provider = provider
                     self.dependencies = dependencies
+                    self.connection = connection
+                }
+
+                private static func parseEffort(_ value: JSONValue?) throws -> EffortLevel? {
+                    guard let value, value != .null else { return nil }
+                    if case .string(let raw) = value, let parsed = EffortLevel(rawValue: raw) {
+                        return parsed
+                    }
+                    throw LanguageModelError("Claude Agent effort must be low, medium, high, xhigh or max")
+                }
+
+                /// Claude Agent models only support streaming; non-streaming `doGenerate` rejects immediately.
+                // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-language-model.ts#Model.doGenerate [status=implemented hash=8394b0219e5d]
+                public func doGenerate(_ options: CallOptions = CallOptions()) async throws -> Never {
+                    _ = options
+                    throw LanguageModelError("Claude Agent models only support streaming")
+                }
+
+                /// Streams Claude Agent SDK responses with session/fork routing, effort validation, and prompt selection.
+                // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-language-model.ts#Model.doStream [status=implemented hash=c210644f5886]
+                public func doStream(_ options: CallOptions) async throws -> StreamResult {
+                    let settings = options.providerOptions[ClaudeAgent.ProviderID.rawValue]
+                    let effort = try Self.parseEffort(settings?["effort"])
+                    let agent: String?
+                    if case .string(let role) = settings?[ClaudeAgent.AGENT_OPTION] {
+                        agent = role
+                    } else {
+                        agent = nil
+                    }
+                    let instructions: String?
+                    if case .string(let loaded) = settings?[ClaudeAgent.INSTRUCTIONS_OPTION] {
+                        instructions = loaded
+                    } else {
+                        instructions = nil
+                    }
+                    let kind = options.headers[ClaudeAgent.RequestKindHeader]
+                    let session = options.headers[ClaudeAgent.SessionHeader]
+                    let primary = kind == "primary"
+                    let branch = kind == "generate" || kind == "compaction"
+                    let sessionID = primary ? session : nil
+                    let sourceID = primary ? options.headers[ClaudeAgent.ForkHeader] : (branch ? session : nil)
+                    let offered = (primary || branch) && !options.toolChoiceNone ? options.tools : []
+                    let convert = StreamConverter.make(toolNames: offered)
+                    let system: String = (primary || branch)
+                        ? ClaudeAgent.makeSystemPrompt(role: agent, instructions: instructions).append
+                        : ClaudeAgent.utilitySystemPrompt(systemBlocks: options.prompt)
+
+                    let deps = self.dependencies
+                    let modelId = self.modelId
+                    let connection = self.connection
+                    let stream = AsyncThrowingStream<StreamPart, Error> { continuation in
+                        continuation.yield(.streamStart(warnings: []))
+                        let task = Task {
+                            do {
+                                let request = StreamRunRequest(
+                                    sessionID: sessionID,
+                                    sourceID: sourceID,
+                                    model: modelId,
+                                    effort: effort,
+                                    maxOutputTokens: options.maxOutputTokens,
+                                    connection: connection,
+                                    system: system,
+                                    prompt: options.prompt,
+                                    tools: offered,
+                                    emit: { part in
+                                        switch part {
+                                        case .toolCall(let rawName, let args):
+                                            continuation.yield(.toolCall(name: convert(rawName), arguments: args))
+                                        default:
+                                            continuation.yield(part)
+                                        }
+                                    }
+                                )
+                                try await deps.run(request)
+                                continuation.finish()
+                            } catch {
+                                continuation.finish(throwing: error)
+                            }
+                        }
+                        continuation.onTermination = { _ in
+                            task.cancel()
+                        }
+                    }
+                    return StreamResult(stream: stream)
                 }
             }
         }
 
         public enum StreamConverter {
-            // parity: core/src/plugin/provider/claude-agent/language-model/convert-claude-stream.ts#make [status=adapted hash=d4f1d88ff46b]
+            // parity: core/src/plugin/provider/claude-agent/language-model/convert-claude-stream.ts#make [status=adapted hash=533281e2919b]
             public static func make(toolNames: [String]) -> @Sendable (String) -> String {
                 { rawToolName in
                     ToolNames.original(rawToolName, tools: toolNames) ?? rawToolName
@@ -7057,7 +7629,7 @@ public enum CorePlugin {
 
         // MARK: claude-agent/{aisdk,instructions,integration,provider,session,index}.ts
 
-        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=cbbb018739cf]
+        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=965cfd96d8d5]
         public static func registerAISDK(ctx: PluginEffect.Context, sessions: any Sessions.Interface) async {
             _ = (ctx, sessions)
         }
@@ -7095,7 +7667,7 @@ public enum CorePlugin {
             await ctx.integration.connection.active(ProviderID.rawValue)
         }
 
-        // parity: core/src/plugin/provider/claude-agent/session.ts#register [status=adapted hash=1dfa6cb19892]
+        // parity: core/src/plugin/provider/claude-agent/session.ts#register [status=adapted hash=039fcfb7e37b]
         public static func registerSession(ctx: PluginEffect.Context) async {
             _ = ctx
         }

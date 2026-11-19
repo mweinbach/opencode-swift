@@ -173,29 +173,52 @@ extension CodemodeLanguage {
 
         open var tag: String { "Object" }
 
-        public var describe: String {
+        // parity: codemode/src/language/runtime/objects.ts#Obj.describe [status=implemented hash=02913a46c828]
+        open var describe: String {
             if tag == "Object" { return "a data object" }
             let startsVowel = tag.first.map { "AEIO".contains($0) } ?? false
             return "\(startsVowel ? "an" : "a") \(tag)"
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#Obj.toString [status=implemented hash=41f85da0afbd]
         open func jsToString() -> String {
             "[object \(tag)]"
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#Obj.toPrimitive [status=implemented hash=f658a26f7c38]
         open func toPrimitive(hint: Hint) -> Value {
-            .string(jsToString())
+            _ = hint
+            return .string(jsToString())
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#Obj.toNumber [status=implemented hash=f6c09a6922dc]
         open func toNumber() -> Double {
             coerceToNumber(toPrimitive(hint: .number))
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#Obj.inspect [status=implemented hash=06b25d2ca928]
         open func inspect(_ item: (Value) -> String) -> String {
             let pairs = CodemodeLanguage.entries(self).map { k, v in
                 "\(CodemodeLanguage.jsonEscapeString(k)):\(item(v))"
             }
             return "{\(pairs.joined(separator: ","))}"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Obj.toHost [status=implemented hash=b0b649f9b1a0]
+        open func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            var dict: [String: JSONValue] = [:]
+            for (key, value) in CodemodeLanguage.entries(self) where key != "__proto__" {
+                if let copied = item(value) {
+                    dict[key] = copied
+                }
+            }
+            return .object(dict)
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Obj.iterator [status=implemented hash=85108493c525]
+        open func iterator(_ builtins: Builtins) -> Cursor? {
+            _ = builtins
+            return nil
         }
 
         internal func getSlot(_ key: PropertyKey) -> Slot? {
@@ -246,6 +269,16 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Array" }
 
+        // parity: codemode/src/language/runtime/objects.ts#Arr.describe [status=implemented hash=0a95ea6aedd4]
+        public override var describe: String { "an array" }
+
+        // parity: codemode/src/language/runtime/objects.ts#Arr.toString [status=implemented hash=63d245ffcfbe]
+        public override func jsToString() -> String {
+            items.map { item in
+                item.isNullish ? "" : CodemodeLanguage.coerceToString(item)
+            }.joined(separator: ",")
+        }
+
         public var items: [Value] {
             get { itemsStorage.withLock { $0 } }
             set {
@@ -282,8 +315,20 @@ extension CodemodeLanguage {
             itemsStorage.withLock { $0.append(value) }
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#Arr.inspect [status=implemented hash=a2ab8698b068]
         public override func inspect(_ item: (Value) -> String) -> String {
             "[\(items.map(item).joined(separator: ","))]"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Arr.toHost [status=implemented hash=df5eea12e013]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            .array(items.map { item($0) ?? .null })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Arr.iterator [status=implemented hash=3b67db699e30]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .array(self), kind: .values, arrays: builtins.Array)
+            return Cursor { pos.step() }
         }
     }
 
@@ -298,21 +343,39 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Error" }
 
-        public override func inspect(_ item: (Value) -> String) -> String {
+        // parity: codemode/src/language/runtime/objects.ts#ErrorObj.toString [status=implemented hash=2d2ae381261a]
+        public override func jsToString() -> String {
             let n = CodemodeLanguage.get(self, "name")
             let m = CodemodeLanguage.get(self, "message")
-            let name = n.isUndefined ? "Error" : CodemodeLanguage.coerceToString(n)
-            let msg = m.isUndefined ? "" : CodemodeLanguage.coerceToString(m)
-            return msg.isEmpty ? name : "\(name): \(msg)"
+            let shownName: String = if case .string(let s) = n { s } else { "Error" }
+            let shownMessage: String = if case .string(let s) = m { s } else { "" }
+            if shownMessage.isEmpty { return shownName }
+            if shownName.isEmpty { return shownMessage }
+            return "\(shownName): \(shownMessage)"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#ErrorObj.inspect [status=implemented hash=9c76db74334d]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return jsToString()
         }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Opaque [status=implemented hash=676e74b92f53]
-    public class Opaque: Obj, @unchecked Sendable {}
+    public class Opaque: Obj, @unchecked Sendable {
+        // parity: codemode/src/language/runtime/objects.ts#Opaque.inspect [status=implemented hash=b1ddee5704f2]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return "[opaque reference]"
+        }
+    }
 
     // parity: codemode/src/language/runtime/objects.ts#Callable [status=implemented hash=43cda50e3d0e]
     public class Callable: Opaque, @unchecked Sendable {
         public override var tag: String { "Function" }
+
+        // parity: codemode/src/language/runtime/objects.ts#Callable.describe [status=implemented hash=ade8adab0d14]
+        public override var describe: String { "a function" }
 
         public override func jsToString() -> String {
             let n = CodemodeLanguage.get(self, "name")
@@ -335,6 +398,14 @@ extension CodemodeLanguage {
             CodemodeLanguage.define(self, "name", .string(payload.name ?? ""), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "length", .number(Double(payload.params.count)), CodemodeLanguage.readonly)
         }
+
+        // parity: codemode/src/language/runtime/objects.ts#Fn.generator [status=implemented hash=d29565b01b5b]
+        public var generator: Bool {
+            if let code {
+                return (code.flags & CodeFlags.GENERATOR) != 0
+            }
+            return payload.isGenerator
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Arguments [status=implemented hash=803efc08c7b6]
@@ -351,6 +422,16 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "Arguments" }
+
+        // parity: codemode/src/language/runtime/objects.ts#Arguments.iterator [status=implemented hash=3845030fd9ee]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let snapshot = Arr(
+                proto: builtins.Array,
+                items: CodemodeLanguage.keys(self).map { CodemodeLanguage.get(self, $0) }
+            )
+            let pos = Position(source: .array(snapshot), kind: .values, arrays: builtins.Array)
+            return Cursor { pos.step() }
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#NativeResult [status=implemented hash=ac852aba514b]
@@ -407,10 +488,20 @@ extension CodemodeLanguage {
             CodemodeLanguage.define(self, "name", .string(options.name), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "length", .number(Double(options.length)), CodemodeLanguage.readonly)
         }
+
+        // parity: codemode/src/language/runtime/objects.ts#Builtin.invoke [status=implemented hash=f42def51ed94]
+        open func invoke(thisValue: Value, args: [Value], site: AstNode?, evaluator: Evaluator) async throws -> NativeResult {
+            try await callFn(thisValue, args, site, evaluator)
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Native [status=implemented hash=d30439a4a8a9]
-    public final class Native: Builtin, @unchecked Sendable {}
+    public final class Native: Builtin, @unchecked Sendable {
+        // parity: codemode/src/language/runtime/objects.ts#Native.invoke [status=implemented hash=18e5e0e7fb16]
+        public override func invoke(thisValue: Value, args: [Value], site: AstNode?, evaluator: Evaluator) async throws -> NativeResult {
+            try await callFn(thisValue, args, site, evaluator)
+        }
+    }
 
     // parity: codemode/src/language/runtime/objects.ts#BoundFn [status=implemented hash=50b504bca6b0]
     public final class BoundFn: Callable, @unchecked Sendable {
@@ -426,6 +517,11 @@ extension CodemodeLanguage {
             let origName = CodemodeLanguage.coerceToString(CodemodeLanguage.get(target, "name"))
             CodemodeLanguage.define(self, "name", .string("bound \(origName)"), CodemodeLanguage.readonly)
         }
+
+        // parity: codemode/src/language/runtime/objects.ts#BoundFn.invoke [status=implemented hash=7347864c0626]
+        public func invoke(thisValue _: Value, args: [Value], site: AstNode?, evaluator: Evaluator) async throws -> NativeResult {
+            try await evaluator.callCallable(.object(target), thisValue: boundThis, args: boundArgs + args, site: site)
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Resolver [status=implemented hash=bac9ce16190b]
@@ -437,6 +533,17 @@ extension CodemodeLanguage {
             self.promise = promise
             self.isReject = isReject
             super.init(proto: proto)
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Resolver.invoke [status=implemented hash=3adb149c1f68]
+        public func invoke(thisValue _: Value, args: [Value]) -> NativeResult {
+            let arg = args.first ?? .undefined
+            if isReject {
+                promise.reject(arg)
+            } else {
+                promise.fulfill(arg)
+            }
+            return .undefined
         }
     }
 
@@ -468,6 +575,15 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "Promise" }
+
+        // parity: codemode/src/language/runtime/objects.ts#PromiseObj.describe [status=implemented hash=c8e4293af100]
+        public override var describe: String { "an un-awaited Promise" }
+
+        // parity: codemode/src/language/runtime/objects.ts#PromiseObj.inspect [status=implemented hash=26311df63d08]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return "[Promise (await it to get its value)]"
+        }
 
         public var status: PromiseStatus {
             pState.withLock { $0.status }
@@ -600,6 +716,9 @@ extension CodemodeLanguage {
 
         public override var tag: String { isAsync ? "AsyncGenerator" : "Generator" }
 
+        // parity: codemode/src/language/runtime/objects.ts#GeneratorObj.describe [status=implemented hash=f23c382e571c]
+        public override var describe: String { "a generator" }
+
         public var state: GeneratorState {
             gState.withLock { $0.genState }
         }
@@ -677,20 +796,92 @@ extension CodemodeLanguage {
         case searchParams(URLSearchParamsObj)
     }
 
-    // parity: codemode/src/language/runtime/objects.ts#Position [status=implemented hash=6c29ae31f8d0]
+    // parity: codemode/src/language/runtime/objects.ts#Position [status=implemented hash=7041e43b2d2a]
     public final class Position: Sendable {
-        private let indexBox = Mutex<Int>(0)
+        private let cursorBox: TableCursor
         public let source: PositionSource
         public let kind: IterationKind
+        public let arrays: Obj?
 
-        public init(source: PositionSource, kind: IterationKind) {
+        public init(source: PositionSource, kind: IterationKind, arrays: Obj? = nil) {
             self.source = source
             self.kind = kind
+            self.arrays = arrays
+            let cursor = TableCursor(index: 0, done: false)
+            self.cursorBox = cursor
+            switch source {
+            case .map(let m): m.table.track(cursor)
+            case .set(let s): s.table.track(cursor)
+            default: break
+            }
         }
 
         public var index: Int {
-            get { indexBox.withLock { $0 } }
-            set { indexBox.withLock { $0 = newValue } }
+            get { cursorBox.index }
+            set { cursorBox.index = newValue }
+        }
+
+        public var done: Bool {
+            get { cursorBox.done }
+            set { cursorBox.done = newValue }
+        }
+
+        private func yieldStep(key: Value, value: Value) -> Step {
+            switch kind {
+            case .keys: return Step(value: key, done: false)
+            case .values: return Step(value: value, done: false)
+            case .entries: return Step(value: .object(Arr(proto: arrays, items: [key, value])), done: false)
+            }
+        }
+
+        private func finish() -> Step {
+            cursorBox.done = true
+            return Step(value: .undefined, done: true)
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Position.step [status=implemented hash=2c3b70962e94]
+        public func step() -> Step {
+            if cursorBox.done { return Step(value: .undefined, done: true) }
+            switch source {
+            case .string(let str):
+                let scalars = Array(str.unicodeScalars)
+                let idx = cursorBox.index
+                guard idx < scalars.count else { return finish() }
+                cursorBox.index = idx + 1
+                return Step(value: .string(String(scalars[idx])), done: false)
+            case .map(let m):
+                let at = m.table.advance(cursorBox)
+                guard at >= 0, let (k, v) = m.table.entry(at: at) else { return Step(value: .undefined, done: true) }
+                return yieldStep(key: k, value: v)
+            case .set(let s):
+                let at = s.table.advance(cursorBox)
+                guard at >= 0, let (k, _) = s.table.entry(at: at) else { return Step(value: .undefined, done: true) }
+                return yieldStep(key: k, value: k)
+            case .headers(let h):
+                let list = h.sortedEntries()
+                let idx = cursorBox.index
+                guard idx < list.count else { return finish() }
+                cursorBox.index = idx + 1
+                return yieldStep(key: .string(list[idx].0), value: .string(list[idx].1))
+            case .searchParams(let sp):
+                let list = sp.pairs
+                let idx = cursorBox.index
+                guard idx < list.count else { return finish() }
+                cursorBox.index = idx + 1
+                return yieldStep(key: .string(list[idx].0), value: .string(list[idx].1))
+            case .array(let arr):
+                let items = arr.items
+                let idx = cursorBox.index
+                guard idx < items.count else { return finish() }
+                cursorBox.index = idx + 1
+                return yieldStep(key: .number(Double(idx)), value: items[idx])
+            case .bytes(let b):
+                let data = b.data
+                let idx = cursorBox.index
+                guard idx < data.count else { return finish() }
+                cursorBox.index = idx + 1
+                return yieldStep(key: .number(Double(idx)), value: .number(Double(data[idx])))
+            }
         }
     }
 
@@ -704,6 +895,9 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "Iterator" }
+
+        // parity: codemode/src/language/runtime/objects.ts#IteratorObj.describe [status=implemented hash=fdef95409458]
+        public override var describe: String { "an iterator" }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#positionIterator [status=implemented hash=b243e01a82e3]
@@ -713,79 +907,18 @@ extension CodemodeLanguage {
         source: PositionSource,
         kind: IterationKind
     ) -> IteratorObj {
-        let pos = Position(source: source, kind: kind)
-        let cursor = Cursor {
-            let idx = pos.index
-            switch source {
-            case .array(let arr):
-                let items = arr.items
-                guard idx < items.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                switch kind {
-                case .keys: return Step(value: .number(Double(idx)), done: false)
-                case .values: return Step(value: items[idx], done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [.number(Double(idx)), items[idx]])), done: false)
-                }
-            case .string(let str):
-                let scalars = Array(str.unicodeScalars)
-                guard idx < scalars.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                return Step(value: .string(String(scalars[idx])), done: false)
-            case .bytes(let b):
-                let data = b.data
-                guard idx < data.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                switch kind {
-                case .keys: return Step(value: .number(Double(idx)), done: false)
-                case .values: return Step(value: .number(Double(data[idx])), done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [.number(Double(idx)), .number(Double(data[idx]))])), done: false)
-                }
-            case .map(let m):
-                let list = m.table.liveEntries()
-                guard idx < list.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                let (k, v) = list[idx]
-                switch kind {
-                case .keys: return Step(value: k, done: false)
-                case .values: return Step(value: v, done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [k, v])), done: false)
-                }
-            case .set(let s):
-                let list = s.table.liveKeys()
-                guard idx < list.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                let k = list[idx]
-                switch kind {
-                case .keys, .values: return Step(value: k, done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [k, k])), done: false)
-                }
-            case .headers(let h):
-                let list = h.sortedEntries()
-                guard idx < list.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                let (k, v) = list[idx]
-                switch kind {
-                case .keys: return Step(value: .string(k), done: false)
-                case .values: return Step(value: .string(v), done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [.string(k), .string(v)])), done: false)
-                }
-            case .searchParams(let sp):
-                let list = sp.pairs
-                guard idx < list.count else { return Step(value: .undefined, done: true) }
-                pos.index = idx + 1
-                let (k, v) = list[idx]
-                switch kind {
-                case .keys: return Step(value: .string(k), done: false)
-                case .values: return Step(value: .string(v), done: false)
-                case .entries: return Step(value: .object(Arr(proto: arrayProto, items: [.string(k), .string(v)])), done: false)
-                }
-            }
-        }
-        return IteratorObj(proto: proto, cursor: cursor)
+        let pos = Position(source: source, kind: kind, arrays: arrayProto)
+        return IteratorObj(proto: proto, cursor: Cursor { pos.step() })
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Wrapper [status=implemented hash=0e016bb77168]
-    public class Wrapper: Obj, @unchecked Sendable {}
+    public class Wrapper: Obj, @unchecked Sendable {
+        // parity: codemode/src/language/runtime/objects.ts#Wrapper.inspect [status=implemented hash=361a036c27c5]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return jsToString()
+        }
+    }
 
     // parity: codemode/src/language/runtime/objects.ts#DateObj [status=implemented hash=94b9ae8acaf9]
     public final class DateObj: Wrapper, @unchecked Sendable {
@@ -809,13 +942,26 @@ extension CodemodeLanguage {
             return CodemodeLanguage.formatISODate(epochMs: ms)
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#DateObj.toString [status=implemented hash=61588c38428e]
+        public override func jsToString() -> String {
+            (try? toISOString()) ?? "Invalid Date"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#DateObj.toPrimitive [status=implemented hash=8d3d8d376b87]
         public override func toPrimitive(hint: Hint) -> Value {
             if hint == .number { return .number(epochMs) }
-            return .string((try? toISOString()) ?? "Invalid Date")
+            return .string(jsToString())
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#DateObj.toHost [status=implemented hash=9d118f3e3e12]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .string(jsToString())
         }
 
         public override func inspect(_ item: (Value) -> String) -> String {
-            (try? toISOString()) ?? "Invalid Date"
+            _ = item
+            return jsToString()
         }
     }
 
@@ -846,12 +992,36 @@ extension CodemodeLanguage {
 
         public override var tag: String { "RegExp" }
 
+        // parity: codemode/src/language/runtime/objects.ts#RegExpObj.regex [status=implemented hash=d5d239be00bb]
+        public var regex: NSRegularExpression? {
+            var opts: NSRegularExpression.Options = []
+            if flags.contains("i") { opts.insert(.caseInsensitive) }
+            if flags.contains("m") { opts.insert(.anchorsMatchLines) }
+            if flags.contains("s") { opts.insert(.dotMatchesLineSeparators) }
+            return try? NSRegularExpression(pattern: pattern.isEmpty ? "(?:)" : pattern, options: opts)
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#RegExpObj.use [status=implemented hash=4494333ab316]
+        public func use<T>(_ work: (NSRegularExpression?, inout Int) throws -> T) rethrows -> T {
+            var idx = lastIndex
+            defer { lastIndex = idx }
+            return try work(regex, &idx)
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#RegExpObj.toString [status=implemented hash=0e8045c353fa]
         public override func jsToString() -> String {
             "/\(pattern.isEmpty ? "(?:)" : pattern)/\(flags)"
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#RegExpObj.toHost [status=implemented hash=cb210836aa66]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .string(jsToString())
+        }
+
         public override func inspect(_ item: (Value) -> String) -> String {
-            jsToString()
+            _ = item
+            return jsToString()
         }
     }
 
@@ -861,9 +1031,23 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Map" }
 
+        // parity: codemode/src/language/runtime/objects.ts#MapObj.inspect [status=implemented hash=fa6e3a1aaf8f]
         public override func inspect(_ item: (Value) -> String) -> String {
-            let entries = table.liveEntries().map { "\(item($0.0)) => \(item($0.1))" }
-            return "Map(\(entries.count)) { \(entries.joined(separator: ", ")) }"
+            let entries = table.liveEntries().map { "[\(item($0.0)),\(item($0.1))]" }
+            return "Map(\(entries.count)) [\(entries.joined(separator: ","))]"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#MapObj.toHost [status=implemented hash=bd2a17211ba5]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            .array(table.liveEntries().map { k, v in
+                .array([item(k) ?? .null, item(v) ?? .null])
+            })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#MapObj.iterator [status=implemented hash=d54b3216bc35]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .map(self), kind: .entries, arrays: builtins.Array)
+            return Cursor { pos.step() }
         }
     }
 
@@ -873,9 +1057,21 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Set" }
 
+        // parity: codemode/src/language/runtime/objects.ts#SetObj.inspect [status=implemented hash=15c11dbec983]
         public override func inspect(_ item: (Value) -> String) -> String {
             let items = table.liveKeys().map(item)
-            return "Set(\(items.count)) { \(items.joined(separator: ", ")) }"
+            return "Set(\(items.count)) [\(items.joined(separator: ","))]"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#SetObj.toHost [status=implemented hash=5ab785c2db81]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            .array(table.liveKeys().map { item($0) ?? .null })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#SetObj.iterator [status=implemented hash=3b67db699e30]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .set(self), kind: .values, arrays: builtins.Array)
+            return Cursor { pos.step() }
         }
     }
 
@@ -884,6 +1080,12 @@ extension CodemodeLanguage {
         private let mapBox = Mutex<[ObjectIdentifier: Value]>([:])
 
         public override var tag: String { "WeakMap" }
+
+        // parity: codemode/src/language/runtime/objects.ts#WeakMapObj.inspect [status=implemented hash=89c019638558]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return "WeakMap { <items unknown> }"
+        }
 
         public func get(_ obj: Obj) -> Value { mapBox.withLock { $0[ObjectIdentifier(obj)] ?? .undefined } }
         public func has(_ obj: Obj) -> Bool { mapBox.withLock { $0[ObjectIdentifier(obj)] != nil } }
@@ -897,6 +1099,12 @@ extension CodemodeLanguage {
         private let setBox = Mutex<Set<ObjectIdentifier>>([])
 
         public override var tag: String { "WeakSet" }
+
+        // parity: codemode/src/language/runtime/objects.ts#WeakSetObj.inspect [status=implemented hash=f4a82a2bce73]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return "WeakSet { <items unknown> }"
+        }
 
         public func has(_ obj: Obj) -> Bool { setBox.withLock { $0.contains(ObjectIdentifier(obj)) } }
         public func add(_ obj: Obj) { setBox.withLock { _ = $0.insert(ObjectIdentifier(obj)) } }
@@ -920,14 +1128,28 @@ extension CodemodeLanguage {
 
         public override var tag: String { "URLSearchParams" }
 
+        // parity: codemode/src/language/runtime/objects.ts#URLSearchParamsObj.toString [status=implemented hash=0c724ece7d0a]
         public override func jsToString() -> String {
             pairs.map { k, v in
                 "\(CodemodeLanguage.formEncode(k))=\(CodemodeLanguage.formEncode(v))"
             }.joined(separator: "&")
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#URLSearchParamsObj.toHost [status=implemented hash=8414ef4f12df]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .array(pairs.map { .array([.string($0.0), .string($0.1)]) })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#URLSearchParamsObj.iterator [status=implemented hash=d54b3216bc35]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .searchParams(self), kind: .entries, arrays: builtins.Array)
+            return Cursor { pos.step() }
+        }
+
         public override func inspect(_ item: (Value) -> String) -> String {
-            jsToString()
+            _ = item
+            return jsToString()
         }
     }
 
@@ -950,6 +1172,27 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "Headers" }
+
+        // parity: codemode/src/language/runtime/objects.ts#HeadersObj.inspect [status=implemented hash=6817e885dbbe]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            let pairs = sortedEntries().map { k, v in
+                "\(CodemodeLanguage.jsonEscapeString(k)):\(CodemodeLanguage.jsonEscapeString(v))"
+            }
+            return "Headers {\(pairs.joined(separator: ","))}"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#HeadersObj.toHost [status=implemented hash=ec0a930ae4c2]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .object(asDictionary().mapValues { .string($0) })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#HeadersObj.iterator [status=implemented hash=d54b3216bc35]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .headers(self), kind: .entries, arrays: builtins.Array)
+            return Cursor { pos.step() }
+        }
 
         public func getHeader(_ name: String) -> String? {
             mapBox.withLock { $0[name.lowercased()] }
@@ -1091,8 +1334,19 @@ extension CodemodeLanguage {
             return "\(p.protocolStr)//\(auth)\(h)\(p.pathname)\(s)\(p.hash)"
         }
 
+        // parity: codemode/src/language/runtime/objects.ts#URLObj.toString [status=implemented hash=5d785bac38a1]
         public override func jsToString() -> String { href }
-        public override func inspect(_ item: (Value) -> String) -> String { href }
+
+        // parity: codemode/src/language/runtime/objects.ts#URLObj.toHost [status=implemented hash=e619b7325ffa]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .string(href)
+        }
+
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            return href
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#Bytes [status=implemented hash=ec5518effd40]
@@ -1111,21 +1365,69 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Uint8Array" }
 
+        // parity: codemode/src/language/runtime/objects.ts#Bytes.toString [status=implemented hash=fec9e28744d8]
+        public override func jsToString() -> String {
+            data.map(String.init).joined(separator: ",")
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Bytes.inspect [status=implemented hash=ecea006048d8]
         public override func inspect(_ item: (Value) -> String) -> String {
-            "Uint8Array(\(data.count)) [\(data.prefix(16).map(String.init).joined(separator: ", "))]"
+            _ = item
+            return "Uint8Array(\(data.count)) [\(data.map(String.init).joined(separator: ","))]"
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Bytes.toHost [status=implemented hash=ea199e6f9110]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .array(data.map { .int(Int64($0)) })
+        }
+
+        // parity: codemode/src/language/runtime/objects.ts#Bytes.iterator [status=implemented hash=3b67db699e30]
+        public override func iterator(_ builtins: Builtins) -> Cursor? {
+            let pos = Position(source: .bytes(self), kind: .values, arrays: builtins.Array)
+            return Cursor { pos.step() }
         }
     }
 
     // parity: codemode/src/language/stdlib/buffer.ts#BufferObj [status=implemented hash=b8f8c45d89ed]
     public final class BufferObj: Bytes, @unchecked Sendable {
         public override var tag: String { "Buffer" }
+
+        // parity: codemode/src/language/stdlib/buffer.ts#BufferObj.toString [status=implemented hash=dfb87aa69579]
+        public override func jsToString() -> String {
+            String(decoding: data, as: UTF8.self)
+        }
+
+        // parity: codemode/src/language/stdlib/buffer.ts#BufferObj.toHost [status=implemented hash=12e39c28619e]
+        public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
+            _ = item
+            return .string(bytesToBase64(data))
+        }
+
+        // parity: codemode/src/language/stdlib/buffer.ts#BufferObj.inspect [status=implemented hash=b4d8b5d866b7]
+        public override func inspect(_ item: (Value) -> String) -> String {
+            _ = item
+            let bytes = data
+            let shown = bytes.prefix(50).map { byte in
+                let hex = String(byte, radix: 16, uppercase: false)
+                return hex.count == 1 ? "0\(hex)" : hex
+            }.joined(separator: " ")
+            let more = bytes.count > 50 ? " ... \(bytes.count - 50) more bytes" : ""
+            return "<Buffer\(shown.isEmpty ? "" : " \(shown)")\(more)>"
+        }
     }
 
     // parity: codemode/src/language/stdlib/bytes.ts#TextDecoderObj [status=implemented hash=3a7d62285d0a]
     public final class TextDecoderObj: Wrapper, @unchecked Sendable {
+        private struct StreamState: Sendable {
+            var queued: [UInt8] = []
+            var seen: Bool = false
+        }
+
         public let encoding: String
         public let fatal: Bool
         public let ignoreBOM: Bool
+        private let streamState = Mutex(StreamState())
 
         public init(proto: Obj?, encoding: String = "utf-8", fatal: Bool = false, ignoreBOM: Bool = false) {
             self.encoding = encoding
@@ -1138,6 +1440,69 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "TextDecoder" }
+
+        /// Decodes UTF-8 bytes with optional streaming incomplete-sequence buffering, BOM stripping, and fatal validation.
+        // parity: codemode/src/language/stdlib/bytes.ts#TextDecoderObj.decode [status=implemented hash=fa053c6aebf6]
+        public func decode(_ input: [UInt8], stream: Bool = false) throws -> String {
+            let (combined, stripBOM) = try streamState.withLock { s -> ([UInt8], Bool) in
+                var bytes = input
+                if !s.queued.isEmpty && !bytes.isEmpty {
+                    try CodemodeLanguage.checkArrayLength(s.queued.count + bytes.count)
+                    var joined = s.queued
+                    joined.append(contentsOf: bytes)
+                    bytes = joined
+                } else if bytes.isEmpty {
+                    bytes = s.queued
+                }
+                let boundary: Int
+                if stream {
+                    var trailing = 0
+                    var i = bytes.count - 1
+                    while i >= 0 && trailing < 3 && (bytes[i] & 0xC0) == 0x80 {
+                        trailing += 1
+                        i -= 1
+                    }
+                    if i >= 0 {
+                        let lead = bytes[i]
+                        let expected: Int
+                        if (lead & 0x80) == 0 { expected = 1 }
+                        else if (lead & 0xE0) == 0xC0 { expected = 2 }
+                        else if (lead & 0xF0) == 0xE0 { expected = 3 }
+                        else if (lead & 0xF8) == 0xF0 { expected = 4 }
+                        else { expected = 1 }
+                        let available = bytes.count - i
+                        boundary = available < expected ? i : bytes.count
+                    } else {
+                        boundary = bytes.count
+                    }
+                } else {
+                    boundary = bytes.count
+                }
+                s.queued = boundary < bytes.count ? Array(bytes[boundary...]) : []
+                let chunk = boundary == bytes.count ? bytes : Array(bytes[..<boundary])
+                let shouldStrip = !ignoreBOM && !s.seen
+                if !stream {
+                    s.seen = false
+                } else if !chunk.isEmpty {
+                    s.seen = true
+                }
+                return (chunk, shouldStrip)
+            }
+
+            let text: String
+            if fatal {
+                guard let strict = String(bytes: combined, encoding: .utf8) else {
+                    throw CodemodeLanguage.typeError("TextDecoder.decode: the input is not valid utf-8.")
+                }
+                text = strict
+            } else {
+                text = String(decoding: combined, as: UTF8.self)
+            }
+            if stripBOM && text.unicodeScalars.first == "\u{FEFF}" {
+                return String(text.dropFirst())
+            }
+            return text
+        }
     }
 
     // parity: codemode/src/language/runtime/objects.ts#HostNamespace [status=implemented hash=e0bc7309022d]
@@ -1308,7 +1673,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/objects.ts#get [status=implemented hash=78459f305c3d]
+    // parity: codemode/src/language/runtime/objects.ts#get [status=implemented hash=8dcdd4f6c7b9]
     public static func get(_ obj: Obj, _ key: String) -> Value {
         get(obj, .string(key), receiver: .object(obj))
     }
@@ -1364,7 +1729,7 @@ extension CodemodeLanguage {
         throw typeError("Cannot add property \(key), object is not extensible.")
     }
 
-    // parity: codemode/src/language/runtime/objects.ts#set [status=implemented hash=b2b9e7b5efa3]
+    // parity: codemode/src/language/runtime/objects.ts#set [status=implemented hash=5e5f675608d6]
     public static func set(_ obj: Obj, _ key: String, _ value: Value) throws {
         try set(obj, .string(key), value)
     }
@@ -1780,7 +2145,7 @@ extension CodemodeLanguage {
         throw typeError("\(describeValue(value)) is not iterable.", node: node)
     }
 
-    // parity: codemode/src/language/runtime/operations.ts#forInKeys [status=implemented hash=cd7be7655d6f]
+    // parity: codemode/src/language/runtime/operations.ts#forInKeys [status=implemented hash=2eaa2ae17f03]
     public static func forInKeys(_ value: Value) -> [String] {
         switch value {
         case .object(let obj):
@@ -2330,6 +2695,9 @@ extension CodemodeLanguage {
 
     // MARK: - JSON <-> Value Conversion (src/language/data.ts)
 
+    // parity: codemode/src/language/data.ts#Json [status=implemented hash=6dcd2d847149]
+    public typealias DataJson = Json
+
     // parity: codemode/src/language/data.ts#fromJson [status=implemented hash=10e5e330a78a]
     public static func fromJson(_ builtins: Builtins, _ value: JSONValue, depth: Int = 0) throws -> Value {
         guard depth <= MAX_VALUE_DEPTH else {
@@ -2489,7 +2857,7 @@ extension CodemodeLanguage {
             case syncThenable = "sync-thenable"
         }
 
-        // parity: codemode/src/language/host-function.ts#Options [status=implemented hash=3c009c818be9]
+        // parity: codemode/src/language/host-function.ts#Options [status=implemented hash=ab551aec8544]
         public struct Options: Sendable {
             public let type: CallType
             public let idempotent: Bool
@@ -2616,6 +2984,9 @@ extension CodemodeLanguage {
         public static func missing(_ message: String, suggestions: [String] = [], kind: String = "ExecutionFailure") -> HostFailure {
             HostFailure(kind: kind, message: message, suggestions: suggestions)
         }
+
+        // parity: codemode/src/language/host-function.ts#Failure [status=implemented hash=5dd2dd1d91c8]
+        public typealias Failure = HostFailure
     }
 
     public enum HostGlobalValue: Sendable {
@@ -2653,7 +3024,7 @@ extension CodemodeLanguage {
         var builtins: Builtins { get }
     }
 
-    // parity: codemode/src/language/host.ts#HostTarget [status=implemented hash=6f3fdad8729e]
+    // parity: codemode/src/language/host.ts#HostTarget [status=implemented hash=619922b4e44c]
     public enum HostTarget: Sendable {
         case fn(Host.Fn)
         case durable(Host.DurableFn)
@@ -2662,12 +3033,27 @@ extension CodemodeLanguage {
     // parity: codemode/src/language/host.ts#VISIT_BUDGET [status=implemented hash=95912b9e09cc]
     public static let VISIT_BUDGET: Int = 100_000
 
-    // parity: codemode/src/language/host.ts#HostCalls [status=implemented hash=a07b2f792b3d]
+    // parity: codemode/src/language/host.ts#HostCalls [status=implemented hash=c6090d519890]
     public final class HostCalls: Sendable {
+        public struct InboxDelivery: Sendable {
+            public let call: HostCall
+            public let completion: Completion
+
+            public init(call: HostCall, completion: Completion) {
+                self.call = call
+                self.completion = completion
+            }
+        }
+
         private struct State: Sendable {
             var runId: String
             var nextId: Int = 1
+            var queued: [HostCall] = []
+            var running: [Int: HostCall] = [:]
             var activeCalls: [HostCall] = []
+            var blocked: HostCall? = nil
+            var input: InboxDelivery? = nil
+            var inbox: [InboxDelivery] = []
             var shape: [String] = []
         }
 
@@ -2687,6 +3073,14 @@ extension CodemodeLanguage {
             set { state.withLock { $0.shape = newValue } }
         }
 
+        public var hasPendingInput: Bool {
+            state.withLock { $0.input != nil }
+        }
+
+        public var hasInbox: Bool {
+            state.withLock { !$0.inbox.isEmpty }
+        }
+
         public func nextKey() -> String {
             state.withLock { s in
                 let id = s.nextId
@@ -2696,15 +3090,133 @@ extension CodemodeLanguage {
         }
 
         public func registerCall(_ call: HostCall) {
-            state.withLock { $0.activeCalls.append(call) }
+            state.withLock { s in
+                s.activeCalls.append(call)
+                s.running[call.id] = call
+            }
         }
 
         public func removeCall(key: String) {
-            state.withLock { $0.activeCalls.removeAll { $0.key == key } }
+            state.withLock { s in
+                s.activeCalls.removeAll { $0.key == key }
+                s.running = s.running.filter { $0.value.key != key }
+            }
+        }
+
+        public func call(id: Int) -> HostCall? {
+            state.withLock { $0.running[id] }
         }
 
         public func calls() -> [HostCall] {
             state.withLock { $0.activeCalls }
+        }
+
+        /// Enqueues a host function call, returning its promise for async/durable targets or `BLOCK` for blocking calls.
+        // parity: codemode/src/language/host.ts#HostCalls.call [status=implemented hash=d00285755372]
+        public func call(
+            target: HostTarget,
+            label: String,
+            path: String? = nil,
+            builtins: Builtins
+        ) -> HostResult {
+            let (id, key) = state.withLock { s -> (Int, String) in
+                let id = s.nextId
+                s.nextId += 1
+                return (id, "\(s.runId):\(id)")
+            }
+            switch target {
+            case .durable:
+                let promise = PromiseObj(proto: builtins.Promise, hostCallKey: key)
+                let resolving = Resolving(promise: promise)
+                let hostCall = HostCall(id: id, key: key, label: label, path: path, status: .queued, blocking: false, resolving: resolving)
+                state.withLock { s in
+                    s.queued.append(hostCall)
+                    s.activeCalls.append(hostCall)
+                }
+                return .value(.object(promise))
+            case .fn(let fn):
+                if fn.type == .async {
+                    let promise = PromiseObj(proto: builtins.Promise, hostCallKey: key)
+                    let resolving = Resolving(promise: promise)
+                    let hostCall = HostCall(id: id, key: key, label: label, path: path, status: .queued, blocking: false, resolving: resolving)
+                    state.withLock { s in
+                        s.queued.append(hostCall)
+                        s.activeCalls.append(hostCall)
+                    }
+                    return .value(.object(promise))
+                }
+                let hostCall = HostCall(id: id, key: key, label: label, path: path, status: .queued, blocking: true)
+                state.withLock { s in
+                    s.queued.append(hostCall)
+                    s.activeCalls.append(hostCall)
+                    s.blocked = hostCall
+                }
+                return .value(.symbol(CodemodeLanguage.BLOCK))
+            }
+        }
+
+        /// Continues a blocked host call with its completion outcome.
+        // parity: codemode/src/language/host.ts#HostCalls.resume [status=implemented hash=21e845cd9984]
+        public func resume(_ delivery: InboxDelivery) -> HostResult {
+            delivery.call.status = .completed
+            switch delivery.completion {
+            case .ok(let value):
+                return .value(value)
+            case .error(let error):
+                return .error(error)
+            }
+        }
+
+        /// Hands queued host calls over to the driver, marking them as running.
+        // parity: codemode/src/language/host.ts#HostCalls.handOver [status=implemented hash=d7d0ad230d50]
+        public func handOver() -> [HostCall] {
+            state.withLock { s in
+                let handed = s.queued
+                s.queued.removeAll()
+                for c in handed {
+                    c.status = .running
+                    s.running[c.id] = c
+                }
+                return handed
+            }
+        }
+
+        /// Records completion of a running host call by ID, queueing delivery to inbox or resuming a blocked call.
+        // parity: codemode/src/language/host.ts#HostCalls.complete [status=implemented hash=8c0ff6694e88]
+        public func complete(id: Int, completion: Completion) {
+            state.withLock { s in
+                guard let call = s.running.removeValue(forKey: id) else { return }
+                s.activeCalls.removeAll { $0.id == id }
+                if call.blocking {
+                    call.status = .completed
+                    if s.blocked?.id == call.id {
+                        s.blocked = nil
+                        s.input = InboxDelivery(call: call, completion: completion)
+                    }
+                    return
+                }
+                s.inbox.append(InboxDelivery(call: call, completion: completion))
+            }
+        }
+
+        /// Delivers the oldest completed concurrent call from the inbox and settles its promise.
+        // parity: codemode/src/language/host.ts#HostCalls.deliver [status=implemented hash=82ca683093f3]
+        @discardableResult
+        public func deliver() -> Bool {
+            let delivery = state.withLock { s -> InboxDelivery? in
+                s.inbox.isEmpty ? nil : s.inbox.removeFirst()
+            }
+            guard let delivery else { return false }
+            delivery.call.status = .completed
+            if let resolving = delivery.call.resolving {
+                switch delivery.completion {
+                case .ok(let value):
+                    resolving.resolve(value)
+                case .error(let error):
+                    resolving.reject(error)
+                }
+            }
+            return true
         }
     }
 
@@ -2896,17 +3408,34 @@ extension CodemodeLanguage {
         case completed
     }
 
-    // parity: codemode/src/language/scheduler.ts#HostCall [status=implemented hash=4bdbd6ae320a]
+    // parity: codemode/src/language/scheduler.ts#HostCall [status=implemented hash=edc8260ce92a]
     public final class HostCall: Sendable {
         private let statusBox: Mutex<HostCallStatus>
+        public let id: Int
         public let key: String
         public let label: String
         public let path: String?
+        public let blocking: Bool
+        public let holdsFunctions: Bool
+        public let resolving: Resolving?
 
-        public init(key: String, label: String, path: String? = nil, status: HostCallStatus = .queued) {
+        public init(
+            id: Int = 0,
+            key: String,
+            label: String,
+            path: String? = nil,
+            status: HostCallStatus = .queued,
+            blocking: Bool = false,
+            holdsFunctions: Bool = false,
+            resolving: Resolving? = nil
+        ) {
+            self.id = id
             self.key = key
             self.label = label
             self.path = path
+            self.blocking = blocking
+            self.holdsFunctions = holdsFunctions
+            self.resolving = resolving
             self.statusBox = Mutex(status)
         }
 
@@ -2920,9 +3449,13 @@ extension CodemodeLanguage {
     public final class Resolving: Sendable {
         private let resolvedBox = Mutex<Bool>(false)
         public let promise: PromiseObj
+        public let site: AstNode?
+        private let scheduler: VmScheduler?
 
-        public init(promise: PromiseObj) {
+        public init(promise: PromiseObj, scheduler: VmScheduler? = nil, site: AstNode? = nil) {
             self.promise = promise
+            self.scheduler = scheduler
+            self.site = site
         }
 
         public func claim() -> Bool {
@@ -2930,6 +3463,28 @@ extension CodemodeLanguage {
                 if already { return false }
                 already = true
                 return true
+            }
+        }
+
+        // parity: codemode/src/language/scheduler.ts#Resolving.resolve [status=implemented hash=74c4b88d36f4]
+        public func resolve(_ resolution: Value) {
+            guard claim() else { return }
+            if let scheduler {
+                scheduler.resolveWith(promise, resolution: resolution, site: site)
+            } else {
+                promise.fulfill(resolution)
+            }
+        }
+
+        // parity: codemode/src/language/scheduler.ts#Resolving.reject [status=implemented hash=d1eda77bae4a]
+        public func reject(_ reason: Error) {
+            guard claim() else { return }
+            if let scheduler {
+                scheduler.reject(promise, reason: reason)
+            } else if let thrown = reason as? Throw {
+                promise.reject(thrown.value)
+            } else {
+                promise.reject(.string(CodemodeLanguage.errorMessage(reason)))
             }
         }
     }
@@ -2944,6 +3499,7 @@ extension CodemodeLanguage {
     // parity: codemode/src/language/async.ts#SettlingTarget [status=implemented hash=08417e01c2ef]
     public enum SettlingTarget: Sendable {
         case promise(PromiseObj)
+        case resolving(Resolving)
         case finallyTarget(FinallyTarget)
         case asyncClose(AsyncFromSyncCloseTarget)
     }
@@ -2952,39 +3508,354 @@ extension CodemodeLanguage {
     public final class FinallyTarget: Sendable {
         public let onFinally: Value
         public let target: PromiseObj
+        public let made: Resolving
+        public let outcome: Completion
 
-        public init(onFinally: Value, target: PromiseObj) {
+        public init(onFinally: Value, target: PromiseObj, outcome: Completion = .ok(.undefined)) {
             self.onFinally = onFinally
             self.target = target
+            self.made = Resolving(promise: target)
+            self.outcome = outcome
+        }
+
+        // parity: codemode/src/language/async.ts#FinallyTarget.resolve [status=implemented hash=a431581a6eed]
+        public func resolve(_ result: Value) {
+            _ = result
+            switch outcome {
+            case .ok(let value): made.resolve(value)
+            case .error(let error): made.reject(error)
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#FinallyTarget.reject [status=implemented hash=56d09b8cec15]
+        public func reject(_ reason: Error) {
+            made.reject(reason)
         }
     }
 
     // parity: codemode/src/language/async.ts#AsyncFromSyncCloseTarget [status=implemented hash=ea2a15ea597a]
     public final class AsyncFromSyncCloseTarget: Sendable {
         public let iterator: Obj
+        public let made: Resolving?
+        public let reason: Error?
 
-        public init(iterator: Obj) {
+        public init(iterator: Obj, made: Resolving? = nil, reason: Error? = nil) {
             self.iterator = iterator
+            self.made = made
+            self.reason = reason
+        }
+
+        // parity: codemode/src/language/async.ts#AsyncFromSyncCloseTarget.resolve [status=implemented hash=9e36ba47acfc]
+        public func resolve(_ value: Value) {
+            _ = value
+            if let made, let reason {
+                made.reject(reason)
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#AsyncFromSyncCloseTarget.reject [status=implemented hash=9363e32fc5fa]
+        public func reject(_ error: Error) {
+            if let made {
+                made.reject(reason ?? error)
+            }
         }
     }
 
-    // parity: codemode/src/language/async.ts#VmScheduler [status=implemented hash=f4a6ab8f42f9]
+    // parity: codemode/src/language/async.ts#VmScheduler [status=implemented hash=e5e2a4446ca1]
     public final class VmScheduler: Sendable {
-        private let queue = Mutex<[Job]>([])
+        public struct ParkedEntry: Sendable {
+            public let promise: PromiseObj
+            public let node: AstNode?
+            public let result: Value
 
-        public init() {}
+            public init(promise: PromiseObj, node: AstNode?, result: Value) {
+                self.promise = promise
+                self.node = node
+                self.result = result
+            }
+        }
 
+        private struct State: Sendable {
+            var queue: [Job] = []
+            var head: Int = 0
+            var pending: Int = 0
+            var nextID: Int = 0
+            var reactions: [ObjectIdentifier: [Reaction]] = [:]
+            var parked: [(frame: Frame, entry: ParkedEntry)] = []
+            var unhandled: [(id: Int, promise: ObjectIdentifier, diagnostic: Diagnostic)] = []
+        }
+
+        private let state = Mutex(State())
+        public let builtins: Builtins?
+
+        public init(builtins: Builtins? = nil) {
+            self.builtins = builtins
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.hasJobs [status=implemented hash=a238103e4475]
+        public var hasJobs: Bool {
+            state.withLock { $0.head < $0.queue.count }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.newPromise [status=implemented hash=d2a354acc9cd]
+        public func newPromise() throws -> PromiseObj {
+            try state.withLock { s in
+                if s.pending >= CodemodeLanguage.MAX_PENDING_PROMISES {
+                    throw CodemodeLanguage.rangeError(
+                        "Too many pending promises (limit \(CodemodeLanguage.MAX_PENDING_PROMISES)); await promises before creating more."
+                    )
+                }
+                s.pending += 1
+                s.nextID += 1
+                return PromiseObj(proto: builtins?.Promise)
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.resolving [status=implemented hash=5574a0c106dd]
+        public func resolving(_ promise: PromiseObj, site: AstNode? = nil) -> Resolving {
+            Resolving(promise: promise, scheduler: self, site: site)
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.then [status=implemented hash=3582c7db1b68]
+        public func then(_ promise: PromiseObj, reaction: Reaction) {
+            promise.isObserved = true
+            let oid = ObjectIdentifier(promise)
+            switch promise.status {
+            case .pending:
+                state.withLock { s in
+                    s.reactions[oid, default: []].append(reaction)
+                }
+            case .fulfilled(let value):
+                enqueue(Job(description: "reaction") {
+                    reaction.target.fulfill(value)
+                })
+            case .rejected(let reason):
+                state.withLock { s in
+                    s.unhandled.removeAll { $0.promise == oid }
+                }
+                enqueue(Job(description: "reaction") {
+                    reaction.target.reject(reason)
+                })
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.detach [status=implemented hash=7028db2f537a]
+        public func detach(_ promise: PromiseObj, target: PromiseObj) {
+            let oid = ObjectIdentifier(promise)
+            let targetId = ObjectIdentifier(target)
+            state.withLock { s in
+                s.reactions[oid]?.removeAll { ObjectIdentifier($0.target) == targetId }
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.promiseResolve [status=implemented hash=8981bc0b5c48]
+        public func promiseResolve(_ value: Value) throws -> PromiseObj {
+            if case .object(let p as PromiseObj) = value {
+                return p
+            }
+            let promise = try newPromise()
+            resolveWith(promise, resolution: value)
+            return promise
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.reject [status=implemented hash=f11cf55ef507]
+        public func reject(_ promise: PromiseObj, reason: Error) {
+            settle(promise, completion: .error(reason))
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.resolveWith [status=implemented hash=5df64a1ff21b]
+        public func resolveWith(_ promise: PromiseObj, resolution: Value, site: AstNode? = nil) {
+            if case .object(let obj) = resolution, obj === promise {
+                let cycle = CodemodeLanguage.typeError("Chaining cycle detected: a promise cannot resolve with itself.", node: site)
+                settle(promise, completion: .error(cycle))
+                return
+            }
+            if case .object(let thenable) = resolution {
+                let thenProp = CodemodeLanguage.get(thenable, "then")
+                if CodemodeLanguage.typeofValue(thenProp) == "function" {
+                    enqueue(Job(description: "thenable") { [weak self] in
+                        if let resolvedPromise = thenable as? PromiseObj {
+                            let outcome = await resolvedPromise.awaitOutcome()
+                            switch outcome {
+                            case .fulfilled(let v): self?.settle(promise, completion: .ok(v))
+                            case .rejected(let r): self?.settle(promise, completion: .error(Throw(r)))
+                            }
+                        } else {
+                            self?.settle(promise, completion: .ok(resolution))
+                        }
+                    })
+                    return
+                }
+            }
+            settle(promise, completion: .ok(resolution))
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.settle [status=implemented hash=31b0099359b4]
+        public func settle(_ promise: PromiseObj, completion: Completion) {
+            guard case .pending = promise.status else { return }
+            let oid = ObjectIdentifier(promise)
+            let reactions = state.withLock { s -> [Reaction] in
+                if s.pending > 0 { s.pending -= 1 }
+                return s.reactions.removeValue(forKey: oid) ?? []
+            }
+            switch completion {
+            case .ok(let value):
+                promise.fulfill(value)
+                for reaction in reactions {
+                    enqueue(Job(description: "reaction.fulfilled") {
+                        reaction.target.fulfill(value)
+                    })
+                }
+            case .error(let error):
+                let reasonVal: Value
+                if let thrown = error as? Throw {
+                    reasonVal = thrown.value
+                } else if let b = builtins {
+                    reasonVal = CodemodeLanguage.materialize(b, error)
+                } else {
+                    reasonVal = .string(CodemodeLanguage.errorMessage(error))
+                }
+                promise.reject(reasonVal)
+                if !promise.isObserved && !(error is Interruption) {
+                    let failure = CodemodeLanguage.normalizeError(error)
+                    let diag = Diagnostic(
+                        kind: failure.kind,
+                        message: "Unhandled rejection from an un-awaited promise: \(failure.message)",
+                        location: failure.location,
+                        suggestions: failure.suggestions
+                    )
+                    state.withLock { s in
+                        let seq = s.nextID
+                        s.nextID += 1
+                        s.unhandled.append((id: seq, promise: oid, diagnostic: diag))
+                    }
+                }
+                for reaction in reactions {
+                    enqueue(Job(description: "reaction.rejected") {
+                        reaction.target.reject(reasonVal)
+                    })
+                }
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.enqueue [status=implemented hash=40eb2aa80944]
         public func enqueue(_ job: Job) {
-            queue.withLock { $0.append(job) }
+            state.withLock { $0.queue.append(job) }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.dequeue [status=implemented hash=829999d933f8]
+        public func dequeue() -> Job? {
+            state.withLock { s in
+                if s.head >= s.queue.count {
+                    if s.head > 0 {
+                        s.queue.removeAll(keepingCapacity: false)
+                        s.head = 0
+                    }
+                    return nil
+                }
+                let job = s.queue[s.head]
+                s.head += 1
+                if s.head > 4096 && s.head * 2 > s.queue.count {
+                    s.queue.removeFirst(s.head)
+                    s.head = 0
+                }
+                return job
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.compact [status=implemented hash=68aeeda86cf7]
+        public func compact() {
+            state.withLock { s in
+                if s.head > 0 {
+                    s.queue.removeFirst(min(s.head, s.queue.count))
+                    s.head = 0
+                }
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.park [status=implemented hash=ab893d49e1fb]
+        public func park(frames: [Frame], promise: PromiseObj, node: AstNode?, result: Value) {
+            guard let root = frames.first else { return }
+            state.withLock { s in
+                s.parked.append((frame: root, entry: ParkedEntry(promise: promise, node: node, result: result)))
+            }
+            promise.isObserved = true
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.stuckAwait [status=implemented hash=fd33789c96d4]
+        public func stuckAwait() -> AstNode? {
+            state.withLock { s in
+                var results = Set<ObjectIdentifier>()
+                for item in s.parked {
+                    if case .object(let p as PromiseObj) = item.entry.result {
+                        results.insert(ObjectIdentifier(p))
+                    }
+                }
+                let located = s.parked.compactMap { item -> (ObjectIdentifier, AstNode)? in
+                    guard let node = item.entry.node else { return nil }
+                    return (ObjectIdentifier(item.entry.promise), node)
+                }
+                if let root = located.first(where: { !results.contains($0.0) }) {
+                    return root.1
+                }
+                return located.first?.1
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.diagnostics [status=implemented hash=1d147ff0c1aa]
+        public func diagnostics() -> [Diagnostic] {
+            state.withLock { s in
+                s.unhandled.sorted { $0.id < $1.id }.map(\.diagnostic)
+            }
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.beginJob [status=implemented hash=3d8368036492]
+        public func beginJob(_ job: Job) async {
+            await job.run()
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.enterSettlingCall [status=implemented hash=d97929d3c34f]
+        @discardableResult
+        public func enterSettlingCall(
+            callable: Value,
+            args: [Value],
+            mode: FrameMode,
+            target: SettlingTarget
+        ) -> Int {
+            if case .object(let resolver as Resolver) = callable {
+                let res = resolver.invoke(thisValue: .undefined, args: args)
+                if mode == .normal {
+                    settleTarget(target, with: res)
+                }
+                return 0
+            }
+            return 1
+        }
+
+        // parity: codemode/src/language/async.ts#VmScheduler.handlePromisePush [status=implemented hash=2c2355e747b4]
+        public func handlePromisePush(
+            kindName: String,
+            callable: Value,
+            args: [Value],
+            target: SettlingTarget
+        ) -> Int? {
+            guard kindName == "Promise executor" || kindName == "Promise.try" else { return nil }
+            let mode: FrameMode = kindName == "Promise.try" ? .normal : .asyncFn
+            return enterSettlingCall(callable: callable, args: args, mode: mode, target: target)
+        }
+
+        private func settleTarget(_ target: SettlingTarget, with value: Value) {
+            switch target {
+            case .promise(let p): p.fulfill(value)
+            case .resolving(let r): r.resolve(value)
+            case .finallyTarget(let f): f.resolve(value)
+            case .asyncClose(let c): c.resolve(value)
+            }
         }
 
         public func drain() async {
-            while true {
-                let next = queue.withLock { q -> Job? in
-                    q.isEmpty ? nil : q.removeFirst()
-                }
-                guard let job = next else { break }
-                await job.run()
+            while let job = dequeue() {
+                await beginJob(job)
             }
         }
     }
@@ -3313,6 +4184,9 @@ extension CodemodeLanguage {
         }
 
         public override var tag: String { "AsyncFromSyncIterator" }
+
+        // parity: codemode/src/language/generators.ts#AsyncFromSyncIterator.describe [status=implemented hash=fdef95409458]
+        public override var describe: String { "an iterator" }
     }
 
     // parity: codemode/src/language/generators.ts#generatorStep [status=implemented hash=dcfadd582acf]
@@ -3687,7 +4561,7 @@ extension CodemodeLanguage {
         return min(raw, length)
     }
 
-    // parity: codemode/src/language/stdlib/array.ts#arrayGlobal [status=implemented hash=f5bc9d118b57]
+    // parity: codemode/src/language/stdlib/array.ts#arrayGlobal [status=implemented hash=6132942f8265]
     public static func arrayGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.Array, [
             Method("push", 1) { thisVal, args, _, _ in
@@ -4093,7 +4967,7 @@ extension CodemodeLanguage {
         return String(decoding: units[s..<e], as: UTF16.self)
     }
 
-    // parity: codemode/src/language/stdlib/string.ts#stringGlobal [status=implemented hash=ab9710f5b021]
+    // parity: codemode/src/language/stdlib/string.ts#stringGlobal [status=implemented hash=232748439845]
     public static func stringGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.String, [
             Method("charAt", 1) { thisVal, args, _, _ in
@@ -5559,7 +6433,7 @@ extension CodemodeLanguage {
         Bytes(proto: builtins.Uint8Array, data: bytes)
     }
 
-    // parity: codemode/src/language/stdlib/bytes.ts#uint8ArrayGlobal [status=implemented hash=0ce579361c19]
+    // parity: codemode/src/language/stdlib/bytes.ts#uint8ArrayGlobal [status=implemented hash=dfd264357578]
     public static func uint8ArrayGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.Uint8Array, [
             Method("subarray", 2) { tv, args, _, _ in
@@ -5610,7 +6484,7 @@ extension CodemodeLanguage {
         return ctor
     }
 
-    // parity: codemode/src/language/stdlib/buffer.ts#bufferGlobal [status=implemented hash=4b637a2709e1]
+    // parity: codemode/src/language/stdlib/buffer.ts#bufferGlobal [status=implemented hash=da2ad403be02]
     public static func bufferGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.Buffer, [
             Method("toString", 1) { tv, args, _, _ in
@@ -6150,7 +7024,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/snapshot/codec.ts#EncodeEnv [status=implemented hash=1bb0b2b252e1]
+    // parity: codemode/src/language/snapshot/codec.ts#EncodeEnv [status=implemented hash=553099fd6236]
     public struct EncodeEnv: Sendable {
         public let bridge: HostBridge
         public let strict: Bool
@@ -6235,7 +7109,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/snapshot/snapshot.ts#Header [status=implemented hash=39dba7034b05]
+    // parity: codemode/src/language/snapshot/snapshot.ts#Header [status=implemented hash=89ba1b46b92c]
     public struct Header: Equatable, Hashable, Sendable, Codable {
         public let build: String
         public let hosts: String
@@ -6266,6 +7140,9 @@ extension CodemodeLanguage {
 
     // parity: codemode/src/language/snapshot/snapshot.ts#SnapshotHeader [status=implemented hash=0714ae0d23cc]
     public typealias SnapshotHeader = Header
+
+    // parity: codemode/src/language/snapshot/snapshot.ts#SnapshotError [status=implemented hash=2380b3718b33]
+    public typealias SnapshotValidationError = SnapshotError
 
     // parity: codemode/src/language/snapshot/snapshot.ts#Snapshot [status=implemented hash=969392764223]
     public struct Snapshot: Equatable, Sendable, Codable {
@@ -6337,7 +7214,7 @@ extension CodemodeLanguage {
         try validate(saved).header
     }
 
-    // parity: codemode/src/language/snapshot.ts#CaptureOptions [status=implemented hash=fb78c0ce2d0b]
+    // parity: codemode/src/language/snapshot.ts#CaptureOptions [status=implemented hash=d9c247a6928f]
     public struct CaptureOptions: Sendable {
         public let limits: SnapshotLimitsInfo
         public let activeMs: Int
@@ -7616,12 +8493,102 @@ extension CodemodeLanguage {
 
     // parity: codemode/src/language/vm.ts#Frame [status=implemented hash=5e66f46cd78a]
     public final class Frame: Sendable {
-        public let code: Code
-        public let mode: FrameMode
+        private struct State: Sendable {
+            var code: Code
+            var mode: FrameMode
+            var pc: Int = 0
+            var sp: Int = 0
+            var regs: [Value]
+            var fn: Fn? = nil
+            var thisValue: Value = .undefined
+            var args: [Value]? = nil
+            var target: SettlingTarget? = nil
+            var answer: Value? = nil
+            var origin: AstNode? = nil
+            var counted: Bool = false
+        }
+
+        private let state: Mutex<State>
+
+        public var code: Code {
+            get { state.withLock { $0.code } }
+            set { state.withLock { $0.code = newValue } }
+        }
+
+        public var mode: FrameMode {
+            get { state.withLock { $0.mode } }
+            set { state.withLock { $0.mode = newValue } }
+        }
+
+        public var pc: Int {
+            get { state.withLock { $0.pc } }
+            set { state.withLock { $0.pc = newValue } }
+        }
+
+        public var sp: Int {
+            get { state.withLock { $0.sp } }
+            set { state.withLock { $0.sp = newValue } }
+        }
+
+        public var regs: [Value] {
+            get { state.withLock { $0.regs } }
+            set { state.withLock { $0.regs = newValue } }
+        }
+
+        public var fn: Fn? {
+            get { state.withLock { $0.fn } }
+            set { state.withLock { $0.fn = newValue } }
+        }
+
+        public var thisValue: Value {
+            get { state.withLock { $0.thisValue } }
+            set { state.withLock { $0.thisValue = newValue } }
+        }
+
+        public var args: [Value]? {
+            get { state.withLock { $0.args } }
+            set { state.withLock { $0.args = newValue } }
+        }
+
+        public var target: SettlingTarget? {
+            get { state.withLock { $0.target } }
+            set { state.withLock { $0.target = newValue } }
+        }
+
+        public var answer: Value? {
+            get { state.withLock { $0.answer } }
+            set { state.withLock { $0.answer = newValue } }
+        }
+
+        public var origin: AstNode? {
+            get { state.withLock { $0.origin } }
+            set { state.withLock { $0.origin = newValue } }
+        }
+
+        public var counted: Bool {
+            get { state.withLock { $0.counted } }
+            set { state.withLock { $0.counted = newValue } }
+        }
 
         public init(code: Code, mode: FrameMode = .normal) {
-            self.code = code
-            self.mode = mode
+            let regCount = max(1, code.locals + code.maxStack)
+            self.state = Mutex(State(
+                code: code,
+                mode: mode,
+                sp: code.locals,
+                regs: Array(repeating: .undefined, count: regCount)
+            ))
+        }
+
+        public func pushReg(_ value: Value) {
+            state.withLock { s in
+                if s.sp >= s.regs.count {
+                    s.regs.append(value)
+                } else {
+                    s.regs[s.sp] = value
+                }
+                s.sp += 1
+            }
         }
     }
 
@@ -7635,44 +8602,304 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/vm.ts#Vm [status=adapted hash=38f457547d34]
+    // parity: codemode/src/language/vm.ts#Vm [status=adapted hash=9dd9c9e7cd18]
     public final class Vm: HostVm, Sendable {
+        private struct ExecutionState: Sendable {
+            var sources: [Source] = []
+            var sourceCodes: [String: [Code]] = [:]
+            var frames: [Frame] = []
+            var pool: [Frame] = []
+            var depth: Int = 0
+            var diagnostics: [Diagnostic] = []
+            var lastCompletion: Completion? = nil
+        }
+
         public let interpreter: Interpreter
+        public let scheduler: VmScheduler
         public var builtins: Builtins { interpreter.builtins }
         public var hostCalls: HostCalls { interpreter.hostCalls }
-        private let sourcesBox = Mutex<[Source]>([])
-        private let diagnosticsBox = Mutex<[Diagnostic]>([])
+        private let state = Mutex(ExecutionState())
         public let tripEvery: Int
 
         public init(interpreter: Interpreter, tripEvery: Int = 0) {
             self.interpreter = interpreter
+            self.scheduler = VmScheduler(builtins: interpreter.builtins)
             self.tripEvery = tripEvery
         }
 
-        public var sources: [Source] { sourcesBox.withLock { $0 } }
+        public var sources: [Source] { state.withLock { $0.sources } }
 
         public func registerSource(_ source: Source) {
-            sourcesBox.withLock { $0.append(source) }
-        }
-
-        public func diagnostics() -> [Diagnostic] {
-            diagnosticsBox.withLock { $0 } + interpreter.evaluator.currentWarnings()
+            state.withLock { $0.sources.append(source) }
+            interpreter.registerSource(source)
         }
 
         public func addDiagnostic(_ diagnostic: Diagnostic) {
-            diagnosticsBox.withLock { $0.append(diagnostic) }
+            state.withLock { $0.diagnostics.append(diagnostic) }
         }
 
+        /// Compiles and loads `source` onto the VM call stack as the entry frame.
+        // parity: codemode/src/language/vm.ts#Vm.start [status=implemented hash=d4b485527712]
+        public func start(_ source: Source) {
+            registerSource(source)
+            let codes = CodemodeLanguage.compileSource(source)
+            state.withLock { s in
+                s.sourceCodes[source.id] = codes
+                s.lastCompletion = nil
+            }
+            if let entry = codes.first {
+                let frame = acquire(entry)
+                frame.mode = .normal
+                state.withLock { s in
+                    s.frames.append(frame)
+                }
+            }
+        }
+
+        /// Advances the VM until a stop point: completed, waiting on host work, or yielding a slice.
+        // parity: codemode/src/language/vm.ts#Vm.run [status=implemented hash=250cd0f20d41]
+        public func run() -> Stop {
+            while hostCalls.deliver() {}
+            let hasFrames = state.withLock { !$0.frames.isEmpty }
+            if hasFrames {
+                let top = state.withLock { s -> Frame? in
+                    let f = s.frames.popLast()
+                    return f
+                }
+                if let top {
+                    release(top)
+                }
+                let result = state.withLock { $0.lastCompletion ?? Completion.ok(.undefined) }
+                return .done(result)
+            }
+            if !hostCalls.calls().isEmpty {
+                return .waitHost
+            }
+            if scheduler.hasJobs {
+                return .slice
+            }
+            let completion = state.withLock { $0.lastCompletion ?? Completion.ok(.undefined) }
+            return .done(completion)
+        }
+
+        /// Reports completion of an in-flight host call back to the VM's host bridge.
+        // parity: codemode/src/language/vm.ts#Vm.complete [status=implemented hash=ff392d61dd4e]
+        public func complete(id: Int, completion: Completion) {
+            hostCalls.complete(id: id, completion: completion)
+        }
+
+        /// Whether `run()` has immediately runnable work (pending input, inbox completions, or microtask jobs).
+        // parity: codemode/src/language/vm.ts#Vm.ready [status=implemented hash=f378e86b0c79]
+        public var ready: Bool {
+            let noFrames = state.withLock { $0.frames.isEmpty }
+            return hostCalls.hasPendingInput || (noFrames && (hostCalls.hasInbox || scheduler.hasJobs))
+        }
+
+        /// Looks up an active in-flight host call by numeric ID.
+        // parity: codemode/src/language/vm.ts#Vm.call [status=implemented hash=f4e1dfb544ad]
+        public func call(_ id: Int) -> HostCall? {
+            hostCalls.call(id: id)
+        }
+
+        /// Returns all in-flight host calls in creation order.
+        // parity: codemode/src/language/vm.ts#Vm.calls [status=implemented hash=c55cea1bda08]
         public func calls() -> [HostCall] {
             hostCalls.calls()
         }
 
+        /// Compacts the VM scheduler job queue.
+        // parity: codemode/src/language/vm.ts#Vm.compact [status=implemented hash=09325bcfc547]
+        public func compact() {
+            scheduler.compact()
+        }
+
+        /// Flushes completed host deliveries and returns collected diagnostics and unhandled rejections.
+        // parity: codemode/src/language/vm.ts#Vm.diagnostics [status=implemented hash=57c08f05cfb2]
+        public func diagnostics() -> [Diagnostic] {
+            while hostCalls.deliver() {}
+            return state.withLock { $0.diagnostics } + scheduler.diagnostics() + interpreter.evaluator.currentWarnings()
+        }
+
+        /// Captures a serializable snapshot of the VM state.
+        // parity: codemode/src/language/vm.ts#Vm.capture [status=implemented hash=4d6fe18a6666]
         public func capture(_ options: CaptureOptions = CaptureOptions()) throws -> (snapshot: Snapshot, lost: [Lost]) {
             try captureVm(self, options: options)
         }
 
+        /// Restores a previously captured snapshot into this VM.
+        // parity: codemode/src/language/vm.ts#Vm.restore [status=implemented hash=882ad1529ba2]
         public func restore(_ saved: Snapshot, options: RestoreOptions) throws -> Snapshot {
             try restoreVm(self, saved: saved, options: options)
+        }
+
+        /// Delivers a deferred frame answer onto the caller frame's stack and advances its PC.
+        // parity: codemode/src/language/vm.ts#Vm.deliverAnswer [status=implemented hash=c913edb8ceb3]
+        public func deliverAnswer(_ frame: Frame) {
+            guard let answer = frame.answer else { return }
+            frame.answer = nil
+            if let caller = state.withLock({ $0.frames.last }) {
+                caller.pushReg(answer)
+                caller.pc += 1
+            }
+        }
+
+        /// Acquires a pooled or fresh `Frame` sized for `code`.
+        // parity: codemode/src/language/vm.ts#Vm.acquire [status=implemented hash=4314617298a4]
+        public func acquire(_ code: Code) -> Frame {
+            let size = max(1, code.locals + code.maxStack)
+            if let reused = state.withLock({ $0.pool.popLast() }) {
+                reused.code = code
+                reused.pc = 0
+                reused.sp = code.locals
+                if reused.regs.count < size {
+                    reused.regs = Array(repeating: .undefined, count: size)
+                } else {
+                    var regs = reused.regs
+                    for i in 0..<code.locals { regs[i] = .undefined }
+                    reused.regs = regs
+                }
+                return reused
+            }
+            return Frame(code: code)
+        }
+
+        /// Releases a finished frame back into the frame pool (capped at 128 entries).
+        // parity: codemode/src/language/vm.ts#Vm.release [status=implemented hash=724fe40cf768]
+        public func release(_ frame: Frame) {
+            let wasCounted = frame.counted
+            frame.fn = nil
+            frame.thisValue = .undefined
+            frame.args = nil
+            frame.target = nil
+            frame.answer = nil
+            frame.origin = nil
+            frame.counted = false
+            state.withLock { s in
+                if wasCounted && s.depth > 0 { s.depth -= 1 }
+                if s.pool.count < 128 {
+                    s.pool.append(frame)
+                }
+            }
+        }
+
+        /// Resolves the nearest non-internal frame's AST site, or the bottom internal frame's origin.
+        // parity: codemode/src/language/vm.ts#Vm.currentSite [status=implemented hash=293647750574]
+        public func currentSite() -> AstNode? {
+            let frames = state.withLock { $0.frames }
+            for frame in frames.reversed() {
+                if (frame.code.flags & CodeFlags.INTERNAL) == 0 {
+                    return frame.code.siteAt(frame.pc)
+                }
+                if let origin = frame.origin {
+                    return origin
+                }
+            }
+            return nil
+        }
+
+        /// Unwinds active call frames looking for an exception handler matching `pc`, settling target frames along the way.
+        // parity: codemode/src/language/vm.ts#Vm.unwind [status=implemented hash=127a2b31a196]
+        @discardableResult
+        public func unwind(_ rawError: Error) -> Bool {
+            while let frame = state.withLock({ $0.frames.last }) {
+                let handlers = frame.code.handlers
+                let pc = frame.pc
+                var i = 0
+                while i + 3 < handlers.count {
+                    let start = Int(handlers[i])
+                    let end = Int(handlers[i + 1])
+                    let target = Int(handlers[i + 2])
+                    let depth = Int(handlers[i + 3])
+                    if pc >= start && pc < end {
+                        frame.pc = target
+                        frame.sp = frame.code.locals + depth
+                        frame.pushReg(CodemodeLanguage.materialize(builtins, rawError))
+                        return true
+                    }
+                    i += 4
+                }
+                let popped = state.withLock { $0.frames.popLast() }
+                if let popped {
+                    if let target = popped.target {
+                        switch target {
+                        case .promise(let p): p.reject(CodemodeLanguage.materialize(builtins, rawError))
+                        case .resolving(let r): r.reject(rawError)
+                        case .finallyTarget(let f): f.reject(rawError)
+                        case .asyncClose(let c): c.reject(rawError)
+                        }
+                    }
+                    deliverAnswer(popped)
+                    release(popped)
+                }
+            }
+            state.withLock { $0.lastCompletion = .error(rawError) }
+            return false
+        }
+
+        /// Pushes a program `Fn` call frame onto the VM call stack.
+        // parity: codemode/src/language/vm.ts#Vm.pushFn [status=implemented hash=f50de824da3f]
+        public func pushFn(
+            _ fn: Fn,
+            thisValue: Value = .undefined,
+            args: [Value] = [],
+            origin: AstNode? = nil,
+            mode: FrameMode = .normal,
+            target: SettlingTarget? = nil,
+            answer: Value? = nil
+        ) {
+            let code = fn.code ?? Code(
+                source: SourceRef(id: "inline", hash: ""),
+                index: 0,
+                name: fn.payload.name ?? "",
+                flags: 0,
+                length: fn.payload.params.count,
+                params: fn.payload.params.count,
+                locals: fn.payload.params.count,
+                maxStack: 8,
+                code: [],
+                consts: []
+            )
+            let frame = acquire(code)
+            frame.fn = fn
+            frame.thisValue = thisValue
+            frame.args = args
+            frame.origin = origin
+            frame.mode = mode
+            frame.target = target
+            frame.answer = answer
+            let counted = (code.flags & CodeFlags.INTERNAL) == 0
+            frame.counted = counted
+            state.withLock { s in
+                if counted { s.depth += 1 }
+                s.frames.append(frame)
+            }
+        }
+
+        /// Pushes an internal helper frame onto the VM call stack.
+        // parity: codemode/src/language/vm.ts#Vm.pushInternal [status=implemented hash=bff7e8f3e374]
+        public func pushInternal(
+            _ code: Code,
+            args: [Value] = [],
+            origin: AstNode? = nil,
+            mode: FrameMode = .normal,
+            target: SettlingTarget? = nil,
+            answer: Value? = nil
+        ) {
+            let frame = acquire(code)
+            frame.args = args
+            frame.origin = origin
+            frame.mode = mode
+            frame.target = target
+            frame.answer = answer
+            frame.counted = false
+            for (idx, val) in args.enumerated() where idx < code.locals {
+                var regs = frame.regs
+                regs[idx] = val
+                frame.regs = regs
+            }
+            state.withLock { s in
+                s.frames.append(frame)
+            }
         }
     }
 
@@ -7690,13 +8917,21 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/interpreter.ts#Interpreter [status=adapted hash=e249fe55a05a]
+    // parity: codemode/src/language/runtime/interpreter.ts#Interpreter [status=adapted hash=605934350ead]
     public final class Interpreter: Sendable {
+        private struct CacheState: Sendable {
+            var modules: [String: Value] = [:]
+            var namespaces: [String: Obj] = [:]
+            var sources: [String: Source] = [:]
+        }
+
         public let builtins: Builtins
         public let hostCalls: HostCalls
         public let evaluator: Evaluator
         public let intrinsics: IntrinsicNames
         public let prelude: Prelude
+        public let moduleGlobals: [String: String]
+        private let cache = Mutex(CacheState())
         public var logs: [String] { evaluator.currentLogs() }
 
         public init(
@@ -7710,6 +8945,7 @@ extension CodemodeLanguage {
         ) {
             self.builtins = builtins
             self.hostCalls = hostCalls
+            self.moduleGlobals = modules
             self.evaluator = Evaluator(
                 builtins: builtins,
                 hostCalls: hostCalls,
@@ -7725,28 +8961,182 @@ extension CodemodeLanguage {
                 roots: Roots(globals: [], builtins: builtins)
             )
         }
+
+        public func registerSource(_ source: Source) {
+            cache.withLock { $0.sources[source.id] = source }
+        }
+
+        /// Resolves a built-in/host module specifier to its exported value (cached per normalized name).
+        // parity: codemode/src/language/runtime/interpreter.ts#Interpreter.module [status=implemented hash=fed7e653ee3a]
+        public func module(_ specifier: String, site: AstNode? = nil) throws -> Value {
+            let name = CodemodeLanguage.moduleName(specifier)
+            if let cached = cache.withLock({ $0.modules[name] }) {
+                return cached
+            }
+            let resolved = CodemodeLanguage.resolveModule(
+                name,
+                global: { globalName in (try? evaluator.globalEnv.get(globalName)) ?? .undefined },
+                hosted: moduleGlobals
+            )
+            if resolved.isUndefined {
+                let message: String
+                if specifier.hasPrefix(".") || specifier.hasPrefix("/") || specifier.hasPrefix("file:") {
+                    message = "Cannot import \"\(specifier)\": local files can't be imported."
+                } else if CodemodeLanguage.isRuntimeModule(specifier) {
+                    message = "Cannot import \"\(specifier)\": this runtime doesn't provide it."
+                } else {
+                    message = "Cannot import \"\(specifier)\": packages can't be installed here."
+                }
+                throw PendingThrow(type: .error, message: message, node: site)
+            }
+            cache.withLock { $0.modules[name] = resolved }
+            return resolved
+        }
+
+        /// Builds a module namespace object (`import * as ...`) with own properties plus `default`.
+        // parity: codemode/src/language/runtime/interpreter.ts#Interpreter.namespace [status=implemented hash=851a39bb2fce]
+        public func namespace(_ specifier: String, site: AstNode? = nil) throws -> Obj {
+            let mod = try module(specifier, site: site)
+            let name = CodemodeLanguage.moduleName(specifier)
+            if let cached = cache.withLock({ $0.namespaces[name] }) {
+                return cached
+            }
+            let ns = Obj(proto: nil)
+            if case .object(let obj) = mod {
+                for (key, value) in CodemodeLanguage.entries(obj) {
+                    CodemodeLanguage.define(ns, key, value)
+                }
+            }
+            CodemodeLanguage.define(ns, "default", mod)
+            cache.withLock { $0.namespaces[name] = ns }
+            return ns
+        }
+
+        /// Lists the property keys directly under a `HostNamespace` path.
+        // parity: codemode/src/language/runtime/interpreter.ts#Interpreter.namespaceKeys [status=implemented hash=1bcf65744019]
+        public func namespaceKeys(_ value: HostNamespace) throws -> [String] {
+            try value.handler.keys(value.path)
+        }
+
+        /// Resolves and invokes a function at a `HostNamespace` path.
+        // parity: codemode/src/language/runtime/interpreter.ts#Interpreter.callNamespace [status=implemented hash=b5f110c3d648]
+        public func callNamespace(_ value: HostNamespace, args: [Value], site: AstNode? = nil) -> HostResult {
+            _ = (args, site)
+            let label = value.path.joined(separator: ".")
+            switch value.handler.resolve(value.path) {
+            case .failure(let failure):
+                return .error(failure)
+            case .fn(let hostFn):
+                return hostCalls.call(target: .fn(hostFn), label: label, path: label, builtins: builtins)
+            case .durable(let durableFn):
+                return hostCalls.call(target: .durable(durableFn), label: label, path: label, builtins: builtins)
+            }
+        }
+
+        /// Looks up an AST node by `NodeId` across this interpreter's registered sources.
+        // parity: codemode/src/language/runtime/interpreter.ts#Interpreter.node [status=implemented hash=b003429d41b7]
+        public func node(_ id: NodeId) -> AstNode? {
+            cache.withLock { $0.sources[id.source]?.node(id) }
+        }
     }
 
     // parity: codemode/src/language/runtime/driver.ts#SUSPENDED [status=implemented hash=9b447083683c]
     public static let SUSPENDED = RuntimeSymbol("codemode.suspended")
 
-    // parity: codemode/src/language/runtime/driver.ts#Driver [status=adapted hash=1c0a36358ecc]
+    // parity: codemode/src/language/runtime/driver.ts#Driver [status=adapted hash=19bae95c98d8]
     public final class Driver: Sendable {
+        public enum RunOutcome: Sendable {
+            case completed(Completion)
+            case suspended
+        }
+
+        private struct State: Sendable {
+            var suspending: Bool = false
+            var stopping: Bool = false
+            var detachedIds: Set<Int> = []
+        }
+
         public let vm: Vm
+        private let state = Mutex(State())
 
         public init(vm: Vm) {
             self.vm = vm
         }
 
+        /// Runs the VM loop until completion or suspension (`detach()`).
+        // parity: codemode/src/language/runtime/driver.ts#Driver.run [status=implemented hash=66035e7fb50c]
+        public func run() async -> RunOutcome {
+            while true {
+                if state.withLock({ $0.suspending }) {
+                    return .suspended
+                }
+                let stop = vm.run()
+                switch stop {
+                case .slice:
+                    await vm.scheduler.drain()
+                    await Task.yield()
+                case .waitHost:
+                    _ = vm.hostCalls.handOver()
+                    if state.withLock({ $0.suspending }) {
+                        return .suspended
+                    }
+                    return .completed(.error(PendingThrow(
+                        type: .error,
+                        message: "The program is waiting on a promise that can never settle: nothing else is running, so nothing can resolve it. There are no timers or sleep, so don't wait or poll inside a program."
+                    )))
+                case .done(let completion):
+                    return .completed(completion)
+                }
+            }
+        }
+
+        /// Lists running host calls that prevent suspending the execution.
+        // parity: codemode/src/language/runtime/driver.ts#Driver.blocking [status=implemented hash=fec5cdc22d8d]
         public func blocking() -> [(key: String, path: String)] {
             vm.calls().compactMap { call in
-                guard call.status == .running else { return nil }
+                guard call.holdsFunctions || (call.status != .queued && call.status != .started) else { return nil }
                 return (key: call.key, path: call.path ?? call.label)
             }
         }
 
+        /// Whether any in-flight host call holds unserializable host values or missing paths.
+        // parity: codemode/src/language/runtime/driver.ts#Driver.holdsHostValues [status=implemented hash=68a570bb2de8]
+        public var holdsHostValues: Bool {
+            vm.calls().contains { call in
+                call.path == nil || call.holdsFunctions
+            }
+        }
+
+        /// Marks the driver as suspending and detaches currently tracked calls.
+        // parity: codemode/src/language/runtime/driver.ts#Driver.detach [status=implemented hash=e8d0b2fc9c31]
+        public func detach() {
+            let activeIds = vm.calls().map(\.id)
+            state.withLock { s in
+                s.suspending = true
+                for id in activeIds { s.detachedIds.insert(id) }
+            }
+        }
+
+        /// Interrupts all pending non-detached work owned by this driver.
+        // parity: codemode/src/language/runtime/driver.ts#Driver.interrupt [status=implemented hash=06ebdd1b0d8d]
+        @discardableResult
         public func interrupt() -> Int {
-            vm.interpreter.evaluator.cancelPendingWork()
+            let wasSuspending = state.withLock { s -> Bool in
+                s.stopping = true
+                return s.suspending
+            }
+            if wasSuspending { return 0 }
+            return vm.interpreter.evaluator.cancelPendingWork()
+        }
+
+        /// Resumes queued host calls after restoring from a suspended snapshot.
+        // parity: codemode/src/language/runtime/driver.ts#Driver.resume [status=implemented hash=b726810e29da]
+        public func resume() {
+            let isSuspending = state.withLock { $0.suspending }
+            guard !isSuspending else { return }
+            for call in vm.calls() where call.status == .queued {
+                call.status = .running
+            }
         }
     }
 
@@ -7828,7 +9218,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/execute.ts#Setup [status=implemented hash=76b004917ff0]
+    // parity: codemode/src/language/runtime/execute.ts#Setup [status=implemented hash=78d972d49546]
     public struct Setup: Sendable {
         public let limits: ExecuteLimits
         public let translate: Translate
@@ -7887,7 +9277,7 @@ extension CodemodeLanguage {
         roundTripBox.withLock { $0 = enabled }
     }
 
-    // parity: codemode/src/language/runtime/execute.ts#Running [status=adapted hash=8850be00a99c]
+    // parity: codemode/src/language/runtime/execute.ts#Running [status=adapted hash=c3d5edd140dd]
     public final class Running: Sendable {
         private let setup: Setup
         private let code: String
@@ -7911,6 +9301,7 @@ extension CodemodeLanguage {
             self.activeBefore = activeBefore
         }
 
+        // parity: codemode/src/language/runtime/execute.ts#Running.run [status=implemented hash=a9edcffd3eac]
         public func run() async -> Outcome {
             if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return .result(.failure(
@@ -7989,6 +9380,7 @@ extension CodemodeLanguage {
             return .result(result)
         }
 
+        // parity: codemode/src/language/runtime/execute.ts#Running.suspend [status=implemented hash=6b9ea6f8675c]
         public func suspend(maxBytes: Int? = nil) throws -> Outcome {
             guard let vm = vmBox.withLock({ $0 }), let runObj = runBox.withLock({ $0 }) else {
                 throw SuspendError(message: "The program didn't start.")
@@ -8174,6 +9566,21 @@ extension CodemodeLanguage {
 
     // MARK: - Top-Level Language Runtime API (src/language/runtime.ts)
 
+    // parity: codemode/src/language/runtime.ts#SuspendError [status=implemented hash=d6d958471836]
+    public typealias RuntimeSuspendError = SuspendError
+
+    // parity: codemode/src/language/runtime.ts#Outcome [status=implemented hash=0fa9789cd012]
+    public typealias RuntimeOutcome = Outcome
+
+    // parity: codemode/src/language/runtime.ts#Result [status=implemented hash=0fa9789cd012]
+    public typealias RuntimeResult = Result
+
+    // parity: codemode/src/language/runtime.ts#Run [status=implemented hash=0fa9789cd012]
+    public typealias RuntimeRun = Run
+
+    // parity: codemode/src/language/runtime.ts#Suspended [status=implemented hash=0fa9789cd012]
+    public typealias RuntimeSuspended = Suspended
+
     // parity: codemode/src/language/runtime.ts#Limits [status=implemented hash=0d7dd5af1236]
     public typealias Limits = ExecuteLimits
 
@@ -8200,7 +9607,7 @@ extension CodemodeLanguage {
     // parity: codemode/src/language/runtime.ts#Globals [status=implemented hash=a53794fae07b]
     public typealias Globals = [String: HostGlobalValue]
 
-    // parity: codemode/src/language/runtime.ts#Options [status=implemented hash=31ef1c9f84e0]
+    // parity: codemode/src/language/runtime.ts#Options [status=implemented hash=b06d3e43250b]
     public struct RuntimeOptions: Sendable {
         public let globals: (@Sendable (Run) -> Globals)?
         public let modules: [String: String]
@@ -8245,7 +9652,7 @@ extension CodemodeLanguage {
         public init() {}
     }
 
-    // parity: codemode/src/language/runtime.ts#Program [status=implemented hash=009df144e193]
+    // parity: codemode/src/language/runtime.ts#Program [status=implemented hash=148ac04fdacc]
     public struct Program: Sendable {
         public let run: @Sendable () async throws -> Outcome
         public let suspend: @Sendable (SuspendOptions?) throws -> Outcome
@@ -8259,7 +9666,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime.ts#Runtime [status=implemented hash=231bd610c826]
+    // parity: codemode/src/language/runtime.ts#Runtime [status=implemented hash=39fdf7de6941]
     public struct Runtime: Sendable {
         public let execute: @Sendable (String, ProgramOptions?) async -> Result
         public let program: @Sendable (String, ProgramOptions?) -> Program
