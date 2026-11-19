@@ -924,3 +924,287 @@ public enum CoreFormatter {
         [AppProcess.node]
     )
 }
+
+// MARK: - CoreFuzzyFileIndex Wiring into CoreFilesystem.Search & CoreFilesystem.Fff
+
+extension CoreFilesystem.Fff {
+    /// Native Swift `Fff.Picker` backed by `CoreFuzzyFileIndex`.
+    public final class NativePicker: CoreFilesystem.Fff.Picker, Sendable {
+        private struct PickerState: Sendable {
+            var destroyed: Bool = false
+            var warmTask: Task<Void, Never>?
+        }
+
+        public let basePath: String
+        public let index: CoreFuzzyFileIndex
+        private let ownsIndex: Bool
+        private let pickerState = Mutex(PickerState())
+
+        public init(
+            basePath: String,
+            index: CoreFuzzyFileIndex,
+            ownsIndex: Bool = false,
+            autoWarm: Bool = true
+        ) {
+            self.basePath = basePath
+            self.index = index
+            self.ownsIndex = ownsIndex
+
+            if autoWarm && index.entryCount(root: basePath) == 0 {
+                let targetRoot = basePath
+                let idx = index
+                let task = Task<Void, Never> { [weak self] in
+                    _ = try? await idx.warm(root: targetRoot)
+                    self?.pickerState.withLock { $0.warmTask = nil }
+                }
+                pickerState.withLock { $0.warmTask = task }
+            }
+        }
+
+        /// Awaits completion of the initial background scan (or warms on demand if not yet scanned).
+        public func waitUntilReady() async {
+            let task = pickerState.withLock { $0.warmTask }
+            if let task {
+                await task.value
+            } else if !pickerState.withLock({ $0.destroyed }) && index.entryCount(root: basePath) == 0 {
+                _ = try? await index.warm(root: basePath)
+            }
+        }
+
+        public func destroy() {
+            let task: Task<Void, Never>? = pickerState.withLock { s in
+                s.destroyed = true
+                let existing = s.warmTask
+                s.warmTask = nil
+                return existing
+            }
+            task?.cancel()
+            if ownsIndex {
+                index.invalidate(root: basePath)
+            }
+        }
+
+        public func isScanning() -> Bool {
+            let hasTask = pickerState.withLock { $0.warmTask != nil }
+            return hasTask || index.isScanning(root: basePath)
+        }
+
+        public func fileSearch(_ query: String, options: SearchOptions? = nil) -> Result<Search> {
+            guard !pickerState.withLock({ $0.destroyed }) else {
+                return .error("fff picker destroyed")
+            }
+            let sliced = runPagedSearch(query: query, kind: .file, options: options)
+            return .ok(Search(
+                items: sliced.map { File(relativePath: $0.relativePath) },
+                scores: sliced.map { Score(total: $0.totalScore) }
+            ))
+        }
+
+        public func directorySearch(_ query: String, options: SearchOptions? = nil) -> Result<DirSearch> {
+            guard !pickerState.withLock({ $0.destroyed }) else {
+                return .error("fff picker destroyed")
+            }
+            let sliced = runPagedSearch(query: query, kind: .directory, options: options)
+            return .ok(DirSearch(
+                items: sliced.map { Directory(relativePath: $0.relativePath) },
+                scores: sliced.map { Score(total: $0.totalScore) }
+            ))
+        }
+
+        public func mixedSearch(_ query: String, options: SearchOptions? = nil) -> Result<MixedSearch> {
+            guard !pickerState.withLock({ $0.destroyed }) else {
+                return .error("fff picker destroyed")
+            }
+            let sliced = runPagedSearch(query: query, kind: nil, options: options)
+            let items: [Mixed] = sliced.map { match in
+                switch match.kind {
+                case .file: return .file(File(relativePath: match.relativePath))
+                case .directory: return .directory(Directory(relativePath: match.relativePath))
+                }
+            }
+            return .ok(MixedSearch(
+                items: items,
+                scores: sliced.map { Score(total: $0.totalScore) }
+            ))
+        }
+
+        private func runPagedSearch(
+            query: String,
+            kind: CoreFuzzyFileIndex.EntryKind?,
+            options: SearchOptions?
+        ) -> [CoreFuzzyFileIndex.MatchResult] {
+            let pageIndex = max(0, options?.pageIndex ?? 0)
+            let pageSize = max(1, options?.pageSize ?? 50)
+            let offset = pageIndex * pageSize
+            let fetchLimit = offset + pageSize
+            let all = index.searchCached(
+                root: basePath,
+                query: query,
+                options: CoreFuzzyFileIndex.SearchOptions(kind: kind, limit: fetchLimit)
+            )
+            guard offset < all.count else { return [] }
+            return Array(all[offset..<min(all.count, fetchLimit)])
+        }
+    }
+
+    /// Native Swift `Fff.Backend` backed by `CoreFuzzyFileIndex`.
+    public final class NativeBackend: CoreFilesystem.Fff.Backend, Sendable {
+        private let fileSystem: any OpenCodeFileSystem
+        private let sharedIndex: CoreFuzzyFileIndex?
+        private let configuration: CoreFuzzyFileIndex.Configuration
+
+        public init(
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+            index: CoreFuzzyFileIndex? = nil,
+            configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+        ) {
+            self.fileSystem = fileSystem
+            self.sharedIndex = index
+            self.configuration = configuration
+        }
+
+        public func isAvailable() -> Bool {
+            true
+        }
+
+        public func create(_ options: Init) -> Result<any Picker> {
+            let ownsIndex = sharedIndex == nil
+            let index = sharedIndex ?? CoreFuzzyFileIndex(fileSystem: fileSystem, configuration: configuration)
+            let picker = NativePicker(basePath: options.basePath, index: index, ownsIndex: ownsIndex)
+            return .ok(picker)
+        }
+    }
+
+    /// Returns a bound `Fff` adapter powered by `CoreFuzzyFileIndex`.
+    public static func nativeAdapter(
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        index: CoreFuzzyFileIndex? = nil,
+        configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+    ) -> BoundAdapter {
+        bind(NativeBackend(fileSystem: fileSystem, index: index, configuration: configuration))
+    }
+}
+
+extension CoreFilesystem.Search {
+    /// High-speed `CoreFilesystem.Search.Interface` backed by `CoreFuzzyFileIndex`.
+    public final class FuzzyIndexedService: CoreFilesystem.Search.Interface, Sendable {
+        public static let serviceKey = CoreFilesystem.Search.Service.serviceKey
+
+        public let directory: String
+        public let index: CoreFuzzyFileIndex
+
+        public init(
+            directory: String,
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+            index: CoreFuzzyFileIndex? = nil,
+            configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+        ) {
+            self.directory = directory
+            self.index = index ?? CoreFuzzyFileIndex(fileSystem: fileSystem, configuration: configuration)
+        }
+
+        /// Warms the background index for this service's directory.
+        @discardableResult
+        public func warm() async throws -> Int {
+            try await index.warm(root: directory)
+        }
+
+        /// Incrementally applies a single-entry filesystem change without full rescan.
+        public func applyChange(path: String, kind: CoreFuzzyFileIndex.ChangeKind) {
+            index.applyChange(path: path, kind: kind, root: directory)
+        }
+
+        /// Invalidates this directory's cached index snapshot.
+        public func invalidate() {
+            index.invalidate(root: directory)
+        }
+
+        /// Records an access for frecency ranking.
+        public func recordAccess(path: String, at epochMs: Int64? = nil) {
+            index.recordAccess(path: path, at: epochMs, root: directory)
+        }
+
+        /// Returns detailed fuzzy/frecency match results including UTF-16 highlight indices.
+        public func findDetailed(_ input: FileSystemSchema.FindInput) async -> [CoreFuzzyFileIndex.MatchResult] {
+            let entryKind: CoreFuzzyFileIndex.EntryKind?
+            switch input.type {
+            case .file: entryKind = .file
+            case .directory: entryKind = .directory
+            case nil: entryKind = nil
+            }
+            let limit = input.limit?.rawValue ?? 50
+            return await index.search(
+                root: directory,
+                query: input.query,
+                options: CoreFuzzyFileIndex.SearchOptions(kind: entryKind, limit: limit)
+            )
+        }
+
+        public func find(_ input: FileSystemSchema.FindInput) async -> [FileSystemSchema.Entry] {
+            let matches = await findDetailed(input)
+            return matches.map { match in
+                let displayPath: String
+                let schemaType: FileSystemSchema.EntryType
+                switch match.kind {
+                case .file:
+                    displayPath = match.relativePath
+                    schemaType = .file
+                case .directory:
+                    displayPath = match.relativePath.hasSuffix("/") ? match.relativePath : match.relativePath + "/"
+                    schemaType = .directory
+                }
+                return FileSystemSchema.Entry(
+                    path: SchemaPrimitive.RelativePath(rawValue: displayPath),
+                    type: schemaType
+                )
+            }
+        }
+    }
+
+    /// Location-scoped `LayerNode.ExecutableLayer` wiring `CoreFuzzyFileIndex` into `CoreFilesystem.Search`.
+    public static func fuzzyIndexLayer(
+        index: CoreFuzzyFileIndex? = nil,
+        configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+    ) -> LayerNode.ExecutableLayer {
+        LayerNode.ExecutableLayer { deps, _ in
+            let directory = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
+            let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
+            let fs = fsUtil?.fileSystem ?? LocalFileSystem.shared
+            let service = FuzzyIndexedService(
+                directory: directory,
+                fileSystem: fs,
+                index: index,
+                configuration: configuration
+            )
+            return LayerNode.Output([Service.serviceKey: service as any Interface])
+        }
+    }
+
+    /// Drop-in `LayerNode.Provider` providing `CoreFilesystem.Search.Service.serviceKey` via `CoreFuzzyFileIndex`.
+    public static func fuzzyIndexNode(
+        index: CoreFuzzyFileIndex? = nil,
+        configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+    ) -> LayerNode.Provider {
+        AppNode.makeLocationNode(
+            Service.serviceKey,
+            fuzzyIndexLayer(index: index, configuration: configuration),
+            [FSUtil.node]
+        )
+    }
+
+    /// Native `fff`-protocol layer composed directly via `CoreFilesystem.Search.makeFffLayer`.
+    public static func nativeFffLayer(
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        index: CoreFuzzyFileIndex? = nil,
+        configuration: CoreFuzzyFileIndex.Configuration = CoreFuzzyFileIndex.Configuration()
+    ) -> LayerNode.ExecutableLayer {
+        let backend = CoreFilesystem.Fff.NativeBackend(
+            fileSystem: fileSystem,
+            index: index,
+            configuration: configuration
+        )
+        return makeFffLayer { options in
+            backend.create(options)
+        }
+    }
+}
