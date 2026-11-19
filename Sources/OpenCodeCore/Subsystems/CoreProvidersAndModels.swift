@@ -2438,6 +2438,36 @@ public enum CoreModel {
                 self.limit = limit; self.compaction = compaction; self.cache = cache
                 self.transport = transport; self.chunkTimeout = chunkTimeout
             }
+
+            /// Instantiates a live runnable `AISchema.LanguageModel` from this resolved catalog descriptor.
+            public func makeLanguageModel(
+                transport: (any HTTPTransport)? = nil,
+                environment: any EnvironmentProviding = SystemEnvironment.shared,
+                clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+            ) throws -> AISchema.LanguageModel {
+                var effectiveSettings = model.settings
+                if let baseURL = model.baseURL, effectiveSettings["baseURL"] == nil {
+                    effectiveSettings["baseURL"] = .string(baseURL)
+                }
+                let timeout: AISchema.RequestTimeout? = chunkTimeout.map { opt in
+                    let chunk: AISchema.HttpTimeout = switch opt {
+                    case .disabled: .disabled
+                    case .milliseconds(let ms): .milliseconds(ms)
+                    }
+                    return .phases(AISchema.TimeoutConfig(chunk: chunk))
+                }
+                return try AIProviders.makeLanguageModel(
+                    package: model.package,
+                    modelID: model.id,
+                    settings: effectiveSettings,
+                    headers: model.headers.isEmpty ? nil : model.headers,
+                    body: model.body.isEmpty ? nil : model.body,
+                    timeout: timeout,
+                    environment: environment,
+                    transport: transport,
+                    clock: clock
+                )
+            }
         }
 
         // parity: core/src/model-resolver.ts#Dependencies [status=adapted hash=05f4bacf6674]
@@ -2703,6 +2733,36 @@ public enum CoreModel {
             public func resolveDecision(_ ref: ModelSchema.Ref) async throws -> ResolvedModelDescriptor? {
                 try await resolveMedia(ref, type: .decision)
             }
+
+            /// Resolves a model reference from the live catalog and returns a runnable `AISchema.LanguageModel`
+            /// wired to the appropriate `AIProviders` protocol route and `OpenCodePlatform.HTTPTransport`.
+            public func resolveLanguageModel(
+                _ requested: ModelSchema.Ref? = nil,
+                transport: (any HTTPTransport)? = nil,
+                clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+            ) async throws -> AISchema.LanguageModel? {
+                guard let resolved = try await resolve(requested) else { return nil }
+                return try resolved.makeLanguageModel(
+                    transport: transport,
+                    environment: dependencies.environment,
+                    clock: clock
+                )
+            }
+
+            /// Resolves a specific catalog `ModelSchema.Info` (with optional variant) into a runnable `AISchema.LanguageModel`.
+            public func resolveLanguageModel(
+                _ model: ModelSchema.Info,
+                variant: ModelSchema.VariantID? = nil,
+                transport: (any HTTPTransport)? = nil,
+                clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+            ) async throws -> AISchema.LanguageModel {
+                let resolved = try await resolveModel(model, variant: variant)
+                return try resolved.makeLanguageModel(
+                    transport: transport,
+                    environment: dependencies.environment,
+                    clock: clock
+                )
+            }
         }
 
         // parity: core/src/model-resolver.ts#layer [status=implemented hash=49efdcbaf5c1]
@@ -2726,6 +2786,22 @@ public enum CoreModel {
     // MARK: - core/src/models-dev/v1.ts & core/src/models-dev.ts
 
     public enum ModelsDev {
+        private static func numericValue(_ value: JSONValue?) -> Double? {
+            switch value {
+            case .double(let d) where d.isFinite: return d
+            case .int(let i): return Double(i)
+            default: return nil
+            }
+        }
+
+        private static func intValue(_ value: JSONValue?) -> Int? {
+            switch value {
+            case .int(let i): return Int(i)
+            case .double(let d) where d.isFinite: return Int(d)
+            default: return nil
+            }
+        }
+
         public enum V1 {
             private static let responsesByDefault: Set<String> = [
                 "@ai-sdk/openai", "@ai-sdk/azure", "@ai-sdk/xai",
@@ -2738,6 +2814,87 @@ public enum CoreModel {
                     if case .object(let obj) = val, case .string = obj["npm"] { return true }
                     return false
                 }
+            }
+
+            private static func convertReasoning(_ model: [String: JSONValue]) -> JSONValue {
+                guard case .bool(true) = model["reasoning"] else {
+                    return .object(["supported": .bool(false)])
+                }
+                var out: [String: JSONValue] = ["supported": .bool(true)]
+                if case .array(let options) = model["reasoning_options"] {
+                    for optVal in options {
+                        guard case .object(let opt) = optVal,
+                              case .string(let optType) = opt["type"] else { continue }
+                        switch optType {
+                        case "toggle":
+                            out["toggle"] = .bool(true)
+                        case "effort":
+                            if case .array(let vals) = opt["values"] {
+                                let filtered: [JSONValue] = vals.compactMap { v in
+                                    if case .string(let s) = v, s != "null" { return .string(s) }
+                                    return nil
+                                }
+                                out["effort"] = .array(filtered)
+                            }
+                        case "budget_tokens":
+                            var budget: [String: JSONValue] = [:]
+                            if let minV = opt["min"], minV != .null { budget["min"] = minV }
+                            if let maxV = opt["max"], maxV != .null { budget["max"] = maxV }
+                            out["budget"] = .object(budget)
+                        default:
+                            break
+                        }
+                    }
+                }
+                return .object(out)
+            }
+
+            private static func convertCost(_ raw: JSONValue?) -> JSONValue? {
+                guard case .object(let c) = raw else { return nil }
+                var inputCache: [String: JSONValue] = [:]
+                if let cr = c["cache_read"], cr != .null { inputCache["read"] = cr }
+                if let cw = c["cache_write"], cw != .null { inputCache["write"] = cw }
+
+                var inputOverrides: [JSONValue] = []
+                var outputOverrides: [JSONValue] = []
+                if case .array(let tiers) = c["tiers"] {
+                    for tierVal in tiers {
+                        guard case .object(let t) = tierVal,
+                              case .object(let tierMeta) = t["tier"],
+                              let sizeVal = tierMeta["size"], sizeVal != .null
+                        else { continue }
+                        let whenObj: JSONValue = .object(["context": .object(["gt": sizeVal])])
+                        var inOv: [String: JSONValue] = ["when": whenObj]
+                        if let ip = t["input"], ip != .null { inOv["price"] = ip }
+                        var ovCache: [String: JSONValue] = [:]
+                        if let cr = t["cache_read"], cr != .null { ovCache["read"] = cr }
+                        if let cw = t["cache_write"], cw != .null { ovCache["write"] = cw }
+                        if !ovCache.isEmpty { inOv["cache"] = .object(ovCache) }
+                        inputOverrides.append(.object(inOv))
+
+                        var outOv: [String: JSONValue] = ["when": whenObj]
+                        if let op = t["output"], op != .null { outOv["price"] = op }
+                        outputOverrides.append(.object(outOv))
+                    }
+                }
+
+                var inputObj: [String: JSONValue] = [
+                    "price": c["input"] ?? .int(0),
+                ]
+                if !inputCache.isEmpty { inputObj["cache"] = .object(inputCache) }
+                if !inputOverrides.isEmpty { inputObj["overrides"] = .array(inputOverrides) }
+
+                var outputObj: [String: JSONValue] = [
+                    "price": c["output"] ?? .int(0),
+                ]
+                if !outputOverrides.isEmpty { outputObj["overrides"] = .array(outputOverrides) }
+
+                return .object([
+                    "text": .object([
+                        "input": .object(inputObj),
+                        "output": .object(outputObj),
+                    ]),
+                ])
             }
 
             /// Converts a models.dev v1 catalog dictionary into the v2 shape.
@@ -2769,29 +2926,57 @@ public enum CoreModel {
                         if case .string(let s) = modelProv?["shape"] { shape = s }
                         let proto = (shape == "responses" || (shape == nil && responsesByDefault.contains(mNpm))) ? "responses" : "chat-completions"
                         let toolCall: Bool = { if case .bool(let b) = m["tool_call"] { return b } else { return false } }()
-                        let reasoningSupported: Bool = { if case .bool(let b) = m["reasoning"] { return b } else { return false } }()
                         let mType = m["type"] ?? .string("chat")
                         let modalities = m["modalities"] ?? .object(["input": .array([.string("text")]), "output": .array([.string("text")])])
+
+                        var caps: [String: JSONValue] = [
+                            "tools": .object(["supported": .bool(toolCall)]),
+                            "reasoning": convertReasoning(m),
+                        ]
+                        if case .bool(let temp) = m["temperature"] {
+                            caps["temperature"] = .bool(temp)
+                        }
+
+                        var apiEntry: [String: JSONValue] = [
+                            "base_url": .string(mApi),
+                            "sdk": .object(["aisdk": .string(mNpm)]),
+                        ]
+                        let reasoningField: String? = {
+                            if case .string(let s) = m["interleaved"] { return s }
+                            if case .object(let obj) = m["interleaved"], case .string(let f) = obj["field"] { return f }
+                            return nil
+                        }()
+                        if let reasoningField {
+                            apiEntry["compatibility"] = .object(["reasoning_field": .string(reasoningField)])
+                        }
+
                         var converted: [String: JSONValue] = [
                             "id": .string(id),
                             "type": mType,
                             "name": .string(name),
                             "release_date": m["release_date"] ?? .string(""),
                             "modalities": modalities,
-                            "capabilities": .object([
-                                "tools": .object(["supported": .bool(toolCall)]),
-                                "reasoning": .object(["supported": .bool(reasoningSupported)]),
-                            ]),
-                            "api": .object([
-                                proto: .object([
-                                    "base_url": .string(mApi),
-                                    "sdk": .object(["aisdk": .string(mNpm)]),
-                                ]),
-                            ]),
+                            "capabilities": .object(caps),
+                            "api": .object([proto: .object(apiEntry)]),
                         ]
                         if let fam = m["family"] { converted["family"] = fam }
                         if let lim = m["limit"] { converted["limit"] = lim }
                         if let st = m["status"] { converted["status"] = st }
+                        if let costVal = convertCost(m["cost"]) { converted["cost"] = costVal }
+                        if case .object(let exp) = m["experimental"], case .object(let modes) = exp["modes"] {
+                            var convertedModes: [String: JSONValue] = [:]
+                            for (modeName, modeVal) in modes {
+                                guard case .object(let modeObj) = modeVal else { continue }
+                                var nextMode: [String: JSONValue] = [:]
+                                if let mc = convertCost(modeObj["cost"]) { nextMode["cost"] = mc }
+                                if case .object(let mp) = modeObj["provider"] {
+                                    if let b = mp["body"] { nextMode["body"] = b }
+                                    if let h = mp["headers"] { nextMode["headers"] = h }
+                                }
+                                convertedModes[modeName] = .object(nextMode)
+                            }
+                            converted["experimental"] = .object(["modes": .object(convertedModes)])
+                        }
                         convertedModels[mid] = .object(converted)
                     }
                     out[key] = .object([
@@ -2838,6 +3023,325 @@ public enum CoreModel {
             Hash.sha256(text)
         }
 
+        private static let buildsOwnURL: Set<String> = [
+            "@opencode/ai/providers/amazon-bedrock",
+            "@opencode/ai/providers/azure/chat",
+            "@opencode/ai/providers/azure/images",
+            "@opencode/ai/providers/azure/messages",
+            "@opencode/ai/providers/azure/responses",
+            "@opencode/ai/providers/cloudflare-ai-gateway",
+            "@opencode/ai/providers/cloudflare-ai-gateway/decisions",
+            "@opencode/ai/providers/cloudflare-workers-ai",
+            "@opencode/ai/providers/cloudflare-workers-ai/decisions",
+            "@opencode/ai/providers/cloudflare-workers-ai/images",
+            "@opencode/ai/providers/google-vertex/gemini",
+            "@opencode/ai/providers/google-vertex/images",
+            "@opencode/ai/providers/google-vertex/messages",
+            "aisdk:@jerome-benoit/sap-ai-provider-v2",
+            "aisdk:watsonx-ai-provider",
+        ]
+
+        private static func normalizeModality(_ raw: String) -> String {
+            if raw == "application/pdf" { return "pdf" }
+            let kind = raw.split(separator: "/", maxSplits: 1).first.map(String.init) ?? raw
+            if kind == "text" || kind == "image" || kind == "audio" || kind == "video" {
+                return kind
+            }
+            return raw
+        }
+
+        private static func decodeModalities(_ value: JSONValue?) -> [String] {
+            guard case .array(let items) = value else { return ["text"] }
+            var seen: Set<String> = []
+            var out: [String] = []
+            for item in items {
+                guard case .string(let s) = item, !s.isEmpty else { continue }
+                let norm = normalizeModality(s)
+                if seen.insert(norm).inserted {
+                    out.append(norm)
+                }
+            }
+            return out.isEmpty ? ["text"] : out
+        }
+
+        private static func decodeReasoning(_ value: JSONValue?) -> ConfigProviderSchema.Reasoning {
+            guard case .object(let obj) = value,
+                  case .bool(true) = obj["supported"]
+            else {
+                return .unsupported
+            }
+            let toggle: Bool? = if case .bool(let b) = obj["toggle"] { b } else { nil }
+            let effort: [String]? = {
+                guard case .array(let arr) = obj["effort"] else { return nil }
+                return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+            }()
+            let budget: ConfigProviderSchema.ReasoningBudget? = {
+                guard case .object(let bObj) = obj["budget"] else { return nil }
+                return ConfigProviderSchema.ReasoningBudget(
+                    min: intValue(bObj["min"]),
+                    max: intValue(bObj["max"])
+                )
+            }()
+            return .supported(toggle: toggle, effort: effort, budget: budget)
+        }
+
+        /// Pure portable ISO-8601 date parser matching JS `Date.parse(release_date)` (returns epoch ms or `0`).
+        public static func parseReleaseDateMs(_ raw: String) -> Double {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return 0 }
+            let dateAndTime = trimmed.split(separator: "T", maxSplits: 1)
+            let dateParts = dateAndTime[0].split(separator: "-")
+            guard !dateParts.isEmpty, let year = Int(dateParts[0]) else { return 0 }
+            let month = dateParts.count >= 2 ? (Int(dateParts[1]) ?? 0) : 1
+            let day = dateParts.count >= 3 ? (Int(dateParts[2]) ?? 0) : 1
+            guard (1...12).contains(month), (1...31).contains(day) else { return 0 }
+
+            var hour = 0
+            var minute = 0
+            var second = 0
+            var millis = 0
+            var tzOffsetSeconds = 0
+
+            if dateAndTime.count == 2 {
+                var timeStr = String(dateAndTime[1])
+                if timeStr.hasSuffix("Z") || timeStr.hasSuffix("z") {
+                    timeStr.removeLast()
+                } else if let plusIdx = timeStr.lastIndex(of: "+") {
+                    let tz = String(timeStr[timeStr.index(after: plusIdx)...])
+                    timeStr = String(timeStr[..<plusIdx])
+                    let tzParts = tz.split(separator: ":").compactMap { Int($0) }
+                    if tzParts.count >= 2 { tzOffsetSeconds = tzParts[0] * 3600 + tzParts[1] * 60 }
+                } else if let minusIdx = timeStr.lastIndex(of: "-"), minusIdx > timeStr.startIndex {
+                    let tz = String(timeStr[timeStr.index(after: minusIdx)...])
+                    timeStr = String(timeStr[..<minusIdx])
+                    let tzParts = tz.split(separator: ":").compactMap { Int($0) }
+                    if tzParts.count >= 2 { tzOffsetSeconds = -(tzParts[0] * 3600 + tzParts[1] * 60) }
+                }
+                let hms = timeStr.split(separator: ":")
+                if hms.count >= 2, let h = Int(hms[0]), let m = Int(hms[1]) {
+                    hour = h
+                    minute = m
+                    if hms.count >= 3 {
+                        let secParts = hms[2].split(separator: ".", maxSplits: 1)
+                        second = Int(secParts[0]) ?? 0
+                        if secParts.count == 2 {
+                            let frac = String(secParts[1].prefix(3))
+                            let padded = frac + String(repeating: "0", count: max(0, 3 - frac.count))
+                            millis = Int(padded) ?? 0
+                        }
+                    }
+                }
+            }
+
+            // Howard Hinnant civil-to-days algorithm (pure arithmetic, zero Calendar/Locale dependencies).
+            let adjY = month <= 2 ? year - 1 : year
+            let era = (adjY >= 0 ? adjY : adjY - 399) / 400
+            let yoe = adjY - era * 400
+            let doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1
+            let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+            let daysSinceEpoch = era * 146_097 + doe - 719_468
+            let totalSeconds = Int64(daysSinceEpoch) * 86_400
+                + Int64(hour * 3600 + minute * 60 + second)
+                - Int64(tzOffsetSeconds)
+            return Double(totalSeconds) * 1000.0 + Double(millis)
+        }
+
+        private static func makeUSD(_ value: Double?) -> MoneySchema.USDPerMillionTokens {
+            guard let value, let money = MoneySchema.USDPerMillionTokens(rawValue: value) else {
+                return .zero
+            }
+            return money
+        }
+
+        private static func extractCacheWrite(_ cacheVal: JSONValue?) -> Double? {
+            guard case .object(let cache) = cacheVal else { return nil }
+            func firstWrite(_ raw: JSONValue?) -> Double? {
+                if let n = numericValue(raw) { return n }
+                if case .object(let map) = raw {
+                    if let fiveMin = numericValue(map["5m"]) { return fiveMin }
+                    for key in map.keys.sorted() {
+                        if let n = numericValue(map[key]) { return n }
+                    }
+                }
+                return nil
+            }
+            if let direct = firstWrite(cache["write"]) { return direct }
+            if case .object(let explicit) = cache["explicit"] {
+                return firstWrite(explicit["write"])
+            }
+            return nil
+        }
+
+        private static func decodeCost(_ raw: JSONValue?) -> [ModelSchema.Cost] {
+            let zeroCost = [ModelSchema.Cost(input: .zero, output: .zero, cache: ModelSchema.Cost.Cache(read: .zero, write: .zero))]
+            guard case .object(let obj) = raw else { return zeroCost }
+
+            // Direct v2 shape: `cost.text.{input, output}`
+            if case .object(let text) = obj["text"],
+               case .object(let textIn) = text["input"],
+               case .object(let textOut) = text["output"] {
+                let inUnit: String? = if case .string(let u) = textIn["unit"] { u } else { nil }
+                let outUnit: String? = if case .string(let u) = textOut["unit"] { u } else { nil }
+                guard (inUnit == nil || inUnit == "token"), (outUnit == nil || outUnit == "token") else {
+                    return zeroCost
+                }
+                let baseIn = makeUSD(numericValue(textIn["price"]))
+                let baseOut = makeUSD(numericValue(textOut["price"]))
+                let baseCacheRead: MoneySchema.USDPerMillionTokens = {
+                    if case .object(let c) = textIn["cache"] { return makeUSD(numericValue(c["read"])) }
+                    return .zero
+                }()
+                let baseCacheWrite = makeUSD(extractCacheWrite(textIn["cache"]))
+                let base = ModelSchema.Cost(
+                    tier: nil,
+                    input: baseIn,
+                    output: baseOut,
+                    cache: ModelSchema.Cost.Cache(read: baseCacheRead, write: baseCacheWrite)
+                )
+
+                var tierOrder: [Int] = []
+                var tiers: [Int: ModelSchema.Cost] = [:]
+
+                func contextTierSize(_ whenVal: JSONValue?) -> Int? {
+                    guard case .object(let when) = whenVal, when.count == 1,
+                          case .object(let ctx) = when["context"]
+                    else { return nil }
+                    return intValue(ctx["gt"]) ?? intValue(ctx["gte"])
+                }
+
+                if case .array(let inOverrides) = textIn["overrides"] {
+                    for ovVal in inOverrides {
+                        guard case .object(let ov) = ovVal,
+                              let size = contextTierSize(ov["when"])
+                        else { continue }
+                        let existing = tiers[size] ?? ModelSchema.Cost(
+                            tier: ModelSchema.Cost.Tier(size: size),
+                            input: base.input,
+                            output: base.output,
+                            cache: base.cache
+                        )
+                        if tiers[size] == nil { tierOrder.append(size) }
+                        let ovPrice = numericValue(ov["price"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.input
+                        let ovCacheRead: MoneySchema.USDPerMillionTokens = {
+                            if case .object(let c) = ov["cache"], let r = numericValue(c["read"]),
+                               let m = MoneySchema.USDPerMillionTokens(rawValue: r) { return m }
+                            return existing.cache.read
+                        }()
+                        let ovCacheWrite = extractCacheWrite(ov["cache"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.cache.write
+                        tiers[size] = ModelSchema.Cost(
+                            tier: ModelSchema.Cost.Tier(size: size),
+                            input: ovPrice,
+                            output: existing.output,
+                            cache: ModelSchema.Cost.Cache(read: ovCacheRead, write: ovCacheWrite)
+                        )
+                    }
+                }
+
+                if case .array(let outOverrides) = textOut["overrides"] {
+                    for ovVal in outOverrides {
+                        guard case .object(let ov) = ovVal,
+                              let size = contextTierSize(ov["when"])
+                        else { continue }
+                        let existing = tiers[size] ?? ModelSchema.Cost(
+                            tier: ModelSchema.Cost.Tier(size: size),
+                            input: base.input,
+                            output: base.output,
+                            cache: base.cache
+                        )
+                        if tiers[size] == nil { tierOrder.append(size) }
+                        let ovPrice = numericValue(ov["price"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.output
+                        tiers[size] = ModelSchema.Cost(
+                            tier: ModelSchema.Cost.Tier(size: size),
+                            input: existing.input,
+                            output: ovPrice,
+                            cache: existing.cache
+                        )
+                    }
+                }
+
+                return [base] + tierOrder.compactMap { tiers[$0] }
+            }
+
+            // Flat cost fallback (`{ input, output, cache_read, cache_write }`)
+            if numericValue(obj["input"]) != nil || numericValue(obj["output"]) != nil {
+                return [ModelSchema.Cost(
+                    input: makeUSD(numericValue(obj["input"])),
+                    output: makeUSD(numericValue(obj["output"])),
+                    cache: ModelSchema.Cost.Cache(
+                        read: makeUSD(numericValue(obj["cache_read"])),
+                        write: makeUSD(numericValue(obj["cache_write"]))
+                    )
+                )]
+            }
+
+            return zeroCost
+        }
+
+        private static func factorAt(_ factor: JSONValue, path: [String]) -> Double {
+            var node: JSONValue? = factor
+            for key in path {
+                guard let current = node else { return 1 }
+                if let n = numericValue(current) { return n }
+                if case .object(let map) = current {
+                    node = map[key]
+                } else {
+                    return 1
+                }
+            }
+            guard let leaf = node else { return 1 }
+            if let n = numericValue(leaf) { return n }
+            if case .object(let map) = leaf {
+                for key in map.keys.sorted() {
+                    if let n = numericValue(map[key]) { return n }
+                }
+            }
+            return 1
+        }
+
+        private static func modeCost(
+            modelCostRaw: JSONValue?,
+            baseCost: [ModelSchema.Cost],
+            modeName: String,
+            modeObj: [String: JSONValue]
+        ) -> [ModelSchema.Cost] {
+            guard let baseDefault = baseCost.first else { return baseCost }
+            let baseTiers = Array(baseCost.dropFirst())
+            if let explicitModeCost = modeObj["cost"], explicitModeCost != .null {
+                let decoded = decodeCost(explicitModeCost)
+                if let first = decoded.first { return [first] + baseTiers }
+            }
+            let tierName: String = if case .string(let s) = modeObj["service_tier"] { s } else { modeName }
+            guard case .object(let rawCostObj) = modelCostRaw,
+                  case .array(let multipliers) = rawCostObj["multipliers"]
+            else { return baseCost }
+            var matchedFactor: JSONValue? = nil
+            for mVal in multipliers {
+                guard case .object(let mObj) = mVal,
+                      case .object(let when) = mObj["when"], when.count == 1,
+                      case .object(let st) = when["service_tier"],
+                      case .string(let eq) = st["equals"], eq == tierName,
+                      let factor = mObj["factor"]
+                else { continue }
+                matchedFactor = factor
+                break
+            }
+            guard let factor = matchedFactor else { return baseCost }
+            func scale(_ price: MoneySchema.USDPerMillionTokens, _ path: [String]) -> MoneySchema.USDPerMillionTokens {
+                let scaled = (price.rawValue * factorAt(factor, path: path) * 1e10).rounded() / 1e10
+                return makeUSD(scaled)
+            }
+            let scaledDefault = ModelSchema.Cost(
+                tier: nil,
+                input: scale(baseDefault.input, ["text", "input", "price"]),
+                output: scale(baseDefault.output, ["text", "output", "price"]),
+                cache: ModelSchema.Cost.Cache(
+                    read: scale(baseDefault.cache.read, ["text", "input", "cache", "read"]),
+                    write: scale(baseDefault.cache.write, ["text", "input", "cache", "write"])
+                )
+            )
+            return [scaledDefault] + baseTiers
+        }
+
         // parity: core/src/models-dev.ts#decodeSnapshot [status=implemented hash=3365142ba603]
         public static func decodeSnapshot(_ text: String) throws -> [Snapshot] {
             let raw = try JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8))
@@ -2856,59 +3360,209 @@ public enum CoreModel {
                 }()
                 var builtModels: [ModelSchema.Info] = []
                 var pkgCounts: [String: Int] = [:]
-                for (_, mVal) in rawModels {
+                var urlCounts: [String: Int] = [:]
+                var allHaveBaseURL = true
+
+                for (_, mVal) in rawModels.sorted(by: { $0.key < $1.key }) {
                     guard case .object(let m) = mVal,
                           case .string(let mid) = m["id"],
                           case .string(let mname) = m["name"]
                     else { continue }
+                    let modelTypeStr: String = if case .string(let t) = m["type"] { t } else { "chat" }
+                    let modelType = ModelSchema.ModelType(rawValue: modelTypeStr)
+
                     var chosenPkg: String?
+                    var chosenApiObj: [String: JSONValue]?
                     if case .object(let apiMap) = m["api"] {
-                        for (_, apiVal) in apiMap {
-                            if case .object(let apiObj) = apiVal, case .object(let sdk) = apiObj["sdk"] {
-                                if case .string(let oc) = sdk["opencodeai"], CoreProvider.Provider.builtinPackages.contains(oc) {
-                                    chosenPkg = oc; break
-                                }
-                                if case .string(let ai) = sdk["aisdk"] {
-                                    chosenPkg = CoreProvider.AISDKNative.native(npm: ai, providerID: pidStr, modelID: mid)
-                                        ?? CoreProvider.AISDKNative.aisdk(ai)
+                        for (protoKey, apiVal) in apiMap.sorted(by: { $0.key < $1.key }) {
+                            guard case .object(let apiObj) = apiVal, case .object(let sdk) = apiObj["sdk"] else { continue }
+                            if case .string(let rawOc) = sdk["opencodeai"],
+                               let normOc = CoreProvider.AISDKNative.packageName(rawOc),
+                               CoreProvider.Provider.builtinPackages.contains(normOc) {
+                                if modelTypeStr == "chat" || normOc.hasSuffix("/\(modelTypeStr)s") {
+                                    chosenPkg = normOc
+                                    chosenApiObj = apiObj
                                     break
                                 }
+                            }
+                            if modelTypeStr == "chat", case .string(let ai) = sdk["aisdk"] {
+                                let shape: String? = protoKey == "responses" ? "responses" : (protoKey == "chat-completions" ? "completions" : nil)
+                                chosenPkg = CoreProvider.AISDKNative.native(npm: ai, providerID: pidStr, modelID: mid, shape: shape)
+                                    ?? CoreProvider.AISDKNative.aisdk(ai)
+                                chosenApiObj = apiObj
+                                break
                             }
                         }
                     }
                     guard let pkg = chosenPkg else { continue }
                     pkgCounts[pkg, default: 0] += 1
-                    let ctx: Int = { if case .object(let lim) = m["limit"], case .int(let c) = lim["context"] { return Int(c) } else { return 0 } }()
-                    let out: Int = { if case .object(let lim) = m["limit"], case .int(let o) = lim["output"] { return Int(o) } else { return 0 } }()
+
+                    let routeBaseURL: String? = {
+                        guard !buildsOwnURL.contains(pkg),
+                              case .string(let u) = chosenApiObj?["base_url"],
+                              !u.isEmpty
+                        else { return nil }
+                        return u
+                    }()
+                    if let routeBaseURL {
+                        urlCounts[routeBaseURL, default: 0] += 1
+                    } else {
+                        allHaveBaseURL = false
+                    }
+
+                    let limitObj: [String: JSONValue]? = if case .object(let l) = m["limit"] { l } else { nil }
+                    let ctx = intValue(limitObj?["context"]) ?? 0
+                    let inputLimit = intValue(limitObj?["input"])
+                    let out = intValue(limitObj?["output"]) ?? 0
                     let fam: ModelSchema.Family? = { if case .string(let f) = m["family"] { return ModelSchema.Family(rawValue: f) } else { return nil } }()
+
+                    let capsObj: [String: JSONValue]? = if case .object(let c) = m["capabilities"] { c } else { nil }
                     let toolsSupported: Bool = {
-                        if case .object(let caps) = m["capabilities"],
-                           case .object(let tools) = caps["tools"],
+                        if case .object(let tools) = capsObj?["tools"],
                            case .bool(let b) = tools["supported"] { return b }
                         return false
                     }()
-                    builtModels.append(ModelSchema.Info(
+                    let temperatureSupported: Bool? = if case .bool(let b) = capsObj?["temperature"] { b } else { nil }
+                    let freeformFormats: [ToolSchema.FreeformFormat]? = {
+                        guard case .object(let apiCaps) = chosenApiObj?["capabilities"],
+                              case .object(let apiTools) = apiCaps["tools"],
+                              case .array(let arr) = apiTools["freeform"]
+                        else { return nil }
+                        let parsed = arr.compactMap { item -> ToolSchema.FreeformFormat? in
+                            if case .string(let s) = item { return ToolSchema.FreeformFormat(rawValue: s) }
+                            return nil
+                        }
+                        return parsed.isEmpty ? nil : parsed
+                    }()
+
+                    let modalitiesObj: [String: JSONValue]? = if case .object(let mod) = m["modalities"] { mod } else { nil }
+                    let inputModalities = decodeModalities(modalitiesObj?["input"])
+                    let outputModalities = decodeModalities(modalitiesObj?["output"])
+                    let capabilities = ModelSchema.Capabilities(
+                        tools: toolsSupported,
+                        freeform: freeformFormats,
+                        input: inputModalities,
+                        output: outputModalities,
+                        temperature: temperatureSupported
+                    )
+
+                    let compatibility: ModelCompatibilitySchema.Compatibility? = {
+                        guard case .object(let comp) = chosenApiObj?["compatibility"] else { return nil }
+                        let rf: ModelCompatibilitySchema.ReasoningField? = if case .string(let s) = comp["reasoning_field"], !s.isEmpty {
+                            ModelCompatibilitySchema.ReasoningField(rawValue: s)
+                        } else { nil }
+                        let mtf: ModelCompatibilitySchema.MaxTokensField? = if case .string(let s) = comp["max_tokens_field"] {
+                            ModelCompatibilitySchema.MaxTokensField(rawValue: s)
+                        } else { nil }
+                        let mi: ModelCompatibilitySchema.MediaInput? = if case .string(let s) = comp["media_input"] {
+                            ModelCompatibilitySchema.MediaInput(rawValue: s)
+                        } else { nil }
+                        if rf == nil && mtf == nil && mi == nil { return nil }
+                        return ModelCompatibilitySchema.Compatibility(reasoningField: rf, maxTokensField: mtf, mediaInput: mi)
+                    }()
+
+                    let releaseDateStr: String = if case .string(let s) = m["release_date"] { s } else { "" }
+                    let releasedMs = parseReleaseDateMs(releaseDateStr)
+                    let baseCost = decodeCost(m["cost"])
+                    let status: ModelSchema.Info.Status = {
+                        if case .string(let s) = m["status"], let parsed = ModelSchema.Info.Status(rawValue: s) {
+                            return parsed
+                        }
+                        return .active
+                    }()
+                    let modelSettings: ModelSchema.Settings? = {
+                        var extra: [String: JSONValue] = [:]
+                        if let routeBaseURL { extra["baseURL"] = .string(routeBaseURL) }
+                        if pkg == "@opencode/ai/providers/openai-compatible" || pkg == "@opencode/ai/providers/anthropic-compatible" {
+                            extra["provider"] = .string(pidStr)
+                        }
+                        return extra.isEmpty ? nil : ModelSchema.Settings(extra: extra)
+                    }()
+
+                    let baseModel = ModelSchema.Info(
                         id: ModelSchema.ID(rawValue: mid),
                         modelID: ModelSchema.ID(rawValue: mid),
                         providerID: pid,
-                        type: { if case .string(let t) = m["type"] { return ModelSchema.ModelType(rawValue: t) } else { return .chat } }(),
+                        type: modelType,
                         family: fam,
                         name: mname,
+                        compatibility: compatibility,
                         package: pkg,
-                        capabilities: ModelSchema.Capabilities(tools: toolsSupported, input: ["text"], output: ["text"]),
+                        settings: modelSettings,
+                        capabilities: capabilities,
                         variants: [],
-                        time: ModelSchema.Info.Time(released: 0),
-                        cost: [ModelSchema.Cost(input: .zero, output: .zero, cache: ModelSchema.Cost.Cache(read: .zero, write: .zero))],
-                        status: .active,
+                        time: ModelSchema.Info.Time(released: releasedMs),
+                        cost: baseCost,
+                        status: status,
                         enabled: true,
-                        limit: ModelSchema.Info.Limit(context: ctx, input: nil, output: out)
-                    ))
+                        limit: ModelSchema.Info.Limit(context: ctx, input: inputLimit, output: out)
+                    )
+                    let reasoning = decodeReasoning(capsObj?["reasoning"])
+                    let variants = CoreModel.Variant.resolve(baseModel, supports: CoreModel.Variant.supports(reasoning))
+                    let fullModel = ModelSchema.Info(
+                        id: baseModel.id,
+                        modelID: baseModel.modelID,
+                        providerID: baseModel.providerID,
+                        type: baseModel.type,
+                        family: baseModel.family,
+                        name: baseModel.name,
+                        compatibility: baseModel.compatibility,
+                        package: baseModel.package,
+                        settings: baseModel.settings,
+                        capabilities: baseModel.capabilities,
+                        variants: variants,
+                        time: baseModel.time,
+                        cost: baseModel.cost,
+                        status: baseModel.status,
+                        enabled: baseModel.enabled,
+                        limit: baseModel.limit
+                    )
+                    builtModels.append(fullModel)
+
+                    if case .object(let exp) = m["experimental"], case .object(let modes) = exp["modes"] {
+                        for (modeName, modeVal) in modes.sorted(by: { $0.key < $1.key }) {
+                            guard case .object(let modeObj) = modeVal else { continue }
+                            let titleMode = modeName.prefix(1).uppercased() + modeName.dropFirst()
+                            let mCost = modeCost(modelCostRaw: m["cost"], baseCost: baseCost, modeName: modeName, modeObj: modeObj)
+                            let mHeaders: [String: String]? = {
+                                guard case .object(let h) = modeObj["headers"] else { return nil }
+                                var dict: [String: String] = [:]
+                                for (k, v) in h { if case .string(let s) = v { dict[k] = s } }
+                                return dict.isEmpty ? nil : dict
+                            }()
+                            let mBody: [String: JSONValue]? = if case .object(let b) = modeObj["body"] { b } else { nil }
+                            builtModels.append(ModelSchema.Info(
+                                id: ModelSchema.ID(rawValue: "\(mid)-\(modeName)"),
+                                modelID: fullModel.modelID,
+                                providerID: pid,
+                                type: fullModel.type,
+                                family: fullModel.family,
+                                name: "\(mname) \(titleMode)",
+                                compatibility: fullModel.compatibility,
+                                package: fullModel.package,
+                                settings: fullModel.settings,
+                                headers: mHeaders,
+                                body: mBody,
+                                capabilities: fullModel.capabilities,
+                                variants: variants,
+                                time: fullModel.time,
+                                cost: mCost,
+                                status: fullModel.status,
+                                enabled: fullModel.enabled,
+                                limit: fullModel.limit
+                            ))
+                        }
+                    }
                 }
                 guard !builtModels.isEmpty,
                       let defaultPkg = pkgCounts.max(by: { $0.value < $1.value })?.key
                 else { continue }
+                let defaultBaseURL: String? = allHaveBaseURL ? urlCounts.max(by: { $0.value < $1.value })?.key : nil
+                let providerSettings: ProviderSchema.Settings? = defaultBaseURL.map {
+                    ProviderSchema.Settings(extra: ["baseURL": .string($0)])
+                }
                 snapshots.append(Snapshot(
-                    info: ProviderSchema.Info(id: pid, name: pname, activation: .auto, package: defaultPkg),
+                    info: ProviderSchema.Info(id: pid, name: pname, activation: .auto, package: defaultPkg, settings: providerSettings),
                     models: builtModels,
                     environment: env
                 ))
@@ -3279,5 +3933,30 @@ public enum CoreModel {
             let snap = try await load(http: http, baseURL: baseURL, headers: headers)
             return derive(baseURL: baseURL, remote: snap, existing: existing)
         }
+    }
+}
+
+extension CoreModel.Resolver.Interface {
+    /// Resolves a model reference and instantiates a runnable `AISchema.LanguageModel`.
+    public func resolveLanguageModel(
+        _ requested: ModelSchema.Ref? = nil,
+        transport: (any HTTPTransport)? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+    ) async throws -> AISchema.LanguageModel? {
+        guard let resolved = try await resolve(requested) else { return nil }
+        return try resolved.makeLanguageModel(transport: transport, environment: environment, clock: clock)
+    }
+
+    /// Resolves a specific catalog model and instantiates a runnable `AISchema.LanguageModel`.
+    public func resolveLanguageModel(
+        _ model: ModelSchema.Info,
+        variant: ModelSchema.VariantID? = nil,
+        transport: (any HTTPTransport)? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+    ) async throws -> AISchema.LanguageModel {
+        let resolved = try await resolveModel(model, variant: variant)
+        return try resolved.makeLanguageModel(transport: transport, environment: environment, clock: clock)
     }
 }

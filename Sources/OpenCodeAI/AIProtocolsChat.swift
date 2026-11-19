@@ -10,6 +10,11 @@
 ///
 /// Strictly PORTABLE tier: zero OS imports, all HTTP via `OpenCodePlatform.HTTPTransport`.
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import OpenCodePlatform
 import OpenCodeSchema
 import OpenCodeUtil
@@ -27,25 +32,528 @@ public enum AIProtocols {
         case binaryAudio
     }
 
+    /// Stateful incremental wire-stream decoder that consumes transport chunks directly
+    /// and emits `AIProtocolUtils.LLMEvent`s as frames arrive without full-body buffering.
+    public protocol IncrementalStreamDecoder: Sendable {
+        mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+        mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+    }
+
+    /// Fallback decoder for custom `ChatProtocolSpec` instances that only provide a batch `parseStream`.
+    public struct BufferedStreamDecoder: IncrementalStreamDecoder, Sendable {
+        private var buffer: [UInt8] = []
+        private let request: AIProtocolUtils.LLMRequest
+        private let parseStream: @Sendable ([UInt8], AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+
+        public init(
+            request: AIProtocolUtils.LLMRequest,
+            parseStream: @escaping @Sendable ([UInt8], AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+        ) {
+            self.request = request
+            self.parseStream = parseStream
+        }
+
+        public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+            buffer.append(contentsOf: bytes)
+            return []
+        }
+
+        public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+            let bytes = buffer
+            buffer.removeAll(keepingCapacity: false)
+            return try parseStream(bytes, request)
+        }
+    }
+
     public struct ChatProtocolSpec: Sendable {
         public let id: String
         public let framing: FramingKind
         public let sanitizer: String?
         public let buildBody: @Sendable (AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue]
         public let parseStream: @Sendable ([UInt8], AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+        public let makeStreamDecoder: (@Sendable (AIProtocolUtils.LLMRequest) -> any IncrementalStreamDecoder)?
 
         public init(
             id: String,
             framing: FramingKind = .sse,
             sanitizer: String? = nil,
             buildBody: @escaping @Sendable (AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue],
-            parseStream: @escaping @Sendable ([UInt8], AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+            parseStream: @escaping @Sendable ([UInt8], AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent],
+            makeStreamDecoder: (@Sendable (AIProtocolUtils.LLMRequest) -> any IncrementalStreamDecoder)? = nil
         ) {
             self.id = id
             self.framing = framing
             self.sanitizer = sanitizer
             self.buildBody = buildBody
             self.parseStream = parseStream
+            self.makeStreamDecoder = makeStreamDecoder
+        }
+
+        public func makeDecoder(for request: AIProtocolUtils.LLMRequest) -> any IncrementalStreamDecoder {
+            if let makeStreamDecoder {
+                return makeStreamDecoder(request)
+            }
+            return BufferedStreamDecoder(request: request, parseStream: parseStream)
+        }
+    }
+
+    // MARK: Schema <-> Protocol Bridge Converters
+
+    public static func toProtocolError(_ error: AIProtocolUtils.ProtocolError, http: AISchema.HttpContext? = nil) -> AISchema.AIError {
+        switch error.kind {
+        case .invalidRequest:
+            return AISchema.AIError(reason: .invalidRequest(AISchema.InvalidRequestError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .unsupportedOperation:
+            return AISchema.AIError(reason: .unsupportedOperation(AISchema.UnsupportedOperationError(
+                message: error.message,
+                body: error.body,
+                http: http,
+                operation: error.operation ?? "chat",
+                provider: error.provider.map(AISchema.ProviderID.make),
+                route: error.route
+            )))
+        case .authentication:
+            return AISchema.AIError(reason: .authentication(AISchema.AuthenticationError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .rateLimit:
+            return AISchema.AIError(reason: .rateLimit(AISchema.RateLimitError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .contentPolicy:
+            return AISchema.AIError(reason: .contentPolicy(AISchema.ContentPolicyError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .providerInternal:
+            return AISchema.AIError(reason: .providerInternal(AISchema.ProviderInternalError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .unknownProvider:
+            return AISchema.AIError(reason: .unknownProvider(AISchema.UnknownProviderError(
+                message: error.message,
+                body: error.body,
+                http: http
+            )))
+        case .transport:
+            return AISchema.AIError(reason: .transport(AISchema.TransportError(
+                message: error.message,
+                body: error.body,
+                http: http,
+                transport: .http,
+                operation: .read
+            )))
+        case .invalidProviderOutput:
+            let classification: AISchema.InvalidProviderOutputError.Classification? =
+                error.classification == "incomplete-stream" ? .incompleteStream : nil
+            return AISchema.AIError(reason: .invalidProviderOutput(AISchema.InvalidProviderOutputError(
+                message: error.message,
+                body: error.body,
+                http: http,
+                classification: classification,
+                route: error.route
+            )))
+        }
+    }
+
+    private static func toProtocolCacheHint(_ hint: AISchema.CacheHint?) -> AIProtocolUtils.CacheHint? {
+        guard let hint else { return nil }
+        return AIProtocolUtils.CacheHint(type: hint.type.rawValue, ttl: hint.ttl?.rawValue)
+    }
+
+    private static func toProtocolMediaAsset(_ asset: AIMedia.Asset) -> AIProtocolUtils.MediaAsset {
+        let source: AIProtocolUtils.MediaSource = switch asset.source {
+        case .bytes(let data, _):
+            .bytes(data)
+        case .base64(let data, _):
+            .base64(data)
+        case .url(let url, _, _):
+            .url(url)
+        case .ref(let provider, let id, _):
+            .ref(provider: provider.rawValue, id: id)
+        }
+        return AIProtocolUtils.MediaAsset(
+            source: source,
+            mediaType: asset.mediaType,
+            providerMetadata: asset.providerMetadata
+        )
+    }
+
+    private static func toSchemaMediaAsset(_ asset: AIProtocolUtils.MediaAsset) -> AIMedia.Asset {
+        let opts = AIMedia.AssetOptions(providerMetadata: asset.providerMetadata)
+        switch asset.source {
+        case .bytes(let data):
+            return AIMedia.bytes(data, mediaType: asset.mediaType, options: opts)
+        case .base64(let data):
+            return AIMedia.base64(data, mediaType: asset.mediaType, options: opts)
+        case .url(let url):
+            return AIMedia.url(url, mediaType: asset.mediaType, options: opts)
+        case .ref(let provider, let id):
+            return AIMedia.ref(provider: provider, id: id, mediaType: asset.mediaType, options: opts)
+        }
+    }
+
+    private static func toProtocolToolResultValue(_ value: AISchema.ToolResultValue) -> AIProtocolUtils.ToolResultValue {
+        switch value {
+        case .json(let v):
+            return .json(v)
+        case .text(let v):
+            if case .string(let s) = v { return .text(s) }
+            return .text(AIProtocolUtils.JSONCodec.encode(v))
+        case .error(let v):
+            return .error(v)
+        case .content(let items):
+            return .content(items.map { item in
+                switch item {
+                case .text(let t):
+                    return .text(t.text)
+                case .file(let f):
+                    return .file(AIProtocolUtils.ToolFileContent(uri: f.uri, mime: f.mime, name: f.name))
+                }
+            })
+        }
+    }
+
+    private static func toSchemaToolResultValue(_ value: AIProtocolUtils.ToolResultValue) -> AISchema.ToolResultValue {
+        switch value {
+        case .json(let v):
+            return .json(v)
+        case .text(let s):
+            return .text(.string(s))
+        case .error(let v):
+            return .error(v)
+        case .content(let items):
+            return .content(items.map { item in
+                switch item {
+                case .text(let s):
+                    return .text(ToolSchema.TextContent(text: s))
+                case .file(let f):
+                    return .file(ToolSchema.FileContent(uri: f.uri, mime: f.mime, name: f.name))
+                }
+            })
+        }
+    }
+
+    private static func toProtocolToolResultPart(_ part: AISchema.ToolResultPart) -> AIProtocolUtils.ToolResultPart {
+        AIProtocolUtils.ToolResultPart(
+            id: part.id,
+            name: part.name,
+            namespace: part.namespace,
+            result: toProtocolToolResultValue(part.result),
+            providerExecuted: part.providerExecuted,
+            cache: toProtocolCacheHint(part.cache),
+            providerMetadata: part.providerMetadata
+        )
+    }
+
+    private static func toProtocolFreeform(_ freeform: AISchema.Freeform?) -> AIProtocolUtils.FreeformFormat? {
+        guard let freeform else { return nil }
+        switch freeform {
+        case .text: return .text
+        case .regex(let pattern): return .regex(pattern)
+        case .lark(let grammar): return .lark(grammar)
+        }
+    }
+
+    private static func toProtocolToolEntry(_ entry: AISchema.ToolEntry) -> AIProtocolUtils.ToolEntry {
+        switch entry {
+        case .tool(let def):
+            return .tool(AIProtocolUtils.ToolDefinition(
+                name: def.name,
+                description: def.description,
+                inputSchema: def.inputSchema,
+                cache: toProtocolCacheHint(def.cache),
+                freeform: toProtocolFreeform(def.freeform),
+                native: def.native
+            ))
+        case .namespace(let ns):
+            return .namespace(
+                name: ns.name,
+                description: ns.description,
+                tools: ns.tools.map(toProtocolToolEntry)
+            )
+        }
+    }
+
+    private static func toProtocolToolChoice(_ choice: AISchema.ToolChoice?) -> AIProtocolUtils.ToolChoice? {
+        guard let choice else { return nil }
+        let kind: AIProtocolUtils.ToolChoice.Kind = switch choice.type {
+        case .auto: .auto
+        case .none: .none
+        case .required: .required
+        case .tool: .tool
+        }
+        return AIProtocolUtils.ToolChoice(
+            type: kind,
+            name: choice.name,
+            disableParallelToolUse: choice.disableParallelToolUse
+        )
+    }
+
+    private static func toProtocolMessage(_ message: AISchema.Message) -> AIProtocolUtils.Message {
+        switch message {
+        case .system(let sys):
+            let parts: [AIProtocolUtils.ContentPart] = sys.content.compactMap { part in
+                switch part {
+                case .text(let tp):
+                    return .text(AIProtocolUtils.TextPart(
+                        text: tp.text,
+                        cache: toProtocolCacheHint(tp.cache),
+                        providerMetadata: tp.providerMetadata
+                    ))
+                case .effort:
+                    return nil
+                }
+            }
+            return AIProtocolUtils.Message(role: .system, content: parts)
+        case .user(let usr):
+            let parts: [AIProtocolUtils.ContentPart] = usr.content.map { part in
+                switch part {
+                case .text(let tp):
+                    return .text(AIProtocolUtils.TextPart(
+                        text: tp.text,
+                        cache: toProtocolCacheHint(tp.cache),
+                        providerMetadata: tp.providerMetadata
+                    ))
+                case .media(let mp):
+                    return .media(AIProtocolUtils.MediaPart(
+                        media: toProtocolMediaAsset(mp.media),
+                        filename: mp.filename,
+                        cache: toProtocolCacheHint(mp.cache),
+                        providerMetadata: mp.providerMetadata
+                    ))
+                }
+            }
+            return AIProtocolUtils.Message(role: .user, content: parts, providerMetadata: usr.providerMetadata)
+        case .assistant(let asst):
+            let parts: [AIProtocolUtils.ContentPart] = asst.content.map { part in
+                switch part {
+                case .text(let tp):
+                    return .text(AIProtocolUtils.TextPart(
+                        text: tp.text,
+                        cache: toProtocolCacheHint(tp.cache),
+                        providerMetadata: tp.providerMetadata
+                    ))
+                case .reasoning(let rp):
+                    return .reasoning(AIProtocolUtils.ReasoningPart(
+                        text: rp.text,
+                        encrypted: rp.encrypted,
+                        providerMetadata: rp.providerMetadata
+                    ))
+                case .toolCall(let tc):
+                    return .toolCall(AIProtocolUtils.ToolCallPart(
+                        id: tc.id,
+                        name: tc.name,
+                        namespace: tc.namespace,
+                        input: tc.input,
+                        providerExecuted: tc.providerExecuted,
+                        providerMetadata: tc.providerMetadata
+                    ))
+                case .toolResult(let tr):
+                    return .toolResult(toProtocolToolResultPart(tr))
+                case .media(let mp):
+                    return .media(AIProtocolUtils.MediaPart(
+                        media: toProtocolMediaAsset(mp.media),
+                        filename: mp.filename,
+                        cache: toProtocolCacheHint(mp.cache),
+                        providerMetadata: mp.providerMetadata
+                    ))
+                case .compaction(let cp):
+                    return .compaction(AIProtocolUtils.CompactionPart(
+                        provider: cp.provider.rawValue,
+                        id: cp.id,
+                        text: cp.text,
+                        encrypted: cp.encrypted
+                    ))
+                }
+            }
+            return AIProtocolUtils.Message(role: .assistant, content: parts, providerMetadata: asst.providerMetadata)
+        case .tool(let tool):
+            let parts: [AIProtocolUtils.ContentPart] = tool.content.map { .toolResult(toProtocolToolResultPart($0)) }
+            return AIProtocolUtils.Message(role: .tool, content: parts)
+        }
+    }
+
+    public static func toProtocolRequest(
+        _ request: AISchema.LLMRequest,
+        route: ChatRouteSpec,
+        defaultCompatibility: AIProtocolUtils.ModelCompatibility? = nil,
+        defaultCapabilities: AIProtocolUtils.ModelCapabilities? = nil
+    ) -> AIProtocolUtils.LLMRequest {
+        let modelCompat = request.model.compatibility
+        let mergedCompat = AIProtocolUtils.ModelCompatibility(
+            reasoningField: modelCompat?.reasoningField ?? defaultCompatibility?.reasoningField,
+            requireReasoning: modelCompat?.requireReasoning ?? defaultCompatibility?.requireReasoning,
+            maxTokensField: modelCompat?.maxTokensField?.rawValue ?? defaultCompatibility?.maxTokensField,
+            requireFinishReason: modelCompat?.requireFinishReason ?? defaultCompatibility?.requireFinishReason,
+            requireAssistantAfterTool: modelCompat?.requireAssistantAfterTool ?? defaultCompatibility?.requireAssistantAfterTool,
+            cacheFormat: modelCompat?.cacheFormat?.rawValue ?? defaultCompatibility?.cacheFormat,
+            supportsThinkingBlockBinding: modelCompat?.supportsThinkingBlockBinding ?? defaultCompatibility?.supportsThinkingBlockBinding,
+            requireSignature: modelCompat?.requireSignature ?? defaultCompatibility?.requireSignature,
+            zaiToolStream: modelCompat?.zaiToolStream ?? defaultCompatibility?.zaiToolStream,
+            sanitizer: modelCompat?.sanitizer?.rawValue ?? defaultCompatibility?.sanitizer,
+            mediaInput: defaultCompatibility?.mediaInput
+        )
+        let modelCaps = request.model.capabilities
+        let mergedCaps = AIProtocolUtils.ModelCapabilities(
+            promptCacheKey: modelCaps?.promptCacheKey ?? defaultCapabilities?.promptCacheKey,
+            store: modelCaps?.store ?? defaultCapabilities?.store,
+            streamUsage: modelCaps?.streamUsage ?? defaultCapabilities?.streamUsage,
+            strictTools: modelCaps?.tools?.strict ?? defaultCapabilities?.strictTools,
+            systemUpdates: modelCaps?.systemUpdates ?? defaultCapabilities?.systemUpdates,
+            reasoningUpdates: modelCaps?.reasoning?.updates ?? defaultCapabilities?.reasoningUpdates
+        )
+        let descriptor = AIProtocolUtils.ModelDescriptor(
+            id: request.model.id.rawValue,
+            provider: request.model.provider.rawValue,
+            routeID: route.id,
+            providerMetadataKey: route.providerMetadataKey,
+            baseURL: route.defaultBaseURL,
+            sanitizer: route.`protocol`.sanitizer ?? modelCompat?.sanitizer?.rawValue,
+            compatibility: mergedCompat,
+            capabilities: mergedCaps
+        )
+        let cacheSetting: AIProtocolUtils.CacheSetting = switch request.cache {
+        case nil, .some(.auto):
+            .auto
+        case .some(.none):
+            .none
+        case .some(.object(let obj)):
+            .configured(ttl: obj.ttl?.rawValue)
+        }
+        let httpOverlay: AIProtocolUtils.HTTPOverlay?
+        if request.headers != nil || request.http != nil {
+            httpOverlay = AIProtocolUtils.HTTPOverlay(
+                headers: request.headers,
+                body: request.http?.body,
+                query: request.http?.query,
+                encoding: request.http?.encoding?.rawValue
+            )
+        } else {
+            httpOverlay = nil
+        }
+        let systemParts = request.system.map { part in
+            AIProtocolUtils.TextPart(text: part.text, cache: toProtocolCacheHint(part.cache))
+        }
+        return AIProtocolUtils.LLMRequest(
+            model: descriptor,
+            system: systemParts,
+            messages: request.messages.map(toProtocolMessage),
+            tools: request.tools.map(toProtocolToolEntry),
+            toolChoice: toProtocolToolChoice(request.toolChoice),
+            maxTokens: request.maxTokens,
+            temperature: request.temperature,
+            topP: request.topP,
+            topK: request.topK,
+            frequencyPenalty: request.frequencyPenalty,
+            presencePenalty: request.presencePenalty,
+            seed: request.seed,
+            stop: request.stop,
+            cache: cacheSetting,
+            promptCacheKey: request.promptCacheKey,
+            providerOptions: request.providerOptions,
+            http: httpOverlay
+        )
+    }
+
+    private static func toSchemaFinishReason(_ details: AIProtocolUtils.FinishReasonDetails) -> AISchema.FinishReasonDetails {
+        let normalized: AISchema.FinishReason = switch details.normalized {
+        case .stop: .stop
+        case .length: .length
+        case .toolCalls: .toolCalls
+        case .contentFilter: .contentFilter
+        case .error: .error
+        case .unknown: .unknown
+        }
+        return AISchema.FinishReasonDetails(
+            normalized: normalized,
+            raw: details.raw,
+            category: details.category,
+            explanation: details.explanation
+        )
+    }
+
+    private static func toSchemaUsage(_ usage: AIProtocolUtils.Usage) -> AISchema.Usage {
+        AISchema.Usage(
+            contextTokens: usage.contextTokens,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            nonCachedInputTokens: usage.nonCachedInputTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens,
+            cacheWriteInputTokens: usage.cacheWriteInputTokens,
+            reasoningTokens: usage.reasoningTokens,
+            totalTokens: usage.totalTokens,
+            cost: usage.cost,
+            providerMetadata: usage.providerMetadata
+        )
+    }
+
+    public static func toSchemaEvent(_ event: AIProtocolUtils.LLMEvent) -> AISchema.LLMEvent {
+        switch event {
+        case .stepStart(let index):
+            return .stepStart(AISchema.StepStart(index: index))
+        case .textStart(let id, let meta):
+            return .textStart(AISchema.TextStart(id: id, providerMetadata: meta))
+        case .textDelta(let id, let text, let meta):
+            return .textDelta(AISchema.TextDelta(id: id, text: text, providerMetadata: meta))
+        case .textEnd(let id, let text, let meta):
+            return .textEnd(AISchema.TextEnd(id: id, text: text, providerMetadata: meta))
+        case .reasoningStart(let id, let meta):
+            return .reasoningStart(AISchema.ReasoningStart(id: id, providerMetadata: meta))
+        case .reasoningDelta(let id, let text, let meta):
+            return .reasoningDelta(AISchema.ReasoningDelta(id: id, text: text, providerMetadata: meta))
+        case .reasoningEnd(let id, let text, let meta):
+            return .reasoningEnd(AISchema.ReasoningEnd(id: id, text: text, providerMetadata: meta))
+        case .toolInputStart(let id, let name, let ns, let pe, let meta):
+            return .toolInputStart(AISchema.ToolInputStart(id: id, name: name, namespace: ns, providerExecuted: pe, providerMetadata: meta))
+        case .toolInputDelta(let id, let name, let ns, let text, let partial):
+            return .toolInputDelta(AISchema.ToolInputDelta(id: id, name: name, namespace: ns, text: text, input: partial))
+        case .toolInputEnd(let id, let name, let ns, let meta):
+            return .toolInputEnd(AISchema.ToolInputEnd(id: id, name: name, namespace: ns, providerMetadata: meta))
+        case .toolCall(let id, let name, let ns, let input, let pe, let meta):
+            return .toolCall(AISchema.ToolCall(id: id, name: name, namespace: ns, input: input, providerExecuted: pe, providerMetadata: meta))
+        case .toolInputError(let id, let name, let ns, let raw):
+            return .toolInputError(AISchema.ToolInputError(id: id, name: name, namespace: ns, raw: raw))
+        case .toolResult(let id, let name, let result, let pe, let meta):
+            return .toolResult(AISchema.ToolResult(
+                id: id,
+                name: name,
+                result: toSchemaToolResultValue(result),
+                providerExecuted: pe,
+                providerMetadata: meta
+            ))
+        case .media(let media, let meta):
+            return .media(AISchema.MediaEvent(media: toSchemaMediaAsset(media), providerMetadata: meta))
+        case .compaction(let provider, let id, let text, let encrypted):
+            let pid = AISchema.ProviderID.make(provider)
+            if let encrypted {
+                return .compaction(AISchema.CompactionPart.make(provider: pid, id: id, encrypted: encrypted))
+            }
+            return .compaction(AISchema.CompactionPart.make(provider: pid, id: id, text: text))
+        case .stepFinish(let index, let reason, let usage, let meta):
+            return .stepFinish(AISchema.StepFinish(
+                index: index,
+                reason: toSchemaFinishReason(reason),
+                usage: usage.map(toSchemaUsage),
+                providerMetadata: meta
+            ))
+        case .finish(let reason, let usage, let meta):
+            return .finish(AISchema.Finish(
+                reason: toSchemaFinishReason(reason),
+                usage: usage.map(toSchemaUsage),
+                providerMetadata: meta
+            ))
         }
     }
 
@@ -131,11 +639,16 @@ public enum AIProtocols {
             )
         }
 
+        private static let anthropicMessagesProtocols: Set<String> = [
+            "anthropic-messages", "alibaba-messages", "meta-messages", "zai-messages",
+        ]
+
         public func prepareHTTPRequest(
             for request: AIProtocolUtils.LLMRequest,
             baseURLOverride: String? = nil,
             extraHeaders: [String: String] = [:],
-            timestampEpochSeconds: Int64 = 1_700_000_000
+            timestampEpochSeconds: Int64? = nil,
+            clock: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
         ) throws -> HTTPRequest {
             var effectiveRequest = request
             if !defaultProviderOptions.isEmpty {
@@ -164,6 +677,9 @@ public enum AIProtocols {
                 for (k, v) in reqHeaders { headers[k] = v }
             }
             for (k, v) in extraHeaders { headers[k] = v }
+            if Self.anthropicMessagesProtocols.contains(`protocol`.id) {
+                headers = AnthropicMessages.transportHeaders(for: body, existing: headers)
+            }
             let encodedBody = AIProtocolUtils.JSONCodec.encodeObject(body)
             let post = AIProtocolUtils.ProviderShared.jsonPost(
                 url: url,
@@ -171,21 +687,280 @@ public enum AIProtocols {
                 headers: headers,
                 encoding: request.http?.encoding
             )
-            return try auth.apply(to: post, timestampEpochSeconds: timestampEpochSeconds)
+            let resolvedTimestamp = timestampEpochSeconds ?? clock()
+            return try auth.apply(to: post, timestampEpochSeconds: resolvedTimestamp)
         }
 
-        /// Executes a streaming chat request through `OpenCodePlatform.HTTPTransport` and yields parsed `LLMEvent`s.
+        /// Executes a streaming chat request through `OpenCodePlatform.HTTPTransport` and yields parsed `LLMEvent`s
+        /// incrementally as each chunk arrives via `SSEParser` / `BedrockEventStream.FrameDecoder`.
+        public func streamEvents(
+            _ request: AIProtocolUtils.LLMRequest,
+            transport: any HTTPTransport,
+            baseURLOverride: String? = nil,
+            extraHeaders: [String: String] = [:],
+            timestampEpochSeconds: Int64? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) -> AsyncThrowingStream<AIProtocolUtils.LLMEvent, Error> {
+            let routeSpec = self
+            return AsyncThrowingStream { continuation in
+                let task = Task {
+                    do {
+                        let httpRequest = try routeSpec.prepareHTTPRequest(
+                            for: request,
+                            baseURLOverride: baseURLOverride,
+                            extraHeaders: extraHeaders,
+                            timestampEpochSeconds: timestampEpochSeconds,
+                            clock: clock
+                        )
+                        let response = try await transport.stream(httpRequest)
+                        if response.head.statusCode >= 400 {
+                            var errorBytes: [UInt8] = []
+                            for try await chunk in response.chunks {
+                                errorBytes.append(contentsOf: chunk)
+                            }
+                            let bodyText = String(decoding: errorBytes, as: UTF8.self)
+                            throw AIRequestExecutor.httpFailure(
+                                message: AIErrorClassifier.providerErrorMessage(bodyText)
+                                    ?? "Provider request failed with HTTP \(response.head.statusCode)",
+                                url: httpRequest.url,
+                                status: response.head.statusCode,
+                                responseHeaders: response.head.headers,
+                                responseBody: bodyText
+                            )
+                        }
+                        var decoder = routeSpec.`protocol`.makeDecoder(for: request)
+                        for try await chunk in response.chunks {
+                            try Task.checkCancellation()
+                            if chunk.isEmpty { continue }
+                            let produced = try decoder.feed(chunk)
+                            for event in produced {
+                                continuation.yield(event)
+                            }
+                        }
+                        let trailing = try decoder.finish()
+                        for event in trailing {
+                            continuation.yield(event)
+                        }
+                        continuation.finish()
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+                continuation.onTermination = { _ in
+                    task.cancel()
+                }
+            }
+        }
+
+        /// Executes a streaming chat request through `OpenCodePlatform.HTTPTransport`, consuming chunks
+        /// incrementally via `SSEParser` / `BedrockEventStream.FrameDecoder`, and returns all parsed `LLMEvent`s.
         public func executeStream(
             _ request: AIProtocolUtils.LLMRequest,
-            transport: any HTTPTransport
+            transport: any HTTPTransport,
+            baseURLOverride: String? = nil,
+            extraHeaders: [String: String] = [:],
+            timestampEpochSeconds: Int64? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
         ) async throws -> [AIProtocolUtils.LLMEvent] {
-            let httpRequest = try prepareHTTPRequest(for: request)
-            let response = try await transport.stream(httpRequest)
-            var buffer: [UInt8] = []
-            for try await chunk in response.chunks {
-                buffer.append(contentsOf: chunk)
+            var events: [AIProtocolUtils.LLMEvent] = []
+            for try await event in streamEvents(
+                request,
+                transport: transport,
+                baseURLOverride: baseURLOverride,
+                extraHeaders: extraHeaders,
+                timestampEpochSeconds: timestampEpochSeconds,
+                clock: clock
+            ) {
+                events.append(event)
             }
-            return try `protocol`.parseStream(buffer, request)
+            return events
+        }
+
+        /// Bridges this protocol route into a runnable `AIRoute.AnyRoute` backed by incremental HTTP streaming.
+        public func asAnyRoute(
+            defaultCompatibility: AIProtocolUtils.ModelCompatibility? = nil,
+            defaultCapabilities: AIProtocolUtils.ModelCapabilities? = nil,
+            options: AISchema.RequestOptions? = nil,
+            transport: (any HTTPTransport)? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) -> AIRoute.AnyRoute {
+            let routeSpec = self
+            let sanitizer: AISchema.LanguageModelSanitizerCompatibility? =
+                `protocol`.sanitizer.flatMap(AISchema.LanguageModelSanitizerCompatibility.init(rawValue:))
+            return AIRoute.AnyRoute(
+                id: id,
+                provider: AISchema.ProviderID.make(provider),
+                providerMetadataKey: providerMetadataKey,
+                protocolID: `protocol`.id,
+                baseURL: defaultBaseURL,
+                transportID: "http-json",
+                options: options,
+                sanitizer: sanitizer,
+                buildBody: { request in
+                    let protoReq = AIProtocols.toProtocolRequest(
+                        request,
+                        route: routeSpec,
+                        defaultCompatibility: defaultCompatibility,
+                        defaultCapabilities: defaultCapabilities
+                    )
+                    var effective = protoReq
+                    if !routeSpec.defaultProviderOptions.isEmpty {
+                        effective.providerOptions = AIProtocolUtils.JSONCodec.mergeObjects(
+                            routeSpec.defaultProviderOptions,
+                            protoReq.providerOptions
+                        )
+                    }
+                    do {
+                        var body = try routeSpec.`protocol`.buildBody(effective)
+                        if let overlay = effective.http?.body {
+                            body = AIProtocolUtils.JSONCodec.mergeObjects(body, overlay)
+                        }
+                        return .object(body)
+                    } catch let error as AIProtocolUtils.ProtocolError {
+                        throw AIProtocols.toProtocolError(error)
+                    }
+                },
+                executeStream: { request, runtime, streamOptions in
+                    AsyncThrowingStream { continuation in
+                        let task = Task {
+                            var httpContext: AISchema.HttpContext? = nil
+                            do {
+                                let protoReq = AIProtocols.toProtocolRequest(
+                                    request,
+                                    route: routeSpec,
+                                    defaultCompatibility: defaultCompatibility,
+                                    defaultCapabilities: defaultCapabilities
+                                )
+                                let httpRequest = try routeSpec.prepareHTTPRequest(
+                                    for: protoReq,
+                                    clock: clock
+                                )
+                                let executor: AIRequestExecutor.RequestExecutorService = transport.map {
+                                    AIRequestExecutor.layer(transport: $0)
+                                } ?? runtime.http
+                                let middleware = AIRequestExecutor.withFetch(request.fetch, middleware: streamOptions?.http)
+                                let execFn = AIRequestExecutor.withTimeout(
+                                    AIRequestExecutor.withTls(
+                                        { req, mw in try await executor.execute(req, middleware: mw) },
+                                        tls: request.http?.tls
+                                    ),
+                                    timeout: request.timeout
+                                )
+                                let response = try await execFn(httpRequest, middleware)
+                                httpContext = AIRequestExecutor.responseHttp(response)
+
+                                var decoder = routeSpec.`protocol`.makeDecoder(for: protoReq)
+                                var sawFinish = false
+                                for try await chunk in AIRequestExecutor.responseStream(response) {
+                                    try Task.checkCancellation()
+                                    if chunk.isEmpty { continue }
+                                    let produced = try decoder.feed(chunk)
+                                    for ev in produced {
+                                        let schemaEvent = AIProtocols.toSchemaEvent(ev)
+                                        if schemaEvent.isFinish { sawFinish = true }
+                                        continuation.yield(schemaEvent)
+                                    }
+                                }
+                                let trailing = try decoder.finish()
+                                for ev in trailing {
+                                    let schemaEvent = AIProtocols.toSchemaEvent(ev)
+                                    if schemaEvent.isFinish { sawFinish = true }
+                                    continuation.yield(schemaEvent)
+                                }
+                                if !sawFinish {
+                                    throw AISchema.AIError(reason: .invalidProviderOutput(AISchema.InvalidProviderOutputError(
+                                        message: "The provider response ended unexpectedly.",
+                                        http: httpContext,
+                                        classification: .incompleteStream,
+                                        route: "\(request.model.provider.rawValue)/\(routeSpec.id)"
+                                    )))
+                                }
+                                continuation.finish()
+                            } catch let aiError as AISchema.AIError {
+                                continuation.finish(throwing: aiError)
+                            } catch let protoError as AIProtocolUtils.ProtocolError {
+                                continuation.finish(throwing: AIProtocols.toProtocolError(protoError, http: httpContext))
+                            } catch {
+                                continuation.finish(throwing: error)
+                            }
+                        }
+                        continuation.onTermination = { _ in
+                            task.cancel()
+                        }
+                    }
+                }
+            )
+        }
+
+        /// Bridges this protocol route directly into a runnable `AISchema.LanguageModel`.
+        public func asLanguageModel(
+            modelID: String,
+            config: AIProviders.ProviderConfig = AIProviders.ProviderConfig(),
+            transport: (any HTTPTransport)? = nil,
+            options: AISchema.RequestOptions? = nil,
+            capabilities: AISchema.Capabilities? = nil,
+            compatibility: AISchema.LanguageModelCompatibility? = nil,
+            defaultCompatibility: AIProtocolUtils.ModelCompatibility? = nil,
+            defaultCapabilities: AIProtocolUtils.ModelCapabilities? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) -> AISchema.LanguageModel {
+            let resolvedProvider = config.providerOverride ?? provider
+            let resolvedAuth: AIProtocolUtils.AuthStrategy
+            if let explicitAuth = config.auth {
+                resolvedAuth = explicitAuth
+            } else if let token = config.authToken, !token.isEmpty {
+                resolvedAuth = .bearer(token)
+            } else {
+                switch config.apiKey {
+                case .disabled:
+                    resolvedAuth = .none
+                case .explicit(let key):
+                    if resolvedProvider == "anthropic" || resolvedProvider == "anthropic-compatible" {
+                        resolvedAuth = .header(name: "x-api-key", value: key)
+                    } else if resolvedProvider == "google" {
+                        resolvedAuth = .header(name: "x-goog-api-key", value: key)
+                    } else if resolvedProvider == "azure" {
+                        resolvedAuth = .sequence([.remove("authorization"), .header(name: "api-key", value: key)])
+                    } else {
+                        resolvedAuth = .bearer(key)
+                    }
+                case .inherited:
+                    resolvedAuth = auth
+                }
+            }
+            let configured = with(
+                provider: resolvedProvider,
+                baseURL: config.baseURL,
+                headers: config.headers,
+                providerOptions: config.providerOptions,
+                auth: resolvedAuth
+            )
+            let configHttp: AISchema.HttpOptions? = (config.queryParams != nil || config.body != nil)
+                ? AISchema.HttpOptions(query: config.queryParams, body: config.body)
+                : nil
+            let configRequestOptions = AISchema.RequestOptions(
+                http: configHttp,
+                providerOptions: config.providerOptions
+            )
+            let mergedOptions = AISchema.mergeRequestOptions(
+                configRequestOptions.isEmpty ? nil : configRequestOptions,
+                options
+            )
+            let anyRoute = configured.asAnyRoute(
+                defaultCompatibility: defaultCompatibility,
+                defaultCapabilities: defaultCapabilities,
+                options: mergedOptions,
+                transport: transport,
+                clock: clock
+            )
+            return AISchema.LanguageModel.make(AISchema.LanguageModel.Input(
+                id: modelID,
+                provider: resolvedProvider,
+                route: anyRoute,
+                options: mergedOptions,
+                capabilities: capabilities,
+                compatibility: compatibility
+            ))
         }
     }
 
@@ -1158,28 +1933,49 @@ public enum AIProtocols {
             }
         }
 
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var state: ParserState
+
+            public init(request: AIProtocolUtils.LLMRequest) {
+                self.state = ParserState(
+                    provider: request.model.provider,
+                    providerMetadataKey: request.model.providerMetadataKey ?? request.model.provider
+                )
+            }
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
+            }
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.finish())
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    if let evName = frame.event, !sseEvents.contains(evName) { continue }
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == ": keepalive" { continue }
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(
+                        route: adapterID,
+                        input: trimmed,
+                        message: "Invalid Anthropic Messages SSE JSON"
+                    )
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
+                    events.append(contentsOf: try step(state: &state, event: obj))
+                }
+                return events
+            }
+        }
+
         public static func parseSSEStream(
             _ bytes: [UInt8],
             request: AIProtocolUtils.LLMRequest
         ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var state = ParserState(
-                provider: request.model.provider,
-                providerMetadataKey: request.model.providerMetadataKey ?? request.model.provider
-            )
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                if let evName = frame.event, !sseEvents.contains(evName) { continue }
-                let decoded = try AIProtocolUtils.ProviderShared.parseJson(
-                    route: adapterID,
-                    input: frame.data,
-                    message: "Invalid Anthropic Messages SSE JSON"
-                )
-                guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
-                events.append(contentsOf: try step(state: &state, event: obj))
-            }
-            return events
+            var decoder = StreamDecoder(request: request)
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/anthropic-messages.ts#protocol [status=implemented hash=c7ff72010f93]
@@ -1187,7 +1983,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: framing,
             buildBody: fromRequest,
-            parseStream: parseSSEStream
+            parseStream: parseSSEStream,
+            makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/anthropic-messages.ts#transport [status=adapted hash=3c084e4c2ecd]
@@ -2415,38 +3212,70 @@ public enum AIProtocols {
             )
         }
 
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var state: ParserState
+            private let hostedTools: AIProtocolUtils.ResponsesHostedTools.Definitions?
+            private var terminated = false
+
+            public init(
+                request: AIProtocolUtils.LLMRequest,
+                adapter: ProviderAdapter = .base,
+                hostedTools: AIProtocolUtils.ResponsesHostedTools.Definitions? = nil
+            ) {
+                self.state = initial(request, adapter: adapter)
+                self.hostedTools = hostedTools
+            }
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
+            }
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.finish())
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    if terminated { break }
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == "[DONE]" || trimmed == ": keepalive" { continue }
+                    let rawObj = try decodeChannelEvent(trimmed)
+                    let norm = normalize(state, input: rawObj)
+                    if let hostedTools, norm.type == "response.output_item.done", let item = norm.item {
+                        let hostedItem = AIProtocolUtils.ResponsesHostedTools.Item(id: item.id, type: item.type, raw: item.raw)
+                        if AIProtocolUtils.ResponsesHostedTools.isItem(hostedItem, in: hostedTools) {
+                            let (nextLifecycle, emitted) = try AIProtocolUtils.ResponsesHostedTools.onDone(
+                                lifecycle: state.lifecycle,
+                                item: hostedItem,
+                                tools: hostedTools,
+                                providerMetadataKey: state.providerMetadataKey
+                            )
+                            state.lifecycle = nextLifecycle
+                            events.append(contentsOf: emitted)
+                            continue
+                        }
+                    }
+                    let (nextState, emitted) = try step(state, event: norm)
+                    state = nextState
+                    events.append(contentsOf: emitted)
+                    if terminal(rawObj) {
+                        terminated = true
+                    }
+                }
+                return events
+            }
+        }
+
         public static func parseSSEStream(
             _ bytes: [UInt8],
             request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter = .base,
             hostedTools: AIProtocolUtils.ResponsesHostedTools.Definitions? = nil
         ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var state = initial(request, adapter: adapter)
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                let rawObj = try decodeChannelEvent(frame.data)
-                let norm = normalize(state, input: rawObj)
-                if let hostedTools, norm.type == "response.output_item.done", let item = norm.item {
-                    let hostedItem = AIProtocolUtils.ResponsesHostedTools.Item(id: item.id, type: item.type, raw: item.raw)
-                    if AIProtocolUtils.ResponsesHostedTools.isItem(hostedItem, in: hostedTools) {
-                        let (nextLifecycle, emitted) = try AIProtocolUtils.ResponsesHostedTools.onDone(
-                            lifecycle: state.lifecycle,
-                            item: hostedItem,
-                            tools: hostedTools,
-                            providerMetadataKey: state.providerMetadataKey
-                        )
-                        state.lifecycle = nextLifecycle
-                        events.append(contentsOf: emitted)
-                        continue
-                    }
-                }
-                let (nextState, emitted) = try step(state, event: norm)
-                state = nextState
-                events.append(contentsOf: emitted)
-            }
-            return events
+            var decoder = StreamDecoder(request: request, adapter: adapter, hostedTools: hostedTools)
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/open-responses.ts#protocol [status=implemented hash=6735316dd60d]
@@ -2456,7 +3285,8 @@ public enum AIProtocols {
             buildBody: fromRequest,
             parseStream: { bytes, req throws(AIProtocolUtils.ProtocolError) in
                 try parseSSEStream(bytes, request: req)
-            }
+            },
+            makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/open-responses.ts#httpTransport [status=adapted hash=f83e75b34cf9]
@@ -2742,6 +3572,9 @@ public enum AIProtocols {
             buildBody: fromRequest,
             parseStream: { bytes, req throws(AIProtocolUtils.ProtocolError) in
                 try OpenResponses.parseSSEStream(bytes, request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
+            },
+            makeStreamDecoder: { req in
+                OpenResponses.StreamDecoder(request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
             }
         )
 
@@ -3490,28 +4323,57 @@ public enum AIProtocols {
             return events
         }
 
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var state: ParserState
+            private var finished = false
+
+            public init(request: AIProtocolUtils.LLMRequest) {
+                self.state = ParserState(request: request)
+            }
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
+            }
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events = try process(sse.finish())
+                if !finished {
+                    finished = true
+                    events.append(contentsOf: try finishEvents(state: state))
+                }
+                return events
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    if finished { break }
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed == "[DONE]" {
+                        finished = true
+                        events.append(contentsOf: try finishEvents(state: state))
+                        break
+                    }
+                    if trimmed.isEmpty || trimmed == ": keepalive" { continue }
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(
+                        route: adapterID,
+                        input: trimmed,
+                        message: "Invalid OpenAI Chat SSE JSON"
+                    )
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
+                    events.append(contentsOf: try step(state: &state, event: obj))
+                }
+                return events
+            }
+        }
+
         public static func parseSSEStream(
             _ bytes: [UInt8],
             request: AIProtocolUtils.LLMRequest
         ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var state = ParserState(request: request)
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                let trimmed = frame.data.trimmingASCIIWhitespace()
-                if trimmed == "[DONE]" { break }
-                if trimmed.isEmpty { continue }
-                let decoded = try AIProtocolUtils.ProviderShared.parseJson(
-                    route: adapterID,
-                    input: trimmed,
-                    message: "Invalid OpenAI Chat SSE JSON"
-                )
-                guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
-                events.append(contentsOf: try step(state: &state, event: obj))
-            }
-            events.append(contentsOf: try finishEvents(state: state))
-            return events
+            var decoder = StreamDecoder(request: request)
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/openai-chat.ts#protocol [status=implemented hash=757982d80386]
@@ -3519,7 +4381,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: .sseWithDone,
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in try fromRequest(req) },
-            parseStream: parseSSEStream
+            parseStream: parseSSEStream,
+            makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/openai-chat.ts#framing [status=implemented hash=b470ea06f479]
@@ -3980,23 +4843,47 @@ public enum AIProtocols {
             return events
         }
 
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var state: ParserState
+            private var finished = false
+
+            public init(request: AIProtocolUtils.LLMRequest) {
+                self.state = ParserState(request: request)
+            }
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
+            }
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events = try process(sse.finish())
+                if !finished {
+                    finished = true
+                    events.append(contentsOf: Gemini.finish(state: state))
+                }
+                return events
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == "[DONE]" || trimmed == ": keepalive" { continue }
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid Gemini stream event")
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
+                    events.append(contentsOf: try step(state: &state, event: obj))
+                }
+                return events
+            }
+        }
+
         public static func parseSSEStream(
             _ bytes: [UInt8],
             request: AIProtocolUtils.LLMRequest
         ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var state = ParserState(request: request)
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                let trimmed = frame.data.trimmingASCIIWhitespace()
-                if trimmed.isEmpty { continue }
-                let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid Gemini stream event")
-                guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded) else { continue }
-                events.append(contentsOf: try step(state: &state, event: obj))
-            }
-            events.append(contentsOf: finish(state: state))
-            return events
+            var decoder = StreamDecoder(request: request)
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/gemini.ts#transport [status=adapted hash=5b365d47af8f]
@@ -4008,7 +4895,8 @@ public enum AIProtocols {
             framing: .sse,
             sanitizer: "gemini",
             buildBody: fromRequest,
-            parseStream: parseSSEStream
+            parseStream: parseSSEStream,
+            makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/gemini.ts#route [status=implemented hash=6ae466a802e1]
@@ -4463,18 +5351,38 @@ public enum AIProtocols {
             return events
         }
 
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var decoder = BedrockEventStream.framing(route: adapterID).makeDecoder()
+            private var state: ParserState
+            private var finished = false
+
+            public init(request: AIProtocolUtils.LLMRequest) {
+                self.state = ParserState(providerMetadataKey: request.model.providerMetadataKey ?? request.model.provider)
+            }
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                let frames = try decoder.feed(bytes)
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    events.append(contentsOf: try step(state: &state, event: frame.event))
+                }
+                return events
+            }
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try decoder.finish()
+                guard !finished else { return [] }
+                finished = true
+                return onHalt(state: state)
+            }
+        }
+
         public static func parseEventStream(
             _ bytes: [UInt8],
             request: AIProtocolUtils.LLMRequest
         ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            let frames = try BedrockEventStream.framing(route: adapterID).decodeAll(bytes)
-            var state = ParserState(providerMetadataKey: request.model.providerMetadataKey ?? request.model.provider)
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                events.append(contentsOf: try step(state: &state, event: frame.event))
-            }
-            events.append(contentsOf: onHalt(state: state))
-            return events
+            var decoder = StreamDecoder(request: request)
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/bedrock-converse.ts#protocol [status=implemented hash=121a6cea4af9]
@@ -4482,7 +5390,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: .awsEventStream,
             buildBody: fromRequest,
-            parseStream: parseEventStream
+            parseStream: parseEventStream,
+            makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/bedrock-converse.ts#route [status=implemented hash=46ac3a52f1d5]
@@ -4624,30 +5533,50 @@ public enum AIProtocols {
             return body
         }
 
-        public static func parseSSEStream(_ bytes: [UInt8], request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var lifecycle = AIProtocolUtils.Lifecycle.initial()
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: frame.data, message: "Invalid Google Interactions SSE JSON")
-                guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded),
-                      let evType = AIProtocolUtils.JSONCodec.stringValue(obj["event_type"]) else { continue }
-                if evType == "step.delta", let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"]),
-                   AIProtocolUtils.JSONCodec.stringValue(delta["type"]) == "text",
-                   let text = AIProtocolUtils.JSONCodec.stringValue(delta["text"]) {
-                    let idx = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
-                    lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: "text-\(idx)", text: text)
-                } else if evType == "interaction.completed" {
-                    let interaction = AIProtocolUtils.JSONCodec.objectValue(obj["interaction"])
-                    let status = AIProtocolUtils.JSONCodec.stringValue(interaction?["status"])
-                    let norm: AIProtocolUtils.FinishReason = status == "completed" ? .stop : .unknown
-                    lifecycle = AIProtocolUtils.Lifecycle.finish(lifecycle, events: &events, reason: AIProtocolUtils.FinishReasonDetails(normalized: norm, raw: status))
-                } else if evType == "error" {
-                    throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Google Interactions stream error", body: frame.data)
-                }
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var lifecycle = AIProtocolUtils.Lifecycle.initial()
+
+            public init() {}
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
             }
-            return events
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.finish())
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == ": keepalive" { continue }
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid Google Interactions SSE JSON")
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded),
+                          let evType = AIProtocolUtils.JSONCodec.stringValue(obj["event_type"]) else { continue }
+                    if evType == "step.delta", let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"]),
+                       AIProtocolUtils.JSONCodec.stringValue(delta["type"]) == "text",
+                       let text = AIProtocolUtils.JSONCodec.stringValue(delta["text"]) {
+                        let idx = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
+                        lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: "text-\(idx)", text: text)
+                    } else if evType == "interaction.completed" {
+                        let interaction = AIProtocolUtils.JSONCodec.objectValue(obj["interaction"])
+                        let status = AIProtocolUtils.JSONCodec.stringValue(interaction?["status"])
+                        let norm: AIProtocolUtils.FinishReason = status == "completed" ? .stop : .unknown
+                        lifecycle = AIProtocolUtils.Lifecycle.finish(lifecycle, events: &events, reason: AIProtocolUtils.FinishReasonDetails(normalized: norm, raw: status))
+                    } else if evType == "error" {
+                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Google Interactions stream error", body: frame.data)
+                    }
+                }
+                return events
+            }
+        }
+
+        public static func parseSSEStream(_ bytes: [UInt8], request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+            _ = request
+            var decoder = StreamDecoder()
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/google-interactions.ts#protocol [status=implemented hash=100386490bae]
@@ -4655,7 +5584,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: .sse,
             buildBody: fromRequest,
-            parseStream: parseSSEStream
+            parseStream: parseSSEStream,
+            makeStreamDecoder: { _ in StreamDecoder() }
         )
 
         // parity: ai/src/protocols/google-interactions.ts#route [status=implemented hash=2d73e49254a0]
@@ -4759,66 +5689,86 @@ public enum AIProtocols {
             return body
         }
 
-        public static func parseSSEStream(_ bytes: [UInt8], request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            var sse = AIProtocolUtils.SSEParser()
-            let frames = sse.feed(bytes) + sse.finish()
-            var lifecycle = AIProtocolUtils.Lifecycle.initial()
-            var tools = AIProtocolUtils.ToolStream.empty() as AIProtocolUtils.ToolStream.State<Int>
-            var events: [AIProtocolUtils.LLMEvent] = []
-            for frame in frames {
-                let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: frame.data, message: "Invalid Cohere Chat SSE JSON")
-                guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded),
-                      let evType = AIProtocolUtils.JSONCodec.stringValue(obj["type"]) else { continue }
-                let idx = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
-                let deltaMsg = AIProtocolUtils.JSONCodec.objectValue(AIProtocolUtils.JSONCodec.objectValue(obj["delta"])?["message"])
-                switch evType {
-                case "content-start", "content-delta":
-                    let content = AIProtocolUtils.JSONCodec.objectValue(deltaMsg?["content"])
-                    if let text = AIProtocolUtils.JSONCodec.stringValue(content?["text"]), !text.isEmpty {
-                        lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: "text-\(idx)", text: text)
-                    }
-                    if let thinking = AIProtocolUtils.JSONCodec.stringValue(content?["thinking"]), !thinking.isEmpty {
-                        lifecycle = AIProtocolUtils.Lifecycle.reasoningDelta(lifecycle, events: &events, id: "reasoning-\(idx)", text: thinking)
-                    }
-                case "content-end":
-                    lifecycle = AIProtocolUtils.Lifecycle.textEnd(lifecycle, events: &events, id: "text-\(idx)")
-                    lifecycle = AIProtocolUtils.Lifecycle.reasoningEnd(lifecycle, events: &events, id: "reasoning-\(idx)")
-                case "tool-call-start", "tool-call-delta":
-                    let tc = AIProtocolUtils.JSONCodec.objectValue(deltaMsg?["tool_calls"])
-                    let fn = AIProtocolUtils.JSONCodec.objectValue(tc?["function"])
-                    let res = AIProtocolUtils.ToolStream.appendOrStart(
-                        route: adapterID,
-                        tools: tools,
-                        key: idx,
-                        id: AIProtocolUtils.JSONCodec.stringValue(tc?["id"]),
-                        name: AIProtocolUtils.JSONCodec.stringValue(fn?["name"]),
-                        text: AIProtocolUtils.JSONCodec.stringValue(fn?["arguments"]) ?? "",
-                        missingToolMessage: "Cohere tool call delta missing id or name"
-                    )
-                    if case .ok(let outcome) = res {
-                        tools = outcome.tools
-                        events.append(contentsOf: outcome.events)
-                    }
-                case "tool-call-end":
-                    let fin = try AIProtocolUtils.ToolStream.finish(route: adapterID, tools: tools, key: idx)
-                    tools = fin.tools
-                    events.append(contentsOf: fin.events)
-                case "message-end":
-                    let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"])
-                    let raw = AIProtocolUtils.JSONCodec.stringValue(delta?["finish_reason"])
-                    let norm: AIProtocolUtils.FinishReason
-                    switch raw {
-                    case "COMPLETE", "STOP_SEQUENCE": norm = .stop
-                    case "MAX_TOKENS": norm = .length
-                    case "TOOL_CALL": norm = .toolCalls
-                    default: norm = .unknown
-                    }
-                    lifecycle = AIProtocolUtils.Lifecycle.finish(lifecycle, events: &events, reason: AIProtocolUtils.FinishReasonDetails(normalized: norm, raw: raw))
-                default:
-                    break
-                }
+        public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private var sse = AIProtocolUtils.SSEParser()
+            private var lifecycle = AIProtocolUtils.Lifecycle.initial()
+            private var tools = AIProtocolUtils.ToolStream.empty() as AIProtocolUtils.ToolStream.State<Int>
+
+            public init() {}
+
+            public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.feed(bytes))
             }
-            return events
+
+            public mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                try process(sse.finish())
+            }
+
+            private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events: [AIProtocolUtils.LLMEvent] = []
+                for frame in frames {
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == ": keepalive" { continue }
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid Cohere Chat SSE JSON")
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded),
+                          let evType = AIProtocolUtils.JSONCodec.stringValue(obj["type"]) else { continue }
+                    let idx = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
+                    let deltaMsg = AIProtocolUtils.JSONCodec.objectValue(AIProtocolUtils.JSONCodec.objectValue(obj["delta"])?["message"])
+                    switch evType {
+                    case "content-start", "content-delta":
+                        let content = AIProtocolUtils.JSONCodec.objectValue(deltaMsg?["content"])
+                        if let text = AIProtocolUtils.JSONCodec.stringValue(content?["text"]), !text.isEmpty {
+                            lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: "text-\(idx)", text: text)
+                        }
+                        if let thinking = AIProtocolUtils.JSONCodec.stringValue(content?["thinking"]), !thinking.isEmpty {
+                            lifecycle = AIProtocolUtils.Lifecycle.reasoningDelta(lifecycle, events: &events, id: "reasoning-\(idx)", text: thinking)
+                        }
+                    case "content-end":
+                        lifecycle = AIProtocolUtils.Lifecycle.textEnd(lifecycle, events: &events, id: "text-\(idx)")
+                        lifecycle = AIProtocolUtils.Lifecycle.reasoningEnd(lifecycle, events: &events, id: "reasoning-\(idx)")
+                    case "tool-call-start", "tool-call-delta":
+                        let tc = AIProtocolUtils.JSONCodec.objectValue(deltaMsg?["tool_calls"])
+                        let fn = AIProtocolUtils.JSONCodec.objectValue(tc?["function"])
+                        let res = AIProtocolUtils.ToolStream.appendOrStart(
+                            route: adapterID,
+                            tools: tools,
+                            key: idx,
+                            id: AIProtocolUtils.JSONCodec.stringValue(tc?["id"]),
+                            name: AIProtocolUtils.JSONCodec.stringValue(fn?["name"]),
+                            text: AIProtocolUtils.JSONCodec.stringValue(fn?["arguments"]) ?? "",
+                            missingToolMessage: "Cohere tool call delta missing id or name"
+                        )
+                        if case .ok(let outcome) = res {
+                            tools = outcome.tools
+                            events.append(contentsOf: outcome.events)
+                        }
+                    case "tool-call-end":
+                        let fin = try AIProtocolUtils.ToolStream.finish(route: adapterID, tools: tools, key: idx)
+                        tools = fin.tools
+                        events.append(contentsOf: fin.events)
+                    case "message-end":
+                        let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"])
+                        let raw = AIProtocolUtils.JSONCodec.stringValue(delta?["finish_reason"])
+                        let norm: AIProtocolUtils.FinishReason
+                        switch raw {
+                        case "COMPLETE", "STOP_SEQUENCE": norm = .stop
+                        case "MAX_TOKENS": norm = .length
+                        case "TOOL_CALL": norm = .toolCalls
+                        default: norm = .unknown
+                        }
+                        lifecycle = AIProtocolUtils.Lifecycle.finish(lifecycle, events: &events, reason: AIProtocolUtils.FinishReasonDetails(normalized: norm, raw: raw))
+                    default:
+                        break
+                    }
+                }
+                return events
+            }
+        }
+
+        public static func parseSSEStream(_ bytes: [UInt8], request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+            _ = request
+            var decoder = StreamDecoder()
+            return try decoder.feed(bytes) + decoder.finish()
         }
 
         // parity: ai/src/protocols/cohere-chat.ts#protocol [status=implemented hash=0386e4efb34b]
@@ -4826,7 +5776,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: .sse,
             buildBody: fromRequest,
-            parseStream: parseSSEStream
+            parseStream: parseSSEStream,
+            makeStreamDecoder: { _ in StreamDecoder() }
         )
 
         // parity: ai/src/protocols/cohere-chat.ts#route [status=implemented hash=ae588b3c5556]
@@ -4929,7 +5880,8 @@ public enum AIProtocols {
             id: adapterID,
             framing: .sseWithDone,
             buildBody: fromRequest,
-            parseStream: OpenAIChat.parseSSEStream
+            parseStream: OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { OpenAIChat.StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/protocols/mistral-chat.ts#framing [status=implemented hash=b470ea06f479]
@@ -5013,7 +5965,8 @@ public enum AIProtocols {
                 if let so = opts["searchOptions"] { body["search_options"] = so }
                 return body
             },
-            parseStream: OpenAIChat.parseSSEStream
+            parseStream: OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { OpenAIChat.StreamDecoder(request: $0) }
         )
     }
 
@@ -5048,7 +6001,8 @@ public enum AIProtocols {
                 }
                 return body
             },
-            parseStream: AnthropicMessages.parseSSEStream
+            parseStream: AnthropicMessages.parseSSEStream,
+            makeStreamDecoder: { AnthropicMessages.StreamDecoder(request: $0) }
         )
     }
 
@@ -5101,6 +6055,9 @@ public enum AIProtocols {
             },
             parseStream: { bytes, req throws(AIProtocolUtils.ProtocolError) in
                 try OpenResponses.parseSSEStream(bytes, request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
+            },
+            makeStreamDecoder: { req in
+                OpenResponses.StreamDecoder(request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
             }
         )
     }
@@ -5115,7 +6072,8 @@ public enum AIProtocols {
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in
                 try AnthropicMessages.fromRequest(req)
             },
-            parseStream: AnthropicMessages.parseSSEStream
+            parseStream: AnthropicMessages.parseSSEStream,
+            makeStreamDecoder: { AnthropicMessages.StreamDecoder(request: $0) }
         )
     }
 
@@ -5168,6 +6126,9 @@ public enum AIProtocols {
             },
             parseStream: { bytes, req throws(AIProtocolUtils.ProtocolError) in
                 try OpenResponses.parseSSEStream(bytes, request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
+            },
+            makeStreamDecoder: { req in
+                OpenResponses.StreamDecoder(request: req, adapter: adapter, hostedTools: AIProtocolUtils.ResponsesHostedTools.common)
             }
         )
 
@@ -5243,7 +6204,8 @@ public enum AIProtocols {
                 if let rp = opts["repetitionPenalty"] { body["repetition_penalty"] = rp }
                 return body
             },
-            parseStream: OpenAIChat.parseSSEStream
+            parseStream: OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { OpenAIChat.StreamDecoder(request: $0) }
         )
     }
 
@@ -5301,6 +6263,9 @@ public enum AIProtocols {
             },
             parseStream: { bytes, req throws(AIProtocolUtils.ProtocolError) in
                 try OpenResponses.parseSSEStream(bytes, request: req, adapter: adapter, hostedTools: hostedTools)
+            },
+            makeStreamDecoder: { req in
+                OpenResponses.StreamDecoder(request: req, adapter: adapter, hostedTools: hostedTools)
             }
         )
 
@@ -5354,7 +6319,8 @@ public enum AIProtocols {
                 if let uid = opts["userID"] { body["user_id"] = uid }
                 return body
             },
-            parseStream: OpenAIChat.parseSSEStream
+            parseStream: OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { OpenAIChat.StreamDecoder(request: $0) }
         )
     }
 
@@ -5381,7 +6347,8 @@ public enum AIProtocols {
                 if let thinking { body["thinking"] = thinking }
                 return body
             },
-            parseStream: AnthropicMessages.parseSSEStream
+            parseStream: AnthropicMessages.parseSSEStream,
+            makeStreamDecoder: { AnthropicMessages.StreamDecoder(request: $0) }
         )
     }
 

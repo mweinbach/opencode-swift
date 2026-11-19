@@ -4,6 +4,11 @@
 /// Strictly PORTABLE tier: zero OS imports, all HTTP via `OpenCodePlatform.HTTPTransport`
 /// and environment lookups via `OpenCodePlatform.EnvironmentProviding`.
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import OpenCodePlatform
 import OpenCodeSchema
 import OpenCodeUtil
@@ -96,6 +101,109 @@ public enum AIProviders {
             self.profile = profile; self.bedrockAuthMode = bedrockAuthMode
             self.providerOverride = providerOverride
         }
+
+        /// Builds a `ProviderConfig` from untyped catalog/user settings dictionaries.
+        public static func from(
+            settings: [String: JSONValue],
+            headers: [String: String]? = nil,
+            body: [String: JSONValue]? = nil
+        ) -> ProviderConfig {
+            let knownKeys: Set<String> = [
+                "apiKey", "authToken", "auth", "baseURL", "headers", "queryParams", "body",
+                "providerOptions", "region", "workspaceID", "resourceName", "apiVersion",
+                "useDeploymentBasedUrls", "accountId", "gatewayId", "gatewayApiKey",
+                "project", "location", "accessToken", "organization", "credentials",
+                "profile", "bedrockAuthMode", "provider",
+            ]
+
+            let apiKey: APIKeyOption = {
+                switch settings["apiKey"] {
+                case .string(let k) where !k.isEmpty:
+                    return .explicit(k)
+                case .bool(false):
+                    return .disabled
+                default:
+                    return .inherited
+                }
+            }()
+            let authToken = AIProtocolUtils.JSONCodec.stringValue(settings["authToken"])
+            let baseURL = AIProtocolUtils.JSONCodec.stringValue(settings["baseURL"])
+            var mergedHeaders: [String: String] = [:]
+            if let rawHeaders = AIProtocolUtils.JSONCodec.objectValue(settings["headers"]) {
+                for (k, v) in rawHeaders {
+                    if case .string(let s) = v { mergedHeaders[k] = s }
+                }
+            }
+            if let headers {
+                for (k, v) in headers { mergedHeaders[k] = v }
+            }
+            var queryParams: [String: String]? = nil
+            if let rawQuery = AIProtocolUtils.JSONCodec.objectValue(settings["queryParams"]) {
+                var parsed: [String: String] = [:]
+                for (k, v) in rawQuery {
+                    if case .string(let s) = v { parsed[k] = s }
+                }
+                if !parsed.isEmpty { queryParams = parsed }
+            }
+            let mergedBody = AIProtocolUtils.JSONCodec.mergeObjects(
+                AIProtocolUtils.JSONCodec.objectValue(settings["body"]),
+                body
+            )
+            var providerOptions = AIProtocolUtils.JSONCodec.objectValue(settings["providerOptions"]) ?? [:]
+            for (k, v) in settings where !knownKeys.contains(k) {
+                providerOptions[k] = v
+            }
+            let region = AIProtocolUtils.JSONCodec.stringValue(settings["region"])
+            let credentials: AIProtocolUtils.BedrockAuth.Credentials? = {
+                guard let obj = AIProtocolUtils.JSONCodec.objectValue(settings["credentials"]),
+                      let ak = AIProtocolUtils.JSONCodec.stringValue(obj["accessKeyId"]),
+                      let sk = AIProtocolUtils.JSONCodec.stringValue(obj["secretAccessKey"])
+                else { return nil }
+                return AIProtocolUtils.BedrockAuth.Credentials(
+                    region: AIProtocolUtils.JSONCodec.stringValue(obj["region"]) ?? region ?? "us-east-1",
+                    accessKeyId: ak,
+                    secretAccessKey: sk,
+                    sessionToken: AIProtocolUtils.JSONCodec.stringValue(obj["sessionToken"])
+                )
+            }()
+            let bedrockAuthMode: AIProtocolUtils.BedrockAuth.ResolveAuthOptions.Mode? = {
+                if let explicit = AIProtocolUtils.JSONCodec.stringValue(settings["bedrockAuthMode"]),
+                   let mode = AIProtocolUtils.BedrockAuth.ResolveAuthOptions.Mode(rawValue: explicit) {
+                    return mode
+                }
+                if AIProtocolUtils.JSONCodec.stringValue(settings["auth"]) == "sigv4" {
+                    return .sigv4
+                }
+                return nil
+            }()
+
+            return ProviderConfig(
+                apiKey: apiKey,
+                authToken: authToken,
+                auth: nil,
+                baseURL: baseURL,
+                headers: mergedHeaders.isEmpty ? nil : mergedHeaders,
+                queryParams: queryParams,
+                body: mergedBody.isEmpty ? nil : mergedBody,
+                providerOptions: providerOptions.isEmpty ? nil : providerOptions,
+                region: region,
+                workspaceID: AIProtocolUtils.JSONCodec.stringValue(settings["workspaceID"]),
+                resourceName: AIProtocolUtils.JSONCodec.stringValue(settings["resourceName"]),
+                apiVersion: AIProtocolUtils.JSONCodec.stringValue(settings["apiVersion"]),
+                useDeploymentBasedUrls: AIProtocolUtils.JSONCodec.boolValue(settings["useDeploymentBasedUrls"]),
+                accountId: AIProtocolUtils.JSONCodec.stringValue(settings["accountId"]),
+                gatewayId: AIProtocolUtils.JSONCodec.stringValue(settings["gatewayId"]),
+                gatewayApiKey: AIProtocolUtils.JSONCodec.stringValue(settings["gatewayApiKey"]),
+                project: AIProtocolUtils.JSONCodec.stringValue(settings["project"]),
+                location: AIProtocolUtils.JSONCodec.stringValue(settings["location"]),
+                accessToken: AIProtocolUtils.JSONCodec.stringValue(settings["accessToken"]),
+                organization: AIProtocolUtils.JSONCodec.stringValue(settings["organization"]),
+                credentials: credentials,
+                profile: AIProtocolUtils.JSONCodec.stringValue(settings["profile"]),
+                bedrockAuthMode: bedrockAuthMode,
+                providerOverride: AIProtocolUtils.JSONCodec.stringValue(settings["provider"])
+            )
+        }
     }
 
     public struct ConfiguredModel: Sendable {
@@ -114,7 +222,8 @@ public enum AIProviders {
             maxTokens: Int? = nil,
             temperature: Double? = nil,
             providerOptions: [String: JSONValue]? = nil,
-            timestampEpochSeconds: Int64 = 1_700_000_000
+            timestampEpochSeconds: Int64? = nil,
+            clock: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
         ) throws -> HTTPRequest {
             let req = AIProtocolUtils.LLMRequest(
                 model: descriptor,
@@ -125,7 +234,65 @@ public enum AIProviders {
                 temperature: temperature,
                 providerOptions: providerOptions
             )
-            return try route.prepareHTTPRequest(for: req, timestampEpochSeconds: timestampEpochSeconds)
+            return try route.prepareHTTPRequest(
+                for: req,
+                timestampEpochSeconds: timestampEpochSeconds,
+                clock: clock
+            )
+        }
+
+        /// Executes a live streaming request for this configured model, yielding incremental `LLMEvent`s as chunks arrive.
+        public func streamEvents(
+            messages: [AIProtocolUtils.Message],
+            system: [AIProtocolUtils.TextPart] = [],
+            tools: [AIProtocolUtils.ToolEntry] = [],
+            maxTokens: Int? = nil,
+            temperature: Double? = nil,
+            providerOptions: [String: JSONValue]? = nil,
+            transport: any HTTPTransport,
+            timestampEpochSeconds: Int64? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) -> AsyncThrowingStream<AIProtocolUtils.LLMEvent, Error> {
+            let req = AIProtocolUtils.LLMRequest(
+                model: descriptor,
+                system: system,
+                messages: messages,
+                tools: tools,
+                maxTokens: maxTokens,
+                temperature: temperature,
+                providerOptions: providerOptions
+            )
+            return route.streamEvents(
+                req,
+                transport: transport,
+                timestampEpochSeconds: timestampEpochSeconds,
+                clock: clock
+            )
+        }
+
+        /// Bridges this configured provider model directly into a runnable `AISchema.LanguageModel`.
+        public func asLanguageModel(
+            transport: (any HTTPTransport)? = nil,
+            options: AISchema.RequestOptions? = nil,
+            capabilities: AISchema.Capabilities? = nil,
+            compatibility: AISchema.LanguageModelCompatibility? = nil,
+            clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) -> AISchema.LanguageModel {
+            let anyRoute = route.asAnyRoute(
+                defaultCompatibility: descriptor.compatibility,
+                defaultCapabilities: descriptor.capabilities,
+                options: options,
+                transport: transport,
+                clock: clock
+            )
+            return AISchema.LanguageModel.make(AISchema.LanguageModel.Input(
+                id: descriptor.id,
+                provider: descriptor.provider,
+                route: anyRoute,
+                options: options,
+                capabilities: capabilities,
+                compatibility: compatibility
+            ))
         }
     }
 
@@ -250,6 +417,71 @@ public enum AIProviders {
         var s = url.trimmingASCIIWhitespace()
         while s.hasSuffix("/") { s.removeLast() }
         return s
+    }
+
+    /// Resolves AWS Bedrock authentication (bearer token or SigV4) using `.sigV4` when credentials
+    /// are available so request signing honors the real wall-clock timestamp (or explicit test override).
+    public static func resolveBedrockAuth(
+        config: ProviderConfig,
+        region: String,
+        service: String = "bedrock",
+        name: String = "Bedrock Converse",
+        environment: any EnvironmentProviding = SystemEnvironment.shared
+    ) -> AIProtocolUtils.AuthStrategy {
+        if let explicit = config.auth { return explicit }
+        let explicitKey: String? = {
+            if case .explicit(let k) = config.apiKey { return k }
+            return nil
+        }()
+        let apiKey = config.bedrockAuthMode == .sigv4
+            ? nil
+            : (explicitKey ?? environment.variable("AWS_BEARER_TOKEN_BEDROCK"))
+        if let apiKey, !apiKey.isEmpty {
+            return .bearer(apiKey)
+        }
+        if let creds = config.credentials {
+            let scoped = AIProtocolUtils.BedrockAuth.Credentials(
+                region: region,
+                accessKeyId: creds.accessKeyId,
+                secretAccessKey: creds.secretAccessKey,
+                sessionToken: creds.sessionToken
+            )
+            return .sigV4(scoped, service: service, name: name)
+        }
+        if let accessKey = environment.variable("AWS_ACCESS_KEY_ID"), !accessKey.isEmpty,
+           let secretKey = environment.variable("AWS_SECRET_ACCESS_KEY"), !secretKey.isEmpty {
+            let envCreds = AIProtocolUtils.BedrockAuth.Credentials(
+                region: region,
+                accessKeyId: accessKey,
+                secretAccessKey: secretKey,
+                sessionToken: environment.variable("AWS_SESSION_TOKEN")
+            )
+            return .sigV4(envCreds, service: service, name: name)
+        }
+        let chain = AIProtocolUtils.BedrockAuth.defaultChain(
+            .init(region: region, profile: config.profile),
+            environment: environment
+        )
+        return .custom { request in
+            let creds: AIProtocolUtils.BedrockAuth.Credentials
+            switch chain {
+            case .staticCredentials(let c): creds = c
+            case .resolver(let fn): creds = try fn()
+            }
+            var headers = request.headers
+            headers["content-type"] = "application/json"
+            let signed = try AIProtocolUtils.BedrockAuth.signRequest(
+                method: request.method,
+                url: request.url,
+                body: request.body ?? [],
+                headers: headers,
+                credentials: creds,
+                service: service,
+                name: name,
+                timestampEpochSeconds: Int64(Date().timeIntervalSince1970)
+            )
+            return HTTPRequest(method: request.method, url: request.url, headers: signed, body: request.body)
+        }
     }
 
     // MARK: - 1. Alibaba (alibaba.ts, alibaba/messages.ts, alibaba/responses.ts — 11 symbols)
@@ -391,14 +623,11 @@ public enum AIProviders {
                 credentialsRegion: input.credentials?.region,
                 environment: environment
             )
-            let explicitKey: String? = {
-                if case .explicit(let k) = input.apiKey { return k }
-                return nil
-            }()
-            let auth = AIProtocolUtils.BedrockAuth.resolveAuth(
-                .init(apiKey: explicitKey, credentials: input.credentials, profile: input.profile),
+            let auth = AIProviders.resolveBedrockAuth(
+                config: input,
                 region: region,
-                options: .init(service: "bedrock-mantle", name: "Bedrock Mantle", mode: input.bedrockAuthMode),
+                service: "bedrock-mantle",
+                name: "Bedrock Mantle",
                 environment: environment
             )
             return ConfiguredProvider(
@@ -473,14 +702,11 @@ public enum AIProviders {
                 credentialsRegion: input.credentials?.region,
                 environment: environment
             )
-            let explicitKey: String? = {
-                if case .explicit(let k) = input.apiKey { return k }
-                return nil
-            }()
-            let auth = AIProtocolUtils.BedrockAuth.resolveAuth(
-                .init(apiKey: explicitKey, credentials: input.credentials, profile: input.profile),
+            let auth = AIProviders.resolveBedrockAuth(
+                config: input,
                 region: region,
-                options: .init(mode: input.bedrockAuthMode),
+                service: "bedrock",
+                name: "Bedrock Converse",
                 environment: environment
             )
             let configured = AIProtocols.BedrockConverse.route.with(
@@ -1147,7 +1373,8 @@ public enum AIProviders {
         public static let `protocol` = AIProtocols.ChatProtocolSpec(
             id: "digitalocean-chat", framing: .sseWithDone,
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in try AIProtocols.OpenAIChat.fromRequest(req, useCacheControl: true) },
-            parseStream: AIProtocols.OpenAIChat.parseSSEStream
+            parseStream: AIProtocols.OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
         // parity: ai/src/providers/digitalocean.ts#route [status=implemented hash=e1d637b751cf]
         public static let route = AIProtocols.ChatRouteSpec(id: id, provider: id, providerMetadataKey: id, protocol: `protocol`, defaultBaseURL: defaultBaseURL, path: "/chat/completions")

@@ -1597,46 +1597,313 @@ public enum AIRequestExecutor {
         }
     }
 
+    private static let noBodyStatuses: Set<Int> = [101, 204, 205, 304]
+
+    private static func timeoutMillis(
+        _ value: AISchema.HttpTimeout?,
+        fallback: Double? = nil
+    ) -> Double? {
+        switch value {
+        case .disabled:
+            return nil
+        case .milliseconds(let ms) where ms.isFinite && ms > 0:
+            return ms
+        case .milliseconds:
+            return nil
+        case .none:
+            return fallback
+        }
+    }
+
+    private static func timeoutError(
+        url: String,
+        operation: HttpOperation,
+        message: String,
+        http: AISchema.HttpContext? = nil
+    ) -> AISchema.AIError {
+        AISchema.AIError(reason: .transport(AISchema.TransportError(
+            message: message,
+            http: http,
+            transport: .http,
+            operation: operation.asTransportOperation,
+            code: "Timeout",
+            url: url
+        )))
+    }
+
+    private static func raceWithTimeout<T: Sendable>(
+        ms: Double?,
+        onTimeout: @escaping @Sendable () -> AISchema.AIError,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        guard let ms else {
+            return try await operation()
+        }
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(for: .milliseconds(ms))
+                throw onTimeout()
+            }
+            guard let result = try await group.next() else {
+                throw onTimeout()
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private final class StreamTimeoutCoordinator: Sendable {
+        private struct State: Sendable {
+            var completed = false
+            var readerTask: Task<Void, Never>?
+            var chunkTimerTask: Task<Void, Never>?
+            var totalTimerTask: Task<Void, Never>?
+        }
+
+        private let state = Mutex(State())
+        private let continuation: AsyncThrowingStream<[UInt8], Error>.Continuation
+
+        init(continuation: AsyncThrowingStream<[UInt8], Error>.Continuation) {
+            self.continuation = continuation
+        }
+
+        func setReaderTask(_ task: Task<Void, Never>) {
+            let shouldCancel = state.withLock { s -> Bool in
+                if s.completed { return true }
+                s.readerTask = task
+                return false
+            }
+            if shouldCancel { task.cancel() }
+        }
+
+        func setTotalTimerTask(_ task: Task<Void, Never>) {
+            let shouldCancel = state.withLock { s -> Bool in
+                if s.completed { return true }
+                s.totalTimerTask = task
+                return false
+            }
+            if shouldCancel { task.cancel() }
+        }
+
+        func resetChunkTimer(ms: Double, error: AISchema.AIError) {
+            let previous = state.withLock { s -> Task<Void, Never>? in
+                guard !s.completed else { return nil }
+                let old = s.chunkTimerTask
+                s.chunkTimerTask = Task { [weak self] in
+                    do {
+                        try await Task.sleep(for: .milliseconds(ms))
+                    } catch {
+                        return
+                    }
+                    self?.finishFailure(error, cancelReader: true)
+                }
+                return old
+            }
+            previous?.cancel()
+        }
+
+        func yield(_ chunk: [UInt8]) {
+            let active = state.withLock { !$0.completed }
+            if active {
+                continuation.yield(chunk)
+            }
+        }
+
+        func finishSuccess() {
+            let tasks = state.withLock { s -> [Task<Void, Never>]? in
+                guard !s.completed else { return nil }
+                s.completed = true
+                let toCancel = [s.chunkTimerTask, s.totalTimerTask].compactMap { $0 }
+                s.chunkTimerTask = nil
+                s.totalTimerTask = nil
+                s.readerTask = nil
+                return toCancel
+            }
+            guard let tasks else { return }
+            for task in tasks { task.cancel() }
+            continuation.finish()
+        }
+
+        func finishFailure(_ error: any Error, cancelReader: Bool) {
+            let tasks = state.withLock { s -> [Task<Void, Never>]? in
+                guard !s.completed else { return nil }
+                s.completed = true
+                var toCancel = [s.chunkTimerTask, s.totalTimerTask].compactMap { $0 }
+                if cancelReader, let reader = s.readerTask {
+                    toCancel.append(reader)
+                }
+                s.chunkTimerTask = nil
+                s.totalTimerTask = nil
+                s.readerTask = nil
+                return toCancel
+            }
+            guard let tasks else { return }
+            for task in tasks { task.cancel() }
+            continuation.finish(throwing: error)
+        }
+
+        func cancelAll() {
+            let tasks = state.withLock { s -> [Task<Void, Never>] in
+                s.completed = true
+                let toCancel = [s.chunkTimerTask, s.totalTimerTask, s.readerTask].compactMap { $0 }
+                s.chunkTimerTask = nil
+                s.totalTimerTask = nil
+                s.readerTask = nil
+                return toCancel
+            }
+            for task in tasks { task.cancel() }
+        }
+    }
+
+    private static func withBodyTimeouts(
+        _ raw: ExecutorResponse,
+        chunkTimeoutMs: Double?,
+        deadline: ContinuousClock.Instant?
+    ) -> ExecutorResponse {
+        guard !noBodyStatuses.contains(raw.status),
+              chunkTimeoutMs != nil || deadline != nil,
+              case .streaming(let source) = raw.body
+        else {
+            return raw
+        }
+
+        let http = responseHttp(raw)
+        let url = raw.request.url
+        let wrapped = AsyncThrowingStream<[UInt8], Error> { continuation in
+            let coordinator = StreamTimeoutCoordinator(continuation: continuation)
+            let chunkError = timeoutError(
+                url: url,
+                operation: .read,
+                message: "Timed out waiting for response data",
+                http: http
+            )
+            let totalError = timeoutError(
+                url: url,
+                operation: .read,
+                message: "Timed out waiting for the response to complete",
+                http: http
+            )
+
+            if let deadline {
+                let remaining = ContinuousClock.now.duration(to: deadline)
+                if remaining <= .zero {
+                    coordinator.finishFailure(totalError, cancelReader: true)
+                    return
+                }
+                let totalTask = Task {
+                    do {
+                        try await Task.sleep(for: remaining)
+                    } catch {
+                        return
+                    }
+                    coordinator.finishFailure(totalError, cancelReader: true)
+                }
+                coordinator.setTotalTimerTask(totalTask)
+            }
+
+            if let chunkTimeoutMs {
+                coordinator.resetChunkTimer(ms: chunkTimeoutMs, error: chunkError)
+            }
+
+            let readerTask = Task {
+                do {
+                    for try await chunk in source {
+                        if Task.isCancelled { return }
+                        if let chunkTimeoutMs {
+                            coordinator.resetChunkTimer(ms: chunkTimeoutMs, error: chunkError)
+                        }
+                        coordinator.yield(chunk)
+                    }
+                    if !Task.isCancelled {
+                        coordinator.finishSuccess()
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    coordinator.finishFailure(error, cancelReader: false)
+                }
+            }
+            coordinator.setReaderTask(readerTask)
+
+            continuation.onTermination = { _ in
+                coordinator.cancelAll()
+            }
+        }
+        return ExecutorResponse(request: raw.request, head: raw.head, body: .streaming(wrapped))
+    }
+
     private static func executeOnce(
         transport: any HTTPTransport,
         request: HTTPRequest,
         middleware: HttpMiddleware?,
         timeout: AISchema.RequestTimeout?
     ) async throws -> ExecutorResponse {
-        _ = timeout
+        let started = ContinuousClock.now
+        let limits = AISchema.timeoutConfig(timeout)
+        // Unlike header and chunk limits, the whole-request budget has no default.
+        let totalMs = timeoutMillis(limits.total, fallback: nil)
+        let headersMs = timeoutMillis(limits.headers, fallback: AISchema.DEFAULT_HTTP_TIMEOUT_MS)
+        let chunkMs = timeoutMillis(limits.chunk, fallback: AISchema.DEFAULT_CHUNK_TIMEOUT_MS)
+        let headersLimitMs: Double? = switch (headersMs, totalMs) {
+        case let (h?, t?): min(h, t)
+        case let (h?, nil): h
+        case let (nil, t?): t
+        case (nil, nil): nil
+        }
+
         let baseHandler: HttpHandler = { req in
             let streaming = try await transport.stream(req)
             return ExecutorResponse(request: req, streaming: streaming)
         }
         let raw: ExecutorResponse
         do {
-            if let middleware {
-                raw = try await middleware(request, baseHandler)
-            } else {
-                raw = try await baseHandler(request)
-            }
+            raw = try await raceWithTimeout(
+                ms: headersLimitMs,
+                onTimeout: {
+                    timeoutError(
+                        url: request.url,
+                        operation: .request,
+                        message: "Timed out waiting for response headers"
+                    )
+                },
+                operation: {
+                    if let middleware {
+                        return try await middleware(request, baseHandler)
+                    } else {
+                        return try await baseHandler(request)
+                    }
+                }
+            )
         } catch let aiError as AISchema.AIError {
             throw aiError
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw httpError(error: error, request: request, operation: .request)
         }
 
-        if raw.status < 400 {
-            return raw
+        let deadline: ContinuousClock.Instant? = totalMs.map { started.advanced(by: .milliseconds($0)) }
+        let timedResponse = withBodyTimeouts(raw, chunkTimeoutMs: chunkMs, deadline: deadline)
+
+        if timedResponse.status < 400 {
+            return timedResponse
         }
 
         var bodyText: String? = nil
         var readCause: String? = nil
         do {
-            bodyText = try await raw.text()
+            bodyText = try await timedResponse.text()
         } catch {
             readCause = String(describing: rootCause(error))
         }
         throw httpFailure(
-            message: providerMessage(status: raw.status, body: bodyText),
-            url: raw.request.url,
-            status: raw.status,
-            responseHeaders: raw.headers,
+            message: providerMessage(status: timedResponse.status, body: bodyText),
+            url: timedResponse.request.url,
+            status: timedResponse.status,
+            responseHeaders: timedResponse.headers,
             responseBody: bodyText,
             cause: readCause
         )

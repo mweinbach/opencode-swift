@@ -4,6 +4,11 @@
 /// Strictly PORTABLE tier: zero OS imports, all HTTP via `OpenCodePlatform.HTTPTransport`
 /// and environment lookups via `OpenCodePlatform.EnvironmentProviding`.
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import OpenCodePlatform
 import OpenCodeSchema
 import OpenCodeUtil
@@ -124,7 +129,8 @@ extension AIProviders {
                 if let user = req.providerOptions?["user"] { body["user"] = user }
                 return body
             },
-            parseStream: AIProtocols.OpenAIChat.parseSSEStream
+            parseStream: AIProtocols.OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
         // parity: ai/src/providers/groq.ts#route [status=implemented hash=85482bd2cc0a]
         public static let route = AIProtocols.ChatRouteSpec(id: "groq-chat", provider: id, providerMetadataKey: id, protocol: `protocol`, defaultBaseURL: defaultBaseURL, path: "/chat/completions")
@@ -730,7 +736,8 @@ extension AIProviders {
                 }
                 return body
             },
-            parseStream: AIProtocols.OpenAIChat.parseSSEStream
+            parseStream: AIProtocols.OpenAIChat.parseSSEStream,
+            makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
 
         // parity: ai/src/providers/openrouter.ts#route [status=implemented hash=cd9c33d5b1c2]
@@ -1150,5 +1157,418 @@ extension AIProviders {
 
     public static func catalogEntry(for providerID: String) -> ProviderCatalogEntry? {
         catalog.first { $0.id == providerID }
+    }
+
+    // MARK: - Live Provider Bridge (`AIProviders.*` -> `AISchema.LanguageModel` / `AIRoute.AnyRoute`)
+
+    /// Normalizes package specifiers (`@opencode/ai/providers/...`, `@opencode-ai/ai/...`,
+    /// `aisdk:...`, `@ai-sdk/...`, or bare provider IDs) to canonical lowercase keys.
+    public static func normalizePackageSpecifier(_ raw: String) -> String {
+        var s = raw.trimmingASCIIWhitespace()
+        if s.hasPrefix("aisdk:") {
+            s = String(s.dropFirst("aisdk:".count))
+        }
+        if s.hasPrefix("@opencode-ai/ai/") {
+            s = "@opencode/ai/" + s.dropFirst("@opencode-ai/ai/".count)
+        }
+        return s.lowercased()
+    }
+
+    /// Resolves any supported provider package specifier or bare provider ID into a fully configured
+    /// `ConfiguredModel` plus any route-derived query parameters (such as Azure `api-version`).
+    public static func resolveConfiguredModel(
+        package: String,
+        modelID: String,
+        options: ProviderConfig = ProviderConfig(),
+        environment: any EnvironmentProviding = SystemEnvironment.shared
+    ) throws(ProviderConfigurationError) -> (model: ConfiguredModel, queryParams: [String: String]) {
+        let normalized = normalizePackageSpecifier(package)
+        let extraQuery = options.queryParams ?? [:]
+
+        switch normalized {
+        // Anthropic & Anthropic-compatible
+        case "@opencode/ai/providers/anthropic", "anthropic", "@ai-sdk/anthropic":
+            if case .explicit = options.apiKey, options.authToken != nil {
+                throw ProviderConfigurationError(provider: Anthropic.id, message: "Anthropic apiKey cannot be combined with authToken")
+            }
+            return (Anthropic.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/anthropic-compatible", "anthropic-compatible":
+            if case .explicit = options.apiKey, options.authToken != nil {
+                throw ProviderConfigurationError(provider: options.providerOverride ?? AnthropicCompatible.id, message: "Anthropic-compatible apiKey cannot be combined with authToken")
+            }
+            return (try AnthropicCompatible.configure(options).model(modelID), extraQuery)
+
+        // OpenAI (Responses default + Chat Completions)
+        case "@opencode/ai/providers/openai", "@opencode/ai/providers/openai/responses", "openai", "@ai-sdk/openai":
+            let model = OpenAI.configure(options, environment: environment).model(
+                modelID,
+                route: AIProtocols.OpenAIResponses.route,
+                providerOptions: OpenAIOptions.withOpenAIOptions(modelID, providerOptions: options.providerOptions)
+            )
+            return (model, extraQuery)
+
+        case "@opencode/ai/providers/openai/chat":
+            let model = OpenAI.configure(options, environment: environment).model(
+                modelID,
+                route: AIProtocols.OpenAIChat.route,
+                capabilities: .init(promptCacheKey: true),
+                providerOptions: OpenAIOptions.withOpenAIOptions(modelID, providerOptions: options.providerOptions)
+            )
+            return (model, extraQuery)
+
+        // OpenAI-compatible (Chat & Responses)
+        case "@opencode/ai/providers/openai-compatible", "openai-compatible", "@ai-sdk/openai-compatible":
+            return (OpenAICompatible.configure(options).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/openai-compatible/responses", "@opencode/ai/providers/openai-compatible-responses", "openai-compatible-responses":
+            return (OpenAICompatibleResponses.configure(options).model(modelID), extraQuery)
+
+        // Google AI Studio (Gemini & Interactions)
+        case "@opencode/ai/providers/google", "google", "@ai-sdk/google":
+            return (Google.configure(options, environment: environment).model(modelID, route: AIProtocols.Gemini.route), extraQuery)
+
+        case "@opencode/ai/providers/google/interactions", "google-interactions":
+            return (Google.configure(options, environment: environment).model(modelID, route: AIProtocols.GoogleInteractions.route), extraQuery)
+
+        // Google Vertex (Gemini, Chat, Messages, Mistral, Responses, Interactions)
+        case "@opencode/ai/providers/google-vertex", "@opencode/ai/providers/google-vertex/gemini", "google-vertex", "@ai-sdk/google-vertex":
+            return (try GoogleVertex.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/google-vertex/chat", "@opencode/ai/providers/google-vertex-chat":
+            return (try GoogleVertexChat.configure(GoogleVertexShared.oauthSettings(label: "Chat", input: options), environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/google-vertex/messages", "@opencode/ai/providers/google-vertex-messages", "@ai-sdk/google-vertex/anthropic":
+            return (try GoogleVertexMessages.configure(GoogleVertexShared.oauthSettings(label: "Messages", input: options), environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/google-vertex/mistral", "@opencode/ai/providers/google-vertex-mistral":
+            return (try GoogleVertexMistral.configure(GoogleVertexShared.oauthSettings(label: "Mistral", input: options), environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/google-vertex/responses", "@opencode/ai/providers/google-vertex-responses":
+            return (try GoogleVertexResponses.configure(GoogleVertexShared.oauthSettings(label: "Responses", input: options), environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/google-vertex/interactions", "@opencode/ai/providers/google-vertex-interactions":
+            return (try GoogleVertexInteractions.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Amazon Bedrock (Converse + Mantle)
+        case "@opencode/ai/providers/amazon-bedrock", "amazon-bedrock", "bedrock", "@ai-sdk/amazon-bedrock":
+            return (AmazonBedrock.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/amazon-bedrock/mantle", "@opencode/ai/providers/amazon-bedrock/mantle/responses", "amazon-bedrock-mantle", "@ai-sdk/amazon-bedrock/mantle":
+            return (AmazonBedrockMantle.configure(options, environment: environment).model(modelID, route: AmazonBedrockMantle.responsesRoute), extraQuery)
+
+        case "@opencode/ai/providers/amazon-bedrock/mantle/chat":
+            return (AmazonBedrockMantle.configure(options, environment: environment).model(modelID, route: AmazonBedrockMantle.chatRoute), extraQuery)
+
+        case "@opencode/ai/providers/amazon-bedrock/mantle/messages":
+            let region = AIProtocolUtils.BedrockAuth.resolveRegion(
+                region: options.region,
+                credentialsRegion: options.credentials?.region,
+                environment: environment
+            )
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = "https://bedrock-mantle.\(region).api.aws/anthropic/v1" }
+            return (AmazonBedrockMantle.configure(adjusted, environment: environment).model(modelID, route: AmazonBedrockMantle.messagesRoute), extraQuery)
+
+        // OpenRouter
+        case "@opencode/ai/providers/openrouter", "openrouter", "@openrouter/ai-sdk-provider":
+            return (OpenRouter.configure(options, environment: environment).model(modelID, route: OpenRouter.route), extraQuery)
+
+        case "@opencode/ai/providers/openrouter/responses":
+            return (OpenRouter.configure(options, environment: environment).model(modelID, route: OpenRouter.responsesRoute), extraQuery)
+
+        // xAI
+        case "@opencode/ai/providers/xai", "xai", "@ai-sdk/xai":
+            return (XAI.configure(options, environment: environment).model(modelID, route: XAI.responsesRoute), extraQuery)
+
+        case "@opencode/ai/providers/xai/chat":
+            return (XAI.configure(options, environment: environment).model(modelID, route: XAI.chatRoute), extraQuery)
+
+        // Groq
+        case "@opencode/ai/providers/groq", "groq", "@ai-sdk/groq":
+            return (Groq.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // DeepSeek
+        case "@opencode/ai/providers/deepseek", "deepseek":
+            return (DeepSeek.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Mistral
+        case "@opencode/ai/providers/mistral", "mistral", "@ai-sdk/mistral":
+            return (Mistral.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Cerebras
+        case "@opencode/ai/providers/cerebras", "cerebras", "@ai-sdk/cerebras":
+            return (Cerebras.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // TogetherAI
+        case "@opencode/ai/providers/togetherai", "togetherai", "@ai-sdk/togetherai":
+            return (TogetherAI.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Fireworks
+        case "@opencode/ai/providers/fireworks", "fireworks", "fireworks-ai":
+            return (Fireworks.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Cohere
+        case "@opencode/ai/providers/cohere", "cohere", "@ai-sdk/cohere":
+            return (Cohere.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/cohere/chat":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = Cohere.compatibilityBaseURL }
+            return (Cohere.configure(adjusted, environment: environment).model(modelID, route: Cohere.chatRoute), extraQuery)
+
+        // Azure
+        case "@opencode/ai/providers/azure", "@opencode/ai/providers/azure/responses", "azure", "@ai-sdk/azure":
+            let ep = try Azure.resolveEndpoint(input: options, modelID: modelID)
+            var adjusted = options
+            adjusted.baseURL = ep.baseURL
+            return (Azure.configure(adjusted, environment: environment).model(modelID, route: Azure.responsesRoute), ep.query)
+
+        case "@opencode/ai/providers/azure/chat":
+            let ep = try Azure.resolveEndpoint(input: options, modelID: modelID)
+            var adjusted = options
+            adjusted.baseURL = ep.baseURL
+            return (Azure.configure(adjusted, environment: environment).model(modelID, route: Azure.chatRoute, capabilities: .init(promptCacheKey: true)), ep.query)
+
+        case "@opencode/ai/providers/azure/messages":
+            let base: String
+            if let b = options.baseURL { base = trimBaseURL(b) }
+            else if let r = options.resourceName { base = "https://\(r.trimmingASCIIWhitespace()).services.ai.azure.com/anthropic/v1" }
+            else { throw ProviderConfigurationError(provider: Azure.id, message: "Azure requires resourceName or baseURL") }
+            var adjusted = options
+            adjusted.baseURL = base
+            let keyAuth = resolveHeaderAuth(config: options, envVars: ["AZURE_OPENAI_API_KEY"], headerName: "x-api-key", environment: environment)
+            adjusted.auth = options.auth ?? .sequence([.remove("authorization"), keyAuth])
+            return (Azure.configure(adjusted, environment: environment).model(modelID, route: Azure.messagesRoute), extraQuery)
+
+        // Alibaba
+        case "@opencode/ai/providers/alibaba", "@opencode/ai/providers/alibaba/chat", "alibaba", "@ai-sdk/alibaba":
+            var adjusted = options
+            if adjusted.baseURL == nil && adjusted.region == nil { adjusted.region = "ap-southeast-1" }
+            return (try Alibaba.configure(adjusted, environment: environment).model(modelID, route: Alibaba.chatRoute), extraQuery)
+
+        case "@opencode/ai/providers/alibaba/messages":
+            var adjusted = options
+            if adjusted.baseURL == nil && adjusted.region == nil { adjusted.region = "ap-southeast-1" }
+            return (try Alibaba.configure(adjusted, environment: environment).model(modelID, route: Alibaba.messagesRoute), extraQuery)
+
+        case "@opencode/ai/providers/alibaba/responses":
+            var adjusted = options
+            if adjusted.baseURL == nil && adjusted.region == nil { adjusted.region = "ap-southeast-1" }
+            return (try Alibaba.configure(adjusted, environment: environment).model(modelID, route: Alibaba.responsesRoute), extraQuery)
+
+        // Baseten
+        case "@opencode/ai/providers/baseten", "baseten":
+            return (Baseten.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // Cloudflare
+        case "@opencode/ai/providers/cloudflare-ai-gateway", "cloudflare-ai-gateway", "ai-gateway-provider":
+            return (try CloudflareAIGateway.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/cloudflare-workers-ai", "cloudflare-workers-ai":
+            return (try CloudflareWorkersAI.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // DeepInfra
+        case "@opencode/ai/providers/deepinfra", "deepinfra", "@ai-sdk/deepinfra":
+            return (DeepInfra.configure(options, environment: environment).model(modelID), extraQuery)
+
+        // DigitalOcean
+        case "@opencode/ai/providers/digitalocean", "digitalocean":
+            return (DigitalOcean.configure(options, environment: environment).model(modelID, route: DigitalOcean.route), extraQuery)
+
+        case "@opencode/ai/providers/digitalocean/responses":
+            return (DigitalOcean.configure(options, environment: environment).model(modelID, route: DigitalOcean.responsesRoute), extraQuery)
+
+        // Meta
+        case "@opencode/ai/providers/meta", "@opencode/ai/providers/meta/responses", "meta":
+            return (Meta.configure(options, environment: environment).model(modelID, route: Meta.responsesRoute), extraQuery)
+
+        case "@opencode/ai/providers/meta/chat":
+            return (Meta.configure(options, environment: environment).model(modelID, route: Meta.chatRoute), extraQuery)
+
+        case "@opencode/ai/providers/meta/messages":
+            return (Meta.configure(options, environment: environment).model(modelID, route: Meta.messagesRoute), extraQuery)
+
+        // MiniMax
+        case "@opencode/ai/providers/minimax", "@opencode/ai/providers/minimax/messages", "minimax":
+            return (MiniMax.configure(options, environment: environment).model(modelID, route: AIProtocols.AnthropicMessages.route), extraQuery)
+
+        case "@opencode/ai/providers/minimax/chat":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = MiniMax.defaultBaseURL }
+            return (MiniMax.configure(adjusted, environment: environment).model(modelID, route: AIProtocols.OpenAIChat.route), extraQuery)
+
+        case "@opencode/ai/providers/minimax/responses":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = MiniMax.defaultBaseURL }
+            return (MiniMax.configure(adjusted, environment: environment).model(modelID, route: AIProtocols.OpenAICompatibleResponses.route), extraQuery)
+
+        // Moonshot
+        case "@opencode/ai/providers/moonshot", "@opencode/ai/providers/moonshot/chat", "moonshot", "moonshotai":
+            return (Moonshot.configure(options, environment: environment).model(modelID, route: AIProtocols.OpenAIChat.route), extraQuery)
+
+        case "@opencode/ai/providers/moonshot/messages":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = Moonshot.anthropicBaseURL }
+            return (Moonshot.configure(adjusted, environment: environment).model(modelID, route: AIProtocols.AnthropicMessages.route), extraQuery)
+
+        case "@opencode/ai/providers/moonshot/responses":
+            return (Moonshot.configure(options, environment: environment).model(modelID, route: AIProtocols.OpenAICompatibleResponses.route), extraQuery)
+
+        // Venice
+        case "@opencode/ai/providers/venice", "venice", "venice-ai-sdk-provider":
+            return (Venice.configure(options, environment: environment).model(modelID, route: Venice.chatRoute), extraQuery)
+
+        case "@opencode/ai/providers/venice/responses":
+            return (Venice.configure(options, environment: environment).model(modelID, route: Venice.responsesRoute), extraQuery)
+
+        // Vercel AI Gateway
+        case "@opencode/ai/providers/vercel-ai-gateway", "vercel-ai-gateway", "@ai-sdk/gateway":
+            let prov = VercelAIGateway.configure(options, environment: environment)
+            if modelID.hasPrefix("openai/gpt-") || modelID.hasPrefix("spacexai/grok-") {
+                return (prov.model(modelID, route: VercelAIGateway.responsesRoute), extraQuery)
+            }
+            if modelID.hasPrefix("meta/muse-") {
+                return (prov.model(modelID, route: VercelAIGateway.chatRoute, compatibility: .init(reasoningField: "reasoning")), extraQuery)
+            }
+            return (prov.model(modelID, route: VercelAIGateway.messagesRoute, compatibility: .init(requireSignature: modelID.hasPrefix("anthropic/"))), extraQuery)
+
+        case "@opencode/ai/providers/vercel-ai-gateway/chat":
+            return (VercelAIGateway.configure(options, environment: environment).model(modelID, route: VercelAIGateway.chatRoute, compatibility: .init(reasoningField: "reasoning")), extraQuery)
+
+        case "@opencode/ai/providers/vercel-ai-gateway/messages":
+            return (VercelAIGateway.configure(options, environment: environment).model(modelID, route: VercelAIGateway.messagesRoute, compatibility: .init(requireSignature: modelID.hasPrefix("anthropic/"))), extraQuery)
+
+        case "@opencode/ai/providers/vercel-ai-gateway/responses":
+            return (VercelAIGateway.configure(options, environment: environment).model(modelID, route: VercelAIGateway.responsesRoute), extraQuery)
+
+        // Z.ai & Z.ai Coding Plan
+        case "@opencode/ai/providers/zai", "@opencode/ai/providers/zai/chat", "zai":
+            return (ZAI.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/zai-coding-plan", "@opencode/ai/providers/zai-coding-plan/chat", "zai-coding-plan":
+            return (ZAICodingPlan.configure(options, environment: environment).model(modelID), extraQuery)
+
+        case "@opencode/ai/providers/zai-coding-plan/messages":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = ZAICodingPlan.anthropicBaseURL }
+            let route = AIProtocols.ChatRouteSpec(
+                id: "zai-coding-plan-messages",
+                provider: ZAICodingPlan.id,
+                protocol: AIProtocols.ZAIMessages.`protocol`,
+                defaultBaseURL: ZAICodingPlan.anthropicBaseURL,
+                path: "/messages",
+                defaultHeaders: ["anthropic-version": "2023-06-01"]
+            )
+            return (ZAICodingPlan.configure(adjusted, environment: environment).model(modelID, route: route), extraQuery)
+
+        case "@opencode/ai/providers/zai-coding-plan/responses":
+            var adjusted = options
+            if adjusted.baseURL == nil { adjusted.baseURL = ZAICodingPlan.responsesBaseURL }
+            return (ZAICodingPlan.configure(adjusted, environment: environment).model(modelID, route: AIProtocols.OpenAICompatibleResponses.route), extraQuery)
+
+        // OpenCode hosted inference
+        case "@opencode/ai/providers/opencode", "opencode":
+            let baseURL = options.baseURL ?? "https://opencode.ai/zen/v1"
+            let auth = resolveBearerAuth(config: options, envVars: ["OPENCODE_API_KEY"], environment: environment)
+            let route = AIProtocols.OpenAIChat.route.with(
+                id: OpenCode.id,
+                provider: OpenCode.id,
+                providerMetadataKey: OpenCode.id,
+                baseURL: baseURL,
+                headers: options.headers,
+                providerOptions: options.providerOptions,
+                auth: auth
+            )
+            let provider = ConfiguredProvider(
+                id: OpenCode.id,
+                baseURL: baseURL,
+                auth: auth,
+                headers: options.headers ?? [:],
+                routes: [route],
+                defaultRoute: route,
+                defaultProviderOptions: options.providerOptions ?? [:]
+            )
+            return (provider.model(modelID, route: route), extraQuery)
+
+        default:
+            throw ProviderConfigurationError(
+                provider: package,
+                message: "Unsupported AI provider package specifier: \(package)"
+            )
+        }
+    }
+
+    /// Instantiates a live, runnable `AISchema.LanguageModel` for any supported provider package specifier
+    /// (`@opencode/ai/providers/anthropic`, `openai`, `google`, `amazon-bedrock`, `openrouter`, etc.)
+    /// backed by incremental `OpenCodePlatform.HTTPTransport` streaming.
+    public static func makeLanguageModel(
+        package: String,
+        modelID: String,
+        options: ProviderConfig = ProviderConfig(),
+        headers: [String: String]? = nil,
+        body: [String: JSONValue]? = nil,
+        timeout: AISchema.RequestTimeout? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        transport: (any HTTPTransport)? = nil,
+        clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+    ) throws(ProviderConfigurationError) -> AISchema.LanguageModel {
+        var effectiveConfig = options
+        if let headers, !headers.isEmpty {
+            var merged = effectiveConfig.headers ?? [:]
+            for (k, v) in headers { merged[k] = v }
+            effectiveConfig.headers = merged
+        }
+        if let body, !body.isEmpty {
+            effectiveConfig.body = AIProtocolUtils.JSONCodec.mergeObjects(effectiveConfig.body, body)
+        }
+
+        let resolved = try resolveConfiguredModel(
+            package: package,
+            modelID: modelID,
+            options: effectiveConfig,
+            environment: environment
+        )
+        let httpOpts: AISchema.HttpOptions? = (!resolved.queryParams.isEmpty || effectiveConfig.body != nil)
+            ? AISchema.HttpOptions(
+                query: resolved.queryParams.isEmpty ? nil : resolved.queryParams,
+                body: effectiveConfig.body
+            )
+            : nil
+        let requestOpts = AISchema.RequestOptions(
+            timeout: timeout,
+            http: httpOpts,
+            providerOptions: effectiveConfig.providerOptions
+        )
+        return resolved.model.asLanguageModel(
+            transport: transport,
+            options: requestOpts.isEmpty ? nil : requestOpts,
+            clock: clock
+        )
+    }
+
+    /// Convenience overload constructing a runnable `AISchema.LanguageModel` from an untyped settings dictionary
+    /// (e.g. from `CoreModel.Resolver.ResolvedModelDescriptor`).
+    public static func makeLanguageModel(
+        package: String,
+        modelID: String,
+        settings: [String: JSONValue],
+        headers: [String: String]? = nil,
+        body: [String: JSONValue]? = nil,
+        timeout: AISchema.RequestTimeout? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        transport: (any HTTPTransport)? = nil,
+        clock: @escaping @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+    ) throws(ProviderConfigurationError) -> AISchema.LanguageModel {
+        let config = ProviderConfig.from(settings: settings, headers: headers, body: body)
+        return try makeLanguageModel(
+            package: package,
+            modelID: modelID,
+            options: config,
+            timeout: timeout,
+            environment: environment,
+            transport: transport,
+            clock: clock
+        )
     }
 }

@@ -73,25 +73,116 @@ extension AIProtocols {
         }
     }
 
+    public struct DecodedImageResponse: Equatable, Hashable, Sendable {
+        public let images: [AIProtocolUtils.MediaAsset]
+        public let usage: AIProtocolUtils.MediaUsage?
+        public let providerMetadata: AIProtocolUtils.ProviderMetadata?
+
+        public init(
+            images: [AIProtocolUtils.MediaAsset],
+            usage: AIProtocolUtils.MediaUsage? = nil,
+            providerMetadata: AIProtocolUtils.ProviderMetadata? = nil
+        ) {
+            self.images = images
+            self.usage = usage
+            self.providerMetadata = providerMetadata
+        }
+    }
+
+    public struct DecodedSpeechResponse: Equatable, Hashable, Sendable {
+        public let audio: AIProtocolUtils.MediaAsset
+        public let timestamps: [AIProtocolUtils.SpeechTimestampItem]
+        public let usage: AIProtocolUtils.MediaUsage?
+        public let providerMetadata: AIProtocolUtils.ProviderMetadata?
+
+        public init(
+            audio: AIProtocolUtils.MediaAsset,
+            timestamps: [AIProtocolUtils.SpeechTimestampItem] = [],
+            usage: AIProtocolUtils.MediaUsage? = nil,
+            providerMetadata: AIProtocolUtils.ProviderMetadata? = nil
+        ) {
+            self.audio = audio
+            self.timestamps = timestamps
+            self.usage = usage
+            self.providerMetadata = providerMetadata
+        }
+    }
+
+    public struct TranscriptionWord: Equatable, Hashable, Sendable, Codable {
+        public let text: String
+        public let startSeconds: Double
+        public let endSeconds: Double
+        public let speaker: String?
+        public let confidence: Double?
+
+        public init(
+            text: String,
+            startSeconds: Double,
+            endSeconds: Double,
+            speaker: String? = nil,
+            confidence: Double? = nil
+        ) {
+            self.text = text
+            self.startSeconds = startSeconds
+            self.endSeconds = endSeconds
+            self.speaker = speaker
+            self.confidence = confidence
+        }
+    }
+
+    public struct DecodedTranscriptionResponse: Equatable, Hashable, Sendable {
+        public let text: String
+        public let language: String?
+        public let durationSeconds: Double?
+        public let segments: [AIProtocolUtils.TranscriptionSegment]
+        public let words: [TranscriptionWord]
+        public let usage: AIProtocolUtils.MediaUsage?
+        public let providerMetadata: AIProtocolUtils.ProviderMetadata?
+
+        public init(
+            text: String,
+            language: String? = nil,
+            durationSeconds: Double? = nil,
+            segments: [AIProtocolUtils.TranscriptionSegment] = [],
+            words: [TranscriptionWord] = [],
+            usage: AIProtocolUtils.MediaUsage? = nil,
+            providerMetadata: AIProtocolUtils.ProviderMetadata? = nil
+        ) {
+            self.text = text
+            self.language = language
+            self.durationSeconds = durationSeconds
+            self.segments = segments
+            self.words = words
+            self.usage = usage
+            self.providerMetadata = providerMetadata
+        }
+    }
+
     public struct MediaProtocolSpec: Sendable {
         public let identity: AIProtocolUtils.MediaIdentity
         public let mode: MediaMode
         public let defaultBaseURL: String?
         public let path: String
         public let buildBody: @Sendable ([String: JSONValue]) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue]
+        public let parseResponse: @Sendable (String) throws(AIProtocolUtils.ProtocolError) -> JSONValue
 
         public init(
             identity: AIProtocolUtils.MediaIdentity,
             mode: MediaMode,
             defaultBaseURL: String? = nil,
             path: String = "",
-            buildBody: @escaping @Sendable ([String: JSONValue]) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] = { $0 }
+            buildBody: @escaping @Sendable ([String: JSONValue]) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] = { $0 },
+            parseResponse: (@Sendable (String) throws(AIProtocolUtils.ProtocolError) -> JSONValue)? = nil
         ) {
             self.identity = identity
             self.mode = mode
             self.defaultBaseURL = defaultBaseURL
             self.path = path
             self.buildBody = buildBody
+            let routeID = identity.id
+            self.parseResponse = parseResponse ?? { raw throws(AIProtocolUtils.ProtocolError) in
+                try AIProtocolUtils.ProviderShared.parseJson(route: routeID, input: raw, message: "Invalid \(routeID) JSON response")
+            }
         }
 
         public func makeModel(_ input: MediaModelInput, pathOverride: String? = nil) -> MediaModelHandle {
@@ -524,6 +615,8 @@ extension AIProtocols {
     // MARK: - 7. DeepgramTranscription (packages/ai/src/protocols/deepgram-transcription.ts — 7 symbols)
 
     public enum DeepgramTranscription {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "deepgram-transcription", name: "Deepgram", provider: "deepgram")
+
         // parity: ai/src/protocols/deepgram-transcription.ts#DEFAULT_BASE_URL [status=implemented hash=0a1f66140d03]
         public static let DEFAULT_BASE_URL = "https://api.deepgram.com"
 
@@ -536,12 +629,182 @@ extension AIProtocols {
         // parity: ai/src/protocols/deepgram-transcription.ts#Request [status=implemented hash=c7a294bf58a6]
         public typealias Request = TranscriptionRequestPayload
 
+        public static func buildQuery(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: [String]] {
+            if request.prompt != nil {
+                throw routeIdentity.unsupported("media.prompt", "\(routeIdentity.name) does not accept a prompt")
+            }
+            var params: [String: JSONValue] = [
+                "model": .string(request.modelID),
+                "smart_format": .bool(true),
+            ]
+            if let lang = request.language {
+                params["language"] = .string(lang)
+            } else {
+                params["detect_language"] = .bool(true)
+            }
+            if request.diarize == true {
+                params["diarize_model"] = .string("latest")
+            }
+            if request.diarize == true || request.timestamps == "segment" {
+                params["utterances"] = .bool(true)
+            }
+            let merged = AIProtocolUtils.JSONCodec.mergeObjects(params, request.providerOptions)
+            return try AIProtocolUtils.MediaInput.query(route: routeIdentity.id, values: merged)
+        }
+
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            let query = try buildQuery(request)
+            let queryJSON: [String: JSONValue] = query.mapValues { vals in
+                vals.count == 1 ? .string(vals[0]) : .array(vals.map(JSONValue.string))
+            }
+            if let url = AIProtocolUtils.ProviderShared.mediaUrl(request.audio) {
+                return [
+                    "url": .string(url),
+                    "query": .object(queryJSON),
+                ]
+            }
+            let raw = try AIProtocolUtils.MediaInput.inlineBytes(route: routeIdentity.id, asset: request.audio)
+            return [
+                "audio_base64": .string(bytesToBase64(raw)),
+                "content_type": .string(request.audio.mediaType),
+                "query": .object(queryJSON),
+            ]
+        }
+
+        public static func decodeResponse(_ text: String) throws(AIProtocolUtils.ProtocolError) -> DecodedTranscriptionResponse {
+            let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                route: routeIdentity.id,
+                input: text,
+                message: "Invalid Deepgram transcription response"
+            )
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                  let results = AIProtocolUtils.JSONCodec.objectValue(obj["results"]),
+                  let channels = AIProtocolUtils.JSONCodec.arrayValue(results["channels"]),
+                  let firstChannel = channels.first.flatMap(AIProtocolUtils.JSONCodec.objectValue),
+                  let alternatives = AIProtocolUtils.JSONCodec.arrayValue(firstChannel["alternatives"]),
+                  let alternative = alternatives.first.flatMap(AIProtocolUtils.JSONCodec.objectValue),
+                  let transcript = AIProtocolUtils.JSONCodec.stringValue(alternative["transcript"])
+            else {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned no transcript", body: text)
+            }
+
+            func speakerString(_ value: JSONValue?) -> String? {
+                if let i = AIProtocolUtils.JSONCodec.intValue(value) { return String(i) }
+                return AIProtocolUtils.JSONCodec.stringValue(value)
+            }
+
+            func parseWord(_ raw: JSONValue) -> TranscriptionWord? {
+                guard let w = AIProtocolUtils.JSONCodec.objectValue(raw),
+                      let wordStr = AIProtocolUtils.JSONCodec.stringValue(w["punctuated_word"]) ?? AIProtocolUtils.JSONCodec.stringValue(w["word"]),
+                      let start = AIProtocolUtils.JSONCodec.doubleValue(w["start"]),
+                      let end = AIProtocolUtils.JSONCodec.doubleValue(w["end"])
+                else { return nil }
+                return TranscriptionWord(
+                    text: wordStr,
+                    startSeconds: start,
+                    endSeconds: end,
+                    speaker: speakerString(w["speaker"]),
+                    confidence: AIProtocolUtils.JSONCodec.doubleValue(w["confidence"])
+                )
+            }
+
+            let words = (AIProtocolUtils.JSONCodec.arrayValue(alternative["words"]) ?? []).compactMap(parseWord)
+
+            var segments: [AIProtocolUtils.TranscriptionSegment] = []
+            if let utterances = AIProtocolUtils.JSONCodec.arrayValue(results["utterances"]) {
+                for rawU in utterances {
+                    guard let u = AIProtocolUtils.JSONCodec.objectValue(rawU),
+                          let start = AIProtocolUtils.JSONCodec.doubleValue(u["start"]),
+                          let end = AIProtocolUtils.JSONCodec.doubleValue(u["end"]),
+                          let uttText = AIProtocolUtils.JSONCodec.stringValue(u["transcript"])
+                    else { continue }
+                    let uttWords = (AIProtocolUtils.JSONCodec.arrayValue(u["words"]) ?? []).compactMap(parseWord)
+                    if uttWords.isEmpty {
+                        segments.append(AIProtocolUtils.TranscriptionSegment(
+                            text: uttText,
+                            start: start,
+                            end: end,
+                            speaker: speakerString(u["speaker"])
+                        ))
+                    } else {
+                        let turns = AIProtocolUtils.SpeakerTurns.group(uttWords) { $0.speaker }
+                        for turn in turns where !turn.isEmpty {
+                            segments.append(AIProtocolUtils.TranscriptionSegment(
+                                text: turn.map(\.text).joined(separator: " "),
+                                start: turn.first!.startSeconds,
+                                end: turn.last!.endSeconds,
+                                speaker: turn.first!.speaker
+                            ))
+                        }
+                    }
+                }
+            }
+
+            let meta = AIProtocolUtils.JSONCodec.objectValue(obj["metadata"])
+            let duration = AIProtocolUtils.JSONCodec.doubleValue(meta?["duration"])
+            let requestID = AIProtocolUtils.JSONCodec.stringValue(meta?["request_id"])
+            let language = AIProtocolUtils.JSONCodec.stringValue(firstChannel["detected_language"])?.lowercased()
+
+            return DecodedTranscriptionResponse(
+                text: transcript,
+                language: language,
+                durationSeconds: duration,
+                segments: segments,
+                words: words,
+                usage: duration.map { .seconds($0) },
+                providerMetadata: requestID.map { ["deepgram": ["requestId": .string($0)]] }
+            )
+        }
+
         // parity: ai/src/protocols/deepgram-transcription.ts#protocol [status=implemented hash=2ce8755724dc]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "deepgram-transcription", name: "Deepgram", provider: "deepgram"),
+            identity: routeIdentity,
             mode: .inline,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                guard let modelID = AIProtocolUtils.JSONCodec.stringValue(input["model"])
+                    ?? AIProtocolUtils.JSONCodec.stringValue(input["modelID"]),
+                      !modelID.isEmpty else {
+                    throw AIProtocolUtils.ProviderShared.invalidRequest("Deepgram transcription requires model")
+                }
+                let asset: AIProtocolUtils.MediaAsset
+                if let url = AIProtocolUtils.JSONCodec.stringValue(input["url"]) {
+                    asset = .url(url, mediaType: AIProtocolUtils.JSONCodec.stringValue(input["mediaType"]) ?? "audio/mpeg")
+                } else if let b64 = AIProtocolUtils.JSONCodec.stringValue(input["audio_base64"]) {
+                    asset = .base64(b64, mediaType: AIProtocolUtils.JSONCodec.stringValue(input["mediaType"]) ?? "audio/mpeg")
+                } else {
+                    throw AIProtocolUtils.ProviderShared.invalidRequest("Deepgram transcription requires url or audio_base64")
+                }
+                let req = Request(
+                    modelID: modelID,
+                    audio: asset,
+                    language: AIProtocolUtils.JSONCodec.stringValue(input["language"]),
+                    prompt: AIProtocolUtils.JSONCodec.stringValue(input["prompt"]),
+                    diarize: AIProtocolUtils.JSONCodec.boolValue(input["diarize"]),
+                    timestamps: AIProtocolUtils.JSONCodec.stringValue(input["timestamps"]),
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let decoded = try decodeResponse(text)
+                var out: [String: JSONValue] = [
+                    "text": .string(decoded.text),
+                    "segments": .array(decoded.segments.map { seg in
+                        var s: [String: JSONValue] = [
+                            "text": .string(seg.text),
+                            "start": .double(seg.start),
+                            "end": .double(seg.end),
+                        ]
+                        if let spk = seg.speaker { s["speaker"] = .string(spk) }
+                        return .object(s)
+                    }),
+                ]
+                if let lang = decoded.language { out["language"] = .string(lang) }
+                if let dur = decoded.durationSeconds { out["durationSeconds"] = .double(dur) }
+                return .object(out)
+            }
         )
 
         // parity: ai/src/protocols/deepgram-transcription.ts#model [status=implemented hash=878217d650d2]
@@ -556,6 +819,8 @@ extension AIProtocols {
     // MARK: - 8. ElevenLabsSpeech (packages/ai/src/protocols/elevenlabs-speech.ts — 8 symbols)
 
     public enum ElevenLabsSpeech {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "elevenlabs-speech", name: "ElevenLabs", provider: "elevenlabs")
+
         // parity: ai/src/protocols/elevenlabs-speech.ts#DEFAULT_BASE_URL [status=implemented hash=3992eb92ee13]
         public static let DEFAULT_BASE_URL = "https://api.elevenlabs.io"
 
@@ -571,12 +836,165 @@ extension AIProtocols {
         // parity: ai/src/protocols/elevenlabs-speech.ts#Request [status=implemented hash=97ed8161a20a]
         public typealias Request = SpeechRequestPayload
 
+        private static let defaultOutputFormats: [String: String] = [
+            "mp3": "mp3_44100_128",
+            "pcm": "pcm_24000",
+            "wav": "wav_24000",
+            "opus": "opus_48000_64",
+        ]
+
+        private static let pcmCodecs: [String: AIProtocolUtils.SpeechStream.PcmEncoding] = [
+            "pcm": .pcm_s16le,
+            "ulaw": .pcm_mulaw,
+            "alaw": .pcm_alaw,
+        ]
+
+        public static func outputFormat(for request: Request) throws(AIProtocolUtils.ProtocolError) -> String {
+            let explicit = AIProtocolUtils.JSONCodec.stringValue(request.providerOptions?["outputFormat"])
+            guard let format = explicit ?? defaultOutputFormats[request.format ?? "mp3"] else {
+                throw routeIdentity.unsupported(
+                    "media.format",
+                    "\(routeIdentity.name) has no default output format for \"\(request.format ?? "")\"; pass providerOptions.outputFormat"
+                )
+            }
+            if request.streaming && format.hasPrefix("wav_") {
+                throw routeIdentity.unsupported(
+                    "media.format",
+                    "\(routeIdentity.name) streams mp3, pcm, opus, ulaw, and alaw but not \"\(format)\"; use generate for WAV"
+                )
+            }
+            return format
+        }
+
+        public static func requestPath(for request: Request) -> String {
+            let encodedVoice = AIProtocolUtils.JSONCodec.percentEncodePathComponent(request.voice ?? "")
+            let streamSuffix = request.streaming ? "/stream" : ""
+            let tsSuffix = request.timestamps == true ? "/with-timestamps" : ""
+            return "\(PATH)/\(encodedVoice)\(streamSuffix)\(tsSuffix)"
+        }
+
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            if request.instructions != nil {
+                throw routeIdentity.unsupported("media.instructions", "\(routeIdentity.name) does not support instructions")
+            }
+            guard let voice = request.voice, !voice.isEmpty else {
+                throw AIProtocolUtils.ProviderShared.invalidRequest("\(routeIdentity.name) requires a voice id; pass it as `voice`")
+            }
+            _ = try outputFormat(for: request)
+            var base: [String: JSONValue] = [
+                "text": .string(request.text),
+                "model_id": .string(request.modelID),
+            ]
+            if let lang = request.language {
+                base["language_code"] = .string(lang)
+            }
+            if let speed = request.speed {
+                base["voice_settings"] = .object(["speed": .double(speed)])
+            }
+            var native = request.providerOptions ?? [:]
+            native.removeValue(forKey: "outputFormat")
+            return AIProtocolUtils.JSONCodec.mergeObjects(base, native)
+        }
+
+        public static func describeOutputFormat(_ format: String) -> AIProtocolUtils.SpeechStream.FormatMetadata {
+            let parts = format.split(separator: "_").map(String.init)
+            let codec = parts.first ?? format
+            let sampleRate = parts.count > 1 ? Int(parts[1]) : nil
+            if let encoding = pcmCodecs[codec] {
+                return AIProtocolUtils.SpeechStream.pcm(encoding: encoding, sampleRate: sampleRate)
+            }
+            return AIProtocolUtils.SpeechStream.container(format: codec, sampleRate: sampleRate)
+        }
+
+        public static func decodeTimestampedResponse(
+            _ text: String,
+            format: String = "mp3_44100_128",
+            headers: [String: String] = [:]
+        ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.SpeechEvent] {
+            var audioState = AIProtocolUtils.SpeechStream.Audio()
+            var events: [AIProtocolUtils.SpeechEvent] = []
+            let lines = text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }).map(String.init).filter { !$0.trimmingASCIIWhitespace().isEmpty }
+            let records = lines.isEmpty ? [text] : lines
+            for record in records {
+                let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                    route: routeIdentity.id,
+                    input: record,
+                    message: "Invalid ElevenLabs speech JSON record"
+                )
+                guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                      let b64 = AIProtocolUtils.JSONCodec.stringValue(obj["audio_base64"]) else {
+                    throw routeIdentity.frameError("ElevenLabs record missing audio_base64", body: record)
+                }
+                let bytes: [UInt8]
+                do {
+                    bytes = try base64ToBytes(b64)
+                } catch {
+                    throw routeIdentity.frameError("ElevenLabs record contains invalid base64 audio", body: record)
+                }
+                events.append(contentsOf: AIProtocolUtils.SpeechStream.delta(&audioState, chunk: bytes))
+                if let alignment = AIProtocolUtils.JSONCodec.objectValue(obj["alignment"]) {
+                    let chars = (AIProtocolUtils.JSONCodec.arrayValue(alignment["characters"]) ?? []).compactMap(AIProtocolUtils.JSONCodec.stringValue)
+                    let starts = (AIProtocolUtils.JSONCodec.arrayValue(alignment["character_start_times_seconds"]) ?? []).compactMap(AIProtocolUtils.JSONCodec.doubleValue)
+                    let ends = (AIProtocolUtils.JSONCodec.arrayValue(alignment["character_end_times_seconds"]) ?? []).compactMap(AIProtocolUtils.JSONCodec.doubleValue)
+                    events.append(contentsOf: AIProtocolUtils.SpeechStream.timestamps(texts: chars, starts: starts, ends: ends))
+                }
+            }
+            let fmtMeta = describeOutputFormat(format)
+            let loweredHeaders = Dictionary(uniqueKeysWithValues: headers.map { ($0.key.lowercased(), $0.value) })
+            let usage = AIProtocolUtils.SpeechStream.headerUsage(type: "credits", value: loweredHeaders["character-cost"])
+            let reqID = loweredHeaders["request-id"]
+            let finishEvents = try AIProtocolUtils.SpeechStream.finish(
+                route: routeIdentity,
+                state: audioState,
+                mediaType: fmtMeta.mediaType,
+                info: fmtMeta.info,
+                usage: usage,
+                providerMetadata: reqID.map { ["elevenlabs": ["requestId": .string($0)]] }
+            )
+            events.append(contentsOf: finishEvents)
+            return events
+        }
+
         // parity: ai/src/protocols/elevenlabs-speech.ts#protocol [status=implemented hash=4dec28f6877d]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "elevenlabs-speech", name: "ElevenLabs", provider: "elevenlabs"),
+            identity: routeIdentity,
             mode: .stream,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model_id"])
+                        ?? AIProtocolUtils.JSONCodec.stringValue(input["model"])
+                        ?? "eleven_multilingual_v2",
+                    text: AIProtocolUtils.JSONCodec.stringValue(input["text"]) ?? "",
+                    voice: AIProtocolUtils.JSONCodec.stringValue(input["voice"]),
+                    instructions: AIProtocolUtils.JSONCodec.stringValue(input["instructions"]),
+                    format: AIProtocolUtils.JSONCodec.stringValue(input["format"]),
+                    speed: AIProtocolUtils.JSONCodec.doubleValue(input["speed"]),
+                    language: AIProtocolUtils.JSONCodec.stringValue(input["language"])
+                        ?? AIProtocolUtils.JSONCodec.stringValue(input["language_code"]),
+                    timestamps: AIProtocolUtils.JSONCodec.boolValue(input["timestamps"]),
+                    streaming: AIProtocolUtils.JSONCodec.boolValue(input["streaming"]) ?? false,
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let events = try decodeTimestampedResponse(text)
+                var timestampCount = 0
+                var audioByteCount = 0
+                for ev in events {
+                    switch ev {
+                    case .audioDelta(let b): audioByteCount += b.count
+                    case .timestamps(let items): timestampCount += items.count
+                    case .finish: break
+                    }
+                }
+                return .object([
+                    "audioBytes": .int(Int64(audioByteCount)),
+                    "timestamps": .int(Int64(timestampCount)),
+                ])
+            }
         )
 
         // parity: ai/src/protocols/elevenlabs-speech.ts#model [status=implemented hash=92f1b6aa91f6]
@@ -789,6 +1207,8 @@ extension AIProtocols {
     // MARK: - 12. GoogleImages (packages/ai/src/protocols/google-images.ts — 6 symbols)
 
     public enum GoogleImages {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "google-images", name: "Google Images", provider: "google")
+
         // parity: ai/src/protocols/google-images.ts#DEFAULT_BASE_URL [status=implemented hash=ae7b30027e03]
         public static let DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -798,11 +1218,156 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-images.ts#Request [status=implemented hash=513264af475e]
         public typealias Request = ImageRequestPayload
 
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            if let n = request.n, n > 1 {
+                throw routeIdentity.unsupported(
+                    "media.n",
+                    "\(routeIdentity.name) generates one image per request; call it once per image instead of n=\(n)"
+                )
+            }
+            var parts: [JSONValue] = [.object(["text": .string(request.prompt)])]
+            for asset in request.images ?? [] {
+                let mediaPart = try AIProtocolUtils.GeminiGenerateContent.mediaPart(route: routeIdentity.name, asset: asset)
+                parts.append(.object(mediaPart))
+            }
+            var native = request.providerOptions ?? [:]
+            let thinkingLevel = native.removeValue(forKey: "thinkingLevel")
+            let includeThoughts = native.removeValue(forKey: "includeThoughts")
+            var genConfig: [String: JSONValue] = [
+                "responseModalities": .array([.string("IMAGE")]),
+            ]
+            var imageConfig: [String: JSONValue] = [:]
+            if let aspect = request.aspect { imageConfig["aspectRatio"] = .string(aspect) }
+            if let resolution = request.resolution {
+                let upper = resolution.uppercased()
+                imageConfig["imageSize"] = .string(upper == "0.5K" ? "512" : upper)
+            }
+            if !imageConfig.isEmpty { genConfig["imageConfig"] = .object(imageConfig) }
+            var thinkingConfig: [String: JSONValue] = [:]
+            if let thinkingLevel { thinkingConfig["thinkingLevel"] = thinkingLevel }
+            if let includeThoughts { thinkingConfig["includeThoughts"] = includeThoughts }
+            if !thinkingConfig.isEmpty { genConfig["thinkingConfig"] = .object(thinkingConfig) }
+            let mergedGenConfig = AIProtocolUtils.JSONCodec.mergeObjects(genConfig, native)
+            return [
+                "contents": .array([.object(["role": .string("user"), "parts": .array(parts)])]),
+                "generationConfig": .object(mergedGenConfig),
+            ]
+        }
+
+        public static func decodeResponse(_ text: String) throws(AIProtocolUtils.ProtocolError) -> DecodedImageResponse {
+            let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                route: routeIdentity.id,
+                input: text,
+                message: "\(routeIdentity.name) returned an invalid response"
+            )
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed) else {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned an invalid response", body: text)
+            }
+            let candidates = (AIProtocolUtils.JSONCodec.arrayValue(obj["candidates"]) ?? []).compactMap(AIProtocolUtils.JSONCodec.objectValue)
+            var images: [AIProtocolUtils.MediaAsset] = []
+            var finishReasons: [String] = []
+
+            for (candIdx, cand) in candidates.enumerated() {
+                if let fr = AIProtocolUtils.JSONCodec.stringValue(cand["finishReason"]) {
+                    finishReasons.append(fr)
+                }
+                let contentObj = AIProtocolUtils.JSONCodec.objectValue(cand["content"])
+                let parts = (AIProtocolUtils.JSONCodec.arrayValue(contentObj?["parts"]) ?? []).compactMap(AIProtocolUtils.JSONCodec.objectValue)
+                for (partIdx, part) in parts.enumerated() {
+                    if AIProtocolUtils.JSONCodec.boolValue(part["thought"]) == true { continue }
+                    guard let inlineData = AIProtocolUtils.JSONCodec.objectValue(part["inlineData"]),
+                          let data = AIProtocolUtils.JSONCodec.stringValue(inlineData["data"]),
+                          let mime = AIProtocolUtils.JSONCodec.stringValue(inlineData["mimeType"])
+                    else { continue }
+                    var meta: [String: JSONValue] = [
+                        "candidateIndex": .int(Int64(AIProtocolUtils.JSONCodec.intValue(cand["index"]) ?? candIdx)),
+                        "partIndex": .int(Int64(partIdx)),
+                    ]
+                    if let fr = cand["finishReason"] { meta["finishReason"] = fr }
+                    if let sig = part["thoughtSignature"] { meta["thoughtSignature"] = sig }
+                    let asset = try AIProtocolUtils.MediaInput.decodedAsset(
+                        invalid: { msg in routeIdentity.frameError(msg, body: text) },
+                        label: "\(routeIdentity.name) candidate \(candIdx) part \(partIdx)",
+                        data: data,
+                        mediaType: mime,
+                        providerMetadata: ["google": meta]
+                    )
+                    images.append(asset)
+                }
+            }
+
+            if images.isEmpty {
+                if finishReasons.contains(where: AIProtocolUtils.GeminiGenerateContent.contentFiltered) {
+                    throw AIProtocolUtils.ProtocolError(
+                        kind: .contentPolicy,
+                        message: "\(routeIdentity.name) withheld its images (finish reasons: \(finishReasons.joined(separator: ", ")))",
+                        route: routeIdentity.id,
+                        provider: routeIdentity.provider,
+                        body: text
+                    )
+                }
+                let suffix = finishReasons.isEmpty ? "" : " (finish reasons: \(finishReasons.joined(separator: ", ")))"
+                throw routeIdentity.frameError("\(routeIdentity.name) returned no final images\(suffix)", body: text)
+            }
+
+            let usage: AIProtocolUtils.MediaUsage?
+            if let u = AIProtocolUtils.JSONCodec.objectValue(obj["usageMetadata"]) {
+                let promptTokens = AIProtocolUtils.JSONCodec.doubleValue(u["promptTokenCount"])
+                let candidatesTokens = AIProtocolUtils.JSONCodec.doubleValue(u["candidatesTokenCount"])
+                let thoughtsTokens = AIProtocolUtils.JSONCodec.doubleValue(u["thoughtsTokenCount"])
+                let outputTokens = candidatesTokens.map { $0 + (thoughtsTokens ?? 0) }
+                let totalTokens = AIProtocolUtils.ProviderShared.totalTokens(
+                    promptTokens,
+                    outputTokens,
+                    AIProtocolUtils.JSONCodec.doubleValue(u["totalTokenCount"])
+                )
+                var details: [String: JSONValue] = ["google": .object(u)]
+                if let thoughtsTokens { details["reasoningTokens"] = .double(thoughtsTokens) }
+                if let cached = AIProtocolUtils.JSONCodec.doubleValue(u["cachedContentTokenCount"]) {
+                    details["cacheReadInputTokens"] = .double(cached)
+                }
+                usage = .tokens(input: promptTokens, output: outputTokens, total: totalTokens, details: details)
+            } else {
+                usage = nil
+            }
+
+            var topMeta: [String: JSONValue] = [:]
+            if let mv = obj["modelVersion"] { topMeta["modelVersion"] = mv }
+            if let rid = obj["responseId"] { topMeta["responseId"] = rid }
+            if let pf = obj["promptFeedback"] { topMeta["promptFeedback"] = pf }
+            return DecodedImageResponse(
+                images: images,
+                usage: usage,
+                providerMetadata: topMeta.isEmpty ? nil : ["google": topMeta]
+            )
+        }
+
         // parity: ai/src/protocols/google-images.ts#protocol [status=implemented hash=ddeb3a42695c]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "google-images", name: "Google Images", provider: "google"),
+            identity: routeIdentity,
             mode: .inline,
-            defaultBaseURL: DEFAULT_BASE_URL
+            defaultBaseURL: DEFAULT_BASE_URL,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model"]) ?? "gemini-2.5-flash-image",
+                    prompt: AIProtocolUtils.JSONCodec.stringValue(input["prompt"]) ?? "",
+                    n: AIProtocolUtils.JSONCodec.intValue(input["n"]),
+                    aspect: AIProtocolUtils.JSONCodec.stringValue(input["aspect"]),
+                    resolution: AIProtocolUtils.JSONCodec.stringValue(input["resolution"]),
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let decoded = try decodeResponse(text)
+                return .object([
+                    "images": .array(decoded.images.map { img in
+                        var obj: [String: JSONValue] = ["mediaType": .string(img.mediaType)]
+                        if let inline = img.inline() { obj["b64_json"] = .string(inline.base64) }
+                        return .object(obj)
+                    }),
+                ])
+            }
         )
 
         // parity: ai/src/protocols/google-images.ts#model [status=implemented hash=23a027c23eb9]
@@ -1264,6 +1829,8 @@ extension AIProtocols {
     // MARK: - 22. OpenAIImages (packages/ai/src/protocols/openai-images.ts — 10 symbols)
 
     public enum OpenAIImages {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "openai-images", name: "OpenAI Images", provider: "openai")
+
         // parity: ai/src/protocols/openai-images.ts#DEFAULT_BASE_URL [status=implemented hash=97f5685da742]
         public static let DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
@@ -1308,12 +1875,192 @@ extension AIProtocols {
             return ["size": .string("\(size.width)x\(size.height)")]
         }
 
+        public static func fromRequest(
+            _ request: Request,
+            imageInput: OpenAIImageInput = .edits,
+            streaming: Bool = false,
+            provider: String = "openai"
+        ) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            let images = request.images ?? []
+            let opts = request.providerOptions ?? [:]
+            let hasMask = opts["mask"] != nil && opts["mask"] != .null
+            if imageInput == .references && hasMask {
+                throw routeIdentity.unsupported("media.mask", "\(provider) image edits take no mask")
+            }
+            if hasMask && images.isEmpty {
+                throw AIProtocolUtils.ProviderShared.invalidRequest("An OpenAI image mask requires at least one input image")
+            }
+            let shape = AIProtocolUtils.ImageSizing.Shape(aspect: request.aspect, resolution: request.resolution)
+            if opts["size"] != nil && AIProtocolUtils.ImageSizing.isRequested(shape) {
+                throw AIProtocolUtils.ProviderShared.invalidRequest("OpenAI providerOptions.size replaces aspect and resolution; set one or the other")
+            }
+            if streaming, let n = request.n, n > 1 {
+                throw routeIdentity.unsupported("media.n", "\(routeIdentity.name) streams one image; use Image.generate for n=\(n)")
+            }
+
+            var fields: [String: JSONValue] = [:]
+            if let n = request.n { fields["n"] = .int(Int64(n)) }
+            if let sized = pixelSize(request) {
+                for (k, v) in sized { fields[k] = v }
+            }
+            if streaming {
+                fields["stream"] = .bool(true)
+                let partials = AIProtocolUtils.JSONCodec.intValue(opts["partialImages"]) ?? 2
+                fields["partial_images"] = .int(Int64(partials))
+            }
+
+            var native: [String: JSONValue] = [:]
+            for (k, v) in opts {
+                switch k {
+                case "outputCompression": native["output_compression"] = v
+                case "outputFormat": native["output_format"] = v
+                case "partialImages", "mask": break
+                case "response_format":
+                    if v != .null { native[k] = v }
+                default:
+                    native[k] = v
+                }
+            }
+            let mergedFields = AIProtocolUtils.JSONCodec.mergeObjects(fields, native)
+
+            var body: [String: JSONValue] = [
+                "model": .string(request.modelID),
+                "prompt": .string(request.prompt),
+            ]
+            if imageInput == .references {
+                if !images.isEmpty {
+                    var refs: [JSONValue] = []
+                    for img in images {
+                        let ref = try AIProtocolUtils.ProviderShared.mediaReference(asset: img, provider: nil, label: routeIdentity.name)
+                        refs.append(.object([
+                            "type": .string("image_url"),
+                            "image_url": .object(["url": .string(ref.value)]),
+                        ]))
+                    }
+                    body["input_references"] = .array(refs)
+                }
+            } else if !images.isEmpty {
+                var refs: [JSONValue] = []
+                for img in images {
+                    let ref = try AIProtocolUtils.ProviderShared.mediaReference(asset: img, provider: provider, label: routeIdentity.name)
+                    if ref.type == .ref {
+                        refs.append(.object(["file_id": .string(ref.value)]))
+                    } else {
+                        refs.append(.object(["image_url": .string(ref.value)]))
+                    }
+                }
+                body["images"] = .array(refs)
+            }
+            return AIProtocolUtils.JSONCodec.mergeObjects(body, mergedFields)
+        }
+
+        private static func parseImageInfo(format: String?, size: String?) -> [String: JSONValue]? {
+            var info: [String: JSONValue] = [:]
+            if let format { info["format"] = .string(format) }
+            if let size {
+                let parts = size.split(separator: "x")
+                if parts.count == 2, let w = Int(parts[0]), let h = Int(parts[1]) {
+                    info["width"] = .int(Int64(w))
+                    info["height"] = .int(Int64(h))
+                }
+            }
+            return info.isEmpty ? nil : info
+        }
+
+        public static func decodeResponse(
+            _ text: String,
+            provider: String = "openai"
+        ) throws(AIProtocolUtils.ProtocolError) -> DecodedImageResponse {
+            let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                route: routeIdentity.id,
+                input: text,
+                message: "\(routeIdentity.name) returned an invalid response"
+            )
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                  let dataArr = AIProtocolUtils.JSONCodec.arrayValue(obj["data"]) else {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned an invalid response", body: text)
+            }
+            let format = AIProtocolUtils.JSONCodec.stringValue(obj["output_format"])
+            let size = AIProtocolUtils.JSONCodec.stringValue(obj["size"])
+            let mediaType = format.map { "image/\($0)" }
+            let imgInfo = parseImageInfo(format: format, size: size)
+
+            var images: [AIProtocolUtils.MediaAsset] = []
+            for (idx, elem) in dataArr.enumerated() {
+                guard let item = AIProtocolUtils.JSONCodec.objectValue(elem) else {
+                    throw routeIdentity.frameError("\(routeIdentity.name) result \(idx) is not an object", body: text)
+                }
+                let asset = try AIProtocolUtils.MediaInput.imageOutput(
+                    invalid: { msg in routeIdentity.frameError(msg, body: text) },
+                    label: "\(routeIdentity.name) result \(idx)",
+                    b64Json: AIProtocolUtils.JSONCodec.stringValue(item["b64_json"]),
+                    url: AIProtocolUtils.JSONCodec.stringValue(item["url"]),
+                    mediaType: mediaType
+                )
+                images.append(AIProtocolUtils.MediaAsset(
+                    source: asset.source,
+                    mediaType: asset.mediaType,
+                    info: imgInfo,
+                    providerMetadata: asset.providerMetadata
+                ))
+            }
+            if images.isEmpty {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned no images", body: text)
+            }
+
+            let usage: AIProtocolUtils.MediaUsage?
+            if let u = AIProtocolUtils.JSONCodec.objectValue(obj["usage"]) {
+                usage = .tokens(
+                    input: AIProtocolUtils.JSONCodec.doubleValue(u["input_tokens"]),
+                    output: AIProtocolUtils.JSONCodec.doubleValue(u["output_tokens"]),
+                    total: AIProtocolUtils.JSONCodec.doubleValue(u["total_tokens"]),
+                    details: [provider: .object(u)]
+                )
+            } else {
+                usage = nil
+            }
+
+            var meta: [String: JSONValue] = [:]
+            if let format { meta["outputFormat"] = .string(format) }
+            if let size { meta["size"] = .string(size) }
+            if let q = obj["quality"] { meta["quality"] = q }
+            if let bg = obj["background"] { meta["background"] = bg }
+            return DecodedImageResponse(
+                images: images,
+                usage: usage,
+                providerMetadata: meta.isEmpty ? nil : [provider: meta]
+            )
+        }
+
         // parity: ai/src/protocols/openai-images.ts#protocol [status=implemented hash=67acee9f2c33]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "openai-images", name: "OpenAI Images", provider: "openai"),
+            identity: routeIdentity,
             mode: .inline,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model"]) ?? "gpt-image-1",
+                    prompt: AIProtocolUtils.JSONCodec.stringValue(input["prompt"]) ?? "",
+                    n: AIProtocolUtils.JSONCodec.intValue(input["n"]),
+                    aspect: AIProtocolUtils.JSONCodec.stringValue(input["aspect"]),
+                    resolution: AIProtocolUtils.JSONCodec.stringValue(input["resolution"]),
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                let streaming = AIProtocolUtils.JSONCodec.boolValue(input["stream"]) ?? false
+                return try fromRequest(req, streaming: streaming)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let decoded = try decodeResponse(text)
+                return .object([
+                    "images": .array(decoded.images.map { img in
+                        var obj: [String: JSONValue] = ["mediaType": .string(img.mediaType)]
+                        if let inline = img.inline() { obj["b64_json"] = .string(inline.base64) }
+                        if case .url(let u) = img.source { obj["url"] = .string(u) }
+                        return .object(obj)
+                    }),
+                ])
+            }
         )
 
         // parity: ai/src/protocols/openai-images.ts#model [status=implemented hash=20a6a9827cf3]
@@ -1329,6 +2076,10 @@ extension AIProtocols {
     // MARK: - 23. OpenAISpeech (packages/ai/src/protocols/openai-speech.ts — 7 symbols)
 
     public enum OpenAISpeech {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "openai-speech", name: "OpenAI Speech", provider: "openai")
+        public static let pcmSampleRate = 24_000
+        private static let supportedFormats: Set<String> = ["mp3", "opus", "aac", "flac", "wav", "pcm"]
+
         // parity: ai/src/protocols/openai-speech.ts#DEFAULT_BASE_URL [status=implemented hash=97f5685da742]
         public static let DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
@@ -1341,12 +2092,134 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-speech.ts#Request [status=implemented hash=da62c94cf290]
         public typealias Request = SpeechRequestPayload
 
+        public static func supportsSSE(_ modelID: String) -> Bool {
+            let lower = modelID.lowercased()
+            if lower == "tts-1" || lower.hasPrefix("tts-1-") || lower == "tts-1-hd" || lower.hasPrefix("tts-1-hd-") {
+                return false
+            }
+            return true
+        }
+
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            if request.language != nil {
+                throw routeIdentity.unsupported("media.language", "\(routeIdentity.name) does not support language selection")
+            }
+            if request.timestamps == true {
+                throw routeIdentity.unsupported("media.timestamps", "\(routeIdentity.name) does not return timestamps")
+            }
+            if let format = request.format, !supportedFormats.contains(format) {
+                throw routeIdentity.unsupported(
+                    "media.format",
+                    "\(routeIdentity.name) supports the mp3, opus, aac, flac, wav, and pcm formats, not \"\(format)\""
+                )
+            }
+            var body: [String: JSONValue] = [
+                "model": .string(request.modelID),
+                "input": .string(request.text),
+            ]
+            if let voice = request.voice { body["voice"] = .string(voice) }
+            if let instructions = request.instructions { body["instructions"] = .string(instructions) }
+            if let format = request.format { body["response_format"] = .string(format) }
+            if let speed = request.speed { body["speed"] = .double(speed) }
+            if request.streaming && supportsSSE(request.modelID) {
+                body["stream_format"] = .string("sse")
+            }
+            return AIProtocolUtils.JSONCodec.mergeObjects(body, request.providerOptions)
+        }
+
+        public static func decodeSSEStream(
+            _ bytes: [UInt8],
+            format: String = "mp3"
+        ) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.SpeechEvent] {
+            var sse = AIProtocolUtils.SSEParser()
+            let frames = sse.feed(bytes) + sse.finish()
+            var audio = AIProtocolUtils.SpeechStream.Audio()
+            var events: [AIProtocolUtils.SpeechEvent] = []
+            var done = false
+            var usage: AIProtocolUtils.MediaUsage? = nil
+
+            for frame in frames {
+                let trimmed = frame.data.trimmingASCIIWhitespace()
+                if trimmed.isEmpty || trimmed == "[DONE]" { continue }
+                let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                    route: routeIdentity.id,
+                    input: trimmed,
+                    message: "Invalid OpenAI Speech SSE JSON"
+                )
+                guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                      let evType = AIProtocolUtils.JSONCodec.stringValue(obj["type"]) else { continue }
+                if evType == "speech.audio.delta" {
+                    guard let b64 = AIProtocolUtils.JSONCodec.stringValue(obj["audio"]) else {
+                        throw routeIdentity.frameError("OpenAI Speech delta missing audio field", body: trimmed)
+                    }
+                    let chunk: [UInt8]
+                    do {
+                        chunk = try base64ToBytes(b64)
+                    } catch {
+                        throw routeIdentity.frameError("OpenAI Speech delta contains invalid base64", body: trimmed)
+                    }
+                    events.append(contentsOf: AIProtocolUtils.SpeechStream.delta(&audio, chunk: chunk))
+                } else if evType == "speech.audio.done" {
+                    done = true
+                    if let u = AIProtocolUtils.JSONCodec.objectValue(obj["usage"]) {
+                        usage = .tokens(
+                            input: AIProtocolUtils.JSONCodec.doubleValue(u["input_tokens"]),
+                            output: AIProtocolUtils.JSONCodec.doubleValue(u["output_tokens"]),
+                            total: AIProtocolUtils.JSONCodec.doubleValue(u["total_tokens"]),
+                            details: ["openai": .object(u)]
+                        )
+                    }
+                }
+            }
+            guard done else {
+                throw routeIdentity.incomplete()
+            }
+            let fmtMeta = format == "pcm"
+                ? AIProtocolUtils.SpeechStream.pcm(encoding: .pcm_s16le, sampleRate: pcmSampleRate)
+                : AIProtocolUtils.SpeechStream.container(format: format)
+            let finished = try AIProtocolUtils.SpeechStream.finish(
+                route: routeIdentity,
+                state: audio,
+                mediaType: fmtMeta.mediaType,
+                info: fmtMeta.info,
+                usage: usage
+            )
+            events.append(contentsOf: finished)
+            return events
+        }
+
         // parity: ai/src/protocols/openai-speech.ts#protocol [status=implemented hash=98af27e9358f]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "openai-speech", name: "OpenAI Speech", provider: "openai"),
+            identity: routeIdentity,
             mode: .stream,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model"]) ?? "gpt-4o-mini-tts",
+                    text: AIProtocolUtils.JSONCodec.stringValue(input["input"])
+                        ?? AIProtocolUtils.JSONCodec.stringValue(input["text"])
+                        ?? "",
+                    voice: AIProtocolUtils.JSONCodec.stringValue(input["voice"]),
+                    instructions: AIProtocolUtils.JSONCodec.stringValue(input["instructions"]),
+                    format: AIProtocolUtils.JSONCodec.stringValue(input["response_format"])
+                        ?? AIProtocolUtils.JSONCodec.stringValue(input["format"]),
+                    speed: AIProtocolUtils.JSONCodec.doubleValue(input["speed"]),
+                    language: AIProtocolUtils.JSONCodec.stringValue(input["language"]),
+                    timestamps: AIProtocolUtils.JSONCodec.boolValue(input["timestamps"]),
+                    streaming: AIProtocolUtils.JSONCodec.boolValue(input["streaming"]) ?? false,
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let events = try decodeSSEStream(Array(text.utf8))
+                var byteCount = 0
+                for ev in events {
+                    if case .audioDelta(let b) = ev { byteCount += b.count }
+                }
+                return .object(["audioBytes": .int(Int64(byteCount))])
+            }
         )
 
         // parity: ai/src/protocols/openai-speech.ts#model [status=implemented hash=f945df719144]
@@ -1361,6 +2234,8 @@ extension AIProtocols {
     // MARK: - 24. OpenAITranscription (packages/ai/src/protocols/openai-transcription.ts — 7 symbols)
 
     public enum OpenAITranscription {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "openai-transcription", name: "OpenAI Transcription", provider: "openai")
+
         // parity: ai/src/protocols/openai-transcription.ts#DEFAULT_BASE_URL [status=implemented hash=97f5685da742]
         public static let DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
@@ -1373,12 +2248,253 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-transcription.ts#Request [status=implemented hash=b35dbdd7ad13]
         public typealias Request = TranscriptionRequestPayload
 
+        private struct ModelCaps {
+            let stream: Bool
+            let timestamps: [String]
+            let diarize: Bool
+            let usesLanguagesArray: Bool
+        }
+
+        private static func capabilities(for modelID: String) -> ModelCaps {
+            if modelID.hasPrefix("whisper") {
+                return ModelCaps(stream: false, timestamps: ["segment", "word"], diarize: false, usesLanguagesArray: false)
+            }
+            if modelID.contains("diarize") {
+                return ModelCaps(stream: true, timestamps: ["segment"], diarize: true, usesLanguagesArray: false)
+            }
+            if modelID.hasPrefix("gpt-transcribe") {
+                return ModelCaps(stream: true, timestamps: [], diarize: false, usesLanguagesArray: true)
+            }
+            return ModelCaps(stream: true, timestamps: [], diarize: false, usesLanguagesArray: false)
+        }
+
+        private static let reservedFormFields: Set<String> = [
+            "file", "model", "prompt", "language", "response_format", "timestamp_granularities", "stream",
+        ]
+
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            let caps = capabilities(for: request.modelID)
+            if request.diarize == true && !caps.diarize {
+                throw routeIdentity.unsupported("media.diarize", "\(request.modelID) does not diarize; use gpt-4o-transcribe-diarize")
+            }
+            if request.prompt != nil && caps.diarize {
+                throw routeIdentity.unsupported("media.prompt", "\(request.modelID) does not accept a prompt")
+            }
+            if let ts = request.timestamps, ts != "none", !caps.timestamps.contains(ts) {
+                throw routeIdentity.unsupported("media.timestamps", "\(request.modelID) does not return \(ts) timestamps")
+            }
+            guard let ext = AIProtocolUtils.mediaTypeExtension(request.audio.mediaType) else {
+                throw AIProtocolUtils.ProviderShared.invalidRequest(
+                    "\(routeIdentity.name) cannot name a \(request.audio.mediaType) upload; send mp3, mp4, m4a, wav, webm, ogg, or flac audio"
+                )
+            }
+            let responseFormat: String? = caps.diarize
+                ? "diarized_json"
+                : ((request.timestamps == nil || request.timestamps == "none") ? nil : "verbose_json")
+            var fields: [String: JSONValue] = [
+                "model": .string(request.modelID),
+                "filename": .string("audio.\(ext)"),
+            ]
+            if let lang = request.language {
+                if caps.usesLanguagesArray {
+                    fields["languages"] = .array([.string(lang)])
+                } else {
+                    fields["language"] = .string(lang)
+                }
+            }
+            if let prompt = request.prompt { fields["prompt"] = .string(prompt) }
+            if let responseFormat { fields["response_format"] = .string(responseFormat) }
+            if responseFormat == "verbose_json", let ts = request.timestamps {
+                fields["timestamp_granularities"] = .array([.string(ts)])
+            }
+            if caps.diarize { fields["chunking_strategy"] = .string("auto") }
+            if request.streaming && caps.stream { fields["stream"] = .bool(true) }
+            let filteredOverlay = request.providerOptions?.filter { !reservedFormFields.contains($0.key) }
+            return AIProtocolUtils.JSONCodec.mergeObjects(fields, filteredOverlay)
+        }
+
+        public static func buildMultipart(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> AIRoute.MultipartFormData {
+            var fields = try fromRequest(request)
+            let filename = AIProtocolUtils.JSONCodec.stringValue(fields.removeValue(forKey: "filename")) ?? "audio.mp3"
+            let rawBytes = try AIProtocolUtils.MediaInput.inlineBytes(route: routeIdentity.id, asset: request.audio)
+            var form = AIRoute.MultipartFormData()
+            form.append("file", data: rawBytes, filename: filename, contentType: request.audio.mediaType)
+            let multipartFields = AIProtocolUtils.MediaInput.appendFields(
+                fields: fields,
+                overlay: nil,
+                reserved: reservedFormFields,
+                repeatArrays: "key[]"
+            )
+            for item in multipartFields {
+                form.append(item.name, value: item.value)
+            }
+            return form
+        }
+
+        private static func parseUsage(_ value: JSONValue?) -> AIProtocolUtils.MediaUsage? {
+            guard let u = AIProtocolUtils.JSONCodec.objectValue(value) else { return nil }
+            let kind = AIProtocolUtils.JSONCodec.stringValue(u["type"])
+            if kind == "duration", let secs = AIProtocolUtils.JSONCodec.doubleValue(u["seconds"]) {
+                return .seconds(secs)
+            }
+            let input = AIProtocolUtils.JSONCodec.doubleValue(u["input_tokens"])
+            let output = AIProtocolUtils.JSONCodec.doubleValue(u["output_tokens"])
+            let total = AIProtocolUtils.JSONCodec.doubleValue(u["total_tokens"])
+            if input == nil && output == nil && total == nil { return nil }
+            return .tokens(input: input, output: output, total: total, details: ["openai": .object(u)])
+        }
+
+        private static func parseSegment(_ value: JSONValue) -> AIProtocolUtils.TranscriptionSegment? {
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(value),
+                  let text = AIProtocolUtils.JSONCodec.stringValue(obj["text"]),
+                  let start = AIProtocolUtils.JSONCodec.doubleValue(obj["start"]),
+                  let end = AIProtocolUtils.JSONCodec.doubleValue(obj["end"])
+            else { return nil }
+            return AIProtocolUtils.TranscriptionSegment(
+                text: text.trimmingASCIIWhitespace(),
+                start: start,
+                end: end,
+                speaker: AIProtocolUtils.JSONCodec.stringValue(obj["speaker"])
+            )
+        }
+
+        public static func decodeResponse(_ text: String) throws(AIProtocolUtils.ProtocolError) -> DecodedTranscriptionResponse {
+            let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                route: routeIdentity.id,
+                input: text,
+                message: "Invalid OpenAI Transcription JSON response"
+            )
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                  let transcriptText = AIProtocolUtils.JSONCodec.stringValue(obj["text"]) else {
+                throw routeIdentity.frameError("OpenAI Transcription response missing text", body: text)
+            }
+            let segments = (AIProtocolUtils.JSONCodec.arrayValue(obj["segments"]) ?? []).compactMap(parseSegment)
+            let words: [TranscriptionWord] = (AIProtocolUtils.JSONCodec.arrayValue(obj["words"]) ?? []).compactMap { raw in
+                guard let w = AIProtocolUtils.JSONCodec.objectValue(raw),
+                      let wordStr = AIProtocolUtils.JSONCodec.stringValue(w["word"]),
+                      let start = AIProtocolUtils.JSONCodec.doubleValue(w["start"]),
+                      let end = AIProtocolUtils.JSONCodec.doubleValue(w["end"])
+                else { return nil }
+                return TranscriptionWord(text: wordStr, startSeconds: start, endSeconds: end)
+            }
+            let firstLangFromArray: String? = AIProtocolUtils.JSONCodec.arrayValue(obj["languages"])?
+                .first
+                .flatMap(AIProtocolUtils.JSONCodec.objectValue)
+                .flatMap { AIProtocolUtils.JSONCodec.stringValue($0["code"]) }
+            let language = (AIProtocolUtils.JSONCodec.stringValue(obj["language"]) ?? firstLangFromArray)?.lowercased()
+            return DecodedTranscriptionResponse(
+                text: transcriptText,
+                language: language,
+                durationSeconds: AIProtocolUtils.JSONCodec.doubleValue(obj["duration"]),
+                segments: segments,
+                words: words,
+                usage: parseUsage(obj["usage"])
+            )
+        }
+
+        public static func decodeSSEStream(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.TranscriptionEvent] {
+            var sse = AIProtocolUtils.SSEParser()
+            let frames = sse.feed(bytes) + sse.finish()
+            var events: [AIProtocolUtils.TranscriptionEvent] = []
+            var streamedSegments: [AIProtocolUtils.TranscriptionSegment] = []
+            var finalDecoded: DecodedTranscriptionResponse? = nil
+
+            for frame in frames {
+                let trimmed = frame.data.trimmingASCIIWhitespace()
+                if trimmed.isEmpty || trimmed == "[DONE]" { continue }
+                let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                    route: routeIdentity.id,
+                    input: trimmed,
+                    message: "Invalid OpenAI Transcription SSE JSON"
+                )
+                guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                      let evType = AIProtocolUtils.JSONCodec.stringValue(obj["type"]) else { continue }
+                switch evType {
+                case "error":
+                    let errObj = AIProtocolUtils.JSONCodec.objectValue(obj["error"])
+                    let msg = AIProtocolUtils.JSONCodec.stringValue(obj["message"])
+                        ?? AIProtocolUtils.JSONCodec.stringValue(errObj?["message"])
+                        ?? "unknown error"
+                    throw AIProtocolUtils.ProtocolError(
+                        kind: .providerInternal,
+                        message: "\(routeIdentity.name) stream failed: \(msg)",
+                        route: routeIdentity.id,
+                        provider: routeIdentity.provider,
+                        body: trimmed
+                    )
+                case "transcript.text.delta":
+                    if let delta = AIProtocolUtils.JSONCodec.stringValue(obj["delta"]), !delta.isEmpty {
+                        events.append(.textDelta(delta))
+                    }
+                case "transcript.text.segment":
+                    if let seg = parseSegment(.object(obj)) {
+                        streamedSegments.append(seg)
+                        events.append(.segment(seg))
+                    }
+                case "transcript.text.done":
+                    finalDecoded = try decodeResponse(trimmed)
+                default:
+                    break
+                }
+            }
+
+            guard let finalDecoded else {
+                throw routeIdentity.incomplete()
+            }
+            let effectiveSegments = finalDecoded.segments.isEmpty ? streamedSegments : finalDecoded.segments
+            events.append(.finish(
+                text: finalDecoded.text,
+                language: finalDecoded.language,
+                durationSeconds: finalDecoded.durationSeconds,
+                segments: effectiveSegments,
+                usage: finalDecoded.usage,
+                providerMetadata: finalDecoded.providerMetadata
+            ))
+            return events
+        }
+
         // parity: ai/src/protocols/openai-transcription.ts#protocol [status=implemented hash=7b276d1d40f2]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "openai-transcription", name: "OpenAI Transcription", provider: "openai"),
+            identity: routeIdentity,
             mode: .stream,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let mediaType = AIProtocolUtils.JSONCodec.stringValue(input["mediaType"]) ?? "audio/mpeg"
+                let audio: AIProtocolUtils.MediaAsset
+                if let b64 = AIProtocolUtils.JSONCodec.stringValue(input["audio_base64"]) {
+                    audio = .base64(b64, mediaType: mediaType)
+                } else {
+                    audio = .bytes([], mediaType: mediaType)
+                }
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model"]) ?? "gpt-4o-transcribe",
+                    audio: audio,
+                    language: AIProtocolUtils.JSONCodec.stringValue(input["language"]),
+                    prompt: AIProtocolUtils.JSONCodec.stringValue(input["prompt"]),
+                    diarize: AIProtocolUtils.JSONCodec.boolValue(input["diarize"]),
+                    timestamps: AIProtocolUtils.JSONCodec.stringValue(input["timestamps"]),
+                    streaming: AIProtocolUtils.JSONCodec.boolValue(input["stream"])
+                        ?? AIProtocolUtils.JSONCodec.boolValue(input["streaming"])
+                        ?? false,
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let decoded = try decodeResponse(text)
+                var out: [String: JSONValue] = ["text": .string(decoded.text)]
+                if let lang = decoded.language { out["language"] = .string(lang) }
+                if let dur = decoded.durationSeconds { out["durationSeconds"] = .double(dur) }
+                if !decoded.segments.isEmpty {
+                    out["segments"] = .array(decoded.segments.map { seg in
+                        var s: [String: JSONValue] = ["text": .string(seg.text), "start": .double(seg.start), "end": .double(seg.end)]
+                        if let spk = seg.speaker { s["speaker"] = .string(spk) }
+                        return .object(s)
+                    })
+                }
+                return .object(out)
+            }
         )
 
         // parity: ai/src/protocols/openai-transcription.ts#model [status=implemented hash=ea04abff90e8]
@@ -1475,6 +2591,8 @@ extension AIProtocols {
     // MARK: - 27. XAIImages (packages/ai/src/protocols/xai-images.ts — 9 symbols)
 
     public enum XAIImages {
+        public static let routeIdentity = AIProtocolUtils.MediaIdentity(id: "xai-images", name: "xAI Images", provider: "xai")
+
         // parity: ai/src/protocols/xai-images.ts#DEFAULT_BASE_URL [status=implemented hash=cc60095d3c12]
         public static let DEFAULT_BASE_URL = "https://api.x.ai/v1"
 
@@ -1496,12 +2614,105 @@ extension AIProtocols {
             return (AIProtocolUtils.ImageSizing.tier(requested) ?? 1.0) < 1.5 ? "1k" : "2k"
         }
 
+        public static func fromRequest(_ request: Request) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
+            var refs: [JSONValue] = []
+            for img in request.images ?? [] {
+                let ref = try AIProtocolUtils.ProviderShared.mediaReference(asset: img, provider: routeIdentity.provider, label: routeIdentity.name)
+                if ref.type == .ref {
+                    refs.append(.object(["file_id": .string(ref.value)]))
+                } else {
+                    refs.append(.object(["url": .string(ref.value), "type": .string("image_url")]))
+                }
+            }
+            var body: [String: JSONValue] = [
+                "model": .string(request.modelID),
+                "prompt": .string(request.prompt),
+            ]
+            if refs.count == 1 {
+                body["image"] = refs[0]
+            } else if refs.count > 1 {
+                body["images"] = .array(refs)
+            }
+            if let n = request.n { body["n"] = .int(Int64(n)) }
+            if let aspect = request.aspect { body["aspect_ratio"] = .string(aspect) }
+            if let res = resolution(request.resolution) { body["resolution"] = .string(res) }
+
+            var native = request.providerOptions ?? [:]
+            let responseFormat = native.removeValue(forKey: "responseFormat")
+            var mergedNative: [String: JSONValue] = [
+                "response_format": responseFormat ?? native["response_format"] ?? .string("b64_json"),
+            ]
+            for (k, v) in native { mergedNative[k] = v }
+            return AIProtocolUtils.JSONCodec.mergeObjects(body, mergedNative)
+        }
+
+        public static func decodeResponse(_ text: String) throws(AIProtocolUtils.ProtocolError) -> DecodedImageResponse {
+            let parsed = try AIProtocolUtils.ProviderShared.parseJson(
+                route: routeIdentity.id,
+                input: text,
+                message: "\(routeIdentity.name) returned an invalid response"
+            )
+            guard let obj = AIProtocolUtils.JSONCodec.objectValue(parsed),
+                  let dataArr = AIProtocolUtils.JSONCodec.arrayValue(obj["data"]) else {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned an invalid response", body: text)
+            }
+            var images: [AIProtocolUtils.MediaAsset] = []
+            for (idx, elem) in dataArr.enumerated() {
+                guard let item = AIProtocolUtils.JSONCodec.objectValue(elem) else {
+                    throw routeIdentity.frameError("\(routeIdentity.name) result \(idx) is not an object", body: text)
+                }
+                let revised = AIProtocolUtils.JSONCodec.stringValue(item["revised_prompt"])
+                let meta: AIProtocolUtils.ProviderMetadata? = revised.map { ["xai": ["revisedPrompt": .string($0)]] }
+                let asset = try AIProtocolUtils.MediaInput.imageOutput(
+                    invalid: { msg in routeIdentity.frameError(msg, body: text) },
+                    label: "\(routeIdentity.name) result \(idx)",
+                    b64Json: AIProtocolUtils.JSONCodec.stringValue(item["b64_json"]),
+                    url: AIProtocolUtils.JSONCodec.stringValue(item["url"]),
+                    mediaType: AIProtocolUtils.JSONCodec.stringValue(item["mime_type"]),
+                    providerMetadata: meta
+                )
+                images.append(asset)
+            }
+            if images.isEmpty {
+                throw routeIdentity.frameError("\(routeIdentity.name) returned no images", body: text)
+            }
+            let usageMeta: AIProtocolUtils.ProviderMetadata? = AIProtocolUtils.JSONCodec.objectValue(obj["usage"]).map {
+                ["xai": ["usage": .object($0)]]
+            }
+            return DecodedImageResponse(images: images, usage: nil, providerMetadata: usageMeta)
+        }
+
         // parity: ai/src/protocols/xai-images.ts#protocol [status=implemented hash=ddeb3a42695c]
         public static let `protocol` = MediaProtocolSpec(
-            identity: AIProtocolUtils.MediaIdentity(id: "xai-images", name: "xAI Images", provider: "xai"),
+            identity: routeIdentity,
             mode: .inline,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: PATH
+            path: PATH,
+            buildBody: { input throws(AIProtocolUtils.ProtocolError) in
+                let req = Request(
+                    modelID: AIProtocolUtils.JSONCodec.stringValue(input["model"]) ?? "grok-2-image",
+                    prompt: AIProtocolUtils.JSONCodec.stringValue(input["prompt"]) ?? "",
+                    n: AIProtocolUtils.JSONCodec.intValue(input["n"]),
+                    aspect: AIProtocolUtils.JSONCodec.stringValue(input["aspect"]),
+                    resolution: AIProtocolUtils.JSONCodec.stringValue(input["resolution"]),
+                    providerOptions: AIProtocolUtils.JSONCodec.objectValue(input["providerOptions"])
+                )
+                return try fromRequest(req)
+            },
+            parseResponse: { text throws(AIProtocolUtils.ProtocolError) in
+                let decoded = try decodeResponse(text)
+                return .object([
+                    "images": .array(decoded.images.map { img in
+                        var obj: [String: JSONValue] = ["mediaType": .string(img.mediaType)]
+                        if let inline = img.inline() { obj["b64_json"] = .string(inline.base64) }
+                        if case .url(let u) = img.source { obj["url"] = .string(u) }
+                        if let revised = img.providerMetadata?["xai"]?["revisedPrompt"] {
+                            obj["revisedPrompt"] = revised
+                        }
+                        return .object(obj)
+                    }),
+                ])
+            }
         )
 
         // parity: ai/src/protocols/xai-images.ts#model [status=implemented hash=b1f1a2e21049]
