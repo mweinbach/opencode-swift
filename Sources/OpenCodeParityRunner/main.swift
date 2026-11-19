@@ -13,9 +13,14 @@ import Musl
 import CRT
 #endif
 
+import OpenCodeAI
+import OpenCodeCLIKit
+import OpenCodeCore
 import OpenCodePlatform
 import OpenCodeProtocol
 import OpenCodeSchema
+import OpenCodeServer
+import OpenCodeTUI
 import OpenCodeUtil
 
 /// Generic JSON value for NDJSON differential parity dispatch.
@@ -150,6 +155,30 @@ func jsonNumber(_ d: Double) -> JSONValue {
     return .double(d)
 }
 
+func toSchemaJSON(_ value: JSONValue) -> OpenCodeSchema.JSONValue {
+    switch value {
+    case .null: return .null
+    case .bool(let b): return .bool(b)
+    case .int(let i): return .int(i)
+    case .double(let d): return .double(d)
+    case .string(let s): return .string(s)
+    case .array(let arr): return .array(arr.map(toSchemaJSON))
+    case .object(let obj): return .object(obj.mapValues(toSchemaJSON))
+    }
+}
+
+func fromSchemaJSON(_ value: OpenCodeSchema.JSONValue) -> JSONValue {
+    switch value {
+    case .null: return .null
+    case .bool(let b): return .bool(b)
+    case .int(let i): return .int(i)
+    case .double(let d): return jsonNumber(d)
+    case .string(let s): return .string(s)
+    case .array(let arr): return .array(arr.map(fromSchemaJSON))
+    case .object(let obj): return .object(obj.mapValues(fromSchemaJSON))
+    }
+}
+
 func requireString(_ args: [JSONValue], _ idx: Int) throws -> String {
     guard idx < args.count, let s = args[idx].stringValue else {
         throw DispatchError.invalidArguments("Expected string at arg \(idx)")
@@ -189,6 +218,35 @@ func requireBytes(_ args: [JSONValue], _ idx: Int) throws -> [UInt8] {
         throw DispatchError.invalidArguments("Expected byte array at arg \(idx)")
     }
     return bytes
+}
+
+func decodeStringMap(_ value: JSONValue) throws -> [String: String] {
+    guard let obj = value.objectValue else {
+        throw DispatchError.invalidArguments("Expected string dictionary")
+    }
+    var out: [String: String] = [:]
+    for (k, v) in obj {
+        if let s = v.stringValue {
+            out[k] = s
+        }
+    }
+    return out
+}
+
+func decodeCorsOptions(_ args: [JSONValue], _ idx: Int) -> CorsOptions? {
+    guard idx < args.count, let obj = args[idx].objectValue, let arr = obj["cors"]?.arrayValue else {
+        return nil
+    }
+    return CorsOptions(cors: arr.compactMap(\.stringValue))
+}
+
+func decodePlatformOS(_ raw: String) -> PlatformOS {
+    switch raw {
+    case "darwin": return .macOS
+    case "win32": return .windows
+    case "linux": return .linux
+    default: return .unknown
+    }
 }
 
 func decodeSessionTurnMessage(_ value: JSONValue) throws -> SessionTurn.Message {
@@ -632,6 +690,492 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
 
     case "schema/src/identifier.ts#descending":
         return .string(Identifier.descending())
+
+    // MARK: - packages/theme & packages/tui color
+    case "theme/src/tui/color.ts#oklchToHex":
+        guard let obj = args.first?.objectValue,
+              let l = obj["l"]?.doubleValue,
+              let c = obj["c"]?.doubleValue,
+              let h = obj["h"]?.doubleValue else {
+            throw DispatchError.invalidArguments("Expected { l, c, h } object")
+        }
+        return .string(OpenCodeTUI.oklchToHex(OklchColor(l: l, c: c, h: h)))
+
+    case "theme/src/tui/color.ts#rgbToOklch":
+        let res = OpenCodeTUI.rgbToOklch(try requireDouble(args, 0), try requireDouble(args, 1), try requireDouble(args, 2))
+        return .object([
+            "l": jsonNumber(res.l),
+            "c": jsonNumber(res.c),
+            "h": jsonNumber(res.h),
+        ])
+
+    case "theme/src/tui/expand.ts#mergeTheme":
+        let merged = OpenCodeTUI.mergeTheme(args.map(toSchemaJSON))
+        return fromSchemaJSON(.object(merged))
+
+    case "theme/src/tui/v1-migrate.ts#byte":
+        return .string(OpenCodeTUI.byte(try requireInt(args, 0)))
+
+    case "tui/src/theme/color.ts#ansiToRgba":
+        return .string(OpenCodeTUI.hex(TUIThemeBridge.ansiToRgba(try requireInt(args, 0))))
+
+    case "tui/src/theme/color.ts#tint":
+        let base = TUIThemeBridge.ansiToRgba(try requireInt(args, 0))
+        let overlay = TUIThemeBridge.ansiToRgba(try requireInt(args, 1))
+        let alpha = try requireDouble(args, 2)
+        return .string(OpenCodeTUI.hex(TUIThemeBridge.tint(base, overlay: overlay, alpha: alpha)))
+
+    // MARK: - packages/patchmark
+    case "patchmark/src/entities.ts#decodeCodePoint":
+        return .string(OpenCodeTUI.decodeCodePoint(try requireInt(args, 0)))
+
+    case "patchmark/src/entities.ts#decodeEntity":
+        return .string(OpenCodeTUI.decodeEntity(try requireString(args, 0)))
+
+    case "patchmark/src/entities.ts#unescapeString":
+        return .string(OpenCodeTUI.unescapeString(try requireString(args, 0)))
+
+    case "patchmark/src/entities.ts#normalizeURI":
+        return .string(OpenCodeTUI.normalizeURI(try requireString(args, 0)))
+
+    case "patchmark/src/heal.ts#computeTailHeal":
+        let heal = OpenCodeTUI.computeTailHeal(try requireString(args, 0))
+        return .object([
+            "strip": .int(Int64(heal.strip)),
+            "append": .string(heal.append),
+        ])
+
+    case "patchmark/src/heal.ts#healStreamingInline":
+        return .string(OpenCodeTUI.healStreamingInline(try requireString(args, 0)))
+
+    case "patchmark/src/html.ts#escapeHtml":
+        return .string(OpenCodeTUI.escapeHtml(try requireString(args, 0)))
+
+    case "patchmark/src/html.ts#filterDisallowedRawHtml":
+        return .string(OpenCodeTUI.filterDisallowedRawHtml(try requireString(args, 0)))
+
+    case "patchmark/src/stream.ts#splitPendingMarker":
+        let split = OpenCodeTUI.splitPendingMarker(try requireString(args, 0))
+        return .object([
+            "visible": .string(split.visible),
+            "held": .string(split.held),
+        ])
+
+    case "patchmark/src/html.ts#renderBlocksToHtml":
+        let md = try requireString(args, 0)
+        let optsObj = args.count > 1 ? args[1].objectValue : nil
+        let gfm = optsObj?["gfm"]?.boolValue ?? true
+        let math = optsObj?["math"]?.boolValue ?? false
+        let stream = PatchmarkStream(StreamOptions(gfm: gfm, math: math))
+        stream.update(md, streaming: false)
+        return .string(OpenCodeTUI.renderBlocksToHtml(stream.getBlocks(), options: HtmlRenderOptions(gfm: gfm, math: math)))
+
+    // MARK: - packages/ai
+    case "ai/src/protocols/utils/mistral-tool-id.ts#valid":
+        return .bool(AIProtocolUtils.MistralToolID.valid(try requireString(args, 0)))
+
+    case "ai/src/protocols/utils/mistral-tool-id.ts#hash":
+        return .string(AIProtocolUtils.MistralToolID.hash(try requireString(args, 0)))
+
+    case "ai/src/protocols/utils/claude-model.ts#claudeVersion":
+        if let v = AIProtocolUtils.ClaudeModel.claudeVersion(try requireString(args, 0)) {
+            return .object([
+                "family": .string(v.family),
+                "major": .int(Int64(v.major)),
+                "minor": .int(Int64(v.minor)),
+            ])
+        }
+        return .null
+
+    case "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding":
+        guard let obj = args.first?.objectValue, let id = obj["id"]?.stringValue else {
+            throw DispatchError.invalidArguments("Expected { id, supportsThinkingBlockBinding? }")
+        }
+        let compat = obj["supportsThinkingBlockBinding"]?.boolValue.map {
+            AIProtocolUtils.ModelCompatibility(supportsThinkingBlockBinding: $0)
+        }
+        let desc = AIProtocolUtils.ModelDescriptor(id: id, provider: "anthropic", compatibility: compat)
+        return .bool(AIProtocolUtils.ClaudeModel.supportsThinkingBlockBinding(desc))
+
+    case "ai/src/protocols/utils/image-sizing.ts#tier":
+        return AIProtocolUtils.ImageSizing.tier(try requireString(args, 0)).map(jsonNumber) ?? .null
+
+    case "ai/src/protocols/utils/image-sizing.ts#fit":
+        guard args.count >= 2,
+              let shapeObj = args[0].objectValue,
+              let limitsObj = args[1].objectValue,
+              let multiple = limitsObj["multiple"]?.intValue else {
+            throw DispatchError.invalidArguments("Expected (shape, limits)")
+        }
+        let shape = AIProtocolUtils.ImageSizing.Shape(
+            aspect: shapeObj["aspect"]?.stringValue,
+            resolution: shapeObj["resolution"]?.stringValue
+        )
+        let limits = AIProtocolUtils.ImageSizing.Limits(
+            multiple: multiple,
+            minEdge: limitsObj["minEdge"]?.intValue,
+            maxEdge: limitsObj["maxEdge"]?.intValue,
+            minPixels: limitsObj["minPixels"]?.intValue,
+            maxPixels: limitsObj["maxPixels"]?.intValue,
+            maxRatio: limitsObj["maxRatio"]?.doubleValue
+        )
+        let size = AIProtocolUtils.ImageSizing.fit(shape, limits: limits)
+        return .object(["width": .int(Int64(size.width)), "height": .int(Int64(size.height))])
+
+    case "ai/src/protocols/utils/image-sizing.ts#nearest":
+        guard args.count >= 2,
+              let shapeObj = args[0].objectValue,
+              let sizesArr = args[1].arrayValue else {
+            throw DispatchError.invalidArguments("Expected (shape, sizes)")
+        }
+        let shape = AIProtocolUtils.ImageSizing.Shape(
+            aspect: shapeObj["aspect"]?.stringValue,
+            resolution: shapeObj["resolution"]?.stringValue
+        )
+        let sizes = try sizesArr.map { item -> AIProtocolUtils.ImageSizing.Size in
+            guard let o = item.objectValue,
+                  let w = o["width"]?.intValue,
+                  let h = o["height"]?.intValue else {
+                throw DispatchError.invalidArguments("Invalid Size object")
+            }
+            return AIProtocolUtils.ImageSizing.Size(width: w, height: h)
+        }
+        let best = AIProtocolUtils.ImageSizing.nearest(shape, sizes: sizes)
+        return .object(["width": .int(Int64(best.width)), "height": .int(Int64(best.height))])
+
+    case "ai/src/protocols/utils/gemini-json-schema.ts#normalize":
+        guard let obj = args.first?.objectValue else {
+            throw DispatchError.invalidArguments("Expected schema object")
+        }
+        let schemaDict = obj.mapValues(toSchemaJSON)
+        let res = AIProtocolUtils.GeminiJsonSchema.normalize(schemaDict)
+        return fromSchemaJSON(.object(res))
+
+    case "ai/src/protocols/utils/cache.ts#openAIRequestTTL":
+        let res = AIProtocolUtils.Cache.openAIRequestTTL(optionalString(args, 0))
+        return fromSchemaJSON(.object(res))
+
+    case "ai/src/protocols/utils/partial-json.ts#parseJSON":
+        let raw = try requireString(args, 0)
+        let parsed: OpenCodeSchema.JSONValue
+        if args.count > 1, let allow = args[1].intValue {
+            parsed = try AIProtocolUtils.PartialJSONParser.parseJSON(raw, allowPartial: allow)
+        } else {
+            parsed = try AIProtocolUtils.PartialJSONParser.parseJSON(raw)
+        }
+        return fromSchemaJSON(parsed)
+
+    case "ai/src/utils/media-type.ts#detectMediaType":
+        return AIUtils.detectMediaType(try requireBytes(args, 0)).map { .string($0) } ?? .null
+
+    case "ai/src/utils/media-type.ts#fileMediaType":
+        return AIUtils.fileMediaType(try requireBytes(args, 0), path: try requireString(args, 1)).map { .string($0) } ?? .null
+
+    case "ai/src/utils/media-type.ts#mediaTypeExtension":
+        return AIUtils.mediaTypeExtension(try requireString(args, 0)).map { .string($0) } ?? .null
+
+    case "ai/src/utils/provider-codes.ts#awsErrorType":
+        return .array(AIUtils.awsErrorType(optionalString(args, 0)).map { .string($0) })
+
+    case "ai/src/utils/provider-codes.ts#providerCodes":
+        guard let first = args.first else {
+            throw DispatchError.invalidArguments("Expected argument for providerCodes")
+        }
+        return .array(AIUtils.providerCodes(toSchemaJSON(first)).map { .string($0) })
+
+    case "ai/src/route/endpoint.ts#trimBaseUrl":
+        return .string(AIEndpoint.trimBaseUrl(try requireString(args, 0)))
+
+    case "ai/src/protocols/shared.ts#wrapSystemUpdate":
+        guard let arr = args.first?.arrayValue else {
+            throw DispatchError.invalidArguments("Expected string array")
+        }
+        let parts = try arr.map { v -> AIProtocolUtils.TextPart in
+            guard let s = v.stringValue else { throw DispatchError.invalidArguments("Expected strings") }
+            return AIProtocolUtils.TextPart(text: s)
+        }
+        return .string(AIProtocolUtils.ProviderShared.wrapSystemUpdate(parts))
+
+    case "ai/src/protocols/shared.ts#fitThinkingBudget":
+        let budget = try requireInt(args, 0)
+        let maxTokens: Int? = args.count > 1 ? args[1].intValue : nil
+        let minimum: Int = args.count > 2 ? (args[2].intValue ?? 1) : 1
+        return .int(Int64(AIProtocolUtils.ProviderShared.fitThinkingBudget(budget, maxTokens: maxTokens, minimum: minimum)))
+
+    case "ai/src/protocols/shared.ts#promptCacheKey":
+        guard let obj = args.first?.objectValue else {
+            throw DispatchError.invalidArguments("Expected promptCacheKey config object")
+        }
+        let cacheSetting: AIProtocolUtils.CacheSetting
+        switch obj["cache"]?.stringValue {
+        case "none": cacheSetting = .none
+        default: cacheSetting = .auto
+        }
+        let caps = obj["capabilityPromptCacheKey"]?.boolValue.map {
+            AIProtocolUtils.ModelCapabilities(promptCacheKey: $0)
+        }
+        let req = AIProtocolUtils.LLMRequest(
+            model: AIProtocolUtils.ModelDescriptor(id: "gpt-5", provider: "openai", capabilities: caps),
+            cache: cacheSetting,
+            promptCacheKey: obj["promptCacheKey"]?.stringValue
+        )
+        return AIProtocolUtils.ProviderShared.promptCacheKey(req).map { .string($0) } ?? .null
+
+    case "ai/src/provider-error.ts#isContextOverflow":
+        return .bool(AIErrorClassifier.isContextOverflow(try requireString(args, 0)))
+
+    // MARK: - packages/core
+    case "core/src/util/wildcard.ts#match":
+        let input = try requireString(args, 0)
+        let pattern = try requireString(args, 1)
+        let ignoreCase = args.count > 2 ? (args[2].boolValue ?? false) : false
+        return .bool(CoreSubsystems.Util.Wildcard.match(input, pattern: pattern, ignoreCase: ignoreCase))
+
+    case "core/src/util/canonical-json.ts#canonicalJson":
+        guard let first = args.first else {
+            throw DispatchError.invalidArguments("Expected JSON value")
+        }
+        return .string(CoreSubsystems.Util.canonicalJson(toSchemaJSON(first)))
+
+    case "core/src/util/token.ts#estimate":
+        return .int(Int64(CoreSubsystems.Util.Token.estimate(try requireString(args, 0))))
+
+    case "core/src/mime.ts#detect":
+        return .string(CoreFilesystem.Mime.detect(try requireBytes(args, 0)))
+
+    case "core/src/mime.ts#detectMedia":
+        return CoreFilesystem.Mime.detectMedia(try requireBytes(args, 0)).map { .string($0) } ?? .null
+
+    case "core/src/mime.ts#isTextual":
+        return .bool(CoreFilesystem.Mime.isTextual(try requireString(args, 0)))
+
+    case "core/src/config/markdown.ts#sanitize":
+        return .string(CoreConfigMarkdown.sanitize(try requireString(args, 0)))
+
+    case "core/src/managed-policy.ts#decision":
+        guard args.count >= 3, let arr = args[0].arrayValue else {
+            throw DispatchError.invalidArguments("Expected (policies, action, resource)")
+        }
+        let policies = try arr.map { item -> ConfigPolicySchema.Info in
+            guard let o = item.objectValue,
+                  let actRaw = o["action"]?.stringValue,
+                  let act = ConfigPolicySchema.Action(rawValue: actRaw),
+                  let res = o["resource"]?.stringValue,
+                  let effRaw = o["effect"]?.stringValue,
+                  let eff = ConfigPolicySchema.Effect(rawValue: effRaw) else {
+                throw DispatchError.invalidArguments("Invalid ConfigPolicySchema.Info")
+            }
+            return ConfigPolicySchema.Info(action: act, resource: res, effect: eff)
+        }
+        guard let action = ConfigPolicySchema.Action(rawValue: try requireString(args, 1)) else {
+            throw DispatchError.invalidArguments("Invalid ConfigPolicySchema.Action")
+        }
+        let resource = try requireString(args, 2)
+        return .string(CoreManagedPolicy.decision(policies, action: action, resource: resource).rawValue)
+
+    case "core/src/flag.ts#resolve":
+        guard let obj = args.first?.objectValue,
+              let entriesArr = obj["entries"]?.arrayValue,
+              let channel = obj["channel"]?.stringValue else {
+            throw DispatchError.invalidArguments("Expected { entries, channel, overrides? }")
+        }
+        let entries: [CoreConfigEntry] = entriesArr.map { entryVal in
+            let expObj = entryVal.objectValue?["experimental"]?.objectValue
+            let exp = expObj.map { e in
+                ConfigExperimentalSchema.Info(
+                    allFlags: e["all_flags"]?.boolValue,
+                    todo: e["todo"]?.boolValue,
+                    mediaBlob: e["media_blob"]?.boolValue,
+                    automations: e["automations"]?.boolValue,
+                    artifacts: e["artifacts"]?.boolValue,
+                    videoGenerate: e["video_generate"]?.boolValue,
+                    consoleWatches: e["console_watches"]?.boolValue,
+                    mcpEvents: e["mcp_events"]?.boolValue,
+                    fullCodemode: e["full_codemode"]?.boolValue,
+                    schedules: e["schedules"]?.boolValue
+                )
+            }
+            return .document(ConfigSchema.Document(info: ConfigSchema.Info(experimental: exp)))
+        }
+        let resolved = CoreFlag.resolve(CoreFlag.ResolveInput(
+            entries: entries,
+            channel: channel,
+            overrides: obj["overrides"]?.stringValue
+        ))
+        var out: [String: JSONValue] = [:]
+        for (key, state) in resolved {
+            out[key.rawValue] = .object([
+                "enabled": .bool(state.enabled),
+                "source": .string(state.source.rawValue),
+            ])
+        }
+        return .object(out)
+
+    case "core/src/permission.ts#evaluate":
+        guard args.count >= 3, let setsArr = args[2].arrayValue else {
+            throw DispatchError.invalidArguments("Expected (action, resource, rulesets)")
+        }
+        let action = try requireString(args, 0)
+        let resource = try requireString(args, 1)
+        let rulesets: [PermissionSchema.Ruleset] = try setsArr.map { rsVal in
+            guard let rs = rsVal.arrayValue else {
+                throw DispatchError.invalidArguments("Expected ruleset array")
+            }
+            return try rs.map { ruleVal in
+                guard let o = ruleVal.objectValue,
+                      let rAct = o["action"]?.stringValue,
+                      let rRes = o["resource"]?.stringValue,
+                      let rEffRaw = o["effect"]?.stringValue,
+                      let rEff = PermissionSchema.Effect(rawValue: rEffRaw) else {
+                    throw DispatchError.invalidArguments("Invalid PermissionSchema.Rule")
+                }
+                return PermissionSchema.Rule(action: rAct, resource: rRes, effect: rEff)
+            }
+        }
+        let result = CorePermission.evaluate(action: action, resource: resource, rulesets: rulesets)
+        return .object([
+            "action": .string(result.action),
+            "resource": .string(result.resource),
+            "effect": .string(result.effect.rawValue),
+        ])
+
+    // MARK: - packages/server
+    case "server/src/range.ts#parse":
+        let parsed = ByteRange.parse(optionalString(args, 0), size: try requireInt(args, 1))
+        switch parsed {
+        case nil: return .null
+        case .unsatisfiable: return .string("unsatisfiable")
+        case .range(let slice):
+            return .object(["start": .int(Int64(slice.start)), "end": .int(Int64(slice.end))])
+        }
+
+    case "server/src/content-headers.ts#disposition":
+        return .string(ContentHeaders.disposition(try requireString(args, 0)))
+
+    case "server/src/content-headers.ts#download":
+        guard let obj = args.first?.objectValue, let mime = obj["mime"]?.stringValue else {
+            throw DispatchError.invalidArguments("Expected { path?, mime }")
+        }
+        let headers = ContentHeaders.download(path: obj["path"]?.stringValue, mime: mime)
+        return .object(headers.mapValues { .string($0) })
+
+    case "server/src/cors.ts#isAllowedCorsOrigin":
+        return .bool(isAllowedCorsOrigin(optionalString(args, 0), opts: decodeCorsOptions(args, 1)))
+
+    case "server/src/cors.ts#isAllowedRequestOrigin":
+        return .bool(isAllowedRequestOrigin(optionalString(args, 0), host: optionalString(args, 1), opts: decodeCorsOptions(args, 2)))
+
+    case "server/src/media-uri.ts#wantsMediaRefs":
+        let headers = try decodeStringMap(args[0])
+        return .bool(wantsMediaRefs(ServerHTTPRequest(method: "GET", url: "http://localhost/", headers: headers)))
+
+    case "server/src/request-site.ts#rejected":
+        guard let obj = args.first?.objectValue,
+              let url = obj["url"]?.stringValue,
+              let headersVal = obj["headers"] else {
+            throw DispatchError.invalidArguments("Expected { url, headers }")
+        }
+        let headers = try decodeStringMap(headersVal)
+        let req = ServerHTTPRequest(method: "GET", url: url, headers: headers)
+        return .bool(RequestSite.rejected(req, options: decodeCorsOptions(args, 1)))
+
+    // MARK: - packages/schema & packages/protocol
+    case "schema/src/token-usage.ts#total":
+        guard let obj = args.first?.objectValue,
+              let input = obj["input"]?.doubleValue,
+              let output = obj["output"]?.doubleValue,
+              let reasoning = obj["reasoning"]?.doubleValue,
+              let cacheObj = obj["cache"]?.objectValue,
+              let read = cacheObj["read"]?.doubleValue,
+              let write = cacheObj["write"]?.doubleValue else {
+            throw DispatchError.invalidArguments("Expected TokenUsage.Info")
+        }
+        let total = TokenUsageSchema.total(TokenUsageSchema.Info(
+            input: input,
+            output: output,
+            reasoning: reasoning,
+            cache: TokenUsageSchema.Cache(read: read, write: write)
+        ))
+        return jsonNumber(total)
+
+    case "schema/src/event.ts#versionedType":
+        return .string(EventSchema.versionedType(try requireString(args, 0), version: try requireInt(args, 1)))
+
+    case "schema/src/event-manifest.ts#isServer":
+        return .bool(EventManifestSchema.isServer(type: try requireString(args, 0)))
+
+    case "protocol/src/groups/event.ts#isOpenCodeEvent":
+        return .bool(isOpenCodeEvent(type: try requireString(args, 0)))
+
+    case "protocol/src/groups/server.ts#isPairingConnectURL":
+        return .bool(isPairingConnectURL(try requireString(args, 0)))
+
+    case "protocol/src/groups/pty.ts#hasPtyConnectTicketURL":
+        return .bool(hasPtyConnectTicketURL(try requireString(args, 0)))
+
+    case "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL":
+        return .bool(hasPersistentPtyConnectTicketURL(try requireString(args, 0)))
+
+    case "protocol/src/groups/mcp.ts#hasMcpClientTicketURL":
+        return .bool(hasMcpClientTicketURL(try requireString(args, 0)))
+
+    // MARK: - packages/cli
+    case "cli/src/database-path.ts#databasePath":
+        let data = try requireString(args, 0)
+        let envMap = args.count > 1 ? (try decodeStringMap(args[1])) : [:]
+        return .string(CLIUtil.databasePath(data, channel: "local", environment: DictionaryEnvironment(variables: envMap)))
+
+    case "cli/src/services/updater-action.ts#parseReleaseVersion":
+        if let v = CLIServices.UpdaterAction.parseReleaseVersion(try requireString(args, 0)) {
+            return .object([
+                "major": .string(v.major),
+                "core": .string(v.core),
+                "prerelease": .array(v.prerelease.map { .string($0) }),
+            ])
+        }
+        return .null
+
+    case "cli/src/services/updater-action.ts#action":
+        let cur = try requireString(args, 0)
+        let lat = try requireString(args, 1)
+        guard let policy = CLIServices.UpdaterAction.Policy(rawValue: try requireString(args, 2)) else {
+            throw DispatchError.invalidArguments("Invalid UpdaterAction.Policy")
+        }
+        return .string(CLIServices.UpdaterAction.action(current: cur, latest: lat, policy: policy).rawValue)
+
+    case "cli/src/services/service-config.ts#filename":
+        return .string(CLIServices.ServiceConfig.filename(channel: try requireString(args, 0)))
+
+    case "cli/src/services/service-config.ts#defaultPort":
+        let ch = try requireString(args, 0)
+        let plat = decodePlatformOS(try requireString(args, 1))
+        return .int(Int64(CLIServices.ServiceConfig.defaultPort(channel: ch, platform: plat)))
+
+    case "cli/src/services/service-config.ts#legacyFilename":
+        return CLIServices.ServiceConfig.legacyFilename(channel: try requireString(args, 0)).map { .string($0) } ?? .null
+
+    case "cli/src/services/service-config.ts#versionBelongsToChannel":
+        return .bool(CLIServices.ServiceConfig.versionBelongsToChannel(
+            optionalString(args, 0),
+            channel: try requireString(args, 1),
+            installedVersion: try requireString(args, 2)
+        ))
+
+    case "cli/src/node/target.ts#nodeTarget":
+        let t = try CLIUtil.Node.nodeTarget(platform: try requireString(args, 0), arch: try requireString(args, 1))
+        return .object([
+            "platform": .string(t.platform),
+            "arch": .string(t.arch),
+            "nodePtyPackage": .string(t.nodePtyPackage),
+            "nodePtyEntryAsset": .string(t.nodePtyEntryAsset),
+            "parcelWatcherPackage": .string(t.parcelWatcherPackage),
+            "parcelWatcherAsset": .string(t.parcelWatcherAsset),
+            "fffPackage": .string(t.fffPackage),
+            "fffAsset": .string(t.fffAsset),
+            "fffFfiPackage": .string(t.fffFfiPackage),
+            "fffFfiAsset": .string(t.fffFfiAsset),
+            "opencodePtyAsset": .string(t.opencodePtyAsset),
+        ])
 
     default:
         throw DispatchError.unknownFunction(req.fn)

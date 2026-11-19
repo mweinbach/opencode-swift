@@ -1,0 +1,85 @@
+[
+  {
+    "fn": "schema/src/token-usage.ts#total",
+    "cases": [
+      { "name": "all zeros", "args": [{ "input": 0, "output": 0, "reasoning": 0, "cache": { "read": 0, "write": 0 } }] },
+      { "name": "typical turn usage", "args": [{ "input": 1200, "output": 350, "reasoning": 150, "cache": { "read": 8000, "write": 400 } }] },
+      { "name": "large context window counts", "args": [{ "input": 1000000, "output": 65536, "reasoning": 32768, "cache": { "read": 500000, "write": 125000 } }] },
+      { "name": "fractional values", "args": [{ "input": 1.5, "output": 2.25, "reasoning": 0.25, "cache": { "read": 3, "write": 0.5 } }] }
+    ]
+  },
+  {
+    "fn": "schema/src/event.ts#versionedType",
+    "cases": [
+      { "name": "session created v1", "args": ["session.created", 1] },
+      { "name": "session inbox enqueued v2", "args": ["session.inbox.enqueued", 2] },
+      { "name": "double digit version", "args": ["workspace.ready", 12] }
+    ]
+  },
+  {
+    "fn": "schema/src/event-manifest.ts#isServer",
+    "cases": [
+      { "name": "session.created is server event", "args": ["session.created"] },
+      { "name": "session.status is server event", "args": ["session.status"] },
+      { "name": "permission.asked is server event", "args": ["permission.asked"] },
+      { "name": "provider.updated is server event", "args": ["provider.updated"] },
+      { "name": "tui.toast.show is server event", "args": ["tui.toast.show"] },
+      { "name": "vcs.branch.updated is server event", "args": ["vcs.branch.updated"] },
+      { "name": "server.connected is NOT in ServerDefinitions", "args": ["server.connected"] },
+      { "name": "v1 message.updated is NOT a server event", "args": ["message.updated"] },
+      { "name": "rpc.custom is NOT in ServerDefinitions", "args": ["rpc.custom"] },
+      { "name": "unknown event is false", "args": ["does.not.exist"] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+    "cases": [
+      { "name": "server.connected is opencode event", "args": ["server.connected"] },
+      { "name": "session.created is opencode event", "args": ["session.created"] },
+      { "name": "rpc.plugin.ping is opencode event", "args": ["rpc.plugin.ping"] },
+      { "name": "bare rpc. prefix is opencode event", "args": ["rpc."] },
+      { "name": "rpc without dot is false", "args": ["rpc"] },
+      { "name": "v1 message.updated is false", "args": ["message.updated"] },
+      { "name": "unknown event is false", "args": ["custom.unknown"] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+    "cases": [
+      { "name": "valid pairing url", "args": ["http://localhost:4096/auth/connect/abc123"] },
+      { "name": "valid pairing url with query", "args": ["https://opencode.ai/auth/connect/CODE-99?next=/"] },
+      { "name": "missing code segment", "args": ["http://localhost:4096/auth/connect/"] },
+      { "name": "extra trailing segment", "args": ["http://localhost:4096/auth/connect/abc/extra"] },
+      { "name": "wrong path", "args": ["http://localhost:4096/api/pair"] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+    "cases": [
+      { "name": "valid pty connect url with ticket", "args": ["ws://localhost:4096/api/pty/pty_123/connect?ticket=tok_abc"] },
+      { "name": "valid with extra query params", "args": ["http://localhost:4096/api/pty/pty_123/connect?cursor=0&ticket=tok_abc"] },
+      { "name": "empty ticket rejected", "args": ["ws://localhost:4096/api/pty/pty_123/connect?ticket="] },
+      { "name": "missing ticket rejected", "args": ["ws://localhost:4096/api/pty/pty_123/connect?cursor=0"] },
+      { "name": "nested ptyID slash rejected", "args": ["ws://localhost:4096/api/pty/a/b/connect?ticket=tok"] },
+      { "name": "wrong endpoint rejected", "args": ["ws://localhost:4096/api/pty/pty_123/connect-token?ticket=tok"] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL",
+    "cases": [
+      { "name": "valid persistent pty connect with ticket", "args": ["ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect?ticket=t1"] },
+      { "name": "empty ticket rejected", "args": ["ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect?ticket="] },
+      { "name": "missing ticket rejected", "args": ["ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect"] },
+      { "name": "regular pty path rejected", "args": ["ws://localhost:4096/api/pty/pty_9/connect?ticket=t1"] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/mcp.ts#hasMcpClientTicketURL",
+    "cases": [
+      { "name": "valid mcp client url with ticket", "args": ["ws://localhost:4096/api/experimental/client-mcp?name=github&ticket=t1"] },
+      { "name": "empty ticket rejected", "args": ["ws://localhost:4096/api/experimental/client-mcp?ticket="] },
+      { "name": "missing ticket rejected", "args": ["ws://localhost:4096/api/experimental/client-mcp?name=github"] },
+      { "name": "trailing slash rejected", "args": ["ws://localhost:4096/api/experimental/client-mcp/?ticket=t1"] }
+    ]
+  }
+]

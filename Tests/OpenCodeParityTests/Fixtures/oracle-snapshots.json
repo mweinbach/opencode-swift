@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
-  "generatedAt": "2026-11-19T04:40:44.482Z",
-  "vectorCount": 484,
+  "generatedAt": "2026-11-19T18:29:35.380Z",
+  "vectorCount": 1038,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -3197,6 +3197,2038 @@
       }
     },
     {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "valid 9 alphanumeric",
+      "args": [
+        "AbC123xYz"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "too short 8 chars",
+      "args": [
+        "AbC123xY"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "too long 10 chars",
+      "args": [
+        "AbC123xYz0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "contains underscore invalid",
+      "args": [
+        "call_1234"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "contains dash invalid",
+      "args": [
+        "abc-12345"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "empty invalid",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+      "name": "non-ascii invalid",
+      "args": [
+        "ébc123456"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "empty string",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "fp115p7cn"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "openai call id",
+      "args": [
+        "call_abc123def456"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "rk1vl33ke"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "anthropic toolu id",
+      "args": [
+        "toolu_01A09q90qw90lq917835lq9"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "t10pr4bej"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "uuid",
+      "args": [
+        "550e8400-e29b-41d4-a716-446655440000"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a00wde1vm"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "collision attempt suffix",
+      "args": [
+        "call_1:1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ug0gri8cm"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "cjk tool id",
+      "args": [
+        "ツール呼び出し_1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "480b3js4a"
+    },
+    {
+      "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+      "name": "emoji surrogate pair tool id",
+      "args": [
+        "call_🚀_🎉"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ji10rze6c"
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "direct major.minor",
+      "args": [
+        "claude-opus-4-6"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "opus",
+        "major": 4,
+        "minor": 6
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "direct dotted minor",
+      "args": [
+        "claude-sonnet-4.5"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "sonnet",
+        "major": 4,
+        "minor": 5
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "snapshot date ignored as minor",
+      "args": [
+        "claude-sonnet-4-5-20250929"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "sonnet",
+        "major": 4,
+        "minor": 5
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "major only with snapshot date",
+      "args": [
+        "claude-opus-4-20250514"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "opus",
+        "major": 4,
+        "minor": 0
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "gateway slash prefix",
+      "args": [
+        "anthropic/claude-opus-5-1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "opus",
+        "major": 5,
+        "minor": 1
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "bedrock dot prefix with colon version",
+      "args": [
+        "us.anthropic.claude-sonnet-5-2-20260801-v1:0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "sonnet",
+        "major": 5,
+        "minor": 2
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "vertex @ suffix",
+      "args": [
+        "claude-haiku-4-5@20251001"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "haiku",
+        "major": 4,
+        "minor": 5
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "uppercase normalized",
+      "args": [
+        "ANTHROPIC/CLAUDE-OPUS-5.1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "family": "opus",
+        "major": 5,
+        "minor": 1
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "non-claude model returns null",
+      "args": [
+        "gpt-5.2-codex"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+      "name": "embedded claude without boundary returns null",
+      "args": [
+        "myclaude-opus-5-1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "claude 4.6 false",
+      "args": [
+        {
+          "id": "claude-opus-4-6"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "claude 5.0 false",
+      "args": [
+        {
+          "id": "claude-opus-5-0"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "claude 5.1 true",
+      "args": [
+        {
+          "id": "claude-opus-5-1"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "claude 6.0 true",
+      "args": [
+        {
+          "id": "anthropic/claude-sonnet-6"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "explicit compatibility override true on 4.5",
+      "args": [
+        {
+          "id": "claude-sonnet-4-5",
+          "supportsThinkingBlockBinding": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "explicit compatibility override false on 5.2",
+      "args": [
+        {
+          "id": "claude-opus-5-2",
+          "supportsThinkingBlockBinding": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+      "name": "non-claude false",
+      "args": [
+        {
+          "id": "gemini-3-pro"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "1K",
+      "args": [
+        "1K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "2k lowercase",
+      "args": [
+        "2k"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "0.5K fractional",
+      "args": [
+        "0.5K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0.5
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "4K",
+      "args": [
+        "4K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 4
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "pixel dimensions rejected",
+      "args": [
+        "1024x1024"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "bare k rejected",
+      "args": [
+        "k"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "double dot rejected",
+      "args": [
+        "1.2.3K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "empty rejected",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "default 1:1 1K multiple 64",
+      "args": [
+        {},
+        {
+          "multiple": 64
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 1024,
+        "width": 1024
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "16:9 1K multiple 16",
+      "args": [
+        {
+          "aspect": "16:9",
+          "resolution": "1K"
+        },
+        {
+          "multiple": 16
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 768,
+        "width": 1360
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "9:16 2K clamped by maxEdge",
+      "args": [
+        {
+          "aspect": "9:16",
+          "resolution": "2K"
+        },
+        {
+          "multiple": 32,
+          "maxEdge": 2048
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 2048,
+        "width": 1152
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "0.5K raised by minEdge",
+      "args": [
+        {
+          "aspect": "1:1",
+          "resolution": "0.5K"
+        },
+        {
+          "multiple": 16,
+          "minEdge": 768
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 768,
+        "width": 768
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "clamped by maxPixels",
+      "args": [
+        {
+          "aspect": "4:3",
+          "resolution": "2K"
+        },
+        {
+          "multiple": 16,
+          "maxPixels": 1048576
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 880,
+        "width": 1168
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "raised by minPixels",
+      "args": [
+        {
+          "aspect": "3:2",
+          "resolution": "0.5K"
+        },
+        {
+          "multiple": 16,
+          "minPixels": 1048576
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 848,
+        "width": 1264
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+      "name": "aspect clamped by maxRatio",
+      "args": [
+        {
+          "aspect": "21:9",
+          "resolution": "1K"
+        },
+        {
+          "multiple": 32,
+          "maxRatio": 2
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 736,
+        "width": 1440
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#nearest",
+      "name": "exact square match",
+      "args": [
+        {
+          "aspect": "1:1",
+          "resolution": "1K"
+        },
+        [
+          {
+            "width": 1024,
+            "height": 1024
+          },
+          {
+            "width": 1536,
+            "height": 1024
+          },
+          {
+            "width": 1024,
+            "height": 1536
+          }
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 1024,
+        "width": 1024
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#nearest",
+      "name": "picks closest aspect first",
+      "args": [
+        {
+          "aspect": "16:9",
+          "resolution": "1K"
+        },
+        [
+          {
+            "width": 1024,
+            "height": 1024
+          },
+          {
+            "width": 1792,
+            "height": 1024
+          },
+          {
+            "width": 1024,
+            "height": 1792
+          }
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 1024,
+        "width": 1792
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#nearest",
+      "name": "same aspect tiebreaks by pixel area",
+      "args": [
+        {
+          "aspect": "1:1",
+          "resolution": "2K"
+        },
+        [
+          {
+            "width": 512,
+            "height": 512
+          },
+          {
+            "width": 1024,
+            "height": 1024
+          },
+          {
+            "width": 2048,
+            "height": 2048
+          }
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "height": 2048,
+        "width": 2048
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "filters undeclared required properties",
+      "args": [
+        {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "a",
+            "missing"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "draft-04 boolean exclusiveMinimum and exclusiveMaximum",
+      "args": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMinimum": true,
+          "maximum": 10,
+          "exclusiveMaximum": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "exclusiveMaximum": 10,
+        "exclusiveMinimum": 0,
+        "type": "number"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "draft-04 false exclusive bounds dropped",
+      "args": [
+        {
+          "type": "number",
+          "minimum": 1,
+          "exclusiveMinimum": false,
+          "maximum": 5,
+          "exclusiveMaximum": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "maximum": 5,
+        "minimum": 1,
+        "type": "number"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "draft-07 tuple items and additionalItems to prefixItems and items",
+      "args": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "additionalItems": {
+            "type": "boolean"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "items": {
+          "type": "boolean"
+        },
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ],
+        "type": "array"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "cuts unsafe direct required recursion loop",
+      "args": [
+        {
+          "type": "object",
+          "properties": {
+            "self": {
+              "$ref": "#"
+            }
+          },
+          "required": [
+            "self"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "properties": {
+          "self": {}
+        },
+        "required": [
+          "self"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "preserves safe optional recursion loop",
+      "args": [
+        {
+          "type": "object",
+          "properties": {
+            "next": {
+              "$ref": "#"
+            }
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "properties": {
+          "next": {
+            "$ref": "#"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+      "name": "preserves values keys verbatim",
+      "args": [
+        {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ],
+          "default": "a",
+          "examples": [
+            "b"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "default": "a",
+        "enum": [
+          "a",
+          "b"
+        ],
+        "examples": [
+          "b"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+      "name": "undefined returns empty object",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {}
+    },
+    {
+      "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+      "name": "24h uses prompt_cache_retention",
+      "args": [
+        "24h"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "prompt_cache_retention": "24h"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+      "name": "5m uses prompt_cache_options.ttl",
+      "args": [
+        "5m"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "prompt_cache_options": {
+          "ttl": "5m"
+        }
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+      "name": "1h uses prompt_cache_options.ttl",
+      "args": [
+        "1h"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "prompt_cache_options": {
+          "ttl": "1h"
+        }
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+      "name": "in_memory uses prompt_cache_options.ttl",
+      "args": [
+        "in_memory"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "prompt_cache_options": {
+          "ttl": "in_memory"
+        }
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "complete object",
+      "args": [
+        "{\"a\":1,\"b\":\"hi\"}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "a": 1,
+        "b": "hi"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "truncated string inside object",
+      "args": [
+        "{\"msg\":\"hello wor"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "msg": "hello wor"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "truncated array of numbers",
+      "args": [
+        "[1, 2, 3"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "truncated nested object after colon",
+      "args": [
+        "{\"ok\":true,\"partial\":"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "truncated boolean literal",
+      "args": [
+        "{\"flag\":tr"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "flag": true
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "truncated null literal",
+      "args": [
+        "[nu"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        null
+      ]
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "unescaped control character repaired",
+      "args": [
+        "{\"text\":\"line1\nline2\"}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "text": "line1\nline2"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "unicode and emoji in truncated string",
+      "args": [
+        "{\"jp\":\"日本語 🚀"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "jp": "日本語 🚀"
+      }
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "empty string errors",
+      "args": [
+        ""
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+      "name": "whitespace only errors",
+      "args": [
+        "   "
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "png signature",
+      "args": [
+        [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/png"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "jpeg signature",
+      "args": [
+        [
+          255,
+          216,
+          255,
+          224
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/jpeg"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "gif signature",
+      "args": [
+        [
+          71,
+          73,
+          70,
+          56,
+          57,
+          97
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/gif"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "riff webp",
+      "args": [
+        [
+          82,
+          73,
+          70,
+          70,
+          0,
+          0,
+          0,
+          0,
+          87,
+          69,
+          66,
+          80
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/webp"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "riff wav",
+      "args": [
+        [
+          82,
+          73,
+          70,
+          70,
+          0,
+          0,
+          0,
+          0,
+          87,
+          65,
+          86,
+          69
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/wav"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "pdf",
+      "args": [
+        [
+          37,
+          80,
+          68,
+          70,
+          45,
+          49,
+          46,
+          55
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/pdf"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "mp4 isom ftyp",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          16,
+          102,
+          116,
+          121,
+          112,
+          105,
+          115,
+          111,
+          109,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "video/mp4"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "avif ftyp",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          16,
+          102,
+          116,
+          121,
+          112,
+          97,
+          118,
+          105,
+          102,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/avif"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "mif1 compatible avif",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          20,
+          102,
+          116,
+          121,
+          112,
+          109,
+          105,
+          102,
+          49,
+          0,
+          0,
+          0,
+          0,
+          97,
+          118,
+          105,
+          102
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/avif"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "heic ftyp",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          16,
+          102,
+          116,
+          121,
+          112,
+          104,
+          101,
+          105,
+          99,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/heic"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "quicktime ftyp",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          16,
+          102,
+          116,
+          121,
+          112,
+          113,
+          116,
+          32,
+          32,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "video/quicktime"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "m4a ftyp",
+      "args": [
+        [
+          0,
+          0,
+          0,
+          16,
+          102,
+          116,
+          121,
+          112,
+          77,
+          52,
+          65,
+          32,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/mp4"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "webm ebml",
+      "args": [
+        [
+          26,
+          69,
+          223,
+          163
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "video/webm"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "mp3 id3",
+      "args": [
+        [
+          73,
+          68,
+          51,
+          3
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/mpeg"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "aac adts sync",
+      "args": [
+        [
+          255,
+          241
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/aac"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "mpeg audio sync",
+      "args": [
+        [
+          255,
+          251
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/mpeg"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "ogg",
+      "args": [
+        [
+          79,
+          103,
+          103,
+          83
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/ogg"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "flac",
+      "args": [
+        [
+          102,
+          76,
+          97,
+          67
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "audio/flac"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "plain ascii unknown",
+      "args": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#detectMediaType",
+      "name": "empty unknown",
+      "args": [
+        []
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#fileMediaType",
+      "name": "magic bytes override wrong extension",
+      "args": [
+        [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10
+        ],
+        "photo.jpg"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/png"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#fileMediaType",
+      "name": "falls back to extension",
+      "args": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ],
+        "README.MD"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "text/markdown"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#fileMediaType",
+      "name": "unknown bytes and unknown extension",
+      "args": [
+        [
+          1,
+          2,
+          3
+        ],
+        "file.unknown"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "image/png",
+      "args": [
+        "image/png"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "png"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "image/jpeg",
+      "args": [
+        "image/jpeg"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "jpg"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "alias audio/mp3",
+      "args": [
+        "audio/mp3"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "mp3"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "alias audio/x-wav with charset param",
+      "args": [
+        "AUDIO/X-WAV; charset=binary"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "wav"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "application/pdf with whitespace",
+      "args": [
+        "  application/pdf ; version=1.7 "
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "pdf"
+    },
+    {
+      "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+      "name": "unknown returns null",
+      "args": [
+        "application/x-custom"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#awsErrorType",
+      "name": "plain error name",
+      "args": [
+        "ThrottlingException"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "ThrottlingException"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#awsErrorType",
+      "name": "namespaced with uri suffix",
+      "args": [
+        "com.amazon.bedrock#ValidationException:http://internal.amazon.com/coral/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "ValidationException"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#awsErrorType",
+      "name": "uri suffix only",
+      "args": [
+        "ServiceUnavailableException:http://example.com"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "ServiceUnavailableException"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#awsErrorType",
+      "name": "null returns empty array",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "openai nested error json string",
+      "args": [
+        "{\"error\":{\"code\":\"context_length_exceeded\",\"type\":\"invalid_request_error\"}}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "context_length_exceeded",
+        "invalid_request_error"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "google rpc details reasons",
+      "args": [
+        {
+          "error": {
+            "status": "INVALID_ARGUMENT",
+            "details": [
+              {
+                "reason": "API_KEY_INVALID"
+              },
+              {
+                "reason": "QUOTA_EXCEEDED"
+              }
+            ]
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "INVALID_ARGUMENT",
+        "API_KEY_INVALID",
+        "QUOTA_EXCEEDED"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "aws __type namespaced",
+      "args": [
+        {
+          "__type": "com.amazonaws.bedrock#ThrottlingException:http://aws"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "ThrottlingException"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "azure innererror code",
+      "args": [
+        {
+          "error": {
+            "code": "content_filter",
+            "innererror": {
+              "code": "ResponsibleAIPolicyViolation"
+            }
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "content_filter",
+        "ResponsibleAIPolicyViolation"
+      ]
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "invalid json string returns empty",
+      "args": [
+        "not json"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+      "name": "null returns empty",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+      "name": "no trailing slash",
+      "args": [
+        "https://api.openai.com/v1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://api.openai.com/v1"
+    },
+    {
+      "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+      "name": "single trailing slash",
+      "args": [
+        "https://api.openai.com/v1/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://api.openai.com/v1"
+    },
+    {
+      "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+      "name": "multiple trailing slashes",
+      "args": [
+        "https://api.openai.com/v1///"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://api.openai.com/v1"
+    },
+    {
+      "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+      "name": "only slashes",
+      "args": [
+        "///"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+      "name": "empty string",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#wrapSystemUpdate",
+      "name": "single plain part",
+      "args": [
+        [
+          "Skill loaded"
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<system-update>\nSkill loaded\n</system-update>"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#wrapSystemUpdate",
+      "name": "multiple parts joined with newline",
+      "args": [
+        [
+          "Part 1",
+          "Part 2"
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<system-update>\nPart 1\nPart 2\n</system-update>"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#wrapSystemUpdate",
+      "name": "xml special chars escaped",
+      "args": [
+        [
+          "</system-update> & <inject>"
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<system-update>\n&lt;/system-update&gt; &amp; &lt;inject&gt;\n</system-update>"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#wrapSystemUpdate",
+      "name": "unicode and emoji preserved",
+      "args": [
+        [
+          "日本語 🚀",
+          "café & tea"
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<system-update>\n日本語 🚀\ncafé &amp; tea\n</system-update>"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "no maxTokens unchanged",
+      "args": [
+        4000,
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 4000
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "budget within half unchanged",
+      "args": [
+        2000,
+        4096
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2000
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "budget exactly half unchanged",
+      "args": [
+        2048,
+        4096
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2048
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "budget capped at floor of half",
+      "args": [
+        3000,
+        4095
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2047
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "minimum floor honored",
+      "args": [
+        100,
+        10,
+        32
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 32
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "special budget -1 unchanged",
+      "args": [
+        -1,
+        4096
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": -1
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+      "name": "special budget 0 unchanged",
+      "args": [
+        0,
+        4096
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "absent key returns null",
+      "args": [
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "short ascii key returned",
+      "args": [
+        {
+          "promptCacheKey": "ses_12345"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ses_12345"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "cache none suppresses key",
+      "args": [
+        {
+          "promptCacheKey": "ses_12345",
+          "cache": "none"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "capability false suppresses key",
+      "args": [
+        {
+          "promptCacheKey": "ses_12345",
+          "capabilityPromptCacheKey": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "exactly 64 chars unchanged",
+      "args": [
+        {
+          "promptCacheKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "over 64 ascii chars clamped",
+      "args": [
+        {
+          "promptCacheKey": "0123456789012345678901234567890123456789012345678901234567890123456789"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "0123456789012345678901234567890123456789012345678901234567890123"
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+      "name": "over 64 emoji codepoints clamped without splitting surrogates",
+      "args": [
+        {
+          "promptCacheKey": "🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧END"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧"
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "anthropic prompt is too long",
+      "args": [
+        "prompt is too long: 210000 tokens > 200000 maximum"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "openai maximum context length",
+      "args": [
+        "This model's maximum context length is 128000 tokens. However, your messages exceeded maximum context length of 128,000 tokens"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "openai code context_length_exceeded",
+      "args": [
+        "Error: context_length_exceeded"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "zai chinese overflow",
+      "args": [
+        "Prompt 超长"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "413 no body",
+      "args": [
+        "413 status code (no body)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "bedrock throttling exclusion",
+      "args": [
+        "Too many tokens per day, please wait before retrying"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "rate limit exclusion",
+      "args": [
+        "rate limit: too many tokens"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "cohere max_tokens exclusion",
+      "args": [
+        "max_tokens must be less than 4096: too many tokens"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "ai/src/provider-error.ts#isContextOverflow",
+      "name": "normal error false",
+      "args": [
+        "Invalid API key provided"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
       "fn": "util/src/artifact.ts#artifactMime",
       "name": "png uppercase",
       "args": [
@@ -4731,6 +6763,2155 @@
       }
     },
     {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "local channel default db filename",
+      "args": [
+        "/var/lib/opencode",
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/var/lib/opencode/opencode-local.db"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "explicit memory db",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DB": ":memory:"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ":memory:"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "explicit relative custom db",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DB": "custom.sqlite"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/var/lib/opencode/custom.sqlite"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "explicit absolute custom db overrides data dir",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DB": "/tmp/override.db"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/tmp/override.db"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "disable channel db with 1",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DISABLE_CHANNEL_DB": "1"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/var/lib/opencode/opencode.db"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "disable channel db with true",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DISABLE_CHANNEL_DB": "true"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/var/lib/opencode/opencode.db"
+    },
+    {
+      "fn": "cli/src/database-path.ts#databasePath",
+      "name": "disable channel db with false keeps channel db",
+      "args": [
+        "/var/lib/opencode",
+        {
+          "OPENCODE_DISABLE_CHANNEL_DB": "false"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/var/lib/opencode/opencode-local.db"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "standard semver",
+      "args": [
+        "1.2.3"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "1.2.3",
+        "major": "1",
+        "prerelease": []
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "leading v and whitespace",
+      "args": [
+        "  v2.0.15 \n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "2.0.15",
+        "major": "2",
+        "prerelease": []
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "zero components",
+      "args": [
+        "0.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "0.0.0",
+        "major": "0",
+        "prerelease": []
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "prerelease identifiers",
+      "args": [
+        "1.4.0-beta.2.rc-1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "1.4.0",
+        "major": "1",
+        "prerelease": [
+          "beta",
+          "2",
+          "rc-1"
+        ]
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "build metadata stripped",
+      "args": [
+        "1.4.0+20261119.sha512"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "1.4.0",
+        "major": "1",
+        "prerelease": []
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "prerelease and build metadata",
+      "args": [
+        "v3.1.0-alpha.0+build.99"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "3.1.0",
+        "major": "3",
+        "prerelease": [
+          "alpha",
+          "0"
+        ]
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "max safe integer component accepted",
+      "args": [
+        "9007199254740991.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "9007199254740991.0.0",
+        "major": "9007199254740991",
+        "prerelease": []
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "above max safe integer rejected",
+      "args": [
+        "9007199254740992.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "leading zero in core rejected",
+      "args": [
+        "01.2.3"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "leading zero in numeric prerelease rejected",
+      "args": [
+        "1.2.3-01"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "leading zero in alphanumeric prerelease accepted",
+      "args": [
+        "1.2.3-01a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "core": "1.2.3",
+        "major": "1",
+        "prerelease": [
+          "01a"
+        ]
+      }
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "non-semver rejected",
+      "args": [
+        "local"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "empty rejected",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+      "name": "length over 256 rejected",
+      "args": [
+        "1.0.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "disable policy always none",
+      "args": [
+        "1.0.0",
+        "2.0.0",
+        "disable"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "none"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "notify policy on newer version",
+      "args": [
+        "1.0.0",
+        "1.1.0",
+        "notify"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "notify"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "auto policy on newer version",
+      "args": [
+        "1.0.0",
+        "1.1.0",
+        "auto"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "auto"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "same release returns none",
+      "args": [
+        "v1.2.3+build1",
+        "1.2.3+build2",
+        "auto"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "none"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "prerelease differs from release",
+      "args": [
+        "1.2.3-beta.1",
+        "1.2.3",
+        "notify"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "notify"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "oversized numeric prerelease equality",
+      "args": [
+        "1.0.0-9007199254740992",
+        "1.0.0-9007199254740993",
+        "auto"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "none"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "invalid current version returns none",
+      "args": [
+        "local",
+        "1.2.3",
+        "auto"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "none"
+    },
+    {
+      "fn": "cli/src/services/updater-action.ts#action",
+      "name": "invalid latest version returns none",
+      "args": [
+        "1.2.3",
+        "bad",
+        "notify"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "none"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "latest uses service.json",
+      "args": [
+        "latest"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "dev uses service.json",
+      "args": [
+        "dev"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "beta uses service.json",
+      "args": [
+        "beta"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "next uses service.json",
+      "args": [
+        "next"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "local uses channel suffix",
+      "args": [
+        "local"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-local.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "custom channel with slashes and spaces sanitized",
+      "args": [
+        "feat/my branch@1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-feat-my-branch-1.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "latest on darwin",
+      "args": [
+        "latest",
+        "darwin"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 49374
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "latest on win32 masked into 0x7000 block",
+      "args": [
+        "latest",
+        "win32"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 28894
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "local on linux",
+      "args": [
+        "local",
+        "linux"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 49375
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "local on win32",
+      "args": [
+        "local",
+        "win32"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 28895
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "custom channel hashed port darwin",
+      "args": [
+        "pr-4242",
+        "darwin"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 36686
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "custom channel hashed port win32",
+      "args": [
+        "pr-4242",
+        "win32"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 32590
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#defaultPort",
+      "name": "another custom channel",
+      "args": [
+        "canary-release",
+        "linux"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 46891
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#legacyFilename",
+      "name": "latest returns null",
+      "args": [
+        "latest"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#legacyFilename",
+      "name": "local returns null",
+      "args": [
+        "local"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#legacyFilename",
+      "name": "dev hashed filename",
+      "args": [
+        "dev"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-34c6fceca75e456f25e7e99531e2425c6c1de443.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#legacyFilename",
+      "name": "beta hashed filename",
+      "args": [
+        "beta"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-a295e0bdde1938d1fbfd343e5a3e569e868e1465.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#legacyFilename",
+      "name": "custom channel hashed filename",
+      "args": [
+        "preview/pr-99"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-8f3ae17440192758b1743885582f06128228305a.json"
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "null version false",
+      "args": [
+        null,
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "matches installed version exactly",
+      "args": [
+        "1.2.3",
+        "latest",
+        "1.2.3"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "matches channel prerelease integer",
+      "args": [
+        "0.0.0-dev-20261119",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "matches channel prerelease dotted",
+      "args": [
+        "0.0.0-pr42-123.45",
+        "pr42",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "wrong channel false",
+      "args": [
+        "0.0.0-beta-123",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "non-numeric suffix false",
+      "args": [
+        "0.0.0-dev-abc",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "trailing dot false",
+      "args": [
+        "0.0.0-dev-123.",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "two dots false",
+      "args": [
+        "0.0.0-dev-1.2.3",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "darwin arm64",
+      "args": [
+        "darwin",
+        "arm64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "arm64",
+        "fffAsset": "@ff-labs/fff-bin-darwin-arm64/libfff_c.dylib",
+        "fffFfiAsset": "@yuuang/ffi-rs-darwin-arm64/ffi-rs.darwin-arm64.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-darwin-arm64",
+        "fffPackage": "@ff-labs/fff-bin-darwin-arm64",
+        "nodePtyEntryAsset": "@lydell/node-pty-darwin-arm64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-darwin-arm64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty",
+        "parcelWatcherAsset": "@parcel/watcher-darwin-arm64/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-darwin-arm64",
+        "platform": "darwin"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "darwin x64",
+      "args": [
+        "darwin",
+        "x64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "x64",
+        "fffAsset": "@ff-labs/fff-bin-darwin-x64/libfff_c.dylib",
+        "fffFfiAsset": "@yuuang/ffi-rs-darwin-x64/ffi-rs.darwin-x64.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-darwin-x64",
+        "fffPackage": "@ff-labs/fff-bin-darwin-x64",
+        "nodePtyEntryAsset": "@lydell/node-pty-darwin-x64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-darwin-x64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty",
+        "parcelWatcherAsset": "@parcel/watcher-darwin-x64/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-darwin-x64",
+        "platform": "darwin"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "linux arm64",
+      "args": [
+        "linux",
+        "arm64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "arm64",
+        "fffAsset": "@ff-labs/fff-bin-linux-arm64-gnu/libfff_c.so",
+        "fffFfiAsset": "@yuuang/ffi-rs-linux-arm64-gnu/ffi-rs.linux-arm64-gnu.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-linux-arm64-gnu",
+        "fffPackage": "@ff-labs/fff-bin-linux-arm64-gnu",
+        "nodePtyEntryAsset": "@lydell/node-pty-linux-arm64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-linux-arm64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty",
+        "parcelWatcherAsset": "@parcel/watcher-linux-arm64-glibc/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-linux-arm64-glibc",
+        "platform": "linux"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "linux x64",
+      "args": [
+        "linux",
+        "x64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "x64",
+        "fffAsset": "@ff-labs/fff-bin-linux-x64-gnu/libfff_c.so",
+        "fffFfiAsset": "@yuuang/ffi-rs-linux-x64-gnu/ffi-rs.linux-x64-gnu.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-linux-x64-gnu",
+        "fffPackage": "@ff-labs/fff-bin-linux-x64-gnu",
+        "nodePtyEntryAsset": "@lydell/node-pty-linux-x64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-linux-x64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty",
+        "parcelWatcherAsset": "@parcel/watcher-linux-x64-glibc/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-linux-x64-glibc",
+        "platform": "linux"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "win32 arm64",
+      "args": [
+        "win32",
+        "arm64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "arm64",
+        "fffAsset": "@ff-labs/fff-bin-win32-arm64/fff_c.dll",
+        "fffFfiAsset": "@yuuang/ffi-rs-win32-arm64-msvc/ffi-rs.win32-arm64-msvc.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-win32-arm64-msvc",
+        "fffPackage": "@ff-labs/fff-bin-win32-arm64",
+        "nodePtyEntryAsset": "@lydell/node-pty-win32-arm64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-win32-arm64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty.exe",
+        "parcelWatcherAsset": "@parcel/watcher-win32-arm64/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-win32-arm64",
+        "platform": "win32"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "win32 x64",
+      "args": [
+        "win32",
+        "x64"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "arch": "x64",
+        "fffAsset": "@ff-labs/fff-bin-win32-x64/fff_c.dll",
+        "fffFfiAsset": "@yuuang/ffi-rs-win32-x64-msvc/ffi-rs.win32-x64-msvc.node",
+        "fffFfiPackage": "@yuuang/ffi-rs-win32-x64-msvc",
+        "fffPackage": "@ff-labs/fff-bin-win32-x64",
+        "nodePtyEntryAsset": "@lydell/node-pty-win32-x64/lib/index.js",
+        "nodePtyPackage": "@lydell/node-pty-win32-x64",
+        "opencodePtyAsset": "opencode-pty/opencode-pty.exe",
+        "parcelWatcherAsset": "@parcel/watcher-win32-x64/watcher.node",
+        "parcelWatcherPackage": "@parcel/watcher-win32-x64",
+        "platform": "win32"
+      }
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "unsupported platform throws",
+      "args": [
+        "freebsd",
+        "x64"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/node/target.ts#nodeTarget",
+      "name": "unsupported arch throws",
+      "args": [
+        "linux",
+        "riscv64"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "exact ascii match",
+      "args": [
+        "src/index.ts",
+        "src/index.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "star wildcard",
+      "args": [
+        "src/foo/bar.ts",
+        "src/*.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "question mark single char",
+      "args": [
+        "file1.txt",
+        "file?.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "trailing space-star matches bare command",
+      "args": [
+        "git status",
+        "git status *"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "trailing space-star matches with args",
+      "args": [
+        "git status --short",
+        "git status *"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "trailing space-star rejects partial token",
+      "args": [
+        "git statusbar",
+        "git status *"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "backslashes normalized to forward slashes",
+      "args": [
+        "src\\util\\path.ts",
+        "src/util/*.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "regex metacharacters escaped",
+      "args": [
+        "a+b(c)[d].ts",
+        "a+b(c)[d].ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "multiline input matched by star",
+      "args": [
+        "echo hello\nworld",
+        "echo *"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "case sensitive mismatch by default",
+      "args": [
+        "README.MD",
+        "readme.md",
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "ignoreCase true matches",
+      "args": [
+        "README.MD",
+        "readme.md",
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/wildcard.ts#match",
+      "name": "unicode and emoji wildcard",
+      "args": [
+        "日本語/🚀/test.ts",
+        "日本語/*/test.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "null",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "null"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "bool and numbers",
+      "args": [
+        [
+          true,
+          false,
+          0,
+          -42,
+          3.5
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "[true,false,0,-42,3.5]"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "sorts top-level and nested object keys",
+      "args": [
+        {
+          "z": 1,
+          "a": {
+            "d": 4,
+            "b": 2,
+            "c": 3
+          },
+          "m": [
+            1,
+            {
+              "y": 9,
+              "x": 8
+            }
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"a\":{\"b\":2,\"c\":3,\"d\":4},\"m\":[1,{\"x\":8,\"y\":9}],\"z\":1}"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "escapes quotes backslashes and control chars",
+      "args": [
+        {
+          "k": "a\"b\\c\nd\te\u0007"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"k\":\"a\\\"b\\\\c\\nd\\te\\u0007\"}"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "empty object and array",
+      "args": [
+        {
+          "arr": [],
+          "obj": {}
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"arr\":[],\"obj\":{}}"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "unicode keys sorted",
+      "args": [
+        {
+          "日本語": 1,
+          "alpha": 2,
+          "🚀": 3
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"alpha\":2,\"日本語\":1,\"🚀\":3}"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "mixed bmp scripts sorted",
+      "args": [
+        {
+          "Ω": 1,
+          "Я": 2,
+          "é": 3,
+          "a": 4,
+          "Z": 5
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"Z\":5,\"a\":4,\"é\":3,\"Ω\":1,\"Я\":2}"
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "empty string",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "1 char rounds to 0",
+      "args": [
+        "a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "2 chars rounds half up to 1",
+      "args": [
+        "ab"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "4 chars is 1",
+      "args": [
+        "abcd"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "6 chars rounds half up to 2",
+      "args": [
+        "abcdef"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "10 chars rounds half up to 3",
+      "args": [
+        "0123456789"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 3
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "emoji surrogate pairs use utf16 length",
+      "args": [
+        "🚀🎉🔥"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 2
+    },
+    {
+      "fn": "core/src/util/token.ts#estimate",
+      "name": "cjk 5 chars rounds to 1",
+      "args": [
+        "日本語です"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "empty bytes is text/plain",
+      "args": [
+        []
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "text/plain"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "utf8 ascii text",
+      "args": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111,
+          10
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "text/plain"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "utf8 cjk text",
+      "args": [
+        [
+          230,
+          151,
+          165,
+          230,
+          156,
+          172,
+          232,
+          170,
+          158
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "text/plain"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "nul byte binary",
+      "args": [
+        [
+          104,
+          105,
+          0,
+          33
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/octet-stream"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "invalid utf8 binary",
+      "args": [
+        [
+          255,
+          254,
+          253
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/octet-stream"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "high control byte ratio binary",
+      "args": [
+        [
+          1,
+          2,
+          3,
+          4,
+          65,
+          66
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/octet-stream"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "png header",
+      "args": [
+        [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/png"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "valid bmp dib 40",
+      "args": [
+        [
+          66,
+          77,
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          54,
+          0,
+          0,
+          0,
+          40,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/bmp"
+    },
+    {
+      "fn": "core/src/mime.ts#detect",
+      "name": "invalid bmp dib falls back to octet-stream",
+      "args": [
+        [
+          66,
+          77,
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          54,
+          0,
+          0,
+          0,
+          99,
+          0,
+          0,
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/octet-stream"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "png",
+      "args": [
+        [
+          137,
+          80,
+          78,
+          71,
+          13,
+          10,
+          26,
+          10
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/png"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "gif87a",
+      "args": [
+        [
+          71,
+          73,
+          70,
+          56,
+          55,
+          97
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/gif"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "gif89a",
+      "args": [
+        [
+          71,
+          73,
+          70,
+          56,
+          57,
+          97
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/gif"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "pdf with dash",
+      "args": [
+        [
+          37,
+          80,
+          68,
+          70,
+          45
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "application/pdf"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "webp",
+      "args": [
+        [
+          82,
+          73,
+          70,
+          70,
+          0,
+          0,
+          0,
+          0,
+          87,
+          69,
+          66,
+          80
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "image/webp"
+    },
+    {
+      "fn": "core/src/mime.ts#detectMedia",
+      "name": "plain text returns null",
+      "args": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "empty string true",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "text/plain true",
+      "args": [
+        "text/plain"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "text/markdown true",
+      "args": [
+        "text/markdown"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/json true",
+      "args": [
+        "application/json"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/ld+json true",
+      "args": [
+        "application/ld+json"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/xml true",
+      "args": [
+        "application/xml"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "image/svg+xml true",
+      "args": [
+        "image/svg+xml"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/javascript true",
+      "args": [
+        "application/javascript"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/x-javascript true",
+      "args": [
+        "application/x-javascript"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "image/png false",
+      "args": [
+        "image/png"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/mime.ts#isTextual",
+      "name": "application/octet-stream false",
+      "args": [
+        "application/octet-stream"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "no frontmatter unchanged",
+      "args": [
+        "# Just markdown\nhello: world\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "# Just markdown\nhello: world\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "unquoted colon rewritten as block scalar",
+      "args": [
+        "---\ndescription: Run tests: fast\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ndescription: |-\n  Run tests: fast\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "leading bracket tag rewritten as block scalar",
+      "args": [
+        "---\ndescription: [Release] Cut build\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ndescription: |-\n  [Release] Cut build\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "already quoted value untouched",
+      "args": [
+        "---\ndescription: \"Already: quoted\"\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ndescription: \"Already: quoted\"\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "comments and indented lines preserved",
+      "args": [
+        "---\n# comment: ignored\nname: simple\n  nested: keep:me\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\n# comment: ignored\nname: simple\n  nested: keep:me\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "block scalar markers untouched",
+      "args": [
+        "---\ndescription: |\n  keep: this\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ndescription: |\n  keep: this\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "multiple keys with unicode and emoji colons",
+      "args": [
+        "---\ntitle: 🚀 Deploy: prod\ndescription: [日本語] テスト\nsafe: plain\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ntitle: |-\n  🚀 Deploy: prod\ndescription: |-\n  [日本語] テスト\nsafe: plain\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/managed-policy.ts#decision",
+      "name": "empty policies defaults to allow",
+      "args": [
+        [],
+        "provider.use",
+        "openai"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "allow"
+    },
+    {
+      "fn": "core/src/managed-policy.ts#decision",
+      "name": "last matching policy wins deny over allow",
+      "args": [
+        [
+          {
+            "action": "provider.use",
+            "resource": "*",
+            "effect": "allow"
+          },
+          {
+            "action": "provider.use",
+            "resource": "openai*",
+            "effect": "deny"
+          }
+        ],
+        "provider.use",
+        "openai"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "deny"
+    },
+    {
+      "fn": "core/src/managed-policy.ts#decision",
+      "name": "last matching policy wins allow over deny",
+      "args": [
+        [
+          {
+            "action": "tool.use",
+            "resource": "*",
+            "effect": "deny"
+          },
+          {
+            "action": "tool.use",
+            "resource": "read",
+            "effect": "allow"
+          }
+        ],
+        "tool.use",
+        "read"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "allow"
+    },
+    {
+      "fn": "core/src/managed-policy.ts#decision",
+      "name": "action mismatch ignored",
+      "args": [
+        [
+          {
+            "action": "mcp.use",
+            "resource": "*",
+            "effect": "deny"
+          }
+        ],
+        "skill.use",
+        "foo"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "allow"
+    },
+    {
+      "fn": "core/src/managed-policy.ts#decision",
+      "name": "integration account resource pattern",
+      "args": [
+        [
+          {
+            "action": "integration.use",
+            "resource": "opencode#*",
+            "effect": "deny"
+          }
+        ],
+        "integration.use",
+        "opencode#org_1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "deny"
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "local channel defaults on except optInOnly",
+      "args": [
+        {
+          "entries": [],
+          "channel": "local"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": true,
+          "source": "default"
+        },
+        "automations": {
+          "enabled": true,
+          "source": "default"
+        },
+        "console_watches": {
+          "enabled": true,
+          "source": "default"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": true,
+          "source": "default"
+        },
+        "media_blob": {
+          "enabled": true,
+          "source": "default"
+        },
+        "todo": {
+          "enabled": false,
+          "source": "default"
+        },
+        "video_generate": {
+          "enabled": true,
+          "source": "default"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "release channel defaults all off",
+      "args": [
+        {
+          "entries": [],
+          "channel": "latest"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "default"
+        },
+        "automations": {
+          "enabled": false,
+          "source": "default"
+        },
+        "console_watches": {
+          "enabled": false,
+          "source": "default"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": false,
+          "source": "default"
+        },
+        "media_blob": {
+          "enabled": false,
+          "source": "default"
+        },
+        "todo": {
+          "enabled": false,
+          "source": "default"
+        },
+        "video_generate": {
+          "enabled": false,
+          "source": "default"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "env overrides enable and disable",
+      "args": [
+        {
+          "entries": [],
+          "channel": "latest",
+          "overrides": "automations,todo,-media_blob"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "default"
+        },
+        "automations": {
+          "enabled": true,
+          "source": "env"
+        },
+        "console_watches": {
+          "enabled": false,
+          "source": "default"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": false,
+          "source": "default"
+        },
+        "media_blob": {
+          "enabled": false,
+          "source": "env"
+        },
+        "todo": {
+          "enabled": true,
+          "source": "env"
+        },
+        "video_generate": {
+          "enabled": false,
+          "source": "default"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "env wildcard all skips optInOnly and honors negative",
+      "args": [
+        {
+          "entries": [],
+          "channel": "latest",
+          "overrides": "all,-artifacts"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "env"
+        },
+        "automations": {
+          "enabled": true,
+          "source": "env"
+        },
+        "console_watches": {
+          "enabled": true,
+          "source": "env"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": true,
+          "source": "env"
+        },
+        "media_blob": {
+          "enabled": true,
+          "source": "env"
+        },
+        "todo": {
+          "enabled": false,
+          "source": "default"
+        },
+        "video_generate": {
+          "enabled": true,
+          "source": "env"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "env legacy alias schedules maps to automations",
+      "args": [
+        {
+          "entries": [],
+          "channel": "latest",
+          "overrides": "schedules"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "default"
+        },
+        "automations": {
+          "enabled": true,
+          "source": "env"
+        },
+        "console_watches": {
+          "enabled": false,
+          "source": "default"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": false,
+          "source": "default"
+        },
+        "media_blob": {
+          "enabled": false,
+          "source": "default"
+        },
+        "todo": {
+          "enabled": false,
+          "source": "default"
+        },
+        "video_generate": {
+          "enabled": false,
+          "source": "default"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "config experimental and all_flags precedence",
+      "args": [
+        {
+          "entries": [
+            {
+              "experimental": {
+                "all_flags": true
+              }
+            },
+            {
+              "experimental": {
+                "artifacts": false,
+                "todo": true
+              }
+            }
+          ],
+          "channel": "latest"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "config"
+        },
+        "automations": {
+          "enabled": true,
+          "source": "config"
+        },
+        "console_watches": {
+          "enabled": true,
+          "source": "config"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": true,
+          "source": "config"
+        },
+        "media_blob": {
+          "enabled": true,
+          "source": "config"
+        },
+        "todo": {
+          "enabled": true,
+          "source": "config"
+        },
+        "video_generate": {
+          "enabled": true,
+          "source": "config"
+        }
+      }
+    },
+    {
+      "fn": "core/src/flag.ts#resolve",
+      "name": "env overrides beat config",
+      "args": [
+        {
+          "entries": [
+            {
+              "experimental": {
+                "automations": true,
+                "media_blob": false
+              }
+            }
+          ],
+          "channel": "latest",
+          "overrides": "-automations,media_blob"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "artifacts": {
+          "enabled": false,
+          "source": "default"
+        },
+        "automations": {
+          "enabled": false,
+          "source": "env"
+        },
+        "console_watches": {
+          "enabled": false,
+          "source": "default"
+        },
+        "full_codemode": {
+          "enabled": false,
+          "source": "default"
+        },
+        "mcp_events": {
+          "enabled": false,
+          "source": "default"
+        },
+        "media_blob": {
+          "enabled": true,
+          "source": "env"
+        },
+        "todo": {
+          "enabled": false,
+          "source": "default"
+        },
+        "video_generate": {
+          "enabled": false,
+          "source": "default"
+        }
+      }
+    },
+    {
+      "fn": "core/src/permission.ts#evaluate",
+      "name": "empty rulesets default to ask",
+      "args": [
+        "bash",
+        "ls -la",
+        []
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "action": "bash",
+        "effect": "ask",
+        "resource": "*"
+      }
+    },
+    {
+      "fn": "core/src/permission.ts#evaluate",
+      "name": "last match wins across rulesets",
+      "args": [
+        "bash",
+        "git status",
+        [
+          [
+            {
+              "action": "bash",
+              "resource": "*",
+              "effect": "deny"
+            }
+          ],
+          [
+            {
+              "action": "bash",
+              "resource": "git status *",
+              "effect": "allow"
+            }
+          ]
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "action": "bash",
+        "effect": "allow",
+        "resource": "git status *"
+      }
+    },
+    {
+      "fn": "core/src/permission.ts#evaluate",
+      "name": "wildcard action matches",
+      "args": [
+        "edit",
+        "/repo/src/a.swift",
+        [
+          [
+            {
+              "action": "*",
+              "resource": "/repo/**",
+              "effect": "allow"
+            }
+          ]
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "action": "*",
+        "effect": "allow",
+        "resource": "/repo/**"
+      }
+    },
+    {
+      "fn": "core/src/permission.ts#evaluate",
+      "name": "later deny overrides earlier allow",
+      "args": [
+        "read",
+        "/etc/passwd",
+        [
+          [
+            {
+              "action": "read",
+              "resource": "*",
+              "effect": "allow"
+            },
+            {
+              "action": "read",
+              "resource": "/etc/*",
+              "effect": "deny"
+            }
+          ]
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "action": "read",
+        "effect": "deny",
+        "resource": "/etc/*"
+      }
+    },
+    {
+      "fn": "core/src/permission.ts#evaluate",
+      "name": "non-matching rules fall back to ask",
+      "args": [
+        "write",
+        "/tmp/a.txt",
+        [
+          [
+            {
+              "action": "read",
+              "resource": "*",
+              "effect": "allow"
+            }
+          ]
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "action": "write",
+        "effect": "ask",
+        "resource": "*"
+      }
+    },
+    {
       "fn": "util/src/duration.ts#duration",
       "name": "zero ms",
       "args": [
@@ -5757,7 +9938,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001AEklBuRwH7r1X4"
+      "expectedValue": "bcfe56800001ez8MggFpPfYYnd"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -5768,7 +9949,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002nwFfOLZcboIkkA"
+      "expectedValue": "bcfe56800002Iwrt3yKKvQDJW5"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -5779,7 +9960,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeKuQR7U3l68WJ0L"
+      "expectedValue": "4301a97feffeMeyA08gstCg3Zv"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -5790,7 +9971,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdTxM8o1wVNIdS6W"
+      "expectedValue": "4301a97feffdXKgwr9WcsM2lGj"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -5798,7 +9979,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1f21b65fa001ztpPd9Jru2Fe9N"
+      "expectedValue": "1f5123bfb001q65DpL7ViJEk8a"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -5806,7 +9987,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e0de49a05ffdN7ZJQIHFAPZWwW"
+      "expectedValue": "e0aedc404ffdIaOYnnPSWJM06I"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -5814,7 +9995,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "aae0c6e0-ca46-4753-8082-b5a70a62677f"
+      "expectedValue": "4e559202-f51f-4b24-877a-fa54c73a4b02"
     },
     {
       "fn": "util/src/npm.ts#sanitize",
@@ -7238,6 +11419,1269 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": ""
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "null codepoint maps to replacement",
+      "args": [
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "negative codepoint maps to replacement",
+      "args": [
+        -5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "above max unicode maps to replacement",
+      "args": [
+        1114112
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "high surrogate maps to replacement",
+      "args": [
+        55296
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "low surrogate maps to replacement",
+      "args": [
+        57343
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "windows-1252 euro 128",
+      "args": [
+        128
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "€"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "windows-1252 left single quote 145",
+      "args": [
+        145
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "‘"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "windows-1252 em dash 151",
+      "args": [
+        151
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "—"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "windows-1252 Y diaeresis 159",
+      "args": [
+        159
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Ÿ"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "ascii A",
+      "args": [
+        65
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "A"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "cjk character",
+      "args": [
+        26085
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "日"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeCodePoint",
+      "name": "emoji grinning face",
+      "args": [
+        128512
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "😀"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named amp",
+      "args": [
+        "&amp;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named uppercase AMP",
+      "args": [
+        "&AMP;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named lt",
+      "args": [
+        "&lt;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named copy",
+      "args": [
+        "&copy;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "©"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named mdash",
+      "args": [
+        "&mdash;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "—"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named multi-codepoint acE",
+      "args": [
+        "&acE;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "∾̳"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named multi-codepoint fjlig",
+      "args": [
+        "&fjlig;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "fj"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "named astral math fraktur Afr",
+      "args": [
+        "&Afr;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "𝔄"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "decimal ascii",
+      "args": [
+        "&#65;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "A"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "decimal zero replacement",
+      "args": [
+        "&#0;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "decimal windows-1252 euro",
+      "args": [
+        "&#128;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "€"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "decimal emoji",
+      "args": [
+        "&#128640;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "🚀"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "hex lowercase emoji",
+      "args": [
+        "&#x1f680;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "🚀"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "hex uppercase X",
+      "args": [
+        "&#X41;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "A"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "hex 7 digits rejected",
+      "args": [
+        "&#x0000041;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&#x0000041;"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "decimal 8 digits rejected",
+      "args": [
+        "&#00000065;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&#00000065;"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "unknown named unchanged",
+      "args": [
+        "&notarealentity;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&notarealentity;"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "missing semicolon unchanged",
+      "args": [
+        "&amp"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&amp"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#decodeEntity",
+      "name": "too short unchanged",
+      "args": [
+        "&;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&;"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "plain ascii fast path",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello world"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "escaped markdown punctuation",
+      "args": [
+        "\\*bold\\* \\[link\\] \\`code\\`"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "*bold* [link] `code`"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "non-escapable backslash preserved",
+      "args": [
+        "\\a\\1\\ "
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "\\a\\1\\ "
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "double backslash before star",
+      "args": [
+        "\\\\*text"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "\\*text"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "mixed entities and escapes",
+      "args": [
+        "&lt;tag&gt; &amp; \\&amp; &#x2764;"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<tag> & &amp; ❤"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#unescapeString",
+      "name": "cjk and emoji around escapes",
+      "args": [
+        "日本語\\! 🚀 &mdash; café"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "日本語! 🚀 — café"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "already safe url fast path",
+      "args": [
+        "https://example.com/a/b?x=1&y=2#top"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/a/b?x=1&y=2#top"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "preserves valid percent encoding",
+      "args": [
+        "https://example.com/hello%20world/%2f"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/hello%20world/%2f"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "encodes bare percent and spaces",
+      "args": [
+        "https://example.com/100% done/file name.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/100%25%20done/file%20name.txt"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "encodes angle brackets and quotes",
+      "args": [
+        "https://example.com/<a \"b\">"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/%3Ca%20%22b%22%3E"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "encodes cjk path",
+      "args": [
+        "https://example.com/日本語/パス"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/%E6%97%A5%E6%9C%AC%E8%AA%9E/%E3%83%91%E3%82%B9"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "encodes emoji surrogate pair",
+      "args": [
+        "https://example.com/🚀/🎉"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com/%F0%9F%9A%80/%F0%9F%8E%89"
+    },
+    {
+      "fn": "patchmark/src/entities.ts#normalizeURI",
+      "name": "empty uri",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "empty string",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "whitespace only",
+      "args": [
+        "   \t\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "complete bold unchanged",
+      "args": [
+        "hello **world**"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "unclosed bold",
+      "args": [
+        "hello **world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "**",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "dangling bold marker hidden",
+      "args": [
+        "hello **"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "nested bold and italic unclosed",
+      "args": [
+        "**bold *italic"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "***",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "unclosed triple star",
+      "args": [
+        "***both"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "***",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "unclosed strikethrough",
+      "args": [
+        "~~strike"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "~~",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "unclosed inline code",
+      "args": [
+        "run `npm test"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "`",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "unclosed double backtick code",
+      "args": [
+        "run ``a ` b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "``",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "dangling backtick hidden",
+      "args": [
+        "run `"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 1
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "incomplete inline link shows label",
+      "args": [
+        "see [OpenCode](https://opencode"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "OpenCode",
+        "strip": 27
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "incomplete inline image hidden",
+      "args": [
+        "logo ![alt text](https://example.com/img"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 35
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "incomplete link with unclosed bold inside label",
+      "args": [
+        "see [**OpenCode](https://opencode"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "**OpenCode**",
+        "strip": 29
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "intraword underscores not treated as emphasis",
+      "args": [
+        "foo_bar_baz"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "closed inline math untouched",
+      "args": [
+        "value $a_1 + b_2$ ok"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "trailing spaces before closer dropped",
+      "args": [
+        "**bold text   "
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "**",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "cjk and emoji UTF-16 strip lengths",
+      "args": [
+        "日本語 🚀 **"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "",
+        "strip": 0
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#computeTailHeal",
+      "name": "emoji inside incomplete link",
+      "args": [
+        "go [🚀 launch](https://ex"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "append": "🚀 launch",
+        "strip": 22
+      }
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "plain text",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello world"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "unclosed bold",
+      "args": [
+        "hello **world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello **world**"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "dangling opener stripped with space",
+      "args": [
+        "hello **"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello **"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "unclosed italic and code",
+      "args": [
+        "*em `code"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "*em `code`*"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "incomplete link",
+      "args": [
+        "visit [docs](https://opencode.ai/docs"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "visit docs"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "incomplete image",
+      "args": [
+        "before ![pic](https://example.com/a.png"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "before "
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "escaped star ignored",
+      "args": [
+        "hello \\*world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello \\*world"
+    },
+    {
+      "fn": "patchmark/src/heal.ts#healStreamingInline",
+      "name": "cjk and emoji streaming bold",
+      "args": [
+        "日本語 **🚀 テスト"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "日本語 **🚀 テスト**"
+    },
+    {
+      "fn": "patchmark/src/html.ts#escapeHtml",
+      "name": "clean ascii fast path",
+      "args": [
+        "hello world 123"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello world 123"
+    },
+    {
+      "fn": "patchmark/src/html.ts#escapeHtml",
+      "name": "all four escaped chars",
+      "args": [
+        "<a href=\"x&y\">"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&lt;a href=&quot;x&amp;y&quot;&gt;"
+    },
+    {
+      "fn": "patchmark/src/html.ts#escapeHtml",
+      "name": "single quotes preserved",
+      "args": [
+        "it's fine"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "it's fine"
+    },
+    {
+      "fn": "patchmark/src/html.ts#escapeHtml",
+      "name": "unicode and emoji",
+      "args": [
+        "日本語 & 🚀 <tag>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "日本語 &amp; 🚀 &lt;tag&gt;"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "clean text unchanged",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello world"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "allowed div and span unchanged",
+      "args": [
+        "<div class=\"x\"><span>ok</span></div>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<div class=\"x\"><span>ok</span></div>"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "script tag escaped",
+      "args": [
+        "<script>alert(1)</script>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&lt;script>alert(1)&lt;/script>"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "uppercase SCRIPT and closing tag",
+      "args": [
+        "<SCRIPT type=\"text/javascript\">x</SCRIPT>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&lt;SCRIPT type=\"text/javascript\">x&lt;/SCRIPT>"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "iframe self closing",
+      "args": [
+        "<iframe src=\"x\"/>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&lt;iframe src=\"x\"/>"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "style textarea title xmp noembed noframes plaintext",
+      "args": [
+        "<style>a</style><textarea>b</textarea><title>c</title><xmp>d</xmp><noembed>e</noembed><noframes>f</noframes><plaintext>g"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "&lt;style>a&lt;/style>&lt;textarea>b&lt;/textarea>&lt;title>c&lt;/title>&lt;xmp>d&lt;/xmp>&lt;noembed>e&lt;/noembed>&lt;noframes>f&lt;/noframes>&lt;plaintext>g"
+    },
+    {
+      "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+      "name": "prefix tag scripting not escaped",
+      "args": [
+        "<scripting>ok</scripting>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<scripting>ok</scripting>"
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "",
+        "visible": ""
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "normal word",
+      "args": [
+        "hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "",
+        "visible": "hello"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare heading hashes 1..6 held",
+      "args": [
+        "intro\n###"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "###",
+        "visible": "intro\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "7 hashes not held",
+      "args": [
+        "intro\n#######"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "",
+        "visible": "intro\n#######"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare code fence held",
+      "args": [
+        "para\n```"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "```",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare tilde fence held",
+      "args": [
+        "para\n~~~"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "~~~",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare unordered bullet dash",
+      "args": [
+        "para\n-"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "-",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare unordered bullet plus",
+      "args": [
+        "para\n+"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "+",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare bullet dot unicode",
+      "args": [
+        "para\n•"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "•",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare blockquote marker",
+      "args": [
+        "para\n>"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": ">",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare ordered list marker",
+      "args": [
+        "para\n12."
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "12.",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare ordered paren marker",
+      "args": [
+        "para\n3)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "3)",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare display math opener",
+      "args": [
+        "para\n$$"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "$$",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "bare latex bracket opener",
+      "args": [
+        "para\n\\["
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "\\[",
+        "visible": "para\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "marker with content not held",
+      "args": [
+        "para\n## Title"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "",
+        "visible": "para\n## Title"
+      }
+    },
+    {
+      "fn": "patchmark/src/stream.ts#splitPendingMarker",
+      "name": "emoji before newline and held marker",
+      "args": [
+        "🚀 日本語\n-"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "held": "-",
+        "visible": "🚀 日本語\n"
+      }
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "atx headings h1..h3",
+      "args": [
+        "# H1\n\n## H2\n\n### H3\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<h1>H1</h1>\n<h2>H2</h2>\n<h3>H3</h3>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "emphasis strong code del",
+      "args": [
+        "*em* **strong** `code` ~~del~~\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p><em>em</em> <strong>strong</strong> <code>code</code> <del>del</del></p>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "fenced code block with language and html escape",
+      "args": [
+        "```swift\nlet x = a < b && c > d\n```\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<pre><code class=\"language-swift\">let x = a &lt; b &amp;&amp; c &gt; d\n</code></pre>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "gfm table with alignments",
+      "args": [
+        "| Name | Count | Note |\n| :--- | :---: | ---: |\n| alpha | 1 | *ok* |\n| 日本語 | 2 | 🚀 |\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<table>\n<thead>\n<tr>\n<th align=\"left\">Name</th>\n<th align=\"center\">Count</th>\n<th align=\"right\">Note</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td align=\"left\">alpha</td>\n<td align=\"center\">1</td>\n<td align=\"right\"><em>ok</em></td>\n</tr>\n<tr>\n<td align=\"left\">日本語</td>\n<td align=\"center\">2</td>\n<td align=\"right\">🚀</td>\n</tr>\n</tbody>\n</table>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "gfm task list",
+      "args": [
+        "- [x] done\n- [ ] todo\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<ul>\n<li><input checked=\"\" disabled=\"\" type=\"checkbox\"> done</li>\n<li><input disabled=\"\" type=\"checkbox\"> todo</li>\n</ul>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "ordered list with custom start",
+      "args": [
+        "3. third\n4. fourth\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<ol start=\"3\">\n<li>third</li>\n<li>fourth</li>\n</ol>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "nested blockquote and hr",
+      "args": [
+        "> quote **bold**\n>\n> > nested\n\n---\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<blockquote>\n<p>quote <strong>bold</strong></p>\n<blockquote>\n<p>nested</p>\n</blockquote>\n</blockquote>\n<hr />\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "links images and reference defs",
+      "args": [
+        "[OpenCode][oc] and ![logo](https://example.com/a.png \"Hi\")\n\n[oc]: https://opencode.ai \"Home\"\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p><a href=\"https://opencode.ai\" title=\"Home\">OpenCode</a> and <img src=\"https://example.com/a.png\" alt=\"logo\" title=\"Hi\" /></p>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "gfm tagfilter strips script",
+      "args": [
+        "hello <script>alert(1)</script> <b>ok</b>\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p>hello &lt;script>alert(1)&lt;/script> <b>ok</b></p>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "inline and block math",
+      "args": [
+        "Inline $x^2 + y^2$ here.\n\n$$\nE = mc^2\n$$\n",
+        {
+          "gfm": true,
+          "math": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p>Inline <span class=\"math-inline\" data-math-delimiter=\"dollar\">x^2 + y^2</span> here.</p>\n<div class=\"math-block\" data-math-delimiter=\"double-dollar\">E = mc^2</div>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "html entities and backslash escapes",
+      "args": [
+        "&copy; 2026 &mdash; \\*literal\\* &#x1F680;\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p>© 2026 — *literal* 🚀</p>\n"
+    },
+    {
+      "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+      "name": "cjk and emoji paragraph",
+      "args": [
+        "こんにちは **世界** 🚀 `swift-opencode`\n",
+        {
+          "gfm": true,
+          "math": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "<p>こんにちは <strong>世界</strong> 🚀 <code>swift-opencode</code></p>\n"
     },
     {
       "fn": "util/src/path.ts#getFilename",
@@ -18677,6 +24121,1233 @@
       "expectedValue": "█▀▀▀▀▀▀▀██▀█▀▀█▀▀▀▀▀▀▀█\n█ █▀▀▀█ █  █▄▀█ █▀▀▀█ █\n█ █   █ █▀▄█▄▀█ █   █ █\n█ ▀▀▀▀▀ █ █▀▄ █ ▀▀▀▀▀ █\n█▀▀█▀██▀▀▄  ▄▄█▀▀▀█▀▀██\n█▄▄ ▀  ▀ ▀█ ▄▀█▀ ▄▄▀█ █\n█  ▄ █▄▀▄▀▀ ▀ ▄▄ ▀▄█▀██\n█▀▀▀▀▀▀▀█  ▀▀███ ▀█▀▀▄█\n█ █▀▀▀█ ██▀▀ ▀█▄▀ █████\n█ █   █ █▄█▀█▄▄   ▄▄▄ █\n█ ▀▀▀▀▀ █ ▄▀█▄▀▄█▀▀█▀██\n▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"
     },
     {
+      "fn": "schema/src/token-usage.ts#total",
+      "name": "all zeros",
+      "args": [
+        {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "schema/src/token-usage.ts#total",
+      "name": "typical turn usage",
+      "args": [
+        {
+          "input": 1200,
+          "output": 350,
+          "reasoning": 150,
+          "cache": {
+            "read": 8000,
+            "write": 400
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 10100
+    },
+    {
+      "fn": "schema/src/token-usage.ts#total",
+      "name": "large context window counts",
+      "args": [
+        {
+          "input": 1000000,
+          "output": 65536,
+          "reasoning": 32768,
+          "cache": {
+            "read": 500000,
+            "write": 125000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1723304
+    },
+    {
+      "fn": "schema/src/token-usage.ts#total",
+      "name": "fractional values",
+      "args": [
+        {
+          "input": 1.5,
+          "output": 2.25,
+          "reasoning": 0.25,
+          "cache": {
+            "read": 3,
+            "write": 0.5
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 7.5
+    },
+    {
+      "fn": "schema/src/event.ts#versionedType",
+      "name": "session created v1",
+      "args": [
+        "session.created",
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "session.created.1"
+    },
+    {
+      "fn": "schema/src/event.ts#versionedType",
+      "name": "session inbox enqueued v2",
+      "args": [
+        "session.inbox.enqueued",
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "session.inbox.enqueued.2"
+    },
+    {
+      "fn": "schema/src/event.ts#versionedType",
+      "name": "double digit version",
+      "args": [
+        "workspace.ready",
+        12
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "workspace.ready.12"
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "session.created is server event",
+      "args": [
+        "session.created"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "session.status is server event",
+      "args": [
+        "session.status"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "permission.asked is server event",
+      "args": [
+        "permission.asked"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "provider.updated is server event",
+      "args": [
+        "provider.updated"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "tui.toast.show is server event",
+      "args": [
+        "tui.toast.show"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "vcs.branch.updated is server event",
+      "args": [
+        "vcs.branch.updated"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "server.connected is NOT in ServerDefinitions",
+      "args": [
+        "server.connected"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "v1 message.updated is NOT a server event",
+      "args": [
+        "message.updated"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "rpc.custom is NOT in ServerDefinitions",
+      "args": [
+        "rpc.custom"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "schema/src/event-manifest.ts#isServer",
+      "name": "unknown event is false",
+      "args": [
+        "does.not.exist"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "server.connected is opencode event",
+      "args": [
+        "server.connected"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "session.created is opencode event",
+      "args": [
+        "session.created"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "rpc.plugin.ping is opencode event",
+      "args": [
+        "rpc.plugin.ping"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "bare rpc. prefix is opencode event",
+      "args": [
+        "rpc."
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "rpc without dot is false",
+      "args": [
+        "rpc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "v1 message.updated is false",
+      "args": [
+        "message.updated"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/event.ts#isOpenCodeEvent",
+      "name": "unknown event is false",
+      "args": [
+        "custom.unknown"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+      "name": "valid pairing url",
+      "args": [
+        "http://localhost:4096/auth/connect/abc123"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+      "name": "valid pairing url with query",
+      "args": [
+        "https://opencode.ai/auth/connect/CODE-99?next=/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+      "name": "missing code segment",
+      "args": [
+        "http://localhost:4096/auth/connect/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+      "name": "extra trailing segment",
+      "args": [
+        "http://localhost:4096/auth/connect/abc/extra"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/server.ts#isPairingConnectURL",
+      "name": "wrong path",
+      "args": [
+        "http://localhost:4096/api/pair"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "valid pty connect url with ticket",
+      "args": [
+        "ws://localhost:4096/api/pty/pty_123/connect?ticket=tok_abc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "valid with extra query params",
+      "args": [
+        "http://localhost:4096/api/pty/pty_123/connect?cursor=0&ticket=tok_abc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "empty ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/pty/pty_123/connect?ticket="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "missing ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/pty/pty_123/connect?cursor=0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "nested ptyID slash rejected",
+      "args": [
+        "ws://localhost:4096/api/pty/a/b/connect?ticket=tok"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/pty.ts#hasPtyConnectTicketURL",
+      "name": "wrong endpoint rejected",
+      "args": [
+        "ws://localhost:4096/api/pty/pty_123/connect-token?ticket=tok"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL",
+      "name": "valid persistent pty connect with ticket",
+      "args": [
+        "ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect?ticket=t1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL",
+      "name": "empty ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect?ticket="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL",
+      "name": "missing ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/experimental/persistent-pty/pty_9/connect"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL",
+      "name": "regular pty path rejected",
+      "args": [
+        "ws://localhost:4096/api/pty/pty_9/connect?ticket=t1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/mcp.ts#hasMcpClientTicketURL",
+      "name": "valid mcp client url with ticket",
+      "args": [
+        "ws://localhost:4096/api/experimental/client-mcp?name=github&ticket=t1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/mcp.ts#hasMcpClientTicketURL",
+      "name": "empty ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/experimental/client-mcp?ticket="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/mcp.ts#hasMcpClientTicketURL",
+      "name": "missing ticket rejected",
+      "args": [
+        "ws://localhost:4096/api/experimental/client-mcp?name=github"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/mcp.ts#hasMcpClientTicketURL",
+      "name": "trailing slash rejected",
+      "args": [
+        "ws://localhost:4096/api/experimental/client-mcp/?ticket=t1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "undefined header serves full body",
+      "args": [
+        null,
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "closed range",
+      "args": [
+        "bytes=0-9",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 9,
+        "start": 0
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "open-ended range",
+      "args": [
+        "bytes=50-",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 99,
+        "start": 50
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "end clamped to size minus 1",
+      "args": [
+        "bytes=90-500",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 99,
+        "start": 90
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "suffix range",
+      "args": [
+        "bytes=-20",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 99,
+        "start": 80
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "suffix larger than size clamps start to 0",
+      "args": [
+        "bytes=-500",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 99,
+        "start": 0
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "suffix zero unsatisfiable",
+      "args": [
+        "bytes=-0",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "unsatisfiable"
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "suffix on empty body unsatisfiable",
+      "args": [
+        "bytes=-5",
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "unsatisfiable"
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "start beyond size unsatisfiable",
+      "args": [
+        "bytes=100-110",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "unsatisfiable"
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "start greater than end unsatisfiable",
+      "args": [
+        "bytes=20-10",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "unsatisfiable"
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "case insensitive BYTES with spaces",
+      "args": [
+        "  BYTES= 5 - 15  ",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "end": 15,
+        "start": 5
+      }
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "empty dash returns null",
+      "args": [
+        "bytes=-",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "multi-range falls back to null",
+      "args": [
+        "bytes=0-1, 2-3",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "server/src/range.ts#parse",
+      "name": "wrong unit returns null",
+      "args": [
+        "items=0-5",
+        100
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "empty name",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "simple ascii filename",
+      "args": [
+        "report.pdf"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"report.pdf\"; filename*=UTF-8''report.pdf"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "spaces and rfc5987 special chars",
+      "args": [
+        "my file (1)'s*copy.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"my file (1)'s*copy.txt\"; filename*=UTF-8''my%20file%20%281%29%27s%2Acopy.txt"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "quotes backslash and percent sanitized in fallback",
+      "args": [
+        "a\"b\\c%20d.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"a_b_c_20d.txt\"; filename*=UTF-8''a%22b%5Cc%2520d.txt"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "control char replaced in fallback",
+      "args": [
+        "bad\nname.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"bad_name.txt\"; filename*=UTF-8''bad%0Aname.txt"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "cjk filename",
+      "args": [
+        "報告書.pdf"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"___.pdf\"; filename*=UTF-8''%E5%A0%B1%E5%91%8A%E6%9B%B8.pdf"
+    },
+    {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "accented unicode filename",
+      "args": [
+        "résumé.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"r_sum_.txt\"; filename*=UTF-8''r%C3%A9sum%C3%A9.txt"
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "html neutralized to text/plain",
+      "args": [
+        {
+          "path": "/tmp/page.html",
+          "mime": "text/html"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"page.html\"; filename*=UTF-8''page.html",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "html with charset neutralized",
+      "args": [
+        {
+          "path": "index.html",
+          "mime": "text/html; charset=utf-8"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"index.html\"; filename*=UTF-8''index.html",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "javascript neutralized",
+      "args": [
+        {
+          "path": "app.js",
+          "mime": "application/javascript"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"app.js\"; filename*=UTF-8''app.js",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "svg+xml neutralized",
+      "args": [
+        {
+          "path": "icon.svg",
+          "mime": "image/svg+xml"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"icon.svg\"; filename*=UTF-8''icon.svg",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "application/xml neutralized",
+      "args": [
+        {
+          "path": "data.xml",
+          "mime": "application/xml"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"data.xml\"; filename*=UTF-8''data.xml",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "png preserved",
+      "args": [
+        {
+          "path": "/assets/photo.png",
+          "mime": "image/png"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"photo.png\"; filename*=UTF-8''photo.png",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "image/png",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "json preserved",
+      "args": [
+        {
+          "path": "/data/out.json",
+          "mime": "application/json"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"out.json\"; filename*=UTF-8''out.json",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "application/json",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "omitted path uses bare attachment",
+      "args": [
+        {
+          "mime": "application/pdf"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "application/pdf",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "null origin allowed",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "empty origin allowed",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "localhost port allowed",
+      "args": [
+        "http://localhost:3000"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "127.0.0.1 port allowed",
+      "args": [
+        "http://127.0.0.1:4096"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "oc renderer allowed",
+      "args": [
+        "oc://renderer"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "tauri localhost schemes allowed",
+      "args": [
+        "tauri://localhost"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "https tauri localhost allowed",
+      "args": [
+        "https://tauri.localhost"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "opencode apex allowed",
+      "args": [
+        "https://opencode.ai"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "opencode nested subdomain allowed",
+      "args": [
+        "https://app.eu-1.opencode.ai"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "http opencode rejected",
+      "args": [
+        "http://opencode.ai"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "spoofed opencode suffix rejected",
+      "args": [
+        "https://opencode.ai.evil.com"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "custom cors allowlist match",
+      "args": [
+        "https://studio.example.com",
+        {
+          "cors": [
+            "https://studio.example.com"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+      "name": "custom cors allowlist miss",
+      "args": [
+        "https://other.example.com",
+        {
+          "cors": [
+            "https://studio.example.com"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "same host with port allowed",
+      "args": [
+        "https://dev.internal:8443",
+        "dev.internal:8443"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "different port rejected",
+      "args": [
+        "https://dev.internal:8443",
+        "dev.internal:9443"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "invalid origin url rejected",
+      "args": [
+        "not a url",
+        "dev.internal:8443"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "falls back to cors allowlist",
+      "args": [
+        "https://opencode.ai",
+        "other.local:4096"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "null origin allowed",
+      "args": [
+        null,
+        "other.local:4096"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/media-uri.ts#wantsMediaRefs",
+      "name": "missing header false",
+      "args": [
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/media-uri.ts#wantsMediaRefs",
+      "name": "exact token true",
+      "args": [
+        {
+          "x-opencode-capabilities": "experimental-media-uri"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/media-uri.ts#wantsMediaRefs",
+      "name": "comma list with whitespace and case true",
+      "args": [
+        {
+          "x-opencode-capabilities": "foo, Experimental-Media-URI , bar"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/media-uri.ts#wantsMediaRefs",
+      "name": "substring mismatch false",
+      "args": [
+        {
+          "x-opencode-capabilities": "experimental-media-uri-v2"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "no sec-fetch-site header allowed",
+      "args": [
+        {
+          "url": "http://localhost/api/session",
+          "headers": {}
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "same-origin allowed",
+      "args": [
+        {
+          "url": "http://localhost/api/session",
+          "headers": {
+            "sec-fetch-site": "same-origin",
+            "sec-fetch-mode": "navigate"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site api navigate rejected",
+      "args": [
+        {
+          "url": "http://localhost/api/session",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "navigate"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site non-api path allowed",
+      "args": [
+        {
+          "url": "http://localhost/docs",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "navigate"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site artifact view exempt",
+      "args": [
+        {
+          "url": "http://localhost/api/experimental/artifacts/art_123/view/index.html",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "navigate"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site cors from disallowed origin rejected",
+      "args": [
+        {
+          "url": "http://localhost/api/config",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "cors",
+            "origin": "https://evil.example",
+            "host": "localhost:4096"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site cors from allowed opencode origin permitted",
+      "args": [
+        {
+          "url": "http://localhost/api/config",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "cors",
+            "origin": "https://app.opencode.ai",
+            "host": "localhost:4096"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "server/src/request-site.ts#rejected",
+      "name": "cross-site cors from custom cors origin permitted",
+      "args": [
+        {
+          "url": "http://localhost/api/config",
+          "headers": {
+            "sec-fetch-site": "cross-site",
+            "sec-fetch-mode": "cors",
+            "origin": "https://custom.local",
+            "host": "localhost:4096"
+          }
+        },
+        {
+          "cors": [
+            "https://custom.local"
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
       "fn": "util/src/session-mention.ts#sessionMentions",
       "name": "no mentions",
       "args": [
@@ -20447,6 +27118,821 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": "�A"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "pure black",
+      "args": [
+        {
+          "l": 0,
+          "c": 0,
+          "h": 0
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "pure white",
+      "args": [
+        {
+          "l": 1,
+          "c": 0,
+          "h": 0
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ffffff"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "mid gray achromatic",
+      "args": [
+        {
+          "l": 0.5,
+          "c": 0,
+          "h": 180
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#636363"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "sRGB linear cutoff low lightness",
+      "args": [
+        {
+          "l": 0.05,
+          "c": 0,
+          "h": 0
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "in-gamut warm red",
+      "args": [
+        {
+          "l": 0.65,
+          "c": 0.15,
+          "h": 25
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#dc655f"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "in-gamut forest green",
+      "args": [
+        {
+          "l": 0.58,
+          "c": 0.12,
+          "h": 145
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#478d4b"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "in-gamut ocean blue",
+      "args": [
+        {
+          "l": 0.55,
+          "c": 0.14,
+          "h": 250
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#1f74bf"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "in-gamut violet",
+      "args": [
+        {
+          "l": 0.6,
+          "c": 0.14,
+          "h": 300
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#8e6ac7"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "out-of-gamut high chroma fitted",
+      "args": [
+        {
+          "l": 0.7,
+          "c": 0.45,
+          "h": 140
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#42bc1c"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "extreme chroma fallback to gray",
+      "args": [
+        {
+          "l": 0.99,
+          "c": 5,
+          "h": 250
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#fcfcfc"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "negative hue wraps modulo 360",
+      "args": [
+        {
+          "l": 0.62,
+          "c": 0.12,
+          "h": -60
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#9274c3"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "large negative hue wraps",
+      "args": [
+        {
+          "l": 0.62,
+          "c": 0.12,
+          "h": -780
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#9274c3"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "hue above 360 wraps",
+      "args": [
+        {
+          "l": 0.62,
+          "c": 0.12,
+          "h": 420
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ba7331"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "lightness clamped below zero",
+      "args": [
+        {
+          "l": -0.3,
+          "c": 0.1,
+          "h": 120
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "lightness clamped above one",
+      "args": [
+        {
+          "l": 1.4,
+          "c": 0.1,
+          "h": 120
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ffffff"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#oklchToHex",
+      "name": "negative chroma clamped to zero",
+      "args": [
+        {
+          "l": 0.5,
+          "c": -0.2,
+          "h": 45
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#636363"
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "black",
+      "args": [
+        0,
+        0,
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0,
+        "h": 0,
+        "l": 0
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "white",
+      "args": [
+        1,
+        1,
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 3.727399553519285e-8,
+        "h": 89.87556309590244,
+        "l": 0.9999999934735462
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "pure red",
+      "args": [
+        1,
+        0,
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0.2576833077361567,
+        "h": 29.233885192342633,
+        "l": 0.6279553606145516
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "pure green",
+      "args": [
+        0,
+        1,
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0.2948272403370167,
+        "h": 142.49533888780996,
+        "l": 0.8664396115356694
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "pure blue",
+      "args": [
+        0,
+        0,
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0.31321437166460114,
+        "h": 264.052020638055,
+        "l": 0.4520137183853429
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "low linear sRGB segment",
+      "args": [
+        0.02,
+        0.03,
+        0.04
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0.008356107095035713,
+        "h": 243.11853065166832,
+        "l": 0.1299892022567094
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "mid gray",
+      "args": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 2.2296585815985204e-8,
+        "h": 89.87556282857139,
+        "l": 0.5981807266228486
+      }
+    },
+    {
+      "fn": "theme/src/tui/color.ts#rgbToOklch",
+      "name": "coral accent",
+      "args": [
+        0.95,
+        0.42,
+        0.31
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "c": 0.17252535901505384,
+        "h": 33.33724693274446,
+        "l": 0.6886754920421098
+      }
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "empty merge",
+      "args": [],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {}
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "single layer",
+      "args": [
+        {
+          "text": {
+            "base": "#111111"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "text": {
+          "base": "#111111"
+        }
+      }
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "deep merge preserves sibling keys",
+      "args": [
+        {
+          "text": {
+            "base": "#111111",
+            "muted": "#666666"
+          },
+          "border": {
+            "base": "#cccccc"
+          }
+        },
+        {
+          "text": {
+            "muted": "#555555",
+            "faint": "#999999"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "border": {
+          "base": "#cccccc"
+        },
+        "text": {
+          "base": "#111111",
+          "faint": "#999999",
+          "muted": "#555555"
+        }
+      }
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "three layers with primitive and array override",
+      "args": [
+        {
+          "categorical": [
+            "red",
+            "blue"
+          ],
+          "nested": {
+            "a": 1,
+            "b": {
+              "x": "#000",
+              "y": "#fff"
+            }
+          }
+        },
+        {
+          "categorical": [
+            "green"
+          ],
+          "nested": {
+            "b": {
+              "y": "#eee",
+              "z": "#ddd"
+            }
+          }
+        },
+        {
+          "nested": {
+            "a": {
+              "replaced": true
+            }
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "categorical": [
+          "green"
+        ],
+        "nested": {
+          "a": {
+            "replaced": true
+          },
+          "b": {
+            "x": "#000",
+            "y": "#eee",
+            "z": "#ddd"
+          }
+        }
+      }
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "ignores non-object arguments",
+      "args": [
+        null,
+        "not-an-object",
+        42,
+        [
+          1,
+          2
+        ],
+        {
+          "ok": "#abcdef"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": "#abcdef"
+      }
+    },
+    {
+      "fn": "theme/src/tui/expand.ts#mergeTheme",
+      "name": "unicode and emoji keys and values",
+      "args": [
+        {
+          "テーマ": {
+            "色": "#123456",
+            "🚀": "launch"
+          }
+        },
+        {
+          "テーマ": {
+            "🚀": "override-🎨"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "テーマ": {
+          "色": "#123456",
+          "🚀": "override-🎨"
+        }
+      }
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "zero",
+      "args": [
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "00"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "single digit 9",
+      "args": [
+        9
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "09"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "hex boundary 15",
+      "args": [
+        15
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "0f"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "hex boundary 16",
+      "args": [
+        16
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "10"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "mid 127",
+      "args": [
+        127
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "7f"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "mid 128",
+      "args": [
+        128
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "80"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "max 255",
+      "args": [
+        255
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "ansi 0 black",
+      "args": [
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "ansi 1 maroon",
+      "args": [
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#800000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "ansi 7 silver",
+      "args": [
+        7
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#c0c0c0"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "ansi 9 bright red",
+      "args": [
+        9
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ff0000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "ansi 15 white",
+      "args": [
+        15
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ffffff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "cube start 16",
+      "args": [
+        16
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "cube red 196",
+      "args": [
+        196
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ff0000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "cube cyan 51",
+      "args": [
+        51
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#00ffff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "cube mid 137",
+      "args": [
+        137
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#af875f"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "cube end 231",
+      "args": [
+        231
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ffffff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "grayscale start 232",
+      "args": [
+        232
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#080808"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "grayscale mid 244",
+      "args": [
+        244
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#808080"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "grayscale end 255",
+      "args": [
+        255
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#eeeeee"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "out of range 256",
+      "args": [
+        256
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#ansiToRgba",
+      "name": "negative code -1",
+      "args": [
+        -1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "alpha 0 preserves base",
+      "args": [
+        0,
+        15,
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#000000"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "alpha 1 becomes overlay",
+      "args": [
+        0,
+        15,
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ffffff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "black and white 50 percent",
+      "args": [
+        0,
+        15,
+        0.5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#808080"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "dark gray tinted with red at 0.25",
+      "args": [
+        235,
+        9,
+        0.25
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#5c1c1c"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "white tinted with blue at 0.2",
+      "args": [
+        15,
+        12,
+        0.2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#ccccff"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "cube colors 75 percent",
+      "args": [
+        33,
+        208,
+        0.75
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#bf8740"
+    },
+    {
+      "fn": "tui/src/theme/color.ts#tint",
+      "name": "same color unchanged",
+      "args": [
+        141,
+        141,
+        0.42
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "#af87ff"
     }
   ]
 }

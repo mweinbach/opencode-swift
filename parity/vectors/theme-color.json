@@ -1,0 +1,113 @@
+[
+  {
+    "fn": "theme/src/tui/color.ts#oklchToHex",
+    "cases": [
+      { "name": "pure black", "args": [{ "l": 0, "c": 0, "h": 0 }] },
+      { "name": "pure white", "args": [{ "l": 1, "c": 0, "h": 0 }] },
+      { "name": "mid gray achromatic", "args": [{ "l": 0.5, "c": 0, "h": 180 }] },
+      { "name": "sRGB linear cutoff low lightness", "args": [{ "l": 0.05, "c": 0, "h": 0 }] },
+      { "name": "in-gamut warm red", "args": [{ "l": 0.65, "c": 0.15, "h": 25 }] },
+      { "name": "in-gamut forest green", "args": [{ "l": 0.58, "c": 0.12, "h": 145 }] },
+      { "name": "in-gamut ocean blue", "args": [{ "l": 0.55, "c": 0.14, "h": 250 }] },
+      { "name": "in-gamut violet", "args": [{ "l": 0.6, "c": 0.14, "h": 300 }] },
+      { "name": "out-of-gamut high chroma fitted", "args": [{ "l": 0.7, "c": 0.45, "h": 140 }] },
+      { "name": "extreme chroma fallback to gray", "args": [{ "l": 0.99, "c": 5.0, "h": 250 }] },
+      { "name": "negative hue wraps modulo 360", "args": [{ "l": 0.62, "c": 0.12, "h": -60 }] },
+      { "name": "large negative hue wraps", "args": [{ "l": 0.62, "c": 0.12, "h": -780 }] },
+      { "name": "hue above 360 wraps", "args": [{ "l": 0.62, "c": 0.12, "h": 420 }] },
+      { "name": "lightness clamped below zero", "args": [{ "l": -0.3, "c": 0.1, "h": 120 }] },
+      { "name": "lightness clamped above one", "args": [{ "l": 1.4, "c": 0.1, "h": 120 }] },
+      { "name": "negative chroma clamped to zero", "args": [{ "l": 0.5, "c": -0.2, "h": 45 }] }
+    ]
+  },
+  {
+    "fn": "theme/src/tui/color.ts#rgbToOklch",
+    "cases": [
+      { "name": "black", "args": [0, 0, 0] },
+      { "name": "white", "args": [1, 1, 1] },
+      { "name": "pure red", "args": [1, 0, 0] },
+      { "name": "pure green", "args": [0, 1, 0] },
+      { "name": "pure blue", "args": [0, 0, 1] },
+      { "name": "low linear sRGB segment", "args": [0.02, 0.03, 0.04] },
+      { "name": "mid gray", "args": [0.5, 0.5, 0.5] },
+      { "name": "coral accent", "args": [0.95, 0.42, 0.31] }
+    ]
+  },
+  {
+    "fn": "theme/src/tui/expand.ts#mergeTheme",
+    "cases": [
+      { "name": "empty merge", "args": [] },
+      { "name": "single layer", "args": [{ "text": { "base": "#111111" } }] },
+      {
+        "name": "deep merge preserves sibling keys",
+        "args": [
+          { "text": { "base": "#111111", "muted": "#666666" }, "border": { "base": "#cccccc" } },
+          { "text": { "muted": "#555555", "faint": "#999999" } }
+        ]
+      },
+      {
+        "name": "three layers with primitive and array override",
+        "args": [
+          { "categorical": ["red", "blue"], "nested": { "a": 1, "b": { "x": "#000", "y": "#fff" } } },
+          { "categorical": ["green"], "nested": { "b": { "y": "#eee", "z": "#ddd" } } },
+          { "nested": { "a": { "replaced": true } } }
+        ]
+      },
+      {
+        "name": "ignores non-object arguments",
+        "args": [null, "not-an-object", 42, [1, 2], { "ok": "#abcdef" }]
+      },
+      {
+        "name": "unicode and emoji keys and values",
+        "args": [
+          { "テーマ": { "色": "#123456", "🚀": "launch" } },
+          { "テーマ": { "🚀": "override-🎨" } }
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "theme/src/tui/v1-migrate.ts#byte",
+    "cases": [
+      { "name": "zero", "args": [0] },
+      { "name": "single digit 9", "args": [9] },
+      { "name": "hex boundary 15", "args": [15] },
+      { "name": "hex boundary 16", "args": [16] },
+      { "name": "mid 127", "args": [127] },
+      { "name": "mid 128", "args": [128] },
+      { "name": "max 255", "args": [255] }
+    ]
+  },
+  {
+    "fn": "tui/src/theme/color.ts#ansiToRgba",
+    "cases": [
+      { "name": "ansi 0 black", "args": [0] },
+      { "name": "ansi 1 maroon", "args": [1] },
+      { "name": "ansi 7 silver", "args": [7] },
+      { "name": "ansi 9 bright red", "args": [9] },
+      { "name": "ansi 15 white", "args": [15] },
+      { "name": "cube start 16", "args": [16] },
+      { "name": "cube red 196", "args": [196] },
+      { "name": "cube cyan 51", "args": [51] },
+      { "name": "cube mid 137", "args": [137] },
+      { "name": "cube end 231", "args": [231] },
+      { "name": "grayscale start 232", "args": [232] },
+      { "name": "grayscale mid 244", "args": [244] },
+      { "name": "grayscale end 255", "args": [255] },
+      { "name": "out of range 256", "args": [256] },
+      { "name": "negative code -1", "args": [-1] }
+    ]
+  },
+  {
+    "fn": "tui/src/theme/color.ts#tint",
+    "cases": [
+      { "name": "alpha 0 preserves base", "args": [0, 15, 0] },
+      { "name": "alpha 1 becomes overlay", "args": [0, 15, 1] },
+      { "name": "black and white 50 percent", "args": [0, 15, 0.5] },
+      { "name": "dark gray tinted with red at 0.25", "args": [235, 9, 0.25] },
+      { "name": "white tinted with blue at 0.2", "args": [15, 12, 0.2] },
+      { "name": "cube colors 75 percent", "args": [33, 208, 0.75] },
+      { "name": "same color unchanged", "args": [141, 141, 0.42] }
+    ]
+  }
+]

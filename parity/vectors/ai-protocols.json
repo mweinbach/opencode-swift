@@ -1,0 +1,297 @@
+[
+  {
+    "fn": "ai/src/protocols/utils/mistral-tool-id.ts#valid",
+    "cases": [
+      { "name": "valid 9 alphanumeric", "args": ["AbC123xYz"] },
+      { "name": "too short 8 chars", "args": ["AbC123xY"] },
+      { "name": "too long 10 chars", "args": ["AbC123xYz0"] },
+      { "name": "contains underscore invalid", "args": ["call_1234"] },
+      { "name": "contains dash invalid", "args": ["abc-12345"] },
+      { "name": "empty invalid", "args": [""] },
+      { "name": "non-ascii invalid", "args": ["ébc123456"] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/mistral-tool-id.ts#hash",
+    "cases": [
+      { "name": "empty string", "args": [""] },
+      { "name": "openai call id", "args": ["call_abc123def456"] },
+      { "name": "anthropic toolu id", "args": ["toolu_01A09q90qw90lq917835lq9"] },
+      { "name": "uuid", "args": ["550e8400-e29b-41d4-a716-446655440000"] },
+      { "name": "collision attempt suffix", "args": ["call_1:1"] },
+      { "name": "cjk tool id", "args": ["ツール呼び出し_1"] },
+      { "name": "emoji surrogate pair tool id", "args": ["call_🚀_🎉"] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/claude-model.ts#claudeVersion",
+    "cases": [
+      { "name": "direct major.minor", "args": ["claude-opus-4-6"] },
+      { "name": "direct dotted minor", "args": ["claude-sonnet-4.5"] },
+      { "name": "snapshot date ignored as minor", "args": ["claude-sonnet-4-5-20250929"] },
+      { "name": "major only with snapshot date", "args": ["claude-opus-4-20250514"] },
+      { "name": "gateway slash prefix", "args": ["anthropic/claude-opus-5-1"] },
+      { "name": "bedrock dot prefix with colon version", "args": ["us.anthropic.claude-sonnet-5-2-20260801-v1:0"] },
+      { "name": "vertex @ suffix", "args": ["claude-haiku-4-5@20251001"] },
+      { "name": "uppercase normalized", "args": ["ANTHROPIC/CLAUDE-OPUS-5.1"] },
+      { "name": "non-claude model returns null", "args": ["gpt-5.2-codex"] },
+      { "name": "embedded claude without boundary returns null", "args": ["myclaude-opus-5-1"] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding",
+    "cases": [
+      { "name": "claude 4.6 false", "args": [{ "id": "claude-opus-4-6" }] },
+      { "name": "claude 5.0 false", "args": [{ "id": "claude-opus-5-0" }] },
+      { "name": "claude 5.1 true", "args": [{ "id": "claude-opus-5-1" }] },
+      { "name": "claude 6.0 true", "args": [{ "id": "anthropic/claude-sonnet-6" }] },
+      { "name": "explicit compatibility override true on 4.5", "args": [{ "id": "claude-sonnet-4-5", "supportsThinkingBlockBinding": true }] },
+      { "name": "explicit compatibility override false on 5.2", "args": [{ "id": "claude-opus-5-2", "supportsThinkingBlockBinding": false }] },
+      { "name": "non-claude false", "args": [{ "id": "gemini-3-pro" }] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+    "cases": [
+      { "name": "1K", "args": ["1K"] },
+      { "name": "2k lowercase", "args": ["2k"] },
+      { "name": "0.5K fractional", "args": ["0.5K"] },
+      { "name": "4K", "args": ["4K"] },
+      { "name": "pixel dimensions rejected", "args": ["1024x1024"] },
+      { "name": "bare k rejected", "args": ["k"] },
+      { "name": "double dot rejected", "args": ["1.2.3K"] },
+      { "name": "empty rejected", "args": [""] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/image-sizing.ts#fit",
+    "cases": [
+      { "name": "default 1:1 1K multiple 64", "args": [{}, { "multiple": 64 }] },
+      { "name": "16:9 1K multiple 16", "args": [{ "aspect": "16:9", "resolution": "1K" }, { "multiple": 16 }] },
+      { "name": "9:16 2K clamped by maxEdge", "args": [{ "aspect": "9:16", "resolution": "2K" }, { "multiple": 32, "maxEdge": 2048 }] },
+      { "name": "0.5K raised by minEdge", "args": [{ "aspect": "1:1", "resolution": "0.5K" }, { "multiple": 16, "minEdge": 768 }] },
+      { "name": "clamped by maxPixels", "args": [{ "aspect": "4:3", "resolution": "2K" }, { "multiple": 16, "maxPixels": 1048576 }] },
+      { "name": "raised by minPixels", "args": [{ "aspect": "3:2", "resolution": "0.5K" }, { "multiple": 16, "minPixels": 1048576 }] },
+      { "name": "aspect clamped by maxRatio", "args": [{ "aspect": "21:9", "resolution": "1K" }, { "multiple": 32, "maxRatio": 2.0 }] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/image-sizing.ts#nearest",
+    "cases": [
+      {
+        "name": "exact square match",
+        "args": [
+          { "aspect": "1:1", "resolution": "1K" },
+          [{ "width": 1024, "height": 1024 }, { "width": 1536, "height": 1024 }, { "width": 1024, "height": 1536 }]
+        ]
+      },
+      {
+        "name": "picks closest aspect first",
+        "args": [
+          { "aspect": "16:9", "resolution": "1K" },
+          [{ "width": 1024, "height": 1024 }, { "width": 1792, "height": 1024 }, { "width": 1024, "height": 1792 }]
+        ]
+      },
+      {
+        "name": "same aspect tiebreaks by pixel area",
+        "args": [
+          { "aspect": "1:1", "resolution": "2K" },
+          [{ "width": 512, "height": 512 }, { "width": 1024, "height": 1024 }, { "width": 2048, "height": 2048 }]
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/gemini-json-schema.ts#normalize",
+    "cases": [
+      {
+        "name": "filters undeclared required properties",
+        "args": [
+          { "type": "object", "properties": { "a": { "type": "string" } }, "required": ["a", "missing"] }
+        ]
+      },
+      {
+        "name": "draft-04 boolean exclusiveMinimum and exclusiveMaximum",
+        "args": [
+          { "type": "number", "minimum": 0, "exclusiveMinimum": true, "maximum": 10, "exclusiveMaximum": true }
+        ]
+      },
+      {
+        "name": "draft-04 false exclusive bounds dropped",
+        "args": [
+          { "type": "number", "minimum": 1, "exclusiveMinimum": false, "maximum": 5, "exclusiveMaximum": false }
+        ]
+      },
+      {
+        "name": "draft-07 tuple items and additionalItems to prefixItems and items",
+        "args": [
+          { "type": "array", "items": [{ "type": "string" }, { "type": "integer" }], "additionalItems": { "type": "boolean" } }
+        ]
+      },
+      {
+        "name": "cuts unsafe direct required recursion loop",
+        "args": [
+          { "type": "object", "properties": { "self": { "$ref": "#" } }, "required": ["self"] }
+        ]
+      },
+      {
+        "name": "preserves safe optional recursion loop",
+        "args": [
+          { "type": "object", "properties": { "next": { "$ref": "#" } } }
+        ]
+      },
+      {
+        "name": "preserves values keys verbatim",
+        "args": [
+          { "type": "string", "enum": ["a", "b"], "default": "a", "examples": ["b"] }
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/cache.ts#openAIRequestTTL",
+    "cases": [
+      { "name": "undefined returns empty object", "args": [null] },
+      { "name": "24h uses prompt_cache_retention", "args": ["24h"] },
+      { "name": "5m uses prompt_cache_options.ttl", "args": ["5m"] },
+      { "name": "1h uses prompt_cache_options.ttl", "args": ["1h"] },
+      { "name": "in_memory uses prompt_cache_options.ttl", "args": ["in_memory"] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/utils/partial-json.ts#parseJSON",
+    "cases": [
+      { "name": "complete object", "args": ["{\"a\":1,\"b\":\"hi\"}"] },
+      { "name": "truncated string inside object", "args": ["{\"msg\":\"hello wor"] },
+      { "name": "truncated array of numbers", "args": ["[1, 2, 3"] },
+      { "name": "truncated nested object after colon", "args": ["{\"ok\":true,\"partial\":"] },
+      { "name": "truncated boolean literal", "args": ["{\"flag\":tr"] },
+      { "name": "truncated null literal", "args": ["[nu"] },
+      { "name": "unescaped control character repaired", "args": ["{\"text\":\"line1\nline2\"}"] },
+      { "name": "unicode and emoji in truncated string", "args": ["{\"jp\":\"日本語 🚀"] },
+      { "name": "empty string errors", "args": [""], "compare": "expect_error" },
+      { "name": "whitespace only errors", "args": ["   "], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "ai/src/utils/media-type.ts#detectMediaType",
+    "cases": [
+      { "name": "png signature", "args": [[137, 80, 78, 71, 13, 10, 26, 10]] },
+      { "name": "jpeg signature", "args": [[255, 216, 255, 224]] },
+      { "name": "gif signature", "args": [[71, 73, 70, 56, 57, 97]] },
+      { "name": "riff webp", "args": [[82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]] },
+      { "name": "riff wav", "args": [[82, 73, 70, 70, 0, 0, 0, 0, 87, 65, 86, 69]] },
+      { "name": "pdf", "args": [[37, 80, 68, 70, 45, 49, 46, 55]] },
+      { "name": "mp4 isom ftyp", "args": [[0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0]] },
+      { "name": "avif ftyp", "args": [[0, 0, 0, 16, 102, 116, 121, 112, 97, 118, 105, 102, 0, 0, 0, 0]] },
+      { "name": "mif1 compatible avif", "args": [[0, 0, 0, 20, 102, 116, 121, 112, 109, 105, 102, 49, 0, 0, 0, 0, 97, 118, 105, 102]] },
+      { "name": "heic ftyp", "args": [[0, 0, 0, 16, 102, 116, 121, 112, 104, 101, 105, 99, 0, 0, 0, 0]] },
+      { "name": "quicktime ftyp", "args": [[0, 0, 0, 16, 102, 116, 121, 112, 113, 116, 32, 32, 0, 0, 0, 0]] },
+      { "name": "m4a ftyp", "args": [[0, 0, 0, 16, 102, 116, 121, 112, 77, 52, 65, 32, 0, 0, 0, 0]] },
+      { "name": "webm ebml", "args": [[26, 69, 223, 163]] },
+      { "name": "mp3 id3", "args": [[73, 68, 51, 3]] },
+      { "name": "aac adts sync", "args": [[255, 241]] },
+      { "name": "mpeg audio sync", "args": [[255, 251]] },
+      { "name": "ogg", "args": [[79, 103, 103, 83]] },
+      { "name": "flac", "args": [[102, 76, 97, 67]] },
+      { "name": "plain ascii unknown", "args": [[104, 101, 108, 108, 111]] },
+      { "name": "empty unknown", "args": [[]] }
+    ]
+  },
+  {
+    "fn": "ai/src/utils/media-type.ts#fileMediaType",
+    "cases": [
+      { "name": "magic bytes override wrong extension", "args": [[137, 80, 78, 71, 13, 10, 26, 10], "photo.jpg"] },
+      { "name": "falls back to extension", "args": [[104, 101, 108, 108, 111], "README.MD"] },
+      { "name": "unknown bytes and unknown extension", "args": [[1, 2, 3], "file.unknown"] }
+    ]
+  },
+  {
+    "fn": "ai/src/utils/media-type.ts#mediaTypeExtension",
+    "cases": [
+      { "name": "image/png", "args": ["image/png"] },
+      { "name": "image/jpeg", "args": ["image/jpeg"] },
+      { "name": "alias audio/mp3", "args": ["audio/mp3"] },
+      { "name": "alias audio/x-wav with charset param", "args": ["AUDIO/X-WAV; charset=binary"] },
+      { "name": "application/pdf with whitespace", "args": ["  application/pdf ; version=1.7 "] },
+      { "name": "unknown returns null", "args": ["application/x-custom"] }
+    ]
+  },
+  {
+    "fn": "ai/src/utils/provider-codes.ts#awsErrorType",
+    "cases": [
+      { "name": "plain error name", "args": ["ThrottlingException"] },
+      { "name": "namespaced with uri suffix", "args": ["com.amazon.bedrock#ValidationException:http://internal.amazon.com/coral/"] },
+      { "name": "uri suffix only", "args": ["ServiceUnavailableException:http://example.com"] },
+      { "name": "null returns empty array", "args": [null] }
+    ]
+  },
+  {
+    "fn": "ai/src/utils/provider-codes.ts#providerCodes",
+    "cases": [
+      { "name": "openai nested error json string", "args": ["{\"error\":{\"code\":\"context_length_exceeded\",\"type\":\"invalid_request_error\"}}"] },
+      { "name": "google rpc details reasons", "args": [{ "error": { "status": "INVALID_ARGUMENT", "details": [{ "reason": "API_KEY_INVALID" }, { "reason": "QUOTA_EXCEEDED" }] } }] },
+      { "name": "aws __type namespaced", "args": [{ "__type": "com.amazonaws.bedrock#ThrottlingException:http://aws" }] },
+      { "name": "azure innererror code", "args": [{ "error": { "code": "content_filter", "innererror": { "code": "ResponsibleAIPolicyViolation" } } }] },
+      { "name": "invalid json string returns empty", "args": ["not json"] },
+      { "name": "null returns empty", "args": [null] }
+    ]
+  },
+  {
+    "fn": "ai/src/route/endpoint.ts#trimBaseUrl",
+    "cases": [
+      { "name": "no trailing slash", "args": ["https://api.openai.com/v1"] },
+      { "name": "single trailing slash", "args": ["https://api.openai.com/v1/"] },
+      { "name": "multiple trailing slashes", "args": ["https://api.openai.com/v1///"] },
+      { "name": "only slashes", "args": ["///"] },
+      { "name": "empty string", "args": [""] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/shared.ts#wrapSystemUpdate",
+    "cases": [
+      { "name": "single plain part", "args": [["Skill loaded"]] },
+      { "name": "multiple parts joined with newline", "args": [["Part 1", "Part 2"]] },
+      { "name": "xml special chars escaped", "args": [["</system-update> & <inject>"]] },
+      { "name": "unicode and emoji preserved", "args": [["日本語 🚀", "café & tea"]] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/shared.ts#fitThinkingBudget",
+    "cases": [
+      { "name": "no maxTokens unchanged", "args": [4000, null] },
+      { "name": "budget within half unchanged", "args": [2000, 4096] },
+      { "name": "budget exactly half unchanged", "args": [2048, 4096] },
+      { "name": "budget capped at floor of half", "args": [3000, 4095] },
+      { "name": "minimum floor honored", "args": [100, 10, 32] },
+      { "name": "special budget -1 unchanged", "args": [-1, 4096] },
+      { "name": "special budget 0 unchanged", "args": [0, 4096] }
+    ]
+  },
+  {
+    "fn": "ai/src/protocols/shared.ts#promptCacheKey",
+    "cases": [
+      { "name": "absent key returns null", "args": [{}] },
+      { "name": "short ascii key returned", "args": [{ "promptCacheKey": "ses_12345" }] },
+      { "name": "cache none suppresses key", "args": [{ "promptCacheKey": "ses_12345", "cache": "none" }] },
+      { "name": "capability false suppresses key", "args": [{ "promptCacheKey": "ses_12345", "capabilityPromptCacheKey": false }] },
+      { "name": "exactly 64 chars unchanged", "args": [{ "promptCacheKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }] },
+      { "name": "over 64 ascii chars clamped", "args": [{ "promptCacheKey": "0123456789012345678901234567890123456789012345678901234567890123456789" }] },
+      { "name": "over 64 emoji codepoints clamped without splitting surrogates", "args": [{ "promptCacheKey": "🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧🚀🎉🔥✨🌟💡🎯🔧END" }] }
+    ]
+  },
+  {
+    "fn": "ai/src/provider-error.ts#isContextOverflow",
+    "cases": [
+      { "name": "anthropic prompt is too long", "args": ["prompt is too long: 210000 tokens > 200000 maximum"] },
+      { "name": "openai maximum context length", "args": ["This model's maximum context length is 128000 tokens. However, your messages exceeded maximum context length of 128,000 tokens"] },
+      { "name": "openai code context_length_exceeded", "args": ["Error: context_length_exceeded"] },
+      { "name": "zai chinese overflow", "args": ["Prompt 超长"] },
+      { "name": "413 no body", "args": ["413 status code (no body)"] },
+      { "name": "bedrock throttling exclusion", "args": ["Too many tokens per day, please wait before retrying"] },
+      { "name": "rate limit exclusion", "args": ["rate limit: too many tokens"] },
+      { "name": "cohere max_tokens exclusion", "args": ["max_tokens must be less than 4096: too many tokens"] },
+      { "name": "normal error false", "args": ["Invalid API key provided"] }
+    ]
+  }
+]

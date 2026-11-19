@@ -1,0 +1,163 @@
+[
+  {
+    "fn": "patchmark/src/entities.ts#decodeCodePoint",
+    "cases": [
+      { "name": "null codepoint maps to replacement", "args": [0] },
+      { "name": "negative codepoint maps to replacement", "args": [-5] },
+      { "name": "above max unicode maps to replacement", "args": [1114112] },
+      { "name": "high surrogate maps to replacement", "args": [55296] },
+      { "name": "low surrogate maps to replacement", "args": [57343] },
+      { "name": "windows-1252 euro 128", "args": [128] },
+      { "name": "windows-1252 left single quote 145", "args": [145] },
+      { "name": "windows-1252 em dash 151", "args": [151] },
+      { "name": "windows-1252 Y diaeresis 159", "args": [159] },
+      { "name": "ascii A", "args": [65] },
+      { "name": "cjk character", "args": [26085] },
+      { "name": "emoji grinning face", "args": [128512] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/entities.ts#decodeEntity",
+    "cases": [
+      { "name": "named amp", "args": ["&amp;"] },
+      { "name": "named uppercase AMP", "args": ["&AMP;"] },
+      { "name": "named lt", "args": ["&lt;"] },
+      { "name": "named copy", "args": ["&copy;"] },
+      { "name": "named mdash", "args": ["&mdash;"] },
+      { "name": "named multi-codepoint acE", "args": ["&acE;"] },
+      { "name": "named multi-codepoint fjlig", "args": ["&fjlig;"] },
+      { "name": "named astral math fraktur Afr", "args": ["&Afr;"] },
+      { "name": "decimal ascii", "args": ["&#65;"] },
+      { "name": "decimal zero replacement", "args": ["&#0;"] },
+      { "name": "decimal windows-1252 euro", "args": ["&#128;"] },
+      { "name": "decimal emoji", "args": ["&#128640;"] },
+      { "name": "hex lowercase emoji", "args": ["&#x1f680;"] },
+      { "name": "hex uppercase X", "args": ["&#X41;"] },
+      { "name": "hex 7 digits rejected", "args": ["&#x0000041;"] },
+      { "name": "decimal 8 digits rejected", "args": ["&#00000065;"] },
+      { "name": "unknown named unchanged", "args": ["&notarealentity;"] },
+      { "name": "missing semicolon unchanged", "args": ["&amp"] },
+      { "name": "too short unchanged", "args": ["&;"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/entities.ts#unescapeString",
+    "cases": [
+      { "name": "plain ascii fast path", "args": ["hello world"] },
+      { "name": "escaped markdown punctuation", "args": ["\\*bold\\* \\[link\\] \\`code\\`"] },
+      { "name": "non-escapable backslash preserved", "args": ["\\a\\1\\ "] },
+      { "name": "double backslash before star", "args": ["\\\\*text"] },
+      { "name": "mixed entities and escapes", "args": ["&lt;tag&gt; &amp; \\&amp; &#x2764;"] },
+      { "name": "cjk and emoji around escapes", "args": ["日本語\\! 🚀 &mdash; café"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/entities.ts#normalizeURI",
+    "cases": [
+      { "name": "already safe url fast path", "args": ["https://example.com/a/b?x=1&y=2#top"] },
+      { "name": "preserves valid percent encoding", "args": ["https://example.com/hello%20world/%2f"] },
+      { "name": "encodes bare percent and spaces", "args": ["https://example.com/100% done/file name.txt"] },
+      { "name": "encodes angle brackets and quotes", "args": ["https://example.com/<a \"b\">"] },
+      { "name": "encodes cjk path", "args": ["https://example.com/日本語/パス"] },
+      { "name": "encodes emoji surrogate pair", "args": ["https://example.com/🚀/🎉"] },
+      { "name": "empty uri", "args": [""] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/heal.ts#computeTailHeal",
+    "cases": [
+      { "name": "empty string", "args": [""] },
+      { "name": "whitespace only", "args": ["   \t\n"] },
+      { "name": "complete bold unchanged", "args": ["hello **world**"] },
+      { "name": "unclosed bold", "args": ["hello **world"] },
+      { "name": "dangling bold marker hidden", "args": ["hello **"] },
+      { "name": "nested bold and italic unclosed", "args": ["**bold *italic"] },
+      { "name": "unclosed triple star", "args": ["***both"] },
+      { "name": "unclosed strikethrough", "args": ["~~strike"] },
+      { "name": "unclosed inline code", "args": ["run `npm test"] },
+      { "name": "unclosed double backtick code", "args": ["run ``a ` b"] },
+      { "name": "dangling backtick hidden", "args": ["run `"] },
+      { "name": "incomplete inline link shows label", "args": ["see [OpenCode](https://opencode"] },
+      { "name": "incomplete inline image hidden", "args": ["logo ![alt text](https://example.com/img"] },
+      { "name": "incomplete link with unclosed bold inside label", "args": ["see [**OpenCode](https://opencode"] },
+      { "name": "intraword underscores not treated as emphasis", "args": ["foo_bar_baz"] },
+      { "name": "closed inline math untouched", "args": ["value $a_1 + b_2$ ok"] },
+      { "name": "trailing spaces before closer dropped", "args": ["**bold text   "] },
+      { "name": "cjk and emoji UTF-16 strip lengths", "args": ["日本語 🚀 **"] },
+      { "name": "emoji inside incomplete link", "args": ["go [🚀 launch](https://ex"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/heal.ts#healStreamingInline",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "plain text", "args": ["hello world"] },
+      { "name": "unclosed bold", "args": ["hello **world"] },
+      { "name": "dangling opener stripped with space", "args": ["hello **"] },
+      { "name": "unclosed italic and code", "args": ["*em `code"] },
+      { "name": "incomplete link", "args": ["visit [docs](https://opencode.ai/docs"] },
+      { "name": "incomplete image", "args": ["before ![pic](https://example.com/a.png"] },
+      { "name": "escaped star ignored", "args": ["hello \\*world"] },
+      { "name": "cjk and emoji streaming bold", "args": ["日本語 **🚀 テスト"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/html.ts#escapeHtml",
+    "cases": [
+      { "name": "clean ascii fast path", "args": ["hello world 123"] },
+      { "name": "all four escaped chars", "args": ["<a href=\"x&y\">"] },
+      { "name": "single quotes preserved", "args": ["it's fine"] },
+      { "name": "unicode and emoji", "args": ["日本語 & 🚀 <tag>"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/html.ts#filterDisallowedRawHtml",
+    "cases": [
+      { "name": "clean text unchanged", "args": ["hello world"] },
+      { "name": "allowed div and span unchanged", "args": ["<div class=\"x\"><span>ok</span></div>"] },
+      { "name": "script tag escaped", "args": ["<script>alert(1)</script>"] },
+      { "name": "uppercase SCRIPT and closing tag", "args": ["<SCRIPT type=\"text/javascript\">x</SCRIPT>"] },
+      { "name": "iframe self closing", "args": ["<iframe src=\"x\"/>"] },
+      { "name": "style textarea title xmp noembed noframes plaintext", "args": ["<style>a</style><textarea>b</textarea><title>c</title><xmp>d</xmp><noembed>e</noembed><noframes>f</noframes><plaintext>g"] },
+      { "name": "prefix tag scripting not escaped", "args": ["<scripting>ok</scripting>"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/stream.ts#splitPendingMarker",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "normal word", "args": ["hello"] },
+      { "name": "bare heading hashes 1..6 held", "args": ["intro\n###"] },
+      { "name": "7 hashes not held", "args": ["intro\n#######"] },
+      { "name": "bare code fence held", "args": ["para\n```"] },
+      { "name": "bare tilde fence held", "args": ["para\n~~~"] },
+      { "name": "bare unordered bullet dash", "args": ["para\n-"] },
+      { "name": "bare unordered bullet plus", "args": ["para\n+"] },
+      { "name": "bare bullet dot unicode", "args": ["para\n•"] },
+      { "name": "bare blockquote marker", "args": ["para\n>"] },
+      { "name": "bare ordered list marker", "args": ["para\n12."] },
+      { "name": "bare ordered paren marker", "args": ["para\n3)"] },
+      { "name": "bare display math opener", "args": ["para\n$$"] },
+      { "name": "bare latex bracket opener", "args": ["para\n\\["] },
+      { "name": "marker with content not held", "args": ["para\n## Title"] },
+      { "name": "emoji before newline and held marker", "args": ["🚀 日本語\n-"] }
+    ]
+  },
+  {
+    "fn": "patchmark/src/html.ts#renderBlocksToHtml",
+    "cases": [
+      { "name": "atx headings h1..h3", "args": ["# H1\n\n## H2\n\n### H3\n", { "gfm": true, "math": false }] },
+      { "name": "emphasis strong code del", "args": ["*em* **strong** `code` ~~del~~\n", { "gfm": true, "math": false }] },
+      { "name": "fenced code block with language and html escape", "args": ["```swift\nlet x = a < b && c > d\n```\n", { "gfm": true, "math": false }] },
+      { "name": "gfm table with alignments", "args": ["| Name | Count | Note |\n| :--- | :---: | ---: |\n| alpha | 1 | *ok* |\n| 日本語 | 2 | 🚀 |\n", { "gfm": true, "math": false }] },
+      { "name": "gfm task list", "args": ["- [x] done\n- [ ] todo\n", { "gfm": true, "math": false }] },
+      { "name": "ordered list with custom start", "args": ["3. third\n4. fourth\n", { "gfm": true, "math": false }] },
+      { "name": "nested blockquote and hr", "args": ["> quote **bold**\n>\n> > nested\n\n---\n", { "gfm": true, "math": false }] },
+      { "name": "links images and reference defs", "args": ["[OpenCode][oc] and ![logo](https://example.com/a.png \"Hi\")\n\n[oc]: https://opencode.ai \"Home\"\n", { "gfm": true, "math": false }] },
+      { "name": "gfm tagfilter strips script", "args": ["hello <script>alert(1)</script> <b>ok</b>\n", { "gfm": true, "math": false }] },
+      { "name": "inline and block math", "args": ["Inline $x^2 + y^2$ here.\n\n$$\nE = mc^2\n$$\n", { "gfm": true, "math": true }] },
+      { "name": "html entities and backslash escapes", "args": ["&copy; 2026 &mdash; \\*literal\\* &#x1F680;\n", { "gfm": true, "math": false }] },
+      { "name": "cjk and emoji paragraph", "args": ["こんにちは **世界** 🚀 `swift-opencode`\n", { "gfm": true, "math": false }] }
+    ]
+  }
+]

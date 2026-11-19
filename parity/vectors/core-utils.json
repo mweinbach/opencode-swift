@@ -1,0 +1,149 @@
+[
+  {
+    "fn": "core/src/util/wildcard.ts#match",
+    "cases": [
+      { "name": "exact ascii match", "args": ["src/index.ts", "src/index.ts"] },
+      { "name": "star wildcard", "args": ["src/foo/bar.ts", "src/*.ts"] },
+      { "name": "question mark single char", "args": ["file1.txt", "file?.txt"] },
+      { "name": "trailing space-star matches bare command", "args": ["git status", "git status *"] },
+      { "name": "trailing space-star matches with args", "args": ["git status --short", "git status *"] },
+      { "name": "trailing space-star rejects partial token", "args": ["git statusbar", "git status *"] },
+      { "name": "backslashes normalized to forward slashes", "args": ["src\\util\\path.ts", "src/util/*.ts"] },
+      { "name": "regex metacharacters escaped", "args": ["a+b(c)[d].ts", "a+b(c)[d].ts"] },
+      { "name": "multiline input matched by star", "args": ["echo hello\nworld", "echo *"] },
+      { "name": "case sensitive mismatch by default", "args": ["README.MD", "readme.md", false] },
+      { "name": "ignoreCase true matches", "args": ["README.MD", "readme.md", true] },
+      { "name": "unicode and emoji wildcard", "args": ["日本語/🚀/test.ts", "日本語/*/test.ts"] }
+    ]
+  },
+  {
+    "fn": "core/src/util/canonical-json.ts#canonicalJson",
+    "cases": [
+      { "name": "null", "args": [null] },
+      { "name": "bool and numbers", "args": [[true, false, 0, -42, 3.5]] },
+      { "name": "sorts top-level and nested object keys", "args": [{ "z": 1, "a": { "d": 4, "b": 2, "c": 3 }, "m": [1, { "y": 9, "x": 8 }] }] },
+      { "name": "escapes quotes backslashes and control chars", "args": [{ "k": "a\"b\\c\nd\te\u0007" }] },
+      { "name": "empty object and array", "args": [{ "arr": [], "obj": {} }] },
+      { "name": "unicode keys sorted", "args": [{ "日本語": 1, "alpha": 2, "🚀": 3 }] },
+      { "name": "mixed bmp scripts sorted", "args": [{ "Ω": 1, "Я": 2, "é": 3, "a": 4, "Z": 5 }] }
+    ]
+  },
+  {
+    "fn": "core/src/util/token.ts#estimate",
+    "cases": [
+      { "name": "empty string", "args": [""] },
+      { "name": "1 char rounds to 0", "args": ["a"] },
+      { "name": "2 chars rounds half up to 1", "args": ["ab"] },
+      { "name": "4 chars is 1", "args": ["abcd"] },
+      { "name": "6 chars rounds half up to 2", "args": ["abcdef"] },
+      { "name": "10 chars rounds half up to 3", "args": ["0123456789"] },
+      { "name": "emoji surrogate pairs use utf16 length", "args": ["🚀🎉🔥"] },
+      { "name": "cjk 5 chars rounds to 1", "args": ["日本語です"] }
+    ]
+  },
+  {
+    "fn": "core/src/mime.ts#detect",
+    "cases": [
+      { "name": "empty bytes is text/plain", "args": [[]] },
+      { "name": "utf8 ascii text", "args": [[104, 101, 108, 108, 111, 10]] },
+      { "name": "utf8 cjk text", "args": [[230, 151, 165, 230, 156, 172, 232, 170, 158]] },
+      { "name": "nul byte binary", "args": [[104, 105, 0, 33]] },
+      { "name": "invalid utf8 binary", "args": [[255, 254, 253]] },
+      { "name": "high control byte ratio binary", "args": [[1, 2, 3, 4, 65, 66]] },
+      { "name": "png header", "args": [[137, 80, 78, 71, 13, 10, 26, 10]] },
+      { "name": "valid bmp dib 40", "args": [[66, 77, 100, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0]] },
+      { "name": "invalid bmp dib falls back to octet-stream", "args": [[66, 77, 100, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 99, 0, 0, 0]] }
+    ]
+  },
+  {
+    "fn": "core/src/mime.ts#detectMedia",
+    "cases": [
+      { "name": "png", "args": [[137, 80, 78, 71, 13, 10, 26, 10]] },
+      { "name": "gif87a", "args": [[71, 73, 70, 56, 55, 97]] },
+      { "name": "gif89a", "args": [[71, 73, 70, 56, 57, 97]] },
+      { "name": "pdf with dash", "args": [[37, 80, 68, 70, 45]] },
+      { "name": "webp", "args": [[82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]] },
+      { "name": "plain text returns null", "args": [[104, 101, 108, 108, 111]] }
+    ]
+  },
+  {
+    "fn": "core/src/mime.ts#isTextual",
+    "cases": [
+      { "name": "empty string true", "args": [""] },
+      { "name": "text/plain true", "args": ["text/plain"] },
+      { "name": "text/markdown true", "args": ["text/markdown"] },
+      { "name": "application/json true", "args": ["application/json"] },
+      { "name": "application/ld+json true", "args": ["application/ld+json"] },
+      { "name": "application/xml true", "args": ["application/xml"] },
+      { "name": "image/svg+xml true", "args": ["image/svg+xml"] },
+      { "name": "application/javascript true", "args": ["application/javascript"] },
+      { "name": "application/x-javascript true", "args": ["application/x-javascript"] },
+      { "name": "image/png false", "args": ["image/png"] },
+      { "name": "application/octet-stream false", "args": ["application/octet-stream"] }
+    ]
+  },
+  {
+    "fn": "core/src/config/markdown.ts#sanitize",
+    "cases": [
+      { "name": "no frontmatter unchanged", "args": ["# Just markdown\nhello: world\n"] },
+      { "name": "unquoted colon rewritten as block scalar", "args": ["---\ndescription: Run tests: fast\n---\nBody\n"] },
+      { "name": "leading bracket tag rewritten as block scalar", "args": ["---\ndescription: [Release] Cut build\n---\nBody\n"] },
+      { "name": "already quoted value untouched", "args": ["---\ndescription: \"Already: quoted\"\n---\nBody\n"] },
+      { "name": "comments and indented lines preserved", "args": ["---\n# comment: ignored\nname: simple\n  nested: keep:me\n---\nBody\n"] },
+      { "name": "block scalar markers untouched", "args": ["---\ndescription: |\n  keep: this\n---\nBody\n"] },
+      { "name": "multiple keys with unicode and emoji colons", "args": ["---\ntitle: 🚀 Deploy: prod\ndescription: [日本語] テスト\nsafe: plain\n---\nBody\n"] }
+    ]
+  },
+  {
+    "fn": "core/src/managed-policy.ts#decision",
+    "cases": [
+      { "name": "empty policies defaults to allow", "args": [[], "provider.use", "openai"] },
+      { "name": "last matching policy wins deny over allow", "args": [[{ "action": "provider.use", "resource": "*", "effect": "allow" }, { "action": "provider.use", "resource": "openai*", "effect": "deny" }], "provider.use", "openai"] },
+      { "name": "last matching policy wins allow over deny", "args": [[{ "action": "tool.use", "resource": "*", "effect": "deny" }, { "action": "tool.use", "resource": "read", "effect": "allow" }], "tool.use", "read"] },
+      { "name": "action mismatch ignored", "args": [[{ "action": "mcp.use", "resource": "*", "effect": "deny" }], "skill.use", "foo"] },
+      { "name": "integration account resource pattern", "args": [[{ "action": "integration.use", "resource": "opencode#*", "effect": "deny" }], "integration.use", "opencode#org_1"] }
+    ]
+  },
+  {
+    "fn": "core/src/flag.ts#resolve",
+    "cases": [
+      { "name": "local channel defaults on except optInOnly", "args": [{ "entries": [], "channel": "local" }] },
+      { "name": "release channel defaults all off", "args": [{ "entries": [], "channel": "latest" }] },
+      { "name": "env overrides enable and disable", "args": [{ "entries": [], "channel": "latest", "overrides": "automations,todo,-media_blob" }] },
+      { "name": "env wildcard all skips optInOnly and honors negative", "args": [{ "entries": [], "channel": "latest", "overrides": "all,-artifacts" }] },
+      { "name": "env legacy alias schedules maps to automations", "args": [{ "entries": [], "channel": "latest", "overrides": "schedules" }] },
+      {
+        "name": "config experimental and all_flags precedence",
+        "args": [
+          {
+            "entries": [
+              { "experimental": { "all_flags": true } },
+              { "experimental": { "artifacts": false, "todo": true } }
+            ],
+            "channel": "latest"
+          }
+        ]
+      },
+      {
+        "name": "env overrides beat config",
+        "args": [
+          {
+            "entries": [{ "experimental": { "automations": true, "media_blob": false } }],
+            "channel": "latest",
+            "overrides": "-automations,media_blob"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "core/src/permission.ts#evaluate",
+    "cases": [
+      { "name": "empty rulesets default to ask", "args": ["bash", "ls -la", []] },
+      { "name": "last match wins across rulesets", "args": ["bash", "git status", [[{ "action": "bash", "resource": "*", "effect": "deny" }], [{ "action": "bash", "resource": "git status *", "effect": "allow" }]]] },
+      { "name": "wildcard action matches", "args": ["edit", "/repo/src/a.swift", [[{ "action": "*", "resource": "/repo/**", "effect": "allow" }]]] },
+      { "name": "later deny overrides earlier allow", "args": ["read", "/etc/passwd", [[{ "action": "read", "resource": "*", "effect": "allow" }, { "action": "read", "resource": "/etc/*", "effect": "deny" }]]] },
+      { "name": "non-matching rules fall back to ask", "args": ["write", "/tmp/a.txt", [[{ "action": "read", "resource": "*", "effect": "allow" }]]] }
+    ]
+  }
+]

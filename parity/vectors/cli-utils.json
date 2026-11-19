@@ -1,0 +1,105 @@
+[
+  {
+    "fn": "cli/src/database-path.ts#databasePath",
+    "cases": [
+      { "name": "local channel default db filename", "args": ["/var/lib/opencode", {}] },
+      { "name": "explicit memory db", "args": ["/var/lib/opencode", { "OPENCODE_DB": ":memory:" }] },
+      { "name": "explicit relative custom db", "args": ["/var/lib/opencode", { "OPENCODE_DB": "custom.sqlite" }] },
+      { "name": "explicit absolute custom db overrides data dir", "args": ["/var/lib/opencode", { "OPENCODE_DB": "/tmp/override.db" }] },
+      { "name": "disable channel db with 1", "args": ["/var/lib/opencode", { "OPENCODE_DISABLE_CHANNEL_DB": "1" }] },
+      { "name": "disable channel db with true", "args": ["/var/lib/opencode", { "OPENCODE_DISABLE_CHANNEL_DB": "true" }] },
+      { "name": "disable channel db with false keeps channel db", "args": ["/var/lib/opencode", { "OPENCODE_DISABLE_CHANNEL_DB": "false" }] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/updater-action.ts#parseReleaseVersion",
+    "cases": [
+      { "name": "standard semver", "args": ["1.2.3"] },
+      { "name": "leading v and whitespace", "args": ["  v2.0.15 \n"] },
+      { "name": "zero components", "args": ["0.0.0"] },
+      { "name": "prerelease identifiers", "args": ["1.4.0-beta.2.rc-1"] },
+      { "name": "build metadata stripped", "args": ["1.4.0+20261119.sha512"] },
+      { "name": "prerelease and build metadata", "args": ["v3.1.0-alpha.0+build.99"] },
+      { "name": "max safe integer component accepted", "args": ["9007199254740991.0.0"] },
+      { "name": "above max safe integer rejected", "args": ["9007199254740992.0.0"] },
+      { "name": "leading zero in core rejected", "args": ["01.2.3"] },
+      { "name": "leading zero in numeric prerelease rejected", "args": ["1.2.3-01"] },
+      { "name": "leading zero in alphanumeric prerelease accepted", "args": ["1.2.3-01a"] },
+      { "name": "non-semver rejected", "args": ["local"] },
+      { "name": "empty rejected", "args": [""] },
+      { "name": "length over 256 rejected", "args": ["1.0.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/updater-action.ts#action",
+    "cases": [
+      { "name": "disable policy always none", "args": ["1.0.0", "2.0.0", "disable"] },
+      { "name": "notify policy on newer version", "args": ["1.0.0", "1.1.0", "notify"] },
+      { "name": "auto policy on newer version", "args": ["1.0.0", "1.1.0", "auto"] },
+      { "name": "same release returns none", "args": ["v1.2.3+build1", "1.2.3+build2", "auto"] },
+      { "name": "prerelease differs from release", "args": ["1.2.3-beta.1", "1.2.3", "notify"] },
+      { "name": "oversized numeric prerelease equality", "args": ["1.0.0-9007199254740992", "1.0.0-9007199254740993", "auto"] },
+      { "name": "invalid current version returns none", "args": ["local", "1.2.3", "auto"] },
+      { "name": "invalid latest version returns none", "args": ["1.2.3", "bad", "notify"] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/service-config.ts#filename",
+    "cases": [
+      { "name": "latest uses service.json", "args": ["latest"] },
+      { "name": "dev uses service.json", "args": ["dev"] },
+      { "name": "beta uses service.json", "args": ["beta"] },
+      { "name": "next uses service.json", "args": ["next"] },
+      { "name": "local uses channel suffix", "args": ["local"] },
+      { "name": "custom channel with slashes and spaces sanitized", "args": ["feat/my branch@1"] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/service-config.ts#defaultPort",
+    "cases": [
+      { "name": "latest on darwin", "args": ["latest", "darwin"] },
+      { "name": "latest on win32 masked into 0x7000 block", "args": ["latest", "win32"] },
+      { "name": "local on linux", "args": ["local", "linux"] },
+      { "name": "local on win32", "args": ["local", "win32"] },
+      { "name": "custom channel hashed port darwin", "args": ["pr-4242", "darwin"] },
+      { "name": "custom channel hashed port win32", "args": ["pr-4242", "win32"] },
+      { "name": "another custom channel", "args": ["canary-release", "linux"] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/service-config.ts#legacyFilename",
+    "cases": [
+      { "name": "latest returns null", "args": ["latest"] },
+      { "name": "local returns null", "args": ["local"] },
+      { "name": "dev hashed filename", "args": ["dev"] },
+      { "name": "beta hashed filename", "args": ["beta"] },
+      { "name": "custom channel hashed filename", "args": ["preview/pr-99"] }
+    ]
+  },
+  {
+    "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+    "cases": [
+      { "name": "null version false", "args": [null, "dev", "1.0.0"] },
+      { "name": "matches installed version exactly", "args": ["1.2.3", "latest", "1.2.3"] },
+      { "name": "matches channel prerelease integer", "args": ["0.0.0-dev-20261119", "dev", "1.0.0"] },
+      { "name": "matches channel prerelease dotted", "args": ["0.0.0-pr42-123.45", "pr42", "1.0.0"] },
+      { "name": "wrong channel false", "args": ["0.0.0-beta-123", "dev", "1.0.0"] },
+      { "name": "non-numeric suffix false", "args": ["0.0.0-dev-abc", "dev", "1.0.0"] },
+      { "name": "trailing dot false", "args": ["0.0.0-dev-123.", "dev", "1.0.0"] },
+      { "name": "two dots false", "args": ["0.0.0-dev-1.2.3", "dev", "1.0.0"] }
+    ]
+  },
+  {
+    "fn": "cli/src/node/target.ts#nodeTarget",
+    "cases": [
+      { "name": "darwin arm64", "args": ["darwin", "arm64"] },
+      { "name": "darwin x64", "args": ["darwin", "x64"] },
+      { "name": "linux arm64", "args": ["linux", "arm64"] },
+      { "name": "linux x64", "args": ["linux", "x64"] },
+      { "name": "win32 arm64", "args": ["win32", "arm64"] },
+      { "name": "win32 x64", "args": ["win32", "x64"] },
+      { "name": "unsupported platform throws", "args": ["freebsd", "x64"], "compare": "expect_error" },
+      { "name": "unsupported arch throws", "args": ["linux", "riscv64"], "compare": "expect_error" }
+    ]
+  }
+]

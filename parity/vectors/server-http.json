@@ -1,0 +1,96 @@
+[
+  {
+    "fn": "server/src/range.ts#parse",
+    "cases": [
+      { "name": "undefined header serves full body", "args": [null, 100] },
+      { "name": "closed range", "args": ["bytes=0-9", 100] },
+      { "name": "open-ended range", "args": ["bytes=50-", 100] },
+      { "name": "end clamped to size minus 1", "args": ["bytes=90-500", 100] },
+      { "name": "suffix range", "args": ["bytes=-20", 100] },
+      { "name": "suffix larger than size clamps start to 0", "args": ["bytes=-500", 100] },
+      { "name": "suffix zero unsatisfiable", "args": ["bytes=-0", 100] },
+      { "name": "suffix on empty body unsatisfiable", "args": ["bytes=-5", 0] },
+      { "name": "start beyond size unsatisfiable", "args": ["bytes=100-110", 100] },
+      { "name": "start greater than end unsatisfiable", "args": ["bytes=20-10", 100] },
+      { "name": "case insensitive BYTES with spaces", "args": ["  BYTES= 5 - 15  ", 100] },
+      { "name": "empty dash returns null", "args": ["bytes=-", 100] },
+      { "name": "multi-range falls back to null", "args": ["bytes=0-1, 2-3", 100] },
+      { "name": "wrong unit returns null", "args": ["items=0-5", 100] }
+    ]
+  },
+  {
+    "fn": "server/src/content-headers.ts#disposition",
+    "cases": [
+      { "name": "empty name", "args": [""] },
+      { "name": "simple ascii filename", "args": ["report.pdf"] },
+      { "name": "spaces and rfc5987 special chars", "args": ["my file (1)'s*copy.txt"] },
+      { "name": "quotes backslash and percent sanitized in fallback", "args": ["a\"b\\c%20d.txt"] },
+      { "name": "control char replaced in fallback", "args": ["bad\nname.txt"] },
+      { "name": "cjk filename", "args": ["報告書.pdf"] },
+      { "name": "accented unicode filename", "args": ["résumé.txt"] }
+    ]
+  },
+  {
+    "fn": "server/src/content-headers.ts#download",
+    "cases": [
+      { "name": "html neutralized to text/plain", "args": [{ "path": "/tmp/page.html", "mime": "text/html" }] },
+      { "name": "html with charset neutralized", "args": [{ "path": "index.html", "mime": "text/html; charset=utf-8" }] },
+      { "name": "javascript neutralized", "args": [{ "path": "app.js", "mime": "application/javascript" }] },
+      { "name": "svg+xml neutralized", "args": [{ "path": "icon.svg", "mime": "image/svg+xml" }] },
+      { "name": "application/xml neutralized", "args": [{ "path": "data.xml", "mime": "application/xml" }] },
+      { "name": "png preserved", "args": [{ "path": "/assets/photo.png", "mime": "image/png" }] },
+      { "name": "json preserved", "args": [{ "path": "/data/out.json", "mime": "application/json" }] },
+      { "name": "omitted path uses bare attachment", "args": [{ "mime": "application/pdf" }] }
+    ]
+  },
+  {
+    "fn": "server/src/cors.ts#isAllowedCorsOrigin",
+    "cases": [
+      { "name": "null origin allowed", "args": [null] },
+      { "name": "empty origin allowed", "args": [""] },
+      { "name": "localhost port allowed", "args": ["http://localhost:3000"] },
+      { "name": "127.0.0.1 port allowed", "args": ["http://127.0.0.1:4096"] },
+      { "name": "oc renderer allowed", "args": ["oc://renderer"] },
+      { "name": "tauri localhost schemes allowed", "args": ["tauri://localhost"] },
+      { "name": "https tauri localhost allowed", "args": ["https://tauri.localhost"] },
+      { "name": "opencode apex allowed", "args": ["https://opencode.ai"] },
+      { "name": "opencode nested subdomain allowed", "args": ["https://app.eu-1.opencode.ai"] },
+      { "name": "http opencode rejected", "args": ["http://opencode.ai"] },
+      { "name": "spoofed opencode suffix rejected", "args": ["https://opencode.ai.evil.com"] },
+      { "name": "custom cors allowlist match", "args": ["https://studio.example.com", { "cors": ["https://studio.example.com"] }] },
+      { "name": "custom cors allowlist miss", "args": ["https://other.example.com", { "cors": ["https://studio.example.com"] }] }
+    ]
+  },
+  {
+    "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+    "cases": [
+      { "name": "same host with port allowed", "args": ["https://dev.internal:8443", "dev.internal:8443"] },
+      { "name": "different port rejected", "args": ["https://dev.internal:8443", "dev.internal:9443"] },
+      { "name": "invalid origin url rejected", "args": ["not a url", "dev.internal:8443"] },
+      { "name": "falls back to cors allowlist", "args": ["https://opencode.ai", "other.local:4096"] },
+      { "name": "null origin allowed", "args": [null, "other.local:4096"] }
+    ]
+  },
+  {
+    "fn": "server/src/media-uri.ts#wantsMediaRefs",
+    "cases": [
+      { "name": "missing header false", "args": [{}] },
+      { "name": "exact token true", "args": [{ "x-opencode-capabilities": "experimental-media-uri" }] },
+      { "name": "comma list with whitespace and case true", "args": [{ "x-opencode-capabilities": "foo, Experimental-Media-URI , bar" }] },
+      { "name": "substring mismatch false", "args": [{ "x-opencode-capabilities": "experimental-media-uri-v2" }] }
+    ]
+  },
+  {
+    "fn": "server/src/request-site.ts#rejected",
+    "cases": [
+      { "name": "no sec-fetch-site header allowed", "args": [{ "url": "http://localhost/api/session", "headers": {} }] },
+      { "name": "same-origin allowed", "args": [{ "url": "http://localhost/api/session", "headers": { "sec-fetch-site": "same-origin", "sec-fetch-mode": "navigate" } }] },
+      { "name": "cross-site api navigate rejected", "args": [{ "url": "http://localhost/api/session", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" } }] },
+      { "name": "cross-site non-api path allowed", "args": [{ "url": "http://localhost/docs", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" } }] },
+      { "name": "cross-site artifact view exempt", "args": [{ "url": "http://localhost/api/experimental/artifacts/art_123/view/index.html", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" } }] },
+      { "name": "cross-site cors from disallowed origin rejected", "args": [{ "url": "http://localhost/api/config", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", "origin": "https://evil.example", "host": "localhost:4096" } }] },
+      { "name": "cross-site cors from allowed opencode origin permitted", "args": [{ "url": "http://localhost/api/config", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", "origin": "https://app.opencode.ai", "host": "localhost:4096" } }] },
+      { "name": "cross-site cors from custom cors origin permitted", "args": [{ "url": "http://localhost/api/config", "headers": { "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors", "origin": "https://custom.local", "host": "localhost:4096" } }, { "cors": ["https://custom.local"] }] }
+    ]
+  }
+]

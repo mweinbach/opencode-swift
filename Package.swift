@@ -138,7 +138,11 @@ let package = Package(
                 "OpenCodeSchema",
                 "OpenCodeProtocol",
                 "OpenCodePlatform",
+                "OpenCodeAI",
                 "OpenCodeCore",
+                "OpenCodeServer",
+                "OpenCodeTUI",
+                "OpenCodeCLIKit",
             ]
         ),
 
@@ -210,7 +214,17 @@ let package = Package(
         ),
         .testTarget(
             name: "OpenCodeParityTests",
-            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeProtocol", "OpenCodePlatform"],
+            dependencies: [
+                "OpenCodeUtil",
+                "OpenCodeSchema",
+                "OpenCodeProtocol",
+                "OpenCodePlatform",
+                "OpenCodeAI",
+                "OpenCodeCore",
+                "OpenCodeServer",
+                "OpenCodeTUI",
+                "OpenCodeCLIKit",
+            ],
             exclude: ["Fixtures"]
         ),
     ],

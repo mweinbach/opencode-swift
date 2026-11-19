@@ -1,5 +1,12 @@
 import Testing
+import OpenCodeAI
+import OpenCodeCLIKit
+import OpenCodeCore
+import OpenCodePlatform
+import OpenCodeProtocol
 import OpenCodeSchema
+import OpenCodeServer
+import OpenCodeTUI
 import OpenCodeUtil
 
 /// Offline golden parity verification suite using Swift Testing.
@@ -16,6 +23,54 @@ struct ParitySnapshotTests {
             return .int(Int64(d))
         }
         return .double(d)
+    }
+
+    private static func toSchemaJSON(_ value: SnapshotJSON) -> OpenCodeSchema.JSONValue {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .int(let i): return .int(i)
+        case .double(let d): return .double(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(toSchemaJSON))
+        case .object(let obj): return .object(obj.mapValues(toSchemaJSON))
+        }
+    }
+
+    private static func fromSchemaJSON(_ value: OpenCodeSchema.JSONValue) -> SnapshotJSON {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .int(let i): return .int(i)
+        case .double(let d): return snapshotNumber(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(fromSchemaJSON))
+        case .object(let obj): return .object(obj.mapValues(fromSchemaJSON))
+        }
+    }
+
+    private static func decodeStringMap(_ value: SnapshotJSON) -> [String: String] {
+        var out: [String: String] = [:]
+        if let obj = value.obj {
+            for (k, v) in obj {
+                if let s = v.str { out[k] = s }
+            }
+        }
+        return out
+    }
+
+    private static func decodeCorsOptions(_ args: [SnapshotJSON], _ idx: Int) -> CorsOptions? {
+        guard idx < args.count, let o = args[idx].obj, let arr = o["cors"]?.arr else { return nil }
+        return CorsOptions(cors: arr.compactMap(\.str))
+    }
+
+    private static func decodePlatformOS(_ raw: String) -> PlatformOS {
+        switch raw {
+        case "darwin": return .macOS
+        case "win32": return .windows
+        case "linux": return .linux
+        default: return .unknown
+        }
     }
 
     private static func decodeSessionTurnMessage(_ value: SnapshotJSON) -> SessionTurn.Message {
@@ -55,6 +110,7 @@ struct ParitySnapshotTests {
 
     private static func evaluate(_ fn: String, args: [SnapshotJSON]) throws -> SnapshotJSON {
         switch fn {
+        // MARK: - packages/util & schema/identifier
         case "util/src/activity-calendar.ts#activityCalendar":
             let o = args[0].obj!
             let activity = o["activity"]!.arr!.map { item -> ActivityDayInput in
@@ -269,6 +325,301 @@ struct ParitySnapshotTests {
             return .string(Identifier.ascending())
         case "schema/src/identifier.ts#descending":
             return .string(Identifier.descending())
+
+        // MARK: - packages/theme & packages/tui color
+        case "theme/src/tui/color.ts#oklchToHex":
+            let o = args[0].obj!
+            return .string(OpenCodeTUI.oklchToHex(OklchColor(l: o["l"]!.dbl!, c: o["c"]!.dbl!, h: o["h"]!.dbl!)))
+        case "theme/src/tui/color.ts#rgbToOklch":
+            let r = OpenCodeTUI.rgbToOklch(args[0].dbl!, args[1].dbl!, args[2].dbl!)
+            return .object(["l": snapshotNumber(r.l), "c": snapshotNumber(r.c), "h": snapshotNumber(r.h)])
+        case "theme/src/tui/expand.ts#mergeTheme":
+            return fromSchemaJSON(.object(OpenCodeTUI.mergeTheme(args.map(toSchemaJSON))))
+        case "theme/src/tui/v1-migrate.ts#byte":
+            return .string(OpenCodeTUI.byte(args[0].int!))
+        case "tui/src/theme/color.ts#ansiToRgba":
+            return .string(OpenCodeTUI.hex(TUIThemeBridge.ansiToRgba(args[0].int!)))
+        case "tui/src/theme/color.ts#tint":
+            let base = TUIThemeBridge.ansiToRgba(args[0].int!)
+            let overlay = TUIThemeBridge.ansiToRgba(args[1].int!)
+            return .string(OpenCodeTUI.hex(TUIThemeBridge.tint(base, overlay: overlay, alpha: args[2].dbl!)))
+
+        // MARK: - packages/patchmark
+        case "patchmark/src/entities.ts#decodeCodePoint":
+            return .string(OpenCodeTUI.decodeCodePoint(args[0].int!))
+        case "patchmark/src/entities.ts#decodeEntity":
+            return .string(OpenCodeTUI.decodeEntity(args[0].str!))
+        case "patchmark/src/entities.ts#unescapeString":
+            return .string(OpenCodeTUI.unescapeString(args[0].str!))
+        case "patchmark/src/entities.ts#normalizeURI":
+            return .string(OpenCodeTUI.normalizeURI(args[0].str!))
+        case "patchmark/src/heal.ts#computeTailHeal":
+            let h = OpenCodeTUI.computeTailHeal(args[0].str!)
+            return .object(["strip": .int(Int64(h.strip)), "append": .string(h.append)])
+        case "patchmark/src/heal.ts#healStreamingInline":
+            return .string(OpenCodeTUI.healStreamingInline(args[0].str!))
+        case "patchmark/src/html.ts#escapeHtml":
+            return .string(OpenCodeTUI.escapeHtml(args[0].str!))
+        case "patchmark/src/html.ts#filterDisallowedRawHtml":
+            return .string(OpenCodeTUI.filterDisallowedRawHtml(args[0].str!))
+        case "patchmark/src/stream.ts#splitPendingMarker":
+            let s = OpenCodeTUI.splitPendingMarker(args[0].str!)
+            return .object(["visible": .string(s.visible), "held": .string(s.held)])
+        case "patchmark/src/html.ts#renderBlocksToHtml":
+            let opts = args.count > 1 ? args[1].obj : nil
+            let gfm = opts?["gfm"]?.bool ?? true
+            let math = opts?["math"]?.bool ?? false
+            let stream = PatchmarkStream(StreamOptions(gfm: gfm, math: math))
+            stream.update(args[0].str!, streaming: false)
+            return .string(OpenCodeTUI.renderBlocksToHtml(stream.getBlocks(), options: HtmlRenderOptions(gfm: gfm, math: math)))
+
+        // MARK: - packages/ai
+        case "ai/src/protocols/utils/mistral-tool-id.ts#valid":
+            return .bool(AIProtocolUtils.MistralToolID.valid(args[0].str!))
+        case "ai/src/protocols/utils/mistral-tool-id.ts#hash":
+            return .string(AIProtocolUtils.MistralToolID.hash(args[0].str!))
+        case "ai/src/protocols/utils/claude-model.ts#claudeVersion":
+            if let v = AIProtocolUtils.ClaudeModel.claudeVersion(args[0].str!) {
+                return .object(["family": .string(v.family), "major": .int(Int64(v.major)), "minor": .int(Int64(v.minor))])
+            }
+            return .null
+        case "ai/src/protocols/utils/claude-model.ts#supportsThinkingBlockBinding":
+            let o = args[0].obj!
+            let compat = o["supportsThinkingBlockBinding"]?.bool.map {
+                AIProtocolUtils.ModelCompatibility(supportsThinkingBlockBinding: $0)
+            }
+            let desc = AIProtocolUtils.ModelDescriptor(id: o["id"]!.str!, provider: "anthropic", compatibility: compat)
+            return .bool(AIProtocolUtils.ClaudeModel.supportsThinkingBlockBinding(desc))
+        case "ai/src/protocols/utils/image-sizing.ts#tier":
+            return AIProtocolUtils.ImageSizing.tier(args[0].str!).map(snapshotNumber) ?? .null
+        case "ai/src/protocols/utils/image-sizing.ts#fit":
+            let sObj = args[0].obj!
+            let lObj = args[1].obj!
+            let shape = AIProtocolUtils.ImageSizing.Shape(aspect: sObj["aspect"]?.str, resolution: sObj["resolution"]?.str)
+            let limits = AIProtocolUtils.ImageSizing.Limits(
+                multiple: lObj["multiple"]!.int!,
+                minEdge: lObj["minEdge"]?.int,
+                maxEdge: lObj["maxEdge"]?.int,
+                minPixels: lObj["minPixels"]?.int,
+                maxPixels: lObj["maxPixels"]?.int,
+                maxRatio: lObj["maxRatio"]?.dbl
+            )
+            let res = AIProtocolUtils.ImageSizing.fit(shape, limits: limits)
+            return .object(["width": .int(Int64(res.width)), "height": .int(Int64(res.height))])
+        case "ai/src/protocols/utils/image-sizing.ts#nearest":
+            let sObj = args[0].obj!
+            let shape = AIProtocolUtils.ImageSizing.Shape(aspect: sObj["aspect"]?.str, resolution: sObj["resolution"]?.str)
+            let sizes = args[1].arr!.map { item -> AIProtocolUtils.ImageSizing.Size in
+                let o = item.obj!
+                return AIProtocolUtils.ImageSizing.Size(width: o["width"]!.int!, height: o["height"]!.int!)
+            }
+            let res = AIProtocolUtils.ImageSizing.nearest(shape, sizes: sizes)
+            return .object(["width": .int(Int64(res.width)), "height": .int(Int64(res.height))])
+        case "ai/src/protocols/utils/gemini-json-schema.ts#normalize":
+            let dict = args[0].obj!.mapValues(toSchemaJSON)
+            return fromSchemaJSON(.object(AIProtocolUtils.GeminiJsonSchema.normalize(dict)))
+        case "ai/src/protocols/utils/cache.ts#openAIRequestTTL":
+            return fromSchemaJSON(.object(AIProtocolUtils.Cache.openAIRequestTTL(args[0].str)))
+        case "ai/src/protocols/utils/partial-json.ts#parseJSON":
+            let parsed: OpenCodeSchema.JSONValue
+            if args.count > 1, let allow = args[1].int {
+                parsed = try AIProtocolUtils.PartialJSONParser.parseJSON(args[0].str!, allowPartial: allow)
+            } else {
+                parsed = try AIProtocolUtils.PartialJSONParser.parseJSON(args[0].str!)
+            }
+            return fromSchemaJSON(parsed)
+        case "ai/src/utils/media-type.ts#detectMediaType":
+            return AIUtils.detectMediaType(args[0].bytes!).map { .string($0) } ?? .null
+        case "ai/src/utils/media-type.ts#fileMediaType":
+            return AIUtils.fileMediaType(args[0].bytes!, path: args[1].str!).map { .string($0) } ?? .null
+        case "ai/src/utils/media-type.ts#mediaTypeExtension":
+            return AIUtils.mediaTypeExtension(args[0].str!).map { .string($0) } ?? .null
+        case "ai/src/utils/provider-codes.ts#awsErrorType":
+            return .array(AIUtils.awsErrorType(args[0].str).map { .string($0) })
+        case "ai/src/utils/provider-codes.ts#providerCodes":
+            return .array(AIUtils.providerCodes(toSchemaJSON(args[0])).map { .string($0) })
+        case "ai/src/route/endpoint.ts#trimBaseUrl":
+            return .string(AIEndpoint.trimBaseUrl(args[0].str!))
+        case "ai/src/protocols/shared.ts#wrapSystemUpdate":
+            let parts = args[0].arr!.compactMap(\.str).map { AIProtocolUtils.TextPart(text: $0) }
+            return .string(AIProtocolUtils.ProviderShared.wrapSystemUpdate(parts))
+        case "ai/src/protocols/shared.ts#fitThinkingBudget":
+            let maxTok = args.count > 1 ? args[1].int : nil
+            let minVal = args.count > 2 ? (args[2].int ?? 1) : 1
+            return .int(Int64(AIProtocolUtils.ProviderShared.fitThinkingBudget(args[0].int!, maxTokens: maxTok, minimum: minVal)))
+        case "ai/src/protocols/shared.ts#promptCacheKey":
+            let o = args[0].obj!
+            let cacheSetting: AIProtocolUtils.CacheSetting = o["cache"]?.str == "none" ? .none : .auto
+            let caps = o["capabilityPromptCacheKey"]?.bool.map { AIProtocolUtils.ModelCapabilities(promptCacheKey: $0) }
+            let req = AIProtocolUtils.LLMRequest(
+                model: AIProtocolUtils.ModelDescriptor(id: "gpt-5", provider: "openai", capabilities: caps),
+                cache: cacheSetting,
+                promptCacheKey: o["promptCacheKey"]?.str
+            )
+            return AIProtocolUtils.ProviderShared.promptCacheKey(req).map { .string($0) } ?? .null
+        case "ai/src/provider-error.ts#isContextOverflow":
+            return .bool(AIErrorClassifier.isContextOverflow(args[0].str!))
+
+        // MARK: - packages/core
+        case "core/src/util/wildcard.ts#match":
+            let ignoreCase = args.count > 2 ? (args[2].bool ?? false) : false
+            return .bool(CoreSubsystems.Util.Wildcard.match(args[0].str!, pattern: args[1].str!, ignoreCase: ignoreCase))
+        case "core/src/util/canonical-json.ts#canonicalJson":
+            return .string(CoreSubsystems.Util.canonicalJson(toSchemaJSON(args[0])))
+        case "core/src/util/token.ts#estimate":
+            return .int(Int64(CoreSubsystems.Util.Token.estimate(args[0].str!)))
+        case "core/src/mime.ts#detect":
+            return .string(CoreFilesystem.Mime.detect(args[0].bytes!))
+        case "core/src/mime.ts#detectMedia":
+            return CoreFilesystem.Mime.detectMedia(args[0].bytes!).map { .string($0) } ?? .null
+        case "core/src/mime.ts#isTextual":
+            return .bool(CoreFilesystem.Mime.isTextual(args[0].str!))
+        case "core/src/config/markdown.ts#sanitize":
+            return .string(CoreConfigMarkdown.sanitize(args[0].str!))
+        case "core/src/managed-policy.ts#decision":
+            let policies = args[0].arr!.map { item -> ConfigPolicySchema.Info in
+                let o = item.obj!
+                return ConfigPolicySchema.Info(
+                    action: ConfigPolicySchema.Action(rawValue: o["action"]!.str!)!,
+                    resource: o["resource"]!.str!,
+                    effect: ConfigPolicySchema.Effect(rawValue: o["effect"]!.str!)!
+                )
+            }
+            let act = ConfigPolicySchema.Action(rawValue: args[1].str!)!
+            return .string(CoreManagedPolicy.decision(policies, action: act, resource: args[2].str!).rawValue)
+        case "core/src/flag.ts#resolve":
+            let o = args[0].obj!
+            let entries: [CoreConfigEntry] = o["entries"]!.arr!.map { entryVal in
+                let expObj = entryVal.obj?["experimental"]?.obj
+                let exp = expObj.map { e in
+                    ConfigExperimentalSchema.Info(
+                        allFlags: e["all_flags"]?.bool,
+                        todo: e["todo"]?.bool,
+                        mediaBlob: e["media_blob"]?.bool,
+                        automations: e["automations"]?.bool,
+                        artifacts: e["artifacts"]?.bool,
+                        videoGenerate: e["video_generate"]?.bool,
+                        consoleWatches: e["console_watches"]?.bool,
+                        mcpEvents: e["mcp_events"]?.bool,
+                        fullCodemode: e["full_codemode"]?.bool,
+                        schedules: e["schedules"]?.bool
+                    )
+                }
+                return .document(ConfigSchema.Document(info: ConfigSchema.Info(experimental: exp)))
+            }
+            let resolved = CoreFlag.resolve(CoreFlag.ResolveInput(
+                entries: entries,
+                channel: o["channel"]!.str!,
+                overrides: o["overrides"]?.str
+            ))
+            var out: [String: SnapshotJSON] = [:]
+            for (key, state) in resolved {
+                out[key.rawValue] = .object(["enabled": .bool(state.enabled), "source": .string(state.source.rawValue)])
+            }
+            return .object(out)
+        case "core/src/permission.ts#evaluate":
+            let rulesets: [PermissionSchema.Ruleset] = args[2].arr!.map { rs in
+                rs.arr!.map { ruleVal in
+                    let o = ruleVal.obj!
+                    return PermissionSchema.Rule(
+                        action: o["action"]!.str!,
+                        resource: o["resource"]!.str!,
+                        effect: PermissionSchema.Effect(rawValue: o["effect"]!.str!)!
+                    )
+                }
+            }
+            let r = CorePermission.evaluate(action: args[0].str!, resource: args[1].str!, rulesets: rulesets)
+            return .object(["action": .string(r.action), "resource": .string(r.resource), "effect": .string(r.effect.rawValue)])
+
+        // MARK: - packages/server
+        case "server/src/range.ts#parse":
+            switch ByteRange.parse(args[0].str, size: args[1].int!) {
+            case nil: return .null
+            case .unsatisfiable: return .string("unsatisfiable")
+            case .range(let s): return .object(["start": .int(Int64(s.start)), "end": .int(Int64(s.end))])
+            }
+        case "server/src/content-headers.ts#disposition":
+            return .string(ContentHeaders.disposition(args[0].str!))
+        case "server/src/content-headers.ts#download":
+            let o = args[0].obj!
+            let headers = ContentHeaders.download(path: o["path"]?.str, mime: o["mime"]!.str!)
+            return .object(headers.mapValues { .string($0) })
+        case "server/src/cors.ts#isAllowedCorsOrigin":
+            return .bool(isAllowedCorsOrigin(args[0].str, opts: decodeCorsOptions(args, 1)))
+        case "server/src/cors.ts#isAllowedRequestOrigin":
+            return .bool(isAllowedRequestOrigin(args[0].str, host: args[1].str, opts: decodeCorsOptions(args, 2)))
+        case "server/src/media-uri.ts#wantsMediaRefs":
+            return .bool(wantsMediaRefs(ServerHTTPRequest(method: "GET", url: "http://localhost/", headers: decodeStringMap(args[0]))))
+        case "server/src/request-site.ts#rejected":
+            let o = args[0].obj!
+            let req = ServerHTTPRequest(method: "GET", url: o["url"]!.str!, headers: decodeStringMap(o["headers"]!))
+            return .bool(RequestSite.rejected(req, options: decodeCorsOptions(args, 1)))
+
+        // MARK: - packages/schema & packages/protocol
+        case "schema/src/token-usage.ts#total":
+            let o = args[0].obj!
+            let c = o["cache"]!.obj!
+            return snapshotNumber(TokenUsageSchema.total(TokenUsageSchema.Info(
+                input: o["input"]!.dbl!,
+                output: o["output"]!.dbl!,
+                reasoning: o["reasoning"]!.dbl!,
+                cache: TokenUsageSchema.Cache(read: c["read"]!.dbl!, write: c["write"]!.dbl!)
+            )))
+        case "schema/src/event.ts#versionedType":
+            return .string(EventSchema.versionedType(args[0].str!, version: args[1].int!))
+        case "schema/src/event-manifest.ts#isServer":
+            return .bool(EventManifestSchema.isServer(type: args[0].str!))
+        case "protocol/src/groups/event.ts#isOpenCodeEvent":
+            return .bool(isOpenCodeEvent(type: args[0].str!))
+        case "protocol/src/groups/server.ts#isPairingConnectURL":
+            return .bool(isPairingConnectURL(args[0].str!))
+        case "protocol/src/groups/pty.ts#hasPtyConnectTicketURL":
+            return .bool(hasPtyConnectTicketURL(args[0].str!))
+        case "protocol/src/groups/persistent-pty.ts#hasPersistentPtyConnectTicketURL":
+            return .bool(hasPersistentPtyConnectTicketURL(args[0].str!))
+        case "protocol/src/groups/mcp.ts#hasMcpClientTicketURL":
+            return .bool(hasMcpClientTicketURL(args[0].str!))
+
+        // MARK: - packages/cli
+        case "cli/src/database-path.ts#databasePath":
+            let envMap = args.count > 1 ? decodeStringMap(args[1]) : [:]
+            return .string(CLIUtil.databasePath(args[0].str!, channel: "local", environment: DictionaryEnvironment(variables: envMap)))
+        case "cli/src/services/updater-action.ts#parseReleaseVersion":
+            if let v = CLIServices.UpdaterAction.parseReleaseVersion(args[0].str!) {
+                return .object([
+                    "major": .string(v.major),
+                    "core": .string(v.core),
+                    "prerelease": .array(v.prerelease.map { .string($0) }),
+                ])
+            }
+            return .null
+        case "cli/src/services/updater-action.ts#action":
+            let pol = CLIServices.UpdaterAction.Policy(rawValue: args[2].str!)!
+            return .string(CLIServices.UpdaterAction.action(current: args[0].str!, latest: args[1].str!, policy: pol).rawValue)
+        case "cli/src/services/service-config.ts#filename":
+            return .string(CLIServices.ServiceConfig.filename(channel: args[0].str!))
+        case "cli/src/services/service-config.ts#defaultPort":
+            return .int(Int64(CLIServices.ServiceConfig.defaultPort(channel: args[0].str!, platform: decodePlatformOS(args[1].str!))))
+        case "cli/src/services/service-config.ts#legacyFilename":
+            return CLIServices.ServiceConfig.legacyFilename(channel: args[0].str!).map { .string($0) } ?? .null
+        case "cli/src/services/service-config.ts#versionBelongsToChannel":
+            return .bool(CLIServices.ServiceConfig.versionBelongsToChannel(args[0].str, channel: args[1].str!, installedVersion: args[2].str!))
+        case "cli/src/node/target.ts#nodeTarget":
+            let t = try CLIUtil.Node.nodeTarget(platform: args[0].str!, arch: args[1].str!)
+            return .object([
+                "platform": .string(t.platform),
+                "arch": .string(t.arch),
+                "nodePtyPackage": .string(t.nodePtyPackage),
+                "nodePtyEntryAsset": .string(t.nodePtyEntryAsset),
+                "parcelWatcherPackage": .string(t.parcelWatcherPackage),
+                "parcelWatcherAsset": .string(t.parcelWatcherAsset),
+                "fffPackage": .string(t.fffPackage),
+                "fffAsset": .string(t.fffAsset),
+                "fffFfiPackage": .string(t.fffFfiPackage),
+                "fffFfiAsset": .string(t.fffFfiAsset),
+                "opencodePtyAsset": .string(t.opencodePtyAsset),
+            ])
+
         default:
             throw SnapshotError.unknownFunction(fn)
         }
