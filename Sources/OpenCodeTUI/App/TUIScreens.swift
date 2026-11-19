@@ -12,6 +12,7 @@ public struct TUIScreenActions: Sendable {
     public let onDialogFilterInput: @Sendable (String) -> Void
     public let onDialogSubmit: @Sendable () -> Void
     public let onDialogClose: @Sendable () -> Void
+    public let onSelectDialogRow: @Sendable (Int) -> Void
     public let onOpenMCPDialog: @Sendable () -> Void
     public let onPermissionRejectInput: @Sendable (String) -> Void
     public let onPermissionRejectSubmit: @Sendable (String) -> Void
@@ -19,6 +20,14 @@ public struct TUIScreenActions: Sendable {
     public let onFormTextSubmit: @Sendable (String) -> Void
     public let onRenameInput: @Sendable (String) -> Void
     public let onRenameSubmit: @Sendable (String) -> Void
+    public let onSelectSessionTab: @Sendable (String) -> Void
+    public let onNewSessionTab: @Sendable () -> Void
+    public let onFocusPrompt: @Sendable () -> Void
+    public let onOpenQueuedPrompts: @Sendable () -> Void
+    public let onCloseTerminalPane: @Sendable () -> Void
+    public let onFocusTerminalPane: @Sendable () -> Void
+    public let onTerminalInput: @Sendable (String) -> Void
+    public let onTerminalSubmit: @Sendable (String) -> Void
 
     public init(
         onPromptInput: @escaping @Sendable (String) -> Void = { _ in },
@@ -26,19 +35,29 @@ public struct TUIScreenActions: Sendable {
         onDialogFilterInput: @escaping @Sendable (String) -> Void = { _ in },
         onDialogSubmit: @escaping @Sendable () -> Void = {},
         onDialogClose: @escaping @Sendable () -> Void = {},
+        onSelectDialogRow: @escaping @Sendable (Int) -> Void = { _ in },
         onOpenMCPDialog: @escaping @Sendable () -> Void = {},
         onPermissionRejectInput: @escaping @Sendable (String) -> Void = { _ in },
         onPermissionRejectSubmit: @escaping @Sendable (String) -> Void = { _ in },
         onFormTextInput: @escaping @Sendable (String) -> Void = { _ in },
         onFormTextSubmit: @escaping @Sendable (String) -> Void = { _ in },
         onRenameInput: @escaping @Sendable (String) -> Void = { _ in },
-        onRenameSubmit: @escaping @Sendable (String) -> Void = { _ in }
+        onRenameSubmit: @escaping @Sendable (String) -> Void = { _ in },
+        onSelectSessionTab: @escaping @Sendable (String) -> Void = { _ in },
+        onNewSessionTab: @escaping @Sendable () -> Void = {},
+        onFocusPrompt: @escaping @Sendable () -> Void = {},
+        onOpenQueuedPrompts: @escaping @Sendable () -> Void = {},
+        onCloseTerminalPane: @escaping @Sendable () -> Void = {},
+        onFocusTerminalPane: @escaping @Sendable () -> Void = {},
+        onTerminalInput: @escaping @Sendable (String) -> Void = { _ in },
+        onTerminalSubmit: @escaping @Sendable (String) -> Void = { _ in }
     ) {
         self.onPromptInput = onPromptInput
         self.onPromptSubmit = onPromptSubmit
         self.onDialogFilterInput = onDialogFilterInput
         self.onDialogSubmit = onDialogSubmit
         self.onDialogClose = onDialogClose
+        self.onSelectDialogRow = onSelectDialogRow
         self.onOpenMCPDialog = onOpenMCPDialog
         self.onPermissionRejectInput = onPermissionRejectInput
         self.onPermissionRejectSubmit = onPermissionRejectSubmit
@@ -46,6 +65,14 @@ public struct TUIScreenActions: Sendable {
         self.onFormTextSubmit = onFormTextSubmit
         self.onRenameInput = onRenameInput
         self.onRenameSubmit = onRenameSubmit
+        self.onSelectSessionTab = onSelectSessionTab
+        self.onNewSessionTab = onNewSessionTab
+        self.onFocusPrompt = onFocusPrompt
+        self.onOpenQueuedPrompts = onOpenQueuedPrompts
+        self.onCloseTerminalPane = onCloseTerminalPane
+        self.onFocusTerminalPane = onFocusTerminalPane
+        self.onTerminalInput = onTerminalInput
+        self.onTerminalSubmit = onTerminalSubmit
     }
 }
 
@@ -302,6 +329,19 @@ public enum TUIScreens {
                 .width(.percent(100))
                 .flexGrow(1)
 
+                // Embedded Live Terminal Pane (`<leader>t`)
+                if state.terminalPane.isOpen {
+                    TUIEmbeddedTerminalPane.buildEmbeddedTerminalPane(
+                        state: state.terminalPane,
+                        theme: theme,
+                        height: TUIEmbeddedTerminalPane.paneHeight(forRows: state.rows),
+                        onClose: actions.onCloseTerminalPane,
+                        onFocus: actions.onFocusTerminalPane,
+                        onInput: actions.onTerminalInput,
+                        onSubmit: actions.onTerminalSubmit
+                    )
+                }
+
                 // Minimal Bottom-Edge Home Footer (`feature-plugins/home/footer.tsx`)
                 if showFooter {
                     buildHomeFooter(state: state, theme: theme, padY: footerPadY, actions: actions)
@@ -392,10 +432,49 @@ public enum TUIScreens {
         let placeholderText = TUIUtil.takeWidth(rawPlaceholder, inputAvailWidth)
             .trimmingCharacters(in: .whitespaces)
         let inputKey = isHome ? "home-prompt-input" : "session-prompt-input"
-        let inputFocused = state.activeDialog == nil && state.activePermission == nil && state.activeForm == nil
+        let inputFocused = state.activeDialog == nil
+            && state.activePermission == nil
+            && state.activeForm == nil
+            && !(state.terminalPane.isOpen && state.terminalPane.isFocused)
+        let split = TUIMultilinePrompt.splitLines(state.promptText)
+        let prefixLines = split.prefixLines
+        let activeLine = split.activeLine
+        let isMultiline = !prefixLines.isEmpty
+        let visiblePrefix = TUIMultilinePrompt.visiblePrefixSlice(prefixLines)
 
         return AnyTUIView(
             VStack(spacing: 0) {
+                // Subtle Queued Prompts Badge above the composer (`<leader>q`)
+                if !state.queuedPrompts.isEmpty {
+                    let count = state.queuedPrompts.count
+                    let label = count == 1 ? "1 queued prompt" : "\(count) queued prompts"
+                    TUIBox(
+                        border: false,
+                        backgroundColor: .rgba(transparent),
+                        shouldFill: false
+                    ) {
+                        TUIText(
+                            StyledText(chunks: [
+                                TextChunk(text: "↳ \(label)", fg: agentColor, attributes: TextAttributes.bold),
+                                TextChunk(text: " · ", fg: theme.text.muted),
+                                TextChunk(text: "ctrl+x q", fg: theme.text.base),
+                                TextChunk(text: " to manage", fg: theme.text.muted),
+                            ]),
+                            wrapMode: TextWrapMode.none,
+                            selectable: false,
+                            truncate: true
+                        )
+                        .width(.percent(100))
+                    }
+                    .id("opencode-queued-badge")
+                    .padding(left: 1)
+                    .height(1)
+                    .width(.percent(100))
+                    .onMouseUp { _ in
+                        actions.onOpenQueuedPrompts()
+                    }
+                }
+
                 // Main left-bordered prompt box (left-only heavy vertical rail `┃`, NO 4-sided box!)
                 TUIBox(
                     border: .sides([.left]),
@@ -410,9 +489,45 @@ public enum TUIScreens {
                         shouldFill: true
                     ) {
                         VStack(spacing: 0) {
+                            // Preceding lines for multiline drafts (auto-growing up to 6 visible lines)
+                            if isMultiline {
+                                VStack(spacing: 0) {
+                                    if visiblePrefix.hiddenCount > 0 {
+                                        let moreLabel = visiblePrefix.hiddenCount == 1
+                                            ? "↑ 1 more line"
+                                            : "↑ \(visiblePrefix.hiddenCount) more lines"
+                                        TUIText(
+                                            moreLabel,
+                                            fg: .rgba(theme.text.faint),
+                                            bg: .rgba(promptBg),
+                                            attributes: TextAttributes.italic,
+                                            wrapMode: TextWrapMode.none,
+                                            truncate: true
+                                        )
+                                        .key("prompt-multiline-overflow")
+                                        .width(.percent(100))
+                                        .height(1)
+                                    }
+                                    for (idx, line) in visiblePrefix.visible.enumerated() {
+                                        TUIText(
+                                            line.isEmpty ? " " : line,
+                                            fg: .rgba(theme.text.base),
+                                            bg: .rgba(promptBg),
+                                            wrapMode: TextWrapMode.none,
+                                            truncate: true
+                                        )
+                                        .key("prompt-multiline-\(idx)")
+                                        .width(.percent(100))
+                                        .height(1)
+                                    }
+                                }
+                                .key("prompt-multiline-prefix")
+                                .width(.percent(100))
+                            }
+
                             TUIInput(
-                                value: state.promptText,
-                                placeholder: placeholderText,
+                                value: activeLine,
+                                placeholder: isMultiline ? "" : placeholderText,
                                 placeholderColor: .rgba(theme.text.muted),
                                 maxLength: 4000,
                                 textColor: .rgba(theme.text.base),
@@ -428,6 +543,15 @@ public enum TUIScreens {
                             .id(inputKey)
                             .width(.percent(100))
                             .focused(inputFocused)
+
+                            // Subtle paste attachment chips when large pastes are summarized
+                            if !state.pastedBlocks.isEmpty {
+                                buildPasteChipsRow(
+                                    blocks: state.pastedBlocks,
+                                    theme: theme,
+                                    promptBg: promptBg
+                                )
+                            }
 
                             // 1-row spacer + Metadata Row (`Build · Model Name Provider Name · variant`)
                             buildPromptMetadataRow(
@@ -452,6 +576,9 @@ public enum TUIScreens {
                 }
                 .id("opencode-prompt-box")
                 .width(.percent(100))
+                .onMouseUp { _ in
+                    actions.onFocusPrompt()
+                }
 
                 // Bottom half-block cap row (`╹` on left + `▀` edge in promptBg)
                 TUIBox(
@@ -485,6 +612,37 @@ public enum TUIScreens {
             }
             .width(.percent(100))
             .flexShrink(0)
+        )
+    }
+
+    private static func buildPasteChipsRow(
+        blocks: [TUIPastedBlock],
+        theme: ResolvedTheme,
+        promptBg: RGBA
+    ) -> AnyTUIView {
+        let chipBg = theme.background.raised.high
+        var chunks: [TextChunk] = []
+        for (idx, block) in blocks.enumerated() {
+            if idx > 0 {
+                chunks.append(TextChunk(text: " ", fg: theme.text.muted, bg: promptBg))
+            }
+            chunks.append(TextChunk(
+                text: " \(block.label) ",
+                fg: theme.text.action.primary.selected,
+                bg: chipBg
+            ))
+        }
+        return AnyTUIView(
+            TUIText(
+                StyledText(chunks: chunks),
+                bg: .rgba(promptBg),
+                wrapMode: TextWrapMode.none,
+                truncate: true
+            )
+            .key("prompt-paste-chips")
+            .id("opencode-paste-chips")
+            .width(.percent(100))
+            .height(1)
         )
     }
 
@@ -576,7 +734,7 @@ public enum TUIScreens {
                 // Left side: Leader chord hint OR Running spinner + esc interrupt OR abbreviated path:branch
                 if state.leaderArmed {
                     let leaderHints = TUIUtil.truncateWidth(
-                        "m models  a agents  p connect  l sessions  n new  b sidebar",
+                        "m models  a agents  p connect  l sessions  t term  q queue  n new  b sidebar",
                         max(16, columnWidth - 10)
                     )
                     TUIText(
@@ -806,8 +964,20 @@ public enum TUIScreens {
 
         return AnyTUIView(
             HStack(spacing: 0) {
-                // Main Session Column: Compact Header + Scrollable Transcript + Bottom-Pinned Prompt Composer
+                // Main Session Column: Session Tabs (when >=2) + Compact Header + Scrollable Transcript + Bottom-Pinned Prompt Composer + Optional Terminal Pane
                 VStack(spacing: 0) {
+                    if state.openSessionTabs.count >= 2 {
+                        TUISessionTabsBar.buildSessionTabsBar(
+                            tabs: state.openSessionTabs,
+                            activeSessionID: state.activeSessionID,
+                            sessions: state.sessions,
+                            cols: mainColWidth,
+                            theme: theme,
+                            onSelectTab: actions.onSelectSessionTab,
+                            onNewTab: actions.onNewSessionTab
+                        )
+                    }
+
                     buildSessionHeader(state: state, theme: theme, maxWidth: mainColWidth)
 
                     TUIScrollBox(
@@ -891,6 +1061,19 @@ public enum TUIScreens {
                         columnWidth: mainColWidth,
                         actions: actions
                     )
+
+                    // Bottom-docked Embedded Live Terminal Pane (`<leader>t`)
+                    if state.terminalPane.isOpen {
+                        TUIEmbeddedTerminalPane.buildEmbeddedTerminalPane(
+                            state: state.terminalPane,
+                            theme: theme,
+                            height: TUIEmbeddedTerminalPane.paneHeight(forRows: state.rows),
+                            onClose: actions.onCloseTerminalPane,
+                            onFocus: actions.onFocusTerminalPane,
+                            onInput: actions.onTerminalInput,
+                            onSubmit: actions.onTerminalSubmit
+                        )
+                    }
                 }
                 .padding(right: .point(Float(padX)), bottom: 1, left: .point(Float(padX)))
                 .flexGrow(1)
@@ -1434,6 +1617,10 @@ public enum TUIScreens {
             title = "Workspaces"
             searchPlaceholder = "Filter workspaces"
             emptyMessage = "No workspaces found"
+        case .queuedPrompts:
+            title = "Queued prompts"
+            searchPlaceholder = "Search queued prompts"
+            emptyMessage = "No queued prompts"
         case .connectAPIKey, .connectOAuth, .status, .usage, .pair, .help, .debug, .renameSession, .diffViewer:
             title = "Dialog"
             searchPlaceholder = ""
@@ -1528,6 +1715,17 @@ public enum TUIScreens {
                 TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
                 TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
             ]
+        case .queuedPrompts:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "steer", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ctrl+u ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "undo", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ctrl+d ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "delete", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
         default:
             footerChunks = [
                 TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
@@ -1597,15 +1795,18 @@ public enum TUIScreens {
                                 .padding(top: 0, bottom: 0)
                             } else {
                                 for (offset, row) in visibleRows.enumerated() {
+                                    let actualIndex = startIdx + offset
                                     buildDialogRowView(
                                         dialog: dialog,
                                         row: row,
-                                        isSelected: (startIdx + offset) == selectedIndex,
+                                        rowIndex: actualIndex,
+                                        isSelected: actualIndex == selectedIndex,
                                         dialogTheme: dialogTheme,
                                         cardBg: cardBg,
                                         selBg: selBg,
                                         selFg: selFg,
-                                        innerWidth: innerWidth
+                                        innerWidth: innerWidth,
+                                        onSelectRow: actions.onSelectDialogRow
                                     )
                                 }
                             }
@@ -1956,12 +2157,14 @@ public enum TUIScreens {
     private static func buildDialogRowView(
         dialog: TUIActiveDialog,
         row: TUIDialogRow,
+        rowIndex: Int,
         isSelected: Bool,
         dialogTheme: ResolvedTheme,
         cardBg: RGBA,
         selBg: RGBA,
         selFg: RGBA,
-        innerWidth: Int
+        innerWidth: Int,
+        onSelectRow: @escaping @Sendable (Int) -> Void
     ) -> AnyTUIView {
         let rowBg = isSelected ? selBg : cardBg
         let fgMain = isSelected ? selFg : dialogTheme.text.base
@@ -2030,8 +2233,13 @@ public enum TUIScreens {
                 .width(.percent(100))
             }
             .key("dialog-row-\(dialog.rawValue)-\(row.id)")
+            .id("dialog-row-\(rowIndex)")
             .width(.percent(100))
             .height(1)
+            .onMouseUp { event in
+                event.stopPropagation()
+                onSelectRow(rowIndex)
+            }
         )
     }
 

@@ -461,6 +461,7 @@ public enum TUIActiveDialog: String, Equatable, Hashable, Sendable {
     case stashList
     case workspaces
     case diffViewer
+    case queuedPrompts
 
     public var isInputPrompt: Bool {
         self == .connectAPIKey || self == .connectOAuth || self == .renameSession
@@ -518,6 +519,8 @@ public struct TUISlashCommand: Equatable, Hashable, Sendable {
         TUISlashCommand(name: "/home", description: "Return to the home screen"),
         TUISlashCommand(name: "/sidebar", description: "Toggle session sidebar"),
         TUISlashCommand(name: "/compact", description: "Compact session context"),
+        TUISlashCommand(name: "/queue", description: "Manage queued prompts"),
+        TUISlashCommand(name: "/terminal", description: "Toggle embedded terminal pane"),
         TUISlashCommand(name: "/commands", description: "Open command palette"),
         TUISlashCommand(name: "/exit", description: "Exit OpenCode"),
     ]
@@ -555,6 +558,8 @@ public enum TUIPaletteActionID: String, Equatable, Hashable, Sendable {
     case goHome
     case toggleSidebar
     case compactSession
+    case manageQueuedPrompts
+    case toggleTerminalPane
     case showHelp
     case showDebug
     case exit
@@ -658,6 +663,9 @@ public struct TUIInteractiveState: Equatable, Sendable {
 
     public var preferences: TUIPersistedPreferences
     public var promptText: String
+    public var pastedBlocks: [TUIPastedBlock]
+    public var queuedPrompts: [TUIQueuedPromptItem]
+    public var terminalPane: TUIEmbeddedTerminalState
     public var shellMode: Bool
     public var placeholderIndex: Int
     public var slashAutocompleteIndex: Int
@@ -791,6 +799,9 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.revertedMessageID = nil
         self.preferences = TUIPersistedPreferences(themeName: themeName, themePreference: themePreference)
         self.promptText = promptText
+        self.pastedBlocks = []
+        self.queuedPrompts = []
+        self.terminalPane = TUIEmbeddedTerminalState()
         self.shellMode = false
         self.placeholderIndex = placeholderIndex
         self.slashAutocompleteIndex = 0
@@ -1094,6 +1105,8 @@ public struct TUIInteractiveState: Equatable, Sendable {
                 (.goHome, "Go to home", "/home"),
                 (.toggleSidebar, effectiveShowSidebar ? "Hide sidebar" : "Show sidebar", "ctrl+b"),
                 (.compactSession, "Compact session", "/compact"),
+                (.manageQueuedPrompts, "Manage queued prompts", "/queue"),
+                (.toggleTerminalPane, terminalPane.isOpen ? "Close terminal pane" : "Toggle terminal pane", "/terminal"),
                 (.showHelp, "Help & keybindings", "/help"),
                 (.showDebug, "Debug diagnostics", "/debug"),
                 (.exit, "Exit OpenCode", "ctrl+c"),
@@ -1444,6 +1457,19 @@ public struct TUIInteractiveState: Equatable, Sendable {
                     trailing: server.status.label,
                     isActive: server.status.isConnected,
                     badgeColorKind: kind
+                )
+            }
+
+        case .queuedPrompts:
+            let total = queuedPrompts.count
+            return queuedPrompts.enumerated().compactMap { idx, item in
+                let singleLine = item.text.replacingOccurrences(of: "\n", with: " ")
+                guard matches(singleLine, item.delivery) else { return nil }
+                return TUIDialogRow(
+                    id: item.id,
+                    title: TUIUtil.truncateWidth(singleLine, 50),
+                    subtitle: item.delivery == "steer" ? "steer" : nil,
+                    trailing: "\(idx + 1) of \(total)"
                 )
             }
         }
@@ -2545,9 +2571,35 @@ public final class TUIInteractiveClient: Sendable {
                 }
             }
 
-        case "session.message.created", "session.inbox.delivered", "session.message.content.updated":
+        case "session.message.created", "session.message.content.updated":
             if isForActiveSession, let sid = state.activeSessionID {
                 effect.refreshMessagesForSession = sid
+            }
+
+        case "session.inbox.delivered":
+            if isForActiveSession {
+                if let deliveredID = stringField(obj, "id") ?? stringField(obj, "inboxID") {
+                    state.queuedPrompts.removeAll { $0.id == deliveredID }
+                }
+                if let sid = state.activeSessionID {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.inbox.cancelled":
+            if isForActiveSession,
+               let cancelledID = stringField(obj, "id") ?? stringField(obj, "inboxID") {
+                state.queuedPrompts.removeAll { $0.id == cancelledID }
+            }
+
+        case "pty.exited":
+            if let ptyID = stringField(obj, "id"), state.terminalPane.ptyID == ptyID {
+                state.terminalPane.exitCode = intField(obj, "exitCode") ?? 0
+            }
+
+        case "pty.deleted":
+            if let ptyID = stringField(obj, "id"), state.terminalPane.ptyID == ptyID {
+                state.terminalPane.ptyID = nil
             }
 
         case "session.usage.updated", "session.usage.recorded":
@@ -2781,8 +2833,9 @@ public final class TUIInteractiveClient: Sendable {
     // MARK: - User Actions
 
     public func submitPrompt(rawText: String) {
-        let isShell = store.withLock { $0.shellMode }
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let (isShell, pastedBlocks) = store.withLock { ($0.shellMode, $0.pastedBlocks) }
+        let expanded = TUIPasteManager.expand(rawText, blocks: pastedBlocks)
+        let trimmed = expanded.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         if isShell {
@@ -2807,6 +2860,7 @@ public final class TUIInteractiveClient: Sendable {
         let optimisticID = nextOptimisticID()
         let submission = store.withLock { state -> (sessionID: String?, agentID: String, modelRef: ModelSchema.Ref?, dir: String) in
             state.promptText = ""
+            state.pastedBlocks = []
             state.slashAutocompleteDismissed = false
             state.slashAutocompleteIndex = 0
             state.mentionAutocompleteDismissed = false
@@ -2905,6 +2959,7 @@ public final class TUIInteractiveClient: Sendable {
             store.withLock {
                 $0.route = .home(TUIContext.HomeRoute())
                 $0.promptText = ""
+                $0.pastedBlocks = []
                 $0.activeDialog = nil
                 $0.slashAutocompleteDismissed = false
             }
@@ -3058,6 +3113,18 @@ public final class TUIInteractiveClient: Sendable {
             compactActiveSession()
             return true
 
+        case "/queue", "/queued":
+            openQueuedPromptsDialog()
+            return true
+
+        case "/terminal", "/term":
+            store.withLock {
+                $0.promptText = ""
+                $0.pastedBlocks = []
+            }
+            toggleTerminalPane()
+            return true
+
         default:
             // Dispatch custom server slash commands (e.g. `/init`, `/review`, `.opencode/commands/*.md`)
             let matchedServerCmd = store.withLock { state in
@@ -3197,12 +3264,14 @@ public final class TUIInteractiveClient: Sendable {
             state.activeSessionID = nil
             state.activeSessionTitle = "New Session"
             state.messages = []
+            state.queuedPrompts = []
             state.contextTokens = 0
             state.sessionCost = 0
             state.sessionStatus = .idle
             state.interruptArmed = false
             state.route = .home(TUIContext.HomeRoute())
             state.promptText = ""
+            state.pastedBlocks = []
             state.activeDialog = nil
             state.slashAutocompleteDismissed = false
             state.placeholderIndex = (state.placeholderIndex + 1) % TUIInteractiveState.promptPlaceholders.count
@@ -3216,6 +3285,8 @@ public final class TUIInteractiveClient: Sendable {
             state.activeSessionTitle = title
             state.messages = []
             state.todos = []
+            state.queuedPrompts = []
+            state.pastedBlocks = []
             state.contextTokens = 0
             state.sessionCost = 0
             state.sessionStatus = .idle
@@ -3236,6 +3307,7 @@ public final class TUIInteractiveClient: Sendable {
             await self?.loadMessages(sessionID: id)
             await self?.refreshPermissions()
             await self?.refreshForms()
+            await self?.refreshQueuedPrompts()
         }
     }
 
@@ -4016,6 +4088,10 @@ public final class TUIInteractiveClient: Sendable {
                 toggleSidebar()
             case .compactSession:
                 compactActiveSession()
+            case .manageQueuedPrompts:
+                openQueuedPromptsDialog()
+            case .toggleTerminalPane:
+                toggleTerminalPane()
             case .showHelp:
                 openHelpDialog()
             case .showDebug:
@@ -4132,6 +4208,9 @@ public final class TUIInteractiveClient: Sendable {
 
         case .mcpStatus:
             toggleMCPServer(named: row.id)
+
+        case .queuedPrompts:
+            steerQueuedPrompt(id: row.id)
         }
     }
 

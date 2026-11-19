@@ -611,14 +611,16 @@ public enum TUIInteractiveLoop {
             onPromptInput: { value in
                 var mentionQueryToRun: String? = nil
                 store.withLock { state in
-                    if !state.shellMode && TUIShellMode.isShellTrigger(value) {
+                    if !state.shellMode && !state.promptText.contains("\n") && TUIShellMode.isShellTrigger(value) {
                         state.shellMode = true
                         state.promptText = ""
+                        state.pastedBlocks = []
                         state.slashAutocompleteDismissed = false
                         state.mentionAutocompleteDismissed = false
                         return
                     }
-                    state.promptText = value
+                    state.promptText = TUIMultilinePrompt.replaceActiveLine(in: state.promptText, with: value)
+                    TUIPasteManager.pruneUnusedBlocks(in: state.promptText, blocks: &state.pastedBlocks)
                     state.slashAutocompleteDismissed = false
                     state.slashAutocompleteIndex = 0
                     state.mentionAutocompleteDismissed = false
@@ -633,8 +635,16 @@ public enum TUIInteractiveLoop {
                 }
                 markDirty()
             },
-            onPromptSubmit: { value in
-                clientController.submitPrompt(rawText: value)
+            onPromptSubmit: { [weak renderer] value in
+                let (fullText, promptID) = store.withLock { state -> (String, String) in
+                    let combined = TUIMultilinePrompt.replaceActiveLine(in: state.promptText, with: value)
+                    let id = state.isHome ? "home-prompt-input" : "session-prompt-input"
+                    return (combined, id)
+                }
+                clientController.submitPrompt(rawText: fullText)
+                if store.withLock({ $0.promptText.isEmpty }) {
+                    syncInputRenderable(id: promptID, value: "", renderer: renderer)
+                }
             },
             onDialogFilterInput: { value in
                 store.withLock { state in
@@ -652,6 +662,14 @@ public enum TUIInteractiveLoop {
             },
             onDialogClose: {
                 clientController.navigateBackFromSubDialog()
+            },
+            onSelectDialogRow: { index in
+                store.withLock { state in
+                    let count = state.dialogRows().count
+                    guard count > 0 else { return }
+                    state.dialogSelectedIndex = min(max(0, index), count - 1)
+                }
+                clientController.confirmSelectedDialogRow()
             },
             onOpenMCPDialog: {
                 clientController.openDialog(.mcpStatus)
@@ -691,8 +709,168 @@ public enum TUIInteractiveLoop {
             },
             onRenameSubmit: { value in
                 clientController.submitRenameSession(value)
+            },
+            onSelectSessionTab: { sessionID in
+                let title = store.withLock { state in
+                    state.sessions.first(where: { $0.id == sessionID })?.title ?? "Session"
+                }
+                clientController.openSession(id: sessionID, title: title)
+            },
+            onNewSessionTab: {
+                clientController.startNewSession()
+            },
+            onFocusPrompt: { [weak renderer] in
+                let promptID = store.withLock { state -> String in
+                    state.terminalPane.isFocused = false
+                    return state.isHome ? "home-prompt-input" : "session-prompt-input"
+                }
+                if let input = renderer?.root.findDescendantById(promptID) as? InputRenderable {
+                    input.focus()
+                }
+                markDirty()
+            },
+            onOpenQueuedPrompts: {
+                clientController.openQueuedPromptsDialog()
+            },
+            onCloseTerminalPane: {
+                clientController.closeTerminalPane()
+            },
+            onFocusTerminalPane: { [weak renderer] in
+                clientController.focusTerminalPane(true)
+                if let termInput = renderer?.root.findDescendantById("terminal-pane-input") as? InputRenderable {
+                    termInput.focus()
+                }
+            },
+            onTerminalInput: { value in
+                store.withLock { state in
+                    state.terminalPane.inputBuffer = value
+                }
+                markDirty()
+            },
+            onTerminalSubmit: { [weak renderer] value in
+                clientController.submitTerminalCommand(value)
+                syncInputRenderable(id: "terminal-pane-input", value: "", renderer: renderer)
             }
         )
+
+        _ = renderer.keyInput.onPaste { [weak renderer] event in
+            let rawText = String(decoding: event.bytes, as: UTF8.self)
+            guard !rawText.isEmpty else { return }
+            let snap = store.snapshot()
+
+            if let activeDialog = snap.activeDialog {
+                switch activeDialog {
+                case .connectAPIKey, .connectOAuth:
+                    let clean = stripAnsiSequences(rawText)
+                        .replacingOccurrences(of: "\r\n", with: "")
+                        .replacingOccurrences(of: "\n", with: "")
+                        .replacingOccurrences(of: "\r", with: "")
+                    let updated = store.withLock { state -> String in
+                        state.dialogFilter += clean
+                        state.connectErrorMessage = nil
+                        return state.dialogFilter
+                    }
+                    let inputID = activeDialog == .connectAPIKey ? "dialog-apikey-input" : "dialog-oauth-input"
+                    syncInputRenderable(id: inputID, value: updated, renderer: renderer)
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                case .renameSession:
+                    let clean = stripAnsiSequences(rawText)
+                        .replacingOccurrences(of: "\r\n", with: " ")
+                        .replacingOccurrences(of: "\n", with: " ")
+                        .replacingOccurrences(of: "\r", with: " ")
+                    let updated = store.withLock { state -> String in
+                        state.renameDraft += clean
+                        return state.renameDraft
+                    }
+                    syncInputRenderable(id: "rename-session-input", value: updated, renderer: renderer)
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                default:
+                    if !activeDialog.isCustomOverlay {
+                        let clean = stripAnsiSequences(rawText)
+                            .replacingOccurrences(of: "\r\n", with: " ")
+                            .replacingOccurrences(of: "\n", with: " ")
+                            .replacingOccurrences(of: "\r", with: " ")
+                        let updated = store.withLock { state -> String in
+                            state.dialogFilter += clean
+                            state.dialogSelectedIndex = 0
+                            state.connectErrorMessage = nil
+                            state.pendingDeleteCredentialID = nil
+                            state.pendingDeleteSessionID = nil
+                            return state.dialogFilter
+                        }
+                        syncInputRenderable(id: "dialog-filter-input", value: updated, renderer: renderer)
+                        clientController.previewThemeRowIfNeeded()
+                        event.preventDefault()
+                        markDirty()
+                        return
+                    }
+                    event.preventDefault()
+                    return
+                }
+            }
+
+            if snap.activePermission != nil && snap.permissionPromptState.isRejectingWithFeedback {
+                let clean = stripAnsiSequences(rawText)
+                    .replacingOccurrences(of: "\r\n", with: " ")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .replacingOccurrences(of: "\r", with: " ")
+                store.withLock { $0.permissionPromptState.rejectFeedback += clean }
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            if snap.activeForm != nil && snap.formPromptState.editingCustom {
+                let clean = stripAnsiSequences(rawText)
+                    .replacingOccurrences(of: "\r\n", with: " ")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .replacingOccurrences(of: "\r", with: " ")
+                store.withLock { $0.formPromptState.customText += clean }
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            if snap.terminalPane.isOpen && snap.terminalPane.isFocused {
+                let clean = stripAnsiSequences(rawText)
+                    .replacingOccurrences(of: "\r\n", with: " ")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .replacingOccurrences(of: "\r", with: " ")
+                let updated = store.withLock { state -> String in
+                    state.terminalPane.inputBuffer += clean
+                    return state.terminalPane.inputBuffer
+                }
+                syncInputRenderable(id: "terminal-pane-input", value: updated, renderer: renderer)
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            let (activeLine, promptID) = store.withLock { state -> (String, String) in
+                let inserted = TUIPasteManager.preparePaste(
+                    rawText,
+                    pasteSummaryEnabled: state.preferences.pasteSummary,
+                    blocks: &state.pastedBlocks
+                )
+                if !inserted.isEmpty {
+                    state.promptText += inserted
+                    state.slashAutocompleteDismissed = false
+                    state.mentionAutocompleteDismissed = false
+                    state.historyNavigator.reset()
+                }
+                let split = TUIMultilinePrompt.splitLines(state.promptText)
+                return (split.activeLine, state.isHome ? "home-prompt-input" : "session-prompt-input")
+            }
+            syncInputRenderable(id: promptID, value: activeLine, renderer: renderer)
+            event.preventDefault()
+            markDirty()
+        }
 
         _ = renderer.keyInput.onKeypress { [weak renderer] event in
             let snap = store.snapshot()
@@ -713,6 +891,10 @@ public enum TUIInteractiveLoop {
                     return
                 case .stashList:
                     clientController.deleteSelectedStashEntry()
+                    event.preventDefault()
+                    return
+                case .queuedPrompts:
+                    clientController.deleteSelectedQueuedPrompt()
                     event.preventDefault()
                     return
                 case .diffViewer:
@@ -755,11 +937,25 @@ public enum TUIInteractiveLoop {
                     event.preventDefault()
                     return
                 }
+                if snap.terminalPane.isOpen && snap.terminalPane.isFocused {
+                    if !snap.terminalPane.inputBuffer.isEmpty {
+                        store.withLock { $0.terminalPane.inputBuffer = "" }
+                        syncInputRenderable(id: "terminal-pane-input", value: "", renderer: renderer)
+                    } else {
+                        store.withLock { $0.terminalPane.isFocused = false }
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                }
                 if snap.shellMode {
                     store.withLock {
                         $0.shellMode = false
                         $0.promptText = ""
+                        $0.pastedBlocks = []
                     }
+                    let promptID = snap.isHome ? "home-prompt-input" : "session-prompt-input"
+                    syncInputRenderable(id: promptID, value: "", renderer: renderer)
                     event.preventDefault()
                     markDirty()
                     return
@@ -767,9 +963,12 @@ public enum TUIInteractiveLoop {
                 if !snap.promptText.isEmpty {
                     store.withLock {
                         $0.promptText = ""
+                        $0.pastedBlocks = []
                         $0.slashAutocompleteDismissed = false
                         $0.mentionAutocompleteDismissed = false
                     }
+                    let promptID = snap.isHome ? "home-prompt-input" : "session-prompt-input"
+                    syncInputRenderable(id: promptID, value: "", renderer: renderer)
                     event.preventDefault()
                     markDirty()
                     return
@@ -934,6 +1133,19 @@ public enum TUIInteractiveLoop {
                         clientController.closeDialog(commitTheme: true)
                         clientController.forkActiveSession(beforeMessageID: msgID)
                     }
+                    event.preventDefault()
+                    return
+                }
+
+                // Inside Queued Prompts: Ctrl+U undoes (cancels inbox item & restores text to composer)
+                if activeDialog == .queuedPrompts && event.ctrl && keyName == "u" {
+                    clientController.undoSelectedQueuedPrompt()
+                    let restored = store.withLock { state -> (String, String) in
+                        let split = TUIMultilinePrompt.splitLines(state.promptText)
+                        let promptID = state.isHome ? "home-prompt-input" : "session-prompt-input"
+                        return (split.activeLine, promptID)
+                    }
+                    syncInputRenderable(id: restored.1, value: restored.0, renderer: renderer)
                     event.preventDefault()
                     return
                 }
@@ -1131,7 +1343,19 @@ public enum TUIInteractiveLoop {
                 case "c":
                     clientController.compactActiveSession()
                 case "t":
-                    clientController.openDialog(.themePicker)
+                    clientController.toggleTerminalPane()
+                case "up":
+                    clientController.closeTerminalPane()
+                case "right":
+                    clientController.focusTerminalPane(true)
+                case "left":
+                    clientController.focusTerminalPane(false)
+                case "return", "enter", "kpenter":
+                    clientController.submitQueuedPrompt(rawText: snap.promptText)
+                    if store.withLock({ $0.promptText.isEmpty }) {
+                        let promptID = snap.isHome ? "home-prompt-input" : "session-prompt-input"
+                        syncInputRenderable(id: promptID, value: "", renderer: renderer)
+                    }
                 case "v":
                     clientController.openVariantPicker()
                 case "g":
@@ -1153,11 +1377,7 @@ public enum TUIInteractiveLoop {
                         clientController.selectSessionTab(index: n - 1)
                     }
                 case "q":
-                    store.withLock {
-                        $0.shouldQuit = true
-                        $0.exitReason = "leader_quit"
-                    }
-                    markDirty()
+                    clientController.openQueuedPromptsDialog()
                 default:
                     markDirty()
                 }
@@ -1174,6 +1394,17 @@ public enum TUIInteractiveLoop {
                 }
                 event.preventDefault()
                 markDirty()
+                return
+            }
+
+            // Focused Embedded Terminal Pane Keyboard Routing
+            if snap.terminalPane.isOpen && snap.terminalPane.isFocused {
+                if keyName == "escape" {
+                    clientController.focusTerminalPane(false)
+                    event.preventDefault()
+                    return
+                }
+                // Let focused `terminal-pane-input` handle typing, editing, and Enter cleanly
                 return
             }
 
@@ -1262,6 +1493,41 @@ public enum TUIInteractiveLoop {
             if keyName == "tab" && event.shift {
                 clientController.cycleAgent(direction: 1)
                 event.preventDefault()
+                return
+            }
+
+            // Multiline Prompt Newline Insertion (`Shift+Return`, `Ctrl+Return`, `Alt+Return`, `Ctrl+J` / `linefeed`)
+            let isReturnKey = (keyName == "return" || keyName == "enter" || keyName == "kpenter")
+            let isNewlineChord = (isReturnKey && (event.shift || event.ctrl || event.meta || event.option))
+                || keyName == "linefeed"
+                || (event.ctrl && !event.shift && !event.meta && keyName == "j")
+            if isNewlineChord {
+                let promptID = store.withLock { state -> String in
+                    state.promptText = TUIMultilinePrompt.appendNewline(to: state.promptText)
+                    state.slashAutocompleteDismissed = true
+                    state.mentionAutocompleteDismissed = true
+                    state.historyNavigator.reset()
+                    return state.isHome ? "home-prompt-input" : "session-prompt-input"
+                }
+                syncInputRenderable(id: promptID, value: "", renderer: renderer)
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            // Backspace at start of an empty multiline bottom line merges cleanly back onto the prior line
+            if keyName == "backspace" && !event.ctrl && !event.meta,
+               let merged = TUIMultilinePrompt.removeTrailingNewlineIfAtEmptyLine(snap.promptText)
+            {
+                let (activeLine, promptID) = store.withLock { state -> (String, String) in
+                    state.promptText = merged
+                    TUIPasteManager.pruneUnusedBlocks(in: merged, blocks: &state.pastedBlocks)
+                    let split = TUIMultilinePrompt.splitLines(merged)
+                    return (split.activeLine, state.isHome ? "home-prompt-input" : "session-prompt-input")
+                }
+                syncInputRenderable(id: promptID, value: activeLine, renderer: renderer)
+                event.preventDefault()
+                markDirty()
                 return
             }
 
@@ -1356,6 +1622,17 @@ public enum TUIInteractiveLoop {
                 default:
                     break
                 }
+            }
+
+            // Plain Return on multiline prompt submits full multiline draft cleanly
+            if isReturnKey && !event.shift && !event.ctrl && !event.meta && !event.option && snap.promptText.contains("\n") {
+                clientController.submitPrompt(rawText: snap.promptText)
+                if store.withLock({ $0.promptText.isEmpty }) {
+                    let promptID = snap.isHome ? "home-prompt-input" : "session-prompt-input"
+                    syncInputRenderable(id: promptID, value: "", renderer: renderer)
+                }
+                event.preventDefault()
+                return
             }
 
             // Prompt History Navigation (`↑` / `↓` on Home, or when history cursor is active)
@@ -1479,5 +1756,13 @@ public enum TUIInteractiveLoop {
         }
         controller.previewThemeRowIfNeeded()
         markDirty()
+    }
+
+    private static func syncInputRenderable(id: String, value: String, renderer: CliRenderer?) {
+        guard let input = renderer?.root.findDescendantById(id) as? InputRenderable else { return }
+        let prevOnInput = input.onInput
+        input.onInput = nil
+        input.value = value
+        input.onInput = prevOnInput
     }
 }

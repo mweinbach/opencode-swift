@@ -1043,7 +1043,10 @@ extension TUIInteractiveClient {
     // MARK: - 8. Prompt Stash & External `$EDITOR`
 
     public func stashCurrentPrompt() {
-        let text = store.withLock { $0.promptText.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let text = store.withLock { state in
+            TUIPasteManager.expand(state.promptText, blocks: state.pastedBlocks)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         guard !text.isEmpty else {
             store.withLock { state in
                 state.toastMessage = "Prompt is empty — nothing to stash"
@@ -1063,6 +1066,7 @@ extension TUIInteractiveClient {
                 state.stashEntries = Array(state.stashEntries.prefix(TUIPersistenceStore.maxStashEntries))
             }
             state.promptText = ""
+            state.pastedBlocks = []
             state.toastMessage = "Stashed prompt"
             state.toastIsError = false
             return state.stashEntries
@@ -1204,6 +1208,379 @@ extension TUIInteractiveClient {
         }
         if let (sid, title) = target {
             openSession(id: sid, title: title)
+        }
+    }
+
+    // MARK: - 10. Queued Prompts Management (`<leader>return`, `<leader>q`, `/queue`)
+
+    public func submitQueuedPrompt(rawText: String) {
+        let (isShell, pastedBlocks) = store.withLock { ($0.shellMode, $0.pastedBlocks) }
+        let expanded = TUIPasteManager.expand(rawText, blocks: pastedBlocks)
+        let trimmed = expanded.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if isShell || trimmed.hasPrefix("/") {
+            store.withLock { state in
+                state.toastMessage = "This prompt cannot be queued"
+                state.toastIsError = false
+            }
+            markDirty()
+            return
+        }
+
+        let optimisticID = nextOptimisticID()
+        let historyEntry = TUIPromptHistoryEntry(input: trimmed, mode: "normal")
+        let submission = store.withLock { state -> (sessionID: String?, agentID: String, modelRef: ModelSchema.Ref?, dir: String) in
+            state.historyNavigator.append(historyEntry)
+            state.promptText = ""
+            state.pastedBlocks = []
+            state.slashAutocompleteDismissed = false
+            state.slashAutocompleteIndex = 0
+            state.mentionAutocompleteDismissed = false
+            state.mentionAutocompleteIndex = 0
+            state.queuedPrompts.append(TUIQueuedPromptItem(id: optimisticID, text: trimmed, delivery: "queue"))
+            state.toastMessage = "Prompt queued"
+            state.toastIsError = false
+            return (
+                state.activeSessionID,
+                state.activeAgent.id,
+                state.selectedModel?.ref(variant: state.selectedVariant),
+                state.directory
+            )
+        }
+        if let persistence {
+            Task { await persistence.appendHistory(historyEntry) }
+        }
+        markDirty()
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let targetSessionID: String
+                if let existing = submission.sessionID {
+                    targetSessionID = existing
+                } else {
+                    let title = String(trimmed.prefix(48))
+                    let loc = LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: submission.dir))
+                    let created = try await self.client.session.create(SessionCreateInput(
+                        title: title,
+                        agent: submission.agentID,
+                        model: submission.modelRef,
+                        location: loc
+                    ))
+                    targetSessionID = created.id.rawValue
+                    self.store.withLock { state in
+                        state.activeSessionID = targetSessionID
+                        state.activeSessionTitle = title
+                        state.route = .session(TUIContext.SessionRoute(sessionID: targetSessionID))
+                        if !state.openSessionTabs.contains(targetSessionID) {
+                            state.openSessionTabs.append(targetSessionID)
+                        }
+                    }
+                    self.markDirty()
+                }
+                let enqueued = try await self.client.session.prompt(SessionPromptInput(
+                    sessionID: targetSessionID,
+                    text: trimmed,
+                    delivery: .queue
+                ))
+                let serverID = enqueued.id.rawValue
+                let serverDelivery = enqueued.delivery.rawValue
+                self.store.withLock { state in
+                    if let idx = state.queuedPrompts.firstIndex(where: { $0.id == optimisticID }) {
+                        state.queuedPrompts[idx] = TUIQueuedPromptItem(
+                            id: serverID,
+                            text: trimmed,
+                            delivery: serverDelivery
+                        )
+                    }
+                }
+                self.markDirty()
+            } catch {
+                self.store.withLock { state in
+                    state.toastMessage = "Failed to queue prompt: \(error)"
+                    state.toastIsError = true
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    public func openQueuedPromptsDialog() {
+        openDialog(.queuedPrompts)
+        Task { [weak self] in
+            await self?.refreshQueuedPrompts()
+        }
+    }
+
+    public func refreshQueuedPrompts() async {
+        guard let sid = store.withLock({ $0.activeSessionID }) else { return }
+        guard let inbox = try? await client.session.inbox.list(SessionInboxListInput(sessionID: sid)) else {
+            return
+        }
+        let items: [TUIQueuedPromptItem] = inbox.compactMap { record in
+            switch record {
+            case .user(let u):
+                return TUIQueuedPromptItem(
+                    id: u.id.rawValue,
+                    text: u.payload.text,
+                    delivery: u.delivery.rawValue
+                )
+            case .synthetic, .compaction, .move:
+                return nil
+            }
+        }
+        store.withLock { state in
+            guard state.activeSessionID == sid else { return }
+            state.queuedPrompts = items
+            if state.activeDialog == .queuedPrompts {
+                let count = state.dialogRows().count
+                if state.dialogSelectedIndex >= count {
+                    state.dialogSelectedIndex = max(0, count - 1)
+                }
+            }
+        }
+        markDirty()
+    }
+
+    public func undoSelectedQueuedPrompt() {
+        let target = store.withLock { state -> (sessionID: String?, item: TUIQueuedPromptItem)? in
+            guard state.activeDialog == .queuedPrompts else { return nil }
+            let rows = state.dialogRows()
+            guard !rows.isEmpty else { return nil }
+            let idx = min(max(0, state.dialogSelectedIndex), rows.count - 1)
+            let rowID = rows[idx].id
+            guard let itemIdx = state.queuedPrompts.firstIndex(where: { $0.id == rowID }) else { return nil }
+            let removed = state.queuedPrompts.remove(at: itemIdx)
+            if state.promptText.isEmpty {
+                state.promptText = removed.text
+            } else {
+                state.promptText += "\n" + removed.text
+            }
+            state.activeDialog = nil
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.slashAutocompleteDismissed = false
+            state.mentionAutocompleteDismissed = false
+            state.toastMessage = "Restored queued prompt to composer"
+            state.toastIsError = false
+            return (state.activeSessionID, removed)
+        }
+        markDirty()
+        guard let target, let sid = target.sessionID else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            _ = try? await self.client.session.inbox.cancel(SessionInboxCancelInput(
+                sessionID: sid,
+                inboxID: target.item.id
+            ))
+        }
+    }
+
+    public func deleteSelectedQueuedPrompt() {
+        let target = store.withLock { state -> (sessionID: String?, item: TUIQueuedPromptItem)? in
+            guard state.activeDialog == .queuedPrompts else { return nil }
+            let rows = state.dialogRows()
+            guard !rows.isEmpty else { return nil }
+            let idx = min(max(0, state.dialogSelectedIndex), rows.count - 1)
+            let rowID = rows[idx].id
+            guard let itemIdx = state.queuedPrompts.firstIndex(where: { $0.id == rowID }) else { return nil }
+            let removed = state.queuedPrompts.remove(at: itemIdx)
+            let remainingRows = state.dialogRows().count
+            if state.dialogSelectedIndex >= remainingRows {
+                state.dialogSelectedIndex = max(0, remainingRows - 1)
+            }
+            state.toastMessage = "Deleted queued prompt"
+            state.toastIsError = false
+            return (state.activeSessionID, removed)
+        }
+        markDirty()
+        guard let target, let sid = target.sessionID else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            _ = try? await self.client.session.inbox.cancel(SessionInboxCancelInput(
+                sessionID: sid,
+                inboxID: target.item.id
+            ))
+        }
+    }
+
+    public func steerQueuedPrompt(id: String) {
+        let sid = store.withLock { state -> String? in
+            if let idx = state.queuedPrompts.firstIndex(where: { $0.id == id }) {
+                let prev = state.queuedPrompts[idx]
+                state.queuedPrompts[idx] = TUIQueuedPromptItem(id: prev.id, text: prev.text, delivery: "steer")
+            }
+            state.activeDialog = nil
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.toastMessage = "Promoted queued prompt to steer"
+            state.toastIsError = false
+            return state.activeSessionID
+        }
+        markDirty()
+        guard let sid else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            _ = try? await self.client.session.inbox.update(SessionInboxUpdateInput(
+                sessionID: sid,
+                inboxID: id,
+                delivery: .steer
+            ))
+            await self.refreshQueuedPrompts()
+        }
+    }
+
+    // MARK: - 11. Embedded Live Terminal Pane (`<leader>t`, `<leader>up`, `<leader>left/right`, `/terminal`)
+
+    public func toggleTerminalPane() {
+        let shouldOpen = store.withLock { !$0.terminalPane.isOpen }
+        if !shouldOpen {
+            closeTerminalPane()
+            return
+        }
+        let cwd = store.withLock { state -> String in
+            state.terminalPane.isOpen = true
+            state.terminalPane.isFocused = true
+            state.terminalPane.exitCode = nil
+            if state.terminalPane.outputLines.isEmpty {
+                let displayDir = TUIUtil.abbreviateHome(state.directory, home: state.homeDirectory)
+                state.terminalPane.outputLines.append("Connected workspace: \(displayDir)")
+            }
+            return state.directory
+        }
+        markDirty()
+
+        Task { [weak self] in
+            guard let self else { return }
+            if let created = try? await self.client.pty.create(PtyCreateInput(
+                location: self.locationQuery,
+                cwd: cwd,
+                title: "Terminal"
+            )) {
+                let ptyInfo = created.data
+                self.store.withLock { state in
+                    guard state.terminalPane.isOpen else { return }
+                    state.terminalPane.ptyID = ptyInfo.id.rawValue
+                    if !ptyInfo.title.isEmpty {
+                        state.terminalPane.title = ptyInfo.title
+                    }
+                    state.terminalPane.exitCode = ptyInfo.exitCode?.rawValue
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    public func closeTerminalPane() {
+        let ptyID = store.withLock { state -> String? in
+            let existing = state.terminalPane.ptyID
+            state.terminalPane.isOpen = false
+            state.terminalPane.isFocused = false
+            state.terminalPane.ptyID = nil
+            state.terminalPane.inputBuffer = ""
+            return existing
+        }
+        markDirty()
+        if let ptyID {
+            Task { [weak self] in
+                guard let self else { return }
+                _ = try? await self.client.pty.remove(PtyRemoveInput(ptyID: ptyID, location: self.locationQuery))
+            }
+        }
+    }
+
+    public func focusTerminalPane(_ focused: Bool) {
+        store.withLock { state in
+            state.terminalPane.isFocused = focused && state.terminalPane.isOpen
+        }
+        markDirty()
+    }
+
+    public func appendTerminalOutput(_ text: String, exitCode: Int? = nil) {
+        let normalized = TUIPasteManager.normalize(text)
+        let lines = normalized.isEmpty
+            ? []
+            : normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        store.withLock { state in
+            if !lines.isEmpty {
+                state.terminalPane.outputLines.append(contentsOf: lines)
+                if state.terminalPane.outputLines.count > TUIEmbeddedTerminalPane.maxStoredOutputLines {
+                    state.terminalPane.outputLines = Array(
+                        state.terminalPane.outputLines.suffix(TUIEmbeddedTerminalPane.maxStoredOutputLines)
+                    )
+                }
+            }
+            if let exitCode {
+                state.terminalPane.exitCode = exitCode
+            }
+        }
+        markDirty()
+    }
+
+    public func submitTerminalCommand(_ rawCommand: String) {
+        let trimmed = rawCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cwd = store.withLock { state -> String in
+            state.terminalPane.inputBuffer = ""
+            return state.directory
+        }
+        guard !trimmed.isEmpty else {
+            markDirty()
+            return
+        }
+        if trimmed == "clear" {
+            store.withLock { state in
+                state.terminalPane.outputLines = []
+                state.terminalPane.exitCode = nil
+            }
+            markDirty()
+            return
+        }
+        if trimmed == "exit" {
+            closeTerminalPane()
+            return
+        }
+
+        store.withLock { state in
+            state.terminalPane.exitCode = nil
+            state.terminalPane.outputLines.append("$ \(trimmed)")
+            if state.terminalPane.outputLines.count > TUIEmbeddedTerminalPane.maxStoredOutputLines {
+                state.terminalPane.outputLines = Array(
+                    state.terminalPane.outputLines.suffix(TUIEmbeddedTerminalPane.maxStoredOutputLines)
+                )
+            }
+        }
+        markDirty()
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let created = try await self.client.shell.create(ShellCreateInput(
+                    location: self.locationQuery,
+                    command: trimmed,
+                    cwd: cwd
+                ))
+                let shellID = created.data.id.rawValue
+                var latestInfo = created.data
+                for _ in 0..<40 {
+                    if latestInfo.status != .running { break }
+                    try? await Task.sleep(for: .milliseconds(50))
+                    if let polled = try? await self.client.shell.get(ShellGetInput(id: shellID, location: self.locationQuery)) {
+                        latestInfo = polled.data
+                    } else {
+                        break
+                    }
+                }
+                if let out = try? await self.client.shell.output(ShellOutputInput(id: shellID, location: self.locationQuery)) {
+                    let body = out.data.output.trimmingCharacters(in: .newlines)
+                    let code = latestInfo.exit.map(Int.init)
+                    self.appendTerminalOutput(body, exitCode: code)
+                } else if let code = latestInfo.exit.map(Int.init) {
+                    self.appendTerminalOutput("", exitCode: code)
+                }
+            } catch {
+                // Keep pane responsive when server shell API is unavailable (e.g. offline/mock transport).
+            }
         }
     }
 }
