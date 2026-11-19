@@ -43,16 +43,25 @@ case "${CMD}" in
     "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" "$@"
     "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" "$@"
     ;;
+  check)
+    require_bun
+    bun "${ROOT_DIR}/Tools/parity/diff.ts" --check-snapshots
+    bun "${OPENTUI_DIR}/Tools/parity/diff.ts" --check-snapshots
+    bun "${ROOT_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict --no-write
+    bun "${OPENTUI_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict --no-write
+    "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" -Xswiftc -warnings-as-errors
+    "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" -Xswiftc -warnings-as-errors
+    ;;
   all)
     require_bun
     bun "${ROOT_DIR}/Tools/parity/scanner.ts"
     bun "${OPENTUI_DIR}/Tools/parity/scanner.ts"
     bun "${ROOT_DIR}/Tools/parity/diff.ts" --write-snapshots
     bun "${OPENTUI_DIR}/Tools/parity/diff.ts" --write-snapshots
-    bun "${ROOT_DIR}/Tools/parity/audit.ts" --fail-on-drift
-    bun "${OPENTUI_DIR}/Tools/parity/audit.ts" --fail-on-drift
-    "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}"
-    "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}"
+    bun "${ROOT_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict
+    bun "${OPENTUI_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict
+    "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" -Xswiftc -warnings-as-errors
+    "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" -Xswiftc -warnings-as-errors
     ;;
   *)
     cat <<EOF
@@ -65,7 +74,8 @@ Commands:
   diff       Run live differential tests (upstream Bun oracles vs Swift) on parity/vectors/*.json
   snapshot   Run diff and update golden snapshots for Bun-free Swift Testing
   test       Run Swift Testing suites for both swift-opencode and Packages/OpenTUI
-  all        Run scan -> snapshot -> audit --fail-on-drift -> Swift Testing for both packages
+  check      Non-mutating CI verification (diff --check-snapshots -> audit --fail-on-drift --strict -> warnings-as-errors Swift Testing)
+  all        Run scan -> snapshot -> audit --fail-on-drift --strict -> warnings-as-errors Swift Testing for both packages
 EOF
     exit 1
     ;;

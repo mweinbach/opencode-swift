@@ -20,9 +20,28 @@ interface RunnerResponse {
   readonly error: string | null
 }
 
+interface SnapshotEntry {
+  readonly fn: string
+  readonly name: string
+  readonly args: unknown[]
+  readonly compare: string
+  readonly expectedOk: boolean
+  readonly expectedValue: unknown
+}
+
+interface SnapshotFile {
+  readonly upstreamCommit?: unknown
+  readonly generatedAt?: unknown
+  readonly vectorCount?: unknown
+  readonly cases?: unknown
+}
+
 const ROOT_DIR = path.resolve(import.meta.dir, "../..")
 const VECTORS_DIR = path.join(ROOT_DIR, "parity/vectors")
 const SNAPSHOTS_PATH = path.join(ROOT_DIR, "Tests/OpenCodeParityTests/Fixtures/oracle-snapshots.json")
+
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+const IDENTIFIER_RE = /^[0-9a-f]{12}[0-9A-Za-z]{14}$/
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
@@ -73,9 +92,8 @@ function validateInvariant(
   }
 
   if (mode === "uuid_v4") {
-    const re = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    const uOk = typeof upstream.value === "string" && re.test(upstream.value)
-    const sOk = typeof swift.value === "string" && re.test(swift.value)
+    const uOk = typeof upstream.value === "string" && UUID_V4_RE.test(upstream.value)
+    const sOk = typeof swift.value === "string" && UUID_V4_RE.test(swift.value)
     return {
       pass: uOk && sOk,
       detail: uOk && sOk ? undefined : `invalid uuid_v4: upstream=${upstream.value} swift=${swift.value}`,
@@ -83,10 +101,9 @@ function validateInvariant(
   }
 
   if (mode === "identifier_prefix_12") {
-    const re = /^[0-9a-f]{12}[0-9A-Za-z]{14}$/
     const u = String(upstream.value)
     const s = String(swift.value)
-    const shapeOk = re.test(u) && re.test(s)
+    const shapeOk = IDENTIFIER_RE.test(u) && IDENTIFIER_RE.test(s)
     const prefixMatch = u.slice(0, 12) === s.slice(0, 12)
     return {
       pass: shapeOk && prefixMatch,
@@ -98,10 +115,9 @@ function validateInvariant(
   }
 
   if (mode === "identifier_shape") {
-    const re = /^[0-9a-f]{12}[0-9A-Za-z]{14}$/
     const u = String(upstream.value)
     const s = String(swift.value)
-    const ok = re.test(u) && re.test(s)
+    const ok = IDENTIFIER_RE.test(u) && IDENTIFIER_RE.test(s)
     return {
       pass: ok,
       detail: ok ? undefined : `invalid identifier shape: upstream=${u} swift=${s}`,
@@ -109,6 +125,60 @@ function validateInvariant(
   }
 
   return { pass: false, detail: `unknown compare mode ${mode}` }
+}
+
+function compareSnapshotEntry(index: number, existing: unknown, fresh: SnapshotEntry): string | null {
+  if (existing === null || typeof existing !== "object" || Array.isArray(existing)) {
+    return `case[${index}] [${fresh.fn}] "${fresh.name}": existing snapshot entry is not an object`
+  }
+  const ex = existing as Record<string, unknown>
+  if (ex.fn !== fresh.fn) {
+    return `case[${index}]: fn mismatch (snapshot=${JSON.stringify(ex.fn)} vs fresh=${JSON.stringify(fresh.fn)})`
+  }
+  if (ex.name !== fresh.name) {
+    return `case[${index}] [${fresh.fn}]: name mismatch (snapshot=${JSON.stringify(ex.name)} vs fresh=${JSON.stringify(fresh.name)})`
+  }
+  if (ex.compare !== fresh.compare) {
+    return `case[${index}] [${fresh.fn}] "${fresh.name}": compare mode mismatch (snapshot=${JSON.stringify(ex.compare)} vs fresh=${JSON.stringify(fresh.compare)})`
+  }
+  if (!deepEqual(ex.args, fresh.args)) {
+    return `case[${index}] [${fresh.fn}] "${fresh.name}": args mismatch (snapshot=${JSON.stringify(ex.args)} vs fresh=${JSON.stringify(fresh.args)})`
+  }
+  if (ex.expectedOk !== fresh.expectedOk) {
+    return `case[${index}] [${fresh.fn}] "${fresh.name}": expectedOk mismatch (snapshot=${JSON.stringify(ex.expectedOk)} vs fresh=${JSON.stringify(fresh.expectedOk)})`
+  }
+
+  if (fresh.compare === "uuid_v4") {
+    const exOk = typeof ex.expectedValue === "string" && UUID_V4_RE.test(ex.expectedValue)
+    const frOk = typeof fresh.expectedValue === "string" && UUID_V4_RE.test(fresh.expectedValue)
+    if (!exOk || !frOk) {
+      return `case[${index}] [${fresh.fn}] "${fresh.name}": invalid uuid_v4 snapshot value (snapshot=${JSON.stringify(ex.expectedValue)} vs fresh=${JSON.stringify(fresh.expectedValue)})`
+    }
+    return null
+  }
+
+  if (fresh.compare === "identifier_prefix_12") {
+    const exStr = typeof ex.expectedValue === "string" ? ex.expectedValue : ""
+    const frStr = typeof fresh.expectedValue === "string" ? fresh.expectedValue : ""
+    if (!IDENTIFIER_RE.test(exStr) || !IDENTIFIER_RE.test(frStr) || exStr.slice(0, 12) !== frStr.slice(0, 12)) {
+      return `case[${index}] [${fresh.fn}] "${fresh.name}": identifier_prefix_12 mismatch (snapshot=${JSON.stringify(ex.expectedValue)} vs fresh=${JSON.stringify(fresh.expectedValue)})`
+    }
+    return null
+  }
+
+  if (fresh.compare === "identifier_shape") {
+    const exStr = typeof ex.expectedValue === "string" ? ex.expectedValue : ""
+    const frStr = typeof fresh.expectedValue === "string" ? fresh.expectedValue : ""
+    if (!IDENTIFIER_RE.test(exStr) || !IDENTIFIER_RE.test(frStr)) {
+      return `case[${index}] [${fresh.fn}] "${fresh.name}": invalid identifier_shape snapshot value (snapshot=${JSON.stringify(ex.expectedValue)} vs fresh=${JSON.stringify(fresh.expectedValue)})`
+    }
+    return null
+  }
+
+  if (!deepEqual(ex.expectedValue, fresh.expectedValue)) {
+    return `case[${index}] [${fresh.fn}] "${fresh.name}": expectedValue mismatch (snapshot=${JSON.stringify(ex.expectedValue)} vs fresh=${JSON.stringify(fresh.expectedValue)})`
+  }
+  return null
 }
 
 async function runNDJSONProcess(cmd: string[], lines: string[]): Promise<Map<string, RunnerResponse>> {
@@ -165,21 +235,80 @@ async function findSwiftBinary(): Promise<string> {
 }
 
 const writeSnapshots = process.argv.includes("--write-snapshots")
+const checkSnapshots = process.argv.includes("--check-snapshots")
 const filterArg = process.argv.find((a) => a.startsWith("--filter="))?.slice("--filter=".length)
+
+if (writeSnapshots && checkSnapshots) {
+  console.error("error: --write-snapshots and --check-snapshots are mutually exclusive.")
+  process.exit(1)
+}
+if (checkSnapshots && filterArg) {
+  console.error("error: --check-snapshots cannot be combined with --filter=.")
+  process.exit(1)
+}
+
+if (!fs.existsSync(VECTORS_DIR)) {
+  console.error(`error: missing vector directory at ${VECTORS_DIR}`)
+  process.exit(1)
+}
 
 const vectorFiles = fs
   .readdirSync(VECTORS_DIR)
   .filter((f) => f.endsWith(".json"))
   .sort()
 
+if (vectorFiles.length === 0) {
+  console.error(`error: no vector JSON files found in ${VECTORS_DIR}`)
+  process.exit(1)
+}
+
+const vectorErrors: string[] = []
 const suites: VectorSuite[] = []
 for (const file of vectorFiles) {
-  const parsed = (await Bun.file(path.join(VECTORS_DIR, file)).json()) as VectorSuite[]
-  for (const suite of parsed) {
+  const fullPath = path.join(VECTORS_DIR, file)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(fs.readFileSync(fullPath, "utf8"))
+  } catch (err) {
+    vectorErrors.push(`parity/vectors/${file}: failed to parse JSON (${err instanceof Error ? err.message : String(err)})`)
+    continue
+  }
+
+  if (!Array.isArray(parsed)) {
+    vectorErrors.push(`parity/vectors/${file}: expected top-level JSON array of vector suites`)
+    continue
+  }
+
+  let fileCaseCount = 0
+  for (let sIdx = 0; sIdx < parsed.length; sIdx++) {
+    const suite = parsed[sIdx] as Partial<VectorSuite> | null
+    if (!suite || typeof suite !== "object" || typeof suite.fn !== "string" || suite.fn.trim() === "") {
+      vectorErrors.push(`parity/vectors/${file}: suite[${sIdx}] is missing a valid 'fn' string`)
+      continue
+    }
+    if (!Array.isArray(suite.cases)) {
+      vectorErrors.push(`parity/vectors/${file}: suite '${suite.fn}' is missing a 'cases' array`)
+      continue
+    }
+    if (suite.cases.length === 0) {
+      vectorErrors.push(`parity/vectors/${file}: suite '${suite.fn}' has 0 cases`)
+      continue
+    }
+    fileCaseCount += suite.cases.length
     if (!filterArg || suite.fn.includes(filterArg)) {
-      suites.push(suite)
+      suites.push(suite as VectorSuite)
     }
   }
+
+  if (fileCaseCount === 0) {
+    vectorErrors.push(`parity/vectors/${file}: vector file has 0 cases`)
+  }
+}
+
+if (vectorErrors.length > 0) {
+  console.error("Vector validation failed:")
+  for (const err of vectorErrors) console.error(`  ${err}`)
+  process.exit(1)
 }
 
 interface FlatCase {
@@ -205,6 +334,11 @@ for (const suite of suites) {
   }
 }
 
+if (flatCases.length === 0) {
+  console.error(filterArg ? `error: no vector cases matched --filter=${filterArg}` : "error: no vector cases found.")
+  process.exit(1)
+}
+
 const ndjson = flatCases.map((c) => JSON.stringify({ id: c.id, fn: c.fn, args: c.args }))
 
 console.log(`Building Swift parity runner and evaluating ${flatCases.length} vectors across ${suites.length} functions...`)
@@ -219,15 +353,7 @@ let passed = 0
 let failed = 0
 const fnStats = new Map<string, { passed: number; failed: number }>()
 const failures: string[] = []
-
-const snapshotEntries: Array<{
-  fn: string
-  name: string
-  args: unknown[]
-  compare: string
-  expectedOk: boolean
-  expectedValue: unknown
-}> = []
+const snapshotEntries: SnapshotEntry[] = []
 
 for (const c of flatCases) {
   const u = upstreamResults.get(c.id) ?? { id: c.id, ok: false, value: null, error: "missing upstream response" }
@@ -272,11 +398,14 @@ console.log(
   `\nSummary: ${fnPassedCount}/${fnStats.size} functions PASS, ${passed}/${flatCases.length} vectors PASS (${((passed / Math.max(1, flatCases.length)) * 100).toFixed(1)}%)`,
 )
 
-if (writeSnapshots) {
-  if (failed > 0) {
+if (failed > 0) {
+  if (writeSnapshots) {
     console.error("Refusing to write snapshots while differential checks fail.")
-    process.exit(1)
   }
+  process.exit(1)
+}
+
+if (writeSnapshots) {
   const lock = await Bun.file(path.join(ROOT_DIR, "upstream.lock.json")).json()
   fs.mkdirSync(path.dirname(SNAPSHOTS_PATH), { recursive: true })
   await Bun.write(
@@ -295,6 +424,61 @@ if (writeSnapshots) {
   console.log(`Wrote ${snapshotEntries.length} golden oracle snapshots -> Tests/OpenCodeParityTests/Fixtures/oracle-snapshots.json`)
 }
 
-if (failed > 0) {
-  process.exit(1)
+if (checkSnapshots) {
+  const relSnap = "Tests/OpenCodeParityTests/Fixtures/oracle-snapshots.json"
+  if (!fs.existsSync(SNAPSHOTS_PATH)) {
+    console.error(`\nSnapshot check FAIL: missing ${relSnap}`)
+    console.error("Hint: run './scripts/parity.sh snapshot' to generate golden oracle snapshots.")
+    process.exit(1)
+  }
+
+  let existing: SnapshotFile
+  try {
+    existing = JSON.parse(fs.readFileSync(SNAPSHOTS_PATH, "utf8")) as SnapshotFile
+  } catch (err) {
+    console.error(
+      `\nSnapshot check FAIL: unable to parse ${relSnap} (${err instanceof Error ? err.message : String(err)})`,
+    )
+    process.exit(1)
+  }
+
+  const lock = await Bun.file(path.join(ROOT_DIR, "upstream.lock.json")).json()
+  const diffs: string[] = []
+
+  if (existing.upstreamCommit !== lock.commit) {
+    diffs.push(
+      `upstreamCommit mismatch: snapshot=${JSON.stringify(existing.upstreamCommit)} vs upstream.lock.json=${JSON.stringify(lock.commit)}`,
+    )
+  }
+  if (existing.vectorCount !== snapshotEntries.length) {
+    diffs.push(`vectorCount mismatch: snapshot=${JSON.stringify(existing.vectorCount)} vs fresh=${snapshotEntries.length}`)
+  }
+  if (!Array.isArray(existing.cases)) {
+    diffs.push("cases field is missing or not an array")
+  } else {
+    if (existing.cases.length !== snapshotEntries.length) {
+      diffs.push(`cases.length mismatch: snapshot=${existing.cases.length} vs fresh=${snapshotEntries.length}`)
+    }
+    const compareLen = Math.min(existing.cases.length, snapshotEntries.length)
+    for (let i = 0; i < compareLen; i++) {
+      const diff = compareSnapshotEntry(i, existing.cases[i], snapshotEntries[i]!)
+      if (diff) diffs.push(diff)
+    }
+  }
+
+  if (diffs.length > 0) {
+    console.error(`\nSnapshot check FAIL: ${relSnap} is stale (${diffs.length} difference${diffs.length === 1 ? "" : "s"}):`)
+    for (const d of diffs.slice(0, 25)) {
+      console.error(`  - ${d}`)
+    }
+    if (diffs.length > 25) {
+      console.error(`  ... and ${diffs.length - 25} more difference(s)`)
+    }
+    console.error("Hint: run './scripts/parity.sh snapshot' to refresh golden oracle snapshots.")
+    process.exit(1)
+  }
+
+  console.log(
+    `Snapshot check PASS: ${relSnap} matches fresh oracle results (${snapshotEntries.length} vectors, commit ${String(lock.commit).slice(0, 12)})`,
+  )
 }

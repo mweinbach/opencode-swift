@@ -52,15 +52,21 @@ case "${CMD}" in
   test)
     run_swift_testing "$@"
     ;;
+  check)
+    require_bun
+    bun "${PKG_DIR}/Tools/parity/diff.ts" --check-snapshots
+    bun "${PKG_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict --no-write
+    run_swift_testing -Xswiftc -warnings-as-errors
+    ;;
   all)
     require_bun
     bun "${PKG_DIR}/Tools/parity/scanner.ts"
     bun "${PKG_DIR}/Tools/parity/diff.ts" --write-snapshots
-    bun "${PKG_DIR}/Tools/parity/audit.ts" --fail-on-drift
-    run_swift_testing
+    bun "${PKG_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict
+    run_swift_testing -Xswiftc -warnings-as-errors
     ;;
   *)
-    echo "Usage: ./Packages/OpenTUI/scripts/parity.sh <sync|scan|audit|diff|snapshot|test|all>"
+    echo "Usage: ./Packages/OpenTUI/scripts/parity.sh <sync|scan|audit|diff|snapshot|test|check|all>"
     exit 1
     ;;
 esac
