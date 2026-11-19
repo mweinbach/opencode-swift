@@ -82,20 +82,28 @@ public enum ClientURLBuilder {
     ) -> String {
         let (baseWithoutFragment, _) = splitOnce(baseUrl, separator: "#")
         let (basePathPart, baseQueryPart) = splitOnce(baseWithoutFragment, separator: "?")
+        let (pathWithoutFragment, _) = splitOnce(path, separator: "#")
+        let (pathPart, pathQueryPart) = splitOnce(pathWithoutFragment, separator: "?")
 
         let trimmedBase = basePathPart.hasSuffix("/") ? String(basePathPart.dropLast()) : basePathPart
         let normalizedPath: String
-        if path.isEmpty {
+        if pathPart.isEmpty {
             normalizedPath = ""
-        } else if path.hasPrefix("/") {
-            normalizedPath = path
+        } else if pathPart.hasPrefix("/") {
+            normalizedPath = pathPart
         } else {
-            normalizedPath = "/" + path
+            normalizedPath = "/" + pathPart
         }
 
         var queryItems: [(String, String)] = []
         if let baseQueryPart, !baseQueryPart.isEmpty {
             for pair in baseQueryPart.split(separator: "&", omittingEmptySubsequences: true) {
+                let (k, v) = splitOnce(String(pair), separator: "=")
+                queryItems.append((decodeFormComponent(k), decodeFormComponent(v ?? "")))
+            }
+        }
+        if let pathQueryPart, !pathQueryPart.isEmpty {
+            for pair in pathQueryPart.split(separator: "&", omittingEmptySubsequences: true) {
                 let (k, v) = splitOnce(String(pair), separator: "=")
                 queryItems.append((decodeFormComponent(k), decodeFormComponent(v ?? "")))
             }
@@ -340,7 +348,7 @@ public enum ClientHTTPHeaders {
     }
 
     public static func basicAuthorization(username: String, password: String) -> String {
-        "Basic " + base64Encode("\(username):\(password)")
+        "Basic " + bytesToBase64(Array("\(username):\(password)".utf8))
     }
 }
 

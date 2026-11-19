@@ -3107,7 +3107,7 @@ public enum CLICommands {
             server = try await CLIServices.ServerConnection.resolve(
                 CLIServices.ServerConnection.Args(
                     server: input.string("server"),
-                    standalone: input.bool("standalone"),
+                    standalone: input.bool("standalone") ? true : nil,
                     mismatch: .replace,
                     onStart: { reason, previousVersion in
                         if reason == .versionMismatch && preflight.begin(previousVersion) { return }

@@ -1334,6 +1334,25 @@ public enum CLIServices {
             )
         }
 
+        private static func probeRegisteredService(
+            file: String?,
+            context: CLIContext
+        ) async -> LocalService? {
+            let resolvedFile = file ?? fallback(environment: context.environment)
+            guard let bytes = try? await context.fileSystem.readFile(at: resolvedFile),
+                  let info = try? JSONDecoder().decode(ServiceInfo.self, from: Data(bytes)),
+                  info.pid > 0
+            else {
+                return nil
+            }
+            let probed = await probeResult(
+                info,
+                timeoutMs: defaultEnsureTiming.requestTimeout,
+                transport: context.transport
+            )
+            return probed.service
+        }
+
         private static func resolveManaged(
             options: ServiceEnsureOptions,
             mismatch: MismatchPolicy,
@@ -1341,6 +1360,42 @@ public enum CLIServices {
         ) async throws -> ServiceEndpoint {
             switch mismatch {
             case .replace:
+                // Never kill an already-running server from another channel/release when running a local dev build.
+                if context.version == "local",
+                   let existing = await probeRegisteredService(file: options.file, context: context),
+                   existing.compatible,
+                   existing.state == .ready || existing.state == .waiting,
+                   existing.version != context.version,
+                   !ServiceConfig.versionBelongsToChannel(
+                       existing.version,
+                       channel: context.channel,
+                       installedVersion: context.version
+                   )
+                {
+                    let versionLabel = existing.version ?? "unknown"
+                    context.io.writeStderr(
+                        "Warning: Background server at \(existing.endpoint.url) has version \(versionLabel); this client is \(context.version). Continuing without replacing it.\n"
+                    )
+                    if existing.state == .ready {
+                        return existing.endpoint
+                    }
+                    let waitOptions = ServiceEnsureOptions(
+                        file: options.file,
+                        version: nil,
+                        command: options.command,
+                        env: options.env,
+                        onStart: options.onStart,
+                        timing: options.timing
+                    )
+                    return try await EffectClient.Service.ensure(
+                        options: waitOptions,
+                        fileSystem: context.fileSystem,
+                        transport: context.transport,
+                        launcher: context.launcher,
+                        signaler: context.signaler,
+                        environment: context.environment
+                    )
+                }
                 return try await EffectClient.Service.ensure(
                     options: options,
                     fileSystem: context.fileSystem,

@@ -250,20 +250,47 @@ public struct ClientHTTPExecutor: Sendable {
         }
     }
 
+    private static func unsupportedContentTypeDetail(for response: HTTPResponse) -> String {
+        let contentType = ClientHTTPHeaders.value(in: response.head.headers, for: "content-type") ?? "<none>"
+        if let snippet = bodySnippet(response.body) {
+            return "status \(response.head.statusCode), content-type: \(contentType), body: \(snippet)"
+        }
+        return "status \(response.head.statusCode), content-type: \(contentType)"
+    }
+
+    private static func bodySnippet(_ bytes: [UInt8], maxLength: Int = 200) -> String? {
+        guard !bytes.isEmpty else { return nil }
+        let raw = String(decoding: bytes.prefix(maxLength * 4), as: UTF8.self)
+        let collapsed = raw
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !collapsed.isEmpty else { return nil }
+        if collapsed.count <= maxLength {
+            return collapsed
+        }
+        return String(collapsed.prefix(maxLength)) + "…"
+    }
+
     private func decodeJSON<T: Decodable>(_ type: T.Type, from response: HTTPResponse) throws -> T {
         guard ClientHTTPHeaders.isJSONContentType(response.head.headers) else {
+            let contentType = ClientHTTPHeaders.value(in: response.head.headers, for: "content-type")
             throw ClientError(
                 reason: .unsupportedContentType,
-                detail: ClientHTTPHeaders.value(in: response.head.headers, for: "content-type")
+                detail: contentType ?? Self.unsupportedContentTypeDetail(for: response),
+                statusCode: response.head.statusCode
             )
         }
         guard !response.body.isEmpty else {
-            throw ClientError(reason: .malformedResponse)
+            throw ClientError(reason: .malformedResponse, statusCode: response.head.statusCode)
         }
         do {
             return try ClientCodec.decode(type, from: response.body)
         } catch {
-            throw ClientError(reason: .malformedResponse, causeDescription: String(describing: error))
+            throw ClientError(
+                reason: .malformedResponse,
+                statusCode: response.head.statusCode,
+                causeDescription: String(describing: error)
+            )
         }
     }
 
@@ -272,7 +299,8 @@ public struct ClientHTTPExecutor: Sendable {
             guard ClientHTTPHeaders.isJSONContentType(response.head.headers) else {
                 throw ClientError(
                     reason: .unsupportedContentType,
-                    detail: ClientHTTPHeaders.value(in: response.head.headers, for: "content-type")
+                    detail: Self.unsupportedContentTypeDetail(for: response),
+                    statusCode: response.head.statusCode
                 )
             }
             let decoded = try ClientDeclaredErrorDecoder.decode(bytes: response.body)
@@ -370,10 +398,13 @@ public struct ClientHTTPExecutor: Sendable {
                 }
 
                 guard ClientHTTPHeaders.isContentType(streaming.head.headers, expected: "text/event-stream") else {
+                    let contentType = ClientHTTPHeaders.value(in: streaming.head.headers, for: "content-type")
+                    let detail = contentType ?? "status \(streaming.head.statusCode), content-type: <none>"
                     continuation.finish(
                         throwing: ClientError(
                             reason: .unsupportedContentType,
-                            detail: ClientHTTPHeaders.value(in: streaming.head.headers, for: "content-type")
+                            detail: detail,
+                            statusCode: streaming.head.statusCode
                         )
                     )
                     return

@@ -860,7 +860,12 @@ private let wwwAuthenticateHeader = "Basic realm=\"Secure Area\""
 private let unauthorizedMessage = "Authentication required"
 
 private func decodeBasicCredential(_ encoded: String) -> ServerAuth.DecodedCredentials {
-    guard let decoded = try? base64Decode(encoded) else {
+    let decoded: String
+    if let standardBytes = try? base64ToBytes(encoded) {
+        decoded = String(decoding: standardBytes, as: UTF8.self)
+    } else if let urlSafe = try? base64Decode(encoded) {
+        decoded = urlSafe
+    } else {
         return ServerAuth.DecodedCredentials(username: "", password: "")
     }
     guard let colon = decoded.firstIndex(of: ":") else {
@@ -905,18 +910,20 @@ public func authorizedRequest(
         }
     } else if let authHeader = request.header("authorization") {
         let trimmed = authHeader.trimmingCharacters(in: .whitespaces)
-        if trimmed.lowercased().hasPrefix("basic ") {
-            let encoded = String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-            let cred = decodeBasicCredential(encoded)
-            if ServerAuth.authorized(cred, config: config, nowMs: nowMs) {
-                return true
-            }
-        } else if trimmed.lowercased().hasPrefix("bearer ") {
-            let token = String(trimmed.dropFirst(7)).trimmingCharacters(in: .whitespaces)
-            if let expected = config.password,
-               (ServerCrypto.timingSafeEqual(Array(token.utf8), Array(expected.utf8))
-                || ServerAuth.verifySession(token, config: config, nowMs: nowMs)) {
-                return true
+        if let schemeEnd = trimmed.firstIndex(where: \.isWhitespace) {
+            let scheme = trimmed[..<schemeEnd].lowercased()
+            let value = String(trimmed[schemeEnd...]).trimmingCharacters(in: .whitespaces)
+            if scheme == "basic" && !value.isEmpty {
+                let cred = decodeBasicCredential(value)
+                if ServerAuth.authorized(cred, config: config, nowMs: nowMs) {
+                    return true
+                }
+            } else if scheme == "bearer" && !value.isEmpty {
+                if let expected = config.password,
+                   (ServerCrypto.timingSafeEqual(Array(value.utf8), Array(expected.utf8))
+                    || ServerAuth.verifySession(value, config: config, nowMs: nowMs)) {
+                    return true
+                }
             }
         }
     }
