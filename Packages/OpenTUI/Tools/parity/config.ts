@@ -55,6 +55,11 @@ export const OUT_OF_SCOPE_OPENTUI_PACKAGES: readonly string[] = [
   "examples",
 ]
 
+export const EXEMPT_OPENTUI_RUNTIME_DEPS: Readonly<Record<string, string>> = {
+  "@opentui/react": "Optional React reconciler peer adapter; Swift uses native OpenTUIView DSL",
+  "@opentui/solid": "Optional SolidJS reconciler peer adapter; Swift uses native OpenTUIView DSL",
+}
+
 export type TargetPurity = "pure" | "platform" | "host"
 
 export const SWIFT_OPENTUI_TARGET_PURITY: Record<string, TargetPurity> = {

@@ -1,13 +1,21 @@
 import path from "path"
 import fs from "fs"
 import {
+  EXEMPT_OPENTUI_RUNTIME_DEPS,
   FORBIDDEN_PURE_IMPORTS,
   OS_SPECIFIC_IMPORTS,
   OUT_OF_SCOPE_OPENTUI_PACKAGES,
   SWIFT_OPENTUI_TARGET_PURITY,
   TRACKED_OPENTUI_PACKAGES,
 } from "./config.ts"
-import { isFunctionLikeKind, type UpstreamManifest, type UpstreamSymbol } from "./scanner.ts"
+import {
+  isFunctionLikeKind,
+  isUpstreamFunctionBodyEmpty,
+  verifyFileExportsWithTranspiler,
+  walkSourceFiles,
+  type UpstreamManifest,
+  type UpstreamSymbol,
+} from "./scanner.ts"
 
 export type ParityStatus = "implemented" | "partial" | "stub" | "adapted" | "excluded"
 
@@ -84,6 +92,50 @@ interface StubHygieneViolation {
   readonly snippet: string
 }
 
+interface CompilerExportError {
+  readonly package: string
+  readonly file: string
+  readonly exportName: string
+  readonly rule: string
+}
+
+interface WorkspaceDepError {
+  readonly package: string
+  readonly dependency: string
+  readonly section: "dependencies" | "optionalDependencies" | "peerDependencies"
+  readonly version: string
+  readonly outOfScopePackage: string
+  readonly rule: string
+}
+
+interface SubstanceError {
+  readonly upstreamId: string
+  readonly upstreamKind: string
+  readonly swiftFile: string
+  readonly swiftLine: number
+  readonly swiftDeclKind?: string
+  readonly swiftSymbol?: string
+  readonly reason: "empty-body" | "non-callable-declaration"
+  readonly rule: string
+}
+
+interface UnmappedSymbolEntry {
+  readonly id: string
+  readonly package: string
+  readonly file: string
+  readonly symbol: string
+  readonly kind: string
+  readonly line: number
+  readonly bodyHash: string
+}
+
+interface SwiftAnnotationDeclMeta {
+  readonly absPath: string
+  readonly declKind?: string
+  readonly declLine?: number
+  readonly declOffset?: number
+}
+
 interface ParsedPackageTarget {
   readonly kind: string
   readonly name: string
@@ -134,7 +186,15 @@ function walkSwiftFiles(dir: string): string[] {
 function findAnnotatedSwiftDeclaration(
   lines: readonly string[],
   annotationLineIndex: number,
-): { matched: boolean; symbol?: string; nextLineNumber?: number; nextCodeLine?: string } {
+): {
+  matched: boolean
+  symbol?: string
+  declKind?: string
+  declLineIndex?: number
+  declColOffset?: number
+  nextLineNumber?: number
+  nextCodeLine?: string
+} {
   let blockCommentDepth = 0
   let attrParenDepth = 0
 
@@ -216,6 +276,9 @@ function findAnnotatedSwiftDeclaration(
         return {
           matched: true,
           symbol: declMatch[2] || declMatch[1],
+          declKind: declMatch[1],
+          declLineIndex: j,
+          declColOffset: idx,
           nextLineNumber: j + 1,
           nextCodeLine: code.slice(0, 120),
         }
@@ -733,8 +796,510 @@ function checkTestImports(): TestImportViolation[] {
   return violations
 }
 
+const NON_CALLABLE_SWIFT_DECLS = new Set(["struct", "enum", "protocol", "typealias", "class", "actor"])
+
+const SWIFT_DECL_START_KEYWORDS = new Set([
+  "public",
+  "open",
+  "internal",
+  "private",
+  "fileprivate",
+  "package",
+  "func",
+  "var",
+  "let",
+  "init",
+  "deinit",
+  "subscript",
+  "struct",
+  "class",
+  "enum",
+  "actor",
+  "protocol",
+  "extension",
+  "typealias",
+  "override",
+  "static",
+  "final",
+  "mutating",
+  "nonmutating",
+  "associatedtype",
+  "convenience",
+  "required",
+  "indirect",
+  "nonisolated",
+  "case",
+])
+
+// Advance past any Swift line comment, nested block comment, regular string,
+// multiline string, or raw/extended-delimiter string (including nested interpolations).
+function advanceSwiftNonCode(src: string, i: number): number {
+  const ch = src[i]!
+  const next = src[i + 1] ?? ""
+
+  if (ch === "/" && next === "/") {
+    let j = i + 2
+    while (j < src.length && src[j] !== "\n") j++
+    return j
+  }
+
+  if (ch === "/" && next === "*") {
+    let j = i + 2
+    let depth = 1
+    while (j < src.length && depth > 0) {
+      if (src[j] === "/" && src[j + 1] === "*") {
+        depth++
+        j += 2
+      } else if (src[j] === "*" && src[j + 1] === "/") {
+        depth--
+        j += 2
+      } else {
+        j++
+      }
+    }
+    return j
+  }
+
+  if (ch === "#") {
+    let hashes = 0
+    while (src[i + hashes] === "#") hashes++
+    if (src.slice(i + hashes, i + hashes + 3) === '"""') {
+      let j = i + hashes + 3
+      const closeDelim = '"""' + "#".repeat(hashes)
+      const escPrefix = "\\" + "#".repeat(hashes)
+      while (j < src.length) {
+        if (src.startsWith(escPrefix, j)) {
+          if (src[j + escPrefix.length] === "(") {
+            j = advanceSwiftBalancedParen(src, j + escPrefix.length)
+          } else {
+            j += escPrefix.length + 1
+          }
+          continue
+        }
+        if (src.startsWith(closeDelim, j)) return j + closeDelim.length
+        j++
+      }
+      return src.length
+    }
+    if (src[i + hashes] === '"') {
+      let j = i + hashes + 1
+      const closeDelim = '"' + "#".repeat(hashes)
+      const escPrefix = "\\" + "#".repeat(hashes)
+      while (j < src.length) {
+        if (src.startsWith(escPrefix, j)) {
+          if (src[j + escPrefix.length] === "(") {
+            j = advanceSwiftBalancedParen(src, j + escPrefix.length)
+          } else {
+            j += escPrefix.length + 1
+          }
+          continue
+        }
+        if (src.startsWith(closeDelim, j)) return j + closeDelim.length
+        if (src[j] === "\n") return j
+        j++
+      }
+      return src.length
+    }
+    return i
+  }
+
+  if (src.slice(i, i + 3) === '"""') {
+    let j = i + 3
+    while (j < src.length) {
+      if (src[j] === "\\") {
+        if (src[j + 1] === "(") j = advanceSwiftBalancedParen(src, j + 1)
+        else j += 2
+        continue
+      }
+      if (src.slice(j, j + 3) === '"""') return j + 3
+      j++
+    }
+    return src.length
+  }
+
+  if (ch === '"') {
+    let j = i + 1
+    while (j < src.length) {
+      if (src[j] === "\\") {
+        if (src[j + 1] === "(") j = advanceSwiftBalancedParen(src, j + 1)
+        else j += 2
+        continue
+      }
+      if (src[j] === '"') return j + 1
+      if (src[j] === "\n") return j
+      j++
+    }
+    return src.length
+  }
+
+  return i
+}
+
+function advanceSwiftBalancedParen(src: string, openParenIdx: number): number {
+  let depth = 0
+  let i = openParenIdx
+  while (i < src.length) {
+    const nextI = advanceSwiftNonCode(src, i)
+    if (nextI > i) {
+      i = nextI
+      continue
+    }
+    if (src[i] === "(") depth++
+    else if (src[i] === ")") {
+      depth--
+      if (depth === 0) return i + 1
+    }
+    i++
+  }
+  return src.length
+}
+
+function stripSwiftCommentsAndWs(body: string): string {
+  let out = ""
+  let i = 0
+  while (i < body.length) {
+    if (body[i] === "/" && body[i + 1] === "/") {
+      i += 2
+      while (i < body.length && body[i] !== "\n") i++
+      continue
+    }
+    if (body[i] === "/" && body[i + 1] === "*") {
+      let depth = 1
+      i += 2
+      while (i < body.length && depth > 0) {
+        if (body[i] === "/" && body[i + 1] === "*") {
+          depth++
+          i += 2
+        } else if (body[i] === "*" && body[i + 1] === "/") {
+          depth--
+          i += 2
+        } else {
+          i++
+        }
+      }
+      continue
+    }
+    const nextI = advanceSwiftNonCode(body, i)
+    if (nextI > i) {
+      out += body.slice(i, nextI)
+      i = nextI
+      continue
+    }
+    if (!/\s/.test(body[i]!)) out += body[i]
+    i++
+  }
+  return out
+}
+
+function extractSwiftDeclarationBody(
+  src: string,
+  declStartOffset: number,
+  declKind: string,
+): { found: boolean; isEmpty: boolean } {
+  let i = declStartOffset
+  let parenDepth = 0
+  let bracketDepth = 0
+  let seenParamParen = declKind === "deinit" || declKind === "var" || declKind === "let"
+  let seenEquals = false
+  let braceOpen = -1
+
+  while (i < src.length) {
+    const nextI = advanceSwiftNonCode(src, i)
+    if (nextI > i) {
+      i = nextI
+      continue
+    }
+    const ch = src[i]!
+
+    if (ch === "(") {
+      parenDepth++
+      i++
+      continue
+    }
+    if (ch === ")") {
+      parenDepth = Math.max(0, parenDepth - 1)
+      if (parenDepth === 0) seenParamParen = true
+      i++
+      continue
+    }
+    if (ch === "[") {
+      bracketDepth++
+      i++
+      continue
+    }
+    if (ch === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1)
+      i++
+      continue
+    }
+
+    // Parameter-list default closures (`= {}`) occur while `parenDepth > 0` and are ignored here.
+    if (parenDepth === 0 && bracketDepth === 0) {
+      if (ch === "{") {
+        braceOpen = i
+        break
+      }
+      if (ch === "}" || ch === ";") {
+        return { found: false, isEmpty: false }
+      }
+      if (ch === "=" && src[i + 1] !== "=" && src[i + 1] !== ">") {
+        seenEquals = true
+      }
+      if (ch === "\n") {
+        let k = i + 1
+        while (k < src.length) {
+          if (src[k] === " " || src[k] === "\t" || src[k] === "\r" || src[k] === "\n") {
+            k++
+            continue
+          }
+          if (src[k] === "/" && (src[k + 1] === "/" || src[k + 1] === "*")) {
+            k = advanceSwiftNonCode(src, k)
+            continue
+          }
+          break
+        }
+        const peekChar = src[k] ?? ""
+        if (peekChar === "}" || peekChar === "@") {
+          return { found: false, isEmpty: false }
+        }
+        if ((declKind === "var" || declKind === "let") && seenEquals && peekChar !== "{") {
+          return { found: false, isEmpty: false }
+        }
+        const kwMatch = src.slice(k).match(/^([A-Za-z_]\w*)\b/)
+        if (kwMatch && SWIFT_DECL_START_KEYWORDS.has(kwMatch[1]!) && seenParamParen) {
+          return { found: false, isEmpty: false }
+        }
+      }
+    }
+    i++
+  }
+
+  if (braceOpen < 0) return { found: false, isEmpty: false }
+
+  let depth = 0
+  let j = braceOpen
+  while (j < src.length) {
+    const nextJ = advanceSwiftNonCode(src, j)
+    if (nextJ > j) {
+      j = nextJ
+      continue
+    }
+    if (src[j] === "{") depth++
+    else if (src[j] === "}") {
+      depth--
+      if (depth === 0) {
+        const inner = src.slice(braceOpen + 1, j)
+        return { found: true, isEmpty: stripSwiftCommentsAndWs(inner).length === 0 }
+      }
+    }
+    j++
+  }
+  return { found: false, isEmpty: false }
+}
+
+// Gate 9 — Compiler Export Completeness Gate
+function checkCompilerExportCompleteness(manifestData: UpstreamManifest): CompilerExportError[] {
+  if (!fs.existsSync(UPSTREAM_DIR)) return []
+  const emittedByFile = new Map<string, Set<string>>()
+  for (const sym of manifestData.symbols) {
+    if (sym.symbol.includes(".")) continue
+    const key = `${sym.package}/${sym.file}`
+    let set = emittedByFile.get(key)
+    if (!set) {
+      set = new Set<string>()
+      emittedByFile.set(key, set)
+    }
+    set.add(sym.symbol)
+  }
+
+  const errors: CompilerExportError[] = []
+  for (const spec of TRACKED_OPENTUI_PACKAGES) {
+    if (spec.language !== "ts") continue
+    const pkgRoot = path.join(UPSTREAM_DIR, "packages", spec.upstreamPackage)
+    const srcRoot = path.join(pkgRoot, "src")
+    for (const absPath of walkSourceFiles(srcRoot, "ts")) {
+      const relFile = path.relative(pkgRoot, absPath).split(path.sep).join("/")
+      const source = fs.readFileSync(absPath, "utf8")
+      const emitted = emittedByFile.get(`${spec.upstreamPackage}/${relFile}`) ?? new Set<string>()
+      const missing = verifyFileExportsWithTranspiler(absPath, source, emitted)
+      for (const exportName of missing) {
+        errors.push({
+          package: spec.upstreamPackage,
+          file: relFile,
+          exportName,
+          rule: `Upstream TS/TSX local export '${exportName}' in ${spec.upstreamPackage}/${relFile} is missing from Packages/OpenTUI/parity/upstream-manifest.json`,
+        })
+      }
+    }
+  }
+  return errors
+}
+
+// Gate 10 — Workspace Dependency Graph Gate
+function checkWorkspaceDependencyGraph(): WorkspaceDepError[] {
+  if (!fs.existsSync(UPSTREAM_PACKAGES_DIR)) return []
+
+  const outOfScopeByPkgName = new Map<string, string>()
+  for (const outPkg of OUT_OF_SCOPE_OPENTUI_PACKAGES) {
+    const outPkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, outPkg, "package.json")
+    if (fs.existsSync(outPkgJsonPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(outPkgJsonPath, "utf8")) as { name?: unknown }
+        if (typeof parsed.name === "string" && parsed.name.length > 0) {
+          outOfScopeByPkgName.set(parsed.name, outPkg)
+        }
+      } catch {
+        // Ignore malformed package.json and rely on fallback name below
+      }
+    }
+    if (!outOfScopeByPkgName.has(`@opentui/${outPkg}`)) {
+      outOfScopeByPkgName.set(`@opentui/${outPkg}`, outPkg)
+    }
+  }
+
+  const trackedPkgNames = new Set<string>()
+  for (const spec of TRACKED_OPENTUI_PACKAGES) {
+    trackedPkgNames.add(`@opentui/${spec.upstreamPackage}`)
+    const pkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, spec.upstreamPackage, "package.json")
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as { name?: unknown }
+        if (typeof parsed.name === "string" && parsed.name.length > 0) {
+          trackedPkgNames.add(parsed.name)
+        }
+      } catch {
+        // Ignore malformed package.json
+      }
+    }
+  }
+
+  const errors: WorkspaceDepError[] = []
+  const sections = ["dependencies", "optionalDependencies", "peerDependencies"] as const
+
+  for (const spec of TRACKED_OPENTUI_PACKAGES) {
+    const pkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, spec.upstreamPackage, "package.json")
+    if (!fs.existsSync(pkgJsonPath)) continue
+    let pkgJson: Record<string, unknown>
+    try {
+      pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as Record<string, unknown>
+    } catch {
+      continue
+    }
+
+    for (const section of sections) {
+      const deps = pkgJson[section]
+      if (!deps || typeof deps !== "object") continue
+      for (const [depName, rawVer] of Object.entries(deps as Record<string, unknown>)) {
+        const version = String(rawVer ?? "")
+        if (Object.prototype.hasOwnProperty.call(EXEMPT_OPENTUI_RUNTIME_DEPS, depName)) continue
+
+        const outPkg = outOfScopeByPkgName.get(depName)
+        if (outPkg) {
+          errors.push({
+            package: spec.upstreamPackage,
+            dependency: depName,
+            section,
+            version,
+            outOfScopePackage: outPkg,
+            rule: `Tracked OpenTUI package '${spec.upstreamPackage}' has unexempt ${section} dependency '${depName}' on out-of-scope package '${outPkg}'`,
+          })
+        } else if (version.startsWith("workspace:") && !trackedPkgNames.has(depName)) {
+          errors.push({
+            package: spec.upstreamPackage,
+            dependency: depName,
+            section,
+            version,
+            outOfScopePackage: depName,
+            rule: `Tracked OpenTUI package '${spec.upstreamPackage}' has unexempt workspace ${section} dependency '${depName}' (${version}) outside TRACKED_OPENTUI_PACKAGES`,
+          })
+        }
+      }
+    }
+  }
+
+  return errors
+}
+
+// Gate 11 — Swift Implementation Substance Gate
+function checkSwiftSubstance(
+  annotationsList: readonly SwiftAnnotation[],
+  declMetaByAnnotation: ReadonlyMap<SwiftAnnotation, SwiftAnnotationDeclMeta>,
+  symMap: ReadonlyMap<string, UpstreamSymbol>,
+): SubstanceError[] {
+  const errors: SubstanceError[] = []
+  const swiftSourceCache = new Map<string, string>()
+  const upstreamSourceCache = new Map<string, string | null>()
+  const pkgLangByName = new Map(TRACKED_OPENTUI_PACKAGES.map((p) => [p.upstreamPackage, p.language]))
+
+  function readSwiftSource(absPath: string): string {
+    let cached = swiftSourceCache.get(absPath)
+    if (cached === undefined) {
+      cached = fs.readFileSync(absPath, "utf8")
+      swiftSourceCache.set(absPath, cached)
+    }
+    return cached
+  }
+
+  function readUpstreamSource(pkg: string, relFile: string): string | null {
+    const key = `${pkg}/${relFile}`
+    if (upstreamSourceCache.has(key)) return upstreamSourceCache.get(key)!
+    const absPath = path.join(UPSTREAM_DIR, "packages", pkg, relFile)
+    const content = fs.existsSync(absPath) ? fs.readFileSync(absPath, "utf8") : null
+    upstreamSourceCache.set(key, content)
+    return content
+  }
+
+  for (const ann of annotationsList) {
+    if (ann.status !== "implemented") continue
+    const up = symMap.get(ann.upstreamId)
+    if (!up || !isFunctionLikeKind(up.kind)) continue
+
+    const meta = declMetaByAnnotation.get(ann)
+    const declKind = meta?.declKind
+    if (!declKind) continue
+
+    if (NON_CALLABLE_SWIFT_DECLS.has(declKind)) {
+      errors.push({
+        upstreamId: ann.upstreamId,
+        upstreamKind: up.kind,
+        swiftFile: ann.swiftFile,
+        swiftLine: meta.declLine ?? ann.swiftLine,
+        swiftDeclKind: declKind,
+        swiftSymbol: ann.swiftSymbol,
+        reason: "non-callable-declaration",
+        rule: `Implemented upstream function '${ann.upstreamId}' (${up.kind}) maps to non-callable Swift '${declKind}' declaration (use a callable declaration or status=adapted)`,
+      })
+      continue
+    }
+
+    if (meta.declOffset === undefined) continue
+    const swiftSrc = readSwiftSource(meta.absPath)
+    const bodyCheck = extractSwiftDeclarationBody(swiftSrc, meta.declOffset, declKind)
+    if (!bodyCheck.found || !bodyCheck.isEmpty) continue
+
+    const upstreamSrc = readUpstreamSource(up.package, up.file)
+    const lang = pkgLangByName.get(up.package) ?? "ts"
+    const upstreamEmpty = upstreamSrc !== null ? isUpstreamFunctionBodyEmpty(upstreamSrc, up.line, lang) : false
+    if (!upstreamEmpty) {
+      errors.push({
+        upstreamId: ann.upstreamId,
+        upstreamKind: up.kind,
+        swiftFile: ann.swiftFile,
+        swiftLine: meta.declLine ?? ann.swiftLine,
+        swiftDeclKind: declKind,
+        swiftSymbol: ann.swiftSymbol,
+        reason: "empty-body",
+        rule: `Implemented upstream function '${ann.upstreamId}' (${up.kind}) maps to an empty '{}' Swift body while the upstream function body is non-empty`,
+      })
+    }
+  }
+
+  return errors
+}
+
 function scanSwift(): {
   annotations: SwiftAnnotation[]
+  declMetaByAnnotation: Map<SwiftAnnotation, SwiftAnnotationDeclMeta>
   purityViolations: PurityViolation[]
   invalidStatuses: InvalidStatusAnnotation[]
   unpinned: UnpinnedAnnotation[]
@@ -744,6 +1309,7 @@ function scanSwift(): {
 } {
   const files = walkSwiftFiles(SOURCES_DIR)
   const annotations: SwiftAnnotation[] = []
+  const declMetaByAnnotation = new Map<SwiftAnnotation, SwiftAnnotationDeclMeta>()
   const purityViolations: PurityViolation[] = []
   const invalidStatuses: InvalidStatusAnnotation[] = []
   const unpinned: UnpinnedAnnotation[] = []
@@ -757,7 +1323,14 @@ function scanSwift(): {
     const rel = path.relative(PKG_DIR, absPath).split(path.sep).join("/")
     const target = path.relative(SOURCES_DIR, absPath).split(path.sep)[0] ?? "Unknown"
     const purity = SWIFT_OPENTUI_TARGET_PURITY[target]
-    const lines = fs.readFileSync(absPath, "utf8").split("\n")
+    const source = fs.readFileSync(absPath, "utf8")
+    const lines = source.split("\n")
+    const lineOffsets: number[] = []
+    let runningOffset = 0
+    for (const l of lines) {
+      lineOffsets.push(runningOffset)
+      runningOffset += l.length + 1
+    }
     let ifDepth = 0
 
     for (let i = 0; i < lines.length; i++) {
@@ -844,7 +1417,7 @@ function scanSwift(): {
           })
         }
 
-        annotations.push({
+        const ann: SwiftAnnotation = {
           upstreamId,
           status,
           recordedHash,
@@ -852,12 +1425,23 @@ function scanSwift(): {
           swiftLine: i + 1,
           swiftTarget: target,
           swiftSymbol: declCheck.symbol,
-        })
+        }
+        annotations.push(ann)
+
+        if (declCheck.matched && declCheck.declLineIndex !== undefined && declCheck.declColOffset !== undefined) {
+          declMetaByAnnotation.set(ann, {
+            absPath,
+            declKind: declCheck.declKind,
+            declLine: declCheck.declLineIndex + 1,
+            declOffset: lineOffsets[declCheck.declLineIndex]! + declCheck.declColOffset,
+          })
+        }
       }
     }
   }
   return {
     annotations,
+    declMetaByAnnotation,
     purityViolations,
     invalidStatuses,
     unpinned,
@@ -876,6 +1460,7 @@ const symbolMap = new Map<string, UpstreamSymbol>(manifest.symbols.map((s) => [s
 
 const {
   annotations,
+  declMetaByAnnotation,
   purityViolations,
   invalidStatuses,
   unpinned,
@@ -887,6 +1472,9 @@ const {
 const untrackedUpstreamPackages = checkUntrackedUpstreamPackages()
 const dependencyLawViolations = checkPackageDependencyLaws()
 const testImportViolations = checkTestImports()
+const compilerExportErrors = checkCompilerExportCompleteness(manifest)
+const workspaceDepErrors = checkWorkspaceDependencyGraph()
+const substanceErrors = checkSwiftSubstance(annotations, declMetaByAnnotation, symbolMap)
 
 const dangling: SwiftAnnotation[] = []
 const drifted: Array<{ annotation: SwiftAnnotation; currentHash: string }> = []
@@ -922,6 +1510,7 @@ for (const ann of annotations) {
 }
 
 const unmappedSymbolIds: string[] = []
+const unmappedSymbolsList: UnmappedSymbolEntry[] = []
 const stubSymbolIds: string[] = []
 const partialSymbolIds: string[] = []
 const unimplementedFunctionIds: string[] = []
@@ -943,6 +1532,15 @@ const packageAudits = TRACKED_OPENTUI_PACKAGES.map((spec) => {
     if (!ann) {
       unmappedSyms++
       unmappedSymbolIds.push(sym.id)
+      unmappedSymbolsList.push({
+        id: sym.id,
+        package: sym.package,
+        file: sym.file,
+        symbol: sym.symbol,
+        kind: sym.kind,
+        line: sym.line,
+        bodyHash: sym.bodyHash,
+      })
       if (isFn) unimplementedFunctionIds.push(sym.id)
       continue
     }
@@ -1040,6 +1638,9 @@ const report = {
     testImportViolations: testImportViolations.length,
     stubHygieneViolations: stubHygieneViolations.length,
     purityViolations: purityViolations.length,
+    compilerExportErrors: compilerExportErrors.length,
+    workspaceDepErrors: workspaceDepErrors.length,
+    substanceErrors: substanceErrors.length,
     unmappedSymbols: totals.unmappedSymbols,
     stubSymbols: totals.stubSymbols,
     partialSymbols: totals.partialSymbols,
@@ -1055,6 +1656,10 @@ const report = {
   testImportViolations,
   stubHygieneViolations,
   purityViolations,
+  compilerExportErrors,
+  workspaceDepErrors,
+  substanceErrors,
+  unmappedSymbolsList,
   packages: packageAudits,
 }
 
@@ -1087,6 +1692,9 @@ const md: string[] = [
   `| Swift Testing / CLT cross-import violations | ${testImportViolations.length} |`,
   `| Production stub hygiene violations | ${stubHygieneViolations.length} |`,
   `| Cross-platform purity violations | ${purityViolations.length} |`,
+  `| Compiler export completeness errors | ${compilerExportErrors.length} |`,
+  `| Workspace dependency graph errors | ${workspaceDepErrors.length} |`,
+  `| Swift implementation substance errors | ${substanceErrors.length} |`,
   "",
   "## Package Parity Matrix",
   "",
@@ -1098,6 +1706,19 @@ for (const p of packageAudits) {
   md.push(
     `| \`packages/${p.package}\` | ${p.language} | \`${p.swiftTarget}\` | \`${p.tier}\` | ${p.files} | ${p.lines.toLocaleString()} | ${p.implementedFunctions}/${p.totalFunctions} (${pct(p.implementedFunctions, p.totalFunctions)}) | ${p.implementedSymbols}/${p.totalSymbols} (${pct(p.implementedSymbols, p.totalSymbols)}) | ${p.driftedSymbols} |`,
   )
+}
+
+if (unmappedSymbolsList.length > 0) {
+  md.push(
+    "",
+    "## Unmapped Upstream Symbols",
+    "",
+    "| Upstream Symbol | Package | Kind | File:Line | Hash |",
+    "| --- | --- | --- | --- | --- |",
+  )
+  for (const sym of unmappedSymbolsList) {
+    md.push(`| \`${sym.id}\` | \`${sym.package}\` | \`${sym.kind}\` | \`${sym.file}:${sym.line}\` | \`${sym.bodyHash}\` |`)
+  }
 }
 
 md.push(
@@ -1146,6 +1767,9 @@ console.log(`Dep law errors:    ${dependencyLawViolations.length}`)
 console.log(`CLT/XCTest errors: ${testImportViolations.length}`)
 console.log(`Stub hygiene errs: ${stubHygieneViolations.length}`)
 console.log(`Purity errors:     ${purityViolations.length}`)
+console.log(`Compiler exports:  ${compilerExportErrors.length}`)
+console.log(`Workspace deps:    ${workspaceDepErrors.length}`)
+console.log(`Substance errors:  ${substanceErrors.length}`)
 if (!noWrite) {
   console.log("Wrote Packages/OpenTUI/parity/report.json and Packages/OpenTUI/PARITY.md")
 }
@@ -1220,6 +1844,26 @@ if (purityViolations.length > 0) {
     console.error(`  PURITY ${v.file}:${v.line} [${v.target}] ${v.rule}`)
   }
 }
+if (compilerExportErrors.length > 0) {
+  console.error("\nCompiler export completeness errors (Gate 9):")
+  for (const e of compilerExportErrors) {
+    console.error(`  COMPILER_EXPORT ${e.package}/${e.file}#${e.exportName}: ${e.rule}`)
+  }
+}
+if (workspaceDepErrors.length > 0) {
+  console.error("\nWorkspace dependency graph errors (Gate 10):")
+  for (const e of workspaceDepErrors) {
+    console.error(`  WORKSPACE_DEP packages/${e.package} [${e.section}] -> ${e.dependency} (${e.version}): ${e.rule}`)
+  }
+}
+if (substanceErrors.length > 0) {
+  console.error("\nSwift implementation substance errors (Gate 11):")
+  for (const e of substanceErrors) {
+    console.error(
+      `  SUBSTANCE ${e.swiftFile}:${e.swiftLine} ${e.upstreamId} [${e.reason} decl=${e.swiftDeclKind ?? "?"}]: ${e.rule}`,
+    )
+  }
+}
 
 const strictFailures: string[] = []
 if (strictMode) {
@@ -1258,6 +1902,9 @@ if (
   testImportViolations.length > 0 ||
   stubHygieneViolations.length > 0 ||
   purityViolations.length > 0 ||
+  compilerExportErrors.length > 0 ||
+  workspaceDepErrors.length > 0 ||
+  substanceErrors.length > 0 ||
   ((failOnDrift || strictMode) && drifted.length > 0) ||
   strictFailures.length > 0
 ) {
