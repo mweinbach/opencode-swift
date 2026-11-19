@@ -5,6 +5,7 @@ import SwiftUI
 
 @main
 struct OpenCodeDesktopEntrypoint {
+    @MainActor
     static func main() {
         OpenCodeAppLauncher.launch()
     }
