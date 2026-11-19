@@ -3674,11 +3674,18 @@ public enum CLIRun {
         public struct InteractiveStdin: Sendable {
             public let devicePath: String
             public let isTTY: Bool
+            public let fileDescriptor: Int32?
             private let cleanupFn: @Sendable () -> Void
 
-            public init(devicePath: String = "/dev/stdin", isTTY: Bool = true, cleanup: @escaping @Sendable () -> Void = {}) {
+            public init(
+                devicePath: String = "/dev/stdin",
+                isTTY: Bool = true,
+                fileDescriptor: Int32? = nil,
+                cleanup: @escaping @Sendable () -> Void = {}
+            ) {
                 self.devicePath = devicePath
                 self.isTTY = isTTY
+                self.fileDescriptor = fileDescriptor
                 self.cleanupFn = cleanup
             }
 
@@ -3695,7 +3702,7 @@ public enum CLIRun {
         ) throws -> InteractiveStdin {
             let stdinIsTTY = isTTY ?? CLIContext.current.io.isStdinTTY()
             if stdinIsTTY {
-                return InteractiveStdin(devicePath: "/dev/stdin", isTTY: true, cleanup: {})
+                return InteractiveStdin(devicePath: "/dev/stdin", isTTY: true, fileDescriptor: nil, cleanup: {})
             }
             let target = platform == .windows ? "CONIN$" : "/dev/tty"
             do {
@@ -3708,7 +3715,7 @@ public enum CLIRun {
                     throw CLIError(INTERACTIVE_INPUT_ERROR)
                 }
                 let cleaned = Mutex(false)
-                return InteractiveStdin(devicePath: target, isTTY: true) {
+                return InteractiveStdin(devicePath: target, isTTY: true, fileDescriptor: fd) {
                     let shouldClose = cleaned.withLock { c -> Bool in
                         if c { return false }
                         c = true
@@ -3952,7 +3959,14 @@ public enum CLIRun {
                 try await miniRunner(input)
                 return
             }
-            try await MiniHost.usingInteractiveStdin { terminal in
+            try await MiniHost.usingInteractiveStdin(
+                resolve: {
+                    try MiniHost.resolveInteractiveStdin(
+                        isTTY: context.io.isStdinTTY(),
+                        platform: context.platformOS
+                    )
+                }
+            ) { terminal in
                 let piped = context.io.isStdinTTY() ? nil : (try? await CLIUtil.readStdin(context: context))
                 let initialInput = mergeInput(piped: piped, prompt: input.prompt)
                 let directory = context.envVariable("PWD") ?? context.cwd
@@ -3962,15 +3976,108 @@ public enum CLIRun {
                 } catch {
                     throw CLIError("--model must use the format provider/model[#variant]")
                 }
-                let host = MiniHost.createMiniHost(terminal: terminal, directory: directory, paths: input.paths, context: context)
-                let modelSel = requested.map { TUIMini.PromptModelSelection(providerID: $0.providerID.rawValue, modelID: $0.id.rawValue) }
+
+                let initialClient = context.makeClient(endpoint: input.server.endpoint)
+                let reconnectClient: (@Sendable (AbortSignal) async throws -> OpenCodeClient)?
+                if let reconnectEndpoint = input.server.reconnect {
+                    reconnectClient = { signal in
+                        let next = try await reconnectEndpoint(signal)
+                        return context.makeClient(endpoint: next)
+                    }
+                } else {
+                    reconnectClient = nil
+                }
+
+                var activeClient = initialClient
+                var resolvedSessionID: String? = input.session
+                var resolvedDirectory = directory
+                var resolvedAgent = input.agent
+                var resolvedModel = requested.map {
+                    TUIMini.PromptModelSelection(providerID: $0.providerID.rawValue, modelID: $0.id.rawValue)
+                }
+                var resolvedVariant = requested?.variant?.rawValue
+
+                if !input.demo && (input.`continue` || input.fork) {
+                    let targetResult = try await resolveMiniTarget(
+                        sdk: initialClient,
+                        reconnect: reconnectClient
+                    ) { sdk in
+                        try await CLIServices.SessionTargetService.resolveSessionTarget(
+                            CLIServices.SessionTargetService.ResolveInput(
+                                client: sdk,
+                                directory: directory,
+                                continue: input.`continue`,
+                                session: input.session,
+                                fork: input.fork,
+                                model: requested,
+                                agent: input.agent,
+                                environment: input.server.reconnect != nil ? CLIUtil.Env.session() : nil,
+                                prepare: { next in
+                                    (model: next.model, agent: next.agent)
+                                }
+                            )
+                        )
+                    }
+                    activeClient = targetResult.sdk
+                    resolvedSessionID = targetResult.value.session.id.rawValue
+                    resolvedDirectory = targetResult.value.location.directory.rawValue
+                    resolvedAgent = targetResult.value.agent ?? resolvedAgent
+                    if let targetModel = targetResult.value.model {
+                        resolvedModel = TUIMini.PromptModelSelection(
+                            providerID: targetModel.providerID.rawValue,
+                            modelID: targetModel.id.rawValue
+                        )
+                        resolvedVariant = targetModel.variant?.rawValue ?? resolvedVariant
+                    }
+                }
+
+                let host = MiniHost.createMiniHost(terminal: terminal, directory: resolvedDirectory, paths: input.paths, context: context)
+                let finalClient = activeClient
+                let finalSessionID = resolvedSessionID
+                let finalDirectory = resolvedDirectory
+                let finalAgent = resolvedAgent
+                let finalModel = resolvedModel
+                let finalVariant = resolvedVariant
+
+                #if (os(macOS) || os(Linux) || os(FreeBSD)) && (canImport(Darwin) || canImport(Glibc) || canImport(Musl))
+                let liveBackend = PlatformTerminalBackend(
+                    inputFD: terminal.fileDescriptor ?? STDIN_FILENO,
+                    outputFD: STDOUT_FILENO,
+                    defaultSize: TerminalSize(width: context.io.columns(), height: context.io.rows())
+                )
+                #else
+                let liveBackend = PlatformTerminalBackend(
+                    defaultSize: TerminalSize(width: context.io.columns(), height: context.io.rows())
+                )
+                #endif
+
+                if liveBackend.isInteractiveTerminal && !input.demo {
+                    try await TUIMini.runMiniInteractiveTerminal(
+                        backend: liveBackend,
+                        host: host,
+                        client: finalClient,
+                        sessionID: finalSessionID,
+                        directory: finalDirectory,
+                        agent: finalAgent,
+                        model: finalModel,
+                        variant: finalVariant,
+                        initialInput: initialInput,
+                        replay: input.replay,
+                        replayLimit: input.replayLimit,
+                        tuiConfig: input.tuiConfig
+                    )
+                    return
+                }
+
                 let termBackend = SSHTerminalBackend(
                     size: TerminalSize(width: context.io.columns(), height: context.io.rows()),
                     writeHandler: { bytes in
                         context.io.writeStdout(String(decoding: bytes, as: UTF8.self))
                     }
                 )
-                let factory = createCliRendererSSHFactory()
+                let factory = createCliRendererSSHFactory(
+                    config: SSHCliRendererConfig(screenMode: .splitFooter, footerHeight: 6)
+                )
                 let attached = try await factory(
                     SSHRendererCreateOptions(
                         width: context.io.columns(),
@@ -3985,15 +4092,21 @@ public enum CLIRun {
                     let frontendInput = TUIMini.MiniFrontendInput(
                         host: host,
                         renderer: adapter.renderer,
-                        directory: directory,
-                        agent: input.agent,
-                        model: modelSel,
-                        variant: requested?.variant?.rawValue,
+                        client: input.demo ? nil : finalClient,
+                        sessionID: finalSessionID,
+                        directory: finalDirectory,
+                        agent: finalAgent,
+                        model: finalModel,
+                        variant: finalVariant,
                         initialInput: initialInput,
+                        replay: input.replay,
+                        replayLimit: input.replayLimit,
                         demo: input.demo,
+                        interactive: false,
                         tuiConfig: input.tuiConfig
                     )
                     await TUIMini.runMiniFrontend(frontendInput)
+                    await adapter.flushOutput()
                     adapter.destroy()
                 }
             }

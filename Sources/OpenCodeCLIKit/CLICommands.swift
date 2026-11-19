@@ -3246,6 +3246,11 @@ public enum CLICommands {
             CLIServices.ServerConnection.Args(mismatch: .replace),
             context: context
         )
+        defer {
+            if let handle = server.standaloneHandle {
+                Task { await handle.stop() }
+            }
+        }
         let rawConfig = try await context.configService.get()
         let resolved = TUIConfig.resolve(
             rawConfig.tui,
@@ -3279,6 +3284,16 @@ public enum CLICommands {
     }
 
     public static func runACP(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
+        try await runACPBridge(input, context: context, stream: nil)
+    }
+
+    /// Runs the real JSON-RPC 2.0 NDJSON ACP bridge over `stream` (defaulting to POSIX `stdin`/`stdout`),
+    /// backed by a standalone OpenCode server and `EffectClient.OpenCodeClient`.
+    public static func runACPBridge(
+        _ input: CLIFramework.Runtime.Input,
+        context: CLIContext,
+        stream: CLIACP.NDJSONStream? = nil
+    ) async throws {
         if input.bool("login") {
             await Auth.runLogin(CLIFramework.Runtime.Input(commandPath: ["auth", "login"]), context: context)
             return
@@ -3290,8 +3305,37 @@ public enum CLICommands {
             return
         }
         let handle = try await CLIServices.Standalone.start(context: context)
-        defer { Task { await handle.stop() } }
-        context.io.writeStderr("opencode acp: ACP bridge ready on \(handle.endpoint.url)\(context.io.eol)")
+        let client = EffectClient.OpenCode.make(
+            ClientOptions(
+                baseUrl: handle.endpoint.url,
+                transport: context.transport,
+                headers: OpenCodeClient.serviceHeaders(for: handle.endpoint) ?? [:]
+            )
+        )
+        let ndjsonStream = stream ?? CLIACP.NDJSONStream.stdio()
+        let agent = CLIACP.Agent.connect(
+            client: client,
+            stream: ndjsonStream,
+            fileSystem: context.fileSystem,
+            version: context.version
+        )
+        let cleanedUp = Mutex(false)
+        let cleanup: @Sendable () async -> Void = {
+            let shouldRun = cleanedUp.withLock { done -> Bool in
+                if done { return false }
+                done = true
+                return true
+            }
+            guard shouldRun else { return }
+            await agent.close()
+            await handle.stop()
+        }
+        await withTaskCancellationHandler {
+            await agent.waitUntilClosed()
+        } onCancel: {
+            Task { await cleanup() }
+        }
+        await cleanup()
     }
 
     public static func runModels(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {

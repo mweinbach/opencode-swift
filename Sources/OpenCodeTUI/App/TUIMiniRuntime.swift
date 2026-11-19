@@ -3720,31 +3720,1092 @@ public enum TUIMini {
         return desc.isEmpty ? "unknown error" : desc
     }
 
+    private final class MiniLiveSessionTransport: @unchecked Sendable {
+        private struct TrackedTool: Sendable {
+            var part: SessionMessageSchema.AssistantTool
+            var output: String
+            var version: Int
+            var started: Bool
+        }
+
+        private struct State: Sendable {
+            var sessionID: String?
+            var closed: Bool = false
+            var connected: Bool = false
+            var connectedWaiters: [CheckedContinuation<Void, Never>] = []
+            var streamStarted: Bool = false
+            var streamTask: Task<Void, Never>?
+            var offFooterClose: (@Sendable () -> Void)?
+            var rootActive: Bool = false
+            var turnActive: Bool = false
+            var turnSettled: Bool = false
+            var turnWaiters: [CheckedContinuation<Void, Never>] = []
+            var turnEmittedAssistant: Bool = false
+            var pendingUserText: [String: String] = [:]
+            var renderedUserIDs: Set<String> = []
+            var renderedErrorIDs: Set<String> = []
+            var tools: [String: TrackedTool] = [:]
+            var finishedTools: Set<String> = []
+        }
+
+        private let client: OpenCodeClient
+        private let footer: any FooterApi
+        private let directory: String?
+        private let thinking: Bool
+        private let tools: Bool
+        private let replay: Bool
+        private let replayLimit: Int?
+        private let onCommit: (@Sendable (StreamCommit) -> Void)?
+        private let onSessionTitle: (@Sendable (String) -> Void)?
+        private let tracker: SubagentTracker
+        private let fragments = createFragmentReconciler()
+        private let streamController = AbortController()
+        private let state: Mutex<State>
+
+        init(
+            sessionID: String?,
+            footer: any FooterApi,
+            client: OpenCodeClient,
+            directory: String?,
+            thinking: Bool,
+            tools: Bool,
+            replay: Bool,
+            replayLimit: Int?,
+            onCommit: (@Sendable (StreamCommit) -> Void)?,
+            onSessionTitle: (@Sendable (String) -> Void)?
+        ) {
+            let normalizedID = (sessionID?.isEmpty == false) ? sessionID : nil
+            self.client = client
+            self.footer = footer
+            self.directory = directory
+            self.thinking = thinking
+            self.tools = tools
+            self.replay = replay
+            self.replayLimit = replayLimit
+            self.onCommit = onCommit
+            self.onSessionTitle = onSessionTitle
+            self.tracker = createSubagentTracker(SubagentTrackerInput(
+                sessionID: normalizedID ?? "",
+                thinking: thinking,
+                directory: directory,
+                signal: streamController.signal
+            ) {
+                footer.event(.streamSubagent(FooterSubagentState()))
+            })
+            self.state = Mutex(State(sessionID: normalizedID))
+
+            let off = footer.onClose { [weak self] in
+                self?.abortStream()
+            }
+            self.state.withLock { $0.offFooterClose = off }
+            if normalizedID != nil {
+                ensureEventStreamStarted()
+            }
+        }
+
+        var currentSessionID: String? {
+            state.withLock { $0.sessionID }
+        }
+
+        private var isClosed: Bool {
+            state.withLock { $0.closed }
+        }
+
+        private var isTurnSettled: Bool {
+            state.withLock { $0.turnSettled || !$0.turnActive }
+        }
+
+        private func abortStream() {
+            streamController.abort()
+            let (connWaiters, turnWaiters) = state.withLock { s -> ([CheckedContinuation<Void, Never>], [CheckedContinuation<Void, Never>]) in
+                s.turnSettled = true
+                s.turnActive = false
+                let cw = s.connectedWaiters
+                let tw = s.turnWaiters
+                s.connectedWaiters.removeAll()
+                s.turnWaiters.removeAll()
+                return (cw, tw)
+            }
+            for w in connWaiters { w.resume() }
+            for w in turnWaiters { w.resume() }
+        }
+
+        private func markConnected() {
+            let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
+                s.connected = true
+                let w = s.connectedWaiters
+                s.connectedWaiters.removeAll()
+                return w
+            }
+            for w in waiters { w.resume() }
+        }
+
+        private func ensureEventStreamStarted() {
+            let shouldStart = state.withLock { s -> Bool in
+                if s.streamStarted || s.closed { return false }
+                s.streamStarted = true
+                return true
+            }
+            guard shouldStart else { return }
+            let task = Task<Void, Never> { [weak self] in
+                await self?.runEventLoop()
+            }
+            state.withLock { $0.streamTask = task }
+        }
+
+        private func waitUntilStreamReady(timeoutMs: Int = 250) async {
+            if state.withLock({ $0.connected || $0.closed }) || footer.isClosed {
+                return
+            }
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    guard let self else { return }
+                    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                        let alreadyReady = self.state.withLock { s -> Bool in
+                            if s.connected || s.closed { return true }
+                            s.connectedWaiters.append(continuation)
+                            return false
+                        }
+                        if alreadyReady {
+                            continuation.resume()
+                        }
+                    }
+                }
+                group.addTask {
+                    try? await Task.sleep(for: .milliseconds(timeoutMs))
+                }
+                _ = await group.next()
+                group.cancelAll()
+            }
+        }
+
+        private func armActiveTurn() {
+            state.withLock { s in
+                s.turnActive = true
+                s.turnSettled = false
+                s.turnEmittedAssistant = false
+            }
+        }
+
+        private func finishActiveTurn(emitIdle: Bool) {
+            let (waiters, closed) = state.withLock { s -> ([CheckedContinuation<Void, Never>], Bool) in
+                s.rootActive = false
+                s.turnSettled = true
+                s.turnActive = false
+                let w = s.turnWaiters
+                s.turnWaiters.removeAll()
+                return (w, s.closed)
+            }
+            if emitIdle && !closed && !footer.isClosed {
+                writeSessionOutput(
+                    footer: footer,
+                    output: StreamOutput(updates: [
+                        .streamPatch(FooterPatch(phase: .idle, status: "")),
+                        .turnIdle,
+                    ])
+                )
+            }
+            for w in waiters { w.resume() }
+        }
+
+        private func waitForActiveTurn(signal: AbortSignal?) async {
+            if isTurnSettled || isClosed || footer.isClosed || signal?.isAborted == true {
+                return
+            }
+            let cleanup = signal?.onAbort { [weak self] in
+                guard let self else { return }
+                if let sid = self.currentSessionID {
+                    Task {
+                        _ = try? await self.client.session.interrupt(SessionInterruptInput(sessionID: sid, resume: true))
+                    }
+                }
+                self.finishActiveTurn(emitIdle: true)
+            }
+            defer { cleanup?() }
+
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let done = state.withLock { s -> Bool in
+                    if s.turnSettled || !s.turnActive || s.closed { return true }
+                    s.turnWaiters.append(continuation)
+                    return false
+                }
+                if done {
+                    continuation.resume()
+                }
+            }
+        }
+
+        private func ensureSession(for turn: SessionTurnInput) async throws -> (sessionID: String, createdFresh: Bool) {
+            if let existing = state.withLock({ $0.sessionID }), !existing.isEmpty {
+                return (existing, false)
+            }
+            let modelRef: ModelSchema.Ref? = turn.model.map {
+                ModelSchema.Ref(
+                    id: ModelSchema.ID(rawValue: $0.modelID),
+                    providerID: ProviderSchema.ID(rawValue: $0.providerID),
+                    variant: turn.variant.map(ModelSchema.VariantID.init(rawValue:))
+                )
+            }
+            let location: LocationSchema.PublicRef? = directory
+                .flatMap { SchemaPrimitive.AbsolutePath(rawValue: $0) }
+                .map { LocationSchema.PublicRef(directory: $0) }
+            let created = try await client.session.create(
+                SessionCreateInput(
+                    agent: turn.agent,
+                    model: modelRef,
+                    location: location
+                ),
+                options: turn.signal.map { RequestOptions(signal: $0) }
+            )
+            let createdID = created.id.rawValue
+            let resolved = state.withLock { s -> String in
+                if let existing = s.sessionID, !existing.isEmpty { return existing }
+                s.sessionID = createdID
+                return createdID
+            }
+            return (resolved, true)
+        }
+
+        private func buildFileAttachments(_ turn: SessionTurnInput) -> [PromptInputSchema.FileAttachment] {
+            var out: [PromptInputSchema.FileAttachment] = []
+            if turn.includeFiles {
+                for file in turn.files {
+                    out.append(PromptInputSchema.FileAttachment(uri: file.url, name: file.filename))
+                }
+            }
+            for part in turn.prompt.parts {
+                if case .file(let url, let filename, _, let description, let source) = part {
+                    let mention = source.map {
+                        PromptSchema.PromptMention(start: $0.text.start, end: $0.text.end, text: $0.text.value)
+                    }
+                    out.append(PromptInputSchema.FileAttachment(
+                        uri: url,
+                        name: filename,
+                        description: description,
+                        mention: mention
+                    ))
+                }
+            }
+            return out
+        }
+
+        private func buildAgentAttachments(_ turn: SessionTurnInput) -> [PromptSchema.AgentAttachment] {
+            turn.prompt.parts.compactMap { part in
+                guard case .agent(let name, let source) = part else { return nil }
+                let mention = source.map {
+                    PromptSchema.PromptMention(start: $0.start, end: $0.end, text: $0.value)
+                }
+                return PromptSchema.AgentAttachment(name: name, mention: mention)
+            }
+        }
+
+        private func buildSkillAttachments(_ turn: SessionTurnInput) -> [PromptInputSchema.SkillAttachment] {
+            turn.prompt.parts.compactMap { part in
+                guard case .skill(let id, let source) = part else { return nil }
+                let mention = source.map {
+                    PromptSchema.PromptMention(start: $0.start, end: $0.end, text: $0.value)
+                }
+                return PromptInputSchema.SkillAttachment(id: id, mention: mention)
+            }
+        }
+
+        private func sendPromptPayload(
+            sessionID: String,
+            messageID: String,
+            turn: SessionTurnInput,
+            delivery: RunDelivery
+        ) async throws {
+            let files = buildFileAttachments(turn)
+            let agents = buildAgentAttachments(turn)
+            let skills = buildSkillAttachments(turn)
+            let reqOptions = turn.signal.map { RequestOptions(signal: $0) }
+            let optFiles: [PromptInputSchema.FileAttachment]? = files.isEmpty ? nil : files
+            let optAgents: [PromptSchema.AgentAttachment]? = agents.isEmpty ? nil : agents
+            let optSkills: [PromptInputSchema.SkillAttachment]? = skills.isEmpty ? nil : skills
+            if let command = turn.prompt.command {
+                let cmdInput = SessionCommandInput(
+                    sessionID: sessionID,
+                    name: command.name,
+                    text: command.arguments,
+                    files: optFiles,
+                    agents: optAgents,
+                    skills: optSkills,
+                    delivery: delivery
+                )
+                try await client.session.command(cmdInput, options: reqOptions)
+            } else {
+                let promptInput = SessionPromptInput(
+                    sessionID: sessionID,
+                    id: messageID,
+                    text: turn.prompt.text,
+                    files: optFiles,
+                    agents: optAgents,
+                    skills: optSkills,
+                    delivery: delivery
+                )
+                _ = try await client.session.prompt(promptInput, options: reqOptions)
+            }
+        }
+
+        func admitPromptTurn(_ turn: SessionTurnInput, delivery: RunDelivery) async throws {
+            let (sid, createdFresh) = try await ensureSession(for: turn)
+            ensureEventStreamStarted()
+            await waitUntilStreamReady()
+            let reqOptions = turn.signal.map { RequestOptions(signal: $0) }
+            if !createdFresh && turn.prompt.command == nil {
+                if let agent = turn.agent {
+                    try await client.session.switchAgent(SessionSwitchAgentInput(sessionID: sid, agent: agent), options: reqOptions)
+                }
+                if let model = turn.model {
+                    let ref = ModelSchema.Ref(
+                        id: ModelSchema.ID(rawValue: model.modelID),
+                        providerID: ProviderSchema.ID(rawValue: model.providerID),
+                        variant: turn.variant.map(ModelSchema.VariantID.init(rawValue:))
+                    )
+                    try await client.session.switchModel(SessionSwitchModelInput(sessionID: sid, model: ref), options: reqOptions)
+                }
+            }
+            let messageID = turn.prompt.messageID ?? SessionMessageSchema.ID.create().rawValue
+            try await sendPromptPayload(sessionID: sid, messageID: messageID, turn: turn, delivery: delivery)
+        }
+
+        func runPromptTurn(_ turn: SessionTurnInput, admitted: (@Sendable () -> Void)?) async throws {
+            let (sid, createdFresh) = try await ensureSession(for: turn)
+            let reqOptions = turn.signal.map { RequestOptions(signal: $0) }
+            if !createdFresh && turn.prompt.command == nil {
+                if let agent = turn.agent {
+                    try await client.session.switchAgent(SessionSwitchAgentInput(sessionID: sid, agent: agent), options: reqOptions)
+                }
+                if let model = turn.model {
+                    let ref = ModelSchema.Ref(
+                        id: ModelSchema.ID(rawValue: model.modelID),
+                        providerID: ProviderSchema.ID(rawValue: model.providerID),
+                        variant: turn.variant.map(ModelSchema.VariantID.init(rawValue:))
+                    )
+                    try await client.session.switchModel(SessionSwitchModelInput(sessionID: sid, model: ref), options: reqOptions)
+                }
+            }
+
+            armActiveTurn()
+            ensureEventStreamStarted()
+            await waitUntilStreamReady()
+
+            let messageID = turn.prompt.messageID ?? SessionMessageSchema.ID.create().rawValue
+            let delivery = turn.prompt.delivery ?? .steer
+            do {
+                try await sendPromptPayload(sessionID: sid, messageID: messageID, turn: turn, delivery: delivery)
+                admitted?()
+            } catch {
+                finishActiveTurn(emitIdle: true)
+                throw error
+            }
+
+            if turn.prompt.command != nil {
+                finishActiveTurn(emitIdle: true)
+                await footer.idle()
+                return
+            }
+
+            let waitTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.client.experimental.session.wait(
+                        ExperimentalSessionWaitInput(sessionID: sid),
+                        options: reqOptions
+                    )
+                    if !self.isTurnSettled {
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
+                    if !self.isTurnSettled && !self.isClosed {
+                        await self.reconcileProjectedMessages(sessionID: sid, after: messageID)
+                        self.finishActiveTurn(emitIdle: true)
+                    }
+                } catch {
+                    // Minimal servers/mocks without experimental wait settle via SSE terminal events.
+                }
+            }
+            defer { waitTask.cancel() }
+
+            await waitForActiveTurn(signal: turn.signal)
+            await footer.idle()
+        }
+
+        func waitForIdle() async {
+            await waitForActiveTurn(signal: nil)
+            await footer.idle()
+        }
+
+        func interruptActiveTurn() async {
+            if let sid = currentSessionID {
+                _ = try? await client.session.interrupt(SessionInterruptInput(sessionID: sid, resume: true))
+            }
+            finishActiveTurn(emitIdle: true)
+        }
+
+        func selectSubagent(_ sessionID: String?) {
+            tracker.select(sessionID)
+        }
+
+        func replayOnResize(_ input: SessionResizeReplayInput) async -> Bool {
+            await input.reset()
+            for row in input.localRows() {
+                footer.append(row.commit)
+            }
+            if replay, let sid = currentSessionID {
+                await reconcileProjectedMessages(sessionID: sid, after: nil)
+            }
+            return true
+        }
+
+        func close() async {
+            let (task, off) = state.withLock { s -> (Task<Void, Never>?, (@Sendable () -> Void)?) in
+                s.closed = true
+                let t = s.streamTask
+                s.streamTask = nil
+                let o = s.offFooterClose
+                s.offFooterClose = nil
+                return (t, o)
+            }
+            off?()
+            abortStream()
+            task?.cancel()
+            await task?.value
+            tracker.close()
+        }
+
+        private func emitOutput(commits: [StreamCommit] = [], updates: [FooterEvent] = []) {
+            if isClosed || footer.isClosed { return }
+            if let onCommit {
+                for commit in commits {
+                    onCommit(commit)
+                }
+            }
+            writeSessionOutput(footer: footer, output: StreamOutput(commits: commits, updates: updates))
+        }
+
+        private func runEventLoop() async {
+            var backoffMs: UInt64 = 100
+            while !Task.isCancelled && !isClosed && !streamController.signal.isAborted && !footer.isClosed {
+                let stream = client.event.subscribe(SubscribeOptions(signal: streamController.signal))
+                var sawEvent = false
+                do {
+                    for try await event in stream {
+                        if Task.isCancelled || isClosed || streamController.signal.isAborted || footer.isClosed {
+                            break
+                        }
+                        sawEvent = true
+                        backoffMs = 100
+                        if !state.withLock({ $0.connected }) {
+                            markConnected()
+                        }
+                        handleEvent(event)
+                    }
+                    markConnected()
+                    let shouldSettle = state.withLock { $0.turnActive && !$0.turnSettled }
+                    if shouldSettle && sawEvent {
+                        finishActiveTurn(emitIdle: true)
+                    }
+                    if isClosed || footer.isClosed || streamController.signal.isAborted {
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(backoffMs))
+                    backoffMs = min(backoffMs * 2, 1_000)
+                } catch {
+                    markConnected()
+                    if Task.isCancelled || isClosed || streamController.signal.isAborted || footer.isClosed {
+                        finishActiveTurn(emitIdle: false)
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(backoffMs))
+                    backoffMs = min(backoffMs * 2, 1_000)
+                }
+            }
+            markConnected()
+            finishActiveTurn(emitIdle: false)
+        }
+
+        private func handleEvent(_ event: OpenCodeEvent) {
+            if event.type == "server.connected" {
+                markConnected()
+                return
+            }
+            let obj = Self.jsonDict(event.data)
+            let eventSessionID: String?
+            if event.type == "form.created" {
+                eventSessionID = Self.jsonString(Self.jsonDict(obj["form"]), "sessionID")
+            } else {
+                eventSessionID = Self.jsonString(obj, "sessionID")
+            }
+            guard let activeSessionID = currentSessionID, eventSessionID == activeSessionID else {
+                return
+            }
+
+            switch event.type {
+            case "session.renamed":
+                if let title = Self.jsonString(obj, "title") {
+                    onSessionTitle?(title)
+                }
+
+            case "session.inbox.enqueued":
+                if let inboxID = Self.jsonString(obj, "inboxID") {
+                    let item = Self.jsonDict(obj["item"])
+                    if Self.jsonString(item, "type") == "user",
+                       let text = Self.jsonString(Self.jsonDict(item["payload"]), "text")
+                    {
+                        state.withLock { $0.pendingUserText[inboxID] = text }
+                    }
+                }
+
+            case "session.inbox.delivered":
+                if let inboxID = Self.jsonString(obj, "inboxID") {
+                    let pendingText: String? = state.withLock { s in
+                        let text = s.pendingUserText.removeValue(forKey: inboxID)
+                        if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, s.renderedUserIDs.insert(inboxID).inserted {
+                            return text
+                        }
+                        return nil
+                    }
+                    var commits: [StreamCommit] = []
+                    if let pendingText {
+                        commits.append(StreamCommit(
+                            kind: .user,
+                            text: pendingText,
+                            phase: .start,
+                            source: .system,
+                            messageID: inboxID
+                        ))
+                    }
+                    emitOutput(
+                        commits: commits,
+                        updates: [.streamPatch(FooterPatch(phase: .running, status: "waiting for assistant"))]
+                    )
+                }
+
+            case "session.execution.started", "session.step.started":
+                state.withLock { $0.rootActive = true }
+                emitOutput(updates: [.streamPatch(FooterPatch(phase: .running, status: "assistant responding"))])
+
+            case "session.text.started":
+                state.withLock { $0.rootActive = true }
+
+            case "session.text.delta":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let ordinal = Self.jsonInt(obj, "ordinal") ?? 0
+                let delta = Self.jsonString(obj, "delta") ?? Self.jsonString(obj, "text") ?? ""
+                guard !delta.isEmpty else { return }
+                let ref = fragmentRef(messageID: msgID, kind: "text", ordinal: ordinal)
+                if fragments.delta(ref, delta) != nil {
+                    state.withLock { $0.turnEmittedAssistant = true }
+                    emitOutput(commits: [
+                        StreamCommit(
+                            kind: .assistant,
+                            text: delta,
+                            phase: .progress,
+                            source: .assistant,
+                            messageID: msgID,
+                            partID: ref.partID
+                        ),
+                    ])
+                }
+
+            case "session.text.ended":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let ordinal = Self.jsonInt(obj, "ordinal") ?? 0
+                let text = Self.jsonString(obj, "text") ?? ""
+                let ref = fragmentRef(messageID: msgID, kind: "text", ordinal: ordinal)
+                let update = fragments.end(ref, text: text)
+                if text.count > update.previous.count {
+                    let suffix = String(text.dropFirst(update.previous.count))
+                    state.withLock { $0.turnEmittedAssistant = true }
+                    emitOutput(commits: [
+                        StreamCommit(
+                            kind: .assistant,
+                            text: suffix,
+                            phase: .progress,
+                            source: .assistant,
+                            messageID: msgID,
+                            partID: ref.partID
+                        ),
+                    ])
+                }
+
+            case "session.reasoning.started":
+                state.withLock { $0.rootActive = true }
+
+            case "session.reasoning.delta":
+                guard thinking else { return }
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let ordinal = Self.jsonInt(obj, "ordinal") ?? 0
+                let delta = Self.jsonString(obj, "delta") ?? Self.jsonString(obj, "text") ?? ""
+                guard !delta.isEmpty else { return }
+                let ref = fragmentRef(messageID: msgID, kind: "reasoning", ordinal: ordinal)
+                if let update = fragments.delta(ref, delta) {
+                    let rendered = update.previous.isEmpty ? "Thinking: \(delta)" : delta
+                    emitOutput(commits: [
+                        StreamCommit(
+                            kind: .reasoning,
+                            text: rendered,
+                            phase: .progress,
+                            source: .reasoning,
+                            messageID: msgID,
+                            partID: ref.partID
+                        ),
+                    ])
+                }
+
+            case "session.reasoning.ended":
+                guard thinking else { return }
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let ordinal = Self.jsonInt(obj, "ordinal") ?? 0
+                let text = Self.jsonString(obj, "text") ?? ""
+                let ref = fragmentRef(messageID: msgID, kind: "reasoning", ordinal: ordinal)
+                let update = fragments.end(ref, text: text)
+                if text.count > update.previous.count {
+                    let suffix = String(text.dropFirst(update.previous.count))
+                    let rendered = update.previous.isEmpty ? "Thinking: \(text)" : suffix
+                    emitOutput(commits: [
+                        StreamCommit(
+                            kind: .reasoning,
+                            text: rendered,
+                            phase: .progress,
+                            source: .reasoning,
+                            messageID: msgID,
+                            partID: ref.partID
+                        ),
+                    ])
+                }
+
+            case "session.tool.input.started":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let toolID = Self.jsonString(obj, "id") ?? "tool"
+                let name = Self.jsonString(obj, "name") ?? "tool"
+                let created = Int64(event.created ?? 0)
+                let key = "\(msgID)\u{0}\(toolID)"
+                let part = SessionMessageSchema.AssistantTool(
+                    id: toolID,
+                    name: name,
+                    state: .streaming(SessionMessageSchema.ToolStateStreaming(input: "")),
+                    time: SessionMessageSchema.AssistantTool.Time(created: created)
+                )
+                state.withLock { $0.tools[key] = TrackedTool(part: part, output: "", version: 0, started: false) }
+
+            case "session.tool.called":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let toolID = Self.jsonString(obj, "id") ?? "tool"
+                let key = "\(msgID)\u{0}\(toolID)"
+                let created = Int64(event.created ?? 0)
+                let inputDict = Self.jsonDict(obj["input"])
+                let tracked = state.withLock { $0.tools[key] }
+                let name = Self.jsonString(obj, "name") ?? tracked?.part.name ?? "tool"
+                let part = SessionMessageSchema.AssistantTool(
+                    id: toolID,
+                    name: name,
+                    state: .running(SessionMessageSchema.ToolStateRunning(input: inputDict, metadata: [:])),
+                    time: SessionMessageSchema.AssistantTool.Time(created: tracked?.part.time.created ?? created, ran: created)
+                )
+                renderToolUpdate(messageID: msgID, part: part)
+
+            case "session.tool.progress":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let toolID = Self.jsonString(obj, "id") ?? "tool"
+                let key = "\(msgID)\u{0}\(toolID)"
+                let tracked = state.withLock { $0.tools[key] }
+                let meta = Self.jsonDict(obj["metadata"])
+                let existingInput: [String: JSONValue]
+                if let prev = tracked {
+                    switch prev.part.state {
+                    case .running(let s): existingInput = s.input
+                    case .completed(let s): existingInput = s.input
+                    case .error(let s): existingInput = s.input
+                    case .streaming: existingInput = [:]
+                    }
+                } else {
+                    existingInput = [:]
+                }
+                let created = Int64(event.created ?? 0)
+                let part = SessionMessageSchema.AssistantTool(
+                    id: toolID,
+                    name: Self.jsonString(obj, "name") ?? tracked?.part.name ?? "tool",
+                    state: .running(SessionMessageSchema.ToolStateRunning(input: existingInput, metadata: meta)),
+                    time: SessionMessageSchema.AssistantTool.Time(
+                        created: tracked?.part.time.created ?? created,
+                        ran: tracked?.part.time.ran ?? created
+                    )
+                )
+                renderToolUpdate(messageID: msgID, part: part)
+
+            case "session.tool.success", "session.tool.failed":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_stream"
+                let toolID = Self.jsonString(obj, "id") ?? "tool"
+                let key = "\(msgID)\u{0}\(toolID)"
+                let tracked = state.withLock { $0.tools[key] }
+                let existingInput: [String: JSONValue]
+                if let prev = tracked {
+                    switch prev.part.state {
+                    case .running(let s): existingInput = s.input
+                    case .completed(let s): existingInput = s.input
+                    case .error(let s): existingInput = s.input
+                    case .streaming: existingInput = [:]
+                    }
+                } else {
+                    existingInput = [:]
+                }
+                let created = Int64(event.created ?? 0)
+                let name = Self.jsonString(obj, "name") ?? tracked?.part.name ?? "tool"
+                let meta = Self.jsonDict(obj["metadata"])
+                let content = Self.decodeToolContent(obj["content"])
+                let toolState: SessionMessageSchema.ToolState
+                if event.type == "session.tool.failed" {
+                    let errObj = Self.jsonDict(obj["error"])
+                    let errMsg = Self.jsonString(errObj, "message") ?? Self.jsonString(obj, "error") ?? "Tool failed"
+                    let errType = Self.jsonString(errObj, "type") ?? "tool_error"
+                    toolState = .error(SessionMessageSchema.ToolStateError(
+                        input: existingInput,
+                        error: SessionErrorSchema.Error(type: errType, message: errMsg),
+                        content: content.isEmpty ? nil : content,
+                        metadata: meta.isEmpty ? nil : meta
+                    ))
+                } else {
+                    let nonEmptyContent = content.isEmpty ? [SessionMessageSchema.ToolContent.text("")] : content
+                    toolState = .completed(SessionMessageSchema.ToolStateCompleted(
+                        input: existingInput,
+                        content: nonEmptyContent,
+                        metadata: meta.isEmpty ? nil : meta
+                    ))
+                }
+                let part = SessionMessageSchema.AssistantTool(
+                    id: toolID,
+                    name: name,
+                    state: toolState,
+                    time: SessionMessageSchema.AssistantTool.Time(
+                        created: tracked?.part.time.created ?? created,
+                        ran: tracked?.part.time.ran,
+                        completed: created
+                    )
+                )
+                renderToolUpdate(messageID: msgID, part: part)
+
+            case "session.step.ended":
+                let tokens = Self.jsonDict(obj["tokens"])
+                let cache = Self.jsonDict(tokens["cache"])
+                let total = (Self.jsonInt(tokens, "input") ?? 0)
+                    + (Self.jsonInt(tokens, "output") ?? 0)
+                    + (Self.jsonInt(tokens, "reasoning") ?? 0)
+                    + (Self.jsonInt(cache, "read") ?? 0)
+                    + (Self.jsonInt(cache, "write") ?? 0)
+                let cost = Self.jsonDouble(obj, "cost")
+                if total > 0 || (cost ?? 0) > 0 {
+                    emitOutput(updates: [
+                        .streamPatch(FooterPatch(usage: FooterUsage(tokens: total, cost: cost))),
+                    ])
+                }
+
+            case "session.step.failed":
+                let msgID = Self.jsonString(obj, "assistantMessageID") ?? Self.jsonString(obj, "messageID") ?? "msg_error"
+                let errObj = Self.jsonDict(obj["error"])
+                let errMsg = Self.jsonString(errObj, "message") ?? Self.jsonString(obj, "error") ?? "Session execution failed"
+                let shouldEmit = state.withLock { $0.renderedErrorIDs.insert(msgID).inserted }
+                if shouldEmit {
+                    emitOutput(commits: [
+                        StreamCommit(
+                            kind: .error,
+                            text: errMsg,
+                            phase: .start,
+                            source: .system,
+                            messageID: msgID
+                        ),
+                    ])
+                }
+
+            case "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted", "session.idle":
+                if event.type == "session.execution.failed" {
+                    let errObj = Self.jsonDict(obj["error"])
+                    let errMsg = Self.jsonString(errObj, "message") ?? Self.jsonString(obj, "error") ?? "Session execution failed"
+                    let errKey = event.id.isEmpty ? "exec_err" : event.id
+                    if state.withLock({ $0.renderedErrorIDs.insert(errKey).inserted }) {
+                        emitOutput(commits: [
+                            StreamCommit(kind: .error, text: errMsg, phase: .start, source: .system, messageID: errKey),
+                        ])
+                    }
+                }
+                finishActiveTurn(emitIdle: true)
+
+            case "session.status":
+                let statusObj = Self.jsonDict(obj["status"])
+                let kind = Self.jsonString(statusObj, "type") ?? Self.jsonString(obj, "status") ?? ""
+                if kind == "idle" {
+                    finishActiveTurn(emitIdle: true)
+                } else if kind == "busy" || kind == "running" {
+                    state.withLock { $0.rootActive = true }
+                    emitOutput(updates: [.streamPatch(FooterPatch(phase: .running, status: "assistant responding"))])
+                }
+
+            default:
+                break
+            }
+        }
+
+        private func renderToolUpdate(messageID: String, part rawPart: SessionMessageSchema.AssistantTool) {
+            let part = normalizeTool(rawPart)
+            let key = "\(messageID)\u{0}\(part.id)"
+            if state.withLock({ $0.finishedTools.contains(key) }) { return }
+            let previous = state.withLock { $0.tools[key] }
+
+            switch part.state {
+            case .streaming:
+                state.withLock { $0.tools[key] = TrackedTool(part: part, output: "", version: 0, started: false) }
+
+            case .running(let running):
+                let output = Self.jsonString(running.metadata, "output") ?? ""
+                let isPrefix = previous.map { output.hasPrefix($0.output) } ?? false
+                let version = (previous != nil && !isPrefix) ? (previous!.version + 1) : (previous?.version ?? 0)
+                let delta = (previous != nil && isPrefix) ? String(output.dropFirst(previous!.output.count)) : output
+                let wasStarted = previous?.started == true
+                if tools {
+                    if !wasStarted {
+                        emitOutput(
+                            commits: [toolCommit(part, messageID: messageID, phase: .start, directory: directory, version: version)],
+                            updates: [.streamPatch(FooterPatch(phase: .running, status: "running \(part.name)"))]
+                        )
+                    }
+                    if !delta.isEmpty {
+                        emitOutput(commits: [
+                            toolCommit(part, messageID: messageID, phase: .progress, value: delta, directory: directory, version: version),
+                        ])
+                    }
+                }
+                state.withLock {
+                    $0.tools[key] = TrackedTool(part: part, output: output, version: version, started: wasStarted || tools)
+                }
+
+            case .completed(let completed):
+                let output = toolOutputText(part.name, content: completed.content)
+                let isPrefix = previous.map { output.hasPrefix($0.output) } ?? false
+                let version = (previous != nil && !isPrefix) ? (previous!.version + 1) : (previous?.version ?? 0)
+                let delta = (previous != nil && isPrefix) ? String(output.dropFirst(previous!.output.count)) : output
+                state.withLock {
+                    $0.finishedTools.insert(key)
+                    $0.tools.removeValue(forKey: key)
+                }
+                if tools {
+                    var commits: [StreamCommit] = []
+                    if previous?.started != true {
+                        commits.append(toolCommit(part, messageID: messageID, phase: .start, directory: directory, version: version))
+                    }
+                    let phase = toolFinalPhase(part)
+                    commits.append(toolCommit(
+                        part,
+                        messageID: messageID,
+                        phase: phase,
+                        value: phase == .progress ? delta : nil,
+                        directory: directory,
+                        version: version
+                    ))
+                    emitOutput(commits: commits)
+                }
+
+            case .error(let errState):
+                let output = toolOutputText(part.name, content: errState.content)
+                let isPrefix = previous.map { output.hasPrefix($0.output) } ?? false
+                let version = (previous != nil && !isPrefix) ? (previous!.version + 1) : (previous?.version ?? 0)
+                let delta = (previous != nil && isPrefix) ? String(output.dropFirst(previous!.output.count)) : output
+                state.withLock {
+                    $0.finishedTools.insert(key)
+                    $0.tools.removeValue(forKey: key)
+                }
+                if tools {
+                    var commits: [StreamCommit] = []
+                    if previous?.started != true {
+                        commits.append(toolCommit(part, messageID: messageID, phase: .start, directory: directory, version: version))
+                    }
+                    if !delta.isEmpty {
+                        commits.append(toolCommit(part, messageID: messageID, phase: .progress, value: delta, directory: directory, version: version))
+                    }
+                    commits.append(toolCommit(part, messageID: messageID, phase: .final, directory: directory, version: version))
+                    emitOutput(commits: commits)
+                }
+            }
+        }
+
+        private func reconcileProjectedMessages(sessionID: String, after afterMessageID: String?) async {
+            guard let page = try? await client.message.list(
+                MessageListInput(sessionID: sessionID, limit: replayLimit ?? 200, order: .desc)
+            ) else {
+                return
+            }
+            var messages: [SessionMessageSchema.Info] = []
+            for item in page.data {
+                if let afterMessageID, item.id.rawValue == afterMessageID {
+                    break
+                }
+                messages.append(item)
+            }
+            for message in messages.reversed() {
+                switch message {
+                case .assistant(let assistant):
+                    var textOrdinal = 0
+                    var reasoningOrdinal = 0
+                    for item in assistant.content {
+                        switch item {
+                        case .text(let textPart):
+                            let ref = fragmentRef(messageID: assistant.id.rawValue, kind: "text", ordinal: textOrdinal)
+                            textOrdinal += 1
+                            let update = fragments.project(ref, text: textPart.text, visible: true)
+                            if textPart.text.count > update.previous.count {
+                                let suffix = String(textPart.text.dropFirst(update.previous.count))
+                                emitOutput(commits: [
+                                    StreamCommit(
+                                        kind: .assistant,
+                                        text: suffix,
+                                        phase: .progress,
+                                        source: .assistant,
+                                        messageID: assistant.id.rawValue,
+                                        partID: ref.partID
+                                    ),
+                                ])
+                            }
+                        case .reasoning(let reasoningPart):
+                            let ref = fragmentRef(messageID: assistant.id.rawValue, kind: "reasoning", ordinal: reasoningOrdinal)
+                            reasoningOrdinal += 1
+                            let update = fragments.project(ref, text: reasoningPart.text, visible: thinking)
+                            if thinking && reasoningPart.text.count > update.previous.count {
+                                let suffix = String(reasoningPart.text.dropFirst(update.previous.count))
+                                let rendered = update.previous.isEmpty ? "Thinking: \(reasoningPart.text)" : suffix
+                                emitOutput(commits: [
+                                    StreamCommit(
+                                        kind: .reasoning,
+                                        text: rendered,
+                                        phase: .progress,
+                                        source: .reasoning,
+                                        messageID: assistant.id.rawValue,
+                                        partID: ref.partID
+                                    ),
+                                ])
+                            }
+                        case .tool(let toolPart):
+                            renderToolUpdate(messageID: assistant.id.rawValue, part: toolPart)
+                        }
+                    }
+                    if let err = assistant.error, state.withLock({ $0.renderedErrorIDs.insert(assistant.id.rawValue).inserted }) {
+                        emitOutput(commits: [
+                            StreamCommit(kind: .error, text: err.message, phase: .start, source: .system, messageID: assistant.id.rawValue),
+                        ])
+                    }
+                default:
+                    break
+                }
+            }
+        }
+
+        private static func jsonDict(_ value: JSONValue?) -> [String: JSONValue] {
+            if case .object(let dict) = value { return dict }
+            return [:]
+        }
+
+        private static func jsonString(_ dict: [String: JSONValue], _ key: String) -> String? {
+            if case .string(let s) = dict[key] { return s }
+            return nil
+        }
+
+        private static func jsonInt(_ dict: [String: JSONValue], _ key: String) -> Int? {
+            switch dict[key] {
+            case .int(let n): return Int(n)
+            case .double(let d): return Int(d)
+            default: return nil
+            }
+        }
+
+        private static func jsonDouble(_ dict: [String: JSONValue], _ key: String) -> Double? {
+            switch dict[key] {
+            case .double(let d): return d
+            case .int(let n): return Double(n)
+            default: return nil
+            }
+        }
+
+        private static func decodeToolContent(_ value: JSONValue?) -> [SessionMessageSchema.ToolContent] {
+            guard case .array(let items) = value else { return [] }
+            return items.compactMap { item in
+                let dict = jsonDict(item)
+                let type = jsonString(dict, "type")
+                if type == "file", let uri = jsonString(dict, "uri"), let mime = jsonString(dict, "mime") {
+                    return .file(uri: uri, mime: mime, name: jsonString(dict, "name"))
+                }
+                if let text = jsonString(dict, "text") {
+                    return .text(text)
+                }
+                return nil
+            }
+        }
+    }
+
     // parity: tui/src/mini/stream-v2.transport.ts#createSessionTransport [status=adapted hash=33055a05fccf]
     public static func createSessionTransport(
-        sessionID: String,
+        sessionID: String? = nil,
         footer: any FooterApi,
-        thinking: Bool = true
+        client: OpenCodeClient? = nil,
+        directory: String? = nil,
+        thinking: Bool = true,
+        tools: Bool = true,
+        replay: Bool = false,
+        replayLimit: Int? = nil,
+        onCommit: (@Sendable (StreamCommit) -> Void)? = nil,
+        onSessionTitle: (@Sendable (String) -> Void)? = nil
     ) async -> SessionTransport {
-        let tracker = createSubagentTracker(SubagentTrackerInput(sessionID: sessionID, thinking: thinking) {
-            footer.event(.streamSubagent(FooterSubagentState()))
-        })
+        guard let client else {
+            let tracker = createSubagentTracker(SubagentTrackerInput(
+                sessionID: sessionID ?? "",
+                thinking: thinking,
+                directory: directory
+            ) {
+                footer.event(.streamSubagent(FooterSubagentState()))
+            })
+            return SessionTransport(
+                runPromptTurn: { _, _ in
+                    footer.event(.turnIdle)
+                    throw ClientError(reason: .transport, detail: "No OpenCode server client configured")
+                },
+                admitPromptTurn: { _, _ in
+                    throw ClientError(reason: .transport, detail: "No OpenCode server client configured")
+                },
+                waitForIdle: { await footer.idle() },
+                interruptActiveTurn: { footer.event(.turnIdle) },
+                selectSubagent: { tracker.select($0) },
+                replayOnResize: { input in
+                    await input.reset()
+                    for row in input.localRows() { footer.append(row.commit) }
+                    return true
+                },
+                close: { tracker.close() }
+            )
+        }
+
+        let live = MiniLiveSessionTransport(
+            sessionID: sessionID,
+            footer: footer,
+            client: client,
+            directory: directory,
+            thinking: thinking,
+            tools: tools,
+            replay: replay,
+            replayLimit: replayLimit,
+            onCommit: onCommit,
+            onSessionTitle: onSessionTitle
+        )
         return SessionTransport(
             runPromptTurn: { turn, admitted in
-                admitted?()
-                footer.append(StreamCommit(kind: .user, text: turn.prompt.text, phase: .start, source: .system))
-                footer.event(.turnIdle)
+                try await live.runPromptTurn(turn, admitted: admitted)
             },
-            admitPromptTurn: { _, _ in },
-            waitForIdle: { await footer.idle() },
-            interruptActiveTurn: { footer.event(.turnIdle) },
-            selectSubagent: { tracker.select($0) },
+            admitPromptTurn: { turn, delivery in
+                try await live.admitPromptTurn(turn, delivery: delivery)
+            },
+            waitForIdle: { await live.waitForIdle() },
+            interruptActiveTurn: { await live.interruptActiveTurn() },
+            selectSubagent: { live.selectSubagent($0) },
             replayOnResize: { input in
-                await input.reset()
-                for row in input.localRows() { footer.append(row.commit) }
-                return true
+                await live.replayOnResize(input)
             },
-            close: { tracker.close() }
+            close: { await live.close() }
         )
     }
 
@@ -4539,6 +5600,7 @@ public enum TUIMini {
     public struct QueueInput: Sendable {
         public let footer: any FooterApi
         public let initialInput: String?
+        public let interactive: Bool
         public let onNewSession: (@Sendable () async -> Void)?
         public let onCompact: (@Sendable () async -> Void)?
         public let run: @Sendable (RunPrompt, @escaping @Sendable () -> Void) async throws -> Void
@@ -4546,33 +5608,137 @@ public enum TUIMini {
         public init(
             footer: any FooterApi,
             initialInput: String? = nil,
+            interactive: Bool = false,
             onNewSession: (@Sendable () async -> Void)? = nil,
             onCompact: (@Sendable () async -> Void)? = nil,
             run: @escaping @Sendable (RunPrompt, @escaping @Sendable () -> Void) async throws -> Void
         ) {
             self.footer = footer
             self.initialInput = initialInput
+            self.interactive = interactive
             self.onNewSession = onNewSession
             self.onCompact = onCompact
             self.run = run
         }
     }
 
+    private final class MiniPromptFIFO: @unchecked Sendable {
+        private struct Box {
+            var items: [RunPrompt] = []
+            var waiters: [CheckedContinuation<RunPrompt?, Never>] = []
+            var closed: Bool = false
+        }
+
+        private let box = Mutex(Box())
+
+        func push(_ prompt: RunPrompt) {
+            let waiter = box.withLock { b -> CheckedContinuation<RunPrompt?, Never>? in
+                if b.closed { return nil }
+                if !b.waiters.isEmpty {
+                    return b.waiters.removeFirst()
+                }
+                b.items.append(prompt)
+                return nil
+            }
+            waiter?.resume(returning: prompt)
+        }
+
+        func finish() {
+            let waiters = box.withLock { b -> [CheckedContinuation<RunPrompt?, Never>] in
+                if b.closed { return [] }
+                b.closed = true
+                b.items.removeAll()
+                let w = b.waiters
+                b.waiters.removeAll()
+                return w
+            }
+            for w in waiters { w.resume(returning: nil) }
+        }
+
+        func next() async -> RunPrompt? {
+            await withCheckedContinuation { continuation in
+                let immediate: (Bool, RunPrompt?) = box.withLock { b in
+                    if !b.items.isEmpty {
+                        return (true, b.items.removeFirst())
+                    }
+                    if b.closed {
+                        return (true, nil)
+                    }
+                    b.waiters.append(continuation)
+                    return (false, nil)
+                }
+                if immediate.0 {
+                    continuation.resume(returning: immediate.1)
+                }
+            }
+        }
+    }
+
     // parity: tui/src/mini/runtime.queue.ts#runPromptQueue [status=adapted hash=ed3a7246364b]
     public static func runPromptQueue(_ input: QueueInput) async {
-        if let initial = input.initialInput, !initial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if isExitCommand(initial) {
+        func executePrompt(_ prompt: RunPrompt) async -> Bool {
+            let trimmed = prompt.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return true }
+            if isExitCommand(trimmed) {
                 input.footer.close()
-                return
+                return false
             }
-            if isNewCommand(initial) {
+            if isNewCommand(trimmed) {
                 await input.onNewSession?()
-            } else if isCompactCommand(initial) {
+                return true
+            }
+            if isCompactCommand(trimmed) {
                 await input.onCompact?()
-            } else {
-                input.footer.event(.turnSend)
-                try? await input.run(RunPrompt(text: initial), {})
-                input.footer.event(.turnIdle)
+                return true
+            }
+            input.footer.event(.turnSend)
+            do {
+                try await input.run(prompt, {})
+            } catch {
+                if !input.footer.isClosed {
+                    input.footer.append(StreamCommit(
+                        kind: .error,
+                        text: formatUnknownError(error),
+                        phase: .start,
+                        source: .system
+                    ))
+                }
+            }
+            input.footer.event(.turnIdle)
+            return !input.footer.isClosed
+        }
+
+        if !input.interactive {
+            if let initial = input.initialInput, !initial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                _ = await executePrompt(RunPrompt(text: initial))
+            }
+            return
+        }
+
+        let fifo = MiniPromptFIFO()
+        let offPrompt = input.footer.onPrompt { prompt in
+            fifo.push(prompt)
+        }
+        let offClose = input.footer.onClose {
+            fifo.finish()
+        }
+        defer {
+            offPrompt()
+            offClose()
+            fifo.finish()
+        }
+
+        if input.footer.isClosed {
+            return
+        }
+        if let initial = input.initialInput, !initial.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fifo.push(RunPrompt(text: initial))
+        }
+
+        while !Task.isCancelled && !input.footer.isClosed {
+            guard let nextPrompt = await fifo.next() else { break }
+            if !(await executePrompt(nextPrompt)) {
+                break
             }
         }
     }
@@ -4599,33 +5765,48 @@ public enum TUIMini {
     public struct RunDeferredInput: @unchecked Sendable {
         public let host: MiniHost
         public let renderer: CliRenderer
+        public let client: OpenCodeClient?
+        public let sessionID: String?
         public let directory: String
         public let agent: String?
         public let model: PromptModelSelection?
         public let variant: String?
         public let initialInput: String?
+        public let replay: Bool
+        public let replayLimit: Int?
         public let demo: Bool
+        public let interactive: Bool
         public let tuiConfig: RunTuiConfig?
 
         public init(
             host: MiniHost = MiniHost(),
             renderer: CliRenderer,
+            client: OpenCodeClient? = nil,
+            sessionID: String? = nil,
             directory: String,
             agent: String? = nil,
             model: PromptModelSelection? = nil,
             variant: String? = nil,
             initialInput: String? = nil,
+            replay: Bool = true,
+            replayLimit: Int? = nil,
             demo: Bool = false,
+            interactive: Bool = false,
             tuiConfig: RunTuiConfig? = nil
         ) {
             self.host = host
             self.renderer = renderer
+            self.client = client
+            self.sessionID = sessionID
             self.directory = directory
             self.agent = agent
             self.model = model
             self.variant = variant
             self.initialInput = initialInput
+            self.replay = replay
+            self.replayLimit = replayLimit
             self.demo = demo
+            self.interactive = interactive
             self.tuiConfig = tuiConfig
         }
     }
@@ -4660,18 +5841,165 @@ public enum TUIMini {
             lifecycle.close()
             deps?.onComplete?()
         }
+
+        let theme = await resolveRunTheme(renderer: input.renderer, config: config.theme, mono: settings.mono)
+        let draftText = Mutex<String>("")
+
+        let renderFooterView: @Sendable () -> Void = {
+            let promptDraft = draftText.withLock { $0 }
+            let footerNode = RunFooterView(
+                ctx: lifecycle.renderer,
+                state: lifecycle.footer.currentState,
+                view: lifecycle.footer.currentView,
+                promptText: promptDraft,
+                agent: input.agent,
+                width: lifecycle.renderer.width,
+                mono: settings.mono,
+                theme: theme.footer
+            )
+            for child in lifecycle.renderer.root.getChildren() {
+                lifecycle.renderer.root.remove(child)
+            }
+            lifecycle.renderer.root.add(footerNode)
+            lifecycle.renderer.requestRender()
+        }
+
+        let interruptHandler = Mutex<(@Sendable () async -> Void)?>(nil)
+        var keyToken: KeyHandlerToken?
+        var pasteToken: KeyHandlerToken?
+        if input.interactive {
+            renderFooterView()
+            keyToken = lifecycle.renderer.keyInput.onKeypress { event in
+                if event.ctrl && event.name == "d" {
+                    event.preventDefault()
+                    lifecycle.footer.close()
+                    return
+                }
+                if event.ctrl && event.name == "c" {
+                    event.preventDefault()
+                    let cleared = draftText.withLock { text -> Bool in
+                        if text.isEmpty { return false }
+                        text = ""
+                        return true
+                    }
+                    if cleared {
+                        renderFooterView()
+                        return
+                    }
+                    if lifecycle.footer.currentState.phase == .running,
+                       let interrupt = interruptHandler.withLock({ $0 })
+                    {
+                        Task { await interrupt() }
+                        return
+                    }
+                    lifecycle.footer.close()
+                    return
+                }
+                if event.name == "return" || event.name == "enter" {
+                    event.preventDefault()
+                    let submitted = draftText.withLock { text -> String in
+                        let current = text
+                        text = ""
+                        return current
+                    }
+                    renderFooterView()
+                    if !submitted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        lifecycle.footer.submitPrompt(RunPrompt(text: submitted))
+                    }
+                    return
+                }
+                if event.name == "backspace" {
+                    event.preventDefault()
+                    draftText.withLock { text in
+                        if !text.isEmpty { _ = text.popLast() }
+                    }
+                    renderFooterView()
+                    return
+                }
+                if !event.ctrl && !event.meta && !event.sequence.isEmpty {
+                    let printable = event.sequence.unicodeScalars.allSatisfy { $0.value >= 0x20 && $0.value != 0x7F }
+                    if printable {
+                        event.preventDefault()
+                        draftText.withLock { $0 += event.sequence }
+                        renderFooterView()
+                    }
+                }
+            }
+            pasteToken = lifecycle.renderer.keyInput.onPaste { event in
+                let pasted = String(decoding: event.bytes, as: UTF8.self)
+                if !pasted.isEmpty {
+                    event.preventDefault()
+                    draftText.withLock { $0 += pasted }
+                    renderFooterView()
+                }
+            }
+        }
+        defer {
+            if let keyToken { lifecycle.renderer.keyInput.off(keyToken) }
+            if let pasteToken { lifecycle.renderer.keyInput.off(pasteToken) }
+        }
+
         if input.demo {
             let demo = createRunDemo(footer: lifecycle.footer, directory: input.directory)
-            await runPromptQueue(QueueInput(footer: lifecycle.footer, initialInput: input.initialInput) { prompt, admitted in
+            await runPromptQueue(QueueInput(
+                footer: lifecycle.footer,
+                initialInput: input.initialInput,
+                interactive: input.interactive
+            ) { prompt, admitted in
                 admitted()
                 demo(prompt)
+                if input.interactive { renderFooterView() }
             })
         } else {
-            let transport = await createSessionTransport(sessionID: "ses_mini", footer: lifecycle.footer)
-            await runPromptQueue(QueueInput(footer: lifecycle.footer, initialInput: input.initialInput) { prompt, admitted in
-                try await transport.runPromptTurn(SessionTurnInput(agent: input.agent, model: input.model, variant: input.variant, prompt: prompt), admitted)
+            let transportBox = Mutex<SessionTransport?>(nil)
+            let makeTransport: @Sendable (String?) async -> SessionTransport = { sid in
+                await createSessionTransport(
+                    sessionID: sid,
+                    footer: lifecycle.footer,
+                    client: input.client,
+                    directory: input.directory,
+                    thinking: settings.thinking != .hide,
+                    tools: settings.tools != .hide,
+                    replay: input.replay,
+                    replayLimit: input.replayLimit
+                )
+            }
+            let initialTransport = await makeTransport(input.sessionID)
+            transportBox.withLock { $0 = initialTransport }
+            interruptHandler.withLock {
+                $0 = {
+                    if let active = transportBox.withLock({ $0 }) {
+                        await active.interruptActiveTurn()
+                    }
+                }
+            }
+            await runPromptQueue(QueueInput(
+                footer: lifecycle.footer,
+                initialInput: input.initialInput,
+                interactive: input.interactive,
+                onNewSession: {
+                    let prev = transportBox.withLock { $0 }
+                    await prev?.close()
+                    let fresh = await makeTransport(nil)
+                    transportBox.withLock { $0 = fresh }
+                    if input.interactive { renderFooterView() }
+                },
+                onCompact: {
+                    if let client = input.client, let sid = input.sessionID, !sid.isEmpty {
+                        _ = try? await client.session.compact(SessionCompactInput(sessionID: sid))
+                    }
+                }
+            ) { prompt, admitted in
+                guard let active = transportBox.withLock({ $0 }) else { return }
+                try await active.runPromptTurn(
+                    SessionTurnInput(agent: input.agent, model: input.model, variant: input.variant, prompt: prompt),
+                    admitted
+                )
+                if input.interactive { renderFooterView() }
             })
-            await transport.close()
+            if let active = transportBox.withLock({ $0 }) {
+                await active.close()
+            }
         }
     }
 
@@ -4681,5 +6009,88 @@ public enum TUIMini {
     // parity: tui/src/mini/index.ts#runMiniFrontend [status=adapted hash=d0d166faed5f]
     public static func runMiniFrontend(_ input: MiniFrontendInput) async {
         await runInteractiveDeferredMode(input)
+    }
+
+    /// Drives the live interactive Mini TUI over `PlatformTerminalBackend` with raw mode,
+    /// non-blocking stdin & terminal resize polling, and real `OpenCodeClient` SSE streaming.
+    public static func runMiniInteractiveTerminal(
+        backend: PlatformTerminalBackend,
+        host: MiniHost = MiniHost(),
+        client: OpenCodeClient,
+        sessionID: String? = nil,
+        directory: String,
+        agent: String? = nil,
+        model: PromptModelSelection? = nil,
+        variant: String? = nil,
+        initialInput: String? = nil,
+        replay: Bool = true,
+        replayLimit: Int? = nil,
+        tuiConfig: RunTuiConfig? = nil
+    ) async throws {
+        let initialSize = await backend.size
+        let useMouse = tuiConfig?.mouse ?? true
+        let renderer = CliRenderer(
+            config: CliRendererConfig(
+                width: initialSize.width,
+                height: initialSize.height,
+                screenMode: .splitFooter,
+                footerHeight: 6,
+                exitOnCtrlC: false,
+                debounceDelay: 0,
+                useMouse: useMouse
+            )
+        )
+        try await runWithTerminalBackend(
+            renderer: renderer,
+            backend: backend,
+            options: TerminalBackendRunOptions(
+                enterRawMode: true,
+                manageTerminalModes: true,
+                initialRender: false,
+                destroyOnExit: true,
+                enableMouseMovement: useMouse
+            )
+        ) { liveRenderer, session in
+            let stopPump = Mutex(false)
+            let pumpTask = Task.detached {
+                var lastSize = await backend.size
+                while !Task.isCancelled && !stopPump.withLock({ $0 }) && !liveRenderer.isDestroyed {
+                    let currentSize = await backend.size
+                    if currentSize != lastSize {
+                        lastSize = currentSize
+                        _ = await session.syncSize()
+                        await session.renderNow(force: true)
+                    }
+                    let bytes = (try? backend.pollRead(maxBytes: 4096, timeoutMs: 16)) ?? []
+                    if !bytes.isEmpty {
+                        session.feedInput(bytes)
+                        await session.renderNow(force: false)
+                    }
+                }
+            }
+            defer {
+                stopPump.withLock { $0 = true }
+                pumpTask.cancel()
+            }
+
+            let frontendInput = MiniFrontendInput(
+                host: host,
+                renderer: liveRenderer,
+                client: client,
+                sessionID: sessionID,
+                directory: directory,
+                agent: agent,
+                model: model,
+                variant: variant,
+                initialInput: initialInput,
+                replay: replay,
+                replayLimit: replayLimit,
+                demo: false,
+                interactive: true,
+                tuiConfig: tuiConfig
+            )
+            await runMiniFrontend(frontendInput)
+            await session.flush()
+        }
     }
 }
