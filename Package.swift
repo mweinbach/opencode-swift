@@ -60,7 +60,7 @@ let package = Package(
         // MARK: - Tier 2: Client, AI Providers & Core Agent Runtime
         .target(
             name: "OpenCodeClient",
-            dependencies: ["OpenCodeSchema", "OpenCodeProtocol", "OpenCodePlatform"]
+            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeProtocol", "OpenCodePlatform"]
         ),
         .target(
             name: "OpenCodeAI",
@@ -136,6 +136,34 @@ let package = Package(
         .testTarget(
             name: "OpenCodePlatformTests",
             dependencies: ["OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeAITests",
+            dependencies: ["OpenCodeAI", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeClientTests",
+            dependencies: ["OpenCodeClient", "OpenCodeProtocol", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeCoreTests",
+            dependencies: ["OpenCodeCore", "OpenCodeAI", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeServerTests",
+            dependencies: ["OpenCodeServer", "OpenCodeSDK", "OpenCodeClient", "OpenCodeCore", "OpenCodeProtocol", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeTUITests",
+            dependencies: [
+                "OpenCodeTUI",
+                "OpenCodeClient",
+                "OpenCodeSchema",
+                "OpenCodePlatform",
+                "OpenCodeUtil",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+                .product(name: "OpenTUIRenderables", package: "OpenTUI"),
+            ]
         ),
         .testTarget(
             name: "OpenCodeParityTests",
