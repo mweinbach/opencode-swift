@@ -736,4 +736,215 @@ struct TUIRealParityTests {
             #expect(String(decoding: body, as: UTF8.self).contains("AIzaSyTestKey123"))
         }
     }
+
+    // MARK: - 7. Full Wave 2 Parity: Permissions, Forms, ! Shell, @ Mentions, Settings, Diff, QR Pair & History
+
+    @Test("Inline PermissionPrompt and FormPrompt handle SSE arrival, keyboard navigation, and live HTTP replies")
+    func inlinePermissionAndFormPromptsEndToEnd() async throws {
+        let state = TUIRealParityFixtures.makeSessionState(width: 110, height: 34, mode: .light)
+        let permReplied = Mutex<String?>(nil)
+        let formReplied = Mutex<String?>(nil)
+
+        let transport = MockHTTPTransport { req in
+            if req.method == "POST" && req.url.contains("/permission/perm_1/reply") {
+                permReplied.withLock { $0 = req.body.map { String(decoding: $0, as: UTF8.self) } }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204, headers: [:]), body: [])
+            }
+            if req.method == "POST" && req.url.contains("/form/form_1/reply") {
+                formReplied.withLock { $0 = req.body.map { String(decoding: $0, as: UTF8.self) } }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204, headers: [:]), body: [])
+            }
+            if req.method == "GET" && req.url.contains("/api/permission/request") {
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(#"{"location":{"directory":"/workspace"},"data":[]}"#.utf8))
+            }
+            if req.method == "GET" && req.url.contains("/api/form") {
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(#"{"location":{"directory":"/workspace"},"data":[]}"#.utf8))
+            }
+            return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array("{}".utf8))
+        }
+
+        let harness = TUIRealParityHarness(width: 110, height: 34, state: state, transport: transport)
+        defer { harness.destroy() }
+
+        // 1. Arrive permission.asked over SSE reducer
+        harness.store.withLock { st in
+            _ = TUIInteractiveClient.applyServerEvent(
+                TUIRealParityFixtures.makeEvent(type: "permission.asked", data: [
+                    "id": .string("perm_1"),
+                    "sessionID": .string("ses_demo01"),
+                    "action": .string("shell"),
+                    "resources": .array([.string("rm -rf build/")]),
+                    "metadata": .object(["command": .string("rm -rf build/")]),
+                ]),
+                to: &st
+            )
+        }
+        let permFrame = harness.frame()
+        #expect(permFrame.contains("Allow once"))
+        #expect(permFrame.contains("Allow always"))
+        #expect(permFrame.contains("Reject"))
+        #expect(permFrame.contains("rm -rf build/"))
+
+        // Move right to "Allow always" and confirm with Enter
+        harness.testRenderer.mockInput.pressArrow(.right)
+        harness.testRenderer.mockInput.pressEnter()
+        for _ in 0..<25 {
+            if permReplied.withLock({ $0 != nil }) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(permReplied.withLock { $0 }?.contains("always") == true)
+        #expect(harness.store.snapshot().activePermission == nil)
+
+        // 2. Arrive singleSelect FormPrompt and answer via Enter
+        harness.store.withLock { st in
+            st.pendingForms = [
+                TUIPendingFormItem(
+                    id: "form_1",
+                    sessionID: "ses_demo01",
+                    title: "Target Platform",
+                    fields: [
+                        TUIFormFieldItem(
+                            key: "os",
+                            label: "Choose OS",
+                            kind: .singleSelect([
+                                TUIFormOptionItem(label: "macOS", value: "darwin"),
+                                TUIFormOptionItem(label: "Linux", value: "linux"),
+                            ])
+                        ),
+                    ]
+                ),
+            ]
+        }
+        let formFrame = harness.frame()
+        #expect(formFrame.contains("Choose OS"))
+        #expect(formFrame.contains("macOS"))
+        #expect(formFrame.contains("Linux"))
+
+        harness.testRenderer.mockInput.pressArrow(.down) // Linux
+        harness.testRenderer.mockInput.pressEnter()
+        for _ in 0..<25 {
+            if formReplied.withLock({ $0 != nil }) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(formReplied.withLock { $0 }?.contains("linux") == true)
+        #expect(harness.store.snapshot().activeForm == nil)
+    }
+
+    @Test("Shell mode (!), @ mentions, prompt history, /settings cycling, /diff, /pair QR, /status, /debug, and /help work end-to-end")
+    func fullWave2ComposerAndOverlaysEndToEnd() async throws {
+        var state = TUIRealParityFixtures.makeHomeState(width: 110, height: 34, mode: .light)
+        state.mentionFiles = ["Sources/OpenCodeTUI/App/TUIScreens.swift", "Package.swift"]
+        state.historyNavigator = TUIPromptHistoryNavigator(entries: [
+            TUIPromptHistoryEntry(input: "first historical prompt", mode: "normal"),
+            TUIPromptHistoryEntry(input: "second historical prompt", mode: "normal"),
+        ])
+
+        let shellCalled = Mutex<String?>(nil)
+        let transport = MockHTTPTransport { req in
+            if req.method == "POST" && req.url.contains("/api/session") && !req.url.contains("/shell") {
+                let json = #"{"data":{"id":"ses_shell01","projectID":"proj_1","title":"$ ls -la","location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"agent":"build","time":{"created":1,"updated":1}}}"#
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "POST" && req.url.contains("/shell") {
+                shellCalled.withLock { $0 = req.body.map { String(decoding: $0, as: UTF8.self) } }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204, headers: [:]), body: [])
+            }
+            if req.method == "GET" && req.url.contains("/api/info") {
+                let json = #"{"version":"2.3.2","urls":["http://127.0.0.1:4096"],"hostname":"localhost","pid":1234,"paths":{"tmp":"/tmp"},"capabilities":{"persistentPty":true}}"#
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "POST" && req.url.contains("/api/pair") {
+                let json = #"{"code":"PAIR-9999","expires_in":300}"#
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "GET" && req.url.contains("/api/vcs/diff") {
+                let json = #"{"location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"data":[{"file":"Package.swift","patch":"--- a/Package.swift\n+++ b/Package.swift\n@@ -1,2 +1,2 @@\n-old\n+new\n","additions":1,"deletions":1,"status":"modified"}]}"#
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(#"{"data":[]}"#.utf8))
+        }
+
+        let harness = TUIRealParityHarness(width: 110, height: 34, state: state, transport: transport)
+        defer { harness.destroy() }
+
+        // 1. Prompt history Up / Down on Home
+        harness.testRenderer.mockInput.pressArrow(.up)
+        #expect(harness.store.snapshot().promptText == "second historical prompt")
+        harness.testRenderer.mockInput.pressArrow(.up)
+        #expect(harness.store.snapshot().promptText == "first historical prompt")
+        harness.testRenderer.mockInput.pressArrow(.down)
+        #expect(harness.store.snapshot().promptText == "second historical prompt")
+        harness.testRenderer.mockInput.pressArrow(.down)
+        #expect(harness.store.snapshot().promptText == "")
+
+        // 2. `@` mention autocomplete suggests files + agents and Tab replaces cleanly
+        harness.testRenderer.mockInput.typeText("inspect @Pack")
+        #expect(harness.store.snapshot().isMentionAutocompleteVisible == true)
+        #expect(harness.frame().contains("@Package.swift"))
+        harness.testRenderer.mockInput.pressTab()
+        #expect(harness.store.snapshot().promptText == "inspect @Package.swift ")
+
+        // Clear prompt, enter `!` Shell mode, submit shell command
+        harness.testRenderer.mockInput.pressKey("c", modifiers: MockKeyModifiers(ctrl: true))
+        #expect(harness.store.snapshot().promptText == "")
+        harness.testRenderer.mockInput.typeText("!")
+        #expect(harness.store.snapshot().shellMode == true)
+        #expect(harness.frame().contains("! Shell"))
+        harness.testRenderer.mockInput.typeText("ls -la")
+        harness.testRenderer.mockInput.pressEnter()
+        for _ in 0..<30 {
+            if shellCalled.withLock({ $0 != nil }) { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(shellCalled.withLock { $0 }?.contains("ls -la") == true)
+
+        // 3. `/settings` cycles live preferences
+        let initialPref = harness.store.snapshot().preferences.themePreference
+        harness.controller.openSettingsDialog()
+        #expect(harness.store.snapshot().activeDialog == .settings)
+        #expect(harness.frame().contains("Settings"))
+        harness.testRenderer.mockInput.pressArrow(.down) // Color mode
+        harness.testRenderer.mockInput.pressArrow(.right)
+        #expect(harness.store.snapshot().preferences.themePreference != initialPref)
+        harness.pressEscapeAndFlush()
+
+        // 4. `/diff` viewer loads working diff & toggles split view with `v`
+        harness.controller.openDiffViewer()
+        for _ in 0..<25 {
+            if !harness.store.snapshot().diffViewerState.files.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let diffFrame = harness.frame()
+        #expect(diffFrame.contains("Diff Viewer"))
+        #expect(diffFrame.contains("Package.swift"))
+        let beforeSplit = harness.store.snapshot().diffViewerState.splitView
+        harness.testRenderer.mockInput.pressKey("v")
+        #expect(harness.store.snapshot().diffViewerState.splitView == !beforeSplit)
+        harness.testRenderer.mockInput.pressKey("q")
+        #expect(harness.store.snapshot().activeDialog == nil)
+
+        // 5. `/pair` renders real QR code from server.pair()
+        harness.controller.openPairDialog()
+        for _ in 0..<25 {
+            if harness.store.snapshot().pairingInfo != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let pairFrame = harness.frame()
+        #expect(pairFrame.contains("PAIR-9999"))
+        #expect(pairFrame.contains("▀") || pairFrame.contains("▄") || pairFrame.contains("█"))
+        harness.pressEscapeAndFlush()
+
+        // 6. `/status`, `/debug`, and `/help` overlays render cleanly
+        harness.controller.openStatusDialog()
+        #expect(harness.frame().contains("Status"))
+        harness.pressEscapeAndFlush()
+
+        harness.controller.openDebugDialog()
+        #expect(harness.frame().contains("Debug"))
+        harness.pressEscapeAndFlush()
+
+        harness.controller.openHelpDialog()
+        #expect(harness.frame().contains("Ctrl+P"))
+        harness.pressEscapeAndFlush()
+    }
 }

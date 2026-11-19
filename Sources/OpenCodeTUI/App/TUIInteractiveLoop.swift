@@ -240,11 +240,25 @@ public enum TUIInteractiveLoop {
 
         let dirty = Mutex(true)
         @Sendable func markDirty() { dirty.withLock { $0 = true } }
+        let editorRequested = Mutex(false)
+
+        let persistenceStore = TUIPersistenceStore(
+            stateDirectory: Global.make(environment: DictionaryEnvironment(variables: input.environment)).state,
+            fileSystem: LocalFileSystem.shared
+        )
+        store.withLock { state in
+            state.kittyKeyboardFlags = renderer.activeKittyKeyboardFlags
+        }
 
         let controller = TUIInteractiveClient(
             client: client,
             store: store,
             directory: directory,
+            persistence: persistenceStore,
+            onRequestExternalEditor: {
+                editorRequested.withLock { $0 = true }
+                markDirty()
+            },
             markDirty: markDirty
         )
 
@@ -293,12 +307,13 @@ public enum TUIInteractiveLoop {
             )
             defer { viewRoot.unmount() }
 
-            // 3. Kick off non-blocking server bootstrap and live SSE `/api/event` subscription
-            controller.bootstrap()
+            // 3. Kick off non-blocking server bootstrap (including startup CLI args) and live SSE `/api/event` subscription
+            controller.bootstrap(startupArgs: input.args)
             let sseTask = controller.startEventStream()
             defer { sseTask.cancel() }
 
-            // 4. First crisp paint
+            // 4. First crisp paint + initial OSC 2 terminal title
+            var lastWindowTitle = ""
             await session.renderNow(force: true)
             dirty.withLock { $0 = false }
 
@@ -318,6 +333,51 @@ public enum TUIInteractiveLoop {
                 let dtMs = max(0.0, Double(elapsed.components.seconds) * 1000.0 + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000.0)
                 if dtMs > 0 {
                     clock.advance(by: dtMs)
+                }
+
+                // Handle external `$EDITOR` request cleanly by temporarily leaving raw/alt-screen
+                let shouldRunEditor = editorRequested.withLock { flag -> Bool in
+                    if !flag { return false }
+                    flag = false
+                    return true
+                }
+                if shouldRunEditor {
+                    let initialDraft = store.withLock { $0.promptText }
+                    let leaveSeq = "\u{1B}[<u\u{1B}[?2004l\u{1B}[?25h\u{1B}[?1049l"
+                    try? await backend.write(Array(leaveSeq.utf8))
+                    try? await backend.exitRawMode()
+                    let edited = try? TUIExternalEditor.editInExternalEditor(
+                        initialText: initialDraft,
+                        environment: input.environment,
+                        tempDir: Global.make(environment: DictionaryEnvironment(variables: input.environment)).tmp
+                    )
+                    try? await backend.enterRawMode()
+                    let kitty = liveRenderer.activeKittyKeyboardFlags
+                    let reenterSeq = "\u{1B}[?1049h\u{1B}[2J\u{1B}[H\u{1B}[?2004h" + (kitty != 0 ? "\u{1B}[>\(kitty)u" : "")
+                    try? await backend.write(Array(reenterSeq.utf8))
+                    if let edited {
+                        store.withLock { state in
+                            state.promptText = edited.trimmingCharacters(in: .newlines)
+                            state.slashAutocompleteDismissed = false
+                        }
+                    }
+                    viewRoot.invalidate()
+                    await session.renderNow(force: true)
+                    dirty.withLock { $0 = false }
+                    continue
+                }
+
+                // Sync OSC 2 terminal window title (`OpenCode` on Home, `OC | <title>` on Session)
+                let desiredTitle: String = store.withLock { state in
+                    if state.isHome { return "OpenCode" }
+                    let t = state.activeSessionTitle
+                    if t.count > 40 { return "OC | \(t.prefix(37))…" }
+                    return "OC | \(t)"
+                }
+                if desiredTitle != lastWindowTitle {
+                    lastWindowTitle = desiredTitle
+                    let osc2 = "\u{1B}]2;\(desiredTitle)\u{07}"
+                    try? await backend.write(Array(osc2.utf8))
                 }
 
                 // Check terminal resize
@@ -340,7 +400,7 @@ public enum TUIInteractiveLoop {
                     session.feedInput(bytes)
                 }
 
-                // Advance live spinner animation & auto-disarm double-Esc interrupt timer
+                // Advance live spinner animation & auto-disarm timers
                 let clockNow = clock.now()
                 let tickDirty = store.withLock { state -> Bool in
                     var changed = false
@@ -352,7 +412,7 @@ public enum TUIInteractiveLoop {
                         state.leaderArmed = false
                         changed = true
                     }
-                    if state.sessionStatus.isRunning {
+                    if state.preferences.animations && (state.sessionStatus.isRunning || state.sseReconnecting) {
                         spinnerAccumMs += dtMs
                         if spinnerAccumMs >= spinnerFrameIntervalMs {
                             spinnerAccumMs = spinnerAccumMs.truncatingRemainder(dividingBy: spinnerFrameIntervalMs)
@@ -549,10 +609,27 @@ public enum TUIInteractiveLoop {
 
         let actions = TUIScreenActions(
             onPromptInput: { value in
+                var mentionQueryToRun: String? = nil
                 store.withLock { state in
+                    if !state.shellMode && TUIShellMode.isShellTrigger(value) {
+                        state.shellMode = true
+                        state.promptText = ""
+                        state.slashAutocompleteDismissed = false
+                        state.mentionAutocompleteDismissed = false
+                        return
+                    }
                     state.promptText = value
                     state.slashAutocompleteDismissed = false
                     state.slashAutocompleteIndex = 0
+                    state.mentionAutocompleteDismissed = false
+                    state.mentionAutocompleteIndex = 0
+                    state.historyNavigator.reset()
+                    if let trigger = state.activeMentionTrigger {
+                        mentionQueryToRun = trigger.query
+                    }
+                }
+                if let query = mentionQueryToRun {
+                    clientController.queryFilesForMention(query)
                 }
                 markDirty()
             },
@@ -565,6 +642,7 @@ public enum TUIInteractiveLoop {
                     state.dialogSelectedIndex = 0
                     state.connectErrorMessage = nil
                     state.pendingDeleteCredentialID = nil
+                    state.pendingDeleteSessionID = nil
                 }
                 clientController.previewThemeRowIfNeeded()
                 markDirty()
@@ -577,6 +655,42 @@ public enum TUIInteractiveLoop {
             },
             onOpenMCPDialog: {
                 clientController.openDialog(.mcpStatus)
+            },
+            onPermissionRejectInput: { value in
+                store.withLock { state in
+                    state.permissionPromptState.rejectFeedback = value
+                }
+                markDirty()
+            },
+            onPermissionRejectSubmit: { value in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                clientController.replyActivePermission(decision: .reject, message: trimmed.isEmpty ? nil : trimmed)
+            },
+            onFormTextInput: { value in
+                store.withLock { state in
+                    state.formPromptState.customText = value
+                    state.formPromptState.errorMessage = nil
+                }
+                markDirty()
+            },
+            onFormTextSubmit: { _ in
+                let readyToSubmit = store.withLock { state -> Bool in
+                    guard let form = state.activeForm else { return false }
+                    return state.formPromptState.toggleOrSelectCurrent(form: form)
+                }
+                markDirty()
+                if readyToSubmit {
+                    clientController.submitActiveForm()
+                }
+            },
+            onRenameInput: { value in
+                store.withLock { state in
+                    state.renameDraft = value
+                }
+                markDirty()
+            },
+            onRenameSubmit: { value in
+                clientController.submitRenameSession(value)
             }
         )
 
@@ -586,12 +700,30 @@ public enum TUIInteractiveLoop {
             let isSuper = (event.`super` == true)
             let isCtrlOrSuper = event.ctrl || isSuper
 
-            // Ctrl+D: remove selected credential inside Manage Connections, otherwise exit cleanly
+            // Ctrl+D: contextual delete in dialogs, half-page down in diff viewer, otherwise exit cleanly
             if event.ctrl && keyName == "d" {
-                if snap.activeDialog == .manageConnections {
+                switch snap.activeDialog {
+                case .manageConnections:
                     clientController.requestRemoveSelectedCredential()
                     event.preventDefault()
                     return
+                case .sessionList:
+                    clientController.requestDeleteSelectedSession()
+                    event.preventDefault()
+                    return
+                case .stashList:
+                    clientController.deleteSelectedStashEntry()
+                    event.preventDefault()
+                    return
+                case .diffViewer:
+                    if let scrollBox = renderer?.root.findDescendantById("diff-viewer-scrollbox") as? ScrollBoxRenderable {
+                        scrollBox.scrollBy(Double(max(4, (snap.rows - 8) / 2)))
+                        markDirty()
+                    }
+                    event.preventDefault()
+                    return
+                default:
+                    break
                 }
                 store.withLock {
                     $0.shouldQuit = true
@@ -602,7 +734,7 @@ public enum TUIInteractiveLoop {
                 return
             }
 
-            // Ctrl+C: close/clear dialog filter, clear non-empty prompt, or quit
+            // Ctrl+C: close/clear dialog filter, clear non-empty prompt / shell mode, or quit
             if event.ctrl && keyName == "c" {
                 if snap.leaderArmed {
                     store.withLock { $0.leaderArmed = false }
@@ -623,10 +755,20 @@ public enum TUIInteractiveLoop {
                     event.preventDefault()
                     return
                 }
+                if snap.shellMode {
+                    store.withLock {
+                        $0.shellMode = false
+                        $0.promptText = ""
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                }
                 if !snap.promptText.isEmpty {
                     store.withLock {
                         $0.promptText = ""
                         $0.slashAutocompleteDismissed = false
+                        $0.mentionAutocompleteDismissed = false
                     }
                     event.preventDefault()
                     markDirty()
@@ -652,8 +794,105 @@ public enum TUIInteractiveLoop {
                 return
             }
 
-            // Modal Dialog Keyboard Handling
+            // Modal Dialog & Overlay Keyboard Handling
             if let activeDialog = snap.activeDialog {
+                // Full Diff Viewer Keyboard Navigation
+                if activeDialog == .diffViewer {
+                    let scrollBox = renderer?.root.findDescendantById("diff-viewer-scrollbox") as? ScrollBoxRenderable
+                    let halfPage = Double(max(4, (snap.rows - 8) / 2))
+                    if event.ctrl && keyName == "u" {
+                        scrollBox?.scrollBy(-halfPage)
+                        event.preventDefault()
+                        markDirty()
+                        return
+                    }
+                    switch keyName {
+                    case "escape", "q":
+                        clientController.closeDialog(commitTheme: true)
+                    case "n":
+                        store.withLock { state in
+                            let count = state.diffViewerState.files.count
+                            if count > 0 {
+                                state.diffViewerState.selectedFileIndex = (state.diffViewerState.selectedFileIndex + 1) % count
+                            }
+                        }
+                        markDirty()
+                    case "p":
+                        store.withLock { state in
+                            let count = state.diffViewerState.files.count
+                            if count > 0 {
+                                state.diffViewerState.selectedFileIndex = (state.diffViewerState.selectedFileIndex - 1 + count) % count
+                            }
+                        }
+                        markDirty()
+                    case "v":
+                        store.withLock { $0.diffViewerState.splitView.toggle() }
+                        markDirty()
+                    case "b":
+                        store.withLock { $0.diffViewerState.showFileTree.toggle() }
+                        markDirty()
+                    case "f":
+                        store.withLock { $0.diffViewerState.fullscreen.toggle() }
+                        markDirty()
+                    case "j", "down":
+                        scrollBox?.scrollBy(3)
+                        markDirty()
+                    case "k", "up":
+                        scrollBox?.scrollBy(-3)
+                        markDirty()
+                    case "pagedown":
+                        scrollBox?.scrollBy(halfPage * 2)
+                        markDirty()
+                    case "pageup":
+                        scrollBox?.scrollBy(-halfPage * 2)
+                        markDirty()
+                    default:
+                        break
+                    }
+                    event.preventDefault()
+                    return
+                }
+
+                // Read-Only Info Overlays (Pair, Status, Usage, Help, Debug)
+                if activeDialog == .pair || activeDialog == .status || activeDialog == .usage || activeDialog == .help || activeDialog == .debug {
+                    switch keyName {
+                    case "escape", "q", "return", "enter":
+                        clientController.closeDialog(commitTheme: true)
+                        event.preventDefault()
+                        return
+                    case "c":
+                        if activeDialog == .debug {
+                            clientController.copyDebugSnapshot()
+                            event.preventDefault()
+                            return
+                        }
+                    case "up":
+                        if activeDialog == .usage {
+                            store.withLock { state in
+                                let count = max(1, state.usageLimits.count)
+                                state.dialogSelectedIndex = (state.dialogSelectedIndex - 1 + count) % count
+                            }
+                            markDirty()
+                            event.preventDefault()
+                            return
+                        }
+                    case "down":
+                        if activeDialog == .usage {
+                            store.withLock { state in
+                                let count = max(1, state.usageLimits.count)
+                                state.dialogSelectedIndex = (state.dialogSelectedIndex + 1) % count
+                            }
+                            markDirty()
+                            event.preventDefault()
+                            return
+                        }
+                    default:
+                        break
+                    }
+                    event.preventDefault()
+                    return
+                }
+
                 // Inside Model Picker: Ctrl+A / Cmd+A opens Connect Provider; Ctrl+F / Cmd+F toggles Favorite
                 if activeDialog == .modelPicker {
                     if isCtrlOrSuper && keyName == "a" {
@@ -668,7 +907,52 @@ public enum TUIInteractiveLoop {
                     }
                 }
 
-                // Input prompt dialogs (API Key / OAuth Code): let editing & paste pass through
+                // Inside Session List: Ctrl+R renames selected session; Ctrl+F pins/unpins selected session
+                if activeDialog == .sessionList {
+                    if isCtrlOrSuper && keyName == "r" {
+                        let rows = snap.dialogRows()
+                        if !rows.isEmpty {
+                            let idx = min(max(0, snap.dialogSelectedIndex), rows.count - 1)
+                            clientController.openRenameSessionDialog(sessionID: rows[idx].id, currentTitle: rows[idx].title)
+                        }
+                        event.preventDefault()
+                        return
+                    }
+                    if isCtrlOrSuper && keyName == "f" {
+                        clientController.togglePinSelectedSession()
+                        event.preventDefault()
+                        return
+                    }
+                }
+
+                // Inside Timeline: Ctrl+F forks session at selected user message
+                if activeDialog == .timeline && isCtrlOrSuper && keyName == "f" {
+                    let rows = snap.dialogRows()
+                    if !rows.isEmpty {
+                        let idx = min(max(0, snap.dialogSelectedIndex), rows.count - 1)
+                        let msgID = rows[idx].id
+                        clientController.closeDialog(commitTheme: true)
+                        clientController.forkActiveSession(beforeMessageID: msgID)
+                    }
+                    event.preventDefault()
+                    return
+                }
+
+                // Inside Settings: Left/Right arrows cycle the selected setting immediately
+                if activeDialog == .settings {
+                    if keyName == "left" {
+                        clientController.cycleSelectedSetting(direction: -1)
+                        event.preventDefault()
+                        return
+                    }
+                    if keyName == "right" {
+                        clientController.cycleSelectedSetting(direction: 1)
+                        event.preventDefault()
+                        return
+                    }
+                }
+
+                // Input prompt dialogs (API Key / OAuth Code / Rename Session): let editing & paste pass through
                 if activeDialog.isInputPrompt {
                     switch keyName {
                     case "escape":
@@ -721,7 +1005,113 @@ public enum TUIInteractiveLoop {
                 }
             }
 
-            // Leader Chord Handling (`Ctrl+X` followed by `m`, `a`, `p`, `l`, `n`, `b`, `c`, `t`, `v`, `q`)
+            // Inline Permission Prompt Keyboard Handling (`routes/session/permission.tsx`)
+            if snap.activePermission != nil {
+                if snap.permissionPromptState.isRejectingWithFeedback {
+                    switch keyName {
+                    case "escape":
+                        store.withLock { state in
+                            state.permissionPromptState.isRejectingWithFeedback = false
+                            state.permissionPromptState.rejectFeedback = ""
+                        }
+                        markDirty()
+                        event.preventDefault()
+                        return
+                    case "return", "enter":
+                        clientController.confirmSelectedPermissionOption()
+                        event.preventDefault()
+                        return
+                    default:
+                        return
+                    }
+                } else {
+                    switch keyName {
+                    case "left":
+                        store.withLock { $0.permissionPromptState.selectPrevious() }
+                        markDirty()
+                    case "right", "tab":
+                        store.withLock { $0.permissionPromptState.selectNext() }
+                        markDirty()
+                    case "return", "enter":
+                        clientController.confirmSelectedPermissionOption()
+                    case "y", "1":
+                        clientController.replyActivePermission(decision: .once)
+                    case "a", "2":
+                        clientController.replyActivePermission(decision: .always)
+                    case "r", "n", "3":
+                        store.withLock { state in
+                            state.permissionPromptState.selectedOption = .reject
+                            state.permissionPromptState.isRejectingWithFeedback = true
+                            state.permissionPromptState.rejectFeedback = ""
+                        }
+                        markDirty()
+                    case "escape":
+                        clientController.replyActivePermission(decision: .reject)
+                    default:
+                        break
+                    }
+                    event.preventDefault()
+                    return
+                }
+            }
+
+            // Inline Form / Question Prompt Keyboard Handling (`routes/session/form.tsx`)
+            if let activeForm = snap.activeForm {
+                if snap.formPromptState.editingCustom {
+                    switch keyName {
+                    case "escape":
+                        store.withLock { state in
+                            state.formPromptState.editingCustom = false
+                        }
+                        markDirty()
+                        event.preventDefault()
+                        return
+                    case "return", "enter":
+                        let ready = store.withLock { state in
+                            state.formPromptState.toggleOrSelectCurrent(form: activeForm)
+                        }
+                        markDirty()
+                        if ready {
+                            clientController.submitActiveForm()
+                        }
+                        event.preventDefault()
+                        return
+                    default:
+                        return
+                    }
+                } else {
+                    switch keyName {
+                    case "up":
+                        store.withLock { $0.formPromptState.moveRow(by: -1, form: activeForm) }
+                        markDirty()
+                    case "down":
+                        store.withLock { $0.formPromptState.moveRow(by: 1, form: activeForm) }
+                        markDirty()
+                    case "left":
+                        store.withLock { $0.formPromptState.prevField(form: activeForm) }
+                        markDirty()
+                    case "right", "tab":
+                        store.withLock { $0.formPromptState.nextField(form: activeForm) }
+                        markDirty()
+                    case "space", "return", "enter":
+                        let ready = store.withLock { state in
+                            state.formPromptState.toggleOrSelectCurrent(form: activeForm)
+                        }
+                        markDirty()
+                        if ready {
+                            clientController.submitActiveForm()
+                        }
+                    case "escape":
+                        clientController.cancelActiveForm()
+                    default:
+                        break
+                    }
+                    event.preventDefault()
+                    return
+                }
+            }
+
+            // Leader Chord Handling (`Ctrl+X` followed by action key)
             if snap.leaderArmed {
                 store.withLock { $0.leaderArmed = false }
                 switch keyName {
@@ -744,6 +1134,24 @@ public enum TUIInteractiveLoop {
                     clientController.openDialog(.themePicker)
                 case "v":
                     clientController.openVariantPicker()
+                case "g":
+                    clientController.openTimelineDialog()
+                case "u":
+                    clientController.undoLastUserMessage()
+                case "r":
+                    clientController.redoRevertedMessage()
+                case "d":
+                    clientController.openDiffViewer()
+                case "s":
+                    clientController.openStatusDialog()
+                case "e":
+                    clientController.requestExternalEditor()
+                case "w":
+                    clientController.closeCurrentSessionTab()
+                case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+                    if let n = Int(keyName) {
+                        clientController.selectSessionTab(index: n - 1)
+                    }
                 case "q":
                     store.withLock {
                         $0.shouldQuit = true
@@ -766,6 +1174,34 @@ public enum TUIInteractiveLoop {
                 }
                 event.preventDefault()
                 markDirty()
+                return
+            }
+
+            // Shell mode exit via Backspace / Escape on empty prompt
+            if snap.shellMode && snap.promptText.isEmpty && (keyName == "backspace" || keyName == "escape") {
+                store.withLock { $0.shellMode = false }
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            // Session tab cycling (`Ctrl+Tab`, `Ctrl+Shift+Tab`, `Alt+Down`, `Alt+Up`, `Ctrl+Shift+T`)
+            if (event.ctrl && keyName == "tab") || (event.meta && (keyName == "down" || keyName == "up")) {
+                let dir = (event.shift || keyName == "up") ? -1 : 1
+                clientController.cycleSessionTab(direction: dir)
+                event.preventDefault()
+                return
+            }
+            if event.ctrl && event.shift && keyName == "t" {
+                clientController.reopenClosedSessionTab()
+                event.preventDefault()
+                return
+            }
+
+            // Ctrl+R renames active session (upstream `session.rename`)
+            if event.ctrl && keyName == "r" && snap.activeSessionID != nil {
+                clientController.openRenameSessionDialog()
+                event.preventDefault()
                 return
             }
 
@@ -798,15 +1234,11 @@ public enum TUIInteractiveLoop {
                 return
             }
 
-            // Ctrl+Shift+T cycles model reasoning variants; Ctrl+T toggles Light / Dark theme mode
-            if event.ctrl && keyName == "t" {
-                if event.shift {
-                    clientController.cycleVariant()
-                } else {
-                    clientController.toggleThemeMode()
-                    if let r = renderer {
-                        r.setBackgroundColor(store.snapshot().resolveTheme().background.base)
-                    }
+            // Ctrl+T toggles Light / Dark theme mode
+            if event.ctrl && !event.shift && keyName == "t" {
+                clientController.toggleThemeMode()
+                if let r = renderer {
+                    r.setBackgroundColor(store.snapshot().resolveTheme().background.base)
                 }
                 event.preventDefault()
                 return
@@ -883,6 +1315,80 @@ public enum TUIInteractiveLoop {
 
                 default:
                     break
+                }
+            }
+
+            // Live `@` File & Agent Mention Autocomplete Navigation
+            if snap.isMentionAutocompleteVisible, let trigger = snap.activeMentionTrigger {
+                let matches = snap.mentionSuggestions
+                switch keyName {
+                case "up":
+                    store.withLock { state in
+                        let count = max(1, matches.count)
+                        state.mentionAutocompleteIndex = (state.mentionAutocompleteIndex - 1 + count) % count
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                case "down":
+                    store.withLock { state in
+                        let count = max(1, matches.count)
+                        state.mentionAutocompleteIndex = (state.mentionAutocompleteIndex + 1) % count
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                case "tab", "return", "enter":
+                    let idx = min(max(0, snap.mentionAutocompleteIndex), matches.count - 1)
+                    let chosen = matches[idx]
+                    store.withLock { state in
+                        state.promptText = applyMention(chosen, to: state.promptText, trigger: trigger)
+                        state.mentionAutocompleteIndex = 0
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                case "escape":
+                    store.withLock { $0.mentionAutocompleteDismissed = true }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                default:
+                    break
+                }
+            }
+
+            // Prompt History Navigation (`↑` / `↓` on Home, or when history cursor is active)
+            if (snap.isHome || snap.historyNavigator.cursor != nil) && !snap.historyNavigator.entries.isEmpty {
+                if keyName == "up" {
+                    let updated = store.withLock { state -> Bool in
+                        guard let nextText = state.historyNavigator.navigateUp(currentInput: state.promptText) else {
+                            return false
+                        }
+                        state.promptText = nextText
+                        state.slashAutocompleteDismissed = true
+                        state.mentionAutocompleteDismissed = true
+                        return true
+                    }
+                    if updated {
+                        event.preventDefault()
+                        markDirty()
+                        return
+                    }
+                }
+                if keyName == "down" && snap.historyNavigator.cursor != nil {
+                    let updated = store.withLock { state -> Bool in
+                        guard let nextText = state.historyNavigator.navigateDown() else {
+                            return false
+                        }
+                        state.promptText = nextText
+                        return true
+                    }
+                    if updated {
+                        event.preventDefault()
+                        markDirty()
+                        return
+                    }
                 }
             }
 

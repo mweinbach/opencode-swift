@@ -412,6 +412,30 @@ public struct TUIIntegrationItem: Equatable, Hashable, Sendable {
     }
 }
 
+public struct TUISkillItem: Equatable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let description: String?
+
+    public init(id: String, name: String, description: String? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct TUIWorktreeItem: Equatable, Hashable, Sendable {
+    public let directory: String
+    public let branch: String?
+    public let name: String?
+
+    public init(directory: String, branch: String? = nil, name: String? = nil) {
+        self.directory = directory
+        self.branch = branch
+        self.name = name
+    }
+}
+
 public enum TUIActiveDialog: String, Equatable, Hashable, Sendable {
     case commandPalette
     case modelPicker
@@ -425,19 +449,42 @@ public enum TUIActiveDialog: String, Equatable, Hashable, Sendable {
     case sessionList
     case themePicker
     case mcpStatus
+    case settings
+    case status
+    case usage
+    case skills
+    case timeline
+    case pair
+    case help
+    case debug
+    case renameSession
+    case stashList
+    case workspaces
+    case diffViewer
 
     public var isInputPrompt: Bool {
-        self == .connectAPIKey || self == .connectOAuth
+        self == .connectAPIKey || self == .connectOAuth || self == .renameSession
+    }
+
+    public var isCustomOverlay: Bool {
+        switch self {
+        case .diffViewer, .pair, .status, .usage, .debug, .help, .renameSession:
+            return true
+        default:
+            return false
+        }
     }
 }
 
 public struct TUISlashCommand: Equatable, Hashable, Sendable {
     public let name: String
     public let description: String
+    public let isServerCommand: Bool
 
-    public init(name: String, description: String) {
+    public init(name: String, description: String, isServerCommand: Bool = false) {
         self.name = name
         self.description = description
+        self.isServerCommand = isServerCommand
     }
 
     public static let builtIn: [TUISlashCommand] = [
@@ -447,7 +494,26 @@ public struct TUISlashCommand: Equatable, Hashable, Sendable {
         TUISlashCommand(name: "/sessions", description: "Switch or browse sessions"),
         TUISlashCommand(name: "/themes", description: "Switch theme or light/dark mode"),
         TUISlashCommand(name: "/mcps", description: "View MCP server status"),
+        TUISlashCommand(name: "/diff", description: "Open syntax-highlighted diff viewer"),
+        TUISlashCommand(name: "/settings", description: "Configure appearance, session & diff settings"),
+        TUISlashCommand(name: "/skills", description: "Browse and activate skills"),
+        TUISlashCommand(name: "/timeline", description: "Browse session timeline (fork/revert)"),
+        TUISlashCommand(name: "/undo", description: "Undo / revert last user message"),
+        TUISlashCommand(name: "/redo", description: "Restore reverted message"),
+        TUISlashCommand(name: "/fork", description: "Fork current session"),
+        TUISlashCommand(name: "/rename", description: "Rename current session"),
+        TUISlashCommand(name: "/copy", description: "Copy session transcript to clipboard"),
+        TUISlashCommand(name: "/export", description: "Export session transcript to Markdown"),
+        TUISlashCommand(name: "/pair", description: "Pair device with QR code & link"),
+        TUISlashCommand(name: "/status", description: "View server, provider & MCP status"),
+        TUISlashCommand(name: "/usage", description: "View workspace usage limits"),
+        TUISlashCommand(name: "/workspaces", description: "Browse git worktrees & workspaces"),
+        TUISlashCommand(name: "/stash", description: "Browse or manage stashed prompts"),
+        TUISlashCommand(name: "/editor", description: "Compose prompt in external $EDITOR"),
         TUISlashCommand(name: "/variants", description: "Switch model reasoning variant"),
+        TUISlashCommand(name: "/reload", description: "Reload location configuration"),
+        TUISlashCommand(name: "/debug", description: "View live runtime diagnostics"),
+        TUISlashCommand(name: "/help", description: "View keyboard shortcuts & commands"),
         TUISlashCommand(name: "/new", description: "Start a new session"),
         TUISlashCommand(name: "/home", description: "Return to the home screen"),
         TUISlashCommand(name: "/sidebar", description: "Toggle session sidebar"),
@@ -464,6 +530,24 @@ public enum TUIPaletteActionID: String, Equatable, Hashable, Sendable {
     case switchAgent
     case cycleAgent
     case switchVariant
+    case viewDiff
+    case openSettings
+    case openSkills
+    case timeline
+    case undoMessage
+    case redoMessage
+    case forkSession
+    case renameSession
+    case copyTranscript
+    case exportTranscript
+    case pairDevice
+    case viewStatus
+    case viewUsage
+    case openWorkspaces
+    case stashPrompt
+    case openStashList
+    case openExternalEditor
+    case reloadConfig
     case switchTheme
     case toggleMode
     case mcpServers
@@ -471,6 +555,8 @@ public enum TUIPaletteActionID: String, Equatable, Hashable, Sendable {
     case goHome
     case toggleSidebar
     case compactSession
+    case showHelp
+    case showDebug
     case exit
 }
 
@@ -551,7 +637,14 @@ public struct TUIInteractiveState: Equatable, Sendable {
     public var recentModels: [String]
 
     public var mcpServers: [TUIMCPServerItem]
+    public var serverCommands: [TUISlashCommand]
+    public var skills: [TUISkillItem]
+    public var worktrees: [TUIWorktreeItem]
+    public var todos: [TUITodoItem]
+    public var projectID: String?
     public var sessions: [TUISessionItem]
+    public var openSessionTabs: [String]
+    public var closedSessionTabs: [String]
     public var activeSessionID: String?
     public var activeSessionTitle: String
     public var sessionStatus: TUISessionRunStatus
@@ -560,17 +653,43 @@ public struct TUIInteractiveState: Equatable, Sendable {
     public var sessionCost: Double
     public var modifiedFiles: [TUIModifiedFileItem]
     public var messages: [TUITranscriptItem]
+    public var hasRevertedMessage: Bool
+    public var revertedMessageID: String?
 
+    public var preferences: TUIPersistedPreferences
     public var promptText: String
+    public var shellMode: Bool
     public var placeholderIndex: Int
     public var slashAutocompleteIndex: Int
     public var slashAutocompleteDismissed: Bool
+    public var mentionFiles: [String]
+    public var mentionAutocompleteIndex: Int
+    public var mentionAutocompleteDismissed: Bool
+    public var historyNavigator: TUIPromptHistoryNavigator
+    public var stashEntries: [TUIPromptStashEntry]
     public var interruptArmed: Bool
     public var interruptArmedAtMs: Double
     public var leaderArmed: Bool
     public var leaderArmedAtMs: Double
     public var spinnerTick: Int
     public var scrollDeltaPending: Int
+
+    public var pendingPermissions: [TUIPendingPermissionItem]
+    public var permissionPromptState: TUIPermissionPromptState
+    public var pendingForms: [TUIPendingFormItem]
+    public var formPromptState: TUIFormPromptState
+    public var diffViewerState: TUIDiffViewerState
+    public var pairingInfo: TUIPairingInfo?
+    public var usageLimits: [TUIUsageLimitRow]
+    public var usageWorkspaceName: String?
+    public var usageSignedIn: Bool
+    public var renameDraft: String
+    public var renameTargetSessionID: String?
+    public var pendingDeleteSessionID: String?
+
+    public var sseConnected: Bool
+    public var sseReconnecting: Bool
+    public var kittyKeyboardFlags: UInt32
 
     public var activeDialog: TUIActiveDialog?
     public var dialogFilter: String
@@ -652,7 +771,14 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.favoriteModels = favoriteModels
         self.recentModels = recentModels
         self.mcpServers = mcpServers
+        self.serverCommands = []
+        self.skills = []
+        self.worktrees = []
+        self.todos = []
+        self.projectID = nil
         self.sessions = sessions
+        self.openSessionTabs = activeSessionID.map { [$0] } ?? []
+        self.closedSessionTabs = []
         self.activeSessionID = activeSessionID
         self.activeSessionTitle = activeSessionTitle
         self.sessionStatus = sessionStatus
@@ -661,16 +787,40 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.sessionCost = sessionCost
         self.modifiedFiles = modifiedFiles
         self.messages = messages
+        self.hasRevertedMessage = false
+        self.revertedMessageID = nil
+        self.preferences = TUIPersistedPreferences(themeName: themeName, themePreference: themePreference)
         self.promptText = promptText
+        self.shellMode = false
         self.placeholderIndex = placeholderIndex
         self.slashAutocompleteIndex = 0
         self.slashAutocompleteDismissed = false
+        self.mentionFiles = []
+        self.mentionAutocompleteIndex = 0
+        self.mentionAutocompleteDismissed = false
+        self.historyNavigator = TUIPromptHistoryNavigator()
+        self.stashEntries = []
         self.interruptArmed = false
         self.interruptArmedAtMs = 0
         self.leaderArmed = false
         self.leaderArmedAtMs = 0
         self.spinnerTick = 0
         self.scrollDeltaPending = 0
+        self.pendingPermissions = []
+        self.permissionPromptState = TUIPermissionPromptState()
+        self.pendingForms = []
+        self.formPromptState = TUIFormPromptState()
+        self.diffViewerState = TUIDiffViewerState()
+        self.pairingInfo = nil
+        self.usageLimits = []
+        self.usageWorkspaceName = nil
+        self.usageSignedIn = false
+        self.renameDraft = ""
+        self.renameTargetSessionID = nil
+        self.pendingDeleteSessionID = nil
+        self.sseConnected = false
+        self.sseReconnecting = false
+        self.kittyKeyboardFlags = 0
         self.activeDialog = nil
         self.dialogFilter = ""
         self.dialogSelectedIndex = 0
@@ -706,7 +856,61 @@ public struct TUIInteractiveState: Equatable, Sendable {
     }
 
     public var effectiveShowSidebar: Bool {
-        sidebarExplicitOverride ?? (cols > 120)
+        if let override = sidebarExplicitOverride { return override }
+        if preferences.sidebarMode == "hide" { return false }
+        return cols > 120
+    }
+
+    public var activePermission: TUIPendingPermissionItem? {
+        if let activeID = activeSessionID,
+           let matched = pendingPermissions.first(where: { $0.sessionID == activeID }) {
+            return matched
+        }
+        return pendingPermissions.first
+    }
+
+    public var activeForm: TUIPendingFormItem? {
+        if let activeID = activeSessionID,
+           let matched = pendingForms.first(where: { $0.sessionID == activeID }) {
+            return matched
+        }
+        return pendingForms.first
+    }
+
+    public var statusSnapshot: TUIStatusSnapshot {
+        let connectedCount = visibleProviderIntegrations.filter(\.isConnected).count
+        return TUIStatusSnapshot(
+            serverURL: serverURL,
+            serverVersion: serverVersion,
+            directory: TUIUtil.abbreviateHome(directory, home: homeDirectory),
+            gitBranch: gitBranch,
+            connectedProvidersCount: max(connectedCount, providers.count),
+            totalModelsCount: models.count,
+            mcpServers: mcpServers,
+            skillsCount: skills.count,
+            commandsCount: serverCommands.count
+        )
+    }
+
+    public var debugSnapshot: TUIDebugSnapshot {
+        TUIDebugSnapshot(
+            serverURL: serverURL,
+            serverVersion: serverVersion,
+            sessionID: activeSessionID,
+            sseConnected: sseConnected,
+            sseReconnecting: sseReconnecting,
+            terminalCols: cols,
+            terminalRows: rows,
+            themeName: themeName,
+            themeMode: effectiveMode,
+            kittyKeyboardFlags: Int(kittyKeyboardFlags),
+            providersCount: max(providers.count, visibleProviderIntegrations.filter(\.isConnected).count),
+            modelsCount: models.count,
+            agentsCount: agents.count,
+            commandsCount: serverCommands.count,
+            skillsCount: skills.count,
+            toolsCount: 0
+        )
     }
 
     public var activeAgent: TUIAgentItem {
@@ -767,18 +971,46 @@ public struct TUIInteractiveState: Equatable, Sendable {
         return Int((Double(contextTokens) / Double(limit) * 100.0).rounded())
     }
 
+    public var allSlashCommands: [TUISlashCommand] {
+        var seen = Set(TUISlashCommand.builtIn.map { $0.name.lowercased() })
+        var combined = TUISlashCommand.builtIn
+        for cmd in serverCommands {
+            let normalized = cmd.name.hasPrefix("/") ? cmd.name : "/\(cmd.name)"
+            if seen.insert(normalized.lowercased()).inserted {
+                combined.append(TUISlashCommand(name: normalized, description: cmd.description, isServerCommand: true))
+            }
+        }
+        return combined
+    }
+
     public var slashMatches: [TUISlashCommand] {
-        guard activeDialog == nil, !slashAutocompleteDismissed else { return [] }
+        guard activeDialog == nil, !shellMode, !slashAutocompleteDismissed else { return [] }
         guard promptText.hasPrefix("/"), !promptText.contains(" "), !promptText.contains("\n") else { return [] }
         let needle = promptText.lowercased()
-        if needle == "/" { return TUISlashCommand.builtIn }
-        return TUISlashCommand.builtIn.filter {
+        let pool = allSlashCommands
+        if needle == "/" { return pool }
+        return pool.filter {
             $0.name.lowercased().hasPrefix(needle) || $0.description.lowercased().contains(needle.dropFirst())
         }
     }
 
     public var isSlashAutocompleteVisible: Bool {
         !slashMatches.isEmpty
+    }
+
+    public var activeMentionTrigger: TUIMentionTrigger? {
+        guard activeDialog == nil, !shellMode, !mentionAutocompleteDismissed else { return nil }
+        guard !isSlashAutocompleteVisible else { return nil }
+        return detectMentionTrigger(in: promptText)
+    }
+
+    public var mentionSuggestions: [TUIMentionSuggestion] {
+        guard let trigger = activeMentionTrigger else { return [] }
+        return buildMentionSuggestions(query: trigger.query, files: mentionFiles, agents: agents)
+    }
+
+    public var isMentionAutocompleteVisible: Bool {
+        !mentionSuggestions.isEmpty
     }
 
     public func resolveTheme() -> ResolvedTheme {
@@ -835,15 +1067,35 @@ public struct TUIInteractiveState: Equatable, Sendable {
                 (.switchModel, "Switch model", "/models"),
                 (.connectProvider, "Connect a provider", "/connect"),
                 (.switchAgent, "Switch agent", "/agents"),
+                (.switchTheme, "Switch theme", "/themes"),
+                (.mcpServers, "MCP servers", "/mcps"),
+                (.viewDiff, "Open diff viewer", "/diff"),
+                (.openSettings, "Open settings", "/settings"),
+                (.openSkills, "Browse skills", "/skills"),
+                (.pairDevice, "Pair device (QR code)", "/pair"),
+                (.timeline, "Session timeline", "/timeline"),
                 (.cycleAgent, "Cycle agent (\(activeAgent.displayName))", "shift+tab"),
                 (.switchVariant, "Switch model variant", "/variants"),
-                (.switchTheme, "Switch theme", "/themes"),
+                (.undoMessage, "Undo last message", "/undo"),
+                (.redoMessage, "Redo reverted message", "/redo"),
+                (.forkSession, "Fork session", "/fork"),
+                (.renameSession, "Rename session", "ctrl+r"),
+                (.copyTranscript, "Copy transcript", "/copy"),
+                (.exportTranscript, "Export transcript", "/export"),
+                (.viewStatus, "View status", "/status"),
+                (.viewUsage, "View usage limits", "/usage"),
+                (.openWorkspaces, "Manage workspaces", "/workspaces"),
+                (.stashPrompt, "Stash current prompt", "/stash"),
+                (.openStashList, "Browse stashed prompts", "/stash"),
+                (.openExternalEditor, "Open external $EDITOR", "/editor"),
+                (.reloadConfig, "Reload configuration", "/reload"),
                 (.toggleMode, "Toggle Light / Dark mode (\(effectiveMode.rawValue))", "ctrl+t"),
-                (.mcpServers, "MCP servers", "/mcps"),
                 (.newSession, "New session", "ctrl+n"),
                 (.goHome, "Go to home", "/home"),
                 (.toggleSidebar, effectiveShowSidebar ? "Hide sidebar" : "Show sidebar", "ctrl+b"),
                 (.compactSession, "Compact session", "/compact"),
+                (.showHelp, "Help & keybindings", "/help"),
+                (.showDebug, "Debug diagnostics", "/debug"),
                 (.exit, "Exit OpenCode", "ctrl+c"),
             ]
             return items.compactMap { action, title, shortcut in
@@ -996,8 +1248,85 @@ public struct TUIInteractiveState: Equatable, Sendable {
             }
             return rows
 
-        case .connectAPIKey, .connectOAuth:
+        case .connectAPIKey, .connectOAuth, .status, .usage, .pair, .help, .debug, .renameSession, .diffViewer:
             return []
+
+        case .settings:
+            return TUISettingsCatalog.rows(
+                filter: dialogFilter,
+                preferences: preferences,
+                detectedMode: detectedMode
+            )
+
+        case .skills:
+            return skills.compactMap { skill in
+                guard matches(skill.name, "\(skill.id) \(skill.description ?? "")") else { return nil }
+                return TUIDialogRow(
+                    id: skill.id,
+                    title: skill.name,
+                    subtitle: skill.description
+                )
+            }
+
+        case .timeline:
+            let userMessages: [(id: String, text: String)] = messages.compactMap { item in
+                if case .user(let id, let text, _, _) = item {
+                    return (id, text.replacingOccurrences(of: "\n", with: " "))
+                }
+                return nil
+            }.reversed()
+            return userMessages.compactMap { entry in
+                guard matches(entry.text, entry.id) else { return nil }
+                let isRev = revertedMessageID == entry.id
+                return TUIDialogRow(
+                    id: entry.id,
+                    title: TUIUtil.truncateWidth(entry.text, 52),
+                    subtitle: isRev ? "reverted" : nil,
+                    trailing: "enter revert · f fork",
+                    isActive: isRev
+                )
+            }
+
+        case .stashList:
+            return stashEntries.compactMap { entry in
+                let singleLine = entry.input.replacingOccurrences(of: "\n", with: " ")
+                guard matches(singleLine) else { return nil }
+                return TUIDialogRow(
+                    id: entry.id,
+                    title: TUIUtil.truncateWidth(singleLine, 54),
+                    trailing: "enter pop"
+                )
+            }
+
+        case .workspaces:
+            var rows: [TUIDialogRow] = []
+            let curDisplay = TUIUtil.abbreviateHome(directory, home: homeDirectory)
+            if worktrees.isEmpty {
+                if matches(curDisplay, gitBranch) {
+                    rows.append(TUIDialogRow(
+                        id: directory,
+                        title: curDisplay,
+                        subtitle: gitBranch,
+                        trailing: "current",
+                        isActive: true
+                    ))
+                }
+            } else {
+                for wt in worktrees {
+                    let display = TUIUtil.abbreviateHome(wt.directory, home: homeDirectory)
+                    let label = wt.name ?? display
+                    guard matches(label, "\(display) \(wt.branch ?? "")") else { continue }
+                    let isCur = wt.directory == directory
+                    rows.append(TUIDialogRow(
+                        id: wt.directory,
+                        title: label,
+                        subtitle: wt.branch ?? display,
+                        trailing: isCur ? "current" : nil,
+                        isActive: isCur
+                    ))
+                }
+            }
+            return rows
 
         case .agentPicker:
             return agents.compactMap { agent in
@@ -1038,16 +1367,39 @@ public struct TUIInteractiveState: Equatable, Sendable {
             return rows
 
         case .sessionList:
-            return sessions.compactMap { session in
+            let pinnedSet = Set(preferences.pinnedSessionIDs)
+            let ordered = sessions.sorted { lhs, rhs in
+                let lp = pinnedSet.contains(lhs.id)
+                let rp = pinnedSet.contains(rhs.id)
+                if lp != rp { return lp }
+                return false
+            }
+            return ordered.compactMap { session in
                 let sub = session.directory.map { TUIUtil.abbreviateHome($0, home: homeDirectory) } ?? session.id
                 guard matches(session.title, sub) else { return nil }
                 let active = session.id == activeSessionID
+                let isPinned = pinnedSet.contains(session.id)
+                let isConfirmingDelete = pendingDeleteSessionID == session.id
+                let title = isConfirmingDelete ? "Press ctrl+d again to delete \(session.title)" : session.title
+                let trailing: String?
+                if isConfirmingDelete {
+                    trailing = "delete?"
+                } else if active && isPinned {
+                    trailing = "★ active"
+                } else if isPinned {
+                    trailing = "★"
+                } else if active {
+                    trailing = "active"
+                } else {
+                    trailing = nil
+                }
                 return TUIDialogRow(
                     id: session.id,
-                    title: session.title,
-                    subtitle: sub,
-                    trailing: active ? "active" : nil,
-                    isActive: active
+                    title: title,
+                    subtitle: isConfirmingDelete ? "Confirm deletion" : sub,
+                    trailing: trailing,
+                    isActive: active,
+                    badgeColorKind: isConfirmingDelete ? .error : nil
                 )
             }
 
@@ -1148,7 +1500,12 @@ public final class TUIInteractiveClient: Sendable {
         public var refreshMCP: Bool = false
         public var refreshVCS: Bool = false
         public var refreshSessions: Bool = false
+        public var refreshCommands: Bool = false
+        public var refreshSkills: Bool = false
+        public var refreshPermissions: Bool = false
+        public var refreshForms: Bool = false
         public var refreshMessagesForSession: String? = nil
+        public var selectSessionID: String? = nil
 
         public init(
             refreshAgents: Bool = false,
@@ -1157,7 +1514,12 @@ public final class TUIInteractiveClient: Sendable {
             refreshMCP: Bool = false,
             refreshVCS: Bool = false,
             refreshSessions: Bool = false,
-            refreshMessagesForSession: String? = nil
+            refreshCommands: Bool = false,
+            refreshSkills: Bool = false,
+            refreshPermissions: Bool = false,
+            refreshForms: Bool = false,
+            refreshMessagesForSession: String? = nil,
+            selectSessionID: String? = nil
         ) {
             self.refreshAgents = refreshAgents
             self.refreshModels = refreshModels
@@ -1165,33 +1527,45 @@ public final class TUIInteractiveClient: Sendable {
             self.refreshMCP = refreshMCP
             self.refreshVCS = refreshVCS
             self.refreshSessions = refreshSessions
+            self.refreshCommands = refreshCommands
+            self.refreshSkills = refreshSkills
+            self.refreshPermissions = refreshPermissions
+            self.refreshForms = refreshForms
             self.refreshMessagesForSession = refreshMessagesForSession
+            self.selectSessionID = selectSessionID
         }
     }
 
     public let client: OpenCodeClient
     public let store: TUIInteractiveStore
     public let directory: String
-    private let markDirty: @Sendable () -> Void
+    public let persistence: TUIPersistenceStore?
+    internal let markDirty: @Sendable () -> Void
+    internal let onRequestExternalEditor: (@Sendable () -> Void)?
     private let optimisticCounter = Mutex<Int>(0)
+    internal let mentionQueryGeneration = Mutex<Int>(0)
 
     public init(
         client: OpenCodeClient,
         store: TUIInteractiveStore,
         directory: String,
+        persistence: TUIPersistenceStore? = nil,
+        onRequestExternalEditor: (@Sendable () -> Void)? = nil,
         markDirty: @escaping @Sendable () -> Void
     ) {
         self.client = client
         self.store = store
         self.directory = directory
+        self.persistence = persistence
+        self.onRequestExternalEditor = onRequestExternalEditor
         self.markDirty = markDirty
     }
 
-    private var locationQuery: LocationQuery.LocationField {
-        LocationQuery.LocationField(directory: directory)
+    internal var locationQuery: LocationQuery.LocationField {
+        LocationQuery.LocationField(directory: store.withLock { $0.directory })
     }
 
-    private func nextOptimisticID() -> String {
+    internal func nextOptimisticID() -> String {
         let next = optimisticCounter.withLock { count -> Int in
             count += 1
             return count
@@ -1201,9 +1575,38 @@ public final class TUIInteractiveClient: Sendable {
 
     // MARK: - Startup & Refresh
 
-    public func bootstrap() {
+    public func bootstrap(startupArgs: TUIContext.Args? = nil) {
         Task { [weak self] in
             guard let self else { return }
+            if let persistence = self.persistence {
+                async let prefsTask = persistence.loadPreferences()
+                async let modelStateTask = persistence.loadModelState()
+                async let historyTask = persistence.loadHistory()
+                async let stashTask = persistence.loadStash()
+                let prefs = await prefsTask
+                let modelState = await modelStateTask
+                let history = await historyTask
+                let stash = await stashTask
+
+                self.store.withLock { state in
+                    state.preferences = prefs
+                    if !prefs.themeName.isEmpty {
+                        state.themeName = prefs.themeName
+                    }
+                    if state.themePreference == .auto && prefs.themePreference != .auto {
+                        state.themePreference = prefs.themePreference
+                    }
+                    if prefs.sidebarMode == "hide" && state.sidebarExplicitOverride == nil {
+                        state.sidebarExplicitOverride = false
+                    }
+                    state.favoriteModels = modelState.favorite.map(\.key)
+                    state.recentModels = modelState.recent.map(\.key)
+                    state.historyNavigator = TUIPromptHistoryNavigator(entries: history)
+                    state.stashEntries = stash
+                }
+                self.markDirty()
+            }
+
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await self.refreshServerInfo() }
                 group.addTask { await self.refreshAgents() }
@@ -1212,11 +1615,263 @@ public final class TUIInteractiveClient: Sendable {
                 group.addTask { await self.refreshMCP() }
                 group.addTask { await self.refreshVCS() }
                 group.addTask { await self.refreshSessions() }
+                group.addTask { await self.refreshCommands() }
+                group.addTask { await self.refreshSkills() }
+                group.addTask { await self.refreshPermissions() }
+                group.addTask { await self.refreshForms() }
             }
-            if let activeID = self.store.withLock({ $0.activeSessionID }) {
+
+            if let args = startupArgs {
+                await self.applyStartupArgs(args)
+            } else if let activeID = self.store.withLock({ $0.activeSessionID }) {
                 await self.loadMessages(sessionID: activeID)
             }
         }
+    }
+
+    public func applyStartupArgs(_ args: TUIContext.Args) async {
+        if let agentArg = args.agent, !agentArg.isEmpty {
+            selectAgent(id: agentArg)
+        }
+        if let modelArg = args.model, !modelArg.isEmpty {
+            let parts = modelArg.split(separator: "/", maxSplits: 1).map(String.init)
+            if parts.count == 2 {
+                let matched = store.withLock { state in
+                    state.models.first(where: { $0.providerID == parts[0] && $0.id == parts[1] })
+                }
+                if let matched {
+                    selectModel(matched)
+                }
+            }
+        }
+        if args.continue == true {
+            let currentDir = store.withLock { $0.directory }
+            if let list = try? await client.session.list(SessionListInput(limit: 1, order: .desc, directory: currentDir)),
+               let match = list.data.first {
+                let targetID = match.id.rawValue
+                if args.fork == true {
+                    if let forked = try? await client.session.fork(SessionForkInput(sessionID: targetID)) {
+                        openSession(id: forked.id.rawValue, title: SessionTitleFallback.displayLabel(title: forked.title, parentID: forked.parentID?.rawValue))
+                    }
+                } else {
+                    openSession(id: targetID, title: SessionTitleFallback.displayLabel(title: match.title, parentID: match.parentID?.rawValue))
+                }
+                return
+            }
+        }
+        if let sid = args.sessionID, !sid.isEmpty {
+            if args.fork == true {
+                if let forked = try? await client.session.fork(SessionForkInput(sessionID: sid)) {
+                    openSession(id: forked.id.rawValue, title: SessionTitleFallback.displayLabel(title: forked.title, parentID: forked.parentID?.rawValue))
+                }
+            } else {
+                await loadMessages(sessionID: sid)
+            }
+            return
+        }
+        if let activeID = store.withLock({ $0.activeSessionID }) {
+            await loadMessages(sessionID: activeID)
+        }
+    }
+
+    public func refreshCommands() async {
+        guard let resp = try? await client.command.list(CommandListInput(location: locationQuery)) else { return }
+        let items = resp.data.map { cmd in
+            let name = cmd.name.hasPrefix("/") ? cmd.name : "/\(cmd.name)"
+            return TUISlashCommand(name: name, description: cmd.description ?? "Custom command", isServerCommand: true)
+        }
+        store.withLock { state in
+            state.serverCommands = items
+        }
+        markDirty()
+    }
+
+    public func refreshSkills() async {
+        guard let resp = try? await client.skill.list(SkillListInput(location: locationQuery)) else { return }
+        let items = resp.data.map { skill in
+            TUISkillItem(id: skill.id.rawValue, name: skill.name.rawValue, description: skill.description)
+        }
+        store.withLock { state in
+            state.skills = items
+        }
+        markDirty()
+    }
+
+    public func refreshPermissions() async {
+        guard let resp = try? await client.permission.request.list(PermissionRequestListInput(location: locationQuery)) else { return }
+        let items = resp.data.map(Self.mapPermissionRequest)
+        store.withLock { state in
+            state.pendingPermissions = items
+            if items.isEmpty {
+                state.permissionPromptState = TUIPermissionPromptState()
+            }
+        }
+        markDirty()
+    }
+
+    public func refreshForms() async {
+        guard let resp = try? await client.form.list(FormListInput(location: locationQuery)) else { return }
+        let items = resp.data.map(Self.mapFormInfo)
+        store.withLock { state in
+            state.pendingForms = items
+            if items.isEmpty {
+                state.formPromptState = TUIFormPromptState()
+            }
+        }
+        markDirty()
+    }
+
+    public func refreshWorktrees() async {
+        let projectID = store.withLock { state -> String? in
+            if let pid = state.projectID, !pid.isEmpty { return pid }
+            return nil
+        }
+        if let pid = projectID,
+           let resp = try? await client.worktree.list(WorktreeListInput(projectID: pid)) {
+            let mapped = resp.map { wt in
+                TUIWorktreeItem(directory: wt.directory.rawValue, branch: wt.strategy, name: nil)
+            }
+            store.withLock { state in
+                state.worktrees = mapped
+            }
+            markDirty()
+        }
+    }
+
+    private static func mapPermissionRequest(_ req: PermissionSchema.Request) -> TUIPendingPermissionItem {
+        var cmdPreview: String? = nil
+        var filePath: String? = nil
+        var diffPatch: String? = nil
+        if let meta = req.metadata {
+            if case .string(let cmd) = meta["command"] { cmdPreview = cmd }
+            if case .string(let fp) = meta["filepath"] ?? meta["filePath"] ?? meta["path"] { filePath = fp }
+            if case .string(let diff) = meta["diff"] ?? meta["patch"] { diffPatch = diff }
+        }
+        return TUIPendingPermissionItem(
+            id: req.id.rawValue,
+            sessionID: req.sessionID.rawValue,
+            permission: req.action,
+            patterns: req.resources,
+            alwaysPatterns: req.save ?? req.resources,
+            toolName: req.action,
+            commandPreview: cmdPreview,
+            filePath: filePath,
+            diffPatch: diffPatch
+        )
+    }
+
+    private static func mapFormInfo(_ info: FormSchema.Info) -> TUIPendingFormItem {
+        let msg: String?
+        if case .string(let s) = info.metadata?["message"] {
+            msg = s
+        } else {
+            msg = nil
+        }
+        let fields: [TUIFormFieldItem] = info.fields.elements.compactMap { field in
+            switch field {
+            case .string(let sf):
+                let label = sf.title ?? sf.key
+                if let opts = sf.options, !opts.isEmpty {
+                    let mapped = opts.map { TUIFormOptionItem(label: $0.label, value: $0.value, description: $0.description) }
+                    return TUIFormFieldItem(
+                        key: sf.key,
+                        label: label,
+                        description: sf.description,
+                        kind: .singleSelect(mapped),
+                        allowCustom: sf.custom ?? false,
+                        required: sf.required ?? true
+                    )
+                }
+                return TUIFormFieldItem(
+                    key: sf.key,
+                    label: label,
+                    description: sf.description,
+                    kind: .text(placeholder: sf.placeholder),
+                    allowCustom: false,
+                    required: sf.required ?? true
+                )
+            case .multiselect(let mf):
+                let label = mf.title ?? mf.key
+                let mapped = mf.options.map { TUIFormOptionItem(label: $0.label, value: $0.value, description: $0.description) }
+                return TUIFormFieldItem(
+                    key: mf.key,
+                    label: label,
+                    description: mf.description,
+                    kind: .multiSelect(mapped),
+                    allowCustom: mf.custom ?? false,
+                    required: mf.required ?? true
+                )
+            case .boolean(let bf):
+                return TUIFormFieldItem(
+                    key: bf.key,
+                    label: bf.title ?? bf.key,
+                    description: bf.description,
+                    kind: .boolean,
+                    allowCustom: false,
+                    required: bf.required ?? true
+                )
+            case .number(let nf):
+                return TUIFormFieldItem(
+                    key: nf.key,
+                    label: nf.title ?? nf.key,
+                    description: nf.description,
+                    kind: .text(placeholder: "Enter a number"),
+                    allowCustom: false,
+                    required: nf.required ?? true
+                )
+            case .integer(let inf):
+                return TUIFormFieldItem(
+                    key: inf.key,
+                    label: inf.title ?? inf.key,
+                    description: inf.description,
+                    kind: .text(placeholder: "Enter an integer"),
+                    allowCustom: false,
+                    required: inf.required ?? true
+                )
+            case .external:
+                return nil
+            }
+        }
+        return TUIPendingFormItem(
+            id: info.id.rawValue,
+            sessionID: info.sessionID,
+            title: info.title,
+            message: msg,
+            fields: fields
+        )
+    }
+
+    internal func persistPreferencesAsync() {
+        guard let persistence else { return }
+        let prefs = store.withLock { state -> TUIPersistedPreferences in
+            var copy = state.preferences
+            copy.themeName = state.themeName
+            copy.themePreference = state.themePreference
+            return copy
+        }
+        Task { await persistence.savePreferences(prefs) }
+    }
+
+    internal func persistModelStateAsync() {
+        guard let persistence else { return }
+        let modelState = store.withLock { state -> TUIPersistedModelState in
+            let recent = state.recentModels.compactMap { key -> TUIPersistedModelState.ModelEntry? in
+                let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { return nil }
+                return TUIPersistedModelState.ModelEntry(providerID: parts[0], modelID: parts[1])
+            }
+            let favs = state.favoriteModels.compactMap { key -> TUIPersistedModelState.ModelEntry? in
+                let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { return nil }
+                return TUIPersistedModelState.ModelEntry(providerID: parts[0], modelID: parts[1])
+            }
+            var variants: [String: String] = [:]
+            if let sel = state.selectedModel, let v = state.selectedVariant, !v.isEmpty {
+                variants["\(sel.providerID)/\(sel.id)"] = v
+            }
+            return TUIPersistedModelState(recent: recent, favorite: favs, variant: variants)
+        }
+        Task { await persistence.saveModelState(modelState) }
     }
 
     public func refreshIntegrations() async {
@@ -1605,6 +2260,7 @@ public final class TUIInteractiveClient: Sendable {
     public func startEventStream() -> Task<Void, Never> {
         Task { [weak self] in
             var backoffMs: UInt64 = 250
+            var everConnected = false
             while !Task.isCancelled {
                 guard let self else { return }
                 if self.store.withLock({ $0.shouldQuit }) { return }
@@ -1613,8 +2269,11 @@ public final class TUIInteractiveClient: Sendable {
                     for try await event in stream {
                         if Task.isCancelled || self.store.withLock({ $0.shouldQuit }) { return }
                         backoffMs = 250
-                        let effect = self.store.withLock { state in
-                            Self.applyServerEvent(event, to: &state)
+                        everConnected = true
+                        let effect = self.store.withLock { state -> EventSideEffect in
+                            state.sseConnected = true
+                            state.sseReconnecting = false
+                            return Self.applyServerEvent(event, to: &state)
                         }
                         self.markDirty()
                         self.dispatch(effect: effect)
@@ -1623,6 +2282,13 @@ public final class TUIInteractiveClient: Sendable {
                     // Transient disconnect or server restart — reconnect with bounded backoff.
                 }
                 if Task.isCancelled || self.store.withLock({ $0.shouldQuit }) { return }
+                if everConnected {
+                    self.store.withLock { state in
+                        state.sseConnected = false
+                        state.sseReconnecting = true
+                    }
+                    self.markDirty()
+                }
                 try? await Task.sleep(for: .milliseconds(backoffMs))
                 backoffMs = min(backoffMs * 2, 2_000)
             }
@@ -1648,8 +2314,26 @@ public final class TUIInteractiveClient: Sendable {
         if effect.refreshSessions {
             Task { await self.refreshSessions() }
         }
+        if effect.refreshCommands {
+            Task { await self.refreshCommands() }
+        }
+        if effect.refreshSkills {
+            Task { await self.refreshSkills() }
+        }
+        if effect.refreshPermissions {
+            Task { await self.refreshPermissions() }
+        }
+        if effect.refreshForms {
+            Task { await self.refreshForms() }
+        }
         if let sid = effect.refreshMessagesForSession {
             Task { await self.loadMessages(sessionID: sid) }
+        }
+        if let sid = effect.selectSessionID {
+            let title = store.withLock { state in
+                state.sessions.first(where: { $0.id == sid })?.title ?? "Session"
+            }
+            openSession(id: sid, title: title)
         }
     }
 
@@ -1926,6 +2610,95 @@ public final class TUIInteractiveClient: Sendable {
             }
             effect.refreshVCS = true
 
+        case "server.connected":
+            state.sseConnected = true
+            state.sseReconnecting = false
+
+        case "permission.asked":
+            if let reqID = stringField(obj, "id"),
+               let sid = stringField(obj, "sessionID") ?? state.activeSessionID,
+               let action = stringField(obj, "action") ?? stringField(obj, "permission") {
+                var resources: [String] = []
+                if case .array(let arr) = obj["resources"] ?? obj["patterns"] {
+                    resources = arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+                }
+                var savePatterns: [String] = resources
+                if case .array(let arr) = obj["save"] {
+                    savePatterns = arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+                }
+                let meta = jsonObject(obj["metadata"])
+                let item = TUIPendingPermissionItem(
+                    id: reqID,
+                    sessionID: sid,
+                    permission: action,
+                    patterns: resources,
+                    alwaysPatterns: savePatterns,
+                    toolName: action,
+                    commandPreview: stringField(meta, "command"),
+                    filePath: stringField(meta, "filepath") ?? stringField(meta, "filePath") ?? stringField(meta, "path"),
+                    diffPatch: stringField(meta, "diff") ?? stringField(meta, "patch")
+                )
+                state.pendingPermissions.removeAll { $0.id == reqID }
+                state.pendingPermissions.append(item)
+                state.permissionPromptState = TUIPermissionPromptState()
+            } else {
+                effect.refreshPermissions = true
+            }
+
+        case "permission.replied":
+            if let reqID = stringField(obj, "requestID") ?? stringField(obj, "id") {
+                state.pendingPermissions.removeAll { $0.id == reqID }
+                if state.pendingPermissions.isEmpty {
+                    state.permissionPromptState = TUIPermissionPromptState()
+                }
+            } else {
+                effect.refreshPermissions = true
+            }
+
+        case "form.asked", "form.created":
+            effect.refreshForms = true
+
+        case "form.replied", "form.cancelled", "form.settled":
+            if let formID = stringField(obj, "formID") ?? stringField(obj, "id") {
+                state.pendingForms.removeAll { $0.id == formID }
+                if state.pendingForms.isEmpty {
+                    state.formPromptState = TUIFormPromptState()
+                }
+            } else {
+                effect.refreshForms = true
+            }
+
+        case "command.updated":
+            effect.refreshCommands = true
+
+        case "skill.updated":
+            effect.refreshSkills = true
+
+        case "todo.updated", "session.todo.updated":
+            if !isForActiveSession && eventSessionID != nil { break }
+            if case .array(let arr) = obj["todos"] ?? obj["items"] {
+                let parsed: [TUITodoItem] = arr.compactMap { entry in
+                    let d = jsonObject(entry)
+                    guard let content = stringField(d, "content") ?? stringField(d, "text") else { return nil }
+                    let id = stringField(d, "id") ?? content
+                    let rawStatus = stringField(d, "status") ?? "pending"
+                    let status = TUITodoStatus(rawValue: rawStatus) ?? .pending
+                    return TUITodoItem(id: id, content: content, status: status, priority: stringField(d, "priority"))
+                }
+                state.todos = parsed
+            }
+
+        case "tui.toast.show":
+            if let msg = stringField(obj, "message"), !msg.isEmpty {
+                state.toastMessage = msg
+                state.toastIsError = (stringField(obj, "variant") == "error")
+            }
+
+        case "tui.session.select":
+            if let sid = eventSessionID, !sid.isEmpty {
+                effect.selectSessionID = sid
+            }
+
         case "agent.updated":
             effect.refreshAgents = true
 
@@ -2008,18 +2781,36 @@ public final class TUIInteractiveClient: Sendable {
     // MARK: - User Actions
 
     public func submitPrompt(rawText: String) {
+        let isShell = store.withLock { $0.shellMode }
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        if isShell {
+            let cmd = TUIShellMode.extractShellCommand(from: trimmed, isShellMode: true) ?? trimmed
+            submitShellCommand(cmd)
+            return
+        }
 
         if handleSlashCommand(trimmed) {
             return
         }
 
+        // Record prompt in history + persist
+        let historyEntry = TUIPromptHistoryEntry(input: trimmed, mode: "normal")
+        store.withLock { state in
+            state.historyNavigator.append(historyEntry)
+        }
+        if let persistence {
+            Task { await persistence.appendHistory(historyEntry) }
+        }
+
         let optimisticID = nextOptimisticID()
-        let submission = store.withLock { state -> (sessionID: String?, agentID: String, modelRef: ModelSchema.Ref?) in
+        let submission = store.withLock { state -> (sessionID: String?, agentID: String, modelRef: ModelSchema.Ref?, dir: String) in
             state.promptText = ""
             state.slashAutocompleteDismissed = false
             state.slashAutocompleteIndex = 0
+            state.mentionAutocompleteDismissed = false
+            state.mentionAutocompleteIndex = 0
             state.toastMessage = nil
             state.sessionStatus = .running
             state.interruptArmed = false
@@ -2036,7 +2827,8 @@ public final class TUIInteractiveClient: Sendable {
             return (
                 state.activeSessionID,
                 state.activeAgent.id,
-                state.selectedModel?.ref(variant: state.selectedVariant)
+                state.selectedModel?.ref(variant: state.selectedVariant),
+                state.directory
             )
         }
         markDirty()
@@ -2049,7 +2841,7 @@ public final class TUIInteractiveClient: Sendable {
                     targetSessionID = existing
                 } else {
                     let title = String(trimmed.prefix(48))
-                    let loc = LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: self.directory))
+                    let loc = LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: submission.dir))
                     let created = try await self.client.session.create(SessionCreateInput(
                         title: title,
                         agent: submission.agentID,
@@ -2061,6 +2853,9 @@ public final class TUIInteractiveClient: Sendable {
                         state.activeSessionID = targetSessionID
                         state.activeSessionTitle = title
                         state.route = .session(TUIContext.SessionRoute(sessionID: targetSessionID))
+                        if !state.openSessionTabs.contains(targetSessionID) {
+                            state.openSessionTabs.append(targetSessionID)
+                        }
                     }
                     self.markDirty()
                 }
@@ -2092,8 +2887,12 @@ public final class TUIInteractiveClient: Sendable {
 
     @discardableResult
     public func handleSlashCommand(_ trimmed: String) -> Bool {
-        let lower = trimmed.lowercased()
-        switch lower {
+        guard trimmed.hasPrefix("/") else { return false }
+        let pieces = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        let cmdToken = String(pieces.first ?? "").lowercased()
+        let argsText = pieces.count > 1 ? String(pieces[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+
+        switch cmdToken {
         case "/quit", "/exit", "/q":
             store.withLock {
                 $0.shouldQuit = true
@@ -2112,7 +2911,7 @@ public final class TUIInteractiveClient: Sendable {
             markDirty()
             return true
 
-        case "/new":
+        case "/new", "/clear":
             startNewSession()
             return true
 
@@ -2132,7 +2931,7 @@ public final class TUIInteractiveClient: Sendable {
             openVariantPicker()
             return true
 
-        case "/sessions", "/session":
+        case "/sessions", "/session", "/resume", "/continue":
             openDialog(.sessionList)
             Task { await self.refreshSessions() }
             return true
@@ -2146,7 +2945,104 @@ public final class TUIInteractiveClient: Sendable {
             Task { await self.refreshMCP() }
             return true
 
-        case "/commands", "/help":
+        case "/diff", "/diffs":
+            store.withLock { $0.promptText = "" }
+            openDiffViewer()
+            return true
+
+        case "/settings", "/config":
+            openSettingsDialog()
+            return true
+
+        case "/status":
+            openStatusDialog()
+            return true
+
+        case "/usage":
+            openUsageDialog()
+            return true
+
+        case "/skills", "/skill":
+            openSkillsDialog()
+            return true
+
+        case "/timeline":
+            openTimelineDialog()
+            return true
+
+        case "/undo":
+            store.withLock { $0.promptText = "" }
+            undoLastUserMessage()
+            return true
+
+        case "/redo":
+            store.withLock { $0.promptText = "" }
+            redoRevertedMessage()
+            return true
+
+        case "/fork":
+            store.withLock { $0.promptText = "" }
+            forkActiveSession()
+            return true
+
+        case "/rename":
+            store.withLock { $0.promptText = "" }
+            if !argsText.isEmpty, let sid = store.withLock({ $0.activeSessionID }) {
+                renameSession(id: sid, newTitle: argsText)
+            } else {
+                openRenameSessionDialog()
+            }
+            return true
+
+        case "/copy":
+            store.withLock { $0.promptText = "" }
+            copySessionTranscript()
+            return true
+
+        case "/export":
+            store.withLock { $0.promptText = "" }
+            exportSessionTranscript()
+            return true
+
+        case "/pair", "/web":
+            openPairDialog()
+            return true
+
+        case "/workspaces", "/workspace", "/cd":
+            openWorkspacesDialog()
+            return true
+
+        case "/stash":
+            if argsText.lowercased() == "pop" {
+                store.withLock { $0.promptText = "" }
+                popMostRecentStash()
+            } else if !argsText.isEmpty {
+                store.withLock { $0.promptText = "" }
+                stashPromptText(argsText)
+            } else {
+                openStashListDialog()
+            }
+            return true
+
+        case "/editor":
+            store.withLock { $0.promptText = "" }
+            requestExternalEditor()
+            return true
+
+        case "/reload":
+            store.withLock { $0.promptText = "" }
+            reloadLocationConfig()
+            return true
+
+        case "/debug":
+            openDebugDialog()
+            return true
+
+        case "/help":
+            openHelpDialog()
+            return true
+
+        case "/commands":
             openDialog(.commandPalette)
             return true
 
@@ -2163,6 +3059,18 @@ public final class TUIInteractiveClient: Sendable {
             return true
 
         default:
+            // Dispatch custom server slash commands (e.g. `/init`, `/review`, `.opencode/commands/*.md`)
+            let matchedServerCmd = store.withLock { state in
+                state.serverCommands.first { cmd in
+                    let normalized = cmd.name.hasPrefix("/") ? cmd.name.lowercased() : "/\(cmd.name.lowercased())"
+                    return normalized == cmdToken
+                }
+            }
+            if let serverCmd = matchedServerCmd {
+                let rawName = serverCmd.name.hasPrefix("/") ? String(serverCmd.name.dropFirst()) : serverCmd.name
+                submitServerCommand(name: rawName, arguments: argsText)
+                return true
+            }
             return false
         }
     }
@@ -2307,18 +3215,27 @@ public final class TUIInteractiveClient: Sendable {
             state.activeSessionID = id
             state.activeSessionTitle = title
             state.messages = []
+            state.todos = []
             state.contextTokens = 0
             state.sessionCost = 0
             state.sessionStatus = .idle
             state.interruptArmed = false
+            state.hasRevertedMessage = false
+            state.revertedMessageID = nil
             state.route = .session(TUIContext.SessionRoute(sessionID: id))
             state.activeDialog = nil
             state.dialogFilter = ""
             state.dialogSelectedIndex = 0
+            state.pendingDeleteSessionID = nil
+            if !state.openSessionTabs.contains(id) {
+                state.openSessionTabs.append(id)
+            }
         }
         markDirty()
         Task { [weak self] in
             await self?.loadMessages(sessionID: id)
+            await self?.refreshPermissions()
+            await self?.refreshForms()
         }
     }
 
@@ -2378,6 +3295,7 @@ public final class TUIInteractiveClient: Sendable {
             return state.activeSessionID
         }
         markDirty()
+        persistModelStateAsync()
         if let sid = activeSID {
             let ref = store.withLock { $0.selectedModel?.ref(variant: $0.selectedVariant) } ?? model.ref
             Task { [weak self] in
@@ -2399,6 +3317,7 @@ public final class TUIInteractiveClient: Sendable {
             return (sid, model.ref(variant: normalized))
         }
         markDirty()
+        persistModelStateAsync()
         if let (sid, ref) = syncInfo {
             Task { [weak self] in
                 _ = try? await self?.client.session.switchModel(
@@ -2434,6 +3353,7 @@ public final class TUIInteractiveClient: Sendable {
                 state.favoriteModels.insert(key, at: 0)
             }
         }
+        persistModelStateAsync()
         markDirty()
     }
 
@@ -3003,6 +3923,18 @@ public final class TUIInteractiveClient: Sendable {
             submitOAuthCode()
             return
         }
+        if currentDialog == .renameSession {
+            submitRenameSession()
+            return
+        }
+        if currentDialog == .settings {
+            cycleSelectedSetting(direction: 1)
+            return
+        }
+        if currentDialog?.isCustomOverlay == true {
+            closeDialog(commitTheme: true)
+            return
+        }
 
         let selection = store.withLock { state -> (TUIActiveDialog, TUIDialogRow)? in
             guard let dialog = state.activeDialog else { return nil }
@@ -3033,6 +3965,42 @@ public final class TUIInteractiveClient: Sendable {
                 cycleAgent(direction: 1)
             case .switchVariant:
                 openVariantPicker()
+            case .viewDiff:
+                openDiffViewer()
+            case .openSettings:
+                openSettingsDialog()
+            case .openSkills:
+                openSkillsDialog()
+            case .timeline:
+                openTimelineDialog()
+            case .undoMessage:
+                undoLastUserMessage()
+            case .redoMessage:
+                redoRevertedMessage()
+            case .forkSession:
+                forkActiveSession()
+            case .renameSession:
+                openRenameSessionDialog()
+            case .copyTranscript:
+                copySessionTranscript()
+            case .exportTranscript:
+                exportSessionTranscript()
+            case .pairDevice:
+                openPairDialog()
+            case .viewStatus:
+                openStatusDialog()
+            case .viewUsage:
+                openUsageDialog()
+            case .openWorkspaces:
+                openWorkspacesDialog()
+            case .stashPrompt:
+                stashCurrentPrompt()
+            case .openStashList:
+                openStashListDialog()
+            case .openExternalEditor:
+                requestExternalEditor()
+            case .reloadConfig:
+                reloadLocationConfig()
             case .switchTheme:
                 openDialog(.themePicker)
             case .toggleMode:
@@ -3048,6 +4016,10 @@ public final class TUIInteractiveClient: Sendable {
                 toggleSidebar()
             case .compactSession:
                 compactActiveSession()
+            case .showHelp:
+                openHelpDialog()
+            case .showDebug:
+                openDebugDialog()
             case .exit:
                 store.withLock {
                     $0.shouldQuit = true
@@ -3121,6 +4093,29 @@ public final class TUIInteractiveClient: Sendable {
         case .connectOAuth:
             submitOAuthCode()
 
+        case .renameSession:
+            submitRenameSession()
+
+        case .settings:
+            cycleSelectedSetting(direction: 1)
+
+        case .skills:
+            closeDialog(commitTheme: true)
+            activateSkill(id: row.id)
+
+        case .timeline:
+            closeDialog(commitTheme: true)
+            revertToMessage(id: row.id)
+
+        case .stashList:
+            popStashEntry(id: row.id)
+
+        case .workspaces:
+            switchWorkspace(directory: row.id)
+
+        case .status, .usage, .pair, .help, .debug, .diffViewer:
+            closeDialog(commitTheme: true)
+
         case .agentPicker:
             selectAgent(id: row.id)
 
@@ -3133,6 +4128,7 @@ public final class TUIInteractiveClient: Sendable {
         case .themePicker:
             previewThemeRowIfNeeded()
             closeDialog(commitTheme: true)
+            persistPreferencesAsync()
 
         case .mcpStatus:
             toggleMCPServer(named: row.id)

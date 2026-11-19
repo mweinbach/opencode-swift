@@ -41,9 +41,7 @@ final class TUIRealParityHarness {
             client: client,
             store: store,
             directory: state.directory,
-            markDirty: {
-                rootBox.invalidate()
-            }
+            markDirty: {}
         )
         self.viewRoot = TUIInteractiveLoop.mountInteractiveView(
             on: testRenderer.renderer,

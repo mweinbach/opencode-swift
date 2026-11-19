@@ -13,6 +13,12 @@ public struct TUIScreenActions: Sendable {
     public let onDialogSubmit: @Sendable () -> Void
     public let onDialogClose: @Sendable () -> Void
     public let onOpenMCPDialog: @Sendable () -> Void
+    public let onPermissionRejectInput: @Sendable (String) -> Void
+    public let onPermissionRejectSubmit: @Sendable (String) -> Void
+    public let onFormTextInput: @Sendable (String) -> Void
+    public let onFormTextSubmit: @Sendable (String) -> Void
+    public let onRenameInput: @Sendable (String) -> Void
+    public let onRenameSubmit: @Sendable (String) -> Void
 
     public init(
         onPromptInput: @escaping @Sendable (String) -> Void = { _ in },
@@ -20,7 +26,13 @@ public struct TUIScreenActions: Sendable {
         onDialogFilterInput: @escaping @Sendable (String) -> Void = { _ in },
         onDialogSubmit: @escaping @Sendable () -> Void = {},
         onDialogClose: @escaping @Sendable () -> Void = {},
-        onOpenMCPDialog: @escaping @Sendable () -> Void = {}
+        onOpenMCPDialog: @escaping @Sendable () -> Void = {},
+        onPermissionRejectInput: @escaping @Sendable (String) -> Void = { _ in },
+        onPermissionRejectSubmit: @escaping @Sendable (String) -> Void = { _ in },
+        onFormTextInput: @escaping @Sendable (String) -> Void = { _ in },
+        onFormTextSubmit: @escaping @Sendable (String) -> Void = { _ in },
+        onRenameInput: @escaping @Sendable (String) -> Void = { _ in },
+        onRenameSubmit: @escaping @Sendable (String) -> Void = { _ in }
     ) {
         self.onPromptInput = onPromptInput
         self.onPromptSubmit = onPromptSubmit
@@ -28,6 +40,12 @@ public struct TUIScreenActions: Sendable {
         self.onDialogSubmit = onDialogSubmit
         self.onDialogClose = onDialogClose
         self.onOpenMCPDialog = onOpenMCPDialog
+        self.onPermissionRejectInput = onPermissionRejectInput
+        self.onPermissionRejectSubmit = onPermissionRejectSubmit
+        self.onFormTextInput = onFormTextInput
+        self.onFormTextSubmit = onFormTextSubmit
+        self.onRenameInput = onRenameInput
+        self.onRenameSubmit = onRenameSubmit
     }
 }
 
@@ -100,9 +118,18 @@ public enum TUIScreens {
                 .width(.percent(100))
                 .height(.percent(100))
 
-                // Floating centered modal dialog overlay (Command Palette, Model Picker, Session List, Theme Picker, MCP Status)
+                // Floating centered modal dialog / full overlay
                 if let dialog = state.activeDialog {
-                    buildDialogOverlay(dialog: dialog, state: state, theme: theme, actions: actions)
+                    buildDialogOverlay(dialog: dialog, state: state, theme: theme, syntaxStyle: syntaxStyle, actions: actions)
+                }
+
+                // Live SSE Reconnecting overlay (`component/reconnecting.tsx`)
+                if state.sseReconnecting && state.activeDialog == nil {
+                    TUISessionOverlays.buildReconnectingOverlay(
+                        managed: false,
+                        spinnerTick: state.spinnerTick,
+                        theme: theme
+                    )
                 }
 
                 // Subtle bottom-right toast banner when active
@@ -250,6 +277,12 @@ public enum TUIScreens {
                                 theme: theme,
                                 maxWidth: composerWidth
                             )
+                        } else if state.isMentionAutocompleteVisible {
+                            buildMentionAutocomplete(
+                                state: state,
+                                theme: theme,
+                                maxWidth: composerWidth
+                            )
                         }
                         buildPromptComposer(
                             state: state,
@@ -352,13 +385,14 @@ public enum TUIScreens {
         actions: TUIScreenActions
     ) -> AnyTUIView {
         let promptBg = theme.decrease(theme.background.raised.base)
-        let agentColor = state.agentColor(theme: theme)
+        let agentColor = state.shellMode ? theme.text.feedback.warning.base : state.agentColor(theme: theme)
         let innerPadX = state.cols < 44 ? 1 : 2
         let inputAvailWidth = max(8, columnWidth - 1 - innerPadX * 2)
-        let placeholderText = TUIUtil.takeWidth(state.currentPlaceholder, inputAvailWidth)
+        let rawPlaceholder = state.shellMode ? "Run a shell command… (esc to exit)" : state.currentPlaceholder
+        let placeholderText = TUIUtil.takeWidth(rawPlaceholder, inputAvailWidth)
             .trimmingCharacters(in: .whitespaces)
         let inputKey = isHome ? "home-prompt-input" : "session-prompt-input"
-        let inputFocused = state.activeDialog == nil
+        let inputFocused = state.activeDialog == nil && state.activePermission == nil && state.activeForm == nil
 
         return AnyTUIView(
             VStack(spacing: 0) {
@@ -462,6 +496,21 @@ public enum TUIScreens {
         availableWidth: Int
     ) -> AnyTUIView {
         let narrow = state.cols < 44
+        if state.shellMode {
+            let chunks: [TextChunk] = [
+                TextChunk(text: "! Shell", fg: theme.text.feedback.warning.base, bg: promptBg, attributes: TextAttributes.bold),
+                TextChunk(text: " · Enter to run command · Esc to exit", fg: theme.text.muted, bg: promptBg),
+            ]
+            return AnyTUIView(
+                TUIText(
+                    StyledText(chunks: chunks),
+                    bg: .rgba(promptBg),
+                    wrapMode: TextWrapMode.none,
+                    truncate: true
+                )
+                .width(.percent(100))
+            )
+        }
         let agentName = narrow ? "" : state.activeAgent.displayName
         let modelName = state.activeModelLabel
         let providerName = narrow ? "" : state.activeProviderLabel
@@ -672,6 +721,75 @@ public enum TUIScreens {
         )
     }
 
+    // MARK: - Live `@` File & Agent Mention Autocomplete Popover (`component/prompt/autocomplete.tsx`)
+
+    private static func buildMentionAutocomplete(
+        state: TUIInteractiveState,
+        theme: ResolvedTheme,
+        maxWidth: Int
+    ) -> AnyTUIView {
+        let matches = state.mentionSuggestions
+        let maxVisible = min(matches.count, max(1, min(6, state.rows - 14)))
+        let selected = min(max(0, state.mentionAutocompleteIndex), max(0, matches.count - 1))
+        let startIdx = max(0, min(selected - maxVisible + 1, matches.count - maxVisible))
+        let visibleSlice = Array(matches[startIdx..<min(matches.count, startIdx + maxVisible)])
+        let bgSurface = theme.background.raised.high
+        let selBg = theme.background.action.primary.focused
+        let selFg = theme.text.action.primary.focused
+
+        return AnyTUIView(
+            TUIBox(
+                border: .sides([.left, .right]),
+                borderColor: .rgba(theme.border.base),
+                backgroundColor: .rgba(bgSurface),
+                shouldFill: true,
+                customBorderChars: splitBorderChars
+            ) {
+                VStack(spacing: 0) {
+                    for (offset, item) in visibleSlice.enumerated() {
+                        let actualIndex = startIdx + offset
+                        let isSel = actualIndex == selected
+                        let rowBg = isSel ? selBg : bgSurface
+                        let nameFg = isSel ? selFg : theme.text.base
+                        let subFg = isSel ? selFg : theme.text.muted
+                        let kindTag = item.kind == .agent ? "agent" : "file"
+                        let valBudget = max(12, maxWidth - 14)
+
+                        TUIBox(
+                            border: false,
+                            backgroundColor: .rgba(rowBg),
+                            shouldFill: true
+                        ) {
+                            HStack(spacing: 2) {
+                                TUIText(
+                                    TUIUtil.truncateWidth("@\(item.value)", valBudget),
+                                    fg: .rgba(nameFg),
+                                    bg: .rgba(rowBg),
+                                    attributes: isSel ? TextAttributes.bold : TextAttributes.none,
+                                    wrapMode: TextWrapMode.none,
+                                    truncate: true
+                                )
+                                .flexGrow(1)
+                                TUIText(kindTag, fg: .rgba(subFg), bg: .rgba(rowBg), wrapMode: TextWrapMode.none)
+                                    .flexShrink(0)
+                            }
+                            .padding(right: 1, left: 1)
+                            .width(.percent(100))
+                        }
+                        .key("mention-item-\(item.value)")
+                        .width(.percent(100))
+                        .height(1)
+                    }
+                }
+                .width(.percent(100))
+            }
+            .id("opencode-mention-autocomplete")
+            .width(.percent(100))
+            .margin(bottom: 0)
+            .flexShrink(0)
+        )
+    }
+
     // MARK: - Session Screen (`routes/session/index.tsx` + `sidebar.tsx` + `message-parts.tsx`)
 
     public static func buildSessionScreen(
@@ -693,12 +811,12 @@ public enum TUIScreens {
                     buildSessionHeader(state: state, theme: theme, maxWidth: mainColWidth)
 
                     TUIScrollBox(
-                        stickyScroll: true,
+                        stickyScroll: state.preferences.scrollOnSend != "keep",
                         stickyStart: .bottom,
                         scrollX: false,
                         scrollY: true,
                         viewportCulling: true,
-                        showVerticalScrollbar: false,
+                        showVerticalScrollbar: state.preferences.showScrollbar,
                         showHorizontalScrollbar: false,
                         border: false,
                         backgroundColor: .rgba(theme.background.base),
@@ -739,9 +857,30 @@ public enum TUIScreens {
                     .width(.percent(100))
                     .flexGrow(1)
 
-                    // Optional slash autocomplete right above the session prompt composer
-                    if state.isSlashAutocompleteVisible {
+                    // Docked Interactive Permission Prompt (`routes/session/permission.tsx`) or Form Prompt (`routes/session/form.tsx`)
+                    if let perm = state.activePermission {
+                        TUISessionOverlays.buildPermissionPrompt(
+                            request: perm,
+                            state: state.permissionPromptState,
+                            theme: theme,
+                            syntaxStyle: syntaxStyle,
+                            columnWidth: mainColWidth,
+                            onRejectInput: actions.onPermissionRejectInput,
+                            onRejectSubmit: actions.onPermissionRejectSubmit
+                        )
+                    } else if let form = state.activeForm {
+                        TUISessionOverlays.buildFormPrompt(
+                            form: form,
+                            state: state.formPromptState,
+                            theme: theme,
+                            columnWidth: mainColWidth,
+                            onTextInput: actions.onFormTextInput,
+                            onTextSubmit: actions.onFormTextSubmit
+                        )
+                    } else if state.isSlashAutocompleteVisible {
                         buildSlashAutocomplete(state: state, theme: theme, maxWidth: mainColWidth)
+                    } else if state.isMentionAutocompleteVisible {
+                        buildMentionAutocomplete(state: state, theme: theme, maxWidth: mainColWidth)
                     }
 
                     // Bottom-pinned exact left-bordered Prompt Composer
@@ -898,6 +1037,7 @@ public enum TUIScreens {
     ) -> AnyTUIView {
         switch part {
         case .reasoning(let id, let text, let partDone):
+            guard state.preferences.showThinking else { return AnyTUIView(EmptyTUIView()) }
             let header = partDone ? "Thought" : "\(spinnerFrames[state.spinnerTick % spinnerFrames.count]) Thinking"
             let railColor = theme.decrease(theme.background.base)
             return AnyTUIView(
@@ -941,7 +1081,7 @@ public enum TUIScreens {
                 TUIMarkdown(
                     trimmed,
                     syntaxStyle: syntaxStyle,
-                    conceal: true,
+                    conceal: state.preferences.concealMarkdown,
                     streaming: !completed,
                     fg: .rgba(theme.markdown.text),
                     bg: .rgba(theme.background.base)
@@ -1072,6 +1212,17 @@ public enum TUIScreens {
                         }
                     }
 
+                    // Todo Checklist Section (`feature-plugins/sidebar/todo.tsx`)
+                    if !state.todos.isEmpty {
+                        TUISessionOverlays.buildSidebarTodoSection(
+                            items: state.todos,
+                            expanded: true,
+                            theme: theme,
+                            background: bg,
+                            innerWidth: innerWidth
+                        )
+                    }
+
                     // Modified Files Section
                     if !state.modifiedFiles.isEmpty {
                         VStack(spacing: 0) {
@@ -1110,8 +1261,76 @@ public enum TUIScreens {
         dialog: TUIActiveDialog,
         state: TUIInteractiveState,
         theme: ResolvedTheme,
+        syntaxStyle: SyntaxStyle? = nil,
         actions: TUIScreenActions
     ) -> AnyTUIView {
+        switch dialog {
+        case .diffViewer:
+            return TUISessionOverlays.buildDiffViewerOverlay(
+                state: state.diffViewerState,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                syntaxStyle: syntaxStyle ?? generateSyntax(theme),
+                onClose: actions.onDialogClose
+            )
+        case .pair:
+            return TUISessionOverlays.buildPairDialogOverlay(
+                info: state.pairingInfo,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onClose: actions.onDialogClose
+            )
+        case .status:
+            return TUISessionOverlays.buildStatusDialogOverlay(
+                snapshot: state.statusSnapshot,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onClose: actions.onDialogClose
+            )
+        case .usage:
+            return TUISessionOverlays.buildUsageDialogOverlay(
+                workspaceName: state.usageWorkspaceName,
+                isSignedIn: state.usageSignedIn,
+                limits: state.usageLimits,
+                selectedIndex: state.dialogSelectedIndex,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onClose: actions.onDialogClose
+            )
+        case .debug:
+            return TUISessionOverlays.buildDebugDialogOverlay(
+                snapshot: state.debugSnapshot,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onClose: actions.onDialogClose
+            )
+        case .help:
+            return TUISessionOverlays.buildHelpDialogOverlay(
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onClose: actions.onDialogClose
+            )
+        case .renameSession:
+            return TUISessionOverlays.buildRenameSessionDialogOverlay(
+                currentTitle: state.activeSessionTitle,
+                draftTitle: state.renameDraft,
+                cols: state.cols,
+                rows: state.rows,
+                theme: theme,
+                onInput: actions.onRenameInput,
+                onSubmit: actions.onRenameSubmit,
+                onClose: actions.onDialogClose
+            )
+        default:
+            break
+        }
+
         let dialogTheme = theme.surface(.dialog)
         let cardWidth = min(66, max(36, state.cols - 4))
         let innerWidth = max(24, cardWidth - 6)
@@ -1195,8 +1414,28 @@ public enum TUIScreens {
             title = "MCP Servers"
             searchPlaceholder = "Filter MCP servers"
             emptyMessage = "No MCP servers configured"
-        case .connectAPIKey, .connectOAuth:
-            title = "Connect"
+        case .settings:
+            title = "Settings"
+            searchPlaceholder = "Search settings"
+            emptyMessage = "No matching settings"
+        case .skills:
+            title = "Skills"
+            searchPlaceholder = "Search skills"
+            emptyMessage = state.skills.isEmpty ? "No skills available" : "No matching skills"
+        case .timeline:
+            title = "Timeline"
+            searchPlaceholder = "Search timeline"
+            emptyMessage = "No user messages in this session"
+        case .stashList:
+            title = "Prompt Stash"
+            searchPlaceholder = "Search stashed prompts"
+            emptyMessage = "No stashed prompts"
+        case .workspaces:
+            title = "Workspaces"
+            searchPlaceholder = "Filter workspaces"
+            emptyMessage = "No workspaces found"
+        case .connectAPIKey, .connectOAuth, .status, .usage, .pair, .help, .debug, .renameSession, .diffViewer:
+            title = "Dialog"
             searchPlaceholder = ""
             emptyMessage = ""
         }
@@ -1215,6 +1454,44 @@ public enum TUIScreens {
                 TextChunk(text: "  ctrl+f ", fg: dialogTheme.text.base, bg: cardBg),
                 TextChunk(text: "favorite", fg: dialogTheme.text.muted, bg: cardBg),
                 TextChunk(text: "  esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .sessionList:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "open", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  ctrl+r ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "rename", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  ctrl+f ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "pin", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  ctrl+d ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "delete", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .settings:
+            footerChunks = [
+                TextChunk(text: "←/→/enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "change", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ↑↓ ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "navigate", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .stashList:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "pop", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ctrl+d ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "delete", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .timeline:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "revert", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ctrl+f ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "fork here", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
                 TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
             ]
         case .connectProvider:
