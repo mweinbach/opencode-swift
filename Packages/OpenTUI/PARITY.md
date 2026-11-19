@@ -9,11 +9,11 @@
 | Tracked upstream OpenTUI packages | 5 |
 | Tracked upstream source files (TS + Zig) | 292 |
 | Tracked upstream LOC | 169,364 |
-| Upstream exported symbols (implemented / total) | 5679 / 5679 (100.0%) |
-| Upstream functions/methods (implemented / total) | 3159 / 3159 (100.0%) |
-| Unmapped / stub / partial symbols | 0 / 0 / 0 |
+| Upstream exported symbols (implemented / total) | 5679 / 7223 (78.6%) |
+| Upstream functions/methods (implemented / total) | 3164 / 4617 (68.5%) |
+| Unmapped / stub / partial symbols | 1544 / 0 / 0 |
 | Differential oracle-verified functions | 91 (383 test vectors) |
-| Upstream code drift alerts | 0 |
+| Upstream code drift alerts | 520 |
 | Dangling parity annotations | 0 |
 | Duplicate parity annotations | 0 |
 | Unpinned parity annotations (missing hash) | 0 |
@@ -24,30 +24,1582 @@
 | Swift Testing / CLT cross-import violations | 0 |
 | Production stub hygiene violations | 0 |
 | Cross-platform purity violations | 0 |
+| Compiler export completeness errors | 0 |
+| Workspace dependency graph errors | 0 |
+| Swift implementation substance errors | 1 |
 
 ## Package Parity Matrix
 
 | Upstream Package | Lang | Swift Target | Tier | Files | LOC | Functions (Impl/Total) | Symbols (Impl/Total) | Drift |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `packages/core` | ts | `OpenTUICore` | `tier1-primitives` | 125 | 66,569 | 2098/2098 (100.0%) | 3777/3777 (100.0%) | 0 |
-| `packages/keymap` | ts | `OpenTUIKeymap` | `tier1-primitives` | 66 | 13,800 | 203/203 (100.0%) | 410/410 (100.0%) | 0 |
-| `packages/native` | zig | `OpenTUICore` | `tier2-engine` | 80 | 78,145 | 799/799 (100.0%) | 1372/1372 (100.0%) | 0 |
-| `packages/qrcode` | ts | `OpenTUIRenderables` | `tier4-extensions` | 8 | 8,891 | 42/42 (100.0%) | 57/57 (100.0%) | 0 |
-| `packages/ssh` | ts | `OpenTUITerminal` | `tier4-extensions` | 13 | 1,959 | 17/17 (100.0%) | 63/63 (100.0%) | 0 |
+| `packages/core` | ts | `OpenTUICore` | `tier1-primitives` | 125 | 66,569 | 2103/2145 (98.0%) | 3777/3829 (98.6%) | 340 |
+| `packages/keymap` | ts | `OpenTUIKeymap` | `tier1-primitives` | 66 | 13,800 | 203/203 (100.0%) | 410/410 (100.0%) | 49 |
+| `packages/native` | zig | `OpenTUICore` | `tier2-engine` | 80 | 78,145 | 799/2210 (36.2%) | 1372/2864 (47.9%) | 100 |
+| `packages/qrcode` | ts | `OpenTUIRenderables` | `tier4-extensions` | 8 | 8,891 | 42/42 (100.0%) | 57/57 (100.0%) | 15 |
+| `packages/ssh` | ts | `OpenTUITerminal` | `tier4-extensions` | 13 | 1,959 | 17/17 (100.0%) | 63/63 (100.0%) | 16 |
+
+## Unmapped Upstream Symbols
+
+| Upstream Symbol | Package | Kind | File:Line | Hash |
+| --- | --- | --- | --- | --- |
+| `core/src/Renderable.ts#BaseRenderable.add` | `core` | `method` | `src/Renderable.ts:258` | `ee82ab482c01` |
+| `core/src/Renderable.ts#BaseRenderable.remove` | `core` | `method` | `src/Renderable.ts:259` | `0f7c8a2cab40` |
+| `core/src/Renderable.ts#BaseRenderable.insertBefore` | `core` | `method` | `src/Renderable.ts:260` | `70763eba7369` |
+| `core/src/Renderable.ts#BaseRenderable.getChildren` | `core` | `method` | `src/Renderable.ts:261` | `c200a538f8b3` |
+| `core/src/Renderable.ts#BaseRenderable.getChildrenCount` | `core` | `method` | `src/Renderable.ts:262` | `69315b187469` |
+| `core/src/Renderable.ts#BaseRenderable.getRenderable` | `core` | `method` | `src/Renderable.ts:263` | `d2f3d0dc930b` |
+| `core/src/Renderable.ts#BaseRenderable.requestRender` | `core` | `method` | `src/Renderable.ts:264` | `fb8e0191faa0` |
+| `core/src/Renderable.ts#BaseRenderable.findDescendantById` | `core` | `method` | `src/Renderable.ts:265` | `31264de3b072` |
+| `core/src/lib/tree-sitter/assets/update.ts#updateAssets` | `core` | `function` | `src/lib/tree-sitter/assets/update.ts:310` | `a1de0c2ee4e2` |
+| `core/src/lib/tree-sitter/parsers-config.ts#default` | `core` | `const` | `src/lib/tree-sitter/parsers-config.ts:6` | `9ff6beec2724` |
+| `core/src/platform/test.ts#after` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#afterEach` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#before` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#beforeEach` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#describe` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#it` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/platform/test.ts#test` | `core` | `const` | `src/platform/test.ts:45` | `ea7c89590169` |
+| `core/src/renderables/Code.ts#CodeRenderable.lineInfo` | `core` | `method` | `src/renderables/Code.ts:303` | `3ae114014145` |
+| `core/src/renderables/Code.ts#CodeRenderable.getLineSources` | `core` | `method` | `src/renderables/Code.ts:318` | `c973bb5a59b7` |
+| `core/src/renderables/Code.ts#CodeRenderable.wrapMode` | `core` | `method` | `src/renderables/Code.ts:327` | `a9d006256bd1` |
+| `core/src/renderables/Diff.ts#DiffRenderable.destroyRecursively` | `core` | `method` | `src/renderables/Diff.ts:343` | `85206536239c` |
+| `core/src/renderables/Input.ts#InputRenderable.newLine` | `core` | `method` | `src/renderables/Input.ts:111` | `06ed15c2912e` |
+| `core/src/renderables/Input.ts#InputRenderable.insertText` | `core` | `method` | `src/renderables/Input.ts:118` | `0fc77d75da85` |
+| `core/src/renderables/Input.ts#InputRenderable.focus` | `core` | `method` | `src/renderables/Input.ts:153` | `f66669eb6fe3` |
+| `core/src/renderables/Input.ts#InputRenderable.blur` | `core` | `method` | `src/renderables/Input.ts:158` | `84dbd53cb405` |
+| `core/src/renderables/Input.ts#InputRenderable.submit` | `core` | `method` | `src/renderables/Input.ts:169` | `e3b3873c004f` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteCharBackward` | `core` | `method` | `src/renderables/Input.ts:183` | `c1170085c661` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteChar` | `core` | `method` | `src/renderables/Input.ts:189` | `8043f082c14f` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteLine` | `core` | `method` | `src/renderables/Input.ts:195` | `6dda3b232c5f` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteWordBackward` | `core` | `method` | `src/renderables/Input.ts:201` | `536689468c4d` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteWordForward` | `core` | `method` | `src/renderables/Input.ts:207` | `ea59964830ec` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteToLineStart` | `core` | `method` | `src/renderables/Input.ts:213` | `d14cc1546622` |
+| `core/src/renderables/Input.ts#InputRenderable.deleteToLineEnd` | `core` | `method` | `src/renderables/Input.ts:219` | `3555ebf50aef` |
+| `core/src/renderables/Input.ts#InputRenderable.undo` | `core` | `method` | `src/renderables/Input.ts:225` | `aab9649f9164` |
+| `core/src/renderables/Input.ts#InputRenderable.redo` | `core` | `method` | `src/renderables/Input.ts:231` | `6504cb035e79` |
+| `core/src/renderables/Input.ts#InputRenderable.placeholder` | `core` | `method` | `src/renderables/Input.ts:274` | `14bee42ad0cd` |
+| `core/src/renderables/Input.ts#InputRenderable.initialValue` | `core` | `method` | `src/renderables/Input.ts:283` | `5f42ff148d1c` |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.add` | `core` | `method` | `src/renderables/LineNumberRenderable.ts:488` | `f1a16106a2cc` |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.remove` | `core` | `method` | `src/renderables/LineNumberRenderable.ts:505` | `f7141dae06d8` |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.destroy` | `core` | `method` | `src/renderables/LineNumberRenderable.ts:528` | `3e0df50a22b4` |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.destroyRecursively` | `core` | `method` | `src/renderables/LineNumberRenderable.ts:536` | `576b1fe4ed30` |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.primaryAxis` | `core` | `method` | `src/renderables/ScrollBox.ts:434` | `2ea37f7efc37` |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.overflow` | `core` | `method` | `src/renderables/ScrollBox.ts:797` | `beee8edc4669` |
+| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.width` | `core` | `method` | `src/renderables/ScrollBoxParts.ts:503` | `181640690890` |
+| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.height` | `core` | `method` | `src/renderables/ScrollBoxParts.ts:511` | `7486a4bfab9e` |
+| `core/src/renderables/Text.ts#TextRenderable.requestRender` | `core` | `method` | `src/renderables/Text.ts:106` | `8fd49ea875b5` |
+| `core/src/renderables/Text.ts#TextRenderable.add` | `core` | `method` | `src/renderables/Text.ts:114` | `69c9798a52af` |
+| `core/src/renderables/Text.ts#TextRenderable.insertBefore` | `core` | `method` | `src/renderables/Text.ts:124` | `5093688403c8` |
+| `core/src/renderables/Textarea.ts#TextareaRenderable.backgroundColor` | `core` | `method` | `src/renderables/Textarea.ts:363` | `8423d86a4d5d` |
+| `core/src/renderables/Textarea.ts#TextareaRenderable.textColor` | `core` | `method` | `src/renderables/Textarea.ts:372` | `6b053d0ee316` |
+| `core/src/runtime-plugin-support.ts#ensureRuntimePluginSupport` | `core` | `const` | `src/runtime-plugin-support.ts:3` | `7347886ead1e` |
+| `core/src/yoga.ts#default` | `core` | `const` | `src/yoga.ts:1079` | `26defb10022d` |
+| `native/src/ansi.zig#ANSI.moveToOutput` | `native` | `zig_fn` | `src/ansi.zig:247` | `839f5d33992f` |
+| `native/src/ansi.zig#ANSI.fgColorOutput` | `native` | `zig_fn` | `src/ansi.zig:251` | `3e1962dbd676` |
+| `native/src/ansi.zig#ANSI.fgIndexedColorOutput` | `native` | `zig_fn` | `src/ansi.zig:255` | `ac02e26a32e9` |
+| `native/src/ansi.zig#ANSI.fgDefaultOutput` | `native` | `zig_fn` | `src/ansi.zig:259` | `6f8dc5534049` |
+| `native/src/ansi.zig#ANSI.bgColorOutput` | `native` | `zig_fn` | `src/ansi.zig:263` | `798093a47171` |
+| `native/src/ansi.zig#ANSI.bgIndexedColorOutput` | `native` | `zig_fn` | `src/ansi.zig:267` | `83cfc79abc1c` |
+| `native/src/ansi.zig#ANSI.bgDefaultOutput` | `native` | `zig_fn` | `src/ansi.zig:271` | `8e7f2b87091c` |
+| `native/src/ansi.zig#ANSI.cursorColorOutputWriter` | `native` | `zig_fn` | `src/ansi.zig:293` | `7ec7a60690b0` |
+| `native/src/ansi.zig#ANSI.explicitWidthOutput` | `native` | `zig_fn` | `src/ansi.zig:298` | `b91d386acb34` |
+| `native/src/ansi.zig#ANSI.setTerminalBgColorOutput` | `native` | `zig_fn` | `src/ansi.zig:308` | `0c49e10dc311` |
+| `native/src/ansi.zig#ANSI.setMousePointerOutput` | `native` | `zig_fn` | `src/ansi.zig:317` | `98440b2ade1c` |
+| `native/src/ansi.zig#ANSI.setTerminalTitleOutput` | `native` | `zig_fn` | `src/ansi.zig:412` | `30e26b403dce` |
+| `native/src/ansi.zig#TextAttributes.getBaseAttributes` | `native` | `zig_fn` | `src/ansi.zig:435` | `c55ec7e9d476` |
+| `native/src/ansi.zig#TextAttributes.getLinkId` | `native` | `zig_fn` | `src/ansi.zig:440` | `7cd4745a7f76` |
+| `native/src/ansi.zig#TextAttributes.setLinkId` | `native` | `zig_fn` | `src/ansi.zig:445` | `88b98d89927a` |
+| `native/src/ansi.zig#TextAttributes.hasLink` | `native` | `zig_fn` | `src/ansi.zig:452` | `8b62d445bd34` |
+| `native/src/ansi.zig#TextAttributes.applyAttributesOutputWriter` | `native` | `zig_fn` | `src/ansi.zig:456` | `aea0cd8fb483` |
+| `native/src/audio.zig#max_voices` | `native` | `zig_const` | `src/audio.zig:15` | `1cc40105778e` |
+| `native/src/audio.zig#default_sample_rate` | `native` | `zig_const` | `src/audio.zig:16` | `1cfb080384dc` |
+| `native/src/audio.zig#default_playback_channels` | `native` | `zig_const` | `src/audio.zig:17` | `b070441d138b` |
+| `native/src/audio.zig#max_capture_channels` | `native` | `zig_const` | `src/audio.zig:18` | `da807203c85f` |
+| `native/src/audio.zig#default_stream_probe_bytes` | `native` | `zig_const` | `src/audio.zig:21` | `8e7fd2710111` |
+| `native/src/audio.zig#min_pcm_sample_rate` | `native` | `zig_const` | `src/audio.zig:23` | `638ec9b58121` |
+| `native/src/audio.zig#max_pcm_sample_rate` | `native` | `zig_const` | `src/audio.zig:24` | `d7b5142ce797` |
+| `native/src/audio.zig#max_stream_pcm_capacity_frames` | `native` | `zig_const` | `src/audio.zig:31` | `f6b80d373121` |
+| `native/src/audio.zig#CaptureBuffer.create` | `native` | `zig_fn` | `src/audio.zig:153` | `7c17c45c568a` |
+| `native/src/audio.zig#CaptureBuffer.destroy` | `native` | `zig_fn` | `src/audio.zig:180` | `960a61a50eb0` |
+| `native/src/audio.zig#CaptureBuffer.write` | `native` | `zig_fn` | `src/audio.zig:187` | `320b3dfac17a` |
+| `native/src/audio.zig#CaptureBuffer.read` | `native` | `zig_fn` | `src/audio.zig:218` | `e09fdf558d2b` |
+| `native/src/audio.zig#CaptureBuffer.snapshot` | `native` | `zig_fn` | `src/audio.zig:245` | `694c7075e8e8` |
+| `native/src/audio.zig#Engine.init` | `native` | `zig_fn` | `src/audio.zig:373` | `a2b3aa69666d` |
+| `native/src/audio.zig#Engine.deinit` | `native` | `zig_fn` | `src/audio.zig:419` | `00d5c7b25ff8` |
+| `native/src/buffer.zig#DEFAULT_SPACE_CHAR` | `native` | `zig_const` | `src/buffer.zig:29` | `2f636c391c74` |
+| `native/src/buffer.zig#text_bytes_max` | `native` | `zig_const` | `src/buffer.zig:31` | `61d3ea1ca136` |
+| `native/src/buffer.zig#BufferSnapshot.getRealCharSize` | `native` | `zig_fn` | `src/buffer.zig:125` | `93e101d9eb0d` |
+| `native/src/buffer.zig#BufferSnapshot.writeResolvedChars` | `native` | `zig_fn` | `src/buffer.zig:129` | `fe95df0e9b86` |
+| `native/src/buffer.zig#BufferSnapshot.writeResolvedCells` | `native` | `zig_fn` | `src/buffer.zig:137` | `50b71a218f19` |
+| `native/src/buffer.zig#BufferStorage.ensureTrackerCapacity` | `native` | `zig_fn` | `src/buffer.zig:336` | `2f7f06ed3b50` |
+| `native/src/buffer.zig#BufferLease.acquireChecked` | `native` | `zig_fn` | `src/buffer.zig:390` | `a51ccfae78dd` |
+| `native/src/buffer.zig#BufferLease.releaseChecked` | `native` | `zig_fn` | `src/buffer.zig:439` | `6c98953aa5de` |
+| `native/src/buffer.zig#BufferLease.isCurrent` | `native` | `zig_fn` | `src/buffer.zig:457` | `e4e453b6713d` |
+| `native/src/buffer.zig#BufferLease.snapshot` | `native` | `zig_fn` | `src/buffer.zig:462` | `3d722a87f192` |
+| `native/src/buffer.zig#BufferLease.release` | `native` | `zig_fn` | `src/buffer.zig:468` | `d63035068ab4` |
+| `native/src/buffer.zig#OptimizedBuffer.init` | `native` | `zig_fn` | `src/buffer.zig:747` | `9413e3e70b7d` |
+| `native/src/buffer.zig#OptimizedBuffer.acquireLease` | `native` | `zig_fn` | `src/buffer.zig:791` | `dfb68ee645ca` |
+| `native/src/buffer.zig#OptimizedBuffer.getCharPtr` | `native` | `zig_fn` | `src/buffer.zig:799` | `6d75fe12c5b5` |
+| `native/src/buffer.zig#OptimizedBuffer.getFgPtr` | `native` | `zig_fn` | `src/buffer.zig:803` | `422f899b18db` |
+| `native/src/buffer.zig#OptimizedBuffer.getBgPtr` | `native` | `zig_fn` | `src/buffer.zig:807` | `e5331e768fba` |
+| `native/src/buffer.zig#OptimizedBuffer.getAttributesPtr` | `native` | `zig_fn` | `src/buffer.zig:811` | `fe56a4237918` |
+| `native/src/buffer.zig#OptimizedBuffer.deinit` | `native` | `zig_fn` | `src/buffer.zig:815` | `cd1f9581d0ef` |
+| `native/src/buffer.zig#OptimizedBuffer.retain` | `native` | `zig_fn` | `src/buffer.zig:829` | `277c92c2b953` |
+| `native/src/buffer.zig#OptimizedBuffer.getCurrentScissorRect` | `native` | `zig_fn` | `src/buffer.zig:834` | `49b7a51af0f2` |
+| `native/src/buffer.zig#OptimizedBuffer.isPointInScissor` | `native` | `zig_fn` | `src/buffer.zig:839` | `21fba59d453f` |
+| `native/src/buffer.zig#OptimizedBuffer.isRectInScissor` | `native` | `zig_fn` | `src/buffer.zig:853` | `4c10e1b66f6b` |
+| `native/src/buffer.zig#OptimizedBuffer.clipRectToScissor` | `native` | `zig_fn` | `src/buffer.zig:865` | `58aa5683dce7` |
+| `native/src/buffer.zig#OptimizedBuffer.pushScissorRect` | `native` | `zig_fn` | `src/buffer.zig:895` | `d201c1e32d27` |
+| `native/src/buffer.zig#OptimizedBuffer.popScissorRect` | `native` | `zig_fn` | `src/buffer.zig:917` | `ba8ad5c9981d` |
+| `native/src/buffer.zig#OptimizedBuffer.clearScissorRects` | `native` | `zig_fn` | `src/buffer.zig:923` | `1177242975f2` |
+| `native/src/buffer.zig#OptimizedBuffer.getCurrentOpacity` | `native` | `zig_fn` | `src/buffer.zig:928` | `cb07a5a18685` |
+| `native/src/buffer.zig#OptimizedBuffer.pushOpacity` | `native` | `zig_fn` | `src/buffer.zig:934` | `96eac55868ce` |
+| `native/src/buffer.zig#OptimizedBuffer.popOpacity` | `native` | `zig_fn` | `src/buffer.zig:941` | `8f32a440eb86` |
+| `native/src/buffer.zig#OptimizedBuffer.clearOpacity` | `native` | `zig_fn` | `src/buffer.zig:948` | `8575111be834` |
+| `native/src/buffer.zig#OptimizedBuffer.PreparedResize.deinit` | `native` | `zig_fn` | `src/buffer.zig:958` | `c113c77d9401` |
+| `native/src/buffer.zig#OptimizedBuffer.PreparedResize.commit` | `native` | `zig_fn` | `src/buffer.zig:964` | `1dc6f64b5dd0` |
+| `native/src/buffer.zig#OptimizedBuffer.prepareResize` | `native` | `zig_fn` | `src/buffer.zig:996` | `5a6c4fddd6e5` |
+| `native/src/buffer.zig#OptimizedBuffer.resize` | `native` | `zig_fn` | `src/buffer.zig:1005` | `2a0dac821502` |
+| `native/src/buffer.zig#OptimizedBuffer.clear` | `native` | `zig_fn` | `src/buffer.zig:1035` | `ad7df40e81ee` |
+| `native/src/buffer.zig#OptimizedBuffer.clearRows` | `native` | `zig_fn` | `src/buffer.zig:1049` | `0f65df1eb2a9` |
+| `native/src/buffer.zig#OptimizedBuffer.syncImagePlacements` | `native` | `zig_fn` | `src/buffer.zig:1069` | `c13947c0f429` |
+| `native/src/buffer.zig#OptimizedBuffer.copyFrom` | `native` | `zig_fn` | `src/buffer.zig:1084` | `179bbd263610` |
+| `native/src/buffer.zig#OptimizedBuffer.setRaw` | `native` | `zig_fn` | `src/buffer.zig:1129` | `3dabbac60296` |
+| `native/src/buffer.zig#OptimizedBuffer.syncCell` | `native` | `zig_fn` | `src/buffer.zig:1141` | `977411b3d743` |
+| `native/src/buffer.zig#OptimizedBuffer.set` | `native` | `zig_fn` | `src/buffer.zig:1145` | `6963f5bf5d85` |
+| `native/src/buffer.zig#OptimizedBuffer.get` | `native` | `zig_fn` | `src/buffer.zig:1316` | `093db2e3bc4d` |
+| `native/src/buffer.zig#OptimizedBuffer.getWidth` | `native` | `zig_fn` | `src/buffer.zig:1328` | `5d4968e74396` |
+| `native/src/buffer.zig#OptimizedBuffer.getHeight` | `native` | `zig_fn` | `src/buffer.zig:1332` | `b1dda57a819e` |
+| `native/src/buffer.zig#OptimizedBuffer.setRespectAlpha` | `native` | `zig_fn` | `src/buffer.zig:1336` | `e54df433a3d8` |
+| `native/src/buffer.zig#OptimizedBuffer.getRespectAlpha` | `native` | `zig_fn` | `src/buffer.zig:1340` | `59d0b3b5c6c1` |
+| `native/src/buffer.zig#OptimizedBuffer.setBlendBackdropColor` | `native` | `zig_fn` | `src/buffer.zig:1344` | `f3c9374c3e0e` |
+| `native/src/buffer.zig#OptimizedBuffer.getBlendBackdropColor` | `native` | `zig_fn` | `src/buffer.zig:1348` | `f6eb7901951f` |
+| `native/src/buffer.zig#OptimizedBuffer.getId` | `native` | `zig_fn` | `src/buffer.zig:1352` | `ecf2e04f2d7e` |
+| `native/src/buffer.zig#OptimizedBuffer.getRealCharSize` | `native` | `zig_fn` | `src/buffer.zig:1357` | `1e9df1416607` |
+| `native/src/buffer.zig#OptimizedBuffer.writeResolvedChars` | `native` | `zig_fn` | `src/buffer.zig:1366` | `1d2f6ab87bb0` |
+| `native/src/buffer.zig#OptimizedBuffer.blendCells` | `native` | `zig_fn` | `src/buffer.zig:1370` | `7c4355d0f856` |
+| `native/src/buffer.zig#OptimizedBuffer.setCellWithAlphaBlending` | `native` | `zig_fn` | `src/buffer.zig:1463` | `453dac89b89c` |
+| `native/src/buffer.zig#OptimizedBuffer.setCellWithAlphaBlendingRaw` | `native` | `zig_fn` | `src/buffer.zig:1539` | `6bf08eed32c5` |
+| `native/src/buffer.zig#OptimizedBuffer.drawChar` | `native` | `zig_fn` | `src/buffer.zig:1631` | `6f0e48d24e64` |
+| `native/src/buffer.zig#OptimizedBuffer.fillRect` | `native` | `zig_fn` | `src/buffer.zig:1647` | `1a38bcf0934e` |
+| `native/src/buffer.zig#OptimizedBuffer.fillRectClipped` | `native` | `zig_fn` | `src/buffer.zig:1776` | `a57badffc09d` |
+| `native/src/buffer.zig#OptimizedBuffer.drawText` | `native` | `zig_fn` | `src/buffer.zig:1813` | `677a30f86530` |
+| `native/src/buffer.zig#OptimizedBuffer.drawTextClipped` | `native` | `zig_fn` | `src/buffer.zig:1827` | `6926de93d152` |
+| `native/src/buffer.zig#OptimizedBuffer.drawTextChecked` | `native` | `zig_fn` | `src/buffer.zig:1847` | `7ac5a3f740b3` |
+| `native/src/buffer.zig#OptimizedBuffer.drawTextFitted` | `native` | `zig_fn` | `src/buffer.zig:1860` | `ed850278acec` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGrapheme` | `native` | `zig_fn` | `src/buffer.zig:1963` | `37fe54de525a` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGraphemeChecked` | `native` | `zig_fn` | `src/buffer.zig:1994` | `3425a5839d54` |
+| `native/src/buffer.zig#OptimizedBuffer.drawFrameBuffer` | `native` | `zig_fn` | `src/buffer.zig:2086` | `3b839e7cc6e6` |
+| `native/src/buffer.zig#OptimizedBuffer.drawFrameBufferChecked` | `native` | `zig_fn` | `src/buffer.zig:2090` | `7af0e0dc8dac` |
+| `native/src/buffer.zig#OptimizedBuffer.drawTextBuffer` | `native` | `zig_fn` | `src/buffer.zig:2325` | `293b9705447a` |
+| `native/src/buffer.zig#OptimizedBuffer.drawTextBufferChecked` | `native` | `zig_fn` | `src/buffer.zig:2338` | `7339007548b3` |
+| `native/src/buffer.zig#OptimizedBuffer.drawEditorView` | `native` | `zig_fn` | `src/buffer.zig:2916` | `6b4f708f9ed7` |
+| `native/src/buffer.zig#OptimizedBuffer.drawEditorViewChecked` | `native` | `zig_fn` | `src/buffer.zig:2927` | `5bdeab394fa0` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGrid` | `native` | `zig_fn` | `src/buffer.zig:2939` | `c95158f29d25` |
+| `native/src/buffer.zig#OptimizedBuffer.drawBox` | `native` | `zig_fn` | `src/buffer.zig:3133` | `621452ed302d` |
+| `native/src/buffer.zig#OptimizedBuffer.drawBoxChecked` | `native` | `zig_fn` | `src/buffer.zig:3154` | `7c9f20baf756` |
+| `native/src/buffer.zig#OptimizedBuffer.drawImage` | `native` | `zig_fn` | `src/buffer.zig:3476` | `7308c2b8f9fb` |
+| `native/src/buffer.zig#OptimizedBuffer.materializeImageFallback` | `native` | `zig_fn` | `src/buffer.zig:3556` | `730024831030` |
+| `native/src/buffer.zig#OptimizedBuffer.materializeImageFallbacks` | `native` | `zig_fn` | `src/buffer.zig:3610` | `efb95f47c9fc` |
+| `native/src/buffer.zig#OptimizedBuffer.checkImageResources` | `native` | `zig_fn` | `src/buffer.zig:3621` | `6018b61946e6` |
+| `native/src/buffer.zig#OptimizedBuffer.drawSuperSampleBufferChecked` | `native` | `zig_fn` | `src/buffer.zig:3661` | `9d7fb8b1f567` |
+| `native/src/buffer.zig#OptimizedBuffer.drawSuperSampleBuffer` | `native` | `zig_fn` | `src/buffer.zig:3668` | `dd7f13b1ab74` |
+| `native/src/buffer.zig#OptimizedBuffer.drawPackedBufferChecked` | `native` | `zig_fn` | `src/buffer.zig:3733` | `9a22f467724b` |
+| `native/src/buffer.zig#OptimizedBuffer.drawPackedBuffer` | `native` | `zig_fn` | `src/buffer.zig:3741` | `703ec50fadae` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBuffer` | `native` | `zig_fn` | `src/buffer.zig:3798` | `81de4e03a916` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBufferSupersampled` | `native` | `zig_fn` | `src/buffer.zig:3811` | `52ca05abac38` |
+| `native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBufferChecked` | `native` | `zig_fn` | `src/buffer.zig:3825` | `95bf0e8b300d` |
+| `native/src/clipboard/host.zig#Operation.isReadyToDestroy` | `native` | `zig_fn` | `src/clipboard/host.zig:353` | `aa8bd6971d02` |
+| `native/src/clipboard/host.zig#Operation.destroyStorage` | `native` | `zig_fn` | `src/clipboard/host.zig:390` | `f0a34be87c52` |
+| `native/src/clipboard/host.zig#Service.beginShutdown` | `native` | `zig_fn` | `src/clipboard/host.zig:739` | `ed4b5a75cedd` |
+| `native/src/clipboard/host.zig#Service.pollShutdown` | `native` | `zig_fn` | `src/clipboard/host.zig:758` | `1837ff761900` |
+| `native/src/clipboard/host.zig#Service.deinit` | `native` | `zig_fn` | `src/clipboard/host.zig:783` | `e9a9a0f5763e` |
+| `native/src/clipboard/linux.zig#Environment.fromMap` | `native` | `zig_fn` | `src/clipboard/linux.zig:11` | `283c53880f03` |
+| `native/src/clipboard/linux.zig#Environment.detect` | `native` | `zig_fn` | `src/clipboard/linux.zig:19` | `b07790e0e54c` |
+| `native/src/clipboard/linux.zig#Environment.detectProcess` | `native` | `zig_fn` | `src/clipboard/linux.zig:28` | `d2533fdb7518` |
+| `native/src/clipboard/linux.zig#test_log.callback` | `native` | `zig_fn` | `src/clipboard/linux.zig:456` | `2b591bad5484` |
+| `native/src/clipboard/linux.zig#test_log.begin` | `native` | `zig_fn` | `src/clipboard/linux.zig:463` | `d8d02e8142d6` |
+| `native/src/clipboard/linux.zig#test_log.end` | `native` | `zig_fn` | `src/clipboard/linux.zig:470` | `61afb306f858` |
+| `native/src/clipboard/macos.zig#MimeType.name` | `native` | `zig_fn` | `src/clipboard/macos.zig:14` | `0cd724ab9a8c` |
+| `native/src/clipboard/macos.zig#Result.deinit` | `native` | `zig_fn` | `src/clipboard/macos.zig:54` | `75f9dac31fa4` |
+| `native/src/clipboard/sync.zig#Mutex.lock` | `native` | `zig_fn` | `src/clipboard/sync.zig:9` | `e56bfbd4c58c` |
+| `native/src/clipboard/sync.zig#Mutex.tryLock` | `native` | `zig_fn` | `src/clipboard/sync.zig:13` | `d16b5a6e3283` |
+| `native/src/clipboard/sync.zig#Mutex.unlock` | `native` | `zig_fn` | `src/clipboard/sync.zig:17` | `2b8278469a6c` |
+| `native/src/clipboard/sync.zig#Condition.wait` | `native` | `zig_fn` | `src/clipboard/sync.zig:25` | `6b4ae02fc46f` |
+| `native/src/clipboard/sync.zig#Condition.timedWait` | `native` | `zig_fn` | `src/clipboard/sync.zig:29` | `3f03d754ee96` |
+| `native/src/clipboard/sync.zig#Condition.signal` | `native` | `zig_fn` | `src/clipboard/sync.zig:36` | `64934afaa742` |
+| `native/src/clipboard/wayland-protocol.zig#Metadata.init` | `native` | `zig_fn` | `src/clipboard/wayland-protocol.zig:31` | `d6b5ebaa3cb7` |
+| `native/src/clipboard/wayland.zig#READ_RETRY_MAX` | `native` | `zig_const` | `src/clipboard/wayland.zig:26` | `44141b84f1d6` |
+| `native/src/clipboard/wayland.zig#Connection.init` | `native` | `zig_fn` | `src/clipboard/wayland.zig:160` | `1b84a7346816` |
+| `native/src/clipboard/wayland.zig#Connection.deinit` | `native` | `zig_fn` | `src/clipboard/wayland.zig:176` | `854f75f59f22` |
+| `native/src/clipboard/wayland.zig#Connection.drive` | `native` | `zig_fn` | `src/clipboard/wayland.zig:199` | `556540e065c5` |
+| `native/src/clipboard/wayland.zig#Connection.currentOffer` | `native` | `zig_fn` | `src/clipboard/wayland.zig:264` | `f79dc542dfb3` |
+| `native/src/clipboard/wayland.zig#Connection.usesCoreDataDevice` | `native` | `zig_fn` | `src/clipboard/wayland.zig:273` | `dfbc10b986c3` |
+| `native/src/clipboard/wayland.zig#Connection.requestSelectionBarrier` | `native` | `zig_fn` | `src/clipboard/wayland.zig:281` | `fc097c201bdd` |
+| `native/src/clipboard/wayland.zig#Connection.selectionBarrierReached` | `native` | `zig_fn` | `src/clipboard/wayland.zig:291` | `9f0044372636` |
+| `native/src/clipboard/wayland.zig#Connection.acquireCoreSelection` | `native` | `zig_fn` | `src/clipboard/wayland.zig:331` | `480cc6dcb807` |
+| `native/src/clipboard/wayland.zig#Connection.coreSelectionProgress` | `native` | `zig_fn` | `src/clipboard/wayland.zig:350` | `b18c07bb260c` |
+| `native/src/clipboard/wayland.zig#Connection.releaseCoreSelection` | `native` | `zig_fn` | `src/clipboard/wayland.zig:363` | `7d7d3dd9d88b` |
+| `native/src/clipboard/wayland.zig#Connection.takeFailure` | `native` | `zig_fn` | `src/clipboard/wayland.zig:369` | `6805d8e69f3b` |
+| `native/src/clipboard/wayland.zig#Connection.isFailed` | `native` | `zig_fn` | `src/clipboard/wayland.zig:375` | `34e739661b54` |
+| `native/src/clipboard/wayland.zig#Connection.receive` | `native` | `zig_fn` | `src/clipboard/wayland.zig:379` | `e14aba6dba76` |
+| `native/src/clipboard/wayland.zig#Connection.publishText` | `native` | `zig_fn` | `src/clipboard/wayland.zig:389` | `e55e266efe1c` |
+| `native/src/clipboard/wayland.zig#Connection.clearSelection` | `native` | `zig_fn` | `src/clipboard/wayland.zig:450` | `112560d99547` |
+| `native/src/clipboard/wayland.zig#Connection.closableWhenIdle` | `native` | `zig_fn` | `src/clipboard/wayland.zig:472` | `e0403618b455` |
+| `native/src/clipboard/wayland.zig#Connection.dispatchQueued` | `native` | `zig_fn` | `src/clipboard/wayland.zig:478` | `168fb7c0c201` |
+| `native/src/clipboard/wayland.zig#Connection.hasProviders` | `native` | `zig_fn` | `src/clipboard/wayland.zig:483` | `578095adfd1e` |
+| `native/src/clipboard/wayland.zig#Connection.hasWork` | `native` | `zig_fn` | `src/clipboard/wayland.zig:488` | `59ae038f2eb8` |
+| `native/src/clipboard/wayland.zig#Connection.releaseProviders` | `native` | `zig_fn` | `src/clipboard/wayland.zig:494` | `e764e66466d7` |
+| `native/src/clipboard/wayland.zig#Connection.retireProviders` | `native` | `zig_fn` | `src/clipboard/wayland.zig:505` | `265eebfcd04e` |
+| `native/src/clipboard/wayland.zig#Connection.driveProviderUnit` | `native` | `zig_fn` | `src/clipboard/wayland.zig:518` | `33fa1ab837a2` |
+| `native/src/clipboard/wayland.zig#Connection.offeredMime` | `native` | `zig_fn` | `src/clipboard/wayland.zig:537` | `df671bc317e0` |
+| `native/src/clipboard/windows.zig#Result.deinit` | `native` | `zig_fn` | `src/clipboard/windows.zig:85` | `fb7148294ae0` |
+| `native/src/clipboard/windows.zig#Worker.init` | `native` | `zig_fn` | `src/clipboard/windows.zig:127` | `20d3d925ea7c` |
+| `native/src/clipboard/windows.zig#Worker.deinit` | `native` | `zig_fn` | `src/clipboard/windows.zig:154` | `b5ccec9ac90b` |
+| `native/src/clipboard/windows.zig#Worker.execute` | `native` | `zig_fn` | `src/clipboard/windows.zig:162` | `54c1716a2bcb` |
+| `native/src/clipboard/windows.zig#Worker.pumpMessages` | `native` | `zig_fn` | `src/clipboard/windows.zig:192` | `700594f10061` |
+| `native/src/clipboard/x11.zig#ATOM_PRIMARY` | `native` | `zig_const` | `src/clipboard/x11.zig:49` | `bc1fb21a3e18` |
+| `native/src/clipboard/x11.zig#ATOM_ATOM` | `native` | `zig_const` | `src/clipboard/x11.zig:50` | `a4a94b53cd81` |
+| `native/src/clipboard/x11.zig#ATOM_STRING` | `native` | `zig_const` | `src/clipboard/x11.zig:51` | `3a52cbe87c21` |
+| `native/src/clipboard/x11.zig#Connection.init` | `native` | `zig_fn` | `src/clipboard/x11.zig:246` | `684706c1e0a1` |
+| `native/src/clipboard/x11.zig#Connection.deinit` | `native` | `zig_fn` | `src/clipboard/x11.zig:258` | `4b9ab7443242` |
+| `native/src/clipboard/x11.zig#Connection.drive` | `native` | `zig_fn` | `src/clipboard/x11.zig:277` | `e9b4b9c57c11` |
+| `native/src/clipboard/x11.zig#Connection.atoms` | `native` | `zig_fn` | `src/clipboard/x11.zig:291` | `6da3ce0742d4` |
+| `native/src/clipboard/x11.zig#Connection.takeFailure` | `native` | `zig_fn` | `src/clipboard/x11.zig:311` | `6805d8e69f3b` |
+| `native/src/clipboard/x11.zig#Connection.shutdownReady` | `native` | `zig_fn` | `src/clipboard/x11.zig:424` | `3326d737e66a` |
+| `native/src/clipboard/x11.zig#Connection.requestShutdown` | `native` | `zig_fn` | `src/clipboard/x11.zig:428` | `569e583e424f` |
+| `native/src/clipboard/x11.zig#Connection.selectionAtom` | `native` | `zig_fn` | `src/clipboard/x11.zig:586` | `cdfb255fd729` |
+| `native/src/clipboard/x11.zig#Connection.targetAtoms` | `native` | `zig_fn` | `src/clipboard/x11.zig:590` | `ca33210481e6` |
+| `native/src/clipboard/x11.zig#Connection.beginRead` | `native` | `zig_fn` | `src/clipboard/x11.zig:618` | `785d403acc7c` |
+| `native/src/clipboard/x11.zig#Connection.routeReadEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:658` | `bbf57daf33c7` |
+| `native/src/clipboard/x11.zig#Connection.driveRead` | `native` | `zig_fn` | `src/clipboard/x11.zig:710` | `ca67654f112b` |
+| `native/src/clipboard/x11.zig#Connection.cleanupRead` | `native` | `zig_fn` | `src/clipboard/x11.zig:825` | `5d6549a4c799` |
+| `native/src/clipboard/x11.zig#Connection.beginWrite` | `native` | `zig_fn` | `src/clipboard/x11.zig:836` | `750e9b6b3979` |
+| `native/src/clipboard/x11.zig#Connection.beginClear` | `native` | `zig_fn` | `src/clipboard/x11.zig:878` | `213c7ab38cad` |
+| `native/src/clipboard/x11.zig#Connection.driveWrite` | `native` | `zig_fn` | `src/clipboard/x11.zig:907` | `8df972fc92e5` |
+| `native/src/clipboard/x11.zig#Connection.cleanupWrite` | `native` | `zig_fn` | `src/clipboard/x11.zig:953` | `686e4143d02d` |
+| `native/src/clipboard/x11.zig#Connection.abandonMutationConfirmation` | `native` | `zig_fn` | `src/clipboard/x11.zig:962` | `e1c6361100cc` |
+| `native/src/clipboard/x11.zig#Connection.consumeRetiredTimestampEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:970` | `b5897d5ec3a7` |
+| `native/src/clipboard/x11.zig#Connection.routeWriteEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:997` | `bf3c1fb31396` |
+| `native/src/clipboard/x11.zig#Connection.isMutationTimestampEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:1042` | `6aaad14a16d6` |
+| `native/src/clipboard/x11.zig#Connection.pollEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:1053` | `35c4e1be2ce3` |
+| `native/src/clipboard/x11.zig#Connection.handleProviderEvent` | `native` | `zig_fn` | `src/clipboard/x11.zig:1062` | `41d59f965c7b` |
+| `native/src/clipboard/x11.zig#Connection.driveProviderUnit` | `native` | `zig_fn` | `src/clipboard/x11.zig:1071` | `cbd7a5f636d6` |
+| `native/src/clipboard/x11.zig#Connection.hasWork` | `native` | `zig_fn` | `src/clipboard/x11.zig:1100` | `c822fc14e7f7` |
+| `native/src/clipboard/x11.zig#Connection.releaseProviders` | `native` | `zig_fn` | `src/clipboard/x11.zig:1107` | `85a29d81f0a7` |
+| `native/src/context-abi.zig#OutputWriter.write` | `native` | `zig_fn` | `src/context-abi.zig:1149` | `569c23a1020e` |
+| `native/src/context-handles.zig#Table.init` | `native` | `zig_fn` | `src/context-handles.zig:72` | `a86e65cb3622` |
+| `native/src/context-handles.zig#Table.deinit` | `native` | `zig_fn` | `src/context-handles.zig:86` | `217bf23f6611` |
+| `native/src/context-handles.zig#Table.checkCapacity` | `native` | `zig_fn` | `src/context-handles.zig:93` | `294b8607abab` |
+| `native/src/context-handles.zig#Table.insert` | `native` | `zig_fn` | `src/context-handles.zig:109` | `abc4d25411c6` |
+| `native/src/context-handles.zig#Table.get` | `native` | `zig_fn` | `src/context-handles.zig:132` | `bf9cb3d0df95` |
+| `native/src/context-handles.zig#Table.getKind` | `native` | `zig_fn` | `src/context-handles.zig:138` | `05d3e3b9f9c2` |
+| `native/src/context-handles.zig#Table.beginDestroy` | `native` | `zig_fn` | `src/context-handles.zig:142` | `55319139b787` |
+| `native/src/context-handles.zig#Table.finishDestroy` | `native` | `zig_fn` | `src/context-handles.zig:148` | `76e368200720` |
+| `native/src/context-handles.zig#Table.next` | `native` | `zig_fn` | `src/context-handles.zig:164` | `e78ecf11632f` |
+| `native/src/context.zig#terminal_input_bytes_max` | `native` | `zig_const` | `src/context.zig:41` | `1272ec62538f` |
+| `native/src/context.zig#Edit.checkMutable` | `native` | `zig_fn` | `src/context.zig:242` | `60bdcb4c8eb6` |
+| `native/src/context.zig#Edit.invalidate` | `native` | `zig_fn` | `src/context.zig:247` | `513ac15edde8` |
+| `native/src/context.zig#Edit.invalidatePreparation` | `native` | `zig_fn` | `src/context.zig:253` | `d08673d27c7c` |
+| `native/src/context.zig#Editor.checkMutable` | `native` | `zig_fn` | `src/context.zig:270` | `ede8221a58aa` |
+| `native/src/context.zig#Editor.invalidate` | `native` | `zig_fn` | `src/context.zig:277` | `722f82a36b41` |
+| `native/src/context.zig#Editor.invalidatePreparation` | `native` | `zig_fn` | `src/context.zig:286` | `e15dd18d6ef7` |
+| `native/src/context.zig#Editor.prepareView` | `native` | `zig_fn` | `src/context.zig:294` | `0188ecb12833` |
+| `native/src/context.zig#SharedText.checkMutable` | `native` | `zig_fn` | `src/context.zig:310` | `bf29201b03c5` |
+| `native/src/context.zig#SharedText.invalidate` | `native` | `zig_fn` | `src/context.zig:316` | `3e6974a74078` |
+| `native/src/context.zig#SharedText.setWidthMethod` | `native` | `zig_fn` | `src/context.zig:322` | `2761157d1e74` |
+| `native/src/context.zig#TextView.checkMutable` | `native` | `zig_fn` | `src/context.zig:355` | `29ec4e02d7cb` |
+| `native/src/context.zig#TextView.invalidate` | `native` | `zig_fn` | `src/context.zig:362` | `29247c18f369` |
+| `native/src/context.zig#TextView.invalidatePreparation` | `native` | `zig_fn` | `src/context.zig:368` | `7fd1c328fcd7` |
+| `native/src/context.zig#TextView.prepareView` | `native` | `zig_fn` | `src/context.zig:372` | `8310543bf676` |
+| `native/src/context.zig#MarkdownOptions.engine` | `native` | `zig_fn` | `src/context.zig:387` | `dae68e0c98a3` |
+| `native/src/context.zig#MarkdownDoc.resolve` | `native` | `zig_fn` | `src/context.zig:534` | `d0b0c02a1661` |
+| `native/src/context.zig#Text.mapping` | `native` | `zig_fn` | `src/context.zig:843` | `24ba09d9bf21` |
+| `native/src/context.zig#Text.prepareView` | `native` | `zig_fn` | `src/context.zig:856` | `86254972701e` |
+| `native/src/context.zig#Context.raw` | `native` | `zig_fn` | `src/context.zig:954` | `9e56a6cb7fd2` |
+| `native/src/context.zig#Context.RawAccess.getSession` | `native` | `zig_fn` | `src/context.zig:961` | `a3e6e530b12f` |
+| `native/src/context.zig#Context.RawAccess.getSessionRenderer` | `native` | `zig_fn` | `src/context.zig:967` | `ad22690e958e` |
+| `native/src/context.zig#Context.RawAccess.getUnicode` | `native` | `zig_fn` | `src/context.zig:971` | `adfd35242bc1` |
+| `native/src/context.zig#Context.RawAccess.getEmbeddedTerminal` | `native` | `zig_fn` | `src/context.zig:975` | `81f1fda9f347` |
+| `native/src/context.zig#Context.RawAccess.getImage` | `native` | `zig_fn` | `src/context.zig:979` | `0280745e0ce0` |
+| `native/src/context.zig#Context.RawAccess.getAudioEngine` | `native` | `zig_fn` | `src/context.zig:983` | `afc34fc384c8` |
+| `native/src/context.zig#Context.RawAccess.getBuffer` | `native` | `zig_fn` | `src/context.zig:987` | `8252b117ea1c` |
+| `native/src/context.zig#Context.RawAccess.getRenderable` | `native` | `zig_fn` | `src/context.zig:991` | `602b35c2fd60` |
+| `native/src/context.zig#Context.RawAccess.getTextBuffer` | `native` | `zig_fn` | `src/context.zig:995` | `7bd88fff4da9` |
+| `native/src/context.zig#Context.RawAccess.getTextBufferView` | `native` | `zig_fn` | `src/context.zig:999` | `bb052a00f26f` |
+| `native/src/context.zig#Context.RawAccess.getEditBuffer` | `native` | `zig_fn` | `src/context.zig:1003` | `a138c288b541` |
+| `native/src/context.zig#Context.RawAccess.getEditorView` | `native` | `zig_fn` | `src/context.zig:1007` | `f84b37e3102c` |
+| `native/src/context.zig#Context.RawAccess.getSyntaxStyle` | `native` | `zig_fn` | `src/context.zig:1011` | `73c4071f67ff` |
+| `native/src/context.zig#Context.init` | `native` | `zig_fn` | `src/context.zig:1016` | `bc5501d4db58` |
+| `native/src/context.zig#Context.deinit` | `native` | `zig_fn` | `src/context.zig:1060` | `b8983b352119` |
+| `native/src/context.zig#Context.getLinkUrl` | `native` | `zig_fn` | `src/context.zig:1117` | `74d54f7d1d94` |
+| `native/src/context.zig#Context.createClipboardService` | `native` | `zig_fn` | `src/context.zig:1141` | `55b2eea3c6f5` |
+| `native/src/context.zig#Context.createAudioEngine` | `native` | `zig_fn` | `src/context.zig:1147` | `273f9439f77c` |
+| `native/src/context.zig#Context.createSession` | `native` | `zig_fn` | `src/context.zig:1156` | `d827830084df` |
+| `native/src/context.zig#Context.attachSessionRenderer` | `native` | `zig_fn` | `src/context.zig:1194` | `fbd79ddaf71c` |
+| `native/src/context.zig#Context.sessionGetLinkId` | `native` | `zig_fn` | `src/context.zig:1259` | `6fca1b6e019c` |
+| `native/src/context.zig#Context.acquireSessionBufferLease` | `native` | `zig_fn` | `src/context.zig:1272` | `2cefab96543a` |
+| `native/src/context.zig#Context.drawSessionBuffer` | `native` | `zig_fn` | `src/context.zig:1292` | `32ee7e1f271f` |
+| `native/src/context.zig#Context.drawContextBuffer` | `native` | `zig_fn` | `src/context.zig:1308` | `ee6b351d0484` |
+| `native/src/context.zig#Context.sessionSetDebugOverlay` | `native` | `zig_fn` | `src/context.zig:1337` | `6b520c67c2b5` |
+| `native/src/context.zig#Context.sessionUpdateStats` | `native` | `zig_fn` | `src/context.zig:1347` | `c919539d05a4` |
+| `native/src/context.zig#Context.sessionUpdateMemoryStats` | `native` | `zig_fn` | `src/context.zig:1357` | `833f23e73e19` |
+| `native/src/context.zig#Context.sessionDumpHitGrid` | `native` | `zig_fn` | `src/context.zig:1366` | `58c4ee1d697a` |
+| `native/src/context.zig#Context.renderSession` | `native` | `zig_fn` | `src/context.zig:1390` | `aebf2ded3486` |
+| `native/src/context.zig#Context.setupSessionTerminal` | `native` | `zig_fn` | `src/context.zig:1397` | `cb6e728a080c` |
+| `native/src/context.zig#Context.suspendSession` | `native` | `zig_fn` | `src/context.zig:1403` | `9236123b9e37` |
+| `native/src/context.zig#Context.resumeSession` | `native` | `zig_fn` | `src/context.zig:1409` | `1c22a29de06f` |
+| `native/src/context.zig#Context.pumpSession` | `native` | `zig_fn` | `src/context.zig:1415` | `548e64c528f3` |
+| `native/src/context.zig#Context.sessionInputFeed` | `native` | `zig_fn` | `src/context.zig:1421` | `d64666b059e5` |
+| `native/src/context.zig#Context.sessionInputExpect` | `native` | `zig_fn` | `src/context.zig:1427` | `f11cdc468d45` |
+| `native/src/context.zig#Context.sessionInputReset` | `native` | `zig_fn` | `src/context.zig:1433` | `8765f58b5468` |
+| `native/src/context.zig#Context.getSessionTerminalState` | `native` | `zig_fn` | `src/context.zig:1439` | `61811e7ab428` |
+| `native/src/context.zig#Context.controlSession` | `native` | `zig_fn` | `src/context.zig:1443` | `29a6079b49fa` |
+| `native/src/context.zig#Context.writeSessionClipboard` | `native` | `zig_fn` | `src/context.zig:1449` | `b6c8d63305af` |
+| `native/src/context.zig#Context.resizeSessionRenderer` | `native` | `zig_fn` | `src/context.zig:1455` | `f498fe62b32b` |
+| `native/src/context.zig#Context.writeSession` | `native` | `zig_fn` | `src/context.zig:1470` | `1fc77526d7ec` |
+| `native/src/context.zig#Context.readOutput` | `native` | `zig_fn` | `src/context.zig:1476` | `2ed328cb51f8` |
+| `native/src/context.zig#Context.drainOutput` | `native` | `zig_fn` | `src/context.zig:1484` | `83461135d0c5` |
+| `native/src/context.zig#Context.drainStdout` | `native` | `zig_fn` | `src/context.zig:1490` | `fad5f8de7a76` |
+| `native/src/context.zig#Context.postStdout` | `native` | `zig_fn` | `src/context.zig:1497` | `26f5fa07c3b5` |
+| `native/src/context.zig#Context.StdoutCreate.create` | `native` | `zig_fn` | `src/context.zig:1504` | `6034c6583a23` |
+| `native/src/context.zig#Context.completeOutput` | `native` | `zig_fn` | `src/context.zig:1511` | `71eb8c0ec74f` |
+| `native/src/context.zig#Context.beginSessionClose` | `native` | `zig_fn` | `src/context.zig:1522` | `4f0e1157fcc4` |
+| `native/src/context.zig#Context.dropSessionOutput` | `native` | `zig_fn` | `src/context.zig:1528` | `7193b142c0b9` |
+| `native/src/context.zig#Context.cancelSession` | `native` | `zig_fn` | `src/context.zig:1534` | `331e2ece4987` |
+| `native/src/context.zig#Context.createBuffer` | `native` | `zig_fn` | `src/context.zig:1540` | `8b5919aeb0b0` |
+| `native/src/context.zig#Context.importImage` | `native` | `zig_fn` | `src/context.zig:1558` | `b323a354a485` |
+| `native/src/context.zig#Context.inspectImage` | `native` | `zig_fn` | `src/context.zig:1579` | `1ad72cd42464` |
+| `native/src/context.zig#Context.decodeImage` | `native` | `zig_fn` | `src/context.zig:1585` | `499a565c9b35` |
+| `native/src/context.zig#Context.createImagePixels` | `native` | `zig_fn` | `src/context.zig:1592` | `a2888bf646cb` |
+| `native/src/context.zig#Context.cloneImageFrom` | `native` | `zig_fn` | `src/context.zig:1599` | `574a29a52d2b` |
+| `native/src/context.zig#Context.retainImage` | `native` | `zig_fn` | `src/context.zig:1613` | `81b81341e377` |
+| `native/src/context.zig#Context.imageInfo` | `native` | `zig_fn` | `src/context.zig:1624` | `2d25924355ef` |
+| `native/src/context.zig#Context.updateImagePixels` | `native` | `zig_fn` | `src/context.zig:1630` | `884929756b4a` |
+| `native/src/context.zig#Context.resizeImage` | `native` | `zig_fn` | `src/context.zig:1641` | `f4e27ac2c3ae` |
+| `native/src/context.zig#Context.extractImage` | `native` | `zig_fn` | `src/context.zig:1649` | `9994e2d1a83b` |
+| `native/src/context.zig#Context.extendImage` | `native` | `zig_fn` | `src/context.zig:1657` | `ca2dee7eb058` |
+| `native/src/context.zig#Context.transformImage` | `native` | `zig_fn` | `src/context.zig:1665` | `9edaf2b0964e` |
+| `native/src/context.zig#Context.compositeImage` | `native` | `zig_fn` | `src/context.zig:1673` | `6ae75a0202c3` |
+| `native/src/context.zig#Context.copyImagePixels` | `native` | `zig_fn` | `src/context.zig:1682` | `695bf6b28dcd` |
+| `native/src/context.zig#Context.copyImagePng` | `native` | `zig_fn` | `src/context.zig:1689` | `1d164d6272fd` |
+| `native/src/context.zig#Context.takeImagePixels` | `native` | `zig_fn` | `src/context.zig:1701` | `4525ed69ef0f` |
+| `native/src/context.zig#Context.imagePixelsSnapshot` | `native` | `zig_fn` | `src/context.zig:1721` | `1cb4145f96a1` |
+| `native/src/context.zig#Context.releaseImagePixels` | `native` | `zig_fn` | `src/context.zig:1727` | `7f4d07498888` |
+| `native/src/context.zig#Context.createUnicode` | `native` | `zig_fn` | `src/context.zig:1734` | `db23fab7372d` |
+| `native/src/context.zig#Context.drawBufferUnicode` | `native` | `zig_fn` | `src/context.zig:1748` | `3d362e45c07a` |
+| `native/src/context.zig#Context.drawUnicodeOn` | `native` | `zig_fn` | `src/context.zig:1754` | `fb66bb62bc79` |
+| `native/src/context.zig#Context.createEmbeddedTerminal` | `native` | `zig_fn` | `src/context.zig:1779` | `1bbfe6c8be0f` |
+| `native/src/context.zig#Context.embeddedTerminalWrite` | `native` | `zig_fn` | `src/context.zig:1801` | `1004d0b96879` |
+| `native/src/context.zig#Context.embeddedTerminalResize` | `native` | `zig_fn` | `src/context.zig:1809` | `b0306b5f4e92` |
+| `native/src/context.zig#Context.embeddedTerminalCommand` | `native` | `zig_fn` | `src/context.zig:1818` | `4a5fb7defce8` |
+| `native/src/context.zig#Context.embeddedTerminalSetSelection` | `native` | `zig_fn` | `src/context.zig:1840` | `c29896847ec1` |
+| `native/src/context.zig#Context.embeddedTerminalGetSelectedText` | `native` | `zig_fn` | `src/context.zig:1849` | `5e9ba68b8794` |
+| `native/src/context.zig#Context.embeddedTerminalCompose` | `native` | `zig_fn` | `src/context.zig:1858` | `c2f01900d663` |
+| `native/src/context.zig#Context.embeddedTerminalCursor` | `native` | `zig_fn` | `src/context.zig:1868` | `7215b328b4a2` |
+| `native/src/context.zig#Context.embeddedTerminalScrollbar` | `native` | `zig_fn` | `src/context.zig:1873` | `e695a7cf4031` |
+| `native/src/context.zig#Context.embeddedTerminalEncodeKey` | `native` | `zig_fn` | `src/context.zig:1878` | `d02e082f7c36` |
+| `native/src/context.zig#Context.embeddedTerminalEncodeMouse` | `native` | `zig_fn` | `src/context.zig:1907` | `a762f2d61149` |
+| `native/src/context.zig#Context.embeddedTerminalEncodePaste` | `native` | `zig_fn` | `src/context.zig:1946` | `bc8cd5871b48` |
+| `native/src/context.zig#Context.embeddedTerminalEncodeFocus` | `native` | `zig_fn` | `src/context.zig:1956` | `e21ae1d34d4d` |
+| `native/src/context.zig#Context.embeddedTerminalDrainResponses` | `native` | `zig_fn` | `src/context.zig:1965` | `201595ee99af` |
+| `native/src/context.zig#Context.drawBufferImage` | `native` | `zig_fn` | `src/context.zig:1985` | `7dd01be0aea5` |
+| `native/src/context.zig#Context.drawImageOn` | `native` | `zig_fn` | `src/context.zig:1991` | `2729a198b3ac` |
+| `native/src/context.zig#Context.sessionSetImageResolution` | `native` | `zig_fn` | `src/context.zig:2002` | `9dc8b7f844bf` |
+| `native/src/context.zig#Context.sessionSetKittyImageTransport` | `native` | `zig_fn` | `src/context.zig:2018` | `c459a9329cc3` |
+| `native/src/context.zig#Context.sessionKittyImageTransportStatus` | `native` | `zig_fn` | `src/context.zig:2024` | `9f10f609fbe5` |
+| `native/src/context.zig#Context.sessionPollKittyImageTransport` | `native` | `zig_fn` | `src/context.zig:2028` | `5570716df177` |
+| `native/src/context.zig#Context.sessionCancelKittyImageTransport` | `native` | `zig_fn` | `src/context.zig:2034` | `035b18f37849` |
+| `native/src/context.zig#Context.sessionProcessKittyImageReply` | `native` | `zig_fn` | `src/context.zig:2040` | `10a076e3a89f` |
+| `native/src/context.zig#Context.sessionStartKittyFileProbe` | `native` | `zig_fn` | `src/context.zig:2046` | `668c8cac1c83` |
+| `native/src/context.zig#Context.resizeBuffer` | `native` | `zig_fn` | `src/context.zig:2057` | `21c1593917f7` |
+| `native/src/context.zig#Context.clearBuffer` | `native` | `zig_fn` | `src/context.zig:2065` | `5789d1b8a28c` |
+| `native/src/context.zig#Context.drawBufferText` | `native` | `zig_fn` | `src/context.zig:2073` | `d39ca47b481b` |
+| `native/src/context.zig#Context.fillBufferRect` | `native` | `zig_fn` | `src/context.zig:2089` | `26e6c87efd84` |
+| `native/src/context.zig#Context.drawBuffer` | `native` | `zig_fn` | `src/context.zig:2101` | `e27003fb48c3` |
+| `native/src/context.zig#Context.drawBufferOn` | `native` | `zig_fn` | `src/context.zig:2109` | `9558308f78bf` |
+| `native/src/context.zig#Context.bufferStack` | `native` | `zig_fn` | `src/context.zig:2158` | `eb4477fc061c` |
+| `native/src/context.zig#Context.bufferStackOn` | `native` | `zig_fn` | `src/context.zig:2165` | `60c4223e1c18` |
+| `native/src/context.zig#Context.drawGrid` | `native` | `zig_fn` | `src/context.zig:2194` | `08f60646f3e7` |
+| `native/src/context.zig#Context.drawGridOn` | `native` | `zig_fn` | `src/context.zig:2200` | `b80cb657430a` |
+| `native/src/context.zig#Context.drawPackedBuffer` | `native` | `zig_fn` | `src/context.zig:2217` | `df6fd9554383` |
+| `native/src/context.zig#Context.drawSuperSampleBuffer` | `native` | `zig_fn` | `src/context.zig:2224` | `cec7e38f8b0f` |
+| `native/src/context.zig#Context.drawSuperSampleOn` | `native` | `zig_fn` | `src/context.zig:2230` | `856cf22e0d7e` |
+| `native/src/context.zig#Context.drawGrayscaleBuffer` | `native` | `zig_fn` | `src/context.zig:2235` | `7bcf6b0096f5` |
+| `native/src/context.zig#Context.colorMatrixBuffer` | `native` | `zig_fn` | `src/context.zig:2242` | `04015e4c7980` |
+| `native/src/context.zig#Context.colorMatrixOn` | `native` | `zig_fn` | `src/context.zig:2248` | `904a0a31b354` |
+| `native/src/context.zig#Context.checkBufferDimensions` | `native` | `zig_fn` | `src/context.zig:2263` | `b37cfccc6803` |
+| `native/src/context.zig#Context.drawTextBufferView` | `native` | `zig_fn` | `src/context.zig:2272` | `74fd164d3cdb` |
+| `native/src/context.zig#Context.drawTextViewOn` | `native` | `zig_fn` | `src/context.zig:2278` | `5b2454baa81c` |
+| `native/src/context.zig#Context.drawEditorView` | `native` | `zig_fn` | `src/context.zig:2285` | `10803fc704e6` |
+| `native/src/context.zig#Context.drawEditorViewOn` | `native` | `zig_fn` | `src/context.zig:2291` | `879e0e79f8ee` |
+| `native/src/context.zig#Context.drawSceneBody` | `native` | `zig_fn` | `src/context.zig:2297` | `a93cf6a5cbd4` |
+| `native/src/context.zig#Context.drawSceneBodyOn` | `native` | `zig_fn` | `src/context.zig:2303` | `05871baf8afc` |
+| `native/src/context.zig#Context.acquireOwnedBufferLease` | `native` | `zig_fn` | `src/context.zig:2318` | `1e2d86c5637f` |
+| `native/src/context.zig#Context.bufferLeaseSnapshot` | `native` | `zig_fn` | `src/context.zig:2344` | `b5a68db45e92` |
+| `native/src/context.zig#Context.releaseBufferLease` | `native` | `zig_fn` | `src/context.zig:2371` | `3e19091503c6` |
+| `native/src/context.zig#Context.sceneCreateNode` | `native` | `zig_fn` | `src/context.zig:2381` | `36a42abdb84f` |
+| `native/src/context.zig#Context.sceneDestroyNode` | `native` | `zig_fn` | `src/context.zig:2494` | `fa201e8fc9ee` |
+| `native/src/context.zig#Context.sceneSetMeasure` | `native` | `zig_fn` | `src/context.zig:2503` | `f326124d35a0` |
+| `native/src/context.zig#Context.sceneSetBoxDetails` | `native` | `zig_fn` | `src/context.zig:2527` | `ebb9307a9850` |
+| `native/src/context.zig#Context.sceneSetImage` | `native` | `zig_fn` | `src/context.zig:2534` | `dd20ba2b4abf` |
+| `native/src/context.zig#Context.sceneSetCrop` | `native` | `zig_fn` | `src/context.zig:2554` | `fbc065ce98d1` |
+| `native/src/context.zig#Context.sceneSetVideo` | `native` | `zig_fn` | `src/context.zig:2576` | `ef7e264db4f8` |
+| `native/src/context.zig#Context.videoOpen` | `native` | `zig_fn` | `src/context.zig:2591` | `25743c8d9651` |
+| `native/src/context.zig#Context.videoControl` | `native` | `zig_fn` | `src/context.zig:2609` | `ef5806053995` |
+| `native/src/context.zig#Context.videoGetState` | `native` | `zig_fn` | `src/context.zig:2616` | `abea3b857037` |
+| `native/src/context.zig#Context.videoGetError` | `native` | `zig_fn` | `src/context.zig:2623` | `0d2a8bb02d9a` |
+| `native/src/context.zig#Context.sceneSetSurface` | `native` | `zig_fn` | `src/context.zig:2631` | `710daeec4b06` |
+| `native/src/context.zig#Context.sceneSetEditorView` | `native` | `zig_fn` | `src/context.zig:2643` | `8875d2bd4a7f` |
+| `native/src/context.zig#Context.sceneSetEditorOptions` | `native` | `zig_fn` | `src/context.zig:2662` | `9e1a06962efc` |
+| `native/src/context.zig#Context.sceneSetTextView` | `native` | `zig_fn` | `src/context.zig:2674` | `314fcf7b526b` |
+| `native/src/context.zig#Context.sceneSetTextViewPaint` | `native` | `zig_fn` | `src/context.zig:2693` | `a95cbd6d6eca` |
+| `native/src/context.zig#Context.sceneHasMeasure` | `native` | `zig_fn` | `src/context.zig:2702` | `147d4adf7022` |
+| `native/src/context.zig#Context.sceneReachesHooks` | `native` | `zig_fn` | `src/context.zig:2707` | `e53e90280ff6` |
+| `native/src/context.zig#Context.scenePainted` | `native` | `zig_fn` | `src/context.zig:2713` | `dba9c2bef5d5` |
+| `native/src/context.zig#Context.sceneMarkDirty` | `native` | `zig_fn` | `src/context.zig:2719` | `bd678dc9ae6f` |
+| `native/src/context.zig#Context.checkSceneRead` | `native` | `zig_fn` | `src/context.zig:2726` | `36e60b22556d` |
+| `native/src/context.zig#Context.sceneMoveNode` | `native` | `zig_fn` | `src/context.zig:2730` | `f637cd48ceae` |
+| `native/src/context.zig#Context.sceneClearChildren` | `native` | `zig_fn` | `src/context.zig:2740` | `477ea31e931a` |
+| `native/src/context.zig#Context.sceneSetStyle` | `native` | `zig_fn` | `src/context.zig:2749` | `d0360770ca75` |
+| `native/src/context.zig#Context.sceneSetStyleLocked` | `native` | `zig_fn` | `src/context.zig:2756` | `98729b7ed116` |
+| `native/src/context.zig#Context.sceneGetStyle` | `native` | `zig_fn` | `src/context.zig:2816` | `2c0bfca2cdb9` |
+| `native/src/context.zig#Context.sceneSetPositions` | `native` | `zig_fn` | `src/context.zig:2850` | `5a53acff5a08` |
+| `native/src/context.zig#Context.sceneSetPaint` | `native` | `zig_fn` | `src/context.zig:2857` | `b6f17b1e0cc8` |
+| `native/src/context.zig#Context.scenePatchPaint` | `native` | `zig_fn` | `src/context.zig:2862` | `dad77522e7f1` |
+| `native/src/context.zig#Context.scenePatchPaintLocked` | `native` | `zig_fn` | `src/context.zig:2868` | `a20a116fe793` |
+| `native/src/context.zig#Context.sceneSetViewport` | `native` | `zig_fn` | `src/context.zig:2882` | `d9b8d8f69ec4` |
+| `native/src/context.zig#Context.sceneSetScroll` | `native` | `zig_fn` | `src/context.zig:2898` | `27a55be99927` |
+| `native/src/context.zig#Context.sceneSetScrollArrow` | `native` | `zig_fn` | `src/context.zig:2905` | `2a401b4b8285` |
+| `native/src/context.zig#Context.sceneScrollTo` | `native` | `zig_fn` | `src/context.zig:2917` | `fb19054803db` |
+| `native/src/context.zig#Context.sceneScrollRequest` | `native` | `zig_fn` | `src/context.zig:2926` | `de5e541b00d1` |
+| `native/src/context.zig#Context.sceneGetScroll` | `native` | `zig_fn` | `src/context.zig:2936` | `31053b4bf5f8` |
+| `native/src/context.zig#Context.sceneSetFocus` | `native` | `zig_fn` | `src/context.zig:2941` | `2b692720001f` |
+| `native/src/context.zig#Context.sceneSetHooks` | `native` | `zig_fn` | `src/context.zig:2956` | `531badf2998e` |
+| `native/src/context.zig#Context.sceneSetSlider` | `native` | `zig_fn` | `src/context.zig:2963` | `aed5d566b624` |
+| `native/src/context.zig#Context.sceneGetSliderThumb` | `native` | `zig_fn` | `src/context.zig:2978` | `2041434a1eaf` |
+| `native/src/context.zig#Context.sceneSetArrow` | `native` | `zig_fn` | `src/context.zig:2986` | `3f4751d40829` |
+| `native/src/context.zig#Context.sceneSetText` | `native` | `zig_fn` | `src/context.zig:3004` | `f642c4a20c08` |
+| `native/src/context.zig#Context.validateTextBytes` | `native` | `zig_fn` | `src/context.zig:3020` | `112efe6a31dc` |
+| `native/src/context.zig#Context.sceneSetStyledText` | `native` | `zig_fn` | `src/context.zig:3028` | `e0dda02a77f1` |
+| `native/src/context.zig#Context.sceneSetTextOptions` | `native` | `zig_fn` | `src/context.zig:3111` | `4af5053e6407` |
+| `native/src/context.zig#Context.sceneSetTextSelection` | `native` | `zig_fn` | `src/context.zig:3186` | `bc11e48f3b7a` |
+| `native/src/context.zig#Context.sceneGetTextSelection` | `native` | `zig_fn` | `src/context.zig:3236` | `288c0faa8048` |
+| `native/src/context.zig#Context.sceneGetSelectedText` | `native` | `zig_fn` | `src/context.zig:3244` | `b638d21e660d` |
+| `native/src/context.zig#Context.textBufferGetRange` | `native` | `zig_fn` | `src/context.zig:3254` | `62d042b7a84b` |
+| `native/src/context.zig#Context.editBufferGetRange` | `native` | `zig_fn` | `src/context.zig:3265` | `96bb3034379e` |
+| `native/src/context.zig#Context.editMeasureText` | `native` | `zig_fn` | `src/context.zig:3286` | `d4d5b1394a79` |
+| `native/src/context.zig#Context.measureEditText` | `native` | `zig_fn` | `src/context.zig:3294` | `f73f79871de5` |
+| `native/src/context.zig#Context.textViewGetSelectedText` | `native` | `zig_fn` | `src/context.zig:3311` | `e15f59888a6f` |
+| `native/src/context.zig#Context.editorGetSelectedText` | `native` | `zig_fn` | `src/context.zig:3317` | `2850cb3d8a21` |
+| `native/src/context.zig#Context.sceneGetText` | `native` | `zig_fn` | `src/context.zig:3323` | `aae659235d24` |
+| `native/src/context.zig#Context.sceneGetTextInfo` | `native` | `zig_fn` | `src/context.zig:3338` | `f52d6accd702` |
+| `native/src/context.zig#Context.sceneGetTextLines` | `native` | `zig_fn` | `src/context.zig:3355` | `9e630d6a117c` |
+| `native/src/context.zig#Context.sceneGetTextByteAt` | `native` | `zig_fn` | `src/context.zig:3378` | `9801598f02f4` |
+| `native/src/context.zig#Context.sceneGetLayout` | `native` | `zig_fn` | `src/context.zig:3395` | `eb485abd47c1` |
+| `native/src/context.zig#Context.sceneGetPaintLayout` | `native` | `zig_fn` | `src/context.zig:3411` | `5ed66b2b9103` |
+| `native/src/context.zig#Context.sceneMeasureLayout` | `native` | `zig_fn` | `src/context.zig:3420` | `f1e728dd0ff7` |
+| `native/src/context.zig#Context.scenePaint` | `native` | `zig_fn` | `src/context.zig:3435` | `0eb4d8c95154` |
+| `native/src/context.zig#Context.sceneFrameStep` | `native` | `zig_fn` | `src/context.zig:3457` | `6fabe7278f3b` |
+| `native/src/context.zig#Context.sceneFrameStepWithRecording` | `native` | `zig_fn` | `src/context.zig:3461` | `7b99bba287e1` |
+| `native/src/context.zig#Context.sceneFramePaintSlots` | `native` | `zig_fn` | `src/context.zig:3474` | `235cd6e6e988` |
+| `native/src/context.zig#Context.sceneFrameAcquireBufferLease` | `native` | `zig_fn` | `src/context.zig:3480` | `aa0ffce0af8c` |
+| `native/src/context.zig#Context.sceneFrameDrawBuffer` | `native` | `zig_fn` | `src/context.zig:3510` | `2725d85ff65e` |
+| `native/src/context.zig#Context.sceneFrameCommit` | `native` | `zig_fn` | `src/context.zig:3536` | `3c1d1413ccf9` |
+| `native/src/context.zig#Context.sceneFrameCancel` | `native` | `zig_fn` | `src/context.zig:3542` | `ed02b4414a2f` |
+| `native/src/context.zig#Context.sceneHitTest` | `native` | `zig_fn` | `src/context.zig:3552` | `cf1124754107` |
+| `native/src/context.zig#Context.sceneHitTestExcluding` | `native` | `zig_fn` | `src/context.zig:3556` | `3732a1d53efa` |
+| `native/src/context.zig#Context.sceneSetDebugFlags` | `native` | `zig_fn` | `src/context.zig:3571` | `314705d72b1c` |
+| `native/src/context.zig#Context.sceneGetStats` | `native` | `zig_fn` | `src/context.zig:3582` | `53e0f6330569` |
+| `native/src/context.zig#Context.sceneGetCursorState` | `native` | `zig_fn` | `src/context.zig:3588` | `72ee469e7695` |
+| `native/src/context.zig#Context.createTextBuffer` | `native` | `zig_fn` | `src/context.zig:3641` | `ced977db7b82` |
+| `native/src/context.zig#Context.createTextBufferView` | `native` | `zig_fn` | `src/context.zig:3700` | `7895ba7145fd` |
+| `native/src/context.zig#Context.textBufferSetText` | `native` | `zig_fn` | `src/context.zig:3721` | `36de1065811d` |
+| `native/src/context.zig#Context.textBufferSetStyledText` | `native` | `zig_fn` | `src/context.zig:3732` | `4916d7ca1bcc` |
+| `native/src/context.zig#Context.textBufferReplaceStyledBatch` | `native` | `zig_fn` | `src/context.zig:3756` | `98aecc1653a9` |
+| `native/src/context.zig#Context.textBufferAppend` | `native` | `zig_fn` | `src/context.zig:3798` | `ab5e27a023ca` |
+| `native/src/context.zig#Context.textBufferClear` | `native` | `zig_fn` | `src/context.zig:3812` | `d58b5943977d` |
+| `native/src/context.zig#Context.textBufferSetSyntaxStyle` | `native` | `zig_fn` | `src/context.zig:3828` | `c4ce305d5e7f` |
+| `native/src/context.zig#Context.textBufferSetDefaults` | `native` | `zig_fn` | `src/context.zig:3839` | `337023a890ff` |
+| `native/src/context.zig#Context.editBufferSetTabWidth` | `native` | `zig_fn` | `src/context.zig:3848` | `e6d3304426ba` |
+| `native/src/context.zig#Context.textBufferSetTabWidth` | `native` | `zig_fn` | `src/context.zig:3858` | `8ab1d3d4a1f1` |
+| `native/src/context.zig#Context.textBufferSetWidthMethod` | `native` | `zig_fn` | `src/context.zig:3868` | `b0adf6f7ad1c` |
+| `native/src/context.zig#Context.textBufferHighlight` | `native` | `zig_fn` | `src/context.zig:3877` | `23ebb39a81f7` |
+| `native/src/context.zig#Context.textBufferSetLayer` | `native` | `zig_fn` | `src/context.zig:3886` | `ff379c8779d9` |
+| `native/src/context.zig#Context.groupSet` | `native` | `zig_fn` | `src/context.zig:3896` | `01d7b4c308f8` |
+| `native/src/context.zig#Context.textViewSetViewport` | `native` | `zig_fn` | `src/context.zig:3902` | `ca41a0c85306` |
+| `native/src/context.zig#Context.textViewCommand` | `native` | `zig_fn` | `src/context.zig:3920` | `8d2643377726` |
+| `native/src/context.zig#Context.textViewSetTabColor` | `native` | `zig_fn` | `src/context.zig:3948` | `f8a3271e3a20` |
+| `native/src/context.zig#Context.textViewSelect` | `native` | `zig_fn` | `src/context.zig:3958` | `929d9d6e9a81` |
+| `native/src/context.zig#Context.createEditBuffer` | `native` | `zig_fn` | `src/context.zig:3967` | `e7ff4d9e3621` |
+| `native/src/context.zig#Context.createEditorView` | `native` | `zig_fn` | `src/context.zig:3997` | `37984258680a` |
+| `native/src/context.zig#Context.createSyntaxStyle` | `native` | `zig_fn` | `src/context.zig:4018` | `b30a1922416e` |
+| `native/src/context.zig#Context.syntaxStyleRegister` | `native` | `zig_fn` | `src/context.zig:4032` | `87b40aac90a3` |
+| `native/src/context.zig#Context.createMarkdown` | `native` | `zig_fn` | `src/context.zig:4065` | `9b8eccebd056` |
+| `native/src/context.zig#Context.markdownCall` | `native` | `zig_fn` | `src/context.zig:4097` | `268d0917a435` |
+| `native/src/context.zig#Context.markdownSource` | `native` | `zig_fn` | `src/context.zig:4122` | `78206baefd4b` |
+| `native/src/context.zig#Context.markdownReadChanges` | `native` | `zig_fn` | `src/context.zig:4129` | `db7899510410` |
+| `native/src/context.zig#Context.markdownReadLeaf` | `native` | `zig_fn` | `src/context.zig:4143` | `a0299bc218a9` |
+| `native/src/context.zig#Context.markdownReadSource` | `native` | `zig_fn` | `src/context.zig:4157` | `cb9ef4ceea85` |
+| `native/src/context.zig#Context.markdownBind` | `native` | `zig_fn` | `src/context.zig:4165` | `08c2dc33f9bf` |
+| `native/src/context.zig#Context.editSetSyntaxStyle` | `native` | `zig_fn` | `src/context.zig:4204` | `942d703ba028` |
+| `native/src/context.zig#Context.editSetText` | `native` | `zig_fn` | `src/context.zig:4215` | `690510a2baf9` |
+| `native/src/context.zig#Context.editInsertText` | `native` | `zig_fn` | `src/context.zig:4228` | `bc78aa3f1ae4` |
+| `native/src/context.zig#Context.editDeleteRange` | `native` | `zig_fn` | `src/context.zig:4237` | `18f5afb66457` |
+| `native/src/context.zig#Context.editSetCursor` | `native` | `zig_fn` | `src/context.zig:4245` | `1f1a558123c6` |
+| `native/src/context.zig#Context.editHistory` | `native` | `zig_fn` | `src/context.zig:4253` | `9f1f319114a0` |
+| `native/src/context.zig#Context.editCommand` | `native` | `zig_fn` | `src/context.zig:4262` | `12bfe400802a` |
+| `native/src/context.zig#Context.editSetDefaults` | `native` | `zig_fn` | `src/context.zig:4289` | `a6e1df847c42` |
+| `native/src/context.zig#Context.editHighlight` | `native` | `zig_fn` | `src/context.zig:4298` | `f24a4c0e22c8` |
+| `native/src/context.zig#Context.editSetLayer` | `native` | `zig_fn` | `src/context.zig:4307` | `aae0ad3e99fe` |
+| `native/src/context.zig#Context.editMark` | `native` | `zig_fn` | `src/context.zig:4317` | `da031360331c` |
+| `native/src/context.zig#Context.editorSetViewport` | `native` | `zig_fn` | `src/context.zig:4334` | `66935296996f` |
+| `native/src/context.zig#Context.editorSetScrollMargin` | `native` | `zig_fn` | `src/context.zig:4345` | `cfdfe2a8d75d` |
+| `native/src/context.zig#Context.editorCommand` | `native` | `zig_fn` | `src/context.zig:4356` | `ebae727057a6` |
+| `native/src/context.zig#Context.editorSetTabColor` | `native` | `zig_fn` | `src/context.zig:4391` | `230543de04d1` |
+| `native/src/context.zig#Context.editorSelect` | `native` | `zig_fn` | `src/context.zig:4401` | `a3ab0796633f` |
+| `native/src/context.zig#Context.editorPrepareView` | `native` | `zig_fn` | `src/context.zig:4409` | `8d277f9552c2` |
+| `native/src/context.zig#Context.editorReplaceSelection` | `native` | `zig_fn` | `src/context.zig:4417` | `9c697b9b830d` |
+| `native/src/context.zig#Context.editorSetPlaceholder` | `native` | `zig_fn` | `src/context.zig:4428` | `e31356a10844` |
+| `native/src/context.zig#Context.setEditEventCallback` | `native` | `zig_fn` | `src/context.zig:4544` | `49fc7aa4a158` |
+| `native/src/context.zig#Context.followWidthMethod` | `native` | `zig_fn` | `src/context.zig:4583` | `d76fbd733d3c` |
+| `native/src/context.zig#Context.destroy` | `native` | `zig_fn` | `src/context.zig:4659` | `9d76e1f6b791` |
+| `native/src/context.zig#Context.beginMutation` | `native` | `zig_fn` | `src/context.zig:4687` | `dc81b809a715` |
+| `native/src/edit-buffer.zig#EditBuffer.init` | `native` | `zig_fn` | `src/edit-buffer.zig:220` | `41ede0f85081` |
+| `native/src/edit-buffer.zig#EditBuffer.initWithOptions` | `native` | `zig_fn` | `src/edit-buffer.zig:230` | `9ef8f7c4ec73` |
+| `native/src/edit-buffer.zig#EditBuffer.deinit` | `native` | `zig_fn` | `src/edit-buffer.zig:263` | `bb2af65999dc` |
+| `native/src/edit-buffer.zig#EditBuffer.getTextBuffer` | `native` | `zig_fn` | `src/edit-buffer.zig:284` | `b39568ae635b` |
+| `native/src/edit-buffer.zig#EditBuffer.getPrimaryCursor` | `native` | `zig_fn` | `src/edit-buffer.zig:288` | `37d040f57a26` |
+| `native/src/edit-buffer.zig#EditBuffer.setCursor` | `native` | `zig_fn` | `src/edit-buffer.zig:292` | `7a968c403fb2` |
+| `native/src/edit-buffer.zig#EditBuffer.setCursorByOffset` | `native` | `zig_fn` | `src/edit-buffer.zig:306` | `9b0103844223` |
+| `native/src/edit-buffer.zig#EditBuffer.setTabWidth` | `native` | `zig_fn` | `src/edit-buffer.zig:353` | `76707d25c548` |
+| `native/src/edit-buffer.zig#EditBuffer.setWidthMethod` | `native` | `zig_fn` | `src/edit-buffer.zig:360` | `fdb9e12f9f52` |
+| `native/src/edit-buffer.zig#EditBuffer.remeasure` | `native` | `zig_fn` | `src/edit-buffer.zig:365` | `6e31fc9ba665` |
+| `native/src/edit-buffer.zig#EditBuffer.remapCursor` | `native` | `zig_fn` | `src/edit-buffer.zig:372` | `cf5e731a0d2f` |
+| `native/src/edit-buffer.zig#EditBuffer.insertText` | `native` | `zig_fn` | `src/edit-buffer.zig:493` | `e74a28334931` |
+| `native/src/edit-buffer.zig#EditBuffer.deleteRange` | `native` | `zig_fn` | `src/edit-buffer.zig:526` | `8806ee0f58d5` |
+| `native/src/edit-buffer.zig#EditBuffer.replaceRange` | `native` | `zig_fn` | `src/edit-buffer.zig:561` | `e000f601bda2` |
+| `native/src/edit-buffer.zig#EditBuffer.backspace` | `native` | `zig_fn` | `src/edit-buffer.zig:727` | `8926c26841bc` |
+| `native/src/edit-buffer.zig#EditBuffer.deleteForward` | `native` | `zig_fn` | `src/edit-buffer.zig:748` | `63f07e6716f3` |
+| `native/src/edit-buffer.zig#EditBuffer.moveLeft` | `native` | `zig_fn` | `src/edit-buffer.zig:769` | `b5de5d5f546d` |
+| `native/src/edit-buffer.zig#EditBuffer.getPrevCharBoundary` | `native` | `zig_fn` | `src/edit-buffer.zig:775` | `4cb9e46a8952` |
+| `native/src/edit-buffer.zig#EditBuffer.moveRight` | `native` | `zig_fn` | `src/edit-buffer.zig:788` | `e300840b4c30` |
+| `native/src/edit-buffer.zig#EditBuffer.moveUp` | `native` | `zig_fn` | `src/edit-buffer.zig:807` | `233988897c84` |
+| `native/src/edit-buffer.zig#EditBuffer.moveDown` | `native` | `zig_fn` | `src/edit-buffer.zig:812` | `6d96e89872d4` |
+| `native/src/edit-buffer.zig#EditBuffer.snapColumn` | `native` | `zig_fn` | `src/edit-buffer.zig:828` | `87c7171de984` |
+| `native/src/edit-buffer.zig#EditBuffer.unsnappedColumn` | `native` | `zig_fn` | `src/edit-buffer.zig:836` | `d25e04c25f2e` |
+| `native/src/edit-buffer.zig#EditBuffer.setText` | `native` | `zig_fn` | `src/edit-buffer.zig:842` | `f3b63f9d14e3` |
+| `native/src/edit-buffer.zig#EditBuffer.setTextOwned` | `native` | `zig_fn` | `src/edit-buffer.zig:847` | `377d12c1407c` |
+| `native/src/edit-buffer.zig#EditBuffer.replaceText` | `native` | `zig_fn` | `src/edit-buffer.zig:862` | `22ea7e1d6b28` |
+| `native/src/edit-buffer.zig#EditBuffer.getText` | `native` | `zig_fn` | `src/edit-buffer.zig:880` | `968020b6d43e` |
+| `native/src/edit-buffer.zig#EditBuffer.deleteLine` | `native` | `zig_fn` | `src/edit-buffer.zig:884` | `a937bc18689b` |
+| `native/src/edit-buffer.zig#EditBuffer.gotoLine` | `native` | `zig_fn` | `src/edit-buffer.zig:912` | `321b5f1bbc53` |
+| `native/src/edit-buffer.zig#EditBuffer.getCursorPosition` | `native` | `zig_fn` | `src/edit-buffer.zig:924` | `2c8a878ccc2e` |
+| `native/src/edit-buffer.zig#EditBuffer.debugLogRope` | `native` | `zig_fn` | `src/edit-buffer.zig:934` | `73f25f295ff2` |
+| `native/src/edit-buffer.zig#EditBuffer.undo` | `native` | `zig_fn` | `src/edit-buffer.zig:950` | `2f9665dab15a` |
+| `native/src/edit-buffer.zig#EditBuffer.redo` | `native` | `zig_fn` | `src/edit-buffer.zig:956` | `64199150a6c9` |
+| `native/src/edit-buffer.zig#EditBuffer.canUndo` | `native` | `zig_fn` | `src/edit-buffer.zig:1001` | `54bb4c76ac71` |
+| `native/src/edit-buffer.zig#EditBuffer.canRedo` | `native` | `zig_fn` | `src/edit-buffer.zig:1006` | `346350815e01` |
+| `native/src/edit-buffer.zig#EditBuffer.clearHistory` | `native` | `zig_fn` | `src/edit-buffer.zig:1011` | `cc3b04a92ffe` |
+| `native/src/edit-buffer.zig#EditBuffer.clear` | `native` | `zig_fn` | `src/edit-buffer.zig:1015` | `fe3c5a3f5d24` |
+| `native/src/edit-buffer.zig#EditBuffer.addMark` | `native` | `zig_fn` | `src/edit-buffer.zig:1035` | `46348ba53c76` |
+| `native/src/edit-buffer.zig#EditBuffer.removeMark` | `native` | `zig_fn` | `src/edit-buffer.zig:1056` | `c512a3b99d48` |
+| `native/src/edit-buffer.zig#EditBuffer.clearMarks` | `native` | `zig_fn` | `src/edit-buffer.zig:1063` | `b3430cbcd34d` |
+| `native/src/edit-buffer.zig#EditBuffer.markOffsets` | `native` | `zig_fn` | `src/edit-buffer.zig:1077` | `7cd3749c98a7` |
+| `native/src/edit-buffer.zig#EditBuffer.keepOutside` | `native` | `zig_fn` | `src/edit-buffer.zig:1136` | `8c2db2340b42` |
+| `native/src/edit-buffer.zig#EditBuffer.moveAtomic` | `native` | `zig_fn` | `src/edit-buffer.zig:1153` | `8c9b45569eec` |
+| `native/src/edit-buffer.zig#EditBuffer.setCursorByOffsetAtomic` | `native` | `zig_fn` | `src/edit-buffer.zig:1163` | `8181d6741555` |
+| `native/src/edit-buffer.zig#EditBuffer.leaveAtomic` | `native` | `zig_fn` | `src/edit-buffer.zig:1172` | `0b7e121b9d2b` |
+| `native/src/edit-buffer.zig#EditBuffer.deleteAtomic` | `native` | `zig_fn` | `src/edit-buffer.zig:1185` | `4e4030e526cc` |
+| `native/src/edit-buffer.zig#EditBuffer.getNextWordBoundary` | `native` | `zig_fn` | `src/edit-buffer.zig:1198` | `e419c22e5b5a` |
+| `native/src/edit-buffer.zig#EditBuffer.getPrevWordBoundary` | `native` | `zig_fn` | `src/edit-buffer.zig:1285` | `30b4827cd557` |
+| `native/src/edit-buffer.zig#EditBuffer.getEOL` | `native` | `zig_fn` | `src/edit-buffer.zig:1338` | `b1bf5b48345a` |
+| `native/src/edit-buffer.zig#EditBuffer.getTextRange` | `native` | `zig_fn` | `src/edit-buffer.zig:1355` | `9038bccd8647` |
+| `native/src/edit-buffer.zig#EditBuffer.getTextRangeByCoords` | `native` | `zig_fn` | `src/edit-buffer.zig:1362` | `cc70aa7d4c3c` |
+| `native/src/edit-marks.zig#Mark.styled` | `native` | `zig_fn` | `src/edit-marks.zig:26` | `a5c7ff41b513` |
+| `native/src/editor-view.zig#EditorView.settle` | `native` | `zig_fn` | `src/editor-view.zig:82` | `30d927fc754a` |
+| `native/src/editor-view.zig#EditorView.init` | `native` | `zig_fn` | `src/editor-view.zig:95` | `85e554f7d416` |
+| `native/src/editor-view.zig#EditorView.deinit` | `native` | `zig_fn` | `src/editor-view.zig:135` | `6df35e93a343` |
+| `native/src/editor-view.zig#EditorView.setViewport` | `native` | `zig_fn` | `src/editor-view.zig:153` | `dbe9bf3e3f5d` |
+| `native/src/editor-view.zig#EditorView.getViewport` | `native` | `zig_fn` | `src/editor-view.zig:166` | `14234c8e510a` |
+| `native/src/editor-view.zig#EditorView.makeCursorVisible` | `native` | `zig_fn` | `src/editor-view.zig:174` | `cf51f4da66d4` |
+| `native/src/editor-view.zig#EditorView.setScrollMargin` | `native` | `zig_fn` | `src/editor-view.zig:206` | `5351b9c55d72` |
+| `native/src/editor-view.zig#EditorView.setSelectionFollowCursor` | `native` | `zig_fn` | `src/editor-view.zig:211` | `7b7198032df1` |
+| `native/src/editor-view.zig#EditorView.ensureCursorVisible` | `native` | `zig_fn` | `src/editor-view.zig:218` | `503920fbe0ab` |
+| `native/src/editor-view.zig#EditorView.updateCursorBeforeRender` | `native` | `zig_fn` | `src/editor-view.zig:275` | `22e271631145` |
+| `native/src/editor-view.zig#EditorView.getVirtualLines` | `native` | `zig_fn` | `src/editor-view.zig:283` | `3b290d058c21` |
+| `native/src/editor-view.zig#EditorView.getCachedLineInfo` | `native` | `zig_fn` | `src/editor-view.zig:289` | `f97974a1056b` |
+| `native/src/editor-view.zig#EditorView.getLogicalLineInfo` | `native` | `zig_fn` | `src/editor-view.zig:294` | `928e249edd6d` |
+| `native/src/editor-view.zig#EditorView.getTextBufferView` | `native` | `zig_fn` | `src/editor-view.zig:299` | `443913491c4e` |
+| `native/src/editor-view.zig#EditorView.getTotalVirtualLineCount` | `native` | `zig_fn` | `src/editor-view.zig:303` | `3695896cb22a` |
+| `native/src/editor-view.zig#EditorView.getVirtualLineSpans` | `native` | `zig_fn` | `src/editor-view.zig:307` | `d8ab733e0f49` |
+| `native/src/editor-view.zig#EditorView.getTextAlign` | `native` | `zig_fn` | `src/editor-view.zig:311` | `77a0e09d81af` |
+| `native/src/editor-view.zig#EditorView.setDrawY` | `native` | `zig_fn` | `src/editor-view.zig:315` | `306e9c2c8dd4` |
+| `native/src/editor-view.zig#EditorView.getLineAlignmentPad` | `native` | `zig_fn` | `src/editor-view.zig:319` | `5a78abd03f4f` |
+| `native/src/editor-view.zig#EditorView.getTextBuffer` | `native` | `zig_fn` | `src/editor-view.zig:323` | `e10f1f077a86` |
+| `native/src/editor-view.zig#EditorView.getSelection` | `native` | `zig_fn` | `src/editor-view.zig:327` | `b1465b35c7f7` |
+| `native/src/editor-view.zig#EditorView.setSelection` | `native` | `zig_fn` | `src/editor-view.zig:331` | `41ab53e812a6` |
+| `native/src/editor-view.zig#EditorView.updateSelection` | `native` | `zig_fn` | `src/editor-view.zig:337` | `8956de6fe267` |
+| `native/src/editor-view.zig#EditorView.setSelectionInclusive` | `native` | `zig_fn` | `src/editor-view.zig:342` | `2b09cd541c4e` |
+| `native/src/editor-view.zig#EditorView.resetSelection` | `native` | `zig_fn` | `src/editor-view.zig:348` | `72ee1e471382` |
+| `native/src/editor-view.zig#EditorView.setLocalSelection` | `native` | `zig_fn` | `src/editor-view.zig:353` | `e6d06c562eaf` |
+| `native/src/editor-view.zig#EditorView.setLocalSelectionBehavior` | `native` | `zig_fn` | `src/editor-view.zig:357` | `e4f237f12904` |
+| `native/src/editor-view.zig#EditorView.updateLocalSelection` | `native` | `zig_fn` | `src/editor-view.zig:370` | `fc531e72bd62` |
+| `native/src/editor-view.zig#EditorView.updateLocalSelectionBehavior` | `native` | `zig_fn` | `src/editor-view.zig:374` | `03f5830b1c48` |
+| `native/src/editor-view.zig#EditorView.convertSelectionToCell` | `native` | `zig_fn` | `src/editor-view.zig:392` | `d7e3adda7e1d` |
+| `native/src/editor-view.zig#EditorView.resetLocalSelection` | `native` | `zig_fn` | `src/editor-view.zig:399` | `97baf3af135a` |
+| `native/src/editor-view.zig#EditorView.setSelectionOccupancy` | `native` | `zig_fn` | `src/editor-view.zig:404` | `94ad82b56eca` |
+| `native/src/editor-view.zig#EditorView.getSelectionOccupancy` | `native` | `zig_fn` | `src/editor-view.zig:421` | `50d1a6cca9ca` |
+| `native/src/editor-view.zig#EditorView.syncCursorToSelectionFocus` | `native` | `zig_fn` | `src/editor-view.zig:427` | `1b5afd56fb7f` |
+| `native/src/editor-view.zig#EditorView.getSelectedTextIntoBuffer` | `native` | `zig_fn` | `src/editor-view.zig:463` | `b42c9293dc20` |
+| `native/src/editor-view.zig#EditorView.packSelectionInfo` | `native` | `zig_fn` | `src/editor-view.zig:467` | `7a98cd9c019e` |
+| `native/src/editor-view.zig#EditorView.setViewportSize` | `native` | `zig_fn` | `src/editor-view.zig:473` | `34cb2499d41a` |
+| `native/src/editor-view.zig#EditorView.setWrapMode` | `native` | `zig_fn` | `src/editor-view.zig:505` | `d47084308075` |
+| `native/src/editor-view.zig#EditorView.getPrimaryCursor` | `native` | `zig_fn` | `src/editor-view.zig:511` | `784d122b681f` |
+| `native/src/editor-view.zig#EditorView.getText` | `native` | `zig_fn` | `src/editor-view.zig:515` | `592eafd8a569` |
+| `native/src/editor-view.zig#EditorView.getEditBuffer` | `native` | `zig_fn` | `src/editor-view.zig:520` | `f248eab5099a` |
+| `native/src/editor-view.zig#EditorView.getVisualCursor` | `native` | `zig_fn` | `src/editor-view.zig:591` | `a09235c15700` |
+| `native/src/editor-view.zig#EditorView.logicalToVisualCursor` | `native` | `zig_fn` | `src/editor-view.zig:614` | `e739dfa148de` |
+| `native/src/editor-view.zig#EditorView.visualToLogicalCursor` | `native` | `zig_fn` | `src/editor-view.zig:659` | `9422e827bb79` |
+| `native/src/editor-view.zig#EditorView.moveUpVisual` | `native` | `zig_fn` | `src/editor-view.zig:699` | `134a8668664a` |
+| `native/src/editor-view.zig#EditorView.moveDownVisual` | `native` | `zig_fn` | `src/editor-view.zig:707` | `bddbe849f550` |
+| `native/src/editor-view.zig#EditorView.deleteSelectedText` | `native` | `zig_fn` | `src/editor-view.zig:741` | `4eb65e4879ed` |
+| `native/src/editor-view.zig#EditorView.replaceSelectedText` | `native` | `zig_fn` | `src/editor-view.zig:769` | `421a44808184` |
+| `native/src/editor-view.zig#EditorView.setCursorByOffset` | `native` | `zig_fn` | `src/editor-view.zig:791` | `de54e7a2ff0d` |
+| `native/src/editor-view.zig#EditorView.getNextWordBoundary` | `native` | `zig_fn` | `src/editor-view.zig:795` | `e62aa82a0c11` |
+| `native/src/editor-view.zig#EditorView.getPrevWordBoundary` | `native` | `zig_fn` | `src/editor-view.zig:800` | `f729463ed60e` |
+| `native/src/editor-view.zig#EditorView.getEOL` | `native` | `zig_fn` | `src/editor-view.zig:805` | `f9e19723c3b4` |
+| `native/src/editor-view.zig#EditorView.getVisualSOL` | `native` | `zig_fn` | `src/editor-view.zig:812` | `8214a7010ea7` |
+| `native/src/editor-view.zig#EditorView.getVisualEOL` | `native` | `zig_fn` | `src/editor-view.zig:847` | `699211dca501` |
+| `native/src/editor-view.zig#EditorView.gotoVisualLineEnd` | `native` | `zig_fn` | `src/editor-view.zig:890` | `d66ae737b241` |
+| `native/src/editor-view.zig#EditorView.clearPlaceholder` | `native` | `zig_fn` | `src/editor-view.zig:903` | `63b292de48a7` |
+| `native/src/editor-view.zig#EditorView.setPlaceholderOwnedStyledText` | `native` | `zig_fn` | `src/editor-view.zig:917` | `87632bb4d2ee` |
+| `native/src/editor-view.zig#EditorView.followWidthMethod` | `native` | `zig_fn` | `src/editor-view.zig:949` | `d636a52b4f83` |
+| `native/src/editor-view.zig#EditorView.setTabIndicator` | `native` | `zig_fn` | `src/editor-view.zig:976` | `73936d035a7d` |
+| `native/src/editor-view.zig#EditorView.getTabIndicator` | `native` | `zig_fn` | `src/editor-view.zig:980` | `2658202f0552` |
+| `native/src/editor-view.zig#EditorView.setTabIndicatorColor` | `native` | `zig_fn` | `src/editor-view.zig:984` | `5e5de1f45c78` |
+| `native/src/editor-view.zig#EditorView.getTabIndicatorColor` | `native` | `zig_fn` | `src/editor-view.zig:988` | `94b62d77781c` |
+| `native/src/embedded-terminal/ghostty.zig#Key.event` | `native` | `zig_fn` | `src/embedded-terminal/ghostty.zig:22` | `afeb367a2aa1` |
+| `native/src/embedded-terminal/ghostty.zig#Mouse.event` | `native` | `zig_fn` | `src/embedded-terminal/ghostty.zig:43` | `1a94a5c8e651` |
+| `native/src/embedded-terminal/main.zig#StreamHandler.vt` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:41` | `510a426459c5` |
+| `native/src/embedded-terminal/main.zig#StreamHandler.deinit` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:51` | `6b31d1d5c85a` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.init` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:70` | `5097a69f4786` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.deinit` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:104` | `db13c9e2f9ae` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.write` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:113` | `bf54af4ba2cc` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.resize` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:122` | `d28bd2464e61` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.scroll` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:133` | `1461acb12c43` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.scrollbar` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:138` | `0d04301ae860` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.setSelection` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:143` | `cbc3c686dc06` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.clearSelection` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:150` | `c328e28b011a` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.selectedText` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:154` | `338079e5a0ad` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.freeSelectedText` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:160` | `470ce41a0c79` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.invalidate` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:164` | `a40362dfa335` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.setTransparentBackground` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:168` | `e957a28d5abd` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.compose` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:173` | `025eaf23c0a8` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.composeChecked` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:181` | `a9a06598b3d5` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.cursor` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:212` | `38590373c95f` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.encodeKey` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:233` | `1988328ef2ed` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.encodeMouse` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:243` | `894bca16494b` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.encodePaste` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:276` | `4a5be043315e` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.encodeFocus` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:287` | `ff5df2e3e971` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.freeEncoded` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:296` | `7696b8080bf2` |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal.drainResponses` | `native` | `zig_fn` | `src/embedded-terminal/main.zig:300` | `e83f9dfb5445` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.init` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:19` | `daec8633aebf` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.deinit` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:23` | `f49de71ca94d` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.write` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:24` | `aad37949a5d5` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.resize` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:27` | `7e0a41123c3d` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.scroll` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:30` | `40293f61ba0a` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.setSelection` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:31` | `f6507ca7d253` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.clearSelection` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:34` | `64c40595053b` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.selectedText` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:35` | `4d042d63879a` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.freeSelectedText` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:38` | `f81a0acc17a7` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.invalidate` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:39` | `d4b6ce7eab7d` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.setTransparentBackground` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:40` | `0e0ea738b2df` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.compose` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:41` | `6ac24697e3af` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.composeChecked` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:44` | `580339f0e64a` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.cursor` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:47` | `5d851051a8e3` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.scrollbar` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:50` | `30199ef6161e` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.encodePaste` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:53` | `eeb56de12f5c` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.encodeFocus` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:56` | `4b58ec46a634` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.freeEncoded` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:59` | `6fa12319cd2f` |
+| `native/src/embedded-terminal/unavailable.zig#EmbeddedTerminal.drainResponses` | `native` | `zig_fn` | `src/embedded-terminal/unavailable.zig:60` | `d99ebd069e48` |
+| `native/src/encoded-unicode.zig#EncodedUnicode.init` | `native` | `zig_fn` | `src/encoded-unicode.zig:14` | `45912de2e708` |
+| `native/src/encoded-unicode.zig#EncodedUnicode.deinit` | `native` | `zig_fn` | `src/encoded-unicode.zig:64` | `2dd997bdbc6c` |
+| `native/src/event-emitter.zig#EventEmitter.init` | `native` | `zig_fn` | `src/event-emitter.zig:20` | `a7967484642d` |
+| `native/src/event-emitter.zig#EventEmitter.deinit` | `native` | `zig_fn` | `src/event-emitter.zig:27` | `e33142c55461` |
+| `native/src/event-emitter.zig#EventEmitter.on` | `native` | `zig_fn` | `src/event-emitter.zig:34` | `43d888400327` |
+| `native/src/event-emitter.zig#EventEmitter.off` | `native` | `zig_fn` | `src/event-emitter.zig:43` | `f30be31d55a9` |
+| `native/src/event-emitter.zig#EventEmitter.emit` | `native` | `zig_fn` | `src/event-emitter.zig:57` | `aa4ead84308a` |
+| `native/src/grapheme.zig#CHAR_FLAG_IMAGE` | `native` | `zig_const` | `src/grapheme.zig:19` | `34352bbe54da` |
+| `native/src/grapheme.zig#CHAR_FLAG_GRAPHEME` | `native` | `zig_const` | `src/grapheme.zig:20` | `2a448f09dedd` |
+| `native/src/grapheme.zig#CHAR_FLAG_CONTINUATION` | `native` | `zig_const` | `src/grapheme.zig:21` | `41fbc5e37c07` |
+| `native/src/grapheme.zig#CHAR_TYPE_MASK` | `native` | `zig_const` | `src/grapheme.zig:22` | `8fec4bac3d6c` |
+| `native/src/grapheme.zig#IMAGE_ID_MASK` | `native` | `zig_const` | `src/grapheme.zig:23` | `8f69da1e4dde` |
+| `native/src/grapheme.zig#CHAR_EXT_SHIFT` | `native` | `zig_const` | `src/grapheme.zig:46` | `09d805b694f1` |
+| `native/src/grapheme.zig#CHAR_EXT_MASK` | `native` | `zig_const` | `src/grapheme.zig:47` | `671ec51ab326` |
+| `native/src/grapheme.zig#glyph_width_max` | `native` | `zig_const` | `src/grapheme.zig:49` | `590fc5f531c1` |
+| `native/src/grapheme.zig#GRAPHEME_ID_MASK` | `native` | `zig_const` | `src/grapheme.zig:53` | `180b2965d8c8` |
+| `native/src/grapheme.zig#CLASS_BITS` | `native` | `zig_const` | `src/grapheme.zig:54` | `bd1ba0d877f6` |
+| `native/src/grapheme.zig#GENERATION_BITS` | `native` | `zig_const` | `src/grapheme.zig:55` | `0122e7c97a61` |
+| `native/src/grapheme.zig#SLOT_BITS` | `native` | `zig_const` | `src/grapheme.zig:56` | `3aed9389eacc` |
+| `native/src/grapheme.zig#CLASS_MASK` | `native` | `zig_const` | `src/grapheme.zig:57` | `2f7a20544900` |
+| `native/src/grapheme.zig#GENERATION_MASK` | `native` | `zig_const` | `src/grapheme.zig:58` | `7c0e699aebac` |
+| `native/src/grapheme.zig#SLOT_MASK` | `native` | `zig_const` | `src/grapheme.zig:59` | `834380253261` |
+| `native/src/grapheme.zig#GraphemePool.init` | `native` | `zig_fn` | `src/grapheme.zig:104` | `03b3c6d8a5ad` |
+| `native/src/grapheme.zig#GraphemePool.initWithOptions` | `native` | `zig_fn` | `src/grapheme.zig:108` | `4571baae65a0` |
+| `native/src/grapheme.zig#GraphemePool.deinit` | `native` | `zig_fn` | `src/grapheme.zig:122` | `1578515515be` |
+| `native/src/grapheme.zig#GraphemePool.acquire` | `native` | `zig_fn` | `src/grapheme.zig:181` | `4f573ea6430c` |
+| `native/src/grapheme.zig#GraphemePool.incref` | `native` | `zig_fn` | `src/grapheme.zig:209` | `9a1e3230a1ad` |
+| `native/src/grapheme.zig#GraphemePool.decref` | `native` | `zig_fn` | `src/grapheme.zig:224` | `b8107179b514` |
+| `native/src/grapheme.zig#GraphemePool.get` | `native` | `zig_fn` | `src/grapheme.zig:252` | `1b06a5d277ca` |
+| `native/src/grapheme.zig#GraphemePool.getRefcount` | `native` | `zig_fn` | `src/grapheme.zig:260` | `d4ffd10a7f11` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.init` | `native` | `zig_fn` | `src/grapheme.zig:277` | `990087ea7820` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.deinit` | `native` | `zig_fn` | `src/grapheme.zig:315` | `4dfd75323a8d` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.allocInternal` | `native` | `zig_fn` | `src/grapheme.zig:359` | `2c87553bc3a0` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.getGeneration` | `native` | `zig_fn` | `src/grapheme.zig:396` | `1c78072a68ee` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.incref` | `native` | `zig_fn` | `src/grapheme.zig:405` | `60b37055d593` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.decref` | `native` | `zig_fn` | `src/grapheme.zig:424` | `eb61a5812ce3` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.get` | `native` | `zig_fn` | `src/grapheme.zig:468` | `3f1e055cb0d6` |
+| `native/src/grapheme.zig#GraphemePool.ClassPool.getRefcount` | `native` | `zig_fn` | `src/grapheme.zig:488` | `96521cee1250` |
+| `native/src/grapheme.zig#GraphemeTracker.init` | `native` | `zig_fn` | `src/grapheme.zig:566` | `bc57103850b1` |
+| `native/src/grapheme.zig#GraphemeTracker.deinit` | `native` | `zig_fn` | `src/grapheme.zig:584` | `2cc03cf37834` |
+| `native/src/grapheme.zig#GraphemeTracker.clear` | `native` | `zig_fn` | `src/grapheme.zig:590` | `e85a716a7d3c` |
+| `native/src/grapheme.zig#GraphemeTracker.add` | `native` | `zig_fn` | `src/grapheme.zig:595` | `ad0a99dad76a` |
+| `native/src/grapheme.zig#GraphemeTracker.remove` | `native` | `zig_fn` | `src/grapheme.zig:612` | `8abfe00b6129` |
+| `native/src/grapheme.zig#GraphemeTracker.replace` | `native` | `zig_fn` | `src/grapheme.zig:630` | `f59f17016abc` |
+| `native/src/grapheme.zig#GraphemeTracker.contains` | `native` | `zig_fn` | `src/grapheme.zig:637` | `d3525c02d1b6` |
+| `native/src/grapheme.zig#GraphemeTracker.hasAny` | `native` | `zig_fn` | `src/grapheme.zig:641` | `39b4053129ce` |
+| `native/src/grapheme.zig#GraphemeTracker.getGraphemeCount` | `native` | `zig_fn` | `src/grapheme.zig:645` | `cda1965363a1` |
+| `native/src/grapheme.zig#GraphemeTracker.getGraphemeCellCount` | `native` | `zig_fn` | `src/grapheme.zig:650` | `c03f80bc2b3f` |
+| `native/src/grapheme.zig#GraphemeTracker.getTotalGraphemeBytes` | `native` | `zig_fn` | `src/grapheme.zig:661` | `1c586ac1261f` |
+| `native/src/highlight-layers.zig#GroupSets.init` | `native` | `zig_fn` | `src/highlight-layers.zig:36` | `569773125175` |
+| `native/src/highlight-layers.zig#GroupSets.deinit` | `native` | `zig_fn` | `src/highlight-layers.zig:40` | `dd9659cb280e` |
+| `native/src/highlight-layers.zig#GroupSets.count` | `native` | `zig_fn` | `src/highlight-layers.zig:47` | `bd954bd4b885` |
+| `native/src/highlight-layers.zig#GroupSets.nameCount` | `native` | `zig_fn` | `src/highlight-layers.zig:52` | `a96c28ff360b` |
+| `native/src/highlight-layers.zig#GroupSets.name` | `native` | `zig_fn` | `src/highlight-layers.zig:58` | `e1a0d8a488e0` |
+| `native/src/highlight-layers.zig#GroupSets.intern` | `native` | `zig_fn` | `src/highlight-layers.zig:68` | `db4261c97c36` |
+| `native/src/highlight-layers.zig#Layers.slice` | `native` | `zig_fn` | `src/highlight-layers.zig:183` | `e5613ee47691` |
+| `native/src/highlight-layers.zig#Layers.isEmpty` | `native` | `zig_fn` | `src/highlight-layers.zig:187` | `e25d88feb121` |
+| `native/src/highlight-layers.zig#Layers.set` | `native` | `zig_fn` | `src/highlight-layers.zig:195` | `1cc7d3775e3f` |
+| `native/src/highlight-layers.zig#Layers.runsOf` | `native` | `zig_fn` | `src/highlight-layers.zig:208` | `5d9f6105cb8f` |
+| `native/src/highlight-layers.zig#Layers.setWithSpare` | `native` | `zig_fn` | `src/highlight-layers.zig:216` | `8f9d15b0e65b` |
+| `native/src/highlight-layers.zig#Layers.insertBytes` | `native` | `zig_fn` | `src/highlight-layers.zig:345` | `5185cccf1f27` |
+| `native/src/highlight-layers.zig#Layers.deleteBytes` | `native` | `zig_fn` | `src/highlight-layers.zig:361` | `c5e895cab16d` |
+| `native/src/highlight-layers.zig#Layers.reset` | `native` | `zig_fn` | `src/highlight-layers.zig:387` | `30f1e620de9f` |
+| `native/src/highlight-layers.zig#Layers.firstEndingAfter` | `native` | `zig_fn` | `src/highlight-layers.zig:396` | `eba26ea54e0a` |
+| `native/src/image.zig#Region.inside` | `native` | `zig_fn` | `src/image.zig:175` | `41d9946aa088` |
+| `native/src/image.zig#Image.width` | `native` | `zig_fn` | `src/image.zig:196` | `90c58632d1f4` |
+| `native/src/image.zig#Image.height` | `native` | `zig_fn` | `src/image.zig:200` | `26e312c718d3` |
+| `native/src/image.zig#Image.deinit` | `native` | `zig_fn` | `src/image.zig:204` | `79f168461998` |
+| `native/src/image.zig#Image.retain` | `native` | `zig_fn` | `src/image.zig:213` | `cf25aaf3c3f3` |
+| `native/src/image.zig#Image.info` | `native` | `zig_fn` | `src/image.zig:218` | `a18f81a306a0` |
+| `native/src/image.zig#Image.discardEncoded` | `native` | `zig_fn` | `src/image.zig:222` | `28ca334d83bb` |
+| `native/src/image.zig#Image.clone` | `native` | `zig_fn` | `src/image.zig:227` | `6cc843b9242a` |
+| `native/src/image.zig#Image.cloneOwned` | `native` | `zig_fn` | `src/image.zig:231` | `7f08ebd097a7` |
+| `native/src/image.zig#Image.ensurePixels` | `native` | `zig_fn` | `src/image.zig:248` | `454e1cb2a7f0` |
+| `native/src/image.zig#Image.ensureEncodedPng` | `native` | `zig_fn` | `src/image.zig:281` | `480f37df5bf8` |
+| `native/src/input-parser.zig#timeout_ns` | `native` | `zig_const` | `src/input-parser.zig:9` | `736336cae661` |
+| `native/src/input-parser.zig#unit_bytes_max` | `native` | `zig_const` | `src/input-parser.zig:10` | `0bf74a10ecbb` |
+| `native/src/input-parser.zig#sequence_bytes_max` | `native` | `zig_const` | `src/input-parser.zig:11` | `e4adf7e33a06` |
+| `native/src/input-parser.zig#reply_prefix_bytes_max` | `native` | `zig_const` | `src/input-parser.zig:13` | `b5531e29e4e4` |
+| `native/src/input-parser.zig#params_max` | `native` | `zig_const` | `src/input-parser.zig:14` | `868b964506c8` |
+| `native/src/input-parser.zig#subparams_max` | `native` | `zig_const` | `src/input-parser.zig:15` | `7488bac0d278` |
+| `native/src/input-parser.zig#events_per_byte_max` | `native` | `zig_const` | `src/input-parser.zig:16` | `fb5226b6ebc9` |
+| `native/src/input-parser.zig#payload_per_byte_max` | `native` | `zig_const` | `src/input-parser.zig:18` | `14ef7c85ac38` |
+| `native/src/input-parser.zig#mouse_button_none` | `native` | `zig_const` | `src/input-parser.zig:69` | `645cc8372a19` |
+| `native/src/input-parser.zig#key.f` | `native` | `zig_fn` | `src/input-parser.zig:95` | `8e93f79bbce9` |
+| `native/src/input-parser.zig#Sink.hasRoomForOneByte` | `native` | `zig_fn` | `src/input-parser.zig:127` | `fb120471b169` |
+| `native/src/input-parser.zig#Sink.raw` | `native` | `zig_fn` | `src/input-parser.zig:132` | `0bbe11d0ddd4` |
+| `native/src/input-parser.zig#Sink.text` | `native` | `zig_fn` | `src/input-parser.zig:136` | `1a7e45bbc945` |
+| `native/src/input-parser.zig#InputParser.feed` | `native` | `zig_fn` | `src/input-parser.zig:246` | `c2f3c7832000` |
+| `native/src/input-parser.zig#InputParser.deadlineNs` | `native` | `zig_fn` | `src/input-parser.zig:279` | `2b3ec8c22866` |
+| `native/src/input-parser.zig#InputParser.setExpectations` | `native` | `zig_fn` | `src/input-parser.zig:302` | `05c99d381eb4` |
+| `native/src/input-parser.zig#InputParser.reset` | `native` | `zig_fn` | `src/input-parser.zig:312` | `1ad3ef080a1f` |
+| `native/src/kitty-transport.zig#TIMEOUT_NS` | `native` | `zig_const` | `src/kitty-transport.zig:14` | `88111c6a2408` |
+| `native/src/kitty-transport.zig#Transport.pendingBytes` | `native` | `zig_fn` | `src/kitty-transport.zig:47` | `bd3d432a0530` |
+| `native/src/kitty-transport.zig#Transport.pendingCount` | `native` | `zig_fn` | `src/kitty-transport.zig:53` | `7463349a2966` |
+| `native/src/kitty-transport.zig#Transport.cancel` | `native` | `zig_fn` | `src/kitty-transport.zig:59` | `9ae6a85fc53b` |
+| `native/src/kitty-transport.zig#Transport.finishFrame` | `native` | `zig_fn` | `src/kitty-transport.zig:66` | `d7a303966685` |
+| `native/src/kitty-transport.zig#Transport.discard` | `native` | `zig_fn` | `src/kitty-transport.zig:74` | `cb70e9f4c1d8` |
+| `native/src/kitty-transport.zig#Transport.arm` | `native` | `zig_fn` | `src/kitty-transport.zig:82` | `d12d4bc0c6e0` |
+| `native/src/kitty-transport.zig#Transport.expire` | `native` | `zig_fn` | `src/kitty-transport.zig:92` | `44fa8b68dabc` |
+| `native/src/kitty-transport.zig#Transport.startProbe` | `native` | `zig_fn` | `src/kitty-transport.zig:149` | `c93e4cb7a373` |
+| `native/src/kitty-transport.zig#Transport.handleReply` | `native` | `zig_fn` | `src/kitty-transport.zig:170` | `20cbc43eddb7` |
+| `native/src/kitty-transport.zig#Transport.transmit` | `native` | `zig_fn` | `src/kitty-transport.zig:208` | `f9674edff9ce` |
+| `native/src/link.zig#GEN_BITS` | `native` | `zig_const` | `src/link.zig:14` | `577022c431a7` |
+| `native/src/link.zig#SLOT_BITS` | `native` | `zig_const` | `src/link.zig:15` | `3aed9389eacc` |
+| `native/src/link.zig#GEN_MASK` | `native` | `zig_const` | `src/link.zig:16` | `191f08721baf` |
+| `native/src/link.zig#SLOT_MASK` | `native` | `zig_const` | `src/link.zig:17` | `8ff6b5ae5caf` |
+| `native/src/link.zig#MAX_URL_LENGTH` | `native` | `zig_const` | `src/link.zig:18` | `150d2a3c7207` |
+| `native/src/link.zig#LinkPool.init` | `native` | `zig_fn` | `src/link.zig:47` | `195de84aa513` |
+| `native/src/link.zig#LinkPool.deinit` | `native` | `zig_fn` | `src/link.zig:60` | `a0b057606077` |
+| `native/src/link.zig#LinkPool.acquire` | `native` | `zig_fn` | `src/link.zig:137` | `c605c1e1a31a` |
+| `native/src/link.zig#LinkPool.incref` | `native` | `zig_fn` | `src/link.zig:189` | `4e9c0a36906c` |
+| `native/src/link.zig#LinkPool.decref` | `native` | `zig_fn` | `src/link.zig:204` | `143452796e90` |
+| `native/src/link.zig#LinkPool.get` | `native` | `zig_fn` | `src/link.zig:225` | `d6cc2d9e9af7` |
+| `native/src/link.zig#LinkPool.getRefcount` | `native` | `zig_fn` | `src/link.zig:238` | `4930ea6443cf` |
+| `native/src/link.zig#LinkPool.getTotalSlots` | `native` | `zig_fn` | `src/link.zig:250` | `1e5986e78d0a` |
+| `native/src/link.zig#LinkPool.getFreeSlotCount` | `native` | `zig_fn` | `src/link.zig:254` | `fe49f0bb0109` |
+| `native/src/link.zig#LinkPool.getLiveSlotCount` | `native` | `zig_fn` | `src/link.zig:258` | `d741005c60bc` |
+| `native/src/link.zig#LinkTracker.init` | `native` | `zig_fn` | `src/link.zig:268` | `5557ecdee0e2` |
+| `native/src/link.zig#LinkTracker.deinit` | `native` | `zig_fn` | `src/link.zig:283` | `e2d8be6a8f7b` |
+| `native/src/link.zig#LinkTracker.clear` | `native` | `zig_fn` | `src/link.zig:289` | `40235821cc21` |
+| `native/src/link.zig#LinkTracker.trackUrl` | `native` | `zig_fn` | `src/link.zig:295` | `b77f77ef8003` |
+| `native/src/link.zig#LinkTracker.addCellRef` | `native` | `zig_fn` | `src/link.zig:305` | `2d9d2c4caac8` |
+| `native/src/link.zig#LinkTracker.removeCellRef` | `native` | `zig_fn` | `src/link.zig:320` | `5060b902e37c` |
+| `native/src/link.zig#LinkTracker.hasAny` | `native` | `zig_fn` | `src/link.zig:332` | `093b94ae8654` |
+| `native/src/link.zig#LinkTracker.getLinkCount` | `native` | `zig_fn` | `src/link.zig:336` | `8883887b1331` |
+| `native/src/logger.zig#Diagnostics.init` | `native` | `zig_fn` | `src/logger.zig:32` | `5fd8156eb8e2` |
+| `native/src/logger.zig#Diagnostics.deinit` | `native` | `zig_fn` | `src/logger.zig:36` | `d520a5bcfd44` |
+| `native/src/logger.zig#Diagnostics.pop` | `native` | `zig_fn` | `src/logger.zig:42` | `c6a4fc233bbd` |
+| `native/src/logger.zig#Logger.logMessage` | `native` | `zig_fn` | `src/logger.zig:79` | `6232f36a090f` |
+| `native/src/logger.zig#Logger.err` | `native` | `zig_fn` | `src/logger.zig:104` | `aee0ad6c8224` |
+| `native/src/logger.zig#Logger.warn` | `native` | `zig_fn` | `src/logger.zig:108` | `f2e3b8e62ae1` |
+| `native/src/logger.zig#Logger.info` | `native` | `zig_fn` | `src/logger.zig:112` | `6d1ffbe97704` |
+| `native/src/logger.zig#Logger.debug` | `native` | `zig_fn` | `src/logger.zig:116` | `1eefe8bef591` |
+| `native/src/markdown-inline.zig#token_count_max` | `native` | `zig_const` | `src/markdown-inline.zig:11` | `f7a871fa2408` |
+| `native/src/markdown-inline.zig#delimiter_count_max` | `native` | `zig_const` | `src/markdown-inline.zig:15` | `22aea8f8b6dd` |
+| `native/src/markdown-inline.zig#bracket_count_max` | `native` | `zig_const` | `src/markdown-inline.zig:16` | `eaffcfaa9bf7` |
+| `native/src/markdown-inline.zig#label_codepoint_count_max` | `native` | `zig_const` | `src/markdown-inline.zig:18` | `9a1e19b17a56` |
+| `native/src/markdown-inline.zig#Token.end` | `native` | `zig_fn` | `src/markdown-inline.zig:54` | `fa196e25a5de` |
+| `native/src/markdown-inline.zig#References.lookup` | `native` | `zig_fn` | `src/markdown-inline.zig:121` | `7b2b8b5a3bdd` |
+| `native/src/markdown-inline.zig#Parser.deinit` | `native` | `zig_fn` | `src/markdown-inline.zig:217` | `d34c60a1013d` |
+| `native/src/markdown-inline.zig#Parser.releaseCapacity` | `native` | `zig_fn` | `src/markdown-inline.zig:227` | `1d4f4cede70c` |
+| `native/src/markdown-inline.zig#Parser.reset` | `native` | `zig_fn` | `src/markdown-inline.zig:236` | `e83322fadeea` |
+| `native/src/markdown-inline.zig#Parser.firstUnresolvedToken` | `native` | `zig_fn` | `src/markdown-inline.zig:249` | `004226524a5a` |
+| `native/src/markdown-inline.zig#Parser.restart` | `native` | `zig_fn` | `src/markdown-inline.zig:259` | `b5a4f3922580` |
+| `native/src/markdown-inline.zig#Parser.feed` | `native` | `zig_fn` | `src/markdown-inline.zig:274` | `0dee3a4db3c2` |
+| `native/src/markdown-inline.zig#Parser.rebase` | `native` | `zig_fn` | `src/markdown-inline.zig:388` | `d8e113f73525` |
+| `native/src/markdown-inline.zig#Parser.result` | `native` | `zig_fn` | `src/markdown-inline.zig:406` | `60ec93bfa38f` |
+| `native/src/markdown-inline.zig#Parser.takeChanged` | `native` | `zig_fn` | `src/markdown-inline.zig:429` | `92e8e01d3ef7` |
+| `native/src/markdown-inline.zig#Parser.settled` | `native` | `zig_fn` | `src/markdown-inline.zig:439` | `a8473fe317d4` |
+| `native/src/markdown-inline.zig#PendingSpans.clear` | `native` | `zig_fn` | `src/markdown-inline.zig:1414` | `a51138d1fb55` |
+| `native/src/markdown-inline.zig#PendingSpans.deinit` | `native` | `zig_fn` | `src/markdown-inline.zig:1421` | `34654e257aa9` |
+| `native/src/markdown-inline.zig#PendingSpans.add` | `native` | `zig_fn` | `src/markdown-inline.zig:1427` | `032d86da43d3` |
+| `native/src/markdown-inline.zig#LabelScan.run` | `native` | `zig_fn` | `src/markdown-inline.zig:1881` | `91512663a5e2` |
+| `native/src/markdown.zig#source_byte_count_max` | `native` | `zig_const` | `src/markdown.zig:15` | `a10fbdea8550` |
+| `native/src/markdown.zig#block_count_max` | `native` | `zig_const` | `src/markdown.zig:16` | `c3ac352beb9b` |
+| `native/src/markdown.zig#depth_max` | `native` | `zig_const` | `src/markdown.zig:17` | `ae465f426173` |
+| `native/src/markdown.zig#definition_count_max` | `native` | `zig_const` | `src/markdown.zig:18` | `41a517e60ca0` |
+| `native/src/markdown.zig#table_column_count_max` | `native` | `zig_const` | `src/markdown.zig:19` | `18deb61d8bac` |
+| `native/src/markdown.zig#held_line_byte_count_max` | `native` | `zig_const` | `src/markdown.zig:23` | `7a076173b227` |
+| `native/src/markdown.zig#hook_filter_byte_count_max` | `native` | `zig_const` | `src/markdown.zig:24` | `34ef80e4c28f` |
+| `native/src/markdown.zig#hook_filter_item_byte_count_max` | `native` | `zig_const` | `src/markdown.zig:25` | `8e27157f96c2` |
+| `native/src/markdown.zig#hook_filter_item_count_max` | `native` | `zig_const` | `src/markdown.zig:27` | `19e4ada767ef` |
+| `native/src/markdown.zig#scratch_retained_byte_count_max` | `native` | `zig_const` | `src/markdown.zig:29` | `8db52f214948` |
+| `native/src/markdown.zig#none` | `native` | `zig_const` | `src/markdown.zig:31` | `ecde46d9c969` |
+| `native/src/markdown.zig#Options.liveShown` | `native` | `zig_fn` | `src/markdown.zig:122` | `2b03ecaa2e98` |
+| `native/src/markdown.zig#Counters.plus` | `native` | `zig_fn` | `src/markdown.zig:169` | `b9f11d8558e3` |
+| `native/src/markdown.zig#TailSink.deinit` | `native` | `zig_fn` | `src/markdown.zig:415` | `3e1bf952ccde` |
+| `native/src/markdown.zig#TailSink.mirror` | `native` | `zig_fn` | `src/markdown.zig:422` | `9571510b8675` |
+| `native/src/markdown.zig#TailSink.shown` | `native` | `zig_fn` | `src/markdown.zig:430` | `8d5e949a9022` |
+| `native/src/markdown.zig#TailSink.shownStyles` | `native` | `zig_fn` | `src/markdown.zig:435` | `66d3c3326fa3` |
+| `native/src/markdown.zig#TailSink.styleKey` | `native` | `zig_fn` | `src/markdown.zig:462` | `70eb915c31b5` |
+| `native/src/markdown.zig#Doc.init` | `native` | `zig_fn` | `src/markdown.zig:539` | `250dea670868` |
+| `native/src/markdown.zig#Doc.deinit` | `native` | `zig_fn` | `src/markdown.zig:560` | `320ded8f1b19` |
+| `native/src/markdown.zig#Doc.append` | `native` | `zig_fn` | `src/markdown.zig:581` | `2e2b7812f668` |
+| `native/src/markdown.zig#Doc.finish` | `native` | `zig_fn` | `src/markdown.zig:645` | `8ae7b9a875de` |
+| `native/src/markdown.zig#Doc.set` | `native` | `zig_fn` | `src/markdown.zig:665` | `16363163b52e` |
+| `native/src/markdown.zig#Doc.setOptions` | `native` | `zig_fn` | `src/markdown.zig:673` | `00c31039b973` |
+| `native/src/markdown.zig#Doc.changeCount` | `native` | `zig_fn` | `src/markdown.zig:803` | `516d48689ba1` |
+| `native/src/markdown.zig#Doc.readChanges` | `native` | `zig_fn` | `src/markdown.zig:809` | `499343ebf3cb` |
+| `native/src/markdown.zig#Doc.filter` | `native` | `zig_fn` | `src/markdown.zig:1033` | `3cbf86bbc4b7` |
+| `native/src/markdown.zig#Doc.subtreeEnd` | `native` | `zig_fn` | `src/markdown.zig:1083` | `c53b02e437f5` |
+| `native/src/markdown.zig#Doc.wholeWrite` | `native` | `zig_fn` | `src/markdown.zig:2403` | `e5bd3e629834` |
+| `native/src/markdown.zig#Doc.relistHostWritten` | `native` | `zig_fn` | `src/markdown.zig:2426` | `43c4b0726401` |
+| `native/src/markdown.zig#Doc.isBound` | `native` | `zig_fn` | `src/markdown.zig:2439` | `b91ae5e5af83` |
+| `native/src/markdown.zig#Doc.sameStyles` | `native` | `zig_fn` | `src/markdown.zig:2474` | `a506100d78f5` |
+| `native/src/markdown.zig#Doc.leafDisplay` | `native` | `zig_fn` | `src/markdown.zig:3392` | `80305f537f59` |
+| `native/src/markdown.zig#Doc.readLeaf` | `native` | `zig_fn` | `src/markdown.zig:3410` | `166aee395320` |
+| `native/src/markdown.zig#Doc.isInlineLeaf` | `native` | `zig_fn` | `src/markdown.zig:3508` | `a43f26931316` |
+| `native/src/markdown.zig#Doc.leafSubject` | `native` | `zig_fn` | `src/markdown.zig:3519` | `e2a502a2849c` |
+| `native/src/markdown.zig#Doc.parseLeaf` | `native` | `zig_fn` | `src/markdown.zig:3532` | `38676cd8d067` |
+| `native/src/markdown.zig#Doc.references` | `native` | `zig_fn` | `src/markdown.zig:3536` | `2a71fcd169af` |
+| `native/src/markdown.zig#Doc.LeafContent.sourceOffset` | `native` | `zig_fn` | `src/markdown.zig:3595` | `a9f19c665896` |
+| `native/src/markdown.zig#Doc.leafContent` | `native` | `zig_fn` | `src/markdown.zig:3610` | `c35ecdf21921` |
+| `native/src/mem-registry.zig#MemRegistry.init` | `native` | `zig_fn` | `src/mem-registry.zig:22` | `83b3c63a61db` |
+| `native/src/mem-registry.zig#MemRegistry.deinit` | `native` | `zig_fn` | `src/mem-registry.zig:30` | `b27558578a20` |
+| `native/src/mem-registry.zig#MemRegistry.register` | `native` | `zig_fn` | `src/mem-registry.zig:41` | `0af557e1ffdc` |
+| `native/src/mem-registry.zig#MemRegistry.cancelLastRegistration` | `native` | `zig_fn` | `src/mem-registry.zig:69` | `8cc807726c67` |
+| `native/src/mem-registry.zig#MemRegistry.get` | `native` | `zig_fn` | `src/mem-registry.zig:88` | `b467508cccaa` |
+| `native/src/mem-registry.zig#MemRegistry.replace` | `native` | `zig_fn` | `src/mem-registry.zig:95` | `d4a7dbbea34d` |
+| `native/src/mem-registry.zig#MemRegistry.unregister` | `native` | `zig_fn` | `src/mem-registry.zig:105` | `f3803c20c211` |
+| `native/src/mem-registry.zig#MemRegistry.clear` | `native` | `zig_fn` | `src/mem-registry.zig:124` | `a210ab59a8db` |
+| `native/src/mem-registry.zig#MemRegistry.getUsedSlots` | `native` | `zig_fn` | `src/mem-registry.zig:134` | `e159a4002912` |
+| `native/src/mem-registry.zig#MemRegistry.getFreeSlots` | `native` | `zig_fn` | `src/mem-registry.zig:143` | `233e822569bf` |
+| `native/src/native-renderable.zig#NativeRenderable.init` | `native` | `zig_fn` | `src/native-renderable.zig:27` | `bde6088b1f7a` |
+| `native/src/native-renderable.zig#NativeRenderable.initWithConfig` | `native` | `zig_fn` | `src/native-renderable.zig:33` | `8151c63b6b8d` |
+| `native/src/native-renderable.zig#NativeRenderable.deinit` | `native` | `zig_fn` | `src/native-renderable.zig:37` | `73fa18291da1` |
+| `native/src/native-renderable.zig#NativeRenderable.detachMeasure` | `native` | `zig_fn` | `src/native-renderable.zig:43` | `dd0cd5af5009` |
+| `native/src/native-renderable.zig#NativeRenderable.resetForReuse` | `native` | `zig_fn` | `src/native-renderable.zig:53` | `7bfffa859526` |
+| `native/src/native-renderable.zig#NativeRenderable.getYogaNode` | `native` | `zig_fn` | `src/native-renderable.zig:65` | `651bd6530859` |
+| `native/src/native-renderable.zig#NativeRenderable.setMeasureTarget` | `native` | `zig_fn` | `src/native-renderable.zig:69` | `68aaa2e8a71b` |
+| `native/src/native-renderable.zig#NativeRenderable.setMeasureTargetPreservingProvider` | `native` | `zig_fn` | `src/native-renderable.zig:73` | `bd9227fe02bd` |
+| `native/src/native-renderable.zig#NodeStorage.retainedBytes` | `native` | `zig_fn` | `src/native-renderable.zig:148` | `4277d0f76991` |
+| `native/src/native-span-feed.zig#SpanInfo.slice` | `native` | `zig_fn` | `src/native-span-feed.zig:43` | `6ab1d510adf3` |
+| `native/src/native-span-feed.zig#SpanRing.count` | `native` | `zig_fn` | `src/native-span-feed.zig:69` | `29e47af01889` |
+| `native/src/native-span-feed.zig#SpanRing.push` | `native` | `zig_fn` | `src/native-span-feed.zig:94` | `0432f179813a` |
+| `native/src/native-span-feed.zig#SpanRing.popMany` | `native` | `zig_fn` | `src/native-span-feed.zig:123` | `e0e0d227ccd6` |
+| `native/src/native-span-feed.zig#ReserveInfo.slice` | `native` | `zig_fn` | `src/native-span-feed.zig:159` | `26b0d4942d96` |
+| `native/src/native-span-feed.zig#Stream.create` | `native` | `zig_fn` | `src/native-span-feed.zig:199` | `cdff92334251` |
+| `native/src/native-span-feed.zig#Stream.attach` | `native` | `zig_fn` | `src/native-span-feed.zig:261` | `7fa730012063` |
+| `native/src/native-span-feed.zig#Stream.setCallback` | `native` | `zig_fn` | `src/native-span-feed.zig:282` | `ba94231a84df` |
+| `native/src/native-span-feed.zig#Stream.reserveControlCapacity` | `native` | `zig_fn` | `src/native-span-feed.zig:299` | `5ee5e3ccbe48` |
+| `native/src/native-span-feed.zig#Stream.setControlSequenceReservation` | `native` | `zig_fn` | `src/native-span-feed.zig:324` | `d0f56ba6e7eb` |
+| `native/src/native-span-feed.zig#Stream.write` | `native` | `zig_fn` | `src/native-span-feed.zig:342` | `841403636474` |
+| `native/src/native-span-feed.zig#Stream.writeAtomic` | `native` | `zig_fn` | `src/native-span-feed.zig:401` | `228914964ad1` |
+| `native/src/native-span-feed.zig#Stream.writeAtomicUnnotified` | `native` | `zig_fn` | `src/native-span-feed.zig:407` | `499d8b966231` |
+| `native/src/native-span-feed.zig#Stream.writeReservedControlAtomic` | `native` | `zig_fn` | `src/native-span-feed.zig:414` | `6a95a13c65b3` |
+| `native/src/native-span-feed.zig#Stream.reserve` | `native` | `zig_fn` | `src/native-span-feed.zig:504` | `947e7993fe43` |
+| `native/src/native-span-feed.zig#Stream.commitReserved` | `native` | `zig_fn` | `src/native-span-feed.zig:512` | `2a93ea1655dc` |
+| `native/src/native-span-feed.zig#Stream.commit` | `native` | `zig_fn` | `src/native-span-feed.zig:521` | `c5dd936bead3` |
+| `native/src/native-span-feed.zig#Stream.getStats` | `native` | `zig_fn` | `src/native-span-feed.zig:530` | `2bf919298a97` |
+| `native/src/native-span-feed.zig#Stream.assertInvariants` | `native` | `zig_fn` | `src/native-span-feed.zig:540` | `b3cfd8313d9b` |
+| `native/src/native-span-feed.zig#Stream.bounded` | `native` | `zig_fn` | `src/native-span-feed.zig:575` | `031cfe2dfc21` |
+| `native/src/native-span-feed.zig#Stream.byteLimit` | `native` | `zig_fn` | `src/native-span-feed.zig:580` | `3e86d5075fd8` |
+| `native/src/native-span-feed.zig#Stream.atomicByteLimit` | `native` | `zig_fn` | `src/native-span-feed.zig:589` | `a4b6545023c1` |
+| `native/src/native-span-feed.zig#Stream.hasAtomicCapacity` | `native` | `zig_fn` | `src/native-span-feed.zig:651` | `b7c7803346c2` |
+| `native/src/native-span-feed.zig#Stream.setStagedBytes` | `native` | `zig_fn` | `src/native-span-feed.zig:662` | `ab90ffb82ded` |
+| `native/src/native-span-feed.zig#Stream.hasPendingBytes` | `native` | `zig_fn` | `src/native-span-feed.zig:675` | `9dc1482c7785` |
+| `native/src/native-span-feed.zig#Stream.setOptions` | `native` | `zig_fn` | `src/native-span-feed.zig:680` | `5344f45fa501` |
+| `native/src/native-span-feed.zig#Stream.close` | `native` | `zig_fn` | `src/native-span-feed.zig:699` | `095374bb2a0f` |
+| `native/src/native-span-feed.zig#Stream.destroy` | `native` | `zig_fn` | `src/native-span-feed.zig:717` | `9274f78b1404` |
+| `native/src/native-span-feed.zig#Stream.tryDestroy` | `native` | `zig_fn` | `src/native-span-feed.zig:721` | `753950070a10` |
+| `native/src/native-span-feed.zig#Stream.copyQueuedPrefix` | `native` | `zig_fn` | `src/native-span-feed.zig:743` | `1181fb35f2d7` |
+| `native/src/native-span-feed.zig#Stream.drainSpans` | `native` | `zig_fn` | `src/native-span-feed.zig:757` | `c7d7ef3b9802` |
+| `native/src/native-span-feed.zig#Stream.hasPendingSpans` | `native` | `zig_fn` | `src/native-span-feed.zig:762` | `15df77e58f98` |
+| `native/src/native-span-feed.zig#Stream.releaseSpan` | `native` | `zig_fn` | `src/native-span-feed.zig:766` | `65e28bdfa2df` |
+| `native/src/native-span-feed.zig#Stream.markSpanConsumed` | `native` | `zig_fn` | `src/native-span-feed.zig:777` | `73d1db07515c` |
+| `native/src/native-span-feed.zig#Stream.finish` | `native` | `zig_fn` | `src/native-span-feed.zig:781` | `86ec29d9b889` |
+| `native/src/native-span-feed.zig#Stream.commitLocked` | `native` | `zig_fn` | `src/native-span-feed.zig:795` | `930999577ac4` |
+| `native/src/native-span-feed.zig#Stream.reserveLocked` | `native` | `zig_fn` | `src/native-span-feed.zig:822` | `d3244a699047` |
+| `native/src/native-span-feed.zig#Stream.commitReservedLocked` | `native` | `zig_fn` | `src/native-span-feed.zig:853` | `bfca5d0e0ee1` |
+| `native/src/renderer-output.zig#StdoutOutput.initWithIo` | `native` | `zig_fn` | `src/renderer-output.zig:145` | `ffb08666a75a` |
+| `native/src/renderer-output.zig#StdoutOutput.writeSome` | `native` | `zig_fn` | `src/renderer-output.zig:159` | `d60057d5c3d5` |
+| `native/src/renderer-output.zig#StdoutOutput.supportsDirectWrite` | `native` | `zig_fn` | `src/renderer-output.zig:178` | `eef226cd8eca` |
+| `native/src/renderer-output.zig#BackendWriter.write` | `native` | `zig_fn` | `src/renderer-output.zig:283` | `37b6a6896a5c` |
+| `native/src/renderer-output.zig#BackendWriter.writeAll` | `native` | `zig_fn` | `src/renderer-output.zig:288` | `893a45842fcd` |
+| `native/src/renderer-output.zig#BackendWriter.writeByte` | `native` | `zig_fn` | `src/renderer-output.zig:293` | `a45f2811e026` |
+| `native/src/renderer-output.zig#BackendWriter.print` | `native` | `zig_fn` | `src/renderer-output.zig:298` | `2bf234c03006` |
+| `native/src/renderer-output.zig#BackendWriter.flush` | `native` | `zig_fn` | `src/renderer-output.zig:307` | `3cf0bd5a2512` |
+| `native/src/renderer-output.zig#FeedBackend.createWithIo` | `native` | `zig_fn` | `src/renderer-output.zig:420` | `29b9fc48ab7c` |
+| `native/src/renderer-output.zig#FeedBackend.deinit` | `native` | `zig_fn` | `src/renderer-output.zig:424` | `dcc9c7525ab3` |
+| `native/src/renderer-output.zig#FeedBackend.shouldSkipFrame` | `native` | `zig_fn` | `src/renderer-output.zig:431` | `48d997aa7834` |
+| `native/src/renderer-output.zig#FeedBackend.prepareFrame` | `native` | `zig_fn` | `src/renderer-output.zig:438` | `00605e3b6220` |
+| `native/src/renderer-output.zig#FeedBackend.uploadLimit` | `native` | `zig_fn` | `src/renderer-output.zig:513` | `6c763079d287` |
+| `native/src/renderer-output.zig#FeedBackend.beginUpload` | `native` | `zig_fn` | `src/renderer-output.zig:519` | `25f62368a97f` |
+| `native/src/renderer-output.zig#FeedBackend.endUpload` | `native` | `zig_fn` | `src/renderer-output.zig:526` | `09b24b637987` |
+| `native/src/renderer-output.zig#FeedBackend.deferUpload` | `native` | `zig_fn` | `src/renderer-output.zig:544` | `27bb37687b90` |
+| `native/src/renderer-output.zig#FeedBackend.lastUploadWaits` | `native` | `zig_fn` | `src/renderer-output.zig:551` | `85ca586e9dce` |
+| `native/src/renderer-output.zig#FeedBackend.writer` | `native` | `zig_fn` | `src/renderer-output.zig:574` | `e19bae1fadf3` |
+| `native/src/renderer-output.zig#FeedBackend.beginFrame` | `native` | `zig_fn` | `src/renderer-output.zig:578` | `fd4551e03e82` |
+| `native/src/renderer-output.zig#FeedBackend.failFrame` | `native` | `zig_fn` | `src/renderer-output.zig:593` | `7d1137ebe0ae` |
+| `native/src/renderer-output.zig#FeedBackend.endFrame` | `native` | `zig_fn` | `src/renderer-output.zig:600` | `0472afae1cea` |
+| `native/src/renderer-output.zig#FeedBackend.writeOut` | `native` | `zig_fn` | `src/renderer-output.zig:622` | `30ca840eaf4a` |
+| `native/src/renderer.zig#CliRenderer.createWithOptions` | `native` | `zig_fn` | `src/renderer.zig:471` | `ed9c50a5de4a` |
+| `native/src/renderer.zig#CliRenderer.destroyStorage` | `native` | `zig_fn` | `src/renderer.zig:587` | `bafdf6c4ee06` |
+| `native/src/renderer.zig#CliRenderer.writeShutdownImage` | `native` | `zig_fn` | `src/renderer.zig:614` | `da6b67449535` |
+| `native/src/renderer.zig#CliRenderer.updateStats` | `native` | `zig_fn` | `src/renderer.zig:675` | `efff314b4833` |
+| `native/src/renderer.zig#CliRenderer.updateMemoryStats` | `native` | `zig_fn` | `src/renderer.zig:684` | `1ecdb4d5b4ba` |
+| `native/src/renderer.zig#CliRenderer.getRenderStats` | `native` | `zig_fn` | `src/renderer.zig:690` | `73a5fce25979` |
+| `native/src/renderer.zig#CliRenderer.resize` | `native` | `zig_fn` | `src/renderer.zig:703` | `3282f9d54885` |
+| `native/src/renderer.zig#CliRenderer.resizeWithOutput` | `native` | `zig_fn` | `src/renderer.zig:708` | `48b9dde8291e` |
+| `native/src/renderer.zig#CliRenderer.setBackgroundColor` | `native` | `zig_fn` | `src/renderer.zig:739` | `bf64fd48e85f` |
+| `native/src/renderer.zig#CliRenderer.setPaletteState` | `native` | `zig_fn` | `src/renderer.zig:758` | `4f4b37ab6f7c` |
+| `native/src/renderer.zig#CliRenderer.clearSkippedFrameState` | `native` | `zig_fn` | `src/renderer.zig:853` | `d44329249d3d` |
+| `native/src/renderer.zig#CliRenderer.taint` | `native` | `zig_fn` | `src/renderer.zig:860` | `ee032cbe0694` |
+| `native/src/renderer.zig#CliRenderer.leaveRetained` | `native` | `zig_fn` | `src/renderer.zig:868` | `d1ec5963c5c9` |
+| `native/src/renderer.zig#CliRenderer.invalidateTerminalState` | `native` | `zig_fn` | `src/renderer.zig:903` | `2892a781f617` |
+| `native/src/renderer.zig#CliRenderer.renderDeferred` | `native` | `zig_fn` | `src/renderer.zig:945` | `9124215dd4ff` |
+| `native/src/renderer.zig#CliRenderer.renderSplitDeferred` | `native` | `zig_fn` | `src/renderer.zig:959` | `82df71917d9d` |
+| `native/src/renderer.zig#CliRenderer.completePresentation` | `native` | `zig_fn` | `src/renderer.zig:967` | `1eba1866aacf` |
+| `native/src/renderer.zig#CliRenderer.imageFrameCostUs` | `native` | `zig_fn` | `src/renderer.zig:1111` | `19dedec729c6` |
+| `native/src/renderer.zig#CliRenderer.resetSplitScrollback` | `native` | `zig_fn` | `src/renderer.zig:1124` | `69ee1b052dc5` |
+| `native/src/renderer.zig#CliRenderer.syncSplitScrollback` | `native` | `zig_fn` | `src/renderer.zig:1131` | `7350272a1302` |
+| `native/src/renderer.zig#CliRenderer.getSplitOutputOffset` | `native` | `zig_fn` | `src/renderer.zig:1137` | `1b00e1f68438` |
+| `native/src/renderer.zig#CliRenderer.clearPendingSplitFooterTransition` | `native` | `zig_fn` | `src/renderer.zig:1141` | `fd6335be9db2` |
+| `native/src/renderer.zig#CliRenderer.getNextBuffer` | `native` | `zig_fn` | `src/renderer.zig:1740` | `b84006572835` |
+| `native/src/renderer.zig#CliRenderer.getCurrentBuffer` | `native` | `zig_fn` | `src/renderer.zig:1744` | `73ed21814db6` |
+| `native/src/renderer.zig#CliRenderer.resolveImageProtocol` | `native` | `zig_fn` | `src/renderer.zig:1767` | `3ead1a4887d2` |
+| `native/src/renderer.zig#CliRenderer.imageUploadsPending` | `native` | `zig_fn` | `src/renderer.zig:2397` | `9fd580d51583` |
+| `native/src/renderer.zig#CliRenderer.prepareRenderFrameWithWriter` | `native` | `zig_fn` | `src/renderer.zig:2604` | `7bd7cfca3c0b` |
+| `native/src/renderer.zig#CliRenderer.setDebugOverlay` | `native` | `zig_fn` | `src/renderer.zig:3109` | `cb858a7227e4` |
+| `native/src/renderer.zig#CliRenderer.setTerminalEnvVar` | `native` | `zig_fn` | `src/renderer.zig:3114` | `b0ea1150173c` |
+| `native/src/renderer.zig#CliRenderer.syncWidthMethod` | `native` | `zig_fn` | `src/renderer.zig:3120` | `0340cd4aeb51` |
+| `native/src/renderer.zig#CliRenderer.setKittyImageTransport` | `native` | `zig_fn` | `src/renderer.zig:3133` | `a2fa0d807714` |
+| `native/src/renderer.zig#CliRenderer.startKittyFileProbeFromSession` | `native` | `zig_fn` | `src/renderer.zig:3142` | `5375055dcaa4` |
+| `native/src/renderer.zig#CliRenderer.kittyImageTransportStatus` | `native` | `zig_fn` | `src/renderer.zig:3155` | `4075ce9176a6` |
+| `native/src/renderer.zig#CliRenderer.cancelKittyImageTransport` | `native` | `zig_fn` | `src/renderer.zig:3167` | `39e86217bc37` |
+| `native/src/renderer.zig#CliRenderer.pollKittyImageTransport` | `native` | `zig_fn` | `src/renderer.zig:3172` | `9698e729c37b` |
+| `native/src/renderer.zig#CliRenderer.processKittyImageReply` | `native` | `zig_fn` | `src/renderer.zig:3201` | `41bbf5312efa` |
+| `native/src/rope.zig#Rope.Metrics.add` | `native` | `zig_fn` | `src/rope.zig:38` | `8101b8c83a85` |
+| `native/src/rope.zig#Rope.Metrics.weight` | `native` | `zig_fn` | `src/rope.zig:49` | `c6530269d88e` |
+| `native/src/rope.zig#Rope.Node.metrics` | `native` | `zig_fn` | `src/rope.zig:101` | `cc312888aa9e` |
+| `native/src/rope.zig#Rope.Node.depth` | `native` | `zig_fn` | `src/rope.zig:108` | `77207b7c22b8` |
+| `native/src/rope.zig#Rope.Node.count` | `native` | `zig_fn` | `src/rope.zig:112` | `3bf8c7455c18` |
+| `native/src/rope.zig#Rope.Node.is_balanced` | `native` | `zig_fn` | `src/rope.zig:116` | `3d09456a40e4` |
+| `native/src/rope.zig#Rope.Node.is_empty` | `native` | `zig_fn` | `src/rope.zig:123` | `a2a422c0f636` |
+| `native/src/rope.zig#Rope.Node.is_sentinel` | `native` | `zig_fn` | `src/rope.zig:135` | `0a1ec545c78e` |
+| `native/src/rope.zig#Rope.Node.init_branch` | `native` | `zig_fn` | `src/rope.zig:139` | `fc4f7a5c916f` |
+| `native/src/rope.zig#Rope.Node.new_branch` | `native` | `zig_fn` | `src/rope.zig:152` | `40b78785977d` |
+| `native/src/rope.zig#Rope.Node.new_leaf` | `native` | `zig_fn` | `src/rope.zig:158` | `273fa959e1ad` |
+| `native/src/rope.zig#Rope.Node.get` | `native` | `zig_fn` | `src/rope.zig:166` | `7e86ac5f8d80` |
+| `native/src/rope.zig#Rope.Node.walk` | `native` | `zig_fn` | `src/rope.zig:186` | `5e9a633eee0b` |
+| `native/src/rope.zig#Rope.Node.walk_from` | `native` | `zig_fn` | `src/rope.zig:203` | `f43198493521` |
+| `native/src/rope.zig#Rope.Node.rebalance` | `native` | `zig_fn` | `src/rope.zig:257` | `862479aea519` |
+| `native/src/rope.zig#Rope.Node.split_at` | `native` | `zig_fn` | `src/rope.zig:270` | `ec47b96e5d65` |
+| `native/src/rope.zig#Rope.Node.join_balanced` | `native` | `zig_fn` | `src/rope.zig:292` | `843e9477e018` |
+| `native/src/rope.zig#Rope.Node.LeafSplitFn.call` | `native` | `zig_fn` | `src/rope.zig:355` | `8900d9aafbfd` |
+| `native/src/rope.zig#Rope.Node.split_at_weight` | `native` | `zig_fn` | `src/rope.zig:363` | `e072acf3c081` |
+| `native/src/rope.zig#Rope.init` | `native` | `zig_fn` | `src/rope.zig:440` | `0bad28d89959` |
+| `native/src/rope.zig#Rope.initWithConfig` | `native` | `zig_fn` | `src/rope.zig:444` | `b3f8a0edcf07` |
+| `native/src/rope.zig#Rope.from_item` | `native` | `zig_fn` | `src/rope.zig:465` | `a8a56ff8a3e0` |
+| `native/src/rope.zig#Rope.from_itemWithConfig` | `native` | `zig_fn` | `src/rope.zig:469` | `506f104d5f20` |
+| `native/src/rope.zig#Rope.from_slice` | `native` | `zig_fn` | `src/rope.zig:487` | `afd061da6278` |
+| `native/src/rope.zig#Rope.from_sliceWithConfig` | `native` | `zig_fn` | `src/rope.zig:491` | `03d99e698c15` |
+| `native/src/rope.zig#Rope.count` | `native` | `zig_fn` | `src/rope.zig:536` | `24484ebd9d3a` |
+| `native/src/rope.zig#Rope.get` | `native` | `zig_fn` | `src/rope.zig:540` | `9ae398aa712e` |
+| `native/src/rope.zig#Rope.walk` | `native` | `zig_fn` | `src/rope.zig:544` | `a3750560ba0f` |
+| `native/src/rope.zig#Rope.metricsGeneration` | `native` | `zig_fn` | `src/rope.zig:550` | `4ad71a602404` |
+| `native/src/rope.zig#Rope.setMetricsGeneration` | `native` | `zig_fn` | `src/rope.zig:554` | `cbed7c3976c6` |
+| `native/src/rope.zig#Rope.remeasure` | `native` | `zig_fn` | `src/rope.zig:565` | `3bdc630e0adb` |
+| `native/src/rope.zig#Rope.walk_from` | `native` | `zig_fn` | `src/rope.zig:608` | `5012eaefa1e1` |
+| `native/src/rope.zig#Rope.rebalance` | `native` | `zig_fn` | `src/rope.zig:642` | `ca2c808d7809` |
+| `native/src/rope.zig#Rope.insert` | `native` | `zig_fn` | `src/rope.zig:646` | `40cb5fcae3c6` |
+| `native/src/rope.zig#Rope.delete` | `native` | `zig_fn` | `src/rope.zig:650` | `37f057b9a312` |
+| `native/src/rope.zig#Rope.replace` | `native` | `zig_fn` | `src/rope.zig:654` | `268c7b285b0d` |
+| `native/src/rope.zig#Rope.append` | `native` | `zig_fn` | `src/rope.zig:661` | `8f7ab610ceaa` |
+| `native/src/rope.zig#Rope.prepend` | `native` | `zig_fn` | `src/rope.zig:665` | `c8bef5f72d55` |
+| `native/src/rope.zig#Rope.concat` | `native` | `zig_fn` | `src/rope.zig:669` | `af1e502b157a` |
+| `native/src/rope.zig#Rope.split` | `native` | `zig_fn` | `src/rope.zig:673` | `3bac9afe3105` |
+| `native/src/rope.zig#Rope.slice` | `native` | `zig_fn` | `src/rope.zig:687` | `46e6b49da4d2` |
+| `native/src/rope.zig#Rope.delete_range` | `native` | `zig_fn` | `src/rope.zig:723` | `807b7db91c05` |
+| `native/src/rope.zig#Rope.insert_slice` | `native` | `zig_fn` | `src/rope.zig:733` | `19cbb242e7f5` |
+| `native/src/rope.zig#Rope.to_array` | `native` | `zig_fn` | `src/rope.zig:745` | `4242003a5381` |
+| `native/src/rope.zig#Rope.toText` | `native` | `zig_fn` | `src/rope.zig:768` | `ffb396248a9a` |
+| `native/src/rope.zig#Rope.totalWeight` | `native` | `zig_fn` | `src/rope.zig:827` | `8546001e6608` |
+| `native/src/rope.zig#Rope.splitByWeight` | `native` | `zig_fn` | `src/rope.zig:831` | `bac72ddec25d` |
+| `native/src/rope.zig#Rope.replaceRangeByWeight` | `native` | `zig_fn` | `src/rope.zig:963` | `922c62c83f71` |
+| `native/src/rope.zig#Rope.insertSliceByWeight` | `native` | `zig_fn` | `src/rope.zig:977` | `6082082fb9a1` |
+| `native/src/rope.zig#Rope.findByWeight` | `native` | `zig_fn` | `src/rope.zig:993` | `08a808fd04a7` |
+| `native/src/rope.zig#Rope.seekCount` | `native` | `zig_fn` | `src/rope.zig:1017` | `bd7f9932e41b` |
+| `native/src/rope.zig#Rope.seekCountSum` | `native` | `zig_fn` | `src/rope.zig:1039` | `a2f603fd0950` |
+| `native/src/rope.zig#Rope.seekKey` | `native` | `zig_fn` | `src/rope.zig:1065` | `f94df45abf18` |
+| `native/src/rope.zig#Rope.countThrough` | `native` | `zig_fn` | `src/rope.zig:1087` | `96d48acfee8d` |
+| `native/src/rope.zig#Rope.sharedLeaves` | `native` | `zig_fn` | `src/rope.zig:1112` | `4c91240d7249` |
+| `native/src/rope.zig#Rope.store_undo` | `native` | `zig_fn` | `src/rope.zig:1146` | `2b23c2bf62ef` |
+| `native/src/rope.zig#Rope.undo` | `native` | `zig_fn` | `src/rope.zig:1218` | `2c8be2f2fc1f` |
+| `native/src/rope.zig#Rope.redo` | `native` | `zig_fn` | `src/rope.zig:1233` | `2cd9c50bcd6b` |
+| `native/src/rope.zig#Rope.can_undo` | `native` | `zig_fn` | `src/rope.zig:1248` | `300e6f209f4f` |
+| `native/src/rope.zig#Rope.can_redo` | `native` | `zig_fn` | `src/rope.zig:1252` | `bf7406f36b37` |
+| `native/src/rope.zig#Rope.hasHistory` | `native` | `zig_fn` | `src/rope.zig:1257` | `1a09e5864cff` |
+| `native/src/rope.zig#Rope.clear_history` | `native` | `zig_fn` | `src/rope.zig:1261` | `dbefec210717` |
+| `native/src/rope.zig#Rope.clear` | `native` | `zig_fn` | `src/rope.zig:1268` | `0e577d4cabf0` |
+| `native/src/rope.zig#Rope.clearWithUndo` | `native` | `zig_fn` | `src/rope.zig:1272` | `e464c75ee283` |
+| `native/src/rope.zig#Rope.setSegments` | `native` | `zig_fn` | `src/rope.zig:1283` | `0df1072587e2` |
+| `native/src/runtime-abi.zig#std_options` | `native` | `zig_const` | `src/runtime-abi.zig:6` | `b05c12da06c9` |
+| `native/src/scene.zig#ArrowOptions.deinit` | `native` | `zig_fn` | `src/scene.zig:58` | `8367e478cd8a` |
+| `native/src/scene.zig#ScrollState.restick` | `native` | `zig_fn` | `src/scene.zig:147` | `bcf5ac9228c1` |
+| `native/src/scene.zig#ScrollState.observed` | `native` | `zig_fn` | `src/scene.zig:188` | `f6fb4082fa44` |
+| `native/src/scene.zig#ScrollState.applyGutters` | `native` | `zig_fn` | `src/scene.zig:199` | `d210d70d3e7f` |
+| `native/src/scene.zig#ScrollState.barRects` | `native` | `zig_fn` | `src/scene.zig:213` | `50723695c119` |
+| `native/src/scene.zig#ScrollState.slider` | `native` | `zig_fn` | `src/scene.zig:250` | `76823503c7a2` |
+| `native/src/scene.zig#paint_fields_all` | `native` | `zig_const` | `src/scene.zig:337` | `c1d2502eb944` |
+| `native/src/scene.zig#BufferIdentity.init` | `native` | `zig_fn` | `src/scene.zig:370` | `26e6f950a289` |
+| `native/src/scene.zig#BufferIdentity.matches` | `native` | `zig_fn` | `src/scene.zig:378` | `6a5963b00d33` |
+| `native/src/scene.zig#ImageState.deinit` | `native` | `zig_fn` | `src/scene.zig:459` | `c9100b8583a3` |
+| `native/src/scene.zig#VideoState.deinit` | `native` | `zig_fn` | `src/scene.zig:474` | `4744bee38dab` |
+| `native/src/scene.zig#Node.childYoga` | `native` | `zig_fn` | `src/scene.zig:571` | `16a57da627b0` |
+| `native/src/scene.zig#Node.filtersChildren` | `native` | `zig_fn` | `src/scene.zig:575` | `10bd6d66c4eb` |
+| `native/src/scene.zig#Scene.init` | `native` | `zig_fn` | `src/scene.zig:869` | `1a497eb7da7c` |
+| `native/src/scene.zig#Scene.deinit` | `native` | `zig_fn` | `src/scene.zig:876` | `b1d7f7a52e71` |
+| `native/src/scene.zig#Scene.prepareInsert` | `native` | `zig_fn` | `src/scene.zig:902` | `84eb215d9ceb` |
+| `native/src/scene.zig#Scene.insert` | `native` | `zig_fn` | `src/scene.zig:915` | `5f06a52e25f3` |
+| `native/src/scene.zig#Scene.move` | `native` | `zig_fn` | `src/scene.zig:961` | `7922e62a6f32` |
+| `native/src/scene.zig#Scene.clearChildren` | `native` | `zig_fn` | `src/scene.zig:1030` | `23c4315050a5` |
+| `native/src/scene.zig#Scene.remove` | `native` | `zig_fn` | `src/scene.zig:1173` | `def3a05e1bd1` |
+| `native/src/scene.zig#Scene.detachAll` | `native` | `zig_fn` | `src/scene.zig:1240` | `fe949b07787d` |
+| `native/src/scene.zig#Scene.checkWritable` | `native` | `zig_fn` | `src/scene.zig:1257` | `65c967eab3a7` |
+| `native/src/scene.zig#Scene.setPaintPartial` | `native` | `zig_fn` | `src/scene.zig:1263` | `9e609060d2f8` |
+| `native/src/scene.zig#Scene.setBoxDetails` | `native` | `zig_fn` | `src/scene.zig:1316` | `ca909cc3016d` |
+| `native/src/scene.zig#Scene.setHooks` | `native` | `zig_fn` | `src/scene.zig:1346` | `a78bf57cf673` |
+| `native/src/scene.zig#Scene.setScroll` | `native` | `zig_fn` | `src/scene.zig:1381` | `a1e9624491db` |
+| `native/src/scene.zig#Scene.setViewport` | `native` | `zig_fn` | `src/scene.zig:1444` | `90d179a9f0fa` |
+| `native/src/scene.zig#Scene.setScrollArrow` | `native` | `zig_fn` | `src/scene.zig:1467` | `3ce24afed674` |
+| `native/src/scene.zig#Scene.scrollTo` | `native` | `zig_fn` | `src/scene.zig:1480` | `5d0c4e1917cb` |
+| `native/src/scene.zig#Scene.requestScroll` | `native` | `zig_fn` | `src/scene.zig:1500` | `895b5a0911bb` |
+| `native/src/scene.zig#Scene.markObservationStale` | `native` | `zig_fn` | `src/scene.zig:1690` | `d036b249a048` |
+| `native/src/scene.zig#Scene.invalidateObservation` | `native` | `zig_fn` | `src/scene.zig:1701` | `c691e6af659c` |
+| `native/src/scene.zig#Scene.clearPreparation` | `native` | `zig_fn` | `src/scene.zig:1707` | `4993caacff0a` |
+| `native/src/scene.zig#Scene.cancelFrame` | `native` | `zig_fn` | `src/scene.zig:1714` | `d4f9aaf39ff1` |
+| `native/src/scene.zig#Scene.checkPainted` | `native` | `zig_fn` | `src/scene.zig:1731` | `f66f67ebfb29` |
+| `native/src/scene.zig#Scene.paintSlots` | `native` | `zig_fn` | `src/scene.zig:1740` | `335fdb81b9ce` |
+| `native/src/scene.zig#Scene.requalifyPainted` | `native` | `zig_fn` | `src/scene.zig:1752` | `2a8747da717d` |
+| `native/src/scene.zig#Scene.frameStep` | `native` | `zig_fn` | `src/scene.zig:1763` | `c15566782e57` |
+| `native/src/scene.zig#Scene.paintedLatest` | `native` | `zig_fn` | `src/scene.zig:2242` | `ee27d43bf93a` |
+| `native/src/scene.zig#Scene.reaches` | `native` | `zig_fn` | `src/scene.zig:2251` | `80665bfcd2a1` |
+| `native/src/scene.zig#Scene.measureLayout` | `native` | `zig_fn` | `src/scene.zig:2277` | `909863899392` |
+| `native/src/scene.zig#Scene.prepareOmitted` | `native` | `zig_fn` | `src/scene.zig:2417` | `8a00b85c34bf` |
+| `native/src/scene.zig#Scene.hitToken` | `native` | `zig_fn` | `src/scene.zig:2536` | `3337dcd5d952` |
+| `native/src/scene.zig#Scene.paintBody` | `native` | `zig_fn` | `src/scene.zig:2548` | `e32d9a290976` |
+| `native/src/scene.zig#Scene.paintedArea` | `native` | `zig_fn` | `src/scene.zig:2687` | `7d98162ce588` |
+| `native/src/session.zig#environment_entries_max` | `native` | `zig_const` | `src/session.zig:142` | `6795ea1baf35` |
+| `native/src/session.zig#environment_bytes_max` | `native` | `zig_const` | `src/session.zig:143` | `b5288a6126c0` |
+| `native/src/session.zig#control_packet_bytes_max` | `native` | `zig_const` | `src/session.zig:245` | `4f26c8829608` |
+| `native/src/session.zig#capability_response_bytes_max` | `native` | `zig_const` | `src/session.zig:246` | `68d4ca332fe8` |
+| `native/src/session.zig#title_bytes_max` | `native` | `zig_const` | `src/session.zig:247` | `a86723c56f0b` |
+| `native/src/session.zig#program_status_id_bytes_max` | `native` | `zig_const` | `src/session.zig:248` | `4ce47fd3c4e9` |
+| `native/src/session.zig#program_status_id_segment_bytes_max` | `native` | `zig_const` | `src/session.zig:249` | `273b057cfb26` |
+| `native/src/session.zig#program_status_id_segments_max` | `native` | `zig_const` | `src/session.zig:250` | `ad2004f4ab45` |
+| `native/src/session.zig#program_status_app_bytes_max` | `native` | `zig_const` | `src/session.zig:251` | `8c8db2efd88a` |
+| `native/src/session.zig#program_status_title_bytes_max` | `native` | `zig_const` | `src/session.zig:252` | `0b0e06cd1db6` |
+| `native/src/session.zig#program_status_message_bytes_max` | `native` | `zig_const` | `src/session.zig:253` | `b1db11f4c867` |
+| `native/src/session.zig#program_status_bytes_max` | `native` | `zig_const` | `src/session.zig:255` | `e44b7fb4f7c6` |
+| `native/src/session.zig#cursor_settle_ns` | `native` | `zig_const` | `src/session.zig:258` | `afda47cb4d75` |
+| `native/src/session.zig#split_snapshots_max` | `native` | `zig_const` | `src/session.zig:259` | `5526c6035189` |
+| `native/src/session.zig#Session.deinit` | `native` | `zig_fn` | `src/session.zig:379` | `108b455cb8bb` |
+| `native/src/session.zig#Session.write` | `native` | `zig_fn` | `src/session.zig:389` | `5ca44d8fb225` |
+| `native/src/session.zig#Session.checkOpen` | `native` | `zig_fn` | `src/session.zig:402` | `83a91be02e6e` |
+| `native/src/session.zig#Session.render` | `native` | `zig_fn` | `src/session.zig:413` | `f02cfecd7af2` |
+| `native/src/session.zig#Session.commitSceneFrame` | `native` | `zig_fn` | `src/session.zig:425` | `b5c66df36479` |
+| `native/src/session.zig#Session.copySceneFrame` | `native` | `zig_fn` | `src/session.zig:440` | `735e9bf5efcb` |
+| `native/src/session.zig#Session.renderSplit` | `native` | `zig_fn` | `src/session.zig:454` | `6c68400229f1` |
+| `native/src/session.zig#Session.checkRendering` | `native` | `zig_fn` | `src/session.zig:551` | `f6cc5eb72ab6` |
+| `native/src/session.zig#Session.checkResizing` | `native` | `zig_fn` | `src/session.zig:559` | `9d2d4ad3e2bf` |
+| `native/src/session.zig#Session.splitControl` | `native` | `zig_fn` | `src/session.zig:564` | `de2cfa91fe9f` |
+| `native/src/session.zig#Session.setScreen` | `native` | `zig_fn` | `src/session.zig:595` | `16a83ca20b05` |
+| `native/src/session.zig#Session.syncDetached` | `native` | `zig_fn` | `src/session.zig:627` | `49e71e4abccd` |
+| `native/src/session.zig#Session.checkFrameIdle` | `native` | `zig_fn` | `src/session.zig:649` | `24e42cbafadb` |
+| `native/src/session.zig#Session.checkLayoutIdle` | `native` | `zig_fn` | `src/session.zig:656` | `decb7a7d73d8` |
+| `native/src/session.zig#Session.cancelSceneFrame` | `native` | `zig_fn` | `src/session.zig:662` | `e4d31c653ea1` |
+| `native/src/session.zig#Session.setupTerminal` | `native` | `zig_fn` | `src/session.zig:679` | `5b429f7987c2` |
+| `native/src/session.zig#Session.suspendTerminal` | `native` | `zig_fn` | `src/session.zig:706` | `ef492c5ec84a` |
+| `native/src/session.zig#Session.resumeTerminal` | `native` | `zig_fn` | `src/session.zig:722` | `7d2b218c1b3a` |
+| `native/src/session.zig#Session.getTerminalState` | `native` | `zig_fn` | `src/session.zig:738` | `49914b069f8b` |
+| `native/src/session.zig#Session.control` | `native` | `zig_fn` | `src/session.zig:747` | `1f6c63659f0c` |
+| `native/src/session.zig#Session.setPaletteState` | `native` | `zig_fn` | `src/session.zig:828` | `7bb68180f85e` |
+| `native/src/session.zig#Session.triggerNotification` | `native` | `zig_fn` | `src/session.zig:837` | `3846ef2683c2` |
+| `native/src/session.zig#Session.setKittyImageTransport` | `native` | `zig_fn` | `src/session.zig:853` | `50f45b9d1af6` |
+| `native/src/session.zig#Session.kittyImageTransportStatus` | `native` | `zig_fn` | `src/session.zig:869` | `621e25c96592` |
+| `native/src/session.zig#Session.pollKittyImageTransport` | `native` | `zig_fn` | `src/session.zig:875` | `8074558b0f54` |
+| `native/src/session.zig#Session.cancelKittyImageTransport` | `native` | `zig_fn` | `src/session.zig:884` | `3e84113746a4` |
+| `native/src/session.zig#Session.processKittyImageReply` | `native` | `zig_fn` | `src/session.zig:890` | `abadbfdd51c3` |
+| `native/src/session.zig#Session.startKittyFileProbe` | `native` | `zig_fn` | `src/session.zig:896` | `d0326a947398` |
+| `native/src/session.zig#Session.writeClipboard` | `native` | `zig_fn` | `src/session.zig:934` | `17f0de648bb8` |
+| `native/src/session.zig#Session.pump` | `native` | `zig_fn` | `src/session.zig:962` | `bf78725c0b6f` |
+| `native/src/session.zig#Session.feedInput` | `native` | `zig_fn` | `src/session.zig:981` | `cf93d2b2eebc` |
+| `native/src/session.zig#Session.setInputExpectations` | `native` | `zig_fn` | `src/session.zig:1001` | `5a5aa5fb3502` |
+| `native/src/session.zig#Session.resetInput` | `native` | `zig_fn` | `src/session.zig:1007` | `4a230e2fa6bb` |
+| `native/src/session.zig#Session.pumpExit` | `native` | `zig_fn` | `src/session.zig:1021` | `89ffc8c9c3da` |
+| `native/src/session.zig#Session.readOutput` | `native` | `zig_fn` | `src/session.zig:1322` | `5b5adb5de899` |
+| `native/src/session.zig#Session.drainOutput` | `native` | `zig_fn` | `src/session.zig:1342` | `08e79afda332` |
+| `native/src/session.zig#Session.drainStdout` | `native` | `zig_fn` | `src/session.zig:1368` | `caa26ca3d766` |
+| `native/src/session.zig#Session.completeOutput` | `native` | `zig_fn` | `src/session.zig:1443` | `85a397561a46` |
+| `native/src/session.zig#Session.beginClose` | `native` | `zig_fn` | `src/session.zig:1490` | `48299a91dd4d` |
+| `native/src/session.zig#Session.postStdout` | `native` | `zig_fn` | `src/session.zig:1523` | `eceab8f40183` |
+| `native/src/session.zig#Session.dropOutput` | `native` | `zig_fn` | `src/session.zig:1576` | `1083c744b0e7` |
+| `native/src/session.zig#Session.cancel` | `native` | `zig_fn` | `src/session.zig:1625` | `c57d2a69e014` |
+| `native/src/session.zig#Session.canDestroy` | `native` | `zig_fn` | `src/session.zig:1639` | `507cd5d132ca` |
+| `native/src/session.zig#Session.isDrained` | `native` | `zig_fn` | `src/session.zig:1648` | `bd1b96bb6789` |
+| `native/src/session.zig#Session.getStats` | `native` | `zig_fn` | `src/session.zig:1652` | `90e6ae42ef71` |
+| `native/src/split-scrollback.zig#SplitScrollback.reset` | `native` | `zig_fn` | `src/split-scrollback.zig:5` | `ef51da7cc17c` |
+| `native/src/split-scrollback.zig#SplitScrollback.renderOffset` | `native` | `zig_fn` | `src/split-scrollback.zig:10` | `1dcfa5e88518` |
+| `native/src/split-scrollback.zig#SplitScrollback.noteViewportScroll` | `native` | `zig_fn` | `src/split-scrollback.zig:18` | `3802272753ad` |
+| `native/src/split-scrollback.zig#SplitScrollback.noteNewline` | `native` | `zig_fn` | `src/split-scrollback.zig:25` | `88d0235f8a1b` |
+| `native/src/split-scrollback.zig#SplitScrollback.publishSnapshotRows` | `native` | `zig_fn` | `src/split-scrollback.zig:34` | `d3fc370985b0` |
+| `native/src/split-scrollback.zig#SplitScrollback.publishRow` | `native` | `zig_fn` | `src/split-scrollback.zig:51` | `891397360f67` |
+| `native/src/stdout-writer.zig#handover_max` | `native` | `zig_const` | `src/stdout-writer.zig:20` | `330243154c12` |
+| `native/src/stdout-writer.zig#FdSink.write` | `native` | `zig_fn` | `src/stdout-writer.zig:49` | `790a919ac604` |
+| `native/src/stdout-writer.zig#FdSink.waitWritable` | `native` | `zig_fn` | `src/stdout-writer.zig:61` | `7e220eceece0` |
+| `native/src/stdout-writer.zig#Writer.create` | `native` | `zig_fn` | `src/stdout-writer.zig:92` | `2eb5478071ce` |
+| `native/src/stdout-writer.zig#Writer.handle` | `native` | `zig_fn` | `src/stdout-writer.zig:112` | `06d7f37589bc` |
+| `native/src/stdout-writer.zig#Writer.start` | `native` | `zig_fn` | `src/stdout-writer.zig:122` | `d6d82edd1bae` |
+| `native/src/stdout-writer.zig#Writer.collect` | `native` | `zig_fn` | `src/stdout-writer.zig:132` | `e3cf7015e7b4` |
+| `native/src/stdout-writer.zig#Writer.waitCollect` | `native` | `zig_fn` | `src/stdout-writer.zig:150` | `4f81109eefa6` |
+| `native/src/stdout-writer.zig#Writer.abandon` | `native` | `zig_fn` | `src/stdout-writer.zig:178` | `3ccb9c47bbe5` |
+| `native/src/stdout-writer.zig#Writer.release` | `native` | `zig_fn` | `src/stdout-writer.zig:189` | `f9a706e3eac9` |
+| `native/src/stdout-writer.zig#Writer.pick` | `native` | `zig_fn` | `src/stdout-writer.zig:201` | `53d8e096da0f` |
+| `native/src/stdout-writer.zig#Writer.writeStep` | `native` | `zig_fn` | `src/stdout-writer.zig:208` | `4fa3c659efd7` |
+| `native/src/stdout-writer.zig#Writer.publish` | `native` | `zig_fn` | `src/stdout-writer.zig:225` | `5092d8d348ba` |
+| `native/src/stdout-writer.zig#Deadline.init` | `native` | `zig_fn` | `src/stdout-writer.zig:367` | `201d3e0fa053` |
+| `native/src/stdout-writer.zig#Deadline.check` | `native` | `zig_fn` | `src/stdout-writer.zig:372` | `c776409406ab` |
+| `native/src/stdout-writer.zig#Script.write` | `native` | `zig_fn` | `src/stdout-writer.zig:393` | `06bbdf43a3b3` |
+| `native/src/stdout-writer.zig#Script.waitWritable` | `native` | `zig_fn` | `src/stdout-writer.zig:399` | `e3cc5836a902` |
+| `native/src/stdout-writer.zig#MaskSink.write` | `native` | `zig_fn` | `src/stdout-writer.zig:458` | `cb53b6471067` |
+| `native/src/stdout-writer.zig#MaskSink.waitWritable` | `native` | `zig_fn` | `src/stdout-writer.zig:463` | `87abff4afb82` |
+| `native/src/stdout-writer.zig#Parked.waitChange` | `native` | `zig_fn` | `src/stdout-writer.zig:556` | `1e507cd6af56` |
+| `native/src/stdout-writer.zig#RoomSink.write` | `native` | `zig_fn` | `src/stdout-writer.zig:570` | `385376a15a3d` |
+| `native/src/stdout-writer.zig#RoomSink.waitWritable` | `native` | `zig_fn` | `src/stdout-writer.zig:573` | `15d335743584` |
+| `native/src/syntax-style.zig#Borrower.bind` | `native` | `zig_fn` | `src/syntax-style.zig:40` | `c1d66a78fc00` |
+| `native/src/syntax-style.zig#id_limit` | `native` | `zig_const` | `src/syntax-style.zig:58` | `7271e969fb8a` |
+| `native/src/syntax-style.zig#SyntaxStyle.init` | `native` | `zig_fn` | `src/syntax-style.zig:77` | `c831c44596af` |
+| `native/src/syntax-style.zig#SyntaxStyle.deinit` | `native` | `zig_fn` | `src/syntax-style.zig:99` | `493309c91c34` |
+| `native/src/syntax-style.zig#SyntaxStyle.registerStyleDefinition` | `native` | `zig_fn` | `src/syntax-style.zig:111` | `5ec5064865f6` |
+| `native/src/syntax-style.zig#SyntaxStyle.resolveGroupSet` | `native` | `zig_fn` | `src/syntax-style.zig:146` | `8907d0af1382` |
+| `native/src/syntax-style.zig#SyntaxStyle.registerStyle` | `native` | `zig_fn` | `src/syntax-style.zig:160` | `73c208c59ee3` |
+| `native/src/syntax-style.zig#SyntaxStyle.resolveById` | `native` | `zig_fn` | `src/syntax-style.zig:168` | `bb713f43d543` |
+| `native/src/syntax-style.zig#SyntaxStyle.resolveByName` | `native` | `zig_fn` | `src/syntax-style.zig:172` | `ced86d817f41` |
+| `native/src/syntax-style.zig#SyntaxStyle.getStyleByName` | `native` | `zig_fn` | `src/syntax-style.zig:176` | `2f188107c358` |
+| `native/src/syntax-style.zig#SyntaxStyle.getStyleCount` | `native` | `zig_fn` | `src/syntax-style.zig:181` | `9d681e21b34b` |
+| `native/src/terminal-image.zig#QuantizedSixel.deinit` | `native` | `zig_fn` | `src/terminal-image.zig:258` | `487fdd5b7836` |
+| `native/src/terminal.zig#MousePointerStyle.toName` | `native` | `zig_fn` | `src/terminal.zig:157` | `d28d12a8910a` |
+| `native/src/terminal.zig#ClipboardTarget.toChar` | `native` | `zig_fn` | `src/terminal.zig:191` | `dd0a51671a59` |
+| `native/src/terminal.zig#PassthroughWriter.writeAll` | `native` | `zig_fn` | `src/terminal.zig:1819` | `71a51de28103` |
+| `native/src/terminal.zig#PassthroughWriter.writeByte` | `native` | `zig_fn` | `src/terminal.zig:1853` | `4f09d620932d` |
+| `native/src/text-buffer-segment.zig#ChunkLayoutCache.clear` | `native` | `zig_fn` | `src/text-buffer-segment.zig:70` | `15899c9fcf64` |
+| `native/src/text-buffer-segment.zig#ChunkLayoutCache.beginLayout` | `native` | `zig_fn` | `src/text-buffer-segment.zig:75` | `67eb078444e5` |
+| `native/src/text-buffer-segment.zig#ChunkLayoutCache.endLayout` | `native` | `zig_fn` | `src/text-buffer-segment.zig:80` | `af75dc603c84` |
+| `native/src/text-buffer-segment.zig#TextChunk.isAsciiOnly` | `native` | `zig_fn` | `src/text-buffer-segment.zig:121` | `d33b56b9ebd2` |
+| `native/src/text-buffer-segment.zig#TextChunk.hasTab` | `native` | `zig_fn` | `src/text-buffer-segment.zig:125` | `952bffe87dae` |
+| `native/src/text-buffer-segment.zig#TextChunk.empty` | `native` | `zig_fn` | `src/text-buffer-segment.zig:129` | `7544085bda74` |
+| `native/src/text-buffer-segment.zig#TextChunk.is_empty` | `native` | `zig_fn` | `src/text-buffer-segment.zig:138` | `653b2cf615f6` |
+| `native/src/text-buffer-segment.zig#TextChunk.getBytes` | `native` | `zig_fn` | `src/text-buffer-segment.zig:142` | `3e9d81b4a96b` |
+| `native/src/text-buffer-segment.zig#TextChunk.getCachedLayoutInfo` | `native` | `zig_fn` | `src/text-buffer-segment.zig:160` | `aef3ad62ad62` |
+| `native/src/text-buffer-segment.zig#TextChunk.getRenderClusters` | `native` | `zig_fn` | `src/text-buffer-segment.zig:182` | `f624144ebf33` |
+| `native/src/text-buffer-segment.zig#TextChunk.getLayoutInfo` | `native` | `zig_fn` | `src/text-buffer-segment.zig:227` | `38b2eaa0d0cc` |
+| `native/src/text-buffer-segment.zig#TextChunk.getWordLayoutInfo` | `native` | `zig_fn` | `src/text-buffer-segment.zig:239` | `95c16e76b299` |
+| `native/src/text-buffer-segment.zig#StyleSpan.legacy` | `native` | `zig_fn` | `src/text-buffer-segment.zig:343` | `646de2d4002b` |
+| `native/src/text-buffer-segment.zig#StyleSpan.kind` | `native` | `zig_fn` | `src/text-buffer-segment.zig:347` | `57c135068ebf` |
+| `native/src/text-buffer-segment.zig#StyleSpan.linkId` | `native` | `zig_fn` | `src/text-buffer-segment.zig:351` | `05c311190746` |
+| `native/src/text-buffer-segment.zig#Segment.Metrics.add` | `native` | `zig_fn` | `src/text-buffer-segment.zig:382` | `3dd55b60a6ec` |
+| `native/src/text-buffer-segment.zig#Segment.Metrics.lineWidthMax` | `native` | `zig_fn` | `src/text-buffer-segment.zig:408` | `8367b5b14d4c` |
+| `native/src/text-buffer-segment.zig#Segment.Metrics.weight` | `native` | `zig_fn` | `src/text-buffer-segment.zig:415` | `b69b5e8d7c83` |
+| `native/src/text-buffer-segment.zig#Segment.measure` | `native` | `zig_fn` | `src/text-buffer-segment.zig:421` | `d2e7c0ecc73e` |
+| `native/src/text-buffer-segment.zig#Segment.empty` | `native` | `zig_fn` | `src/text-buffer-segment.zig:454` | `06c8bafc7d4f` |
+| `native/src/text-buffer-segment.zig#Segment.is_empty` | `native` | `zig_fn` | `src/text-buffer-segment.zig:458` | `1dbab7b63bd6` |
+| `native/src/text-buffer-segment.zig#Segment.isVoid` | `native` | `zig_fn` | `src/text-buffer-segment.zig:467` | `965e14e6c78c` |
+| `native/src/text-buffer-segment.zig#Segment.getBytes` | `native` | `zig_fn` | `src/text-buffer-segment.zig:471` | `3cae42662b6e` |
+| `native/src/text-buffer-segment.zig#Segment.isBreak` | `native` | `zig_fn` | `src/text-buffer-segment.zig:479` | `82b6dcff8e6f` |
+| `native/src/text-buffer-segment.zig#Segment.isLineStart` | `native` | `zig_fn` | `src/text-buffer-segment.zig:486` | `be40f90cf0bd` |
+| `native/src/text-buffer-segment.zig#Segment.isText` | `native` | `zig_fn` | `src/text-buffer-segment.zig:493` | `14e147f9cd9f` |
+| `native/src/text-buffer-segment.zig#Segment.asText` | `native` | `zig_fn` | `src/text-buffer-segment.zig:500` | `ab6635000fcd` |
+| `native/src/text-buffer-segment.zig#Segment.canMerge` | `native` | `zig_fn` | `src/text-buffer-segment.zig:508` | `3c51ec9a5aec` |
+| `native/src/text-buffer-segment.zig#Segment.findJunction` | `native` | `zig_fn` | `src/text-buffer-segment.zig:523` | `66d4317373c7` |
+| `native/src/text-buffer-segment.zig#Segment.rewriteBoundary` | `native` | `zig_fn` | `src/text-buffer-segment.zig:603` | `5f66fd6ebd1a` |
+| `native/src/text-buffer-segment.zig#Segment.rewriteEnds` | `native` | `zig_fn` | `src/text-buffer-segment.zig:647` | `ab2e1df9b688` |
+| `native/src/text-buffer-view.zig#SelectionStyle.rgb` | `native` | `zig_fn` | `src/text-buffer-view.zig:29` | `5a2c852fdb1b` |
+| `native/src/text-buffer-view.zig#VirtualLine.init` | `native` | `zig_fn` | `src/text-buffer-view.zig:172` | `260e1aae8bd1` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.init` | `native` | `zig_fn` | `src/text-buffer-view.zig:383` | `00171f79f889` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.deinit` | `native` | `zig_fn` | `src/text-buffer-view.zig:461` | `15a2815d5326` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.retireStorage` | `native` | `zig_fn` | `src/text-buffer-view.zig:473` | `3f2e31ce1cb8` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.reinitStorage` | `native` | `zig_fn` | `src/text-buffer-view.zig:483` | `7f387c727087` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.retainedStorageBytes` | `native` | `zig_fn` | `src/text-buffer-view.zig:488` | `54447c52b401` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.prepare` | `native` | `zig_fn` | `src/text-buffer-view.zig:496` | `db3acf00740b` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.needsPrepare` | `native` | `zig_fn` | `src/text-buffer-view.zig:502` | `34fd6fb3616d` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setViewport` | `native` | `zig_fn` | `src/text-buffer-view.zig:507` | `cb87b4997c3a` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getViewport` | `native` | `zig_fn` | `src/text-buffer-view.zig:518` | `8e2a487def5a` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setViewportSize` | `native` | `zig_fn` | `src/text-buffer-view.zig:523` | `89160e2bd22a` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setWrapWidth` | `native` | `zig_fn` | `src/text-buffer-view.zig:541` | `93cd83baf9f8` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.layoutWrapWidth` | `native` | `zig_fn` | `src/text-buffer-view.zig:550` | `cc3b9f3966c2` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setWrapMode` | `native` | `zig_fn` | `src/text-buffer-view.zig:554` | `f2d8bb34fdc8` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setTextAlign` | `native` | `zig_fn` | `src/text-buffer-view.zig:562` | `ca37cdeaa21a` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getTextAlign` | `native` | `zig_fn` | `src/text-buffer-view.zig:566` | `47875760e599` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setDrawY` | `native` | `zig_fn` | `src/text-buffer-view.zig:570` | `24a248f27764` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getLineAlignmentPad` | `native` | `zig_fn` | `src/text-buffer-view.zig:574` | `0e284596ae93` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setFirstLineOffset` | `native` | `zig_fn` | `src/text-buffer-view.zig:581` | `bc9def85ed6f` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateVirtualLines` | `native` | `zig_fn` | `src/text-buffer-view.zig:601` | `5e8890fc482f` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getVirtualLineCount` | `native` | `zig_fn` | `src/text-buffer-view.zig:847` | `521e1a4fd778` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getVirtualLines` | `native` | `zig_fn` | `src/text-buffer-view.zig:852` | `da7229320bd2` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getCachedLineInfo` | `native` | `zig_fn` | `src/text-buffer-view.zig:870` | `7cfa3d0e259a` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getLogicalLineInfo` | `native` | `zig_fn` | `src/text-buffer-view.zig:906` | `855d3868e2ea` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getWrapInfo` | `native` | `zig_fn` | `src/text-buffer-view.zig:918` | `1421f78d5704` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.findVisualLineIndex` | `native` | `zig_fn` | `src/text-buffer-view.zig:926` | `98eba55c35a2` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getPlainTextIntoBuffer` | `native` | `zig_fn` | `src/text-buffer-view.zig:965` | `a6d04265a756` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getArenaAllocatedBytes` | `native` | `zig_fn` | `src/text-buffer-view.zig:969` | `0efbe3bc0017` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1005` | `c5a6c1bdeb05` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setSelectionStyle` | `native` | `zig_fn` | `src/text-buffer-view.zig:1009` | `f511c523577c` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1018` | `dac705b7c81d` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateSelectionStyle` | `native` | `zig_fn` | `src/text-buffer-view.zig:1022` | `2e56016f5dda` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setSelectionColors` | `native` | `zig_fn` | `src/text-buffer-view.zig:1030` | `08f84c937288` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.resetSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1037` | `771383b95cd8` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.followWidthMethod` | `native` | `zig_fn` | `src/text-buffer-view.zig:1044` | `a58997fe201d` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setSelectionOccupancy` | `native` | `zig_fn` | `src/text-buffer-view.zig:1060` | `3239cc05e6ea` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getSelectionOccupancy` | `native` | `zig_fn` | `src/text-buffer-view.zig:1073` | `fb75127e015b` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setSelectionInclusiveStyle` | `native` | `zig_fn` | `src/text-buffer-view.zig:1080` | `79e04b2f96b4` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1090` | `2ad59f2baea3` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getTextBuffer` | `native` | `zig_fn` | `src/text-buffer-view.zig:1094` | `3b80f4850881` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.switchToBuffer` | `native` | `zig_fn` | `src/text-buffer-view.zig:1098` | `11989aba5571` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.switchToOriginalBuffer` | `native` | `zig_fn` | `src/text-buffer-view.zig:1108` | `92c92592aeff` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setLocalSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1114` | `9d1b29516b58` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setLocalSelectionBehavior` | `native` | `zig_fn` | `src/text-buffer-view.zig:1118` | `14c16e44c2fe` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setLocalSelectionStyle` | `native` | `zig_fn` | `src/text-buffer-view.zig:1122` | `7ff4a5e335a7` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateLocalSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1183` | `e6b95375df19` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateLocalSelectionBehavior` | `native` | `zig_fn` | `src/text-buffer-view.zig:1187` | `638cf3121cdf` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.updateLocalSelectionStyle` | `native` | `zig_fn` | `src/text-buffer-view.zig:1191` | `0bd1f9ddd29f` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.convertSelectionToCell` | `native` | `zig_fn` | `src/text-buffer-view.zig:1234` | `23ed45864321` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.selectWord` | `native` | `zig_fn` | `src/text-buffer-view.zig:1282` | `f03a3737b8a5` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.selectWordBetween` | `native` | `zig_fn` | `src/text-buffer-view.zig:1308` | `934535bd8f24` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.selectLine` | `native` | `zig_fn` | `src/text-buffer-view.zig:1334` | `7a47a9cf0227` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.resetLocalSelection` | `native` | `zig_fn` | `src/text-buffer-view.zig:1470` | `069eb22b6f51` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.graphemeAtCell` | `native` | `zig_fn` | `src/text-buffer-view.zig:1579` | `b62c09ee1807` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.packSelectionInfo` | `native` | `zig_fn` | `src/text-buffer-view.zig:1626` | `e0e7994283cd` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getSelectedTextIntoBuffer` | `native` | `zig_fn` | `src/text-buffer-view.zig:1638` | `4dcb2932642d` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.copySelectedText` | `native` | `zig_fn` | `src/text-buffer-view.zig:1644` | `62fe624bc00f` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getVirtualLineSpans` | `native` | `zig_fn` | `src/text-buffer-view.zig:1650` | `030a133cac63` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setTabIndicator` | `native` | `zig_fn` | `src/text-buffer-view.zig:1665` | `9cfd54dd6853` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getTabIndicator` | `native` | `zig_fn` | `src/text-buffer-view.zig:1669` | `2604693d8d6b` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setTabIndicatorColor` | `native` | `zig_fn` | `src/text-buffer-view.zig:1673` | `51bafc763020` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getTabIndicatorColor` | `native` | `zig_fn` | `src/text-buffer-view.zig:1677` | `7ce7265706ae` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.setTruncate` | `native` | `zig_fn` | `src/text-buffer-view.zig:1681` | `6207e8cf8feb` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.getTruncate` | `native` | `zig_fn` | `src/text-buffer-view.zig:1689` | `2d2765707697` |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView.measureForDimensions` | `native` | `zig_fn` | `src/text-buffer-view.zig:1882` | `ed579b2332b7` |
+| `native/src/text-buffer.zig#no_style` | `native` | `zig_const` | `src/text-buffer.zig:40` | `5ef3d2fdf42a` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.defaults` | `native` | `zig_fn` | `src/text-buffer.zig:199` | `2e7e3d7ec07f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.memRegistry` | `native` | `zig_fn` | `src/text-buffer.zig:208` | `77b8a9c05848` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.widthMethod` | `native` | `zig_fn` | `src/text-buffer.zig:213` | `99111495747b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.tabWidth` | `native` | `zig_fn` | `src/text-buffer.zig:218` | `5e3e6988b2e2` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.controlDisplay` | `native` | `zig_fn` | `src/text-buffer.zig:222` | `c2004b09fbf8` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getAllocator` | `native` | `zig_fn` | `src/text-buffer.zig:227` | `55dbe696ae2f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.rope` | `native` | `zig_fn` | `src/text-buffer.zig:233` | `9c76297c4c7d` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.undo` | `native` | `zig_fn` | `src/text-buffer.zig:241` | `3246311de135` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.redo` | `native` | `zig_fn` | `src/text-buffer.zig:250` | `73a4325bf48a` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.lineWidthAt` | `native` | `zig_fn` | `src/text-buffer.zig:258` | `3cf980c167fe` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.lineWidthColsMax` | `native` | `zig_fn` | `src/text-buffer.zig:263` | `2500420b0cdc` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getGraphemeWidthAt` | `native` | `zig_fn` | `src/text-buffer.zig:267` | `7f2e9da2ff42` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getPrevGraphemeWidth` | `native` | `zig_fn` | `src/text-buffer.zig:271` | `655fc1207cf9` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.textEndOffset` | `native` | `zig_fn` | `src/text-buffer.zig:275` | `9a6fe94b99e2` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.graphemeBoundsAtOffset` | `native` | `zig_fn` | `src/text-buffer.zig:279` | `8eb32f6322fe` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.cursorUnitBoundsAtOffset` | `native` | `zig_fn` | `src/text-buffer.zig:295` | `e4b1f20ea2fb` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLayoutInfoFor` | `native` | `zig_fn` | `src/text-buffer.zig:311` | `a9cf0177f552` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getWordLayoutInfoFor` | `native` | `zig_fn` | `src/text-buffer.zig:315` | `3c1279ed7d8e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.walkLinesAndSegments` | `native` | `zig_fn` | `src/text-buffer.zig:320` | `edf911f3783e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.init` | `native` | `zig_fn` | `src/text-buffer.zig:336` | `f3b093b8aa0d` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.initWithOptions` | `native` | `zig_fn` | `src/text-buffer.zig:345` | `254c7fe5d73e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.deinit` | `native` | `zig_fn` | `src/text-buffer.zig:427` | `bdeb3d91e35c` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.retireStorage` | `native` | `zig_fn` | `src/text-buffer.zig:442` | `2778dbcd5e84` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.reinitStorage` | `native` | `zig_fn` | `src/text-buffer.zig:482` | `a9d39f878193` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.retainedStorageBytes` | `native` | `zig_fn` | `src/text-buffer.zig:503` | `315e3467de67` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.arenaStorageBytes` | `native` | `zig_fn` | `src/text-buffer.zig:510` | `05c007dfa3ec` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.registerView` | `native` | `zig_fn` | `src/text-buffer.zig:520` | `5c1f84295ccf` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.unregisterView` | `native` | `zig_fn` | `src/text-buffer.zig:537` | `e583c88b570a` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.isViewDirty` | `native` | `zig_fn` | `src/text-buffer.zig:543` | `8242be604106` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.clearViewDirty` | `native` | `zig_fn` | `src/text-buffer.zig:550` | `466963fa108d` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getContentEpoch` | `native` | `zig_fn` | `src/text-buffer.zig:558` | `c2928de8a206` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.markViewsDirty` | `native` | `zig_fn` | `src/text-buffer.zig:574` | `eb0e6032dbf7` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLength` | `native` | `zig_fn` | `src/text-buffer.zig:579` | `db33205fd33f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getByteSize` | `native` | `zig_fn` | `src/text-buffer.zig:584` | `afe0a9d04e62` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.measureText` | `native` | `zig_fn` | `src/text-buffer.zig:596` | `aefc6f364d4e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.clear` | `native` | `zig_fn` | `src/text-buffer.zig:604` | `8784e3a89dae` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.reset` | `native` | `zig_fn` | `src/text-buffer.zig:629` | `bd96cb1ba22b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setDefaultFg` | `native` | `zig_fn` | `src/text-buffer.zig:658` | `6a49e4d5b7a8` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setDefaultBg` | `native` | `zig_fn` | `src/text-buffer.zig:662` | `bc736ee5d887` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setDefaultAttributes` | `native` | `zig_fn` | `src/text-buffer.zig:666` | `62e04ada76b6` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.resetDefaults` | `native` | `zig_fn` | `src/text-buffer.zig:670` | `f8eb42eef41f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setSyntaxStyle` | `native` | `zig_fn` | `src/text-buffer.zig:676` | `1a15da46b5f3` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getSyntaxStyle` | `native` | `zig_fn` | `src/text-buffer.zig:680` | `980642ca3f3e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.resolveStyle` | `native` | `zig_fn` | `src/text-buffer.zig:700` | `cb5bf0048ff0` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setText` | `native` | `zig_fn` | `src/text-buffer.zig:712` | `2258ed33aa5f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setTextFromMemId` | `native` | `zig_fn` | `src/text-buffer.zig:720` | `7ce05ce62adb` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setTextFromMemIdWithUndo` | `native` | `zig_fn` | `src/text-buffer.zig:724` | `c4cf41a4133f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setTextFromMemRangeWithUndo` | `native` | `zig_fn` | `src/text-buffer.zig:731` | `0cd86b0ea200` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.replaceText` | `native` | `zig_fn` | `src/text-buffer.zig:740` | `14afff59745b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.replaceOwnedText` | `native` | `zig_fn` | `src/text-buffer.zig:746` | `01bdb6ebf558` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.replaceOwnedStyledText` | `native` | `zig_fn` | `src/text-buffer.zig:755` | `e04912d0bdfe` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.PreparedOwnedStyledText.deinit` | `native` | `zig_fn` | `src/text-buffer.zig:783` | `aba9dcbfea0b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.PreparedOwnedStyledText.commit` | `native` | `zig_fn` | `src/text-buffer.zig:794` | `b259b2dae518` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.prepareOwnedStyledText` | `native` | `zig_fn` | `src/text-buffer.zig:820` | `78c1660760bf` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.append` | `native` | `zig_fn` | `src/text-buffer.zig:1042` | `fe5518019643` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.appendWithOwnership` | `native` | `zig_fn` | `src/text-buffer.zig:1047` | `7635006abf49` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.appendCopy` | `native` | `zig_fn` | `src/text-buffer.zig:1052` | `d56ed3d2a46f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.flattenMemRegistry` | `native` | `zig_fn` | `src/text-buffer.zig:1099` | `d44f8c266c0e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.appendFromMemId` | `native` | `zig_fn` | `src/text-buffer.zig:1143` | `864a0c36a0cd` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.replaceTail` | `native` | `zig_fn` | `src/text-buffer.zig:1155` | `684898f9ca9b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.createChunk` | `native` | `zig_fn` | `src/text-buffer.zig:1316` | `6c382232e0a0` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.textToSegments` | `native` | `zig_fn` | `src/text-buffer.zig:1350` | `c50a459f69e2` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLineCount` | `native` | `zig_fn` | `src/text-buffer.zig:1400` | `801ce22f92fc` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.lineCount` | `native` | `zig_fn` | `src/text-buffer.zig:1406` | `00811f9199a5` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.registerMemBuffer` | `native` | `zig_fn` | `src/text-buffer.zig:1411` | `17b35c36b52f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.replaceMemBuffer` | `native` | `zig_fn` | `src/text-buffer.zig:1416` | `2483c68422f0` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.clearMemRegistry` | `native` | `zig_fn` | `src/text-buffer.zig:1422` | `a05bf6a0fa2a` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getMemBuffer` | `native` | `zig_fn` | `src/text-buffer.zig:1427` | `607f1e25573f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.addLine` | `native` | `zig_fn` | `src/text-buffer.zig:1434` | `77c38ff0a76b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getArenaAllocatedBytes` | `native` | `zig_fn` | `src/text-buffer.zig:1456` | `c909d9348973` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getPlainTextIntoBuffer` | `native` | `zig_fn` | `src/text-buffer.zig:1461` | `c8e19aac11dc` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.addHighlight` | `native` | `zig_fn` | `src/text-buffer.zig:1535` | `07ffe2a8217b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLineHighlights` | `native` | `zig_fn` | `src/text-buffer.zig:1563` | `cb5bac31fa19` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLineSpans` | `native` | `zig_fn` | `src/text-buffer.zig:1573` | `98cca153e835` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.resolveSpan` | `native` | `zig_fn` | `src/text-buffer.zig:1593` | `e6407d84b604` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.marks` | `native` | `zig_fn` | `src/text-buffer.zig:1608` | `0b2c4b402650` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.internMarkStyle` | `native` | `zig_fn` | `src/text-buffer.zig:1613` | `8b1e789dbcb6` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.lineMarks` | `native` | `zig_fn` | `src/text-buffer.zig:1813` | `f35adabc1bfa` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setLayer` | `native` | `zig_fn` | `src/text-buffer.zig:1895` | `48950ab4793e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.reserveLayer` | `native` | `zig_fn` | `src/text-buffer.zig:1901` | `4242f456aa1b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.freeLayerSpare` | `native` | `zig_fn` | `src/text-buffer.zig:1907` | `249ba07fc481` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setLayerWithSpare` | `native` | `zig_fn` | `src/text-buffer.zig:1911` | `6ea17160e79b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.assertLayerBoundaries` | `native` | `zig_fn` | `src/text-buffer.zig:1942` | `9a9ff73e7389` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.assertMarks` | `native` | `zig_fn` | `src/text-buffer.zig:1953` | `af6d028f8589` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.byteOffsetAtWeight` | `native` | `zig_fn` | `src/text-buffer.zig:1969` | `de6fb9133099` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.byteAtCell` | `native` | `zig_fn` | `src/text-buffer.zig:1974` | `096160338e01` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.convertUtf16` | `native` | `zig_fn` | `src/text-buffer.zig:1988` | `756ec870dd2b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.weightAtByte` | `native` | `zig_fn` | `src/text-buffer.zig:2029` | `659971fe587b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.byteAtOffset` | `native` | `zig_fn` | `src/text-buffer.zig:2052` | `897ce2fe09ef` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.lineStartByte` | `native` | `zig_fn` | `src/text-buffer.zig:2058` | `789f8e20b895` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.addHighlightByCoords` | `native` | `zig_fn` | `src/text-buffer.zig:2068` | `8a860bf3f7d6` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.addHighlightByCharRange` | `native` | `zig_fn` | `src/text-buffer.zig:2085` | `66f78f8e65ff` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.removeHighlightsByRef` | `native` | `zig_fn` | `src/text-buffer.zig:2158` | `08f51bf01b49` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.removeHighlightsByRefChecked` | `native` | `zig_fn` | `src/text-buffer.zig:2163` | `21a9f6f2ef7d` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.clearLineHighlights` | `native` | `zig_fn` | `src/text-buffer.zig:2184` | `1eb0344021f3` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.clearAllHighlights` | `native` | `zig_fn` | `src/text-buffer.zig:2197` | `3b7d5be75d61` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getLineHighlightsSlice` | `native` | `zig_fn` | `src/text-buffer.zig:2207` | `53f0ea029695` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getHighlightCount` | `native` | `zig_fn` | `src/text-buffer.zig:2215` | `9f5588006c1f` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.loadFile` | `native` | `zig_fn` | `src/text-buffer.zig:2225` | `3cce169f0bc7` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getTabWidth` | `native` | `zig_fn` | `src/text-buffer.zig:2257` | `093abcae5736` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setTabWidth` | `native` | `zig_fn` | `src/text-buffer.zig:2264` | `97d7e4f22355` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.setWidthMethod` | `native` | `zig_fn` | `src/text-buffer.zig:2276` | `89648def2182` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.byteAtOffsetUnder` | `native` | `zig_fn` | `src/text-buffer.zig:2381` | `d6d83314a961` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.effectiveTabWidth` | `native` | `zig_fn` | `src/text-buffer.zig:2419` | `e105e030e8c0` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.checkTabWidth` | `native` | `zig_fn` | `src/text-buffer.zig:2426` | `cc855508081b` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.debugLogRope` | `native` | `zig_fn` | `src/text-buffer.zig:2474` | `ae43b26e936e` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getTextRange` | `native` | `zig_fn` | `src/text-buffer.zig:2500` | `96beb9393e06` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.copyTextRange` | `native` | `zig_fn` | `src/text-buffer.zig:2522` | `1d6e30a93ac0` |
+| `native/src/text-buffer.zig#UnifiedTextBuffer.getTextRangeByCoords` | `native` | `zig_fn` | `src/text-buffer.zig:2545` | `d69a4bebefe1` |
+| `native/src/utf8.zig#LineBreakResult.init` | `native` | `zig_fn` | `src/utf8.zig:45` | `f6dedc2d9125` |
+| `native/src/utf8.zig#LineBreakResult.deinit` | `native` | `zig_fn` | `src/utf8.zig:52` | `02bf9c690a72` |
+| `native/src/utf8.zig#LineBreakResult.reset` | `native` | `zig_fn` | `src/utf8.zig:57` | `0858f54c964c` |
+| `native/src/utf8.zig#TabStopResult.init` | `native` | `zig_fn` | `src/utf8.zig:66` | `2b4ed904608b` |
+| `native/src/utf8.zig#TabStopResult.deinit` | `native` | `zig_fn` | `src/utf8.zig:73` | `a5611bce3399` |
+| `native/src/utf8.zig#TabStopResult.reset` | `native` | `zig_fn` | `src/utf8.zig:78` | `ded0f9c144bc` |
+| `native/src/utf8.zig#LayoutWrapBreakKind.isWordBoundary` | `native` | `zig_fn` | `src/utf8.zig:96` | `b5194b3a9483` |
+| `native/src/utf8.zig#LayoutWrapBreak.colEnd` | `native` | `zig_fn` | `src/utf8.zig:116` | `b838fcb2731e` |
+| `native/src/utf8.zig#LayoutWrapBreak.byteEnd` | `native` | `zig_fn` | `src/utf8.zig:120` | `14a2e17178fc` |
+| `native/src/utf8.zig#TextWidthCursor.advanceTo` | `native` | `zig_fn` | `src/utf8.zig:1356` | `9b420c3d116b` |
+| `native/src/utils.zig#fillU32` | `native` | `zig_fn` | `src/utils.zig:100` | `010ba28267d7` |
+| `native/src/video.zig#audio_sample_rate` | `native` | `zig_const` | `src/video.zig:10` | `f5213a89849e` |
+| `native/src/video.zig#max_av_sync_offset_us` | `native` | `zig_const` | `src/video.zig:18` | `fcb8e758a59e` |
+| `native/src/video.zig#LatencyWindow.add` | `native` | `zig_fn` | `src/video.zig:60` | `a56da490b407` |
+| `native/src/video.zig#LatencyWindow.maximum` | `native` | `zig_fn` | `src/video.zig:66` | `a111a60f3318` |
+| `native/src/video.zig#Quality.scale` | `native` | `zig_fn` | `src/video.zig:97` | `e2b8a90c8d6a` |
+| `native/src/video.zig#Quality.sample` | `native` | `zig_fn` | `src/video.zig:109` | `f92757f37981` |
+| `native/src/video.zig#Video.open` | `native` | `zig_fn` | `src/video.zig:309` | `001b3118cc7c` |
+| `native/src/video.zig#Video.deinit` | `native` | `zig_fn` | `src/video.zig:353` | `7a7695a48f3b` |
+| `native/src/video.zig#Video.configureOutput` | `native` | `zig_fn` | `src/video.zig:372` | `37baed5d17f8` |
+| `native/src/video.zig#Video.seek` | `native` | `zig_fn` | `src/video.zig:394` | `49e60a71900a` |
+| `native/src/video.zig#Video.update` | `native` | `zig_fn` | `src/video.zig:428` | `15df990f46bb` |
+| `native/src/video.zig#Video.prepare` | `native` | `zig_fn` | `src/video.zig:459` | `c5eba772792f` |
+| `native/src/video.zig#Video.drainPreparation` | `native` | `zig_fn` | `src/video.zig:482` | `9daa2636c5e3` |
+| `native/src/video.zig#Video.schedule` | `native` | `zig_fn` | `src/video.zig:635` | `2e43df97ee65` |
+| `native/src/video.zig#Video.prepareNext` | `native` | `zig_fn` | `src/video.zig:656` | `bcb3320f7f72` |
+| `native/src/video.zig#Video.observeOutput` | `native` | `zig_fn` | `src/video.zig:680` | `3127602892df` |
+| `native/src/video.zig#Video.getState` | `native` | `zig_fn` | `src/video.zig:714` | `ad8f4d71847b` |
+| `native/src/video.zig#Video.readAudio` | `native` | `zig_fn` | `src/video.zig:751` | `53228acd8965` |
+| `native/src/video.zig#Video.audioStats` | `native` | `zig_fn` | `src/video.zig:767` | `2f3564300f61` |
+| `native/src/video.zig#Video.audioTimeUs` | `native` | `zig_fn` | `src/video.zig:772` | `b2bf01ad1e6f` |
+| `native/src/video.zig#Video.play` | `native` | `zig_fn` | `src/video.zig:788` | `94b14e17189f` |
+| `native/src/video.zig#Video.pause` | `native` | `zig_fn` | `src/video.zig:801` | `c069a737c98f` |
+| `native/src/video.zig#Video.setMuted` | `native` | `zig_fn` | `src/video.zig:806` | `8d3208717a9e` |
+| `native/src/video.zig#Video.setVolume` | `native` | `zig_fn` | `src/video.zig:811` | `0102b6302f04` |
+| `native/src/video.zig#Video.setAvSyncOffset` | `native` | `zig_fn` | `src/video.zig:817` | `c2878eda793b` |
+| `native/src/video.zig#Video.setAudioOffline` | `native` | `zig_fn` | `src/video.zig:826` | `1af9c0d1c925` |
+| `native/src/video.zig#Video.mixOffline` | `native` | `zig_fn` | `src/video.zig:831` | `bae524a99fc9` |
+| `native/src/video.zig#Video.syncAudio` | `native` | `zig_fn` | `src/video.zig:841` | `97c41f8fdfb6` |
+| `native/src/video.zig#Video.failAudio` | `native` | `zig_fn` | `src/video.zig:853` | `da9b0db7c3f4` |
+| `native/src/video.zig#Video.decodedFrames` | `native` | `zig_fn` | `src/video.zig:1016` | `da6688227b7f` |
+| `native/src/video.zig#Video.lastError` | `native` | `zig_fn` | `src/video.zig:1021` | `2ea011d61fc3` |
+| `native/src/video.zig#Player.open` | `native` | `zig_fn` | `src/video.zig:1066` | `859195e1b208` |
+| `native/src/video.zig#Player.deinit` | `native` | `zig_fn` | `src/video.zig:1074` | `69ec0d868127` |
+| `native/src/video.zig#Player.currentTime` | `native` | `zig_fn` | `src/video.zig:1101` | `2d63bb8eef88` |
+| `native/src/video.zig#Player.snapshot` | `native` | `zig_fn` | `src/video.zig:1130` | `7c7bade16dc7` |
+| `native/src/video.zig#Player.play` | `native` | `zig_fn` | `src/video.zig:1148` | `22d3e9109f70` |
+| `native/src/video.zig#Player.pause` | `native` | `zig_fn` | `src/video.zig:1159` | `4f4534ba222e` |
+| `native/src/video.zig#Player.seek` | `native` | `zig_fn` | `src/video.zig:1171` | `79dee26a155b` |
+| `native/src/video.zig#Player.observeFrameCost` | `native` | `zig_fn` | `src/video.zig:1194` | `e5e5525cc8ac` |
+| `native/src/video.zig#Player.setLoop` | `native` | `zig_fn` | `src/video.zig:1202` | `89c69083a524` |
+| `native/src/video.zig#Player.setMuted` | `native` | `zig_fn` | `src/video.zig:1206` | `9eadc4a0790b` |
+| `native/src/video.zig#Player.setVolume` | `native` | `zig_fn` | `src/video.zig:1210` | `7403b60a267b` |
+| `native/src/video.zig#Player.setAvSyncOffset` | `native` | `zig_fn` | `src/video.zig:1214` | `759b0ce49795` |
+| `native/src/video.zig#Player.setMaxFps` | `native` | `zig_fn` | `src/video.zig:1218` | `cd70c20c1129` |
+| `native/src/video.zig#Player.fail` | `native` | `zig_fn` | `src/video.zig:1230` | `3738484dc5e3` |
+| `native/src/video.zig#Player.frame` | `native` | `zig_fn` | `src/video.zig:1240` | `9baeda60bad7` |
+| `native/src/video.zig#Player.lastError` | `native` | `zig_fn` | `src/video.zig:1260` | `6d23fd5eed14` |
+| `native/src/yoga.zig#Config.init` | `native` | `zig_fn` | `src/yoga.zig:149` | `5ddbd2aecf67` |
+| `native/src/yoga.zig#Config.deinit` | `native` | `zig_fn` | `src/yoga.zig:158` | `eaed8353a07b` |
+| `native/src/yoga.zig#Config.setLogger` | `native` | `zig_fn` | `src/yoga.zig:165` | `30a76771ac3f` |
+| `native/src/yoga.zig#Config.createNode` | `native` | `zig_fn` | `src/yoga.zig:171` | `f18385c5707e` |
+| `native/src/yoga.zig#Config.hasLiveNodes` | `native` | `zig_fn` | `src/yoga.zig:185` | `b8b37fdbee96` |
+| `native/src/yoga.zig#yogaConfigCreate` | `native` | `zig_fn` | `src/yoga.zig:402` | `f7e96bf09d4c` |
+| `native/src/yoga.zig#yogaConfigCreateChecked` | `native` | `zig_fn` | `src/yoga.zig:408` | `704883df2998` |
+| `native/src/yoga.zig#yogaConfigFree` | `native` | `zig_fn` | `src/yoga.zig:420` | `636a941490f7` |
+| `native/src/yoga.zig#yogaConfigFreeChecked` | `native` | `zig_fn` | `src/yoga.zig:424` | `5a01e317fcc7` |
+| `native/src/yoga.zig#yogaConfigSetUseWebDefaultsChecked` | `native` | `zig_fn` | `src/yoga.zig:438` | `a4142152e2cc` |
+| `native/src/yoga.zig#yogaConfigGetUseWebDefaults` | `native` | `zig_fn` | `src/yoga.zig:446` | `43e9de97a806` |
+| `native/src/yoga.zig#yogaConfigSetPointScaleFactorChecked` | `native` | `zig_fn` | `src/yoga.zig:454` | `8199c75a009e` |
+| `native/src/yoga.zig#yogaConfigGetPointScaleFactor` | `native` | `zig_fn` | `src/yoga.zig:462` | `86d027e3f9fd` |
+| `native/src/yoga.zig#yogaConfigSetErrataChecked` | `native` | `zig_fn` | `src/yoga.zig:474` | `1b256ec476c5` |
+| `native/src/yoga.zig#yogaConfigSetExperimentalFeatureEnabledChecked` | `native` | `zig_fn` | `src/yoga.zig:492` | `d7be6bdb3179` |
+| `native/src/yoga.zig#yogaConfigIsExperimentalFeatureEnabledChecked` | `native` | `zig_fn` | `src/yoga.zig:506` | `1e7dc18f2b35` |
+| `native/src/yoga.zig#yogaNodeCreate` | `native` | `zig_fn` | `src/yoga.zig:512` | `73993a60eb8b` |
+| `native/src/yoga.zig#yogaNodeCreateForOpenTUI` | `native` | `zig_fn` | `src/yoga.zig:516` | `fba6ecbd988e` |
+| `native/src/yoga.zig#yogaNodeCreateForOpenTUIChecked` | `native` | `zig_fn` | `src/yoga.zig:522` | `5d5bf196f630` |
+| `native/src/yoga.zig#yogaNodeCreateWithConfig` | `native` | `zig_fn` | `src/yoga.zig:529` | `f2f08578a6c7` |
+| `native/src/yoga.zig#yogaNodeCreateWithConfigChecked` | `native` | `zig_fn` | `src/yoga.zig:535` | `352f647208ea` |
+| `native/src/yoga.zig#yogaNodeFree` | `native` | `zig_fn` | `src/yoga.zig:542` | `92ed04fc2f03` |
+| `native/src/yoga.zig#yogaNodeFreeChecked` | `native` | `zig_fn` | `src/yoga.zig:546` | `9cef092842a5` |
+| `native/src/yoga.zig#yogaNodeFreeRecursive` | `native` | `zig_fn` | `src/yoga.zig:566` | `c2a4b642770c` |
+| `native/src/yoga.zig#yogaNodeFreeRecursiveChecked` | `native` | `zig_fn` | `src/yoga.zig:570` | `72bf99ab8852` |
+| `native/src/yoga.zig#yogaNodeResetChecked` | `native` | `zig_fn` | `src/yoga.zig:616` | `81d0ea817117` |
+| `native/src/yoga.zig#yogaNodeCopyStyleChecked` | `native` | `zig_fn` | `src/yoga.zig:647` | `511571c41a71` |
+| `native/src/yoga.zig#yogaNodeInsertChild` | `native` | `zig_fn` | `src/yoga.zig:655` | `8e245b1fe403` |
+| `native/src/yoga.zig#yogaNodeInsertChildChecked` | `native` | `zig_fn` | `src/yoga.zig:659` | `414df22ed31a` |
+| `native/src/yoga.zig#yogaNodeMoveChildChecked` | `native` | `zig_fn` | `src/yoga.zig:665` | `89045f30bdd6` |
+| `native/src/yoga.zig#yogaNodeRemoveChild` | `native` | `zig_fn` | `src/yoga.zig:706` | `3c0ab0550bc9` |
+| `native/src/yoga.zig#yogaNodeRemoveChildChecked` | `native` | `zig_fn` | `src/yoga.zig:710` | `655a328f50a9` |
+| `native/src/yoga.zig#yogaNodeRemoveAllChildrenChecked` | `native` | `zig_fn` | `src/yoga.zig:729` | `0571e252457a` |
+| `native/src/yoga.zig#yogaNodeGetChildChecked` | `native` | `zig_fn` | `src/yoga.zig:741` | `38f9cb1c78fb` |
+| `native/src/yoga.zig#yogaNodeGetParent` | `native` | `zig_fn` | `src/yoga.zig:751` | `d5e0af1bb4b3` |
+| `native/src/yoga.zig#yogaNodeCalculateLayout` | `native` | `zig_fn` | `src/yoga.zig:755` | `93e51748b561` |
+| `native/src/yoga.zig#yogaNodeCalculateLayoutChecked` | `native` | `zig_fn` | `src/yoga.zig:759` | `8e989acd10b9` |
+| `native/src/yoga.zig#yogaNodeIsDirtyChecked` | `native` | `zig_fn` | `src/yoga.zig:791` | `cae3cdd9864e` |
+| `native/src/yoga.zig#yogaNodeMarkDirty` | `native` | `zig_fn` | `src/yoga.zig:799` | `4e3e65b063f9` |
+| `native/src/yoga.zig#yogaNodeMarkDirtyChecked` | `native` | `zig_fn` | `src/yoga.zig:803` | `744877448c13` |
+| `native/src/yoga.zig#yogaNodeGetHasNewLayoutChecked` | `native` | `zig_fn` | `src/yoga.zig:815` | `fd21066edcf7` |
+| `native/src/yoga.zig#yogaNodeSetHasNewLayoutChecked` | `native` | `zig_fn` | `src/yoga.zig:827` | `d24792bd9cbd` |
+| `native/src/yoga.zig#yogaNodeSetIsReferenceBaselineChecked` | `native` | `zig_fn` | `src/yoga.zig:837` | `bcc888293c98` |
+| `native/src/yoga.zig#yogaNodeIsReferenceBaselineChecked` | `native` | `zig_fn` | `src/yoga.zig:849` | `13943c9902c8` |
+| `native/src/yoga.zig#yogaNodeSetAlwaysFormsContainingBlockChecked` | `native` | `zig_fn` | `src/yoga.zig:861` | `83c889038ec2` |
+| `native/src/yoga.zig#yogaNodeGetAlwaysFormsContainingBlockChecked` | `native` | `zig_fn` | `src/yoga.zig:873` | `2ca01efedc1c` |
+| `native/src/yoga.zig#yogaNodeGetComputedLayout` | `native` | `zig_fn` | `src/yoga.zig:881` | `a25ffbcb8d7b` |
+| `native/src/yoga.zig#yogaNodeGetComputedLayoutChecked` | `native` | `zig_fn` | `src/yoga.zig:887` | `d11efcb219d8` |
+| `native/src/yoga.zig#yogaNodeLayoutGetEdgeChecked` | `native` | `zig_fn` | `src/yoga.zig:904` | `669b1447aac0` |
+| `native/src/yoga.zig#yogaNodeStyleSetEnum` | `native` | `zig_fn` | `src/yoga.zig:910` | `6e2cd14f7ee0` |
+| `native/src/yoga.zig#yogaNodeStyleSetEnumChecked` | `native` | `zig_fn` | `src/yoga.zig:914` | `29f43cbb4b68` |
+| `native/src/yoga.zig#yogaNodeStyleGetEnum` | `native` | `zig_fn` | `src/yoga.zig:920` | `ec68faf13795` |
+| `native/src/yoga.zig#yogaNodeStyleGetEnumChecked` | `native` | `zig_fn` | `src/yoga.zig:926` | `514a6566f99d` |
+| `native/src/yoga.zig#yogaNodeStyleSetFloat` | `native` | `zig_fn` | `src/yoga.zig:932` | `9496847317b8` |
+| `native/src/yoga.zig#yogaNodeStyleSetFloatChecked` | `native` | `zig_fn` | `src/yoga.zig:936` | `861668536b0e` |
+| `native/src/yoga.zig#yogaNodeStyleGetFloatChecked` | `native` | `zig_fn` | `src/yoga.zig:948` | `2d359e3bdb32` |
+| `native/src/yoga.zig#yogaNodeStyleSetBorderChecked` | `native` | `zig_fn` | `src/yoga.zig:958` | `e3e8da3c6501` |
+| `native/src/yoga.zig#yogaNodeStyleGetBorderChecked` | `native` | `zig_fn` | `src/yoga.zig:970` | `ced00410936a` |
+| `native/src/yoga.zig#yogaNodeStyleSetValue` | `native` | `zig_fn` | `src/yoga.zig:976` | `3a24060855a0` |
+| `native/src/yoga.zig#yogaNodeStyleSetValueChecked` | `native` | `zig_fn` | `src/yoga.zig:980` | `05f5f3b52c0d` |
+| `native/src/yoga.zig#yogaNodeStyleSetDimensionChecked` | `native` | `zig_fn` | `src/yoga.zig:986` | `314917cbb1aa` |
+| `native/src/yoga.zig#yogaNodeStyleSetPositionsChecked` | `native` | `zig_fn` | `src/yoga.zig:992` | `5a4ef463760b` |
+| `native/src/yoga.zig#yogaNodeStyleGetValue` | `native` | `zig_fn` | `src/yoga.zig:999` | `7393c6eb975a` |
+| `native/src/yoga.zig#yogaNodeStyleGetValueChecked` | `native` | `zig_fn` | `src/yoga.zig:1005` | `2049ad07fc90` |
+| `native/src/yoga.zig#yogaConfigSetCallbacks` | `native` | `zig_fn` | `src/yoga.zig:1011` | `7ca339601038` |
+| `native/src/yoga.zig#yogaConfigClearCallbacks` | `native` | `zig_fn` | `src/yoga.zig:1024` | `49ff47fba66a` |
+| `native/src/yoga.zig#yogaNodeSetMeasureFunc` | `native` | `zig_fn` | `src/yoga.zig:1035` | `d3fef39f4ebf` |
+| `native/src/yoga.zig#yogaNodeSetMeasureFuncChecked` | `native` | `zig_fn` | `src/yoga.zig:1039` | `c34a85fc0a7c` |
+| `native/src/yoga.zig#yogaNodeUnsetMeasureFuncChecked` | `native` | `zig_fn` | `src/yoga.zig:1075` | `46d1608b34aa` |
+| `native/src/yoga.zig#yogaNodeHasMeasureFunc` | `native` | `zig_fn` | `src/yoga.zig:1079` | `e00b3fbf24bf` |
+| `native/src/yoga.zig#yogaNodeSetDirtiedFunc` | `native` | `zig_fn` | `src/yoga.zig:1083` | `9f590daed4ba` |
+| `native/src/yoga.zig#yogaNodeSetDirtiedFuncChecked` | `native` | `zig_fn` | `src/yoga.zig:1087` | `b8437bbc1eb1` |
+| `native/src/yoga.zig#yogaNodeUnsetDirtiedFuncChecked` | `native` | `zig_fn` | `src/yoga.zig:1099` | `d17e3a2cd257` |
+| `native/src/yoga.zig#yogaStoreMeasureResult` | `native` | `zig_fn` | `src/yoga.zig:1103` | `4aa145b5e58a` |
+| `native/src/yoga.zig#yogaNodeGetConfig` | `native` | `zig_fn` | `src/yoga.zig:1108` | `928957494f9e` |
 
 ## Implemented Parity Mappings
 
 | Upstream Symbol | Status | Swift Location | Hash |
 | --- | --- | --- | --- |
 | `core/src/animation/Timeline.ts#AnimationOptions` | `implemented` | `Sources/OpenTUICore/Timeline.swift:458` | `08401d9bf6ac` (synced) |
-| `core/src/animation/Timeline.ts#createTimeline` | `implemented` | `Sources/OpenTUICore/Timeline.swift:1286` | `b888a2912eec` (synced) |
+| `core/src/animation/Timeline.ts#createTimeline` | `implemented` | `Sources/OpenTUICore/Timeline.swift:1286` | `b888a2912eec` -> `abb110a50b10` (**DRIFT**) |
 | `core/src/animation/Timeline.ts#destroyTimelineEngine` | `implemented` | `Sources/OpenTUICore/Timeline.swift:1274` | `744b5354ba7a` (synced) |
 | `core/src/animation/Timeline.ts#EasingFunctions` | `implemented` | `Sources/OpenTUICore/Timeline.swift:320` | `121554d6ae52` (synced) |
 | `core/src/animation/Timeline.ts#engine` | `implemented` | `Sources/OpenTUICore/Timeline.swift:1263` | `7835b4406491` (synced) |
 | `core/src/animation/Timeline.ts#getTimelineEngine` | `implemented` | `Sources/OpenTUICore/Timeline.swift:1266` | `89c00c75ffab` (synced) |
 | `core/src/animation/Timeline.ts#JSAnimation` | `implemented` | `Sources/OpenTUICore/Timeline.swift:438` | `86b03fae93d0` (synced) |
-| `core/src/animation/Timeline.ts#Timeline` | `implemented` | `Sources/OpenTUICore/Timeline.swift:786` | `9f9ce7d81911` (synced) |
-| `core/src/animation/Timeline.ts#Timeline.add` | `implemented` | `Sources/OpenTUICore/Timeline.swift:876` | `c854a01611b7` (synced) |
+| `core/src/animation/Timeline.ts#Timeline` | `implemented` | `Sources/OpenTUICore/Timeline.swift:786` | `9f9ce7d81911` -> `8ee3088983b3` (**DRIFT**) |
+| `core/src/animation/Timeline.ts#Timeline.add` | `implemented` | `Sources/OpenTUICore/Timeline.swift:876` | `c854a01611b7` -> `aefa6e7f8eb1` (**DRIFT**) |
 | `core/src/animation/Timeline.ts#Timeline.addStateChangeListener` | `implemented` | `Sources/OpenTUICore/Timeline.swift:855` | `9a2573276168` (synced) |
 | `core/src/animation/Timeline.ts#Timeline.call` | `implemented` | `Sources/OpenTUICore/Timeline.swift:909` | `2b64f5f0a528` (synced) |
 | `core/src/animation/Timeline.ts#Timeline.frameRate` | `implemented` | `Sources/OpenTUICore/Timeline.swift:834` | `7e27e4a8d307` (synced) |
@@ -63,16 +1615,16 @@
 | `core/src/ansi.ts#ANSI` | `implemented` | `Sources/OpenTUICore/ANSI.swift:2` | `e2da00c730e0` (synced) |
 | `core/src/audio-stream/demuxer.ts#AudioStreamDemuxer` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:120` | `6c46835ca1c5` (synced) |
 | `core/src/audio-stream/demuxer.ts#AudioStreamDemuxerFactory` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:134` | `b08c930e7809` (synced) |
-| `core/src/audio-stream/demuxer.ts#AudioStreamDemuxOutput` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:110` | `d564e0ecfc57` (synced) |
-| `core/src/audio-stream/demuxer.ts#selectAudioStreamDemuxer` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:349` | `f8969892d746` (synced) |
+| `core/src/audio-stream/demuxer.ts#AudioStreamDemuxOutput` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:110` | `d564e0ecfc57` -> `a02e479a034c` (**DRIFT**) |
+| `core/src/audio-stream/demuxer.ts#selectAudioStreamDemuxer` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:349` | `f8969892d746` -> `00b0f425447f` (**DRIFT**) |
 | `core/src/audio-stream/icy/demuxer.ts#createIcyStreamDemuxer` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:340` | `d01dddee1812` (synced) |
 | `core/src/audio-stream/icy/demuxer.ts#IcyStreamDemuxer` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:242` | `ac9a15f0c98d` (synced) |
 | `core/src/audio-stream/icy/demuxer.ts#IcyStreamDemuxerOptions` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:214` | `de69561f747f` (synced) |
 | `core/src/audio-stream/icy/metadata.ts#parseIcyMetadata` | `implemented` | `Sources/OpenTUICore/AudioStreamDemuxer.swift:141` | `2151724843a7` (synced) |
-| `core/src/audio.ts#Audio` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2246` | `26854a427a4f` (synced) |
+| `core/src/audio.ts#Audio` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2246` | `26854a427a4f` -> `21c762be297b` (**DRIFT**) |
 | `core/src/audio.ts#Audio.clearCaptureDeviceSelection` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3202` | `35e666025d00` (synced) |
 | `core/src/audio.ts#Audio.clearPlaybackDeviceSelection` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3163` | `dff4c3c7af2b` (synced) |
-| `core/src/audio.ts#Audio.create` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2295` | `4bd4c3138f18` (synced) |
+| `core/src/audio.ts#Audio.create` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2295` | `4bd4c3138f18` -> `c6bd0dec5ce3` (**DRIFT**) |
 | `core/src/audio.ts#Audio.disableTap` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2881` | `33219856d264` (synced) |
 | `core/src/audio.ts#Audio.dispose` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3434` | `282804c74e9a` (synced) |
 | `core/src/audio.ts#Audio.enableTap` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2865` | `cef301c72076` (synced) |
@@ -87,32 +1639,32 @@
 | `core/src/audio.ts#Audio.loadSound` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2406` | `5b2c43bfcd06` (synced) |
 | `core/src/audio.ts#Audio.loadSoundFile` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2429` | `34d38def755a` (synced) |
 | `core/src/audio.ts#Audio.mixFrames` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2716` | `b0adff4dc322` (synced) |
-| `core/src/audio.ts#Audio.openCapture` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3328` | `b7235e985bf7` (synced) |
+| `core/src/audio.ts#Audio.openCapture` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3328` | `b7235e985bf7` -> `25d023f85892` (**DRIFT**) |
 | `core/src/audio.ts#Audio.play` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2528` | `d9fecbccec2d` (synced) |
-| `core/src/audio.ts#Audio.playStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2910` | `9d5e0745a574` (synced) |
-| `core/src/audio.ts#Audio.playStreamSource` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3008` | `5115a6f82b36` (synced) |
-| `core/src/audio.ts#Audio.playStreamUrl` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2925` | `334cd2b05ca6` (synced) |
+| `core/src/audio.ts#Audio.playStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2910` | `9d5e0745a574` -> `6490b7a1f9f4` (**DRIFT**) |
+| `core/src/audio.ts#Audio.playStreamSource` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3008` | `5115a6f82b36` -> `bb503a1762bc` (**DRIFT**) |
+| `core/src/audio.ts#Audio.playStreamUrl` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2925` | `334cd2b05ca6` -> `688a67fe64e6` (**DRIFT**) |
 | `core/src/audio.ts#Audio.readCaptureFrames` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3264` | `4048c2586581` (synced) |
-| `core/src/audio.ts#Audio.readTapFrames` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2893` | `96d7e569d604` (synced) |
-| `core/src/audio.ts#Audio.recordToFile` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3366` | `d53568902f7a` (synced) |
+| `core/src/audio.ts#Audio.readTapFrames` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2893` | `96d7e569d604` -> `13429a8f5a3e` (**DRIFT**) |
+| `core/src/audio.ts#Audio.recordToFile` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3366` | `d53568902f7a` -> `9681e84b06ec` (**DRIFT**) |
 | `core/src/audio.ts#Audio.selectCaptureDevice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3183` | `3affad4aa69f` (synced) |
 | `core/src/audio.ts#Audio.selectPlaybackDevice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3148` | `aecfbe973050` (synced) |
 | `core/src/audio.ts#Audio.setGroupVolume` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2488` | `daa2ba6bf1ae` (synced) |
 | `core/src/audio.ts#Audio.setMasterVolume` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2507` | `3d60023270d7` (synced) |
 | `core/src/audio.ts#Audio.setVoiceGroup` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2681` | `dd8c4e531e97` (synced) |
 | `core/src/audio.ts#Audio.start` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2337` | `32be02d09246` (synced) |
-| `core/src/audio.ts#Audio.startCapture` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3215` | `ebbe33dfd64c` (synced) |
+| `core/src/audio.ts#Audio.startCapture` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3215` | `ebbe33dfd64c` -> `a48bd6dab8e9` (**DRIFT**) |
 | `core/src/audio.ts#Audio.startMixer` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2354` | `3ca89d5d2a66` (synced) |
 | `core/src/audio.ts#Audio.stop` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2367` | `35ada2f3eb7e` (synced) |
 | `core/src/audio.ts#Audio.stopCapture` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3307` | `3fc9a54e9cd2` (synced) |
 | `core/src/audio.ts#Audio.stopVoice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2575` | `064e1bd0e6e7` (synced) |
 | `core/src/audio.ts#Audio.unloadSound` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2447` | `49ab63cf25a5` (synced) |
-| `core/src/audio.ts#AudioAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1639` | `871e54fc2732` (synced) |
+| `core/src/audio.ts#AudioAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1639` | `871e54fc2732` -> `88269ecec51b` (**DRIFT**) |
 | `core/src/audio.ts#AudioCaptureDevice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1401` | `adac87dd7e21` (synced) |
 | `core/src/audio.ts#AudioCaptureOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1414` | `8ab295f9622f` (synced) |
 | `core/src/audio.ts#AudioCaptureReadResult` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1546` | `6a3fe523ad45` (synced) |
 | `core/src/audio.ts#AudioCaptureStats` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1494` | `50d0544c1fb0` (synced) |
-| `core/src/audio.ts#AudioCaptureStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2044` | `45bac83195b1` (synced) |
+| `core/src/audio.ts#AudioCaptureStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2044` | `45bac83195b1` -> `c918439b938e` (**DRIFT**) |
 | `core/src/audio.ts#AudioCaptureStream.dispose` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2118` | `21e9dd2a633a` (synced) |
 | `core/src/audio.ts#AudioCaptureStream.getStats` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2082` | `8f4c0e68fcf7` (synced) |
 | `core/src/audio.ts#AudioCaptureStream.state` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2077` | `594f3f304230` (synced) |
@@ -131,12 +1683,12 @@
 | `core/src/audio.ts#AudioInitializationError` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1745` | `7a9d40a0c75a` (synced) |
 | `core/src/audio.ts#AudioPlaybackDevice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1388` | `dd5358b4a743` (synced) |
 | `core/src/audio.ts#AudioPlayOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:987` | `cec694354d67` (synced) |
-| `core/src/audio.ts#AudioRecorder` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2137` | `7ba6ab6a74ca` (synced) |
+| `core/src/audio.ts#AudioRecorder` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2137` | `7ba6ab6a74ca` -> `de1d102a264b` (**DRIFT**) |
 | `core/src/audio.ts#AudioRecorder.dispose` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2228` | `c98aff63bc21` (synced) |
 | `core/src/audio.ts#AudioRecorder.getStats` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2196` | `f8168d8f3374` (synced) |
 | `core/src/audio.ts#AudioRecorder.state` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2169` | `6150b3b3e6b4` (synced) |
 | `core/src/audio.ts#AudioRecorder.stop` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2207` | `fd8bbff2f1c0` (synced) |
-| `core/src/audio.ts#AudioRecorderAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1570` | `95966183fadf` (synced) |
+| `core/src/audio.ts#AudioRecorderAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1570` | `95966183fadf` -> `46d93a656bce` (**DRIFT**) |
 | `core/src/audio.ts#AudioRecorderError` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1773` | `98b4d0d3a8b0` (synced) |
 | `core/src/audio.ts#AudioRecorderErrorContext` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1583` | `da0708368a32` (synced) |
 | `core/src/audio.ts#AudioRecorderEvents` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1594` | `05fb32bd0955` (synced) |
@@ -146,7 +1698,7 @@
 | `core/src/audio.ts#AudioSetupOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:964` | `02d01ffce5ed` (synced) |
 | `core/src/audio.ts#AudioSound` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:908` | `d7bc8d2c8999` (synced) |
 | `core/src/audio.ts#AudioStartOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:911` | `ca89a1e7ca2e` (synced) |
-| `core/src/audio.ts#AudioStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1890` | `7823e0cef91a` (synced) |
+| `core/src/audio.ts#AudioStream` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1890` | `7823e0cef91a` -> `78b7b35752a3` (**DRIFT**) |
 | `core/src/audio.ts#AudioStream.dispose` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:2030` | `beac14f20a85` (synced) |
 | `core/src/audio.ts#AudioStream.getMetadata` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1952` | `f35c8401696c` (synced) |
 | `core/src/audio.ts#AudioStream.getStats` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1942` | `5233769722a4` (synced) |
@@ -154,7 +1706,7 @@
 | `core/src/audio.ts#AudioStream.setPan` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1965` | `4ee7596ab2cb` (synced) |
 | `core/src/audio.ts#AudioStream.setVolume` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1957` | `1a57b83128db` (synced) |
 | `core/src/audio.ts#AudioStream.state` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1937` | `a6b2b21f3189` (synced) |
-| `core/src/audio.ts#AudioStreamAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1317` | `b9f1b0f91163` (synced) |
+| `core/src/audio.ts#AudioStreamAction` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1317` | `b9f1b0f91163` -> `71d05c7c363d` (**DRIFT**) |
 | `core/src/audio.ts#AudioStreamBody` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1013` | `8504eaa96c25` (synced) |
 | `core/src/audio.ts#AudioStreamBodyOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1175` | `164fea9061f1` (synced) |
 | `core/src/audio.ts#AudioStreamBufferOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1101` | `e0ef83dd922f` (synced) |
@@ -176,24 +1728,24 @@
 | `core/src/audio.ts#AudioStreamRetryDecision` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1089` | `f241a045c4e4` (synced) |
 | `core/src/audio.ts#AudioStreamRetryPhase` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1070` | `a3c83be779e9` (synced) |
 | `core/src/audio.ts#AudioStreamSourceOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1186` | `b6546b736e14` (synced) |
-| `core/src/audio.ts#AudioStreamState` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1244` | `1a1bf9e36546` (synced) |
+| `core/src/audio.ts#AudioStreamState` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1244` | `1a1bf9e36546` -> `9bb2b8eb16ad` (**DRIFT**) |
 | `core/src/audio.ts#AudioStreamStats` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1255` | `b2431edda580` (synced) |
 | `core/src/audio.ts#AudioStreamUrlOptions` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:1218` | `4fd3c4997682` (synced) |
 | `core/src/audio.ts#AudioVoice` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:905` | `8ddacb8fe65f` (synced) |
-| `core/src/audio.ts#setupAudio` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3462` | `bd9bad457186` (synced) |
+| `core/src/audio.ts#setupAudio` | `implemented` | `Sources/OpenTUICore/AudioEngine.swift:3462` | `bd9bad457186` -> `a73a39ef7928` (**DRIFT**) |
 | `core/src/buffer.ts#BufferAccess` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:198` | `fc2e93ffc7e6` (synced) |
 | `core/src/buffer.ts#EncodedUnicode` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:347` | `628e56a731d2` (synced) |
 | `core/src/buffer.ts#NativeResourceOwner` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:258` | `e8d19282b8a7` (synced) |
-| `core/src/buffer.ts#OptimizedBuffer` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:272` | `ab16c376bb9b` (synced) |
-| `core/src/buffer.ts#OptimizedBuffer.buffers` | `adapted` | `Sources/OpenTUICore/CoreParityCompletions.swift:672` | `b8e3d4959beb` (synced) |
+| `core/src/buffer.ts#OptimizedBuffer` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:272` | `ab16c376bb9b` -> `8b7b6d7be068` (**DRIFT**) |
+| `core/src/buffer.ts#OptimizedBuffer.buffers` | `adapted` | `Sources/OpenTUICore/CoreParityCompletions.swift:672` | `b8e3d4959beb` -> `db6818a18db5` (**DRIFT**) |
 | `core/src/buffer.ts#OptimizedBuffer.clear` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:575` | `bb074fa310b5` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.clearOpacity` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:498` | `d1a5f4fb9375` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.clearScissorRects` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:470` | `becd413a066d` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.colorMatrix` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:383` | `78edfc60b82d` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.colorMatrixUniform` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:426` | `e559f64db97a` (synced) |
-| `core/src/buffer.ts#OptimizedBuffer.create` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:332` | `a916e3c49664` (synced) |
+| `core/src/buffer.ts#OptimizedBuffer.create` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:332` | `a916e3c49664` -> `b706aff0d61e` (**DRIFT**) |
 | `core/src/buffer.ts#OptimizedBuffer.destroy` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:358` | `d46c3275dbf3` (synced) |
-| `core/src/buffer.ts#OptimizedBuffer.drawBox` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1300` | `0ef616e0d0f7` (synced) |
+| `core/src/buffer.ts#OptimizedBuffer.drawBox` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1300` | `0ef616e0d0f7` -> `af351aaa68c5` (**DRIFT**) |
 | `core/src/buffer.ts#OptimizedBuffer.drawChar` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:893` | `852263c0bf46` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.drawEditorView` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:935` | `b1c718ba9d9b` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.drawFrameBuffer` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1513` | `77853d2ec43d` (synced) |
@@ -203,7 +1755,7 @@
 | `core/src/buffer.ts#OptimizedBuffer.drawImage` | `adapted` | `Sources/OpenTUICore/CoreParityCompletions.swift:1050` | `55049f60dc17` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.drawPackedBuffer` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:1109` | `23071322a727` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.drawSuperSampleBuffer` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:968` | `95e0e6c22ab7` (synced) |
-| `core/src/buffer.ts#OptimizedBuffer.drawText` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1123` | `c0ab798b1760` (synced) |
+| `core/src/buffer.ts#OptimizedBuffer.drawText` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1123` | `c0ab798b1760` -> `246cc71c401f` (**DRIFT**) |
 | `core/src/buffer.ts#OptimizedBuffer.drawTextBuffer` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:719` | `691e6221454c` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.drawTextFit` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:1172` | `143010e39579` (synced) |
 | `core/src/buffer.ts#OptimizedBuffer.encodeUnicode` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:1303` | `33338f2e06ab` (synced) |
@@ -232,14 +1784,14 @@
 | `core/src/buffer.ts#ResourceContext.disposed` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:298` | `8bcd778b3586` (synced) |
 | `core/src/buffer.ts#ResourceContext.resourceContext` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:304` | `5d8ce776b780` (synced) |
 | `core/src/console.ts#capture` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:57` | `0e39db961338` (synced) |
-| `core/src/console.ts#ConsoleAction` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:165` | `1ca11ae5b350` (synced) |
+| `core/src/console.ts#ConsoleAction` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:165` | `1ca11ae5b350` -> `4084330a5e5d` (**DRIFT**) |
 | `core/src/console.ts#ConsoleKeyBinding` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:182` | `23cfb60f2e98` (synced) |
 | `core/src/console.ts#ConsoleOptions` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:218` | `01fa230e70f4` (synced) |
 | `core/src/console.ts#ConsolePosition` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:62` | `2934d81335ac` (synced) |
-| `core/src/console.ts#TerminalConsole` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:586` | `0676372a0af8` (synced) |
+| `core/src/console.ts#TerminalConsole` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:586` | `0676372a0af8` -> `0c0b8855e79e` (**DRIFT**) |
 | `core/src/console.ts#TerminalConsole.activate` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:778` | `29fe0f927729` (synced) |
 | `core/src/console.ts#TerminalConsole.blur` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:845` | `ed4fa76f5230` (synced) |
-| `core/src/console.ts#TerminalConsole.bounds` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:705` | `00de73881129` (synced) |
+| `core/src/console.ts#TerminalConsole.bounds` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:705` | `00de73881129` -> `db37574cdad7` (**DRIFT**) |
 | `core/src/console.ts#TerminalConsole.clear` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:851` | `4899c6b5fae5` (synced) |
 | `core/src/console.ts#TerminalConsole.deactivate` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:783` | `3a1b30e05eff` (synced) |
 | `core/src/console.ts#TerminalConsole.destroy` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:863` | `60adcf1b5474` (synced) |
@@ -257,7 +1809,7 @@
 | `core/src/console.ts#TerminalConsole.toggle` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:824` | `ab8599c44108` (synced) |
 | `core/src/console.ts#TerminalConsole.toggleDebugMode` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:887` | `605d42e54d1c` (synced) |
 | `core/src/console.ts#TerminalConsole.visible` | `implemented` | `Sources/OpenTUICore/TerminalConsole.swift:660` | `98cee99745b1` (synced) |
-| `core/src/edit-buffer.ts#EditBuffer` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:178` | `467bc30f1c65` (synced) |
+| `core/src/edit-buffer.ts#EditBuffer` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:178` | `467bc30f1c65` -> `eab3f6a60ba5` (**DRIFT**) |
 | `core/src/edit-buffer.ts#EditBuffer.addHighlight` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1135` | `a0da54ba434d` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.addHighlightByCharRange` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1141` | `98e4d276f24c` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.canRedo` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1096` | `d78a903c85de` (synced) |
@@ -296,7 +1848,7 @@
 | `core/src/edit-buffer.ts#EditBuffer.moveCursorRight` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:619` | `199a8a605258` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.moveCursorUp` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:629` | `3d0d1cbd4309` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.newLine` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:464` | `3a2e5284f08c` (synced) |
-| `core/src/edit-buffer.ts#EditBuffer.offsetToPosition` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:990` | `638a296c949f` (synced) |
+| `core/src/edit-buffer.ts#EditBuffer.offsetToPosition` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:990` | `638a296c949f` -> `668541d1b163` (**DRIFT**) |
 | `core/src/edit-buffer.ts#EditBuffer.positionToOffset` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:996` | `0e56c17f9434` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.redo` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1071` | `3974e5440a5b` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.removeHighlightsByRef` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1147` | `1c3b0adc0247` (synced) |
@@ -316,21 +1868,21 @@
 | `core/src/edit-buffer.ts#EditBuffer.setTextOwned` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:302` | `bfe5051c8c34` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.stringIndexToCellOffset` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1019` | `c895ff1c55a5` (synced) |
 | `core/src/edit-buffer.ts#EditBuffer.undo` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1052` | `ec58842770f1` (synced) |
-| `core/src/edit-buffer.ts#measureEditText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:163` | `d5639988443a` (synced) |
-| `core/src/editor-view.ts#EditorView` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1200` | `f836e89d187b` (synced) |
+| `core/src/edit-buffer.ts#measureEditText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:163` | `d5639988443a` -> `3e81d1c00f35` (**DRIFT**) |
+| `core/src/editor-view.ts#EditorView` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1200` | `f836e89d187b` -> `b405254c06d4` (**DRIFT**) |
 | `core/src/editor-view.ts#EditorView.convertSelectionToCell` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1454` | `d49ddadc9e34` (synced) |
 | `core/src/editor-view.ts#EditorView.create` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1224` | `5f3318e065de` (synced) |
 | `core/src/editor-view.ts#EditorView.deleteSelectedText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1491` | `d5b34ca1259a` (synced) |
 | `core/src/editor-view.ts#EditorView.destroy` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1729` | `c8c068a40ea6` (synced) |
 | `core/src/editor-view.ts#EditorView.extmarks` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1689` | `8f42bb0b052f` (synced) |
-| `core/src/editor-view.ts#EditorView.getCursor` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1512` | `4829ed2b7369` (synced) |
+| `core/src/editor-view.ts#EditorView.getCursor` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1512` | `4829ed2b7369` -> `6beb017deb1a` (**DRIFT**) |
 | `core/src/editor-view.ts#EditorView.getEOL` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1628` | `5c72bec2f2b3` (synced) |
 | `core/src/editor-view.ts#EditorView.getLineInfo` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1671` | `f643d5104220` (synced) |
 | `core/src/editor-view.ts#EditorView.getLogicalLineInfo` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1677` | `44f82128ed8d` (synced) |
 | `core/src/editor-view.ts#EditorView.getNextWordBoundary` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1616` | `1d826f3fedc8` (synced) |
 | `core/src/editor-view.ts#EditorView.getPrevWordBoundary` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1622` | `8420b299dda6` (synced) |
 | `core/src/editor-view.ts#EditorView.getSelectedText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1485` | `e782a7fd50cc` (synced) |
-| `core/src/editor-view.ts#EditorView.getSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1373` | `f0518e9fd89f` (synced) |
+| `core/src/editor-view.ts#EditorView.getSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1373` | `f0518e9fd89f` -> `3433e127f42e` (**DRIFT**) |
 | `core/src/editor-view.ts#EditorView.getSelectionOccupancy` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1467` | `785a00112104` (synced) |
 | `core/src/editor-view.ts#EditorView.getText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1519` | `e9d8fde5d0b3` (synced) |
 | `core/src/editor-view.ts#EditorView.getTotalVirtualLineCount` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1347` | `fa0356721c82` (synced) |
@@ -342,14 +1894,14 @@
 | `core/src/editor-view.ts#EditorView.gotoVisualLineEnd` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1664` | `c82a62335412` (synced) |
 | `core/src/editor-view.ts#EditorView.hasSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1379` | `edf5bc87304e` (synced) |
 | `core/src/editor-view.ts#EditorView.isDestroyed` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1229` | `0ebb2d8ca234` (synced) |
-| `core/src/editor-view.ts#EditorView.measureForDimensions` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1723` | `ac0149220251` (synced) |
+| `core/src/editor-view.ts#EditorView.measureForDimensions` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1723` | `ac0149220251` -> `65f9e4ce4e17` (**DRIFT**) |
 | `core/src/editor-view.ts#EditorView.moveDownVisual` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1587` | `3018c7604d63` (synced) |
 | `core/src/editor-view.ts#EditorView.moveUpVisual` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1564` | `f0ad3f549d3b` (synced) |
 | `core/src/editor-view.ts#EditorView.resetLocalSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1448` | `42a60c6f0fa2` (synced) |
 | `core/src/editor-view.ts#EditorView.resetSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1367` | `c2dca2a01c66` (synced) |
 | `core/src/editor-view.ts#EditorView.setCursorByOffset` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1610` | `d767c178c7ef` (synced) |
 | `core/src/editor-view.ts#EditorView.setLocalSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1385` | `5dacc2b2fd5f` (synced) |
-| `core/src/editor-view.ts#EditorView.setPlaceholderStyledText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1700` | `160f997eaad5` (synced) |
+| `core/src/editor-view.ts#EditorView.setPlaceholderStyledText` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1700` | `160f997eaad5` -> `d655389c4327` (**DRIFT**) |
 | `core/src/editor-view.ts#EditorView.setScrollMargin` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1280` | `ea61b6a5b492` (synced) |
 | `core/src/editor-view.ts#EditorView.setSelection` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1355` | `1bbdb1f890f1` (synced) |
 | `core/src/editor-view.ts#EditorView.setSelectionColors` | `implemented` | `Sources/OpenTUICore/EditBuffer.swift:1479` | `be9059e9e325` (synced) |
@@ -370,30 +1922,30 @@
 | `core/src/image.ts#ImageColorStatus` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:20` | `7487e251d33b` (synced) |
 | `core/src/image.ts#ImageCreateOptions` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:176` | `8797b76da37f` (synced) |
 | `core/src/image.ts#ImageError` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:145` | `8e90521536a6` (synced) |
-| `core/src/image.ts#ImageErrorCode` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:96` | `ae43fe9b3bd5` (synced) |
+| `core/src/image.ts#ImageErrorCode` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:96` | `ae43fe9b3bd5` -> `dc0a7a2be47f` (**DRIFT**) |
 | `core/src/image.ts#ImageFormat` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:8` | `26e14d8851e6` (synced) |
-| `core/src/image.ts#imageInfo` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:699` | `ed26a32e2efe` (synced) |
+| `core/src/image.ts#imageInfo` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:699` | `ed26a32e2efe` -> `8d2ba1808192` (**DRIFT**) |
 | `core/src/image.ts#ImageInfo` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:215` | `35efe5108f29` (synced) |
 | `core/src/image.ts#ImageLoadError` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:78` | `fb6b26bbc0d8` (synced) |
 | `core/src/image.ts#ImageLoadErrorCode` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:69` | `ee2dde19ab15` (synced) |
 | `core/src/image.ts#ImageLoadOptions` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:197` | `ba18f35c2bd3` (synced) |
 | `core/src/image.ts#ImageSource` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:60` | `513e856ef37a` (synced) |
-| `core/src/image.ts#NativeImage` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1300` | `817af4f6fa2b` (synced) |
+| `core/src/image.ts#NativeImage` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1300` | `817af4f6fa2b` -> `35855d569bed` (**DRIFT**) |
 | `core/src/image.ts#NativeImage.clone` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1567` | `c8c1c69169f7` (synced) |
-| `core/src/image.ts#NativeImage.composite` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1925` | `94e6cf6d77cf` (synced) |
-| `core/src/image.ts#NativeImage.copyTo` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2070` | `84bf958445eb` (synced) |
-| `core/src/image.ts#NativeImage.decode` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1327` | `3785d046b76d` (synced) |
+| `core/src/image.ts#NativeImage.composite` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1925` | `94e6cf6d77cf` -> `c4ea3ccb0650` (**DRIFT**) |
+| `core/src/image.ts#NativeImage.copyTo` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2070` | `84bf958445eb` -> `002f17814763` (**DRIFT**) |
+| `core/src/image.ts#NativeImage.decode` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1327` | `3785d046b76d` -> `a5e0e0391aad` (**DRIFT**) |
 | `core/src/image.ts#NativeImage.dispose` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1580` | `191c9859f814` (synced) |
 | `core/src/image.ts#NativeImage.ensureEncodedPng` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2011` | `d2a2e317543b` (synced) |
-| `core/src/image.ts#NativeImage.extend` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1795` | `f11daba3c6eb` (synced) |
+| `core/src/image.ts#NativeImage.extend` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1795` | `f11daba3c6eb` -> `94fa86956353` (**DRIFT**) |
 | `core/src/image.ts#NativeImage.extract` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1761` | `a9d558f2fcd9` (synced) |
 | `core/src/image.ts#NativeImage.flip` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1888` | `0b03cf1318ee` (synced) |
 | `core/src/image.ts#NativeImage.flop` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1906` | `9930c2263605` (synced) |
-| `core/src/image.ts#NativeImage.fromPixels` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1400` | `ada8466799ff` (synced) |
-| `core/src/image.ts#NativeImage.fromRgba` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1384` | `573524079fae` (synced) |
+| `core/src/image.ts#NativeImage.fromPixels` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1400` | `ada8466799ff` -> `79c3fb96e0f2` (**DRIFT**) |
+| `core/src/image.ts#NativeImage.fromRgba` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1384` | `573524079fae` -> `2d515fc6db1f` (**DRIFT**) |
 | `core/src/image.ts#NativeImage.height` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1539` | `d1c8720704db` (synced) |
 | `core/src/image.ts#NativeImage.info` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1528` | `910b9d914d05` (synced) |
-| `core/src/image.ts#NativeImage.load` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1333` | `65b4d7d590b5` (synced) |
+| `core/src/image.ts#NativeImage.load` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1333` | `65b4d7d590b5` -> `27355192921a` (**DRIFT**) |
 | `core/src/image.ts#NativeImage.ptr` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1523` | `0f5e3d9003d7` (synced) |
 | `core/src/image.ts#NativeImage.raw` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2037` | `8b44870ab5eb` (synced) |
 | `core/src/image.ts#NativeImage.resize` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1591` | `6e6ee8469baa` (synced) |
@@ -403,7 +1955,7 @@
 | `core/src/image.ts#NativeImage.width` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:1534` | `ac2a5d3d5297` (synced) |
 | `core/src/image.ts#NativeImagePool` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2124` | `f65f9964cd38` (synced) |
 | `core/src/image.ts#NativeImagePool.dispose` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2179` | `1c10b195c185` (synced) |
-| `core/src/image.ts#NativeImagePool.publishPixels` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2153` | `6ab52d8cb31a` (synced) |
+| `core/src/image.ts#NativeImagePool.publishPixels` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2153` | `6ab52d8cb31a` -> `70eda410250c` (**DRIFT**) |
 | `core/src/image.ts#NativeImagePool.publishRgba` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2148` | `7aba2ac485bb` (synced) |
 | `core/src/image.ts#NativeImagePoolOptions` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:2108` | `83f86361118a` (synced) |
 | `core/src/image.ts#OwnedRawImage` | `implemented` | `Sources/OpenTUICore/ImagePipeline.swift:396` | `2bc505836b94` (synced) |
@@ -416,8 +1968,8 @@
 | `core/src/lib/ascii.font.ts#coordinateToCharacterIndex` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:347` | `215e11f0d073` (synced) |
 | `core/src/lib/ascii.font.ts#fonts` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:152` | `a1d083bb4317` (synced) |
 | `core/src/lib/ascii.font.ts#getCharacterPositions` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:317` | `bccf4c5db820` (synced) |
-| `core/src/lib/ascii.font.ts#measureText` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:291` | `9e2eb8274717` (synced) |
-| `core/src/lib/ascii.font.ts#renderFontToFrameBuffer` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:376` | `724f026224e8` (synced) |
+| `core/src/lib/ascii.font.ts#measureText` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:291` | `9e2eb8274717` -> `e70e32196889` (**DRIFT**) |
+| `core/src/lib/ascii.font.ts#renderFontToFrameBuffer` | `implemented` | `Sources/OpenTUICore/ASCIIFontData.swift:376` | `724f026224e8` -> `6c7f1aa7f5d2` (**DRIFT**) |
 | `core/src/lib/border.ts#BorderCharacters` | `implemented` | `Sources/OpenTUICore/Border.swift:1` | `3666406c7884` (synced) |
 | `core/src/lib/border.ts#BorderCharArrays` | `implemented` | `Sources/OpenTUICore/Border.swift:175` | `0bb7ab34ba47` (synced) |
 | `core/src/lib/border.ts#BorderChars` | `implemented` | `Sources/OpenTUICore/Border.swift:92` | `1d932117c2cf` (synced) |
@@ -439,25 +1991,25 @@
 | `core/src/lib/clipboard.ts#ClipboardClearResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:712` | `17b01a9a3c82` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:836` | `6aae4777d9d3` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardReadOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:479` | `f001965da630` (synced) |
-| `core/src/lib/clipboard.ts#ClipboardReadResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:497` | `2a5340d8be8b` (synced) |
+| `core/src/lib/clipboard.ts#ClipboardReadResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:497` | `2a5340d8be8b` -> `366dbd69825d` (**DRIFT**) |
 | `core/src/lib/clipboard.ts#ClipboardRepresentation` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:8` | `21bb38e5965b` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardSelection` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:20` | `6c8d236e08b8` (synced) |
-| `core/src/lib/clipboard.ts#ClipboardService` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:724` | `b6015b3c55ca` (synced) |
+| `core/src/lib/clipboard.ts#ClipboardService` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:724` | `b6015b3c55ca` -> `d8e5cb01b4b3` (**DRIFT**) |
 | `core/src/lib/clipboard.ts#ClipboardTarget` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:69` | `00217313d738` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardWriteDestination` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:27` | `427bab69b1ce` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardWriteOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:617` | `144e2877f711` (synced) |
 | `core/src/lib/clipboard.ts#ClipboardWriteResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:700` | `cc00cad80c90` (synced) |
-| `core/src/lib/clipboard.ts#createClipboard` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:1562` | `0e7f2fbb4748` (synced) |
-| `core/src/lib/clipboard.ts#createHostClipboard` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:1183` | `aaacf7484ffd` (synced) |
+| `core/src/lib/clipboard.ts#createClipboard` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:1562` | `0e7f2fbb4748` -> `a75318d30634` (**DRIFT**) |
+| `core/src/lib/clipboard.ts#createHostClipboard` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:1183` | `aaacf7484ffd` -> `856d9d79d743` (**DRIFT**) |
 | `core/src/lib/clipboard.ts#createRendererClipboardAdapter` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:173` | `aae9e104ffcc` (synced) |
-| `core/src/lib/clipboard.ts#HostClipboardBackend` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:608` | `0a14389a5d6d` (synced) |
-| `core/src/lib/clipboard.ts#HostClipboardClearResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:588` | `8a23c2fde2f7` (synced) |
+| `core/src/lib/clipboard.ts#HostClipboardBackend` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:608` | `0a14389a5d6d` -> `c515328b0abe` (**DRIFT**) |
+| `core/src/lib/clipboard.ts#HostClipboardClearResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:588` | `8a23c2fde2f7` -> `6369fe932bca` (**DRIFT**) |
 | `core/src/lib/clipboard.ts#HostClipboardOperationOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:733` | `f558240baa81` (synced) |
 | `core/src/lib/clipboard.ts#HostClipboardOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:765` | `43a7b92c914c` (synced) |
 | `core/src/lib/clipboard.ts#HostClipboardReadOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:526` | `f1c8a721462f` (synced) |
 | `core/src/lib/clipboard.ts#HostClipboardService` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:745` | `b23c43683729` (synced) |
 | `core/src/lib/clipboard.ts#HostClipboardWriteOptions` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:550` | `aa65d9975115` (synced) |
-| `core/src/lib/clipboard.ts#HostClipboardWriteResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:568` | `038f974e33b7` (synced) |
+| `core/src/lib/clipboard.ts#HostClipboardWriteResult` | `implemented` | `Sources/OpenTUICore/HostClipboard.swift:568` | `038f974e33b7` -> `ccea00bc4afa` (**DRIFT**) |
 | `core/src/lib/clipboard.ts#RendererClipboardBoundary` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:121` | `af08421dd684` (synced) |
 | `core/src/lib/clipboard.ts#TerminalClipboardAdapter` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:102` | `e408f244268f` (synced) |
 | `core/src/lib/clipboard.ts#TerminalClipboardOperationResult` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:57` | `4c9e2d98d117` (synced) |
@@ -479,11 +2031,11 @@
 | `core/src/lib/data-paths.ts#DataPathsManager.localConfigFile` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:308` | `b8b269c0840b` (synced) |
 | `core/src/lib/data-paths.ts#DataPathsManager.toObject` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:329` | `2958bf190b92` (synced) |
 | `core/src/lib/data-paths.ts#getDataPaths` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:478` | `3a2defb7c118` (synced) |
-| `core/src/lib/detect-links.ts#detectLinks` | `implemented` | `Sources/OpenTUICore/DetectLinks.swift:373` | `3c77b6254638` (synced) |
-| `core/src/lib/detect-links.ts#normalizeMarkdownLinkTarget` | `implemented` | `Sources/OpenTUICore/DetectLinks.swift:344` | `991d9947ed52` (synced) |
+| `core/src/lib/detect-links.ts#detectLinks` | `implemented` | `Sources/OpenTUICore/DetectLinks.swift:373` | `3c77b6254638` -> `8a38eab16c27` (**DRIFT**) |
+| `core/src/lib/detect-links.ts#normalizeMarkdownLinkTarget` | `implemented` | `Sources/OpenTUICore/DetectLinks.swift:344` | `991d9947ed52` -> `8b0eb365a119` (**DRIFT**) |
 | `core/src/lib/env.ts#clearEnvCache` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:350` | `c6f2d96e4eac` (synced) |
-| `core/src/lib/env.ts#env` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:161` | `7943c7d42eec` (synced) |
-| `core/src/lib/env.ts#envRegistry` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:158` | `61f26db12b8e` (synced) |
+| `core/src/lib/env.ts#env` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:161` | `7943c7d42eec` -> `e963c7f59903` (**DRIFT**) |
+| `core/src/lib/env.ts#envRegistry` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:158` | `61f26db12b8e` -> `7497fb56181f` (**DRIFT**) |
 | `core/src/lib/env.ts#EnvVarConfig` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:81` | `1fdf4cdc98ad` (synced) |
 | `core/src/lib/env.ts#generateEnvColored` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:362` | `459a59be8f99` (synced) |
 | `core/src/lib/env.ts#generateEnvMarkdown` | `implemented` | `Sources/OpenTUICore/EnvRegistry.swift:356` | `5a4b3d898de5` (synced) |
@@ -491,7 +2043,7 @@
 | `core/src/lib/extmarks.ts#createExtmarksController` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:280` | `37369ebb4427` (synced) |
 | `core/src/lib/extmarks.ts#Extmark` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:3` | `dba6d0654ed5` (synced) |
 | `core/src/lib/extmarks.ts#ExtmarkOptions` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:39` | `7a7d541fedf4` (synced) |
-| `core/src/lib/extmarks.ts#ExtmarksController` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:97` | `966884a1a4f8` (synced) |
+| `core/src/lib/extmarks.ts#ExtmarksController` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:97` | `966884a1a4f8` -> `a53696bda180` (**DRIFT**) |
 | `core/src/lib/extmarks.ts#ExtmarksController.clear` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:231` | `12949e6b4cdd` (synced) |
 | `core/src/lib/extmarks.ts#ExtmarksController.create` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:155` | `aa98d20587b4` (synced) |
 | `core/src/lib/extmarks.ts#ExtmarksController.delete` | `implemented` | `Sources/OpenTUICore/Extmarks.swift:188` | `059bbdeb0c44` (synced) |
@@ -526,7 +2078,7 @@
 | `core/src/lib/keybinding.internal.ts#KeyAliasMap` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:93` | `fd85f9898951` (synced) |
 | `core/src/lib/keybinding.internal.ts#KeyBinding` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:15` | `5bf5fe90cd99` (synced) |
 | `core/src/lib/keybinding.internal.ts#KeyBindingLike` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:5` | `16149a7d3e9f` (synced) |
-| `core/src/lib/keybinding.internal.ts#KeyBindingLookup` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:47` | `501b3c9d25f0` (synced) |
+| `core/src/lib/keybinding.internal.ts#KeyBindingLookup` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:47` | `501b3c9d25f0` -> `b53082328215` (**DRIFT**) |
 | `core/src/lib/keybinding.internal.ts#keyBindingToString` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:328` | `0fa7fafe3119` (synced) |
 | `core/src/lib/keybinding.internal.ts#matchesKeyBinding` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:278` | `0fcdc09ad542` (synced) |
 | `core/src/lib/keybinding.internal.ts#mergeKeyAliases` | `implemented` | `Sources/OpenTUICore/KeyBindings.swift:132` | `2bb25c0fbd98` (synced) |
@@ -551,7 +2103,7 @@
 | `core/src/lib/KeyHandler.ts#PasteEvent.stopPropagation` | `implemented` | `Sources/OpenTUICore/KeyHandler.swift:96` | `91aedcd2fea3` (synced) |
 | `core/src/lib/kitty-keys.ts#keypadKeyNames` | `implemented` | `Sources/OpenTUICore/KittyKeys.swift:2` | `cac7a63bc35e` (synced) |
 | `core/src/lib/kitty-keys.ts#kittyKeyMap` | `implemented` | `Sources/OpenTUICore/KittyKeys.swift:6` | `614f2d1f170b` (synced) |
-| `core/src/lib/objects-in-viewport.ts#getObjectsInViewport` | `implemented` | `Sources/OpenTUICore/Viewport.swift:48` | `404fbef54525` (synced) |
+| `core/src/lib/objects-in-viewport.ts#getObjectsInViewport` | `implemented` | `Sources/OpenTUICore/Viewport.swift:48` | `404fbef54525` -> `cbaec86466b8` (**DRIFT**) |
 | `core/src/lib/output.capture.ts#Capture` | `implemented` | `Sources/OpenTUICore/OutputCapture.swift:29` | `e008595f18ca` (synced) |
 | `core/src/lib/output.capture.ts#Capture.claimOutput` | `implemented` | `Sources/OpenTUICore/OutputCapture.swift:71` | `2d42a961c32e` (synced) |
 | `core/src/lib/output.capture.ts#Capture.size` | `implemented` | `Sources/OpenTUICore/OutputCapture.swift:46` | `97d655e87398` (synced) |
@@ -560,10 +2112,10 @@
 | `core/src/lib/output.capture.ts#CapturedWritableStream` | `implemented` | `Sources/OpenTUICore/OutputCapture.swift:115` | `70a995733b8a` (synced) |
 | `core/src/lib/output.capture.ts#CapturedWritableStream.getColorDepth` | `implemented` | `Sources/OpenTUICore/OutputCapture.swift:148` | `793ef4196ee3` (synced) |
 | `core/src/lib/parse.keypress.ts#KeyEventType` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:4` | `004778495019` (synced) |
-| `core/src/lib/parse.keypress.ts#ParsedKey` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:18` | `354a725b5db9` (synced) |
-| `core/src/lib/parse.keypress.ts#parseKeypress` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:113` | `b4c51f281770` (synced) |
+| `core/src/lib/parse.keypress.ts#ParsedKey` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:18` | `354a725b5db9` -> `58acbedb4336` (**DRIFT**) |
+| `core/src/lib/parse.keypress.ts#parseKeypress` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:113` | `b4c51f281770` -> `d138d3e53b0a` (**DRIFT**) |
 | `core/src/lib/parse.keypress.ts#ParseKeypressOptions` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:79` | `8dfb7bb21131` (synced) |
-| `core/src/lib/parse.keypress.ts#terminalNamedSingleStrokeKeys` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:89` | `6fc5e8ec90b6` (synced) |
+| `core/src/lib/parse.keypress.ts#terminalNamedSingleStrokeKeys` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:89` | `6fc5e8ec90b6` -> `3f874ad92791` (**DRIFT**) |
 | `core/src/lib/parse.mouse.ts#MouseEventType` | `implemented` | `Sources/OpenTUICore/Mouse.swift:2` | `076d10a16238` (synced) |
 | `core/src/lib/parse.mouse.ts#RawMouseEvent` | `implemented` | `Sources/OpenTUICore/Mouse.swift:49` | `9af01deb2638` (synced) |
 | `core/src/lib/parse.mouse.ts#ScrollInfo` | `implemented` | `Sources/OpenTUICore/Mouse.swift:24` | `cd5d31ea0d05` (synced) |
@@ -622,21 +2174,21 @@
 | `core/src/lib/scroll-acceleration.ts#LinearScrollAccel.tick` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:51` | `f6d3b7afe1a3` (synced) |
 | `core/src/lib/scroll-acceleration.ts#MacOSScrollAccel` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:73` | `d37ab452badf` (synced) |
 | `core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.reset` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:135` | `e2511e9ab6c0` (synced) |
-| `core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.tick` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:90` | `de481bbfa863` (synced) |
+| `core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.tick` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:90` | `de481bbfa863` -> `42d9c05efe20` (**DRIFT**) |
 | `core/src/lib/scroll-acceleration.ts#ScrollAcceleration` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:41` | `4fdd1bc990d0` (synced) |
 | `core/src/lib/scroll-chain.ts#scrollOnce` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:198` | `a19141f53b64` (synced) |
-| `core/src/lib/scroll-chain.ts#wheelDirection` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:178` | `90e4f5a1eaef` (synced) |
+| `core/src/lib/scroll-chain.ts#wheelDirection` | `implemented` | `Sources/OpenTUICore/ScrollAcceleration.swift:178` | `90e4f5a1eaef` -> `632220ead8f1` (**DRIFT**) |
 | `core/src/lib/selection.ts#ASCIIFontSelectionHelper` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:19` | `9ae48eb17b02` (synced) |
-| `core/src/lib/selection.ts#ASCIIFontSelectionHelper.getSelection` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:35` | `35496c0888a5` (synced) |
+| `core/src/lib/selection.ts#ASCIIFontSelectionHelper.getSelection` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:35` | `35496c0888a5` -> `c1f5b1b8b94a` (**DRIFT**) |
 | `core/src/lib/selection.ts#ASCIIFontSelectionHelper.hasSelection` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:30` | `635a77a73a24` (synced) |
 | `core/src/lib/selection.ts#ASCIIFontSelectionHelper.onLocalSelectionChanged` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:52` | `9998e580d9e1` (synced) |
 | `core/src/lib/selection.ts#ASCIIFontSelectionHelper.shouldStartSelection` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:40` | `d97cdc3693c4` (synced) |
 | `core/src/lib/selection.ts#convertGlobalToLocalSelection` | `implemented` | `Sources/OpenTUICore/Selection.swift:244` | `4466be1ef0ff` (synced) |
 | `core/src/lib/selection.ts#LocalSelectionBounds` | `implemented` | `Sources/OpenTUICore/Selection.swift:218` | `f430b23cd262` (synced) |
 | `core/src/lib/selection.ts#Selection` | `implemented` | `Sources/OpenTUICore/Selection.swift:78` | `50b1556576a0` (synced) |
-| `core/src/lib/selection.ts#Selection.anchor` | `implemented` | `Sources/OpenTUICore/Selection.swift:106` | `b71e2e525342` (synced) |
+| `core/src/lib/selection.ts#Selection.anchor` | `implemented` | `Sources/OpenTUICore/Selection.swift:106` | `b71e2e525342` -> `ee9cc7dcc49b` (**DRIFT**) |
 | `core/src/lib/selection.ts#Selection.bounds` | `implemented` | `Sources/OpenTUICore/Selection.swift:132` | `f1a7b769494b` (synced) |
-| `core/src/lib/selection.ts#Selection.focus` | `implemented` | `Sources/OpenTUICore/Selection.swift:111` | `e6dc8c1da417` (synced) |
+| `core/src/lib/selection.ts#Selection.focus` | `implemented` | `Sources/OpenTUICore/Selection.swift:111` | `e6dc8c1da417` -> `2733f4274016` (**DRIFT**) |
 | `core/src/lib/selection.ts#Selection.getSelectedText` | `implemented` | `Sources/OpenTUICore/Selection.swift:169` | `59ed3fc32c7c` (synced) |
 | `core/src/lib/selection.ts#Selection.isActive` | `implemented` | `Sources/OpenTUICore/Selection.swift:117` | `360101ea25b6` (synced) |
 | `core/src/lib/selection.ts#Selection.isDragging` | `implemented` | `Sources/OpenTUICore/Selection.swift:123` | `f8daaaeec1b5` (synced) |
@@ -650,7 +2202,7 @@
 | `core/src/lib/singleton.ts#hasSingleton` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:111` | `76f6432e2738` (synced) |
 | `core/src/lib/singleton.ts#singleton` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:82` | `185fb5b83ead` (synced) |
 | `core/src/lib/stdin-parser-native.ts#NativeInputSession` | `adapted` | `Sources/OpenTUICore/CoreParityCompletions.swift:327` | `802910307b20` (synced) |
-| `core/src/lib/stdin-parser-native.ts#NativeStdinParser` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2185` | `5c810fc74ffc` (synced) |
+| `core/src/lib/stdin-parser-native.ts#NativeStdinParser` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2185` | `5c810fc74ffc` -> `a78aeab4bca6` (**DRIFT**) |
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.destroy` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2308` | `f69aa9b7b5ff` (synced) |
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.drain` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2259` | `582d3efa8b9b` (synced) |
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.flushTimeout` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2267` | `ce1816f4e8dd` (synced) |
@@ -661,55 +2213,55 @@
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.resume` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2289` | `5a1428796556` (synced) |
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.suspend` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2282` | `c92c67812472` (synced) |
 | `core/src/lib/stdin-parser-native.ts#NativeStdinParser.updateProtocolContext` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2210` | `8740cf767a19` (synced) |
-| `core/src/lib/stdin-parser-native.ts#NativeStdinParserOptions` | `adapted` | `Sources/OpenTUICore/StdinParser.swift:2175` | `24e160ce25a0` (synced) |
-| `core/src/lib/stdin-parser-native.ts#StdinEvent` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2138` | `6cc5857ebdf0` (synced) |
-| `core/src/lib/stdin-parser-native.ts#StdinParserProtocolContext` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2147` | `f1b5b216d59d` (synced) |
+| `core/src/lib/stdin-parser-native.ts#NativeStdinParserOptions` | `adapted` | `Sources/OpenTUICore/StdinParser.swift:2175` | `24e160ce25a0` -> `2eb7457fe631` (**DRIFT**) |
+| `core/src/lib/stdin-parser-native.ts#StdinEvent` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2138` | `6cc5857ebdf0` -> `c57e39b806b2` (**DRIFT**) |
+| `core/src/lib/stdin-parser-native.ts#StdinParserProtocolContext` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2147` | `f1b5b216d59d` -> `f577830d7163` (**DRIFT**) |
 | `core/src/lib/stdin-parser-native.ts#StdinResponseProtocol` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:2121` | `6b452df97743` (synced) |
-| `core/src/lib/styled-text.ts#bg` | `implemented` | `Sources/OpenTUICore/StyledText.swift:469` | `102351504885` (synced) |
-| `core/src/lib/styled-text.ts#bgBlack` | `implemented` | `Sources/OpenTUICore/StyledText.swift:372` | `35c98d606792` (synced) |
-| `core/src/lib/styled-text.ts#bgBlue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:392` | `e6f23b8b7a81` (synced) |
-| `core/src/lib/styled-text.ts#bgCyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:402` | `9e3591207b73` (synced) |
-| `core/src/lib/styled-text.ts#bgGreen` | `implemented` | `Sources/OpenTUICore/StyledText.swift:382` | `537cd49e97be` (synced) |
-| `core/src/lib/styled-text.ts#bgMagenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:397` | `dc25ef64c68a` (synced) |
-| `core/src/lib/styled-text.ts#bgRed` | `implemented` | `Sources/OpenTUICore/StyledText.swift:377` | `91e3da7ef528` (synced) |
-| `core/src/lib/styled-text.ts#bgWhite` | `implemented` | `Sources/OpenTUICore/StyledText.swift:407` | `7aa35395fd07` (synced) |
-| `core/src/lib/styled-text.ts#bgYellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:387` | `5bf272881e45` (synced) |
-| `core/src/lib/styled-text.ts#black` | `implemented` | `Sources/OpenTUICore/StyledText.swift:288` | `452d68cefd2f` (synced) |
-| `core/src/lib/styled-text.ts#blink` | `implemented` | `Sources/OpenTUICore/StyledText.swift:444` | `68b10fcf0aa1` (synced) |
-| `core/src/lib/styled-text.ts#blue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:308` | `874c39db0746` (synced) |
-| `core/src/lib/styled-text.ts#bold` | `implemented` | `Sources/OpenTUICore/StyledText.swift:414` | `05510efc8e49` (synced) |
-| `core/src/lib/styled-text.ts#brightBlack` | `implemented` | `Sources/OpenTUICore/StyledText.swift:330` | `95caf9a4e350` (synced) |
-| `core/src/lib/styled-text.ts#brightBlue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:350` | `34cb225101ae` (synced) |
-| `core/src/lib/styled-text.ts#brightCyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:360` | `ff3ac86d9386` (synced) |
-| `core/src/lib/styled-text.ts#brightGreen` | `implemented` | `Sources/OpenTUICore/StyledText.swift:340` | `9f7a2b26617b` (synced) |
-| `core/src/lib/styled-text.ts#brightMagenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:355` | `ee9a1252f0b8` (synced) |
-| `core/src/lib/styled-text.ts#brightRed` | `implemented` | `Sources/OpenTUICore/StyledText.swift:335` | `65a89aa20c2d` (synced) |
-| `core/src/lib/styled-text.ts#brightWhite` | `implemented` | `Sources/OpenTUICore/StyledText.swift:365` | `08413f124f3e` (synced) |
-| `core/src/lib/styled-text.ts#brightYellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:345` | `5c63eb97486a` (synced) |
+| `core/src/lib/styled-text.ts#bg` | `implemented` | `Sources/OpenTUICore/StyledText.swift:469` | `102351504885` -> `dcca98de8678` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgBlack` | `implemented` | `Sources/OpenTUICore/StyledText.swift:372` | `35c98d606792` -> `f557df882b2f` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgBlue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:392` | `e6f23b8b7a81` -> `3373b74930b5` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgCyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:402` | `9e3591207b73` -> `f9171c1a5fe1` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgGreen` | `implemented` | `Sources/OpenTUICore/StyledText.swift:382` | `537cd49e97be` -> `09921d92f9b8` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgMagenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:397` | `dc25ef64c68a` -> `3c50e41467e4` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgRed` | `implemented` | `Sources/OpenTUICore/StyledText.swift:377` | `91e3da7ef528` -> `2f35455f8f85` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgWhite` | `implemented` | `Sources/OpenTUICore/StyledText.swift:407` | `7aa35395fd07` -> `9838f50be246` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bgYellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:387` | `5bf272881e45` -> `35bd0ac79868` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#black` | `implemented` | `Sources/OpenTUICore/StyledText.swift:288` | `452d68cefd2f` -> `27063f87a9b4` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#blink` | `implemented` | `Sources/OpenTUICore/StyledText.swift:444` | `68b10fcf0aa1` -> `7bd0d9d248ac` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#blue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:308` | `874c39db0746` -> `22f7214f30eb` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#bold` | `implemented` | `Sources/OpenTUICore/StyledText.swift:414` | `05510efc8e49` -> `739671e84c24` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightBlack` | `implemented` | `Sources/OpenTUICore/StyledText.swift:330` | `95caf9a4e350` -> `237439d4d8cf` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightBlue` | `implemented` | `Sources/OpenTUICore/StyledText.swift:350` | `34cb225101ae` -> `e4e58f353f1d` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightCyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:360` | `ff3ac86d9386` -> `6e30a7a99d83` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightGreen` | `implemented` | `Sources/OpenTUICore/StyledText.swift:340` | `9f7a2b26617b` -> `0e68a0ff734d` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightMagenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:355` | `ee9a1252f0b8` -> `71f74aa11f8b` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightRed` | `implemented` | `Sources/OpenTUICore/StyledText.swift:335` | `65a89aa20c2d` -> `f769961a0380` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightWhite` | `implemented` | `Sources/OpenTUICore/StyledText.swift:365` | `08413f124f3e` -> `82e9b71704c9` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#brightYellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:345` | `5c63eb97486a` -> `31ad48cda620` (**DRIFT**) |
 | `core/src/lib/styled-text.ts#Color` | `implemented` | `Sources/OpenTUICore/StyledText.swift:35` | `2efadaa60218` (synced) |
-| `core/src/lib/styled-text.ts#cyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:318` | `393cab7928a6` (synced) |
-| `core/src/lib/styled-text.ts#dim` | `implemented` | `Sources/OpenTUICore/StyledText.swift:434` | `0314fd01c918` (synced) |
-| `core/src/lib/styled-text.ts#fg` | `implemented` | `Sources/OpenTUICore/StyledText.swift:461` | `170d63c84069` (synced) |
-| `core/src/lib/styled-text.ts#green` | `implemented` | `Sources/OpenTUICore/StyledText.swift:298` | `088548615426` (synced) |
+| `core/src/lib/styled-text.ts#cyan` | `implemented` | `Sources/OpenTUICore/StyledText.swift:318` | `393cab7928a6` -> `aee57bd92259` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#dim` | `implemented` | `Sources/OpenTUICore/StyledText.swift:434` | `0314fd01c918` -> `56c7359eca79` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#fg` | `implemented` | `Sources/OpenTUICore/StyledText.swift:461` | `170d63c84069` -> `8b3b863f95a6` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#green` | `implemented` | `Sources/OpenTUICore/StyledText.swift:298` | `088548615426` -> `67d14d49f2d7` (**DRIFT**) |
 | `core/src/lib/styled-text.ts#isStyledText` | `implemented` | `Sources/OpenTUICore/StyledText.swift:114` | `ac0864df2df4` (synced) |
-| `core/src/lib/styled-text.ts#italic` | `implemented` | `Sources/OpenTUICore/StyledText.swift:419` | `7ad8abd3b450` (synced) |
+| `core/src/lib/styled-text.ts#italic` | `implemented` | `Sources/OpenTUICore/StyledText.swift:419` | `7ad8abd3b450` -> `a80e6db5bdc3` (**DRIFT**) |
 | `core/src/lib/styled-text.ts#link` | `implemented` | `Sources/OpenTUICore/StyledText.swift:477` | `33d00d192be0` (synced) |
-| `core/src/lib/styled-text.ts#magenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:313` | `a2cdc38088fc` (synced) |
-| `core/src/lib/styled-text.ts#red` | `implemented` | `Sources/OpenTUICore/StyledText.swift:293` | `94e988ce3673` (synced) |
-| `core/src/lib/styled-text.ts#reverse` | `implemented` | `Sources/OpenTUICore/StyledText.swift:439` | `7344f85a030d` (synced) |
-| `core/src/lib/styled-text.ts#strikethrough` | `implemented` | `Sources/OpenTUICore/StyledText.swift:429` | `050f179ca712` (synced) |
+| `core/src/lib/styled-text.ts#magenta` | `implemented` | `Sources/OpenTUICore/StyledText.swift:313` | `a2cdc38088fc` -> `c28fb5ad062a` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#red` | `implemented` | `Sources/OpenTUICore/StyledText.swift:293` | `94e988ce3673` -> `37e0d9662b7c` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#reverse` | `implemented` | `Sources/OpenTUICore/StyledText.swift:439` | `7344f85a030d` -> `d54009cc6697` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#strikethrough` | `implemented` | `Sources/OpenTUICore/StyledText.swift:429` | `050f179ca712` -> `ab1de3ac6171` (**DRIFT**) |
 | `core/src/lib/styled-text.ts#stringToStyledText` | `implemented` | `Sources/OpenTUICore/StyledText.swift:139` | `46d042e70483` (synced) |
 | `core/src/lib/styled-text.ts#StylableInput` | `implemented` | `Sources/OpenTUICore/StyledText.swift:145` | `b4632f91496e` (synced) |
 | `core/src/lib/styled-text.ts#StyleAttrs` | `implemented` | `Sources/OpenTUICore/StyledText.swift:72` | `c08154f1f865` (synced) |
 | `core/src/lib/styled-text.ts#StyledText` | `implemented` | `Sources/OpenTUICore/StyledText.swift:120` | `d05769e46cd6` (synced) |
 | `core/src/lib/styled-text.ts#t` | `implemented` | `Sources/OpenTUICore/StyledText.swift:494` | `ac4f80aaf2bb` (synced) |
-| `core/src/lib/styled-text.ts#underline` | `implemented` | `Sources/OpenTUICore/StyledText.swift:424` | `15b1bbbbf331` (synced) |
-| `core/src/lib/styled-text.ts#white` | `implemented` | `Sources/OpenTUICore/StyledText.swift:323` | `50ba3056d855` (synced) |
-| `core/src/lib/styled-text.ts#yellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:303` | `2f79fc7ecf42` (synced) |
+| `core/src/lib/styled-text.ts#underline` | `implemented` | `Sources/OpenTUICore/StyledText.swift:424` | `15b1bbbbf331` -> `ad5ec0acec77` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#white` | `implemented` | `Sources/OpenTUICore/StyledText.swift:323` | `50ba3056d855` -> `c22e30dffe4f` (**DRIFT**) |
+| `core/src/lib/styled-text.ts#yellow` | `implemented` | `Sources/OpenTUICore/StyledText.swift:303` | `2f79fc7ecf42` -> `84b27774fefe` (**DRIFT**) |
 | `core/src/lib/terminal-capability-detection.ts#isCapabilityResponse` | `implemented` | `Sources/OpenTUICore/TerminalCapabilityDetection.swift:299` | `12eb018b164c` (synced) |
 | `core/src/lib/terminal-capability-detection.ts#isExplicitWidthReport` | `implemented` | `Sources/OpenTUICore/TerminalCapabilityDetection.swift:332` | `5b36af30316a` (synced) |
 | `core/src/lib/terminal-capability-detection.ts#isPixelResolutionResponse` | `implemented` | `Sources/OpenTUICore/TerminalCapabilityDetection.swift:395` | `017692b5a4af` (synced) |
-| `core/src/lib/terminal-capability-detection.ts#parsePixelResolution` | `implemented` | `Sources/OpenTUICore/TerminalCapabilityDetection.swift:401` | `783987fc50f2` (synced) |
+| `core/src/lib/terminal-capability-detection.ts#parsePixelResolution` | `implemented` | `Sources/OpenTUICore/TerminalCapabilityDetection.swift:401` | `783987fc50f2` -> `46e5fb0488e8` (**DRIFT**) |
 | `core/src/lib/terminal-palette.ts#applyPaletteReplies` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:278` | `f8fed6b97815` (synced) |
 | `core/src/lib/terminal-palette.ts#buildTerminalPaletteSignature` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:556` | `ff549a1dc7cf` (synced) |
 | `core/src/lib/terminal-palette.ts#createTerminalPalette` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:509` | `9c7ec1304733` (synced) |
@@ -719,7 +2271,7 @@
 | `core/src/lib/terminal-palette.ts#normalizeTerminalPalette` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:536` | `f8c0dee20531` (synced) |
 | `core/src/lib/terminal-palette.ts#OscSubscriptionSource` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:76` | `8713512caff8` (synced) |
 | `core/src/lib/terminal-palette.ts#TerminalColors` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:11` | `dd82e83bda34` (synced) |
-| `core/src/lib/terminal-palette.ts#TerminalPalette` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:409` | `8bb96eeebfc3` (synced) |
+| `core/src/lib/terminal-palette.ts#TerminalPalette` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:409` | `8bb96eeebfc3` -> `e5f689f0c740` (**DRIFT**) |
 | `core/src/lib/terminal-palette.ts#TerminalPalette.cleanup` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:431` | `ab3f82fddf7a` (synced) |
 | `core/src/lib/terminal-palette.ts#TerminalPalette.detect` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:472` | `4f8227ab2826` (synced) |
 | `core/src/lib/terminal-palette.ts#TerminalPalette.detectOSCSupport` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:441` | `62c403f9efaf` (synced) |
@@ -728,11 +2280,11 @@
 | `core/src/lib/terminal-palette.ts#WriteFunction` | `implemented` | `Sources/OpenTUICore/TerminalPalette.swift:7` | `fa1c019cc1b5` (synced) |
 | `core/src/lib/tree-sitter-styled-text.ts#treeSitterToStyledText` | `implemented` | `Sources/OpenTUICore/HighlightChunks.swift:357` | `7699ad5a7e8b` (synced) |
 | `core/src/lib/tree-sitter-styled-text.ts#TreeSitterToStyledTextOptions` | `implemented` | `Sources/OpenTUICore/HighlightChunks.swift:38` | `fc94d8a6ba34` (synced) |
-| `core/src/lib/tree-sitter-styled-text.ts#treeSitterToTextChunks` | `implemented` | `Sources/OpenTUICore/HighlightChunks.swift:134` | `c43734ce4a9f` (synced) |
+| `core/src/lib/tree-sitter-styled-text.ts#treeSitterToTextChunks` | `implemented` | `Sources/OpenTUICore/HighlightChunks.swift:134` | `c43734ce4a9f` -> `27232c48b26b` (**DRIFT**) |
 | `core/src/lib/tree-sitter/assets/update.ts#runUpdateAssetsCli` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:619` | `7672499bde59` (synced) |
 | `core/src/lib/tree-sitter/assets/update.ts#UpdateOptions` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:605` | `5cb405539dad` (synced) |
 | `core/src/lib/tree-sitter/client.ts#addDefaultParsers` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:644` | `858eafc68e86` (synced) |
-| `core/src/lib/tree-sitter/client.ts#TreeSitterClient` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:746` | `7471767ea77d` (synced) |
+| `core/src/lib/tree-sitter/client.ts#TreeSitterClient` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:746` | `7471767ea77d` -> `fcdc5a9378e5` (**DRIFT**) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.addFiletypeParser` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:993` | `bbdda62f74fc` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.clearCache` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:1271` | `1b700ce27905` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.createBuffer` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:1124` | `d86e16d9700b` (synced) |
@@ -746,16 +2298,16 @@
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.isInitialized` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:965` | `ca96bd7fb481` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.onDestroy` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:923` | `38adf0a9727e` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.preloadParser` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:1004` | `85b58d5069f5` (synced) |
-| `core/src/lib/tree-sitter/client.ts#TreeSitterClient.removeBuffer` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:1221` | `f876a0c3933c` (synced) |
+| `core/src/lib/tree-sitter/client.ts#TreeSitterClient.removeBuffer` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:1221` | `f876a0c3933c` -> `e4dce071f7d9` (**DRIFT**) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.removeCopy` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:1116` | `a08ba96c50f9` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.resetBuffer` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:1201` | `a5560c8b74cd` (synced) |
 | `core/src/lib/tree-sitter/client.ts#TreeSitterClient.setDataPath` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:1262` | `3d1130556914` (synced) |
-| `core/src/lib/tree-sitter/client.ts#TreeSitterClient.updateBuffer` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:1184` | `f644a210fda9` (synced) |
+| `core/src/lib/tree-sitter/client.ts#TreeSitterClient.updateBuffer` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:1184` | `f644a210fda9` -> `d3640391b01a` (**DRIFT**) |
 | `core/src/lib/tree-sitter/default-parser-assets.bun.ts#resolveBundledDefaultParserAsset` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:540` | `3b4929fbd8ce` (synced) |
-| `core/src/lib/tree-sitter/default-parsers.ts#defaultParserAssetPaths` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:468` | `7dbffab27bfe` (synced) |
+| `core/src/lib/tree-sitter/default-parsers.ts#defaultParserAssetPaths` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:468` | `7dbffab27bfe` -> `75d904e2c040` (**DRIFT**) |
 | `core/src/lib/tree-sitter/default-parsers.ts#getParsers` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:559` | `c3e56d8deae9` (synced) |
 | `core/src/lib/tree-sitter/download-utils.ts#DownloadResult` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:273` | `4d9f58bc40c0` (synced) |
-| `core/src/lib/tree-sitter/download-utils.ts#DownloadUtils` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:347` | `c1e24459242c` (synced) |
+| `core/src/lib/tree-sitter/download-utils.ts#DownloadUtils` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:347` | `c1e24459242c` -> `f84131b536f1` (**DRIFT**) |
 | `core/src/lib/tree-sitter/download-utils.ts#DownloadUtils.downloadOrLoad` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:365` | `5490ba168797` (synced) |
 | `core/src/lib/tree-sitter/download-utils.ts#DownloadUtils.downloadToPath` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:408` | `1bea31365c0b` (synced) |
 | `core/src/lib/tree-sitter/download-utils.ts#DownloadUtils.fetchHighlightQueries` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:435` | `b7f0572b1cfc` (synced) |
@@ -779,10 +2331,10 @@
 | `core/src/lib/tree-sitter/types.ts#TreeSitterClientEvents` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:226` | `c531718283a9` (synced) |
 | `core/src/lib/tree-sitter/types.ts#TreeSitterClientOptions` | `adapted` | `Sources/OpenTUICore/TreeSitterClient.swift:662` | `624ed2b889f0` (synced) |
 | `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerLogType` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:118` | `f1c7ca24651e` (synced) |
-| `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerRequest` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:185` | `fceef8b7c3c0` (synced) |
-| `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerResponse` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:203` | `49b86a0de3f6` (synced) |
+| `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerRequest` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:185` | `fceef8b7c3c0` -> `aa4fd77b0a30` (**DRIFT**) |
+| `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerResponse` | `implemented` | `Sources/OpenTUICore/TreeSitterClient.swift:203` | `49b86a0de3f6` -> `d42d67a28697` (**DRIFT**) |
 | `core/src/lib/validate-dir-name.ts#isValidDirectoryName` | `implemented` | `Sources/OpenTUICore/Validation.swift:8` | `5559f4e45527` (synced) |
-| `core/src/lib/yoga.options.ts#AlignString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:159` | `af79ea874c9b` (synced) |
+| `core/src/lib/yoga.options.ts#AlignString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:159` | `af79ea874c9b` -> `d66c516fe0de` (**DRIFT**) |
 | `core/src/lib/yoga.options.ts#BoxSizingString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:172` | `df8ff05ea546` (synced) |
 | `core/src/lib/yoga.options.ts#DimensionString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:178` | `2b244bf4d1a2` (synced) |
 | `core/src/lib/yoga.options.ts#DirectionString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:184` | `c0e9cf4d21dc` (synced) |
@@ -817,9 +2369,9 @@
 | `core/src/lib/yoga.options.ts#UnitString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:268` | `d7baab8e054c` (synced) |
 | `core/src/lib/yoga.options.ts#WrapString` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:276` | `e7139335a899` (synced) |
 | `core/src/native-abi.generated.ts#nativeCallbacks` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1770` | `ae42c62ccadb` (synced) |
-| `core/src/native-abi.generated.ts#nativeConstants` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1776` | `704193546182` (synced) |
-| `core/src/native-abi.generated.ts#nativeLayouts` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1773` | `37f5ea68d90e` (synced) |
-| `core/src/native-abi.generated.ts#nativeSymbols` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1767` | `a882592743a7` (synced) |
+| `core/src/native-abi.generated.ts#nativeConstants` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1776` | `704193546182` -> `7d868fb9e642` (**DRIFT**) |
+| `core/src/native-abi.generated.ts#nativeLayouts` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1773` | `37f5ea68d90e` -> `4a30664cb7ea` (**DRIFT**) |
+| `core/src/native-abi.generated.ts#nativeSymbols` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:1767` | `a882592743a7` -> `118bdcaed89a` (**DRIFT**) |
 | `core/src/native-abi.generated.ts#OT_ALIGN_AUTO` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:306` | `ff9fcca5ed94` (synced) |
 | `core/src/native-abi.generated.ts#OT_ALIGN_BASELINE` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:316` | `15c293d3501d` (synced) |
 | `core/src/native-abi.generated.ts#OT_ALIGN_CENTER` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:310` | `25c0d55ce342` (synced) |
@@ -1675,7 +3227,7 @@
 | `core/src/native-abi.generated.ts#OT_YOGA_LOG_LEVEL_WARN` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:372` | `bb1f4cceb2b3` (synced) |
 | `core/src/native-abi.generated.ts#OT_YOGA_NODE_TYPE_DEFAULT` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:382` | `253a9063c75f` (synced) |
 | `core/src/native-abi.generated.ts#OT_YOGA_NODE_TYPE_TEXT` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:384` | `35488f8a3ad7` (synced) |
-| `core/src/NativeScene.ts#NativeScene` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:610` | `19364ae62eb2` (synced) |
+| `core/src/NativeScene.ts#NativeScene` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:610` | `19364ae62eb2` -> `a7137830a8a0` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.assertAlive` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:701` | `7bfbeb80f4b8` (synced) |
 | `core/src/NativeScene.ts#NativeScene.cancelFrame` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1644` | `a2e1f1d072b4` (synced) |
 | `core/src/NativeScene.ts#NativeScene.commit` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1613` | `d0cf09e90abc` (synced) |
@@ -1686,26 +3238,26 @@
 | `core/src/NativeScene.ts#NativeScene.drawBody` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1100` | `ae8d31c4a571` (synced) |
 | `core/src/NativeScene.ts#NativeScene.flushStaged` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:680` | `beb4b6bc285e` (synced) |
 | `core/src/NativeScene.ts#NativeScene.frame` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:648` | `28161aafe6ea` (synced) |
-| `core/src/NativeScene.ts#NativeScene.getLayout` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1477` | `e42d0b1675a9` (synced) |
+| `core/src/NativeScene.ts#NativeScene.getLayout` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1477` | `e42d0b1675a9` -> `5fcfc1f24dd0` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.getRenderables` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:696` | `f950d40d60ac` (synced) |
 | `core/src/NativeScene.ts#NativeScene.getScroll` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1413` | `ca40ec69e3f3` (synced) |
 | `core/src/NativeScene.ts#NativeScene.getSelectedText` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1152` | `9ecf8371e6c0` (synced) |
-| `core/src/NativeScene.ts#NativeScene.getSliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1237` | `df9d2cbf6925` (synced) |
-| `core/src/NativeScene.ts#NativeScene.getStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:915` | `29b7241e9cac` (synced) |
+| `core/src/NativeScene.ts#NativeScene.getSliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1237` | `df9d2cbf6925` -> `f05e1566059f` (**DRIFT**) |
+| `core/src/NativeScene.ts#NativeScene.getStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:915` | `29b7241e9cac` -> `3f7ced88b780` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.getText` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1093` | `59af1d4f848a` (synced) |
 | `core/src/NativeScene.ts#NativeScene.getTextLineInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1169` | `05ad7313cd82` (synced) |
 | `core/src/NativeScene.ts#NativeScene.getTextMetrics` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1207` | `e45ff0868108` (synced) |
-| `core/src/NativeScene.ts#NativeScene.getTextSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1145` | `76e5b6ac7b87` (synced) |
-| `core/src/NativeScene.ts#NativeScene.hasMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:936` | `d2bdc0bc737c` (synced) |
+| `core/src/NativeScene.ts#NativeScene.getTextSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1145` | `76e5b6ac7b87` -> `b2b2f03e347d` (**DRIFT**) |
+| `core/src/NativeScene.ts#NativeScene.hasMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:936` | `d2bdc0bc737c` -> `0cc877069bf0` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.hasStagedMutations` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:659` | `9129a29aad06` (synced) |
 | `core/src/NativeScene.ts#NativeScene.hitTest` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1652` | `27a5e188f17a` (synced) |
-| `core/src/NativeScene.ts#NativeScene.markDirty` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:958` | `bc315f09ab29` (synced) |
+| `core/src/NativeScene.ts#NativeScene.markDirty` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:958` | `bc315f09ab29` -> `1a15675a2f02` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.measureSnapshot` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:1505` | `94650f584c7f` (synced) |
 | `core/src/NativeScene.ts#NativeScene.moveNode` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:779` | `598ee138ef96` (synced) |
 | `core/src/NativeScene.ts#NativeScene.observedLayoutRevision` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:653` | `a5d44297af4f` (synced) |
 | `core/src/NativeScene.ts#NativeScene.paint` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:1570` | `9d638f6e596f` (synced) |
-| `core/src/NativeScene.ts#NativeScene.painted` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:951` | `b5c77afc5ad5` (synced) |
-| `core/src/NativeScene.ts#NativeScene.reachesHooks` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:944` | `11c01eb05aa7` (synced) |
+| `core/src/NativeScene.ts#NativeScene.painted` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:951` | `b5c77afc5ad5` -> `dce3ec8bc447` (**DRIFT**) |
+| `core/src/NativeScene.ts#NativeScene.reachesHooks` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:944` | `11c01eb05aa7` -> `ecce10eb31d7` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.resourceContext` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:643` | `bdc62b95bbed` (synced) |
 | `core/src/NativeScene.ts#NativeScene.scrollRequest` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1356` | `38271162731a` (synced) |
 | `core/src/NativeScene.ts#NativeScene.scrollTo` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1326` | `7ca89b932d77` (synced) |
@@ -1719,13 +3271,13 @@
 | `core/src/NativeScene.ts#NativeScene.setFocus` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:815` | `36a5b3e0fb57` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setHooks` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:874` | `c466ae0e8e83` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setImage` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1262` | `eab609285894` (synced) |
-| `core/src/NativeScene.ts#NativeScene.setMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:928` | `bf478775a0af` (synced) |
+| `core/src/NativeScene.ts#NativeScene.setMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:928` | `bf478775a0af` -> `4912f2f90738` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.setPaint` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:995` | `53891f0f932e` (synced) |
-| `core/src/NativeScene.ts#NativeScene.setPositions` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:965` | `91b3465ce9d0` (synced) |
+| `core/src/NativeScene.ts#NativeScene.setPositions` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:965` | `91b3465ce9d0` -> `97523b687cd7` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.setScroll` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1303` | `fc8526cb6f55` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setScrollArrow` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1314` | `6ef482899895` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setSlider` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1230` | `a1d5b50c8180` (synced) |
-| `core/src/NativeScene.ts#NativeScene.setStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:891` | `978b3ee393cd` (synced) |
+| `core/src/NativeScene.ts#NativeScene.setStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:891` | `978b3ee393cd` -> `f7d98d302e94` (**DRIFT**) |
 | `core/src/NativeScene.ts#NativeScene.setSurface` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1431` | `c8e3d2d108dd` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setText` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1033` | `0a2ed3038c23` (synced) |
 | `core/src/NativeScene.ts#NativeScene.setTextOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1085` | `bfb94cd4ecd3` (synced) |
@@ -1736,8 +3288,8 @@
 | `core/src/NativeScene.ts#NativeScene.setViewport` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:807` | `0fa0f6366a87` (synced) |
 | `core/src/NativeScene.ts#NativeScene.textByteAt` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1063` | `264653dd7b5f` (synced) |
 | `core/src/NativeScene.ts#NativeScene.textNode` | `implemented` | `Sources/OpenTUIRenderables/NativeScene.swift:1057` | `4fc8a400c53c` (synced) |
-| `core/src/NativeScene.ts#NativeScene.videoNode` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:1295` | `415710d96fce` (synced) |
-| `core/src/NativeSession.ts#NativeSession` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:768` | `f20328928d0c` (synced) |
+| `core/src/NativeScene.ts#NativeScene.videoNode` | `adapted` | `Sources/OpenTUIRenderables/NativeScene.swift:1295` | `415710d96fce` -> `114b6995d958` (**DRIFT**) |
+| `core/src/NativeSession.ts#NativeSession` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:768` | `f20328928d0c` -> `7ba9b726d167` (**DRIFT**) |
 | `core/src/NativeSession.ts#NativeSession.armCloseTimeout` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1549` | `ce4773ed4ea9` (synced) |
 | `core/src/NativeSession.ts#NativeSession.attachRenderer` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:934` | `6072a67a9da0` (synced) |
 | `core/src/NativeSession.ts#NativeSession.cancelKittyImageTransport` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1351` | `d123aad67f56` (synced) |
@@ -1758,7 +3310,7 @@
 | `core/src/NativeSession.ts#NativeSession.processKittyImageReply` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1362` | `1f2d8e75a329` (synced) |
 | `core/src/NativeSession.ts#NativeSession.render` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1091` | `cc31c57cb3ac` (synced) |
 | `core/src/NativeSession.ts#NativeSession.renderLib` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:897` | `8073c4aead48` (synced) |
-| `core/src/NativeSession.ts#NativeSession.renderSplit` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1141` | `f11c46f2bb9b` (synced) |
+| `core/src/NativeSession.ts#NativeSession.renderSplit` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1141` | `f11c46f2bb9b` -> `de2602f2bd92` (**DRIFT**) |
 | `core/src/NativeSession.ts#NativeSession.resize` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1206` | `c276693c9ba8` (synced) |
 | `core/src/NativeSession.ts#NativeSession.restoreOnExit` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1576` | `f3a27328bd91` (synced) |
 | `core/src/NativeSession.ts#NativeSession.resume` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1064` | `cc9c365e1001` (synced) |
@@ -1766,7 +3318,7 @@
 | `core/src/NativeSession.ts#NativeSession.setKittyImageTransport` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1331` | `f418693cd432` (synced) |
 | `core/src/NativeSession.ts#NativeSession.setProgramStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1303` | `f7f341d3f62b` (synced) |
 | `core/src/NativeSession.ts#NativeSession.setScreen` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1171` | `24d7f991a2b2` (synced) |
-| `core/src/NativeSession.ts#NativeSession.setupTerminal` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1008` | `4e2c1c880445` (synced) |
+| `core/src/NativeSession.ts#NativeSession.setupTerminal` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1008` | `4e2c1c880445` -> `34a09d8a2a07` (**DRIFT**) |
 | `core/src/NativeSession.ts#NativeSession.startKittyFileProbe` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1376` | `1c94a8e3a2f2` (synced) |
 | `core/src/NativeSession.ts#NativeSession.suspend` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:1051` | `34a6a924e63b` (synced) |
 | `core/src/NativeSession.ts#NativeSession.triggerNotification` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:1284` | `17f2aa92e781` (synced) |
@@ -1777,7 +3329,7 @@
 | `core/src/NativeSession.ts#NativeSessionDriverOptions` | `adapted` | `Sources/OpenTUIRenderables/NativeSession.swift:468` | `8660ec3fbcb5` (synced) |
 | `core/src/NativeSession.ts#NativeSessionScheduler` | `implemented` | `Sources/OpenTUIRenderables/NativeSession.swift:247` | `549947da6e98` (synced) |
 | `core/src/NativeSpanFeed.ts#DataHandler` | `implemented` | `Sources/OpenTUICore/NativeSpanFeed.swift:179` | `81621fda3bb1` (synced) |
-| `core/src/NativeSpanFeed.ts#NativeSpanFeed` | `adapted` | `Sources/OpenTUICore/NativeSpanFeed.swift:188` | `b8e2166adf21` (synced) |
+| `core/src/NativeSpanFeed.ts#NativeSpanFeed` | `adapted` | `Sources/OpenTUICore/NativeSpanFeed.swift:188` | `b8e2166adf21` -> `cf71f84e4355` (**DRIFT**) |
 | `core/src/NativeSpanFeed.ts#NativeSpanFeed.attach` | `adapted` | `Sources/OpenTUICore/NativeSpanFeed.swift:246` | `8a38f74f72a3` (synced) |
 | `core/src/NativeSpanFeed.ts#NativeSpanFeed.close` | `implemented` | `Sources/OpenTUICore/NativeSpanFeed.swift:645` | `da2a05fa77d7` (synced) |
 | `core/src/NativeSpanFeed.ts#NativeSpanFeed.create` | `adapted` | `Sources/OpenTUICore/NativeSpanFeed.swift:240` | `c0d5becd195e` (synced) |
@@ -1834,7 +3386,7 @@
 | `core/src/platform/runtime-assets.node.ts#resolveDefaultTreeSitterWorkerPath` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1170` | `f6a6ab507f2a` (synced) |
 | `core/src/platform/runtime-assets.node.ts#resolveNativeLibraryPath` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1202` | `19c86859a7d3` (synced) |
 | `core/src/platform/runtime-assets.node.ts#resolveTreeSitterWasm` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1186` | `27c0599a6c58` (synced) |
-| `core/src/platform/runtime.ts#resolveBundledFilePath` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1128` | `19e98c5479bf` (synced) |
+| `core/src/platform/runtime.ts#resolveBundledFilePath` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1128` | `19e98c5479bf` -> `2d8244785077` (**DRIFT**) |
 | `core/src/platform/runtime.ts#ResolveBundledFilePathOptions` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1062` | `27285209babf` (synced) |
 | `core/src/platform/runtime.ts#sleep` | `adapted` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1074` | `b8d0d3e8e0c1` (synced) |
 | `core/src/platform/runtime.ts#stringWidth` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1085` | `863b199833dc` (synced) |
@@ -1853,24 +3405,24 @@
 | `core/src/platform/worker.ts#WorkerErrorHandler` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1252` | `8ab2a706ffd9` (synced) |
 | `core/src/platform/worker.ts#WorkerMessageEvent` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1226` | `2cdd2239ab0a` (synced) |
 | `core/src/platform/worker.ts#WorkerMessageHandler` | `implemented` | `Sources/OpenTUICore/CoreRuntimeHelpers.swift:1248` | `de18c2389838` (synced) |
-| `core/src/plugins/core-slot.ts#CoreManagedSlot` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:673` | `ea4519cc073e` (synced) |
-| `core/src/plugins/core-slot.ts#CorePlugin` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:701` | `f0b43fc1416d` (synced) |
-| `core/src/plugins/core-slot.ts#CoreResolvedSlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:725` | `9674294d38f8` (synced) |
-| `core/src/plugins/core-slot.ts#CoreSlotContribution` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:694` | `d036177b4088` (synced) |
+| `core/src/plugins/core-slot.ts#CoreManagedSlot` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:673` | `ea4519cc073e` -> `dc3642b01dec` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#CorePlugin` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:701` | `f0b43fc1416d` -> `cdab8cfb2110` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#CoreResolvedSlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:725` | `9674294d38f8` -> `d01467d9b34e` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#CoreSlotContribution` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:694` | `d036177b4088` -> `d7317e08f74e` (**DRIFT**) |
 | `core/src/plugins/core-slot.ts#CoreSlotFailurePlaceholder` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:737` | `32140960bc5a` (synced) |
 | `core/src/plugins/core-slot.ts#CoreSlotMode` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:660` | `0e0643c3b9ad` (synced) |
-| `core/src/plugins/core-slot.ts#CoreSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:664` | `13ff57ed4270` (synced) |
-| `core/src/plugins/core-slot.ts#CoreSlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:669` | `fab01d915406` (synced) |
-| `core/src/plugins/core-slot.ts#createCoreSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:742` | `b7f9995743a3` (synced) |
-| `core/src/plugins/core-slot.ts#registerCorePlugin` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:757` | `16b8fa056f95` (synced) |
-| `core/src/plugins/core-slot.ts#resolveCoreSlot` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:798` | `011481ed12c8` (synced) |
-| `core/src/plugins/core-slot.ts#SlotRenderable` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:843` | `e3a7bb5d8b68` (synced) |
+| `core/src/plugins/core-slot.ts#CoreSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:664` | `13ff57ed4270` -> `c69b49bf2cb0` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#CoreSlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:669` | `fab01d915406` -> `1dec1aa18fa9` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#createCoreSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:742` | `b7f9995743a3` -> `4620cdc72265` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#registerCorePlugin` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:757` | `16b8fa056f95` -> `f3718753aeab` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#resolveCoreSlot` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:798` | `011481ed12c8` -> `83f3dafcc3e2` (**DRIFT**) |
+| `core/src/plugins/core-slot.ts#SlotRenderable` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:843` | `e3a7bb5d8b68` -> `728856e6920a` (**DRIFT**) |
 | `core/src/plugins/core-slot.ts#SlotRenderable.data` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:919` | `22e7520ce9d5` (synced) |
 | `core/src/plugins/core-slot.ts#SlotRenderable.mode` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:910` | `bae7091ae40a` (synced) |
 | `core/src/plugins/core-slot.ts#SlotRenderable.refresh` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:931` | `f584dedfbc52` (synced) |
-| `core/src/plugins/core-slot.ts#SlotRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:811` | `88087ea39962` (synced) |
-| `core/src/plugins/registry.ts#createSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:626` | `3eb243ca84e4` (synced) |
-| `core/src/plugins/registry.ts#SlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:226` | `f2d06cd8cbe3` (synced) |
+| `core/src/plugins/core-slot.ts#SlotRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:811` | `88087ea39962` -> `b52c1f74dd9c` (**DRIFT**) |
+| `core/src/plugins/registry.ts#createSlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:626` | `3eb243ca84e4` -> `7603cdefd1b2` (**DRIFT**) |
+| `core/src/plugins/registry.ts#SlotRegistry` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:226` | `f2d06cd8cbe3` -> `2f35591654f6` (**DRIFT**) |
 | `core/src/plugins/registry.ts#SlotRegistry.batch` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:437` | `eb2472c93a25` (synced) |
 | `core/src/plugins/registry.ts#SlotRegistry.clear` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:384` | `56246ec505b5` (synced) |
 | `core/src/plugins/registry.ts#SlotRegistry.clearPluginErrors` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:457` | `80b9867c9837` (synced) |
@@ -1892,7 +3444,7 @@
 | `core/src/plugins/types.ts#PluginErrorEvent` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:78` | `dbbda2eb944e` (synced) |
 | `core/src/plugins/types.ts#PluginErrorPhase` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:33` | `0055cf7b3e36` (synced) |
 | `core/src/plugins/types.ts#PluginErrorReport` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:107` | `2f496a113afb` (synced) |
-| `core/src/plugins/types.ts#PluginErrorSource` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:42` | `6dbda2d19d2b` (synced) |
+| `core/src/plugins/types.ts#PluginErrorSource` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:42` | `6dbda2d19d2b` -> `9de1af3404fa` (**DRIFT**) |
 | `core/src/plugins/types.ts#ResolvedSlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:159` | `68ba6c93b467` (synced) |
 | `core/src/plugins/types.ts#SlotMode` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:22` | `9a4b5e5c44b5` (synced) |
 | `core/src/plugins/types.ts#SlotRenderer` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:131` | `3758139d0cd0` (synced) |
@@ -1908,8 +3460,8 @@
 | `core/src/post/effects.ts#CRTRollingBarEffect.height` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1590` | `ddaf5916958d` (synced) |
 | `core/src/post/effects.ts#CRTRollingBarEffect.intensity` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1596` | `38a40a80e3a0` (synced) |
 | `core/src/post/effects.ts#CRTRollingBarEffect.speed` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1584` | `4cf6f87a73ab` (synced) |
-| `core/src/post/effects.ts#DistortionEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:978` | `7796956b688e` (synced) |
-| `core/src/post/effects.ts#DistortionEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1029` | `8e096e65683b` (synced) |
+| `core/src/post/effects.ts#DistortionEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:978` | `7796956b688e` -> `dc731e7d17b4` (**DRIFT**) |
+| `core/src/post/effects.ts#DistortionEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1029` | `8e096e65683b` -> `3bf52779fd30` (**DRIFT**) |
 | `core/src/post/effects.ts#FlamesEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1459` | `a7e200a59953` (synced) |
 | `core/src/post/effects.ts#FlamesEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1501` | `4978da206a24` (synced) |
 | `core/src/post/effects.ts#FlamesEffect.intensity` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1491` | `38a40a80e3a0` (synced) |
@@ -1921,10 +3473,10 @@
 | `core/src/post/effects.ts#RainbowTextEffect.saturation` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1693` | `d7f9aea93e48` (synced) |
 | `core/src/post/effects.ts#RainbowTextEffect.speed` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1687` | `95310572639e` (synced) |
 | `core/src/post/effects.ts#RainbowTextEffect.value` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1699` | `35f708afa686` (synced) |
-| `core/src/post/effects.ts#VignetteEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1169` | `a4481c016ce3` (synced) |
-| `core/src/post/effects.ts#VignetteEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1253` | `ef0b08537fcd` (synced) |
+| `core/src/post/effects.ts#VignetteEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1169` | `a4481c016ce3` -> `63b0b15ec426` (**DRIFT**) |
+| `core/src/post/effects.ts#VignetteEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1253` | `ef0b08537fcd` -> `002389f8750b` (**DRIFT**) |
 | `core/src/post/effects.ts#VignetteEffect.strength` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:1183` | `a801a5095aac` (synced) |
-| `core/src/post/filters.ts#applyAsciiArt` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:573` | `653a5b0b3fe3` (synced) |
+| `core/src/post/filters.ts#applyAsciiArt` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:573` | `653a5b0b3fe3` -> `fe927f47ed65` (**DRIFT**) |
 | `core/src/post/filters.ts#applyBrightness` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:611` | `4f6800114b28` (synced) |
 | `core/src/post/filters.ts#applyChromaticAberration` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:536` | `249adf72b9eb` (synced) |
 | `core/src/post/filters.ts#applyGain` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:624` | `d71a66bd1be0` (synced) |
@@ -1933,7 +3485,7 @@
 | `core/src/post/filters.ts#applySaturation` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:637` | `e05d0d78988d` (synced) |
 | `core/src/post/filters.ts#applyScanlines` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:474` | `0dc605583d4a` (synced) |
 | `core/src/post/filters.ts#BloomEffect` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:882` | `3f8451e373f5` (synced) |
-| `core/src/post/filters.ts#BloomEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:917` | `d3af3692e1a4` (synced) |
+| `core/src/post/filters.ts#BloomEffect.apply` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:917` | `d3af3692e1a4` -> `534184e2dc73` (**DRIFT**) |
 | `core/src/post/filters.ts#BloomEffect.radius` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:906` | `1d06770d5af9` (synced) |
 | `core/src/post/filters.ts#BloomEffect.strength` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:900` | `d2758220d02f` (synced) |
 | `core/src/post/filters.ts#BloomEffect.threshold` | `implemented` | `Sources/OpenTUICore/PostEffects.swift:894` | `e326fb37d07b` (synced) |
@@ -1961,9 +3513,9 @@
 | `core/src/Renderable.ts#isRenderable` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:754` | `b507d7c73b8c` (synced) |
 | `core/src/Renderable.ts#LayoutEvents` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:311` | `da8a4990d7b5` (synced) |
 | `core/src/Renderable.ts#LayoutOptions` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:353` | `adedc96073b9` (synced) |
-| `core/src/Renderable.ts#NativeRenderableIntegration` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:158` | `18c332053b6f` (synced) |
+| `core/src/Renderable.ts#NativeRenderableIntegration` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:158` | `18c332053b6f` -> `fb1eb00a5c1c` (**DRIFT**) |
 | `core/src/Renderable.ts#Position` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:324` | `c2102507c15e` (synced) |
-| `core/src/Renderable.ts#Renderable` | `adapted` | `Sources/OpenTUIRenderables/Renderable.swift:886` | `032dea1c9599` (synced) |
+| `core/src/Renderable.ts#Renderable` | `adapted` | `Sources/OpenTUIRenderables/Renderable.swift:886` | `032dea1c9599` -> `f81cec58be12` (**DRIFT**) |
 | `core/src/Renderable.ts#Renderable.add` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1896` | `041800eb0d08` (synced) |
 | `core/src/Renderable.ts#Renderable.addListener` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:355` | `58b07d25f276` (synced) |
 | `core/src/Renderable.ts#Renderable.alignContent` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1383` | `7e9e7e11599e` (synced) |
@@ -1976,7 +3528,7 @@
 | `core/src/Renderable.ts#Renderable.bottom` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1465` | `18be360a0802` (synced) |
 | `core/src/Renderable.ts#Renderable.ctx` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:198` | `8f0ec387c020` (synced) |
 | `core/src/Renderable.ts#Renderable.destroy` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2292` | `51737426b589` (synced) |
-| `core/src/Renderable.ts#Renderable.destroyRecursively` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2332` | `f9b6bd3ffe1b` (synced) |
+| `core/src/Renderable.ts#Renderable.destroyRecursively` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2332` | `f9b6bd3ffe1b` -> `c344bd597320` (**DRIFT**) |
 | `core/src/Renderable.ts#Renderable.findDescendantById` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2024` | `51b0bb58275c` (synced) |
 | `core/src/Renderable.ts#Renderable.flexBasis` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1323` | `f51fdb6ab59e` (synced) |
 | `core/src/Renderable.ts#Renderable.flexDirection` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1333` | `22480fc7d726` (synced) |
@@ -2089,13 +3641,13 @@
 | `core/src/Renderable.ts#Renderable.y` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1193` | `daeb3268185b` (synced) |
 | `core/src/Renderable.ts#Renderable.zIndex` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:1139` | `60991adae798` (synced) |
 | `core/src/Renderable.ts#RenderableEvents` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:317` | `45ab0e17c593` (synced) |
-| `core/src/Renderable.ts#RenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:491` | `43b41a67323e` (synced) |
+| `core/src/Renderable.ts#RenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:491` | `43b41a67323e` -> `c7716d789bb9` (**DRIFT**) |
 | `core/src/Renderable.ts#RootRenderable` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2348` | `f012f5a6cbe1` (synced) |
 | `core/src/Renderable.ts#RootRenderable.currentRenderable` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2367` | `f211ba688875` (synced) |
 | `core/src/Renderable.ts#RootRenderable.resize` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2397` | `ce39a4f1e1f2` (synced) |
 | `core/src/Renderable.ts#RootRenderable.takeCurrentRenderable` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:2376` | `010b055621ab` (synced) |
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontOptions` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:124` | `72bdd77e07e9` (synced) |
-| `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:194` | `e7ef03b2d33d` (synced) |
+| `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:194` | `e7ef03b2d33d` -> `7a9068caa3a0` (**DRIFT**) |
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable.backgroundColor` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:294` | `1af6f6906868` (synced) |
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable.color` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:276` | `3b3fa19a4888` (synced) |
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable.font` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:262` | `5dadec112e8b` (synced) |
@@ -2107,7 +3659,7 @@
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable.shouldStartSelection` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:352` | `c3e6c6a6bff7` (synced) |
 | `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable.text` | `implemented` | `Sources/OpenTUIRenderables/ASCIIFontRenderable.swift:248` | `083757af6e65` (synced) |
 | `core/src/renderables/Box.ts#BoxOptions` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:7` | `aceede751753` (synced) |
-| `core/src/renderables/Box.ts#BoxRenderable` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:220` | `0730700635bd` (synced) |
+| `core/src/renderables/Box.ts#BoxRenderable` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:220` | `0730700635bd` -> `90a25abe76b8` (**DRIFT**) |
 | `core/src/renderables/Box.ts#BoxRenderable.backgroundColor` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:311` | `3f2fd901bcc7` (synced) |
 | `core/src/renderables/Box.ts#BoxRenderable.border` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:325` | `0e76100049d4` (synced) |
 | `core/src/renderables/Box.ts#BoxRenderable.borderColor` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:352` | `c0d1cecb90f6` (synced) |
@@ -2125,7 +3677,7 @@
 | `core/src/renderables/Box.ts#BoxRenderable.titleColor` | `implemented` | `Sources/OpenTUIRenderables/BoxRenderable.swift:392` | `f655ef30b63c` (synced) |
 | `core/src/renderables/Code.ts#ChunkRenderContext` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:30` | `c4cbfb2203ca` (synced) |
 | `core/src/renderables/Code.ts#CodeOptions` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:64` | `cf4cb8acb49a` (synced) |
-| `core/src/renderables/Code.ts#CodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:217` | `b99372d616ce` (synced) |
+| `core/src/renderables/Code.ts#CodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:217` | `b99372d616ce` -> `a40e058e51f6` (**DRIFT**) |
 | `core/src/renderables/Code.ts#CodeRenderable.baseHighlight` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:390` | `9383ecac3c10` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.conceal` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:321` | `2bc204954212` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.content` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:281` | `ebe008abea36` (synced) |
@@ -2133,7 +3685,7 @@
 | `core/src/renderables/Code.ts#CodeRenderable.filetype` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:290` | `cfbaa5c81d52` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.getLineHighlights` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:443` | `b897d18d8d45` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.highlightingDone` | `adapted` | `Sources/OpenTUIRenderables/CodeRenderable.swift:415` | `cfc5e53caf3d` (synced) |
-| `core/src/renderables/Code.ts#CodeRenderable.initialStyledText` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:354` | `f50bff178e46` (synced) |
+| `core/src/renderables/Code.ts#CodeRenderable.initialStyledText` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:354` | `f50bff178e46` -> `3d6706dbae3d` (**DRIFT**) |
 | `core/src/renderables/Code.ts#CodeRenderable.isHighlighting` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:409` | `40dc7f2f0f7e` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.onChunks` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:400` | `600570448bbe` (synced) |
 | `core/src/renderables/Code.ts#CodeRenderable.onHighlight` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:381` | `868a329482e2` (synced) |
@@ -2144,8 +3696,8 @@
 | `core/src/renderables/Code.ts#HighlightContext` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:8` | `a7c2c2dbb536` (synced) |
 | `core/src/renderables/Code.ts#OnChunksCallback` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:55` | `a091329a981f` (synced) |
 | `core/src/renderables/Code.ts#OnHighlightCallback` | `implemented` | `Sources/OpenTUIRenderables/CodeRenderable.swift:23` | `a1ea57138eae` (synced) |
-| `core/src/renderables/Diff.ts#DiffGutterOptions` | `implemented` | `Sources/OpenTUIRenderables/DiffParser.swift:18` | `b6201690d626` (synced) |
-| `core/src/renderables/Diff.ts#DiffRenderable` | `implemented` | `Sources/OpenTUIRenderables/DiffRenderable.swift:481` | `ac5236e6279d` (synced) |
+| `core/src/renderables/Diff.ts#DiffGutterOptions` | `implemented` | `Sources/OpenTUIRenderables/DiffParser.swift:18` | `b6201690d626` -> `76e1a10f8a37` (**DRIFT**) |
+| `core/src/renderables/Diff.ts#DiffRenderable` | `implemented` | `Sources/OpenTUIRenderables/DiffRenderable.swift:481` | `ac5236e6279d` -> `32bdca5fd45b` (**DRIFT**) |
 | `core/src/renderables/Diff.ts#DiffRenderable.addedBg` | `implemented` | `Sources/OpenTUIRenderables/DiffRenderable.swift:690` | `743d00c1a549` (synced) |
 | `core/src/renderables/Diff.ts#DiffRenderable.addedContentBg` | `implemented` | `Sources/OpenTUIRenderables/DiffRenderable.swift:789` | `7836efdcb13a` (synced) |
 | `core/src/renderables/Diff.ts#DiffRenderable.addedLineNumberBg` | `implemented` | `Sources/OpenTUIRenderables/DiffRenderable.swift:743` | `e6e7b6a7852e` (synced) |
@@ -2182,7 +3734,7 @@
 | `core/src/renderables/EditBufferRenderable.ts#ContentChangeEvent` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:55` | `62032667f426` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#CursorChangeEvent` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:42` | `190aff0f28d8` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferOptions` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:76` | `afae3abaaf82` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:316` | `254f9b1f78cd` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:316` | `254f9b1f78cd` -> `dfdfc8926ae6` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.addHighlight` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1513` | `7a4ace4ec28b` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.addHighlightByCharRange` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1519` | `43ccedb96afc` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.attributes` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:711` | `0abe5cc94146` (synced) |
@@ -2208,30 +3760,30 @@
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.focus` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1593` | `df96497eb9a4` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getLineHighlights` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1543` | `aaeaa85b4b44` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getSelectedText` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1049` | `cc0cb2f8764d` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1059` | `35496c0888a5` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1059` | `35496c0888a5` -> `b83799385fb0` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getTextRange` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1581` | `97e9b796b4d4` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getTextRangeByCoords` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1586` | `e813b7367dd4` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1359` | `912849933656` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1347` | `d678b232b958` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1359` | `912849933656` -> `32951c9589bd` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1347` | `d678b232b958` -> `b37f77079ea5` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLine` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1265` | `4b6e047dc481` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1303` | `cdf0325ec58b` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1284` | `463d6e898c26` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1303` | `cdf0325ec58b` -> `ffe9cd553f7a` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1284` | `463d6e898c26` -> `40b70ecfa9e0` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineStart` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1273` | `d9e7e4762811` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineTextEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1278` | `50f373768a26` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1335` | `25ee21859481` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1322` | `97ae2cac3465` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineEnd` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1335` | `25ee21859481` -> `549f931a60eb` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineHome` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1322` | `97ae2cac3465` -> `2e9743234a26` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.hasSelection` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1054` | `9bbd2a0f1dbc` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.insertChar` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1123` | `60dd6919c498` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.insertText` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1130` | `e9de2deee402` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.lineCount` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:530` | `914cbfc4ee60` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.lineInfo` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:521` | `16dd85e0f58e` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.logicalCursor` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:565` | `a0bbe7a173df` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorDown` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1254` | `38d01119edbc` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorLeft` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1219` | `49e4033f4c22` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorRight` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1231` | `9306858b7b38` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorUp` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1243` | `0e5fcae01262` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordBackward` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1452` | `fe461b30384a` (synced) |
-| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordForward` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1439` | `b8e6742425fb` (synced) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorDown` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1254` | `38d01119edbc` -> `8dbd5b753110` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorLeft` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1219` | `49e4033f4c22` -> `f8a89477a110` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorRight` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1231` | `9306858b7b38` -> `ea8acab5f5ef` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorUp` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1243` | `0e5fcae01262` -> `f66813dd03f2` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordBackward` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1452` | `fe461b30384a` -> `b57f33528617` (**DRIFT**) |
+| `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordForward` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1439` | `b8e6742425fb` -> `d6ebe2a0e817` (**DRIFT**) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.newLine` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:1180` | `3cdd1cd93e29` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.onContentChange` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:838` | `9151d320b264` (synced) |
 | `core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.onCursorChange` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:832` | `dea76855ecf6` (synced) |
@@ -2268,12 +3820,12 @@
 | `core/src/renderables/EditBufferRenderable.ts#isEditBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/EditBufferRenderable.swift:37` | `7977bdb84c11` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalDataSource` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:8` | `1a99824a36ce` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalOptions` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:75` | `411d3e224c83` (synced) |
-| `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:923` | `9c18e1e3f7fa` (synced) |
+| `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:923` | `9c18e1e3f7fa` -> `8ef940486369` (**DRIFT**) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.blur` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1198` | `d318a4db1392` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.encodeKey` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1047` | `874885893746` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.encodePaste` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1112` | `2ae60b15bdb5` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.focus` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1186` | `e1fe197e50a3` (synced) |
-| `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.getScroll` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1024` | `68bf4f670022` (synced) |
+| `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.getScroll` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1024` | `68bf4f670022` -> `b1268e6f4029` (**DRIFT**) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.getSelectedText` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1178` | `72c848f87182` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.handleKeyPress` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1207` | `dd919a17439f` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.handlePaste` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1215` | `aaf53d203f5e` (synced) |
@@ -2288,16 +3840,16 @@
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.transparentBackground` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1006` | `4fc4a33eac7a` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.write` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:1029` | `221db068cdf6` (synced) |
 | `core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalScreen` | `implemented` | `Sources/OpenTUIRenderables/EmbeddedTerminalRenderable.swift:38` | `3eecda2f3b03` (synced) |
-| `core/src/renderables/FrameBuffer.ts#FrameBufferOptions` | `implemented` | `Sources/OpenTUIRenderables/FrameBufferRenderable.swift:7` | `96b0cf75193f` (synced) |
+| `core/src/renderables/FrameBuffer.ts#FrameBufferOptions` | `implemented` | `Sources/OpenTUIRenderables/FrameBufferRenderable.swift:7` | `96b0cf75193f` -> `f1800681581a` (**DRIFT**) |
 | `core/src/renderables/FrameBuffer.ts#FrameBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/FrameBufferRenderable.swift:116` | `61f132ebda7a` (synced) |
 | `core/src/renderables/Image.ts#checkCrop` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:141` | `e3cb6ac41646` (synced) |
 | `core/src/renderables/Image.ts#ImageFit` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:8` | `9a41f1926992` (synced) |
-| `core/src/renderables/Image.ts#ImageRenderable` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:459` | `799459b68d0b` (synced) |
+| `core/src/renderables/Image.ts#ImageRenderable` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:459` | `799459b68d0b` -> `256a294f0f63` (**DRIFT**) |
 | `core/src/renderables/Image.ts#ImageRenderable.cellAspectRatio` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:596` | `e1dc7442bf7e` (synced) |
 | `core/src/renderables/Image.ts#ImageRenderable.crop` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:556` | `794a8407c7a9` (synced) |
 | `core/src/renderables/Image.ts#ImageRenderable.effectiveProtocol` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:587` | `881d689ca906` (synced) |
 | `core/src/renderables/Image.ts#ImageRenderable.fit` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:546` | `4addcb51cfe1` (synced) |
-| `core/src/renderables/Image.ts#ImageRenderable.getFittedSize` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:612` | `b8c314fb5435` (synced) |
+| `core/src/renderables/Image.ts#ImageRenderable.getFittedSize` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:612` | `b8c314fb5435` -> `4e4dd26a53d8` (**DRIFT**) |
 | `core/src/renderables/Image.ts#ImageRenderable.image` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:543` | `8a3e7187f445` (synced) |
 | `core/src/renderables/Image.ts#ImageRenderable.loadError` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:634` | `a5a4cd7fe897` (synced) |
 | `core/src/renderables/Image.ts#ImageRenderable.loading` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:631` | `b4ecf3735119` (synced) |
@@ -2309,17 +3861,17 @@
 | `core/src/renderables/Image.ts#sameCrop` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:160` | `a89fbe190013` (synced) |
 | `core/src/renderables/Input.ts#InputAction` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:6` | `d833e38c92d4` (synced) |
 | `core/src/renderables/Input.ts#InputKeyBinding` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:9` | `1779a3935989` (synced) |
-| `core/src/renderables/Input.ts#InputRenderable` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:183` | `10f30e92cf75` (synced) |
+| `core/src/renderables/Input.ts#InputRenderable` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:183` | `10f30e92cf75` -> `18a657f1d73d` (**DRIFT**) |
 | `core/src/renderables/Input.ts#InputRenderable.deleteCharacter` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:482` | `20c7eb888982` (synced) |
 | `core/src/renderables/Input.ts#InputRenderable.maxLength` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:346` | `5117a96fb9ac` (synced) |
 | `core/src/renderables/Input.ts#InputRenderable.minLength` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:360` | `210f8907b778` (synced) |
 | `core/src/renderables/Input.ts#InputRenderable.value` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:332` | `fe89ee09e2b1` (synced) |
 | `core/src/renderables/Input.ts#InputRenderableEvents` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:12` | `4dfcda6f51fa` (synced) |
-| `core/src/renderables/Input.ts#InputRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:27` | `429656026645` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#GutterLayout` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:55` | `816154f60de6` (synced) |
+| `core/src/renderables/Input.ts#InputRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/InputRenderable.swift:27` | `429656026645` -> `24c40f219a00` (**DRIFT**) |
+| `core/src/renderables/LineNumberRenderable.ts#GutterLayout` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:55` | `816154f60de6` -> `6929c3b53fc4` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineColorConfig` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:29` | `387345c6be92` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberOptions` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:82` | `991d33f7f168` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:488` | `ac3064920884` (synced) |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:488` | `ac3064920884` -> `7ebd8de21e08` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.bg` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:723` | `243845f8004a` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.clearAllLineColors` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:745` | `2832fd10e617` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.clearAllLineSigns` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:801` | `fbe7a938cd94` (synced) |
@@ -2330,20 +3882,20 @@
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.fg` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:714` | `9be35c345043` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getGutterLayout` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:830` | `14122815dcaa` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getHideLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:858` | `64ff6fb05412` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineColors` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:784` | `8a6359c9f6dd` (synced) |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineColors` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:784` | `8a6359c9f6dd` -> `32dd448e6c32` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:875` | `91be7948a661` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineSigns` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:825` | `e4ee1bbca64c` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.hideLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:863` | `200261d032f3` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.highlightLines` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:886` | `6aba4e6581cd` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineColors` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:752` | `207a5aedddc0` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineNumberOffset` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:842` | `32f8d026bac4` (synced) |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineNumberOffset` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:842` | `32f8d026bac4` -> `945638eeaa0c` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:880` | `e88770eeaa61` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineSigns` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:813` | `9f3c2b205312` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setGutterLayout` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:835` | `c0a5a72688a1` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setHideLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:852` | `73455386bb1c` (synced) |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setHideLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:852` | `73455386bb1c` -> `2149a6d5bfb6` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineColor` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:732` | `c7ece54898a7` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineColors` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:774` | `f0322fa610ad` (synced) |
-| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:869` | `5410c9e3c32f` (synced) |
+| `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:869` | `5410c9e3c32f` -> `5bf3e8b9ea67` (**DRIFT**) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineSign` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:789` | `9d0bfbee7910` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineSigns` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:807` | `a369d47f2793` (synced) |
 | `core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.showLineNumbers` | `implemented` | `Sources/OpenTUIRenderables/LineNumberRenderable.swift:705` | `df4c19c708a6` (synced) |
@@ -2362,15 +3914,15 @@
 | `core/src/renderables/markdown-document.ts#MarkdownDocument.write` | `implemented` | `Sources/OpenTUIRenderables/MarkdownDocument.swift:157` | `dc7f699898c3` (synced) |
 | `core/src/renderables/Markdown.ts#createMarkdownCodeBlockRenderer` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:246` | `76e5d9be3286` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownBlock` | `adapted` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:149` | `25c42383fc10` (synced) |
-| `core/src/renderables/Markdown.ts#MarkdownBlockKind` | `implemented` | `Sources/OpenTUIRenderables/MarkdownDocument.swift:7` | `0c493acfe009` (synced) |
+| `core/src/renderables/Markdown.ts#MarkdownBlockKind` | `implemented` | `Sources/OpenTUIRenderables/MarkdownDocument.swift:7` | `0c493acfe009` -> `387074e8c778` (**DRIFT**) |
 | `core/src/renderables/Markdown.ts#MarkdownCodeBlock` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:197` | `20b060228b72` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownCodeBlockRenderer` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:228` | `8d3bf77c2b72` (synced) |
-| `core/src/renderables/Markdown.ts#MarkdownCodeBlockRendererMap` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:235` | `df48a120d251` (synced) |
-| `core/src/renderables/Markdown.ts#MarkdownInlineContext` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:98` | `3bd3f62603d3` (synced) |
+| `core/src/renderables/Markdown.ts#MarkdownCodeBlockRendererMap` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:235` | `df48a120d251` -> `24a1ea3dac4a` (**DRIFT**) |
+| `core/src/renderables/Markdown.ts#MarkdownInlineContext` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:98` | `3bd3f62603d3` -> `d4910e16d3b2` (**DRIFT**) |
 | `core/src/renderables/Markdown.ts#MarkdownInlineHook` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:114` | `c7cac927d39a` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownInlineSpan` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:65` | `c7a9e2f0d40d` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownOptions` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:277` | `89468533e0af` (synced) |
-| `core/src/renderables/Markdown.ts#MarkdownRenderable` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:519` | `0abdc5fd9dcc` (synced) |
+| `core/src/renderables/Markdown.ts#MarkdownRenderable` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:519` | `0abdc5fd9dcc` -> `64663ead6a3e` (**DRIFT**) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.bg` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:640` | `668f5b6dcdd7` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.blocks` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:753` | `0fcf77d1c392` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.clearCache` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:817` | `5adcb765cec7` (synced) |
@@ -2384,7 +3936,7 @@
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.inlineHookFilter` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:725` | `f3cda2f1e39f` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.refreshStyles` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:823` | `f4fa94f30d11` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.renderBlock` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:699` | `e0a7e6088dae` (synced) |
-| `core/src/renderables/Markdown.ts#MarkdownRenderable.rerunInlineHook` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:772` | `08b295c246f0` (synced) |
+| `core/src/renderables/Markdown.ts#MarkdownRenderable.rerunInlineHook` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:772` | `08b295c246f0` -> `014b88ff1a00` (**DRIFT**) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.streaming` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:674` | `a6ce28dc913c` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.syntaxStyle` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:603` | `8bbbc920cf40` (synced) |
 | `core/src/renderables/Markdown.ts#MarkdownRenderable.tableOptions` | `implemented` | `Sources/OpenTUIRenderables/MarkdownRenderable.swift:687` | `0edbdb0d3e35` (synced) |
@@ -2402,7 +3954,7 @@
 | `core/src/renderables/ScrollBar.ts#ArrowRenderable.direction` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:232` | `560f7f1945eb` (synced) |
 | `core/src/renderables/ScrollBar.ts#ArrowRenderable.foregroundColor` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:242` | `438ea5db8db4` (synced) |
 | `core/src/renderables/ScrollBar.ts#ScrollBarOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:315` | `b6eb21235372` (synced) |
-| `core/src/renderables/ScrollBar.ts#ScrollBarRenderable` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:386` | `14348f30fef7` (synced) |
+| `core/src/renderables/ScrollBar.ts#ScrollBarRenderable` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:386` | `14348f30fef7` -> `2b3895bd1005` (**DRIFT**) |
 | `core/src/renderables/ScrollBar.ts#ScrollBarRenderable.arrowOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:664` | `aea0ade3b0b1` (synced) |
 | `core/src/renderables/ScrollBar.ts#ScrollBarRenderable.handleKeyPress` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:740` | `c3c47416c8fa` (synced) |
 | `core/src/renderables/ScrollBar.ts#ScrollBarRenderable.resetVisibilityControl` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:600` | `0eb12e54ef9c` (synced) |
@@ -2414,9 +3966,9 @@
 | `core/src/renderables/ScrollBar.ts#ScrollBarRenderable.viewportSize` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:636` | `fc22b9384953` (synced) |
 | `core/src/renderables/ScrollBar.ts#ScrollBarRenderable.visible` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:591` | `15fa60f153cf` (synced) |
 | `core/src/renderables/ScrollBar.ts#ScrollUnit` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:7` | `a8c224d41720` (synced) |
-| `core/src/renderables/ScrollBar.ts#scrollUnitSize` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:23` | `0d705355ee7b` (synced) |
+| `core/src/renderables/ScrollBar.ts#scrollUnitSize` | `implemented` | `Sources/OpenTUIRenderables/ScrollBarRenderable.swift:23` | `0d705355ee7b` -> `eb3263aaefc2` (**DRIFT**) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:775` | `47c596a92831` (synced) |
-| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:924` | `a38d96e7e918` (synced) |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:924` | `a38d96e7e918` -> `7c076832ac48` (**DRIFT**) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.afterLayout` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1388` | `35d023086d8a` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.anchor` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1395` | `9fe0afb42b60` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.contentOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1278` | `f067646bb334` (synced) |
@@ -2425,11 +3977,11 @@
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.rootOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1234` | `5964a0ba4897` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollAcceleration` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1216` | `a40f965aeb8d` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollbarOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1284` | `2a4fbca4bc16` (synced) |
-| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollBy` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1363` | `f956a33d6c46` (synced) |
-| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollChildIntoView` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1374` | `958f94cd6264` (synced) |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollBy` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1363` | `f956a33d6c46` -> `a0953482269e` (**DRIFT**) |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollChildIntoView` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1374` | `958f94cd6264` -> `1866756b07ae` (**DRIFT**) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollHeight` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1211` | `31bef44067d5` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollLeft` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1200` | `6a6f76f27ddd` (synced) |
-| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollTo` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1352` | `2f9e6b830126` (synced) |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollTo` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1352` | `2f9e6b830126` -> `3c651fbe0d3f` (**DRIFT**) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollTop` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1194` | `0eefaa59364a` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollWidth` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1206` | `8d37bb6040cc` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollX` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1174` | `2c9ebbcccdbc` (synced) |
@@ -2438,13 +3990,13 @@
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.stickyScroll` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1150` | `719193c0516e` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.stickyStart` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1164` | `d24f8e1660e3` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.stopAutoScroll` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:2322` | `2294cc0a460e` (synced) |
-| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.updateAutoScroll` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:2306` | `2fa59dba7753` (synced) |
+| `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.updateAutoScroll` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:2306` | `2fa59dba7753` -> `a11b367a2aa7` (**DRIFT**) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.verticalScrollbarOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1298` | `2c38f2b5dd7e` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.viewportCulling` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1222` | `49a62dd1af2b` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.viewportOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1272` | `04551d4e81f0` (synced) |
 | `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.wrapperOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:1262` | `47af811359be` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#SceneStyleNode` | `adapted` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:45` | `a691c9c34670` (synced) |
-| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:495` | `b04a00caa68b` (synced) |
+| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:495` | `b04a00caa68b` -> `89f6bdb072e3` (**DRIFT**) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.arrowOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:584` | `92b50fe9e233` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.handleKeyPress` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:673` | `92db633f4861` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.onChange` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:517` | `1e96291a3c97` (synced) |
@@ -2456,10 +4008,10 @@
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.scrollPosition` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:661` | `917fd82b859a` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.scrollSize` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:651` | `78bec26891d5` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.showArrows` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:574` | `4f3478549f53` (synced) |
-| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.trackOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:595` | `be33458e609c` (synced) |
+| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.trackOptions` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:595` | `be33458e609c` -> `7763a8d0b9fb` (**DRIFT**) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.viewportSize` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:656` | `6f333628cfb3` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.visible` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:556` | `90608f4f75da` (synced) |
-| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:268` | `cb0895841f6f` (synced) |
+| `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:268` | `cb0895841f6f` -> `571403b6c751` (**DRIFT**) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent.add` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:405` | `e980314f30cd` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent.findDescendantById` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:437` | `5680c1504b56` (synced) |
 | `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent.getChildren` | `implemented` | `Sources/OpenTUIRenderables/ScrollBoxRenderable.swift:422` | `eac065179d1d` (synced) |
@@ -2473,7 +4025,7 @@
 | `core/src/renderables/Select.ts#SelectAction` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:22` | `396f0f9674d1` (synced) |
 | `core/src/renderables/Select.ts#SelectKeyBinding` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:31` | `4e4ef7878560` (synced) |
 | `core/src/renderables/Select.ts#SelectOption` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:9` | `8b4f1e79f5a4` (synced) |
-| `core/src/renderables/Select.ts#SelectRenderable` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:182` | `e567f77929db` (synced) |
+| `core/src/renderables/Select.ts#SelectRenderable` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:182` | `e567f77929db` -> `bcdac35b6a75` (**DRIFT**) |
 | `core/src/renderables/Select.ts#SelectRenderable.backgroundColor` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:612` | `a04686f20402` (synced) |
 | `core/src/renderables/Select.ts#SelectRenderable.descriptionColor` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:666` | `54a989192b2c` (synced) |
 | `core/src/renderables/Select.ts#SelectRenderable.fastScrollStep` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:707` | `75f01f1a283f` (synced) |
@@ -2503,7 +4055,7 @@
 | `core/src/renderables/Select.ts#SelectRenderableEvents` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:45` | `bcd76561a010` (synced) |
 | `core/src/renderables/Select.ts#SelectRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/SelectRenderable.swift:53` | `42b5cf4499e9` (synced) |
 | `core/src/renderables/Slider.ts#SliderOptions` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:133` | `b47fa3afc23d` (synced) |
-| `core/src/renderables/Slider.ts#SliderRenderable` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:251` | `8377f92a8f33` (synced) |
+| `core/src/renderables/Slider.ts#SliderRenderable` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:251` | `8377f92a8f33` -> `0c697987b977` (**DRIFT**) |
 | `core/src/renderables/Slider.ts#SliderRenderable.backgroundColor` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:370` | `81a56a76ea69` (synced) |
 | `core/src/renderables/Slider.ts#SliderRenderable.foregroundColor` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:384` | `438ea5db8db4` (synced) |
 | `core/src/renderables/Slider.ts#SliderRenderable.max` | `implemented` | `Sources/OpenTUIRenderables/SliderRenderable.swift:337` | `65d3c9395c97` (synced) |
@@ -2514,7 +4066,7 @@
 | `core/src/renderables/TabSelect.ts#TabSelectAction` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:22` | `1ca828bcec45` (synced) |
 | `core/src/renderables/TabSelect.ts#TabSelectKeyBinding` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:29` | `f76ffe709a17` (synced) |
 | `core/src/renderables/TabSelect.ts#TabSelectOption` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:9` | `8343c6d22a6a` (synced) |
-| `core/src/renderables/TabSelect.ts#TabSelectRenderable` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:178` | `41ba9327a3ea` (synced) |
+| `core/src/renderables/TabSelect.ts#TabSelectRenderable` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:178` | `41ba9327a3ea` -> `38902b658497` (**DRIFT**) |
 | `core/src/renderables/TabSelect.ts#TabSelectRenderable.backgroundColor` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:601` | `9fb4dc45e2a8` (synced) |
 | `core/src/renderables/TabSelect.ts#TabSelectRenderable.focusedBackgroundColor` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:620` | `69d31f56c0e5` (synced) |
 | `core/src/renderables/TabSelect.ts#TabSelectRenderable.focusedTextColor` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:629` | `79201935c67b` (synced) |
@@ -2544,20 +4096,20 @@
 | `core/src/renderables/TabSelect.ts#TabSelectRenderableOptions` | `implemented` | `Sources/OpenTUIRenderables/TabSelectRenderable.swift:56` | `c443758b2868` (synced) |
 | `core/src/renderables/text-table-width.ts#allocateProportionalColumnWidths` | `implemented` | `Sources/OpenTUIRenderables/TextTableWidth.swift:39` | `a6a68f8c4997` (synced) |
 | `core/src/renderables/Text.ts#TextOptions` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:30` | `4dab7d75e382` (synced) |
-| `core/src/renderables/Text.ts#TextRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:121` | `53b436ee991f` (synced) |
+| `core/src/renderables/Text.ts#TextRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:121` | `53b436ee991f` -> `60043aa2924b` (**DRIFT**) |
 | `core/src/renderables/Text.ts#TextRenderable.chunks` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:183` | `748e57073a55` (synced) |
 | `core/src/renderables/Text.ts#TextRenderable.clear` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:301` | `cf2932f853d7` (synced) |
 | `core/src/renderables/Text.ts#TextRenderable.content` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:155` | `e70ddb11ed44` (synced) |
 | `core/src/renderables/Text.ts#TextRenderable.getTextChildren` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:296` | `aa74a196c5f8` (synced) |
 | `core/src/renderables/Text.ts#TextRenderable.remove` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:269` | `7c9f0763e1ab` (synced) |
 | `core/src/renderables/Text.ts#TextRenderable.textNode` | `implemented` | `Sources/OpenTUIRenderables/TextRenderable.swift:188` | `315a2eb8a9e9` (synced) |
-| `core/src/renderables/Textarea.ts#defaultTextareaKeyBindings` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:88` | `1f04a2020f2b` (synced) |
+| `core/src/renderables/Textarea.ts#defaultTextareaKeyBindings` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:88` | `1f04a2020f2b` -> `004bf28b9c7c` (**DRIFT**) |
 | `core/src/renderables/Textarea.ts#KeyBinding` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:82` | `8ecb31fb2a5b` (synced) |
 | `core/src/renderables/Textarea.ts#SubmitEvent` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:165` | `8e231e9507f4` (synced) |
-| `core/src/renderables/Textarea.ts#TextareaAction` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:42` | `66e8fbc3184e` (synced) |
+| `core/src/renderables/Textarea.ts#TextareaAction` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:42` | `66e8fbc3184e` -> `e8b66015f437` (**DRIFT**) |
 | `core/src/renderables/Textarea.ts#TextareaKeyAliasMap` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:85` | `66292753ff6e` (synced) |
 | `core/src/renderables/Textarea.ts#TextareaOptions` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:172` | `a8f70ed61878` (synced) |
-| `core/src/renderables/Textarea.ts#TextareaRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:333` | `f7bb7b236e0c` (synced) |
+| `core/src/renderables/Textarea.ts#TextareaRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:333` | `f7bb7b236e0c` -> `956c7c20251d` (**DRIFT**) |
 | `core/src/renderables/Textarea.ts#TextareaRenderable.blur` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:515` | `66125d685019` (synced) |
 | `core/src/renderables/Textarea.ts#TextareaRenderable.extmarks` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:630` | `66b09bf53393` (synced) |
 | `core/src/renderables/Textarea.ts#TextareaRenderable.focus` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:509` | `d35860e5d769` (synced) |
@@ -2573,14 +4125,14 @@
 | `core/src/renderables/Textarea.ts#TextareaRenderable.placeholderColor` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:539` | `0f1d57d0d8c8` (synced) |
 | `core/src/renderables/Textarea.ts#TextareaRenderable.submit` | `implemented` | `Sources/OpenTUIRenderables/TextareaRenderable.swift:599` | `e4616c6ffa73` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferOptions` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:226` | `04c609fc1b17` (synced) |
-| `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:357` | `22b9851d6ee0` (synced) |
+| `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:357` | `22b9851d6ee0` -> `9d878106f0df` (**DRIFT**) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.attributes` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:653` | `0abe5cc94146` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.bg` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:641` | `c71e643b358e` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.drawToBuffer` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:881` | `cc59709beef9` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.fg` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:607` | `64fa5ad6d6bc` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getLineSources` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:514` | `698e3afeff66` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getSelectedText` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:852` | `efaf7dccd209` (synced) |
-| `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:864` | `35496c0888a5` (synced) |
+| `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:864` | `35496c0888a5` -> `863eb7ec0ae2` (**DRIFT**) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.hasSelection` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:858` | `8ce7d3c0be35` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.lineCount` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:520` | `7f182e24ec66` (synced) |
 | `core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.lineInfo` | `implemented` | `Sources/OpenTUIRenderables/TextBufferRenderable.swift:508` | `85221e40bb8d` (synced) |
@@ -2606,7 +4158,7 @@
 | `core/src/renderables/TextNode.ts#RootTextNodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:462` | `318f863fe32b` (synced) |
 | `core/src/renderables/TextNode.ts#RootTextNodeRenderable.requestRender` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:477` | `8cb73223ad92` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeOptions` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:8` | `04f407d6d8a8` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:96` | `ae2062b545ef` (synced) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:96` | `ae2062b545ef` -> `41c211c55687` (**DRIFT**) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.add` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:148` | `779b62d73530` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.attributes` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:435` | `b808f39fe392` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.bg` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:426` | `6557c7c25d24` (synced) |
@@ -2614,28 +4166,28 @@
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.clear` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:284` | `2599eb4d0d06` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.fg` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:417` | `9c25bfcc5e8d` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.findDescendantById` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:453` | `e943c9374693` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.fromNodes` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:370` | `119dbec36cea` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.fromString` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:363` | `854ccafbc00e` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.gatherWithInheritedStyle` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:305` | `53f9b76c43ae` (synced) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.fromNodes` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:370` | `119dbec36cea` -> `05ce43ce591f` (**DRIFT**) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.fromString` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:363` | `854ccafbc00e` -> `3998f613b91f` (**DRIFT**) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.gatherWithInheritedStyle` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:305` | `53f9b76c43ae` -> `553062aed4b4` (**DRIFT**) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.getChildren` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:387` | `5b1b20c7ac3e` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.getChildrenCount` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:392` | `8a7566b33e9b` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.getRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:397` | `b7cee78a2529` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.getRenderableIndex` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:407` | `8cf67ea66f3a` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.insertBefore` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:240` | `de6e6901706f` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.link` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:444` | `c805b823a293` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.mergeStyles` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:295` | `e4e7293f8c91` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.prepareWithInheritedStyle` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:311` | `59783afad212` (synced) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.link` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:444` | `c805b823a293` -> `771eda766bfa` (**DRIFT**) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.mergeStyles` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:295` | `e4e7293f8c91` -> `9c2f0e348e18` (**DRIFT**) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.prepareWithInheritedStyle` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:311` | `59783afad212` -> `2f4343971bbf` (**DRIFT**) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.remove` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:275` | `13abb5bb3480` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.replace` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:205` | `3e26674f23a8` (synced) |
 | `core/src/renderables/TextNode.ts#TextNodeRenderable.requestRender` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:137` | `10f8f8443481` (synced) |
-| `core/src/renderables/TextNode.ts#TextNodeRenderable.toChunks` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:382` | `2598faba73e9` (synced) |
+| `core/src/renderables/TextNode.ts#TextNodeRenderable.toChunks` | `implemented` | `Sources/OpenTUIRenderables/TextNodeRenderable.swift:382` | `2598faba73e9` -> `e8b2b47b6ead` (**DRIFT**) |
 | `core/src/renderables/TextTable.ts#TextTableCellContent` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:10` | `467e427cd44d` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableColumnAlignment` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:57` | `10d7d87fc309` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableColumnFitter` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:53` | `6d42e9400e96` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableColumnWidthMode` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:47` | `216142a6e5b7` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableContent` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:43` | `428286caa824` (synced) |
-| `core/src/renderables/TextTable.ts#TextTableOptions` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:61` | `d564d96df226` (synced) |
-| `core/src/renderables/TextTable.ts#TextTableRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:330` | `91d382843385` (synced) |
+| `core/src/renderables/TextTable.ts#TextTableOptions` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:61` | `d564d96df226` -> `100c17efdbe9` (**DRIFT**) |
+| `core/src/renderables/TextTable.ts#TextTableRenderable` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:330` | `91d382843385` -> `426e7ae9321a` (**DRIFT**) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.border` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:547` | `930506fbbaa4` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.borderColor` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:570` | `c0d1cecb90f6` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.borderStyle` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:560` | `89da544e8fa5` (synced) |
@@ -2649,7 +4201,7 @@
 | `core/src/renderables/TextTable.ts#TextTableRenderable.content` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:431` | `408050ecf9bb` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.fg` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:579` | `aaa4b7c66a42` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.getSelectedText` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:659` | `972d0562bb3e` (synced) |
-| `core/src/renderables/TextTable.ts#TextTableRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:647` | `f0518e9fd89f` (synced) |
+| `core/src/renderables/TextTable.ts#TextTableRenderable.getSelection` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:647` | `f0518e9fd89f` -> `c57818fbdab7` (**DRIFT**) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.hasSelection` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:635` | `54066dca1e0f` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.onSelectionChanged` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:615` | `436d110e9e04` (synced) |
 | `core/src/renderables/TextTable.ts#TextTableRenderable.outerBorder` | `implemented` | `Sources/OpenTUIRenderables/TextTableRenderable.swift:536` | `021eaab0aa11` (synced) |
@@ -2665,7 +4217,7 @@
 | `core/src/renderables/TimeToFirstDraw.ts#TimeToFirstDrawRenderable.runtimeMs` | `implemented` | `Sources/OpenTUIRenderables/TimeToFirstDrawRenderable.swift:160` | `7f8803365c46` (synced) |
 | `core/src/renderables/TimeToFirstDraw.ts#TimeToFirstDrawRenderable.textLabel` | `implemented` | `Sources/OpenTUIRenderables/TimeToFirstDrawRenderable.swift:184` | `56a8837515ce` (synced) |
 | `core/src/renderables/Video.ts#VideoMetadata` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:676` | `8f8698c22468` (synced) |
-| `core/src/renderables/Video.ts#VideoRenderable` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:805` | `ead091cd06e9` (synced) |
+| `core/src/renderables/Video.ts#VideoRenderable` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:805` | `ead091cd06e9` -> `ab792dceffd0` (**DRIFT**) |
 | `core/src/renderables/Video.ts#VideoRenderable.audio` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:995` | `cc338810a821` (synced) |
 | `core/src/renderables/Video.ts#VideoRenderable.autoplay` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:1053` | `caacd5f56405` (synced) |
 | `core/src/renderables/Video.ts#VideoRenderable.avSyncOffsetMs` | `implemented` | `Sources/OpenTUIRenderables/ImageAndVideoRenderables.swift:1026` | `b7ae16264241` (synced) |
@@ -2697,13 +4249,13 @@
 | `core/src/renderer-theme-mode.ts#RendererThemeMode` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:158` | `95b0cd62cce3` (synced) |
 | `core/src/renderer-theme-mode.ts#RendererThemeMode.cancelRefresh` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:288` | `99d2537534ec` (synced) |
 | `core/src/renderer-theme-mode.ts#RendererThemeMode.dispose` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:233` | `e8ae8a70402f` (synced) |
-| `core/src/renderer-theme-mode.ts#RendererThemeMode.handleSequence` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:253` | `ce4b12c8951b` (synced) |
+| `core/src/renderer-theme-mode.ts#RendererThemeMode.handleSequence` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:253` | `ce4b12c8951b` -> `c7f448d44625` (**DRIFT**) |
 | `core/src/renderer-theme-mode.ts#RendererThemeMode.resolveWaiters` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:240` | `22e51e9e60f0` (synced) |
 | `core/src/renderer-theme-mode.ts#RendererThemeMode.themeMode` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:187` | `efc3aee41ee9` (synced) |
 | `core/src/renderer-theme-mode.ts#RendererThemeMode.waitForThemeMode` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:220` | `217cb5f0716e` (synced) |
 | `core/src/renderer-theme-mode.ts#RendererThemeModeHost` | `implemented` | `Sources/OpenTUICore/ThemeMode.swift:9` | `ed3e266aba5a` (synced) |
 | `core/src/renderer.ts#buildKittyKeyboardFlags` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:38` | `5f9e03dd7f29` (synced) |
-| `core/src/renderer.ts#CliRenderer` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:317` | `ad9726ea50d0` (synced) |
+| `core/src/renderer.ts#CliRenderer` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:317` | `ad9726ea50d0` -> `81cb2c8321ec` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.addInputHandler` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1498` | `1d179714981e` (synced) |
 | `core/src/renderer.ts#CliRenderer.addPostProcessFn` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:958` | `5000158e68e6` (synced) |
 | `core/src/renderer.ts#CliRenderer.auto` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1152` | `aaef7391dbb5` (synced) |
@@ -2717,17 +4269,17 @@
 | `core/src/renderer.ts#CliRenderer.clearPostProcessFns` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:972` | `e36b284ed792` (synced) |
 | `core/src/renderer.ts#CliRenderer.clearSelection` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1976` | `7c6bc83f3cf8` (synced) |
 | `core/src/renderer.ts#CliRenderer.closed` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:962` | `8da6dfd5f30e` (synced) |
-| `core/src/renderer.ts#CliRenderer.configureDebugOverlay` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1330` | `41a5b6119c3b` (synced) |
+| `core/src/renderer.ts#CliRenderer.configureDebugOverlay` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1330` | `41a5b6119c3b` -> `f6409f02211e` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.console` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1021` | `e38e444a5e5d` (synced) |
 | `core/src/renderer.ts#CliRenderer.consoleMode` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:986` | `19a337866c2a` (synced) |
 | `core/src/renderer.ts#CliRenderer.controlState` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:650` | `48ac5bfd2195` (synced) |
 | `core/src/renderer.ts#CliRenderer.copyToClipboardOSC52` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1367` | `27edbcdc64a5` (synced) |
-| `core/src/renderer.ts#CliRenderer.createScrollbackSurface` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1163` | `75746783b8b3` (synced) |
+| `core/src/renderer.ts#CliRenderer.createScrollbackSurface` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1163` | `75746783b8b3` -> `a033eab1fb51` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.currentControlState` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1056` | `199959606930` (synced) |
 | `core/src/renderer.ts#CliRenderer.currentFocusedEditor` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:980` | `6846da017d7c` (synced) |
 | `core/src/renderer.ts#CliRenderer.currentFocusedRenderable` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:788` | `a6b39115c33f` (synced) |
 | `core/src/renderer.ts#CliRenderer.destroy` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:1215` | `071c4c2ff365` (synced) |
-| `core/src/renderer.ts#CliRenderer.disableKittyKeyboard` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:747` | `b66933512fe4` (synced) |
+| `core/src/renderer.ts#CliRenderer.disableKittyKeyboard` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:747` | `b66933512fe4` -> `b10dc2b54df8` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.dropLive` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1133` | `71024f905e29` (synced) |
 | `core/src/renderer.ts#CliRenderer.dumpHitGrid` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1393` | `9f14fa30da0d` (synced) |
 | `core/src/renderer.ts#CliRenderer.enableKittyKeyboard` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:738` | `60b9e808d6c9` (synced) |
@@ -2741,7 +4293,7 @@
 | `core/src/renderer.ts#CliRenderer.getLinkAt` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:918` | `9416fecbb04a` (synced) |
 | `core/src/renderer.ts#CliRenderer.getLinkIdAt` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:909` | `5076dbc0a0e8` (synced) |
 | `core/src/renderer.ts#CliRenderer.getNativeStats` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1459` | `066c89436789` (synced) |
-| `core/src/renderer.ts#CliRenderer.getPalette` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:932` | `539e36afd2c5` (synced) |
+| `core/src/renderer.ts#CliRenderer.getPalette` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:932` | `539e36afd2c5` -> `0df0b66643d8` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.getSchedulerState` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1078` | `b84ff85df12c` (synced) |
 | `core/src/renderer.ts#CliRenderer.getSelection` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1965` | `fe09fa2252a1` (synced) |
 | `core/src/renderer.ts#CliRenderer.getSelectionContainer` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1971` | `9735ff8408ae` (synced) |
@@ -2760,7 +4312,7 @@
 | `core/src/renderer.ts#CliRenderer.lastSceneTimeMs` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:956` | `627de62d58a4` (synced) |
 | `core/src/renderer.ts#CliRenderer.liveRequestCount` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:715` | `8f2667a7cd05` (synced) |
 | `core/src/renderer.ts#CliRenderer.maxFps` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:689` | `0b796274dee6` (synced) |
-| `core/src/renderer.ts#CliRenderer.onAnimationTick` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1005` | `44f2e4b06acb` (synced) |
+| `core/src/renderer.ts#CliRenderer.onAnimationTick` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1005` | `44f2e4b06acb` -> `abedb9da4e85` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.paletteDetectionStatus` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1497` | `8f7e5ef7cde7` (synced) |
 | `core/src/renderer.ts#CliRenderer.pause` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1167` | `de444aae67b7` (synced) |
 | `core/src/renderer.ts#CliRenderer.prependInputHandler` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1507` | `cda456067cd8` (synced) |
@@ -2773,7 +4325,7 @@
 | `core/src/renderer.ts#CliRenderer.requestRender` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:1109` | `2d715cff57e8` (synced) |
 | `core/src/renderer.ts#CliRenderer.requestResize` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1411` | `a89e6c2e20bc` (synced) |
 | `core/src/renderer.ts#CliRenderer.requestSelectionUpdate` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:2065` | `f1f5a852ea6a` (synced) |
-| `core/src/renderer.ts#CliRenderer.resetSplitFooterForReplay` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1237` | `d4f1950d3c3d` (synced) |
+| `core/src/renderer.ts#CliRenderer.resetSplitFooterForReplay` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1237` | `d4f1950d3c3d` -> `1f51fb96081e` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.resetStats` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:2171` | `87f448a8eeba` (synced) |
 | `core/src/renderer.ts#CliRenderer.resetTerminalBgColor` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1352` | `f3bb0eb98059` (synced) |
 | `core/src/renderer.ts#CliRenderer.resize` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:1430` | `2483c242dd29` (synced) |
@@ -2803,22 +4355,22 @@
 | `core/src/renderer.ts#CliRenderer.toggleDebugOverlay` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1314` | `d667ddc8d36f` (synced) |
 | `core/src/renderer.ts#CliRenderer.triggerNotification` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1115` | `57b26dec6570` (synced) |
 | `core/src/renderer.ts#CliRenderer.unregisterLifecyclePass` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:776` | `acc385e40d39` (synced) |
-| `core/src/renderer.ts#CliRenderer.updateSelection` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:2030` | `0ddcb8ce5527` (synced) |
+| `core/src/renderer.ts#CliRenderer.updateSelection` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:2030` | `0ddcb8ce5527` -> `a95ac9d857b7` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.useKittyKeyboard` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:721` | `07dbbef5d5c0` (synced) |
 | `core/src/renderer.ts#CliRenderer.useMouse` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:699` | `9984dc8ff1c8` (synced) |
-| `core/src/renderer.ts#CliRenderer.waitForThemeMode` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:756` | `3a9386de6924` (synced) |
+| `core/src/renderer.ts#CliRenderer.waitForThemeMode` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:756` | `3a9386de6924` -> `024923693e16` (**DRIFT**) |
 | `core/src/renderer.ts#CliRenderer.widthMethod` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:671` | `77ccf80f9bba` (synced) |
 | `core/src/renderer.ts#CliRenderer.writeToScrollback` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:1177` | `b7d2e06b4f5d` (synced) |
-| `core/src/renderer.ts#CliRendererConfig` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:223` | `7f83fac3b9b1` (synced) |
+| `core/src/renderer.ts#CliRendererConfig` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:223` | `7f83fac3b9b1` -> `223b13c7f64c` (**DRIFT**) |
 | `core/src/renderer.ts#CliRendererErrorEvent` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:490` | `398c90129e29` (synced) |
 | `core/src/renderer.ts#CliRendererExternalOutputEvent` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:455` | `7f79766af46a` (synced) |
-| `core/src/renderer.ts#CliRendererFrameDroppedEvent` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:502` | `52425f5371bb` (synced) |
+| `core/src/renderer.ts#CliRendererFrameDroppedEvent` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:502` | `52425f5371bb` -> `85b5f6e20e12` (**DRIFT**) |
 | `core/src/renderer.ts#CliRendererFrameEvent` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:176` | `c516a750a891` (synced) |
 | `core/src/renderer.ts#CliRendererHandlerErrorEvent` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:514` | `910a95433e04` (synced) |
 | `core/src/renderer.ts#CliRendererStats` | `adapted` | `Sources/OpenTUIRenderables/CliRenderer.swift:185` | `6beeae868a2d` (synced) |
 | `core/src/renderer.ts#CliRenderEvents` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:132` | `d95828021a43` (synced) |
 | `core/src/renderer.ts#ConsoleMode` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:126` | `7ac2382108ab` (synced) |
-| `core/src/renderer.ts#createCliRenderer` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:945` | `39b4f67a1582` (synced) |
+| `core/src/renderer.ts#createCliRenderer` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:945` | `39b4f67a1582` -> `1b13a3fa6ffe` (**DRIFT**) |
 | `core/src/renderer.ts#ExternalOutputMode` | `implemented` | `Sources/OpenTUIRenderables/CliRenderer.swift:120` | `bb34026d0960` (synced) |
 | `core/src/renderer.ts#KittyImageTransport` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:390` | `2fc9d49fdd7e` (synced) |
 | `core/src/renderer.ts#KittyImageTransportStatus` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:428` | `68875d232aa9` (synced) |
@@ -2840,8 +4392,8 @@
 | `core/src/renderer.ts#ScrollbackSurfaceOptions` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:576` | `256ca61ccebe` (synced) |
 | `core/src/renderer.ts#ScrollbackWriter` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:572` | `e6882f4aa1bb` (synced) |
 | `core/src/renderer.ts#SplitFooterReplayResetOptions` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:623` | `636a0db7151a` (synced) |
-| `core/src/runtime-plugin-support-configure.ts#ensureRuntimePluginSupport` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1514` | `cccda11e850d` (synced) |
-| `core/src/runtime-plugin.ts#createRuntimePlugin` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1421` | `4b166f960afa` (synced) |
+| `core/src/runtime-plugin-support-configure.ts#ensureRuntimePluginSupport` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1514` | `cccda11e850d` -> `21f67016a16b` (**DRIFT**) |
+| `core/src/runtime-plugin.ts#createRuntimePlugin` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1421` | `4b166f960afa` -> `8e8055cbc45a` (**DRIFT**) |
 | `core/src/runtime-plugin.ts#CreateRuntimePluginOptions` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1322` | `21fe23200029` (synced) |
 | `core/src/runtime-plugin.ts#isCoreRuntimeModuleSpecifier` | `implemented` | `Sources/OpenTUIRenderables/PluginSystem.swift:1343` | `414ca4553522` (synced) |
 | `core/src/runtime-plugin.ts#RuntimeModuleEntry` | `adapted` | `Sources/OpenTUIRenderables/PluginSystem.swift:1264` | `2abb3bf642cc` (synced) |
@@ -2855,7 +4407,7 @@
 | `core/src/syntax-style.ts#MergedStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:104` | `5bf48178322b` (synced) |
 | `core/src/syntax-style.ts#StyleDefinition` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:14` | `dd42cabeb722` (synced) |
 | `core/src/syntax-style.ts#StyleDefinitionInput` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:44` | `5ce564a99f91` (synced) |
-| `core/src/syntax-style.ts#SyntaxStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:185` | `912dde32dddf` (synced) |
+| `core/src/syntax-style.ts#SyntaxStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:185` | `912dde32dddf` -> `3cc8d85db367` (**DRIFT**) |
 | `core/src/syntax-style.ts#SyntaxStyle.clearCache` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:372` | `68e1be4f7212` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.clearNameCache` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:301` | `f13b59e070ad` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.create` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:200` | `4bd51880dec9` (synced) |
@@ -2865,20 +4417,20 @@
 | `core/src/syntax-style.ts#SyntaxStyle.getAllStyles` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:384` | `0a73279a768c` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.getCacheSize` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:378` | `ed4d07ac35cb` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.getRegisteredNames` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:390` | `6cf7ced7fcc2` (synced) |
-| `core/src/syntax-style.ts#SyntaxStyle.getStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:310` | `e2b968f912cd` (synced) |
+| `core/src/syntax-style.ts#SyntaxStyle.getStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:310` | `e2b968f912cd` -> `f499bc4e1981` (**DRIFT**) |
 | `core/src/syntax-style.ts#SyntaxStyle.getStyleCount` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:295` | `8aa8951f203b` (synced) |
-| `core/src/syntax-style.ts#SyntaxStyle.getStyleId` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:273` | `8c43dcac2c6a` (synced) |
+| `core/src/syntax-style.ts#SyntaxStyle.getStyleId` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:273` | `8c43dcac2c6a` -> `9297a3e25979` (**DRIFT**) |
 | `core/src/syntax-style.ts#SyntaxStyle.mergeStyles` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:336` | `c93daa70930f` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.registerStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:228` | `0f7907d9fabb` (synced) |
 | `core/src/syntax-style.ts#SyntaxStyle.resolveStyleId` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:258` | `739850acd8e5` (synced) |
 | `core/src/syntax-style.ts#ThemeTokenStyle` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:118` | `df9f4138f89f` (synced) |
-| `core/src/text-buffer-view.ts#TextBufferView` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:629` | `bbf6e0f36648` (synced) |
+| `core/src/text-buffer-view.ts#TextBufferView` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:629` | `bbf6e0f36648` -> `98e8adbe6035` (**DRIFT**) |
 | `core/src/text-buffer-view.ts#TextBufferView.create` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:659` | `e29d44e3ab1f` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.destroy` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1423` | `35d0b974f3bb` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.getLineSources` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1353` | `9f83e7432b5f` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.getPlainText` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1370` | `d7dfd3d3167a` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.getSelectedText` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1363` | `db3e11c8f6e4` (synced) |
-| `core/src/text-buffer-view.ts#TextBufferView.getSelection` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:999` | `f0518e9fd89f` (synced) |
+| `core/src/text-buffer-view.ts#TextBufferView.getSelection` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:999` | `f0518e9fd89f` -> `bdae3319204d` (**DRIFT**) |
 | `core/src/text-buffer-view.ts#TextBufferView.getSelectionOccupancy` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1065` | `ed667d771157` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.getVirtualLineCount` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1416` | `6251542d4055` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.hasSelection` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1005` | `997ec38633e4` (synced) |
@@ -2902,7 +4454,7 @@
 | `core/src/text-buffer-view.ts#TextBufferView.setWrapWidth` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1250` | `4c9f9b06a601` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.updateLocalSelection` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:1029` | `e01fde848e20` (synced) |
 | `core/src/text-buffer-view.ts#TextBufferView.updateSelection` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:984` | `bd5b8bf5b15b` (synced) |
-| `core/src/text-buffer.ts#TextBuffer` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:154` | `c50d503e2c9a` (synced) |
+| `core/src/text-buffer.ts#TextBuffer` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:154` | `c50d503e2c9a` -> `8bac2449569d` (**DRIFT**) |
 | `core/src/text-buffer.ts#TextBuffer.addHighlight` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:515` | `a0da54ba434d` (synced) |
 | `core/src/text-buffer.ts#TextBuffer.addHighlightByCharRange` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:486` | `98e4d276f24c` (synced) |
 | `core/src/text-buffer.ts#TextBuffer.append` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:227` | `b0a28e4681e2` (synced) |
@@ -2948,8 +4500,8 @@
 | `core/src/types.ts#ImageRenderProtocol` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:104` | `f15bc27e4eda` (synced) |
 | `core/src/types.ts#LineInfo` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:26` | `df0a6f0e79a1` (synced) |
 | `core/src/types.ts#LineInfoProvider` | `implemented` | `Sources/OpenTUICore/TextBuffer.swift:55` | `31c950668d37` (synced) |
-| `core/src/types.ts#MousePointerStyle` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:27` | `2ed771e0d677` (synced) |
-| `core/src/types.ts#ProgramStatus` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:38` | `b22154cfe8e4` (synced) |
+| `core/src/types.ts#MousePointerStyle` | `implemented` | `Sources/OpenTUIRenderables/Renderable.swift:27` | `2ed771e0d677` -> `ff367afca416` (**DRIFT**) |
+| `core/src/types.ts#ProgramStatus` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:38` | `b22154cfe8e4` -> `adc250b7d01d` (**DRIFT**) |
 | `core/src/types.ts#ProgramStatusKind` | `implemented` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:32` | `234ce067b524` (synced) |
 | `core/src/types.ts#RenderContext` | `adapted` | `Sources/OpenTUIRenderables/Renderable.swift:238` | `03b893678b3c` (synced) |
 | `core/src/types.ts#RendererEvents` | `adapted` | `Sources/OpenTUIRenderables/RendererRenderableCompletions.swift:79` | `0441db3514fd` (synced) |
@@ -2966,7 +4518,7 @@
 | `core/src/types.ts#ViewportBounds` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:49` | `73c3364c8cfa` (synced) |
 | `core/src/types.ts#WidthMethod` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:37` | `b6b7f38f83d3` (synced) |
 | `core/src/utils.ts#attributesWithLink` | `implemented` | `Sources/OpenTUICore/TextAttributes.swift:48` | `3ab0e95bea99` (synced) |
-| `core/src/utils.ts#createTextAttributes` | `implemented` | `Sources/OpenTUICore/TextAttributes.swift:24` | `90f14a365137` (synced) |
+| `core/src/utils.ts#createTextAttributes` | `implemented` | `Sources/OpenTUICore/TextAttributes.swift:24` | `90f14a365137` -> `9ae5fcfa148d` (**DRIFT**) |
 | `core/src/utils.ts#getLinkId` | `implemented` | `Sources/OpenTUICore/TextAttributes.swift:55` | `f5d2e6b3516e` (synced) |
 | `core/src/utils.ts#visualizeRenderableTree` | `implemented` | `Sources/OpenTUICore/CoreParityCompletions.swift:1631` | `99325e3ca672` (synced) |
 | `core/src/yoga.internal.ts#parseYogaValue` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:470` | `05bba9a2d4bb` (synced) |
@@ -2984,7 +4536,7 @@
 | `core/src/yoga.internal.ts#YogaEnumKindId` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:411` | `40dcd2475c1e` (synced) |
 | `core/src/yoga.internal.ts#YogaFloatKind` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:388` | `dfa475e7aca4` (synced) |
 | `core/src/yoga.internal.ts#YogaFloatKindId` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:414` | `1781427693ac` (synced) |
-| `core/src/yoga.internal.ts#YogaHost` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:628` | `ff8eb7b2db45` (synced) |
+| `core/src/yoga.internal.ts#YogaHost` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:628` | `ff8eb7b2db45` -> `9942af05bc75` (**DRIFT**) |
 | `core/src/yoga.internal.ts#YogaHost.assertMutable` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:663` | `b0dd4a51c479` (synced) |
 | `core/src/yoga.internal.ts#YogaHost.dispose` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:750` | `d8e0d3d1a95e` (synced) |
 | `core/src/yoga.internal.ts#YogaHost.flushSceneMutations` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:684` | `960343523083` (synced) |
@@ -2994,7 +4546,7 @@
 | `core/src/yoga.internal.ts#YogaHost.invokeCallback` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:701` | `208220f68c48` (synced) |
 | `core/src/yoga.internal.ts#YogaHost.runMutation` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:715` | `3adf4b81e1fb` (synced) |
 | `core/src/yoga.internal.ts#YogaHost.stageScene` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:674` | `087b15d17488` (synced) |
-| `core/src/yoga.internal.ts#YogaHost.throwCallbackError` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:731` | `b72729d528aa` (synced) |
+| `core/src/yoga.internal.ts#YogaHost.throwCallbackError` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:731` | `b72729d528aa` -> `5d1f85c73a2e` (**DRIFT**) |
 | `core/src/yoga.internal.ts#YogaValueKind` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:396` | `7244b9f37813` (synced) |
 | `core/src/yoga.internal.ts#YogaValueKindId` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:417` | `e1bbf2b2075e` (synced) |
 | `core/src/yoga.ts#Align` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:3` | `1c7db59d4a60` (synced) |
@@ -3010,7 +4562,7 @@
 | `core/src/yoga.ts#BOX_SIZING_BORDER_BOX` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:62` | `c4cd30a44799` (synced) |
 | `core/src/yoga.ts#BOX_SIZING_CONTENT_BOX` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:64` | `1118cbe9eb14` (synced) |
 | `core/src/yoga.ts#BoxSizing` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:16` | `c4bb6d531282` (synced) |
-| `core/src/yoga.ts#Config` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:768` | `e288493c1b02` (synced) |
+| `core/src/yoga.ts#Config` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:768` | `e288493c1b02` -> `05b741fdb293` (**DRIFT**) |
 | `core/src/yoga.ts#Config.assertAlive` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:836` | `71f47c41c9c0` (synced) |
 | `core/src/yoga.ts#Config.assertUnused` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:825` | `f2a26d07d4fe` (synced) |
 | `core/src/yoga.ts#Config.create` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:794` | `19d67d10933b` (synced) |
@@ -3086,7 +4638,7 @@
 | `core/src/yoga.ts#MEASURE_MODE_UNDEFINED` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:163` | `58b7c353be7f` (synced) |
 | `core/src/yoga.ts#MeasureFunction` | `adapted` | `Sources/OpenTUILayout/FlexNode.swift:108` | `3dab18ed23b6` (synced) |
 | `core/src/yoga.ts#MeasureMode` | `implemented` | `Sources/OpenTUILayout/YogaOptions.swift:115` | `4c42bcb18a66` (synced) |
-| `core/src/yoga.ts#Node` | `adapted` | `Sources/OpenTUILayout/FlexNode.swift:118` | `6e196f262b13` (synced) |
+| `core/src/yoga.ts#Node` | `adapted` | `Sources/OpenTUILayout/FlexNode.swift:118` | `6e196f262b13` -> `c41dbe875476` (**DRIFT**) |
 | `core/src/yoga.ts#NODE_TYPE_DEFAULT` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:170` | `7cfafda65d9c` (synced) |
 | `core/src/yoga.ts#NODE_TYPE_TEXT` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:172` | `72840d2d3e7a` (synced) |
 | `core/src/yoga.ts#Node.assertMutable` | `implemented` | `Sources/OpenTUILayout/YogaCompat.swift:983` | `986c77a7f0d4` (synced) |
@@ -3227,16 +4779,16 @@
 | `core/src/zig-structs.ts#AllocatorStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4447` | `c62c7868dc35` (synced) |
 | `core/src/zig-structs.ts#AudioCaptureStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5388` | `13d3ad48428b` (synced) |
 | `core/src/zig-structs.ts#AudioCreateOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4830` | `589b849a49e7` (synced) |
-| `core/src/zig-structs.ts#AudioCreateOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5324` | `41233f08cc97` (synced) |
+| `core/src/zig-structs.ts#AudioCreateOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5324` | `41233f08cc97` -> `d5668c633849` (**DRIFT**) |
 | `core/src/zig-structs.ts#AudioStartOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4861` | `bf19b69b5e36` (synced) |
-| `core/src/zig-structs.ts#AudioStartOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5329` | `9a27f8f9e369` (synced) |
+| `core/src/zig-structs.ts#AudioStartOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5329` | `9a27f8f9e369` -> `949f2ec0b9cc` (**DRIFT**) |
 | `core/src/zig-structs.ts#AudioStats` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5188` | `d91311cef151` (synced) |
 | `core/src/zig-structs.ts#AudioStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5401` | `0236591b64c3` (synced) |
 | `core/src/zig-structs.ts#AudioStreamCreateOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5006` | `bffb896b09bd` (synced) |
-| `core/src/zig-structs.ts#AudioStreamCreateOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5355` | `689cf8068e57` (synced) |
+| `core/src/zig-structs.ts#AudioStreamCreateOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5355` | `689cf8068e57` -> `f5cb66526271` (**DRIFT**) |
 | `core/src/zig-structs.ts#AudioStreamStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5371` | `4487b688e458` (synced) |
 | `core/src/zig-structs.ts#AudioVoiceOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4960` | `374163bc77aa` (synced) |
-| `core/src/zig-structs.ts#AudioVoiceOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5350` | `dc3add80e3db` (synced) |
+| `core/src/zig-structs.ts#AudioVoiceOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5350` | `dc3add80e3db` -> `5968b37f97cf` (**DRIFT**) |
 | `core/src/zig-structs.ts#BuildOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4365` | `20cd46766a92` (synced) |
 | `core/src/zig-structs.ts#BuildOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4393` | `12d99bb07dc3` (synced) |
 | `core/src/zig-structs.ts#GrowthPolicy` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4564` | `8d39e4734590` (synced) |
@@ -3244,21 +4796,21 @@
 | `core/src/zig-structs.ts#NativeAudioStreamCloseReason` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5181` | `aa422eae36ab` (synced) |
 | `core/src/zig-structs.ts#NativeAudioStreamFormat` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4999` | `fb8d03c92326` (synced) |
 | `core/src/zig-structs.ts#NativeAudioStreamState` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5159` | `e1212c4c337e` (synced) |
-| `core/src/zig-structs.ts#NativeAudioStreamStateNames` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5170` | `809a07ce2945` (synced) |
+| `core/src/zig-structs.ts#NativeAudioStreamStateNames` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5170` | `809a07ce2945` -> `eed1f6f4c1eb` (**DRIFT**) |
 | `core/src/zig-structs.ts#NativeAudioStreamStats` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:5080` | `3308a823ad62` (synced) |
 | `core/src/zig-structs.ts#NativeFrameWork` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4458` | `4a6a1283adf3` (synced) |
 | `core/src/zig-structs.ts#NativeImageInfo` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4301` | `eba31d65eed1` (synced) |
 | `core/src/zig-structs.ts#NativeRenderStats` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4532` | `655d2e8ddf5f` (synced) |
 | `core/src/zig-structs.ts#NativeSpanFeedOptions` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4567` | `ed24741bf5c9` (synced) |
-| `core/src/zig-structs.ts#NativeSpanFeedOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4795` | `3fd53deb7e63` (synced) |
+| `core/src/zig-structs.ts#NativeSpanFeedOptionsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4795` | `3fd53deb7e63` -> `71c3ad8183f0` (**DRIFT**) |
 | `core/src/zig-structs.ts#NativeSpanFeedStats` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4643` | `d70555e40470` (synced) |
-| `core/src/zig-structs.ts#NativeSpanFeedStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4807` | `affdd18fde20` (synced) |
+| `core/src/zig-structs.ts#NativeSpanFeedStatsStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4807` | `affdd18fde20` -> `2462f3465897` (**DRIFT**) |
 | `core/src/zig-structs.ts#ReserveInfo` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4763` | `162adbbb7b8b` (synced) |
-| `core/src/zig-structs.ts#ReserveInfoStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4825` | `d5db49c14f6a` (synced) |
+| `core/src/zig-structs.ts#ReserveInfoStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4825` | `d5db49c14f6a` -> `1ecf6248be66` (**DRIFT**) |
 | `core/src/zig-structs.ts#SpanInfo` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4709` | `690ee127dc4f` (synced) |
-| `core/src/zig-structs.ts#SpanInfoStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4820` | `59b0946653dc` (synced) |
+| `core/src/zig-structs.ts#SpanInfoStruct` | `implemented` | `Sources/OpenTUICore/NativeABI.swift:4820` | `59b0946653dc` -> `19bb7c1f8e1a` (**DRIFT**) |
 | `core/src/zig.ts#AudioEngineHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1329` | `b9014ba0c291` (synced) |
-| `core/src/zig.ts#AudioEngineLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2118` | `9519c30c72f1` (synced) |
+| `core/src/zig.ts#AudioEngineLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2118` | `9519c30c72f1` -> `a941b86a6f4d` (**DRIFT**) |
 | `core/src/zig.ts#ClipboardOperationHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1341` | `34f05c965256` (synced) |
 | `core/src/zig.ts#ClipboardServiceHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1338` | `a5d270304927` (synced) |
 | `core/src/zig.ts#ContextBufferHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:94` | `b34be3d52e26` (synced) |
@@ -3278,18 +4830,18 @@
 | `core/src/zig.ts#EmbeddedTerminalKey` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1404` | `41f8a85873bc` (synced) |
 | `core/src/zig.ts#EmbeddedTerminalMouse` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1433` | `965e9b1ae86d` (synced) |
 | `core/src/zig.ts#emptySceneScrollState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1021` | `e455cbcb87e2` (synced) |
-| `core/src/zig.ts#FFIRenderLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2156` | `81bbe65ecfdf` (synced) |
+| `core/src/zig.ts#FFIRenderLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2156` | `81bbe65ecfdf` -> `f6456a66d8ab` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.attachNativeSpanFeed` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7547` | `1f54bda2f224` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioClearCaptureDeviceSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7294` | `0b3afbb752cf` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioClearPlaybackDeviceSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7256` | `eef63b460d98` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioCloseStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7428` | `021ea84006de` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioCreateGroup` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7480` | `194cc4904f08` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioCreateStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7348` | `29edf671c4b1` (synced) |
+| `core/src/zig.ts#FFIRenderLib.audioCloseStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7428` | `021ea84006de` -> `b1427ee702b2` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.audioCreateGroup` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7480` | `194cc4904f08` -> `2143b7330179` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.audioCreateStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7348` | `29edf671c4b1` -> `28c115967f4c` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.audioEnableTap` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7500` | `5447a785e158` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioEndStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7374` | `9144f49d8233` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioGetCaptureDeviceCount` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7266` | `98353458de99` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioGetCaptureDeviceName` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7271` | `20740d0837da` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioGetCaptureStats` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7322` | `c88eda7713ca` (synced) |
+| `core/src/zig.ts#FFIRenderLib.audioGetCaptureStats` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7322` | `c88eda7713ca` -> `fe7ef2256353` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.audioGetPlaybackDeviceCount` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7228` | `4eaae8e9ad38` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioGetPlaybackDeviceName` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7233` | `1be31d8f0085` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioGetStats` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7514` | `d73e05ffb565` (synced) |
@@ -3297,11 +4849,11 @@
 | `core/src/zig.ts#FFIRenderLib.audioIsCaptureDeviceDefault` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7280` | `0e3bce983742` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioIsCaptureRunning` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7312` | `a5135338bdcd` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioIsPlaybackDeviceDefault` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7242` | `9330ed06b043` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioLoad` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7440` | `d9c2f8b7439c` (synced) |
+| `core/src/zig.ts#FFIRenderLib.audioLoad` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7440` | `d9c2f8b7439c` -> `8252de396e7e` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.audioMixToBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7495` | `8811e7eb4d8a` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioPlay` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7453` | `07b0c37766c9` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioReadCapture` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7317` | `3cbf0d114abf` (synced) |
-| `core/src/zig.ts#FFIRenderLib.audioReadTap` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7505` | `77284174d7f6` (synced) |
+| `core/src/zig.ts#FFIRenderLib.audioPlay` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7453` | `07b0c37766c9` -> `6ea63053b9fd` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.audioReadCapture` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7317` | `3cbf0d114abf` -> `a319852b6566` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.audioReadTap` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7505` | `77284174d7f6` -> `d05133a400d6` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.audioRefreshCaptureDevices` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7261` | `38e252d65d33` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioRefreshPlaybackDevices` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7223` | `cf2bc2aca2fd` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioRestartStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7384` | `9ab78127f189` (synced) |
@@ -3321,39 +4873,39 @@
 | `core/src/zig.ts#FFIRenderLib.audioStopVoice` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7470` | `f32aa431332c` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioUnload` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7448` | `796f65075871` (synced) |
 | `core/src/zig.ts#FFIRenderLib.audioWriteStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7359` | `566cef3e6f89` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardClearOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6588` | `cee5f1f16727` (synced) |
+| `core/src/zig.ts#FFIRenderLib.clipboardClearOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6588` | `cee5f1f16727` -> `2f98220b4a1d` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationCancel` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6621` | `261774f228b4` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationDestroy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6700` | `c5526d92fbf4` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationPoll` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6614` | `06e6905fced0` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDataCopy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6660` | `14ef8f26196c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDataLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6653` | `3eddf2948b6d` (synced) |
+| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDataLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6653` | `3eddf2948b6d` -> `d511064a8912` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDiagnosticCopy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6687` | `caae0ba15672` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDiagnosticLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6680` | `d826a8f0b4ab` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultErrorCode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6673` | `27ad72b8f3fb` (synced) |
+| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultDiagnosticLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6680` | `d826a8f0b4ab` -> `eb58e95aaeb7` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultErrorCode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6673` | `27ad72b8f3fb` -> `b9ed476a61b2` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.clipboardOperationResultMimeCopy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6640` | `1e36490728c7` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultMimeLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6633` | `3aae01154c1d` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardReadOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6542` | `4502697b7d2a` (synced) |
+| `core/src/zig.ts#FFIRenderLib.clipboardOperationResultMimeLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6633` | `3aae01154c1d` -> `b007a2b85cf6` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.clipboardReadOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6542` | `4502697b7d2a` -> `6d20a8f103b7` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.clipboardServiceBeginShutdown` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6504` | `9c8905f199a1` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardServiceCreate` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6494` | `b1ce427dfeb4` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardServiceDestroy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6521` | `4d5d82ae391a` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardServiceDrain` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6534` | `88bc040c3df8` (synced) |
 | `core/src/zig.ts#FFIRenderLib.clipboardServicePollShutdown` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6513` | `037f872ac19f` (synced) |
-| `core/src/zig.ts#FFIRenderLib.clipboardWriteOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6565` | `2b066108925a` (synced) |
+| `core/src/zig.ts#FFIRenderLib.clipboardWriteOperationStart` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6565` | `2b066108925a` -> `89d295062ede` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextAcquireBufferLease` | `adapted` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2635` | `3311e3fa70cf` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextBufferDrawUnicode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2307` | `f2ed6a7bf966` (synced) |
+| `core/src/zig.ts#FFIRenderLib.contextBufferDrawUnicode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2307` | `f2ed6a7bf966` -> `cd5d8cafb2af` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextBufferLeaseGetRealCharSize` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2690` | `d32ef53ac8f6` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextBufferLeaseWriteResolvedChars` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2708` | `08541985f19e` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextBufferStack` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2459` | `fd10db44770c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextColorMatrixBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2596` | `3eb0aa30495d` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2390` | `a2bf6ef5b8cb` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawEditorView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2749` | `457956d1e8a2` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawGrayscaleBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2554` | `32d304aeacaf` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawGrid` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2489` | `0abc429ba017` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawImage` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2790` | `8a1bac171a79` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawPackedBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2517` | `7de4d01f1ec0` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawSceneBody` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2773` | `82e305d8cba1` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawSuperSampleBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2542` | `eade1536550c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextDrawTextBufferView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2726` | `70bba5bb692c` (synced) |
+| `core/src/zig.ts#FFIRenderLib.contextBufferStack` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2459` | `fd10db44770c` -> `44af7af87a73` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextColorMatrixBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2596` | `3eb0aa30495d` -> `92d35fe6700d` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2390` | `a2bf6ef5b8cb` -> `044f2e35e42c` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawEditorView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2749` | `457956d1e8a2` -> `f22f1ae470fb` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawGrayscaleBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2554` | `32d304aeacaf` -> `fd57064f8129` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawGrid` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2489` | `0abc429ba017` -> `716935e58622` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawImage` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2790` | `8a1bac171a79` -> `488b54d01059` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawPackedBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2517` | `7de4d01f1ec0` -> `66e2f62447c0` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawSceneBody` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2773` | `82e305d8cba1` -> `5274fff34d3f` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawSuperSampleBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2542` | `eade1536550c` -> `f9df6c0201e6` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextDrawTextBufferView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2726` | `70bba5bb692c` -> `cc8ce896ff76` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextEditBufferCommand` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3981` | `d8c8178f309d` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEditBufferConvertOffset` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4097` | `282db6e97ad7` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEditBufferDeleteRange` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3891` | `101ac2a365a5` (synced) |
@@ -3388,7 +4940,7 @@
 | `core/src/zig.ts#FFIRenderLib.contextEditorViewSetTabColor` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4403` | `54f4fc855ece` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEditorViewSetViewport` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4313` | `23a3b3d6e8a4` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalClearSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2951` | `133280d0e98f` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalCompose` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3012` | `4b951d0c40cf` (synced) |
+| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalCompose` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3012` | `4b951d0c40cf` -> `0743a0493aa9` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalCursor` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3035` | `aac949ca2ecc` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalDrainResponses` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3153` | `761f8724fcc1` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalEncodeFocus` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3138` | `eda173533cb3` (synced) |
@@ -3399,8 +4951,8 @@
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalInvalidate` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2921` | `53b0fad1624a` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalResize` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2901` | `feb9c3230b2e` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalScroll` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2935` | `e1fddc2cf4e5` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalScrollbar` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3055` | `fecc5f02a889` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalSetSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2980` | `8820edbcfef0` (synced) |
+| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalScrollbar` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3055` | `fecc5f02a889` -> `ade95854bee3` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalSetSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2980` | `8820edbcfef0` -> `a8403b7d9c91` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalSetTransparentBackground` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2965` | `3be61a4c8e05` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalWrite` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2886` | `35401c99291c` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextGetLinkUrl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2270` | `f6d1392a6ca8` (synced) |
@@ -3417,7 +4969,7 @@
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferGetRange` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3399` | `51b11247f497` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferGetText` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3385` | `f393596e03b5` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferHighlight` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3467` | `bb0c6fb83b3d` (synced) |
-| `core/src/zig.ts#FFIRenderLib.contextTextBufferReplaceStyledBatch` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3338` | `15f0e7876754` (synced) |
+| `core/src/zig.ts#FFIRenderLib.contextTextBufferReplaceStyledBatch` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3338` | `15f0e7876754` -> `0c2ae93e4823` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferSetDefaults` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3415` | `363183e6a9c8` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferSetEncodedStyledText` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3317` | `cbee1de0830f` (synced) |
 | `core/src/zig.ts#FFIRenderLib.contextTextBufferSetLayer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3513` | `a19ebeffb9da` (synced) |
@@ -3439,11 +4991,11 @@
 | `core/src/zig.ts#FFIRenderLib.createAudioEngine` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7200` | `77a450615b29` (synced) |
 | `core/src/zig.ts#FFIRenderLib.createContext` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2241` | `c12bdf21ebbb` (synced) |
 | `core/src/zig.ts#FFIRenderLib.createContextBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2328` | `74b5bb9a02c0` (synced) |
-| `core/src/zig.ts#FFIRenderLib.createContextEditBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3756` | `85f2f1af9951` (synced) |
+| `core/src/zig.ts#FFIRenderLib.createContextEditBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3756` | `85f2f1af9951` -> `7e2331a6f8aa` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.createContextEditorView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3780` | `26e324403239` (synced) |
-| `core/src/zig.ts#FFIRenderLib.createContextEmbeddedTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2856` | `25c132351b71` (synced) |
+| `core/src/zig.ts#FFIRenderLib.createContextEmbeddedTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2856` | `25c132351b71` -> `84892271ec48` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.createContextSyntaxStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3809` | `fb753c2e5cfa` (synced) |
-| `core/src/zig.ts#FFIRenderLib.createContextTextBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3171` | `d06090bcdb82` (synced) |
+| `core/src/zig.ts#FFIRenderLib.createContextTextBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3171` | `d06090bcdb82` -> `8d40952280f0` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.createContextTextBufferView` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:3195` | `be4d5f755623` (synced) |
 | `core/src/zig.ts#FFIRenderLib.createContextUnicode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2278` | `ce84bd009fd3` (synced) |
 | `core/src/zig.ts#FFIRenderLib.createEditorSelectionRecord` | `adapted` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2219` | `01f6b26d3ef2` (synced) |
@@ -3472,26 +5024,26 @@
 | `core/src/zig.ts#FFIRenderLib.getBuildOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7178` | `d8b67114fde3` (synced) |
 | `core/src/zig.ts#FFIRenderLib.getContextUnicode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2288` | `b65a0587dfec` (synced) |
 | `core/src/zig.ts#FFIRenderLib.getYogaHost` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6716` | `35650e272171` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageClone` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7846` | `cc010e2264a4` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageComposite` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7955` | `02a721fc74a4` (synced) |
+| `core/src/zig.ts#FFIRenderLib.imageClone` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7846` | `cc010e2264a4` -> `72e21472bf73` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageComposite` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7955` | `02a721fc74a4` -> `72a4cc9ee498` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.imageCopyPixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7860` | `b72cd5eae553` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageCopyPng` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7807` | `bfccaef6e446` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageCreateFromPixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7701` | `dc2a8c3d1112` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageCreateFromRgba` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7684` | `776adfd45863` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageDecode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7673` | `2ef08ee730a9` (synced) |
+| `core/src/zig.ts#FFIRenderLib.imageCopyPng` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7807` | `bfccaef6e446` -> `940b516928dc` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageCreateFromPixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7701` | `dc2a8c3d1112` -> `1f150507d864` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageCreateFromRgba` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7684` | `776adfd45863` -> `c7420608a060` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageDecode` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7673` | `2ef08ee730a9` -> `f3a9195ee6ff` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.imageDestroy` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7739` | `2c2612e0ff9f` (synced) |
 | `core/src/zig.ts#FFIRenderLib.imageEnsureEncodedPng` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7795` | `de77be1379dc` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageExtend` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7911` | `ffe975437acf` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageExtract` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7893` | `19930fb52658` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageGetInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7784` | `41b5e2a99cee` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7667` | `37cca0dbe98f` (synced) |
+| `core/src/zig.ts#FFIRenderLib.imageExtend` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7911` | `ffe975437acf` -> `b3abe01420b5` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageExtract` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7893` | `19930fb52658` -> `e72eb7ec7115` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageGetInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7784` | `41b5e2a99cee` -> `097307be8485` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7667` | `37cca0dbe98f` -> `de53a3db73fc` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.imageReleaseIccCache` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7776` | `b64faf193a2c` (synced) |
 | `core/src/zig.ts#FFIRenderLib.imageReleasePixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7836` | `f22a9e3a5647` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageResize` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7875` | `13ab4e87551c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageRetain` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7755` | `9f24b00ed270` (synced) |
+| `core/src/zig.ts#FFIRenderLib.imageResize` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7875` | `13ab4e87551c` -> `ae4e0bbb9474` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageRetain` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7755` | `9f24b00ed270` -> `e53a74f93991` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.imageRetainIccCache` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7768` | `00f2da7887da` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageTakePixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7818` | `8f1a22ea3032` (synced) |
-| `core/src/zig.ts#FFIRenderLib.imageTransform` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7929` | `afe80d4a6049` (synced) |
+| `core/src/zig.ts#FFIRenderLib.imageTakePixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7818` | `8f1a22ea3032` -> `ac39084c1cc3` (**DRIFT**) |
+| `core/src/zig.ts#FFIRenderLib.imageTransform` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7929` | `afe80d4a6049` -> `7e7b9af782c3` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.imageUpdatePixels` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7718` | `985188f815f9` (synced) |
 | `core/src/zig.ts#FFIRenderLib.logContextDiagnostics` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2812` | `f2df598c7f1c` (synced) |
 | `core/src/zig.ts#FFIRenderLib.markdownBind` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6473` | `f9c68fed69dd` (synced) |
@@ -3515,19 +5067,19 @@
 | `core/src/zig.ts#FFIRenderLib.sceneFrameCommit` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5342` | `aa177f6459ae` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneFrameCopyBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5211` | `e5b0e5995728` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneFrameGetPaintSlots` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5305` | `36987b078032` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sceneFrameStep` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5246` | `87ac9c977627` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sceneFrameStep` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5246` | `87ac9c977627` -> `8b976a9da982` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetCursorState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5415` | `c1532e89333c` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetLayout` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5185` | `7cf5bfce90f9` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetScroll` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5092` | `d63a596a951b` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetSelectedText` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5144` | `3c62554b67f0` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sceneGetSliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5008` | `12011e6cdbbb` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sceneGetSliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5008` | `12011e6cdbbb` -> `56f4519e09f8` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetStats` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5407` | `9231793198ae` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sceneGetStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4751` | `64fecf523f07` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sceneGetStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4751` | `64fecf523f07` -> `f20929a0f8e3` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetText` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5162` | `2e172fc6fac6` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetTextByteAt` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4863` | `ba8d024ebce0` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetTextLineInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5171` | `311771a5d181` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneGetTextMetrics` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5153` | `2aede12a7c2c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sceneGetTextSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5135` | `4785e005c058` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sceneGetTextSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5135` | `4785e005c058` -> `a1c3725e4d45` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sceneHasMeasure` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4673` | `67a31c5e6899` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneHitTest` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5373` | `1853677b8254` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sceneMarkDirty` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:4700` | `601a6b4abd79` (synced) |
@@ -3582,12 +5134,12 @@
 | `core/src/zig.ts#FFIRenderLib.sessionInputReset` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5875` | `abdbcd8f79b5` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionNotification` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5929` | `cf4b44cb1ceb` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionPollKittyImageTransport` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6244` | `4ff36e875f66` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sessionPostStdout` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6033` | `f80bb644c3d3` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sessionPostStdout` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6033` | `f80bb644c3d3` -> `28eed6e79c03` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sessionProcessKittyImageReply` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6273` | `42a30edda0e8` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionPump` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5817` | `bef5ea53ed0a` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionPumpExit` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5832` | `a3c0075bbf83` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionReadOutput` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5997` | `c7cacb3b024c` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sessionRenderSplit` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6119` | `ae3f4d1acd2b` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sessionRenderSplit` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6119` | `ae3f4d1acd2b` -> `ad51ce0d97f7` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sessionResizeRenderer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5631` | `eaf80b099ecb` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionResume` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5792` | `750a0b852f92` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionSetCursor` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5961` | `67c9da1684a8` (synced) |
@@ -3596,7 +5148,7 @@
 | `core/src/zig.ts#FFIRenderLib.sessionSetKittyImageTransport` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6215` | `10495a45855a` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionSetPaletteState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5946` | `62300c1652ed` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionSetScreen` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6164` | `a0ecee424aad` (synced) |
-| `core/src/zig.ts#FFIRenderLib.sessionSetupTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5766` | `8580fe6bd19e` (synced) |
+| `core/src/zig.ts#FFIRenderLib.sessionSetupTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5766` | `8580fe6bd19e` -> `85ec2902ac1d` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.sessionSplitControl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6143` | `7d3278c59fbd` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionStartKittyFileProbe` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6288` | `961aeca85f48` (synced) |
 | `core/src/zig.ts#FFIRenderLib.sessionSuspend` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5781` | `37cbb866b4af` (synced) |
@@ -3610,7 +5162,7 @@
 | `core/src/zig.ts#FFIRenderLib.streamDrainSpans` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7581` | `a3c4beb8e396` (synced) |
 | `core/src/zig.ts#FFIRenderLib.streamGetStats` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7610` | `d3df9b4e18f1` (synced) |
 | `core/src/zig.ts#FFIRenderLib.streamReleaseSpan` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7600` | `96d870b1e2c3` (synced) |
-| `core/src/zig.ts#FFIRenderLib.streamReserve` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7618` | `8196ec5c7c40` (synced) |
+| `core/src/zig.ts#FFIRenderLib.streamReserve` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7618` | `8196ec5c7c40` -> `619c44d7c28f` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.streamWrite` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7561` | `fb76abd02f02` (synced) |
 | `core/src/zig.ts#FFIRenderLib.terminalFlushInput` | `adapted` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:5892` | `292b9ca1b3eb` (synced) |
 | `core/src/zig.ts#FFIRenderLib.unregisterNativeSpanFeedStream` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7531` | `b1cb45410cd5` (synced) |
@@ -3649,7 +5201,7 @@
 | `core/src/zig.ts#FFIRenderLib.yogaNodeGetConfig` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6817` | `3a117401b43d` (synced) |
 | `core/src/zig.ts#FFIRenderLib.yogaNodeGetHasNewLayout` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6929` | `bddb54d3bad6` (synced) |
 | `core/src/zig.ts#FFIRenderLib.yogaNodeGetParent` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6898` | `8f4cfde8b2ff` (synced) |
-| `core/src/zig.ts#FFIRenderLib.yogaNodeHasMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7135` | `9a0cbe0bbbba` (synced) |
+| `core/src/zig.ts#FFIRenderLib.yogaNodeHasMeasureFunc` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:7135` | `9a0cbe0bbbba` -> `46c12417a283` (**DRIFT**) |
 | `core/src/zig.ts#FFIRenderLib.yogaNodeInsertChild` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6859` | `3ee65b82424a` (synced) |
 | `core/src/zig.ts#FFIRenderLib.yogaNodeIsDirty` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6919` | `eaa9d465fbd7` (synced) |
 | `core/src/zig.ts#FFIRenderLib.yogaNodeIsReferenceBaseline` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:6948` | `1a4f124e08da` (synced) |
@@ -3687,7 +5239,7 @@
 | `core/src/zig.ts#NativeAudioStreamFormat` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:17` | `d33f814d4aa3` (synced) |
 | `core/src/zig.ts#NativeAudioStreamState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:11` | `3986b0a0e065` (synced) |
 | `core/src/zig.ts#NativeBorder` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:659` | `fbef228f1e9a` (synced) |
-| `core/src/zig.ts#NativeBufferDraw` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:843` | `6fcf5d0908f9` (synced) |
+| `core/src/zig.ts#NativeBufferDraw` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:843` | `6fcf5d0908f9` -> `9612dd13f1b8` (**DRIFT**) |
 | `core/src/zig.ts#NativeBufferedOutput` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1496` | `2d842536323e` (synced) |
 | `core/src/zig.ts#NativeBufferGrid` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:790` | `d0101d84e2e4` (synced) |
 | `core/src/zig.ts#NativeBufferStack` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:819` | `14ea966da7e6` (synced) |
@@ -3703,7 +5255,7 @@
 | `core/src/zig.ts#NativeContextHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:36` | `cd5614a005d8` (synced) |
 | `core/src/zig.ts#NativeContextImageDraw` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:885` | `f6fc12c8e95f` (synced) |
 | `core/src/zig.ts#NativeContextOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:45` | `61bf0843635f` (synced) |
-| `core/src/zig.ts#NativeDrawingTarget` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:830` | `46b019e81c78` (synced) |
+| `core/src/zig.ts#NativeDrawingTarget` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:830` | `46b019e81c78` -> `7bf98327304c` (**DRIFT**) |
 | `core/src/zig.ts#NativeEditAtomic` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:409` | `4b4069f6b65b` (synced) |
 | `core/src/zig.ts#NativeEditBufferInfo` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:302` | `06ca68c1ea35` (synced) |
 | `core/src/zig.ts#NativeEditCommand` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:390` | `b03be2de1287` (synced) |
@@ -3731,7 +5283,7 @@
 | `core/src/zig.ts#NativeMarkdownOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:206` | `91899db2896b` (synced) |
 | `core/src/zig.ts#NativeMarkdownResult` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:226` | `2c5c3c1f9e3b` (synced) |
 | `core/src/zig.ts#NativeOutputTicket` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1089` | `6c50cf0df2dc` (synced) |
-| `core/src/zig.ts#NativePaintRecorder` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1715` | `99b5a325057b` (synced) |
+| `core/src/zig.ts#NativePaintRecorder` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1715` | `99b5a325057b` -> `46838fa71203` (**DRIFT**) |
 | `core/src/zig.ts#NativePaintRecorder.begin` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1723` | `8e326cce8b98` (synced) |
 | `core/src/zig.ts#NativePaintRecorder.colorMatrix` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1809` | `7f039497ed23` (synced) |
 | `core/src/zig.ts#NativePaintRecorder.currentOpacity` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1753` | `f966409913f4` (synced) |
@@ -3771,16 +5323,16 @@
 | `core/src/zig.ts#NativeSceneTextSelectionOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:926` | `54bb07d88e98` (synced) |
 | `core/src/zig.ts#NativeSessionBufferLease` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1026` | `a7edfe0e743c` (synced) |
 | `core/src/zig.ts#NativeSessionCapabilities` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1210` | `fd0222f14a42` (synced) |
-| `core/src/zig.ts#NativeSessionControl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1176` | `f26a7eb1cf7b` (synced) |
+| `core/src/zig.ts#NativeSessionControl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1176` | `f26a7eb1cf7b` -> `26244f06b568` (**DRIFT**) |
 | `core/src/zig.ts#NativeSessionCursorOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1184` | `3c21b629b3e1` (synced) |
 | `core/src/zig.ts#NativeSessionKittyImageTransportStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1124` | `ab8c44a60663` (synced) |
 | `core/src/zig.ts#NativeSessionOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1084` | `a180ec7db97a` (synced) |
 | `core/src/zig.ts#NativeSessionPumpResult` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1152` | `bc368b8fe78c` (synced) |
 | `core/src/zig.ts#NativeSessionPumpStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1147` | `6874ee60fab1` (synced) |
 | `core/src/zig.ts#NativeSessionRendererOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1107` | `4d807e44f14c` (synced) |
-| `core/src/zig.ts#NativeSessionRendererState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1119` | `3a36e19ec7fc` (synced) |
+| `core/src/zig.ts#NativeSessionRendererState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1119` | `3a36e19ec7fc` -> `366f7cc6da26` (**DRIFT**) |
 | `core/src/zig.ts#NativeSessionRenderStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1114` | `016092a6f548` (synced) |
-| `core/src/zig.ts#NativeSessionSplitControl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:768` | `e3676924822a` (synced) |
+| `core/src/zig.ts#NativeSessionSplitControl` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:768` | `e3676924822a` -> `50cf99602d23` (**DRIFT**) |
 | `core/src/zig.ts#NativeSessionState` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1102` | `ac666b2d13b9` (synced) |
 | `core/src/zig.ts#NativeSessionTerminalOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1134` | `088be70e09e6` (synced) |
 | `core/src/zig.ts#NativeSessionTerminalPhase` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1142` | `af3908c97ffe` (synced) |
@@ -3799,7 +5351,7 @@
 | `core/src/zig.ts#RenderLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:2136` | `b1f42f88ff33` (synced) |
 | `core/src/zig.ts#resolveRenderLib` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:8178` | `373b234c1e27` (synced) |
 | `core/src/zig.ts#SceneNodeHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:86` | `7922d5ea5db2` (synced) |
-| `core/src/zig.ts#SceneStaging` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1551` | `5cf3c96bc27c` (synced) |
+| `core/src/zig.ts#SceneStaging` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1551` | `5cf3c96bc27c` -> `0a3601dac44c` (**DRIFT**) |
 | `core/src/zig.ts#SceneStaging.byteLength` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1573` | `6122bf4f02a6` (synced) |
 | `core/src/zig.ts#SceneStaging.checkStyleValue` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1579` | `b1563723b1a6` (synced) |
 | `core/src/zig.ts#SceneStaging.clear` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1662` | `6b2f1ae07325` (synced) |
@@ -3808,8 +5360,8 @@
 | `core/src/zig.ts#SceneStaging.discard` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1689` | `06446cb567ba` (synced) |
 | `core/src/zig.ts#SceneStaging.full` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1576` | `5cb7a533ca69` (synced) |
 | `core/src/zig.ts#SceneStaging.pending` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1567` | `e00cf348161c` (synced) |
-| `core/src/zig.ts#SceneStaging.stageBackground` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1638` | `39d8af642354` (synced) |
-| `core/src/zig.ts#SceneStaging.stagePaint` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1648` | `81e806e6da04` (synced) |
+| `core/src/zig.ts#SceneStaging.stageBackground` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1638` | `39d8af642354` -> `1e52ff5a0ab9` (**DRIFT**) |
+| `core/src/zig.ts#SceneStaging.stagePaint` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1648` | `81e806e6da04` -> `7adec49413d7` (**DRIFT**) |
 | `core/src/zig.ts#SceneStaging.stageStyle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:1604` | `9d212868c617` (synced) |
 | `core/src/zig.ts#SessionBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:285` | `470bc83ada1c` (synced) |
 | `core/src/zig.ts#SessionHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeRenderLib.swift:78` | `53de61a7f5dd` (synced) |
@@ -3862,12 +5414,12 @@
 | `keymap/src/addons/universal/timed-leader.ts#TimedLeaderOptions` | `implemented` | `Sources/OpenTUIKeymap/UniversalAddons.swift:138` | `d24f9b79fabf` (synced) |
 | `keymap/src/addons/universal/unresolved-commands.ts#registerUnresolvedCommandWarnings` | `implemented` | `Sources/OpenTUIKeymap/UniversalAddons.swift:1372` | `065343fb3d19` (synced) |
 | `keymap/src/extras/binding-lookup.ts#BindingCommandMap` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:71` | `a701d18018b9` (synced) |
-| `keymap/src/extras/binding-lookup.ts#BindingConfig` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:67` | `8da46a6c5863` (synced) |
-| `keymap/src/extras/binding-lookup.ts#BindingConfigItem` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:23` | `3b370c979440` (synced) |
+| `keymap/src/extras/binding-lookup.ts#BindingConfig` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:67` | `8da46a6c5863` -> `1f6eccf582af` (**DRIFT**) |
+| `keymap/src/extras/binding-lookup.ts#BindingConfigItem` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:23` | `3b370c979440` -> `92d1e31d1f3a` (**DRIFT**) |
 | `keymap/src/extras/binding-lookup.ts#BindingDefaults` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:85` | `d69008f50766` (synced) |
 | `keymap/src/extras/binding-lookup.ts#BindingDefaultsContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:74` | `422c2926b86a` (synced) |
 | `keymap/src/extras/binding-lookup.ts#BindingLookup` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:103` | `13e49b2d2f63` (synced) |
-| `keymap/src/extras/binding-lookup.ts#BindingValue` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:39` | `b575a8f05cc3` (synced) |
+| `keymap/src/extras/binding-lookup.ts#BindingValue` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:39` | `b575a8f05cc3` -> `04864009d396` (**DRIFT**) |
 | `keymap/src/extras/binding-lookup.ts#createBindingLookup` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:305` | `d57474438f00` (synced) |
 | `keymap/src/extras/binding-lookup.ts#CreateBindingLookupOptions` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:89` | `50d227eacb89` (synced) |
 | `keymap/src/extras/command-bindings.ts#CommandBindingMap` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:315` | `54054e962150` (synced) |
@@ -3875,22 +5427,22 @@
 | `keymap/src/extras/command-bindings.ts#CommandBindingsError` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:333` | `16004a1cd582` (synced) |
 | `keymap/src/extras/command-bindings.ts#CommandBindingsOptions` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:348` | `37bf0ac6d7bb` (synced) |
 | `keymap/src/extras/command-bindings.ts#CommandBindingsOverrideWarning` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:318` | `7d947f43fbe1` (synced) |
-| `keymap/src/extras/formatting.ts#formatCommandBindings` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:698` | `22eeba790a36` (synced) |
+| `keymap/src/extras/formatting.ts#formatCommandBindings` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:698` | `22eeba790a36` -> `6487df0dabb9` (**DRIFT**) |
 | `keymap/src/extras/formatting.ts#FormatCommandBindingsOptions` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:557` | `1e938b14ea3a` (synced) |
-| `keymap/src/extras/formatting.ts#formatKeySequence` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:675` | `8f6783d0bfb5` (synced) |
+| `keymap/src/extras/formatting.ts#formatKeySequence` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:675` | `8f6783d0bfb5` -> `550b9a88fc1e` (**DRIFT**) |
 | `keymap/src/extras/formatting.ts#FormatKeySequenceOptions` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:484` | `bf36223cbe9e` (synced) |
 | `keymap/src/extras/formatting.ts#KeyModifierName` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:418` | `69d4a1c0ea12` (synced) |
 | `keymap/src/extras/formatting.ts#KeySequenceFormatPart` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:427` | `28116868cfe3` (synced) |
-| `keymap/src/extras/formatting.ts#PatternDisplayResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:471` | `cdc96573d21c` (synced) |
+| `keymap/src/extras/formatting.ts#PatternDisplayResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:471` | `cdc96573d21c` -> `e49386c18e82` (**DRIFT**) |
 | `keymap/src/extras/formatting.ts#SequenceBindingLike` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:596` | `a5aba914a35a` (synced) |
-| `keymap/src/extras/formatting.ts#TokenDisplayResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:458` | `5aed5a348b13` (synced) |
+| `keymap/src/extras/formatting.ts#TokenDisplayResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:458` | `5aed5a348b13` -> `672767d447b8` (**DRIFT**) |
 | `keymap/src/extras/graph.ts#createGraphExtra` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:1247` | `1145c000103d` (synced) |
 | `keymap/src/extras/graph.ts#getGraphSnapshot` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:1231` | `0fabff839366` (synced) |
 | `keymap/src/extras/graph.ts#KeymapGraphExtra` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:1217` | `acacffb692be` (synced) |
-| `keymap/src/extras/lib/graph-snapshot.ts#createGraphSnapshot` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:890` | `4d142ee5817e` (synced) |
+| `keymap/src/extras/lib/graph-snapshot.ts#createGraphSnapshot` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:890` | `4d142ee5817e` -> `3f848a47b1ae` (**DRIFT**) |
 | `keymap/src/extras/lib/graph-types.ts#GraphBinding` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:787` | `87cb286c74b7` (synced) |
 | `keymap/src/extras/lib/graph-types.ts#GraphCommand` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:772` | `26c0f445b504` (synced) |
-| `keymap/src/extras/lib/graph-types.ts#GraphInactiveReason` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:742` | `b33b2d05324c` (synced) |
+| `keymap/src/extras/lib/graph-types.ts#GraphInactiveReason` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:742` | `b33b2d05324c` -> `4b6fb1b5064b` (**DRIFT**) |
 | `keymap/src/extras/lib/graph-types.ts#GraphLayer` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:754` | `169a5d172783` (synced) |
 | `keymap/src/extras/lib/graph-types.ts#GraphSequenceNode` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:810` | `0ce1608f7fb3` (synced) |
 | `keymap/src/extras/lib/graph-types.ts#GraphSnapshot` | `implemented` | `Sources/OpenTUIKeymap/KeymapExtras.swift:830` | `aad0f6cc505b` (synced) |
@@ -3902,7 +5454,7 @@
 | `keymap/src/html.ts#htmlEventMatchResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1248` | `439dc5b0cd5a` (synced) |
 | `keymap/src/html.ts#HtmlKeymapEvent` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1036` | `93013ba506b3` (synced) |
 | `keymap/src/html.ts#normalizeHtmlKeyName` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1122` | `de6027f82fdf` (synced) |
-| `keymap/src/keymap.ts#Keymap` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:490` | `b3b2f20c0c16` (synced) |
+| `keymap/src/keymap.ts#Keymap` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:490` | `b3b2f20c0c16` -> `19debf506811` (**DRIFT**) |
 | `keymap/src/keymap.ts#Keymap.acquireResource` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:835` | `d2b63fa94afd` (synced) |
 | `keymap/src/keymap.ts#Keymap.appendBindingExpander` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:1086` | `9bd3c4183605` (synced) |
 | `keymap/src/keymap.ts#Keymap.appendBindingParser` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:1033` | `2c82ddb7a2c3` (synced) |
@@ -3932,8 +5484,8 @@
 | `keymap/src/keymap.ts#Keymap.getData` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:771` | `0acd79a93e9f` (synced) |
 | `keymap/src/keymap.ts#Keymap.getHostMetadata` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:776` | `4889936f1135` (synced) |
 | `keymap/src/keymap.ts#Keymap.hasPendingSequence` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:781` | `f23680148c31` (synced) |
-| `keymap/src/keymap.ts#Keymap.intercept` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:895` | `0f6ec2b2a001` (synced) |
-| `keymap/src/keymap.ts#Keymap.on` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:878` | `f1acc8cdb38c` (synced) |
+| `keymap/src/keymap.ts#Keymap.intercept` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:895` | `0f6ec2b2a001` -> `0517977b20be` (**DRIFT**) |
+| `keymap/src/keymap.ts#Keymap.on` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:878` | `f1acc8cdb38c` -> `5ec65512ef09` (**DRIFT**) |
 | `keymap/src/keymap.ts#Keymap.parseKeySequence` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:797` | `801c04da5dd4` (synced) |
 | `keymap/src/keymap.ts#Keymap.popPendingSequence` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:812` | `30230ef2fec5` (synced) |
 | `keymap/src/keymap.ts#Keymap.prependBindingExpander` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:1075` | `8eeee3466eda` (synced) |
@@ -3969,7 +5521,7 @@
 | `keymap/src/lib/registry.ts#PriorityRegistry` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:202` | `a57cb6b10e1e` (synced) |
 | `keymap/src/lib/runtime-utils.ts#createRuntimeEmitter` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:246` | `783eef621b47` (synced) |
 | `keymap/src/lib/runtime-utils.ts#createRuntimeOrderedRegistry` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:287` | `ba3c5686714b` (synced) |
-| `keymap/src/lib/runtime-utils.ts#createRuntimePriorityRegistry` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:294` | `5031a636d0f2` (synced) |
+| `keymap/src/lib/runtime-utils.ts#createRuntimePriorityRegistry` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:294` | `5031a636d0f2` -> `7d54a4892e3c` (**DRIFT**) |
 | `keymap/src/lib/runtime-utils.ts#RuntimeEmitter` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:233` | `4adf49270c9b` (synced) |
 | `keymap/src/lib/runtime-utils.ts#RuntimeEmitterListener` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:230` | `deb175f1f837` (synced) |
 | `keymap/src/lib/runtime-utils.ts#RuntimeOrderedRegistry` | `implemented` | `Sources/OpenTUIKeymap/KeymapLib.swift:256` | `ed69d2c4928c` (synced) |
@@ -3978,12 +5530,12 @@
 | `keymap/src/opentui.ts#createDefaultOpenTuiKeymap` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:232` | `dbaf44b631c9` (synced) |
 | `keymap/src/opentui.ts#createOpenTuiKeymap` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:222` | `94a4dd51d1e3` (synced) |
 | `keymap/src/opentui.ts#createOpenTuiKeymapHost` | `implemented` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:215` | `8e3a5fb4c829` (synced) |
-| `keymap/src/react/index.ts#KeymapProvider` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1352` | `269e4a41a3c0` (synced) |
+| `keymap/src/react/index.ts#KeymapProvider` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1352` | `269e4a41a3c0` -> `3d2bff023fae` (**DRIFT**) |
 | `keymap/src/react/index.ts#KeymapProviderProps` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1341` | `6173dfc7dea8` (synced) |
 | `keymap/src/react/index.ts#reactiveMatcherFromStore` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1470` | `140c0ae91ff4` (synced) |
 | `keymap/src/react/index.ts#useActiveKeys` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1405` | `242b8ff6c6cc` (synced) |
 | `keymap/src/react/index.ts#useBindings` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1422` | `d8a72440772b` (synced) |
-| `keymap/src/react/index.ts#UseBindingsLayer` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1371` | `d66f83cd97b4` (synced) |
+| `keymap/src/react/index.ts#UseBindingsLayer` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1371` | `d66f83cd97b4` -> `3c67fc123834` (**DRIFT**) |
 | `keymap/src/react/index.ts#UseBindingsTargetRef` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1362` | `f39170191ec1` (synced) |
 | `keymap/src/react/index.ts#useKeymap` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1397` | `142e01ba6838` (synced) |
 | `keymap/src/react/index.ts#usePendingSequence` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1414` | `105c0aad0393` (synced) |
@@ -3992,22 +5544,22 @@
 | `keymap/src/schema.ts#RESERVED_COMMAND_FIELDS` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:6` | `fdda056af42c` (synced) |
 | `keymap/src/schema.ts#RESERVED_LAYER_FIELDS` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:12` | `00c3f12023fd` (synced) |
 | `keymap/src/services/activation.ts#ActivationService` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:232` | `e46e3ae90a5f` (synced) |
-| `keymap/src/services/activation.ts#createActivationService` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:1069` | `02fb1eb288b6` (synced) |
+| `keymap/src/services/activation.ts#createActivationService` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:1069` | `02fb1eb288b6` -> `8ae68a7f8643` (**DRIFT**) |
 | `keymap/src/services/active-key-cache.ts#ActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:90` | `1e9e45b77d61` (synced) |
 | `keymap/src/services/active-key-cache.ts#ActiveKeysCaches` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:113` | `6f01a6ec51f1` (synced) |
-| `keymap/src/services/active-key-cache.ts#createActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:140` | `8bf3c5d4c6ce` (synced) |
-| `keymap/src/services/active-key-cache.ts#createActiveKeysCaches` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:146` | `27a899162d1a` (synced) |
+| `keymap/src/services/active-key-cache.ts#createActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:140` | `8bf3c5d4c6ce` -> `23214169e09a` (**DRIFT**) |
+| `keymap/src/services/active-key-cache.ts#createActiveKeysCaches` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:146` | `27a899162d1a` -> `f923f1386729` (**DRIFT**) |
 | `keymap/src/services/active-key-cache.ts#getActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:158` | `041992d12914` (synced) |
-| `keymap/src/services/active-key-cache.ts#getFocusedActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:172` | `f6fa20e0cba4` (synced) |
+| `keymap/src/services/active-key-cache.ts#getFocusedActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:172` | `f6fa20e0cba4` -> `3e521efe17fe` (**DRIFT**) |
 | `keymap/src/services/active-key-cache.ts#setFocusedActiveKeysCache` | `implemented` | `Sources/OpenTUIKeymap/ActiveKeyCache.swift:187` | `b412aa3c5642` (synced) |
 | `keymap/src/services/command-catalog.ts#CommandCatalogService` | `implemented` | `Sources/OpenTUIKeymap/CommandCatalog.swift:435` | `da926c364ea1` (synced) |
-| `keymap/src/services/command-catalog.ts#createCommandCatalogService` | `implemented` | `Sources/OpenTUIKeymap/CommandCatalog.swift:1510` | `b75a1bbd0562` (synced) |
+| `keymap/src/services/command-catalog.ts#createCommandCatalogService` | `implemented` | `Sources/OpenTUIKeymap/CommandCatalog.swift:1510` | `b75a1bbd0562` -> `db1d0bd885d8` (**DRIFT**) |
 | `keymap/src/services/command-catalog.ts#getCommand` | `implemented` | `Sources/OpenTUIKeymap/CommandCatalog.swift:428` | `7c38706c2df2` (synced) |
 | `keymap/src/services/command-executor.ts#CommandExecutorService` | `implemented` | `Sources/OpenTUIKeymap/CommandExecutor.swift:74` | `065748ec91e9` (synced) |
-| `keymap/src/services/command-executor.ts#createCommandExecutorService` | `implemented` | `Sources/OpenTUIKeymap/CommandExecutor.swift:398` | `5abe82e30dd3` (synced) |
+| `keymap/src/services/command-executor.ts#createCommandExecutorService` | `implemented` | `Sources/OpenTUIKeymap/CommandExecutor.swift:398` | `5abe82e30dd3` -> `bd0338961453` (**DRIFT**) |
 | `keymap/src/services/compiler.ts#CompilerOptions` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:934` | `f6d57ee92bff` (synced) |
 | `keymap/src/services/compiler.ts#CompilerService` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:981` | `2664732b0cdf` (synced) |
-| `keymap/src/services/compiler.ts#createCompilerService` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:1318` | `96fd485cbd50` (synced) |
+| `keymap/src/services/compiler.ts#createCompilerService` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:1318` | `96fd485cbd50` -> `76d515a5c112` (**DRIFT**) |
 | `keymap/src/services/conditions.ts#ConditionService` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:408` | `bd2c682b3030` (synced) |
 | `keymap/src/services/conditions.ts#createConditionService` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:510` | `1c5047088d2b` (synced) |
 | `keymap/src/services/dispatch-decisions.ts#createDeferredDecision` | `implemented` | `Sources/OpenTUIKeymap/DispatchDecisions.swift:167` | `d98519c50a73` (synced) |
@@ -4023,7 +5575,7 @@
 | `keymap/src/services/dispatch-patterns.ts#createPatternEventPart` | `implemented` | `Sources/OpenTUIKeymap/DispatchDecisions.swift:236` | `462906ac47f6` (synced) |
 | `keymap/src/services/dispatch-patterns.ts#createSequencePayload` | `implemented` | `Sources/OpenTUIKeymap/DispatchDecisions.swift:268` | `a6f19aa432ed` (synced) |
 | `keymap/src/services/dispatch-patterns.ts#matchSequencePattern` | `implemented` | `Sources/OpenTUIKeymap/DispatchDecisions.swift:213` | `4ddc9f835117` (synced) |
-| `keymap/src/services/dispatch.ts#createDispatchService` | `implemented` | `Sources/OpenTUIKeymap/Dispatch.swift:1578` | `778beb5bf1e9` (synced) |
+| `keymap/src/services/dispatch.ts#createDispatchService` | `implemented` | `Sources/OpenTUIKeymap/Dispatch.swift:1578` | `778beb5bf1e9` -> `52830adfd703` (**DRIFT**) |
 | `keymap/src/services/dispatch.ts#DispatchService` | `implemented` | `Sources/OpenTUIKeymap/Dispatch.swift:325` | `c2768d18cd37` (synced) |
 | `keymap/src/services/environment.ts#registerFields` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:350` | `243fe43de7db` (synced) |
 | `keymap/src/services/environment.ts#registerSequencePattern` | `implemented` | `Sources/OpenTUIKeymap/KeymapRuntime.swift:282` | `b83b032ac300` (synced) |
@@ -4036,7 +5588,7 @@
 | `keymap/src/services/keys.ts#cloneKeySequencePart` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:161` | `3d7219208684` (synced) |
 | `keymap/src/services/keys.ts#cloneKeyStroke` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:132` | `550b7c16edc3` (synced) |
 | `keymap/src/services/keys.ts#createKeyMatch` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:188` | `1d9a010d67a4` (synced) |
-| `keymap/src/services/keys.ts#createKeySequencePart` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:144` | `5fe992126b44` (synced) |
+| `keymap/src/services/keys.ts#createKeySequencePart` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:144` | `5fe992126b44` -> `3f90872913ee` (**DRIFT**) |
 | `keymap/src/services/keys.ts#createTextKeyMatch` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:194` | `fe28548b4a00` (synced) |
 | `keymap/src/services/keys.ts#normalizeBindingTokenName` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:97` | `3f028a11e039` (synced) |
 | `keymap/src/services/keys.ts#normalizeEventKeyStroke` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:127` | `fd317a125a47` (synced) |
@@ -4046,9 +5598,9 @@
 | `keymap/src/services/keys.ts#stringifyKeySequence` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:219` | `6729afc0b8fe` (synced) |
 | `keymap/src/services/keys.ts#stringifyKeyStroke` | `implemented` | `Sources/OpenTUIKeymap/KeyServices.swift:203` | `101ec175cc37` (synced) |
 | `keymap/src/services/layer-diagnostics.ts#createLayerDiagnostics` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:499` | `351676c8a7d9` (synced) |
-| `keymap/src/services/layer-diagnostics.ts#LayerDiagnosticsCore` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:410` | `9d345375fbb8` (synced) |
+| `keymap/src/services/layer-diagnostics.ts#LayerDiagnosticsCore` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:410` | `9d345375fbb8` -> `49603e14d557` (**DRIFT**) |
 | `keymap/src/services/layers.ts#AnalyzeLayerOptions` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:376` | `c8bef290669a` (synced) |
-| `keymap/src/services/layers.ts#createLayerService` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:1306` | `ea5f1cade54c` (synced) |
+| `keymap/src/services/layers.ts#createLayerService` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:1306` | `ea5f1cade54c` -> `a7d9d0d55397` (**DRIFT**) |
 | `keymap/src/services/layers.ts#LayerDiagnostics` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:402` | `c6fc5aa8cbcc` (synced) |
 | `keymap/src/services/layers.ts#LayerService` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:677` | `61c232f6d30d` (synced) |
 | `keymap/src/services/layers.ts#LayerSlot` | `implemented` | `Sources/OpenTUIKeymap/Layers.swift:646` | `4936522806dc` (synced) |
@@ -4069,7 +5621,7 @@
 | `keymap/src/services/primitives/bindings.ts#validateBindings` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:368` | `914b440e0603` (synced) |
 | `keymap/src/services/primitives/command-normalization.ts#normalizeBindingCommand` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:325` | `c6b48f381837` (synced) |
 | `keymap/src/services/primitives/command-normalization.ts#normalizeCommandName` | `implemented` | `Sources/OpenTUIKeymap/Compiler.swift:344` | `930d145b8fb9` (synced) |
-| `keymap/src/services/primitives/field-invariants.ts#createFieldCompilerContext` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:611` | `c49beb2335f5` (synced) |
+| `keymap/src/services/primitives/field-invariants.ts#createFieldCompilerContext` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:611` | `c49beb2335f5` -> `eeaf01d8cd5c` (**DRIFT**) |
 | `keymap/src/services/primitives/field-invariants.ts#mergeAttribute` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:533` | `f8b077291f8a` (synced) |
 | `keymap/src/services/primitives/field-invariants.ts#mergeRequirement` | `implemented` | `Sources/OpenTUIKeymap/Conditions.swift:520` | `a7822b407b8f` (synced) |
 | `keymap/src/services/primitives/pending-captures.ts#captureHasContinuations` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:41` | `6d79d5320cf2` (synced) |
@@ -4091,7 +5643,7 @@
 | `keymap/src/services/sequence-index.ts#createSequenceNode` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:140` | `8a37aba41f96` (synced) |
 | `keymap/src/services/sequence-index.ts#firstNodeForMatch` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:267` | `226897f5df4d` (synced) |
 | `keymap/src/services/sequence-index.ts#getCaptureNode` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:202` | `3a25b81377a0` (synced) |
-| `keymap/src/services/sequence-index.ts#getNodePresentation` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:247` | `9a7f79f02127` (synced) |
+| `keymap/src/services/sequence-index.ts#getNodePresentation` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:247` | `9a7f79f02127` -> `e9469a351c2f` (**DRIFT**) |
 | `keymap/src/services/sequence-index.ts#getNodeSequence` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:225` | `ba5b30858d1e` (synced) |
 | `keymap/src/services/sequence-index.ts#SequenceActiveOption` | `implemented` | `Sources/OpenTUIKeymap/SequenceIndex.swift:71` | `6ffd2315eb6e` (synced) |
 | `keymap/src/services/state.ts#ActiveCommandView` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:712` | `f83edcb619cd` (synced) |
@@ -4108,12 +5660,12 @@
 | `keymap/src/services/values.ts#markExternal` | `implemented` | `Sources/OpenTUIKeymap/Values.swift:160` | `da9c8f13bb29` (synced) |
 | `keymap/src/services/values.ts#markSupplied` | `implemented` | `Sources/OpenTUIKeymap/Values.swift:146` | `195724698534` (synced) |
 | `keymap/src/services/values.ts#sameCompiledData` | `implemented` | `Sources/OpenTUIKeymap/Values.swift:190` | `9a5ba0a59d7e` (synced) |
-| `keymap/src/services/values.ts#snapshotDataValue` | `implemented` | `Sources/OpenTUIKeymap/Values.swift:281` | `60a7c6a90adf` (synced) |
+| `keymap/src/services/values.ts#snapshotDataValue` | `implemented` | `Sources/OpenTUIKeymap/Values.swift:281` | `60a7c6a90adf` -> `6ba433834726` (**DRIFT**) |
 | `keymap/src/solid/index.ts#KeymapProvider` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1561` | `2afcf4f39d8d` (synced) |
 | `keymap/src/solid/index.ts#KeymapProviderProps` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1552` | `20f0e5b52aae` (synced) |
 | `keymap/src/solid/index.ts#reactiveMatcherFromSignal` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1671` | `91ece7cc8ad4` (synced) |
 | `keymap/src/solid/index.ts#useBindings` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1623` | `5ab8d82d1f0d` (synced) |
-| `keymap/src/solid/index.ts#UseBindingsLayer` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1574` | `d66f83cd97b4` (synced) |
+| `keymap/src/solid/index.ts#UseBindingsLayer` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1574` | `d66f83cd97b4` -> `3c67fc123834` (**DRIFT**) |
 | `keymap/src/solid/index.ts#UseBindingsTarget` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1571` | `328a5e677476` (synced) |
 | `keymap/src/solid/index.ts#useKeymap` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1600` | `142e01ba6838` (synced) |
 | `keymap/src/solid/index.ts#useKeymapSelector` | `adapted` | `Sources/OpenTUIKeymap/KeymapHostAdapters.swift:1606` | `17d5d53df445` (synced) |
@@ -4124,7 +5676,7 @@
 | `keymap/src/types.ts#ActiveKeyState` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:636` | `e7801d488ca0` (synced) |
 | `keymap/src/types.ts#Attributes` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:57` | `cf6d8d6effbb` (synced) |
 | `keymap/src/types.ts#Binding` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:252` | `d462cf3ec3e5` (synced) |
-| `keymap/src/types.ts#BindingCommand` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:242` | `a2ffc90fb418` (synced) |
+| `keymap/src/types.ts#BindingCommand` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:242` | `a2ffc90fb418` -> `d37479279c24` (**DRIFT**) |
 | `keymap/src/types.ts#BindingCompilationResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:670` | `f622e3cf3932` (synced) |
 | `keymap/src/types.ts#BindingEvent` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:247` | `a20720b115e1` (synced) |
 | `keymap/src/types.ts#BindingExpander` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:435` | `bea845b5b26f` (synced) |
@@ -4135,38 +5687,38 @@
 | `keymap/src/types.ts#BindingParser` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:432` | `4bed6245cbf3` (synced) |
 | `keymap/src/types.ts#BindingParserContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:412` | `48f9bb952f0f` (synced) |
 | `keymap/src/types.ts#BindingParserResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:427` | `e175b509b5fe` (synced) |
-| `keymap/src/types.ts#Bindings` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:257` | `fb877368d985` (synced) |
+| `keymap/src/types.ts#Bindings` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:257` | `fb877368d985` -> `9a1787f00f3b` (**DRIFT**) |
 | `keymap/src/types.ts#BindingState` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:600` | `4cdcde504473` (synced) |
-| `keymap/src/types.ts#BindingsValidationResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:454` | `3e979c9f7cc2` (synced) |
+| `keymap/src/types.ts#BindingsValidationResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:454` | `3e979c9f7cc2` -> `c83683c38a30` (**DRIFT**) |
 | `keymap/src/types.ts#BindingTransformer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:450` | `1d009c65e50d` (synced) |
 | `keymap/src/types.ts#BindingTransformerContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:443` | `c0174ea63a37` (synced) |
-| `keymap/src/types.ts#Command` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:157` | `184a194565ac` (synced) |
+| `keymap/src/types.ts#Command` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:157` | `184a194565ac` -> `a0aee7e3c866` (**DRIFT**) |
 | `keymap/src/types.ts#CommandBindingsQuery` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:182` | `29b683ba14c8` (synced) |
-| `keymap/src/types.ts#CommandContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:199` | `a02d3bfe3112` (synced) |
+| `keymap/src/types.ts#CommandContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:199` | `a02d3bfe3112` -> `27e9553968cb` (**DRIFT**) |
 | `keymap/src/types.ts#CommandEntry` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:367` | `707f1d9a55da` (synced) |
 | `keymap/src/types.ts#CommandFieldCompiler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:483` | `9a8d3b6b9e06` (synced) |
 | `keymap/src/types.ts#CommandFieldContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:480` | `64a0980047d1` (synced) |
-| `keymap/src/types.ts#CommandFilter` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:170` | `48848aa23178` (synced) |
-| `keymap/src/types.ts#CommandHandler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:239` | `d143827c1e67` (synced) |
+| `keymap/src/types.ts#CommandFilter` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:170` | `48848aa23178` -> `16765b1bb3ff` (**DRIFT**) |
+| `keymap/src/types.ts#CommandHandler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:239` | `d143827c1e67` -> `86ef77b401aa` (**DRIFT**) |
 | `keymap/src/types.ts#CommandQuery` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:177` | `b65ae9c7476a` (synced) |
-| `keymap/src/types.ts#CommandQueryValue` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:165` | `25a998478b9a` (synced) |
+| `keymap/src/types.ts#CommandQueryValue` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:165` | `25a998478b9a` -> `200d3e607637` (**DRIFT**) |
 | `keymap/src/types.ts#CommandResolutionStatus` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:234` | `a8b1f980a40b` (synced) |
 | `keymap/src/types.ts#CommandResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:289` | `6a8fb39e2e6d` (synced) |
 | `keymap/src/types.ts#CommandResolverContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:284` | `49306fda45c4` (synced) |
-| `keymap/src/types.ts#CommandResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:205` | `7044b076358a` (synced) |
-| `keymap/src/types.ts#CommandState` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:665` | `447e81547fd3` (synced) |
+| `keymap/src/types.ts#CommandResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:205` | `7044b076358a` -> `0700175419c2` (**DRIFT**) |
+| `keymap/src/types.ts#CommandState` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:665` | `447e81547fd3` -> `11d09ddc81f5` (**DRIFT**) |
 | `keymap/src/types.ts#CommandTransformer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:476` | `c94f74c1306f` (synced) |
 | `keymap/src/types.ts#CommandTransformerContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:471` | `1f274de5d731` (synced) |
-| `keymap/src/types.ts#DispatchBinding` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:325` | `16b5a1c96208` (synced) |
+| `keymap/src/types.ts#DispatchBinding` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:325` | `16b5a1c96208` -> `970518cb3bf8` (**DRIFT**) |
 | `keymap/src/types.ts#DispatchEvent` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:350` | `bf284e0c497e` (synced) |
 | `keymap/src/types.ts#DispatchLayer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:320` | `a76c880a7342` (synced) |
-| `keymap/src/types.ts#DispatchPhase` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:340` | `8370f6c28d30` (synced) |
+| `keymap/src/types.ts#DispatchPhase` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:340` | `8370f6c28d30` -> `b8cccfe13da3` (**DRIFT**) |
 | `keymap/src/types.ts#ErrorEvent` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:530` | `fb9e2be241f9` (synced) |
 | `keymap/src/types.ts#EventData` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:54` | `089f06ed866c` (synced) |
 | `keymap/src/types.ts#EventMatchResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:84` | `db2c1e0b2ce1` (synced) |
 | `keymap/src/types.ts#EventMatchResolverContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:77` | `d453e637906a` (synced) |
 | `keymap/src/types.ts#EventName` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:554` | `05ca28f8a50e` (synced) |
-| `keymap/src/types.ts#Events` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:544` | `011273410c5c` (synced) |
+| `keymap/src/types.ts#Events` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:544` | `011273410c5c` -> `b30fee9693a8` (**DRIFT**) |
 | `keymap/src/types.ts#HookName` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:505` | `f0f3d9cc80bd` (synced) |
 | `keymap/src/types.ts#Hooks` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:497` | `845e2888bc4d` (synced) |
 | `keymap/src/types.ts#HostCapability` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:37` | `a5e1fa37dd5f` (synced) |
@@ -4178,10 +5730,10 @@
 | `keymap/src/types.ts#KEY_DEFERRED_DISAMBIGUATION_DECISION` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:90` | `2d531e7977de` (synced) |
 | `keymap/src/types.ts#KEY_DISAMBIGUATION_DECISION` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:87` | `bde3e78d5a7b` (synced) |
 | `keymap/src/types.ts#KeyAfterInputContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:362` | `298c17fb3ccb` (synced) |
-| `keymap/src/types.ts#KeyAfterReason` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:355` | `a58d91371cf6` (synced) |
-| `keymap/src/types.ts#KeyDeferredDisambiguationContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:109` | `a6b124d9f733` (synced) |
+| `keymap/src/types.ts#KeyAfterReason` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:355` | `a58d91371cf6` -> `d573d83c96bf` (**DRIFT**) |
+| `keymap/src/types.ts#KeyDeferredDisambiguationContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:109` | `a6b124d9f733` -> `45c628bf6c0e` (**DRIFT**) |
 | `keymap/src/types.ts#KeyDeferredDisambiguationDecision` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:98` | `b862df3eab58` (synced) |
-| `keymap/src/types.ts#KeyDeferredDisambiguationHandler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:114` | `de0245923670` (synced) |
+| `keymap/src/types.ts#KeyDeferredDisambiguationHandler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:114` | `de0245923670` -> `e0645aae6921` (**DRIFT**) |
 | `keymap/src/types.ts#KeyDisambiguationContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:103` | `bddd30819cce` (synced) |
 | `keymap/src/types.ts#KeyDisambiguationDecision` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:93` | `0a431cc98253` (synced) |
 | `keymap/src/types.ts#KeyDisambiguationResolver` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:117` | `0fe77f2eb4a8` (synced) |
@@ -4192,7 +5744,7 @@
 | `keymap/src/types.ts#KeymapHost` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:49` | `14cb2c5979f2` (synced) |
 | `keymap/src/types.ts#KeyMatch` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:74` | `8ed82bd81647` (synced) |
 | `keymap/src/types.ts#KeySequencePart` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:126` | `f89a4db9268f` (synced) |
-| `keymap/src/types.ts#KeyStringifyInput` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:137` | `86622f8d6e39` (synced) |
+| `keymap/src/types.ts#KeyStringifyInput` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:137` | `86622f8d6e39` -> `aee7fc979db3` (**DRIFT**) |
 | `keymap/src/types.ts#KeyStrokeInput` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:60` | `eb0a80518521` (synced) |
 | `keymap/src/types.ts#KeyToken` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:293` | `0d35654f534b` (synced) |
 | `keymap/src/types.ts#Layer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:265` | `ada02bc3a6b4` (synced) |
@@ -4200,7 +5752,7 @@
 | `keymap/src/types.ts#LayerAnalyzer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:409` | `24abf3129db1` (synced) |
 | `keymap/src/types.ts#LayerBindingAnalysis` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:404` | `7441e8a210d6` (synced) |
 | `keymap/src/types.ts#LayerBindingsTransformer` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:467` | `ed8bb7456ab9` (synced) |
-| `keymap/src/types.ts#LayerBindingsTransformerContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:462` | `0edf4c1ea4ad` (synced) |
+| `keymap/src/types.ts#LayerBindingsTransformerContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:462` | `0edf4c1ea4ad` -> `ea7a45776dd2` (**DRIFT**) |
 | `keymap/src/types.ts#LayerFieldCompiler` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:396` | `3e4775976984` (synced) |
 | `keymap/src/types.ts#LayerFieldContext` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:393` | `19f26d8ec7ee` (synced) |
 | `keymap/src/types.ts#Listener` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:512` | `a8af4f16c120` (synced) |
@@ -4217,7 +5769,7 @@
 | `keymap/src/types.ts#ResolvedKeyToken` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:121` | `96ca04ee7f6c` (synced) |
 | `keymap/src/types.ts#ResolvedSequencePattern` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:310` | `89abf3a922ea` (synced) |
 | `keymap/src/types.ts#RunCommandOptions` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:189` | `f553f95c3312` (synced) |
-| `keymap/src/types.ts#RunCommandResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:194` | `2ac518e3be88` (synced) |
+| `keymap/src/types.ts#RunCommandResult` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:194` | `2ac518e3be88` -> `1d9e8b3b8d48` (**DRIFT**) |
 | `keymap/src/types.ts#RuntimeMatchable` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:595` | `7e76ce990f81` (synced) |
 | `keymap/src/types.ts#RuntimeMatcher` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:590` | `9a2beba8fb36` (synced) |
 | `keymap/src/types.ts#SequenceNode` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:675` | `cc64c514ae4c` (synced) |
@@ -4228,7 +5780,7 @@
 | `keymap/src/types.ts#WarningEvent` | `implemented` | `Sources/OpenTUIKeymap/KeymapTypesAndServices.swift:516` | `6a7cf1a6d2e5` (synced) |
 | `native/src/ansi.zig#alpha` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:389` | `7f4dc0985766` (synced) |
 | `native/src/ansi.zig#alphaF` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:413` | `7427eefc5b88` (synced) |
-| `native/src/ansi.zig#ANSI` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:520` | `cd842a7167fb` (synced) |
+| `native/src/ansi.zig#ANSI` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:520` | `cd842a7167fb` -> `c166a87b94af` (**DRIFT**) |
 | `native/src/ansi.zig#ANSI_256_CUBE_LEVELS` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:337` | `8c4d46556641` (synced) |
 | `native/src/ansi.zig#ANSI16_RGB` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:317` | `2600d51ca9e1` (synced) |
 | `native/src/ansi.zig#AnsiError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:311` | `83e7e836f058` (synced) |
@@ -4300,7 +5852,7 @@
 | `native/src/audio-abi.zig#audioUnload` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6016` | `6b49ec40748e` (synced) |
 | `native/src/audio-abi.zig#audioWriteStream` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:5940` | `4c0415ea6924` (synced) |
 | `native/src/audio-abi.zig#createAudioEngine` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:5785` | `c710ea7634da` (synced) |
-| `native/src/audio.zig#CaptureBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1543` | `34741908216c` (synced) |
+| `native/src/audio.zig#CaptureBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1543` | `34741908216c` -> `8ab68451814e` (**DRIFT**) |
 | `native/src/audio.zig#CaptureStats` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1514` | `60db1cd215f0` (synced) |
 | `native/src/audio.zig#clearCaptureDeviceSelection` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1727` | `b50c6df0055b` (synced) |
 | `native/src/audio.zig#clearPlaybackDeviceSelection` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1691` | `0ad24f732556` (synced) |
@@ -4308,11 +5860,11 @@
 | `native/src/audio.zig#create` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1647` | `4c0af1dff4de` (synced) |
 | `native/src/audio.zig#createGroup` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1935` | `19b14e44e6fb` (synced) |
 | `native/src/audio.zig#CreateOptions` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1285` | `323c3a4414c7` (synced) |
-| `native/src/audio.zig#createStream` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1811` | `8a2b5022f939` (synced) |
+| `native/src/audio.zig#createStream` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1811` | `8a2b5022f939` -> `917e77672d66` (**DRIFT**) |
 | `native/src/audio.zig#destroy` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1652` | `d6b0bdd190ef` (synced) |
 | `native/src/audio.zig#enableTap` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1981` | `02df1edd6f46` (synced) |
 | `native/src/audio.zig#endStream` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1858` | `0b9e16bff64b` (synced) |
-| `native/src/audio.zig#Engine` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1623` | `f4b81c92cefa` (synced) |
+| `native/src/audio.zig#Engine` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1623` | `f4b81c92cefa` -> `fb71786dc4ed` (**DRIFT**) |
 | `native/src/audio.zig#getCaptureDeviceCount` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1703` | `a4c1a1caeb99` (synced) |
 | `native/src/audio.zig#getCaptureDeviceName` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1708` | `77a0c32158ad` (synced) |
 | `native/src/audio.zig#getCaptureStats` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1765` | `45bbdccfbd42` (synced) |
@@ -4365,23 +5917,23 @@
 | `native/src/buffer.zig#BorderSides` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3065` | `1122371a1aa5` (synced) |
 | `native/src/buffer.zig#BufferArrays` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3095` | `392c0eeaef80` (synced) |
 | `native/src/buffer.zig#BufferError` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:9` | `b1e3e969c538` (synced) |
-| `native/src/buffer.zig#BufferLease` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3378` | `f423af9d0c1e` (synced) |
+| `native/src/buffer.zig#BufferLease` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3378` | `f423af9d0c1e` -> `26c12b9d4b56` (**DRIFT**) |
 | `native/src/buffer.zig#BufferSnapshot` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3117` | `94b731d4951c` (synced) |
-| `native/src/buffer.zig#BufferStorage` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3249` | `0f5fe9f150ba` (synced) |
+| `native/src/buffer.zig#BufferStorage` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3249` | `0f5fe9f150ba` -> `80b6e7f2a95b` (**DRIFT**) |
 | `native/src/buffer.zig#Cell` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3474` | `5b3c9239058f` (synced) |
 | `native/src/buffer.zig#ClipRect` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:18` | `b2424f746999` (synced) |
 | `native/src/buffer.zig#grapheme_bytes_max` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:32` | `cb3c964e883b` (synced) |
 | `native/src/buffer.zig#isControlCodepoint` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:175` | `5f89b765d7a6` (synced) |
 | `native/src/buffer.zig#isPrintableGlyph` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:168` | `b8d4bfeeec9d` (synced) |
-| `native/src/buffer.zig#OptimizedBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3505` | `c92c317be241` (synced) |
+| `native/src/buffer.zig#OptimizedBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3505` | `c92c317be241` -> `178e13c4613b` (**DRIFT**) |
 | `native/src/buffer.zig#quadrantChars` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3629` | `22dbfc9e9726` (synced) |
 | `native/src/buffer.zig#QuadrantResult` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3649` | `4feecf7a5c2c` (synced) |
 | `native/src/buffer.zig#RGBA` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2969` | `4a2784ea6614` (synced) |
 | `native/src/buffer.zig#rgbaEqual` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3468` | `e2dddc85841e` (synced) |
 | `native/src/buffer.zig#TextFit` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:48` | `80dad36887a2` (synced) |
 | `native/src/buffer.zig#TextSelection` | `implemented` | `Sources/OpenTUICore/OptimizedBuffer.swift:33` | `3921d72759c1` (synced) |
-| `native/src/buffer.zig#validateColor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3042` | `23b0671aad03` (synced) |
-| `native/src/buffer.zig#validateTextInput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3051` | `dd5152006a35` (synced) |
+| `native/src/buffer.zig#validateColor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3042` | `23b0671aad03` -> `fd5c85378c7a` (**DRIFT**) |
+| `native/src/buffer.zig#validateTextInput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3051` | `dd5152006a35` -> `7d1a1fe4a725` (**DRIFT**) |
 | `native/src/buffer.zig#Vec3f` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2972` | `7d073c5c331d` (synced) |
 | `native/src/buffer.zig#Vec4f` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2997` | `fa4563af4f8f` (synced) |
 | `native/src/clipboard-abi.zig#ot_clipboard_clear_operation_start` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3419` | `cacdbda31df1` (synced) |
@@ -4415,7 +5967,7 @@
 | `native/src/clipboard/host.zig#DestroyStatus` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2840` | `763a7e795ae7` (synced) |
 | `native/src/clipboard/host.zig#drainService` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3339` | `2c7674e50969` (synced) |
 | `native/src/clipboard/host.zig#Handle` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2784` | `60613aa7ce8b` (synced) |
-| `native/src/clipboard/host.zig#Operation` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2855` | `c974886b2992` (synced) |
+| `native/src/clipboard/host.zig#Operation` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2855` | `c974886b2992` -> `63815cd65fc2` (**DRIFT**) |
 | `native/src/clipboard/host.zig#OperationStatus` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2799` | `4ac25c4f4ea4` (synced) |
 | `native/src/clipboard/host.zig#pollOperation` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3224` | `72ce058ea451` (synced) |
 | `native/src/clipboard/host.zig#pollServiceShutdown` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3321` | `2a03c5a376ab` (synced) |
@@ -4426,7 +5978,7 @@
 | `native/src/clipboard/host.zig#resultErrorCode` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3280` | `b6a7d5bad9e6` (synced) |
 | `native/src/clipboard/host.zig#resultMimeCopy` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3249` | `644ffd44d0d4` (synced) |
 | `native/src/clipboard/host.zig#resultMimeLength` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3240` | `c563b30922c3` (synced) |
-| `native/src/clipboard/host.zig#Service` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2916` | `d07762b3d171` (synced) |
+| `native/src/clipboard/host.zig#Service` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2916` | `d07762b3d171` -> `ac672b1ca670` (**DRIFT**) |
 | `native/src/clipboard/host.zig#ShutdownStatus` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2847` | `581b084c8284` (synced) |
 | `native/src/clipboard/host.zig#startClearOperation` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3187` | `c39d35f72c4b` (synced) |
 | `native/src/clipboard/host.zig#startReadOperation` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:3079` | `4a8ca5072a47` (synced) |
@@ -4502,7 +6054,7 @@
 | `native/src/clipboard/wayland-protocol.zig#Kind` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1218` | `3a9c77222667` (synced) |
 | `native/src/clipboard/wayland-protocol.zig#Metadata` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1260` | `fc840cc715ae` (synced) |
 | `native/src/clipboard/wayland.zig#canonicalMimeEssence` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1517` | `5b64fff0386e` (synced) |
-| `native/src/clipboard/wayland.zig#Connection` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1619` | `82249276d183` (synced) |
+| `native/src/clipboard/wayland.zig#Connection` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1619` | `82249276d183` -> `35db625be80f` (**DRIFT**) |
 | `native/src/clipboard/wayland.zig#Failure` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1557` | `0076f0c7a572` (synced) |
 | `native/src/clipboard/wayland.zig#MimeMatch` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1606` | `c93db34a4283` (synced) |
 | `native/src/clipboard/wayland.zig#Offer` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1576` | `11fce5a2b376` (synced) |
@@ -4520,9 +6072,9 @@
 | `native/src/clipboard/windows.zig#ReadJob` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2259` | `11bd54c34298` (synced) |
 | `native/src/clipboard/windows.zig#Result` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2245` | `c46c96911ef8` (synced) |
 | `native/src/clipboard/windows.zig#Status` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2232` | `5d8bf5656fb8` (synced) |
-| `native/src/clipboard/windows.zig#Worker` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2302` | `2b9edf0d4672` (synced) |
+| `native/src/clipboard/windows.zig#Worker` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:2302` | `2b9edf0d4672` -> `816a92235db7` (**DRIFT**) |
 | `native/src/clipboard/x11.zig#Atoms` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1746` | `7ea4f2e03601` (synced) |
-| `native/src/clipboard/x11.zig#Connection` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1772` | `a72003a9e9df` (synced) |
+| `native/src/clipboard/x11.zig#Connection` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1772` | `a72003a9e9df` -> `f9f2e0d3b72e` (**DRIFT**) |
 | `native/src/clipboard/x11.zig#Failure` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1680` | `e399d2670b89` (synced) |
 | `native/src/clipboard/x11.zig#Progress` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1672` | `75baa47f684a` (synced) |
 | `native/src/clipboard/x11.zig#Provider` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1735` | `8af022f2bddf` (synced) |
@@ -4531,10 +6083,10 @@
 | `native/src/clipboard/x11.zig#SelectionResult` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1691` | `2bf69682c642` (synced) |
 | `native/src/clipboard/x11.zig#WriteState` | `implemented` | `Sources/OpenTUITerminal/PlatformHostClipboard.swift:1722` | `917373572bf5` (synced) |
 | `native/src/context-abi.zig#ContextHandle` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:1251` | `4cb0c4f4c7d2` (synced) |
-| `native/src/context-abi.zig#createTestContext` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3401` | `fd8dbaa43b01` (synced) |
+| `native/src/context-abi.zig#createTestContext` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3401` | `fd8dbaa43b01` -> `b7db0fdacb09` (**DRIFT**) |
 | `native/src/context-abi.zig#destroyKind` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3394` | `d030be4a3af8` (synced) |
 | `native/src/context-abi.zig#export_symbols` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3421` | `aab3aede1c45` (synced) |
-| `native/src/context-abi.zig#followSessionWidth` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:1417` | `1a0d880e72e2` (synced) |
+| `native/src/context-abi.zig#followSessionWidth` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:1417` | `1a0d880e72e2` -> `bc4942a7818d` (**DRIFT**) |
 | `native/src/context-abi.zig#frameRequestFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3155` | `60b7e5c8800b` (synced) |
 | `native/src/context-abi.zig#handleFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3379` | `38aac7aaf199` (synced) |
 | `native/src/context-abi.zig#handleToC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3384` | `81812314ebe7` (synced) |
@@ -4637,7 +6189,7 @@
 | `native/src/context-abi.zig#ot_session_clipboard` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2466` | `61dde2b8dc0d` (synced) |
 | `native/src/context-abi.zig#ot_session_close` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2540` | `5fa6aff05ec0` (synced) |
 | `native/src/context-abi.zig#ot_session_complete_output` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2528` | `cbdf72a61b74` (synced) |
-| `native/src/context-abi.zig#ot_session_control` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2454` | `a83382bee840` (synced) |
+| `native/src/context-abi.zig#ot_session_control` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2454` | `a83382bee840` -> `3dfb9da5e29a` (**DRIFT**) |
 | `native/src/context-abi.zig#ot_session_create` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2014` | `24b200e61831` (synced) |
 | `native/src/context-abi.zig#ot_session_destroy` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2582` | `eb98ebc0e3da` (synced) |
 | `native/src/context-abi.zig#ot_session_drain_output` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2349` | `af905522b256` (synced) |
@@ -4680,7 +6232,7 @@
 | `native/src/context-abi.zig#sessionError` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3389` | `12e4f9d99384` (synced) |
 | `native/src/context-abi.zig#setStyledText` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2985` | `515c1d0617ae` (synced) |
 | `native/src/context-abi.zig#styledTextChunkFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:2996` | `d70d8a6e6963` (synced) |
-| `native/src/context-abi.zig#widthMethodFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:1767` | `801c2a81f5f4` (synced) |
+| `native/src/context-abi.zig#widthMethodFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:1767` | `801c2a81f5f4` -> `31298e6117e0` (**DRIFT**) |
 | `native/src/context-audio-abi.zig#ot_audio_create` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3430` | `5029d0ec1106` (synced) |
 | `native/src/context-audio-abi.zig#ot_audio_destroy` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3442` | `57af7c4cf4ed` (synced) |
 | `native/src/context-audio-abi.zig#ot_audio_load` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3477` | `bc0658eef28b` (synced) |
@@ -4698,7 +6250,7 @@
 | `native/src/context-editor-abi.zig#layerRunsFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4147` | `3255ca2605c5` (synced) |
 | `native/src/context-editor-abi.zig#ot_edit_buffer_command` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3619` | `b22463b96b3d` (synced) |
 | `native/src/context-editor-abi.zig#ot_edit_buffer_convert_offset` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3706` | `fb3de8de25ae` (synced) |
-| `native/src/context-editor-abi.zig#ot_edit_buffer_get_highlights` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4104` | `b00a161425cc` (synced) |
+| `native/src/context-editor-abi.zig#ot_edit_buffer_get_highlights` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4104` | `b00a161425cc` -> `457dd493ce3c` (**DRIFT**) |
 | `native/src/context-editor-abi.zig#ot_edit_buffer_get_marks` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3826` | `57364eb05bca` (synced) |
 | `native/src/context-editor-abi.zig#ot_edit_buffer_get_position` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3657` | `e30a3c148452` (synced) |
 | `native/src/context-editor-abi.zig#ot_edit_buffer_get_range` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:3681` | `1e4ff36f7dce` (synced) |
@@ -4736,7 +6288,7 @@
 | `native/src/context-handles.zig#Handle` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:26` | `406da47f31fb` (synced) |
 | `native/src/context-handles.zig#Kind` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:66` | `08a2a3901a46` (synced) |
 | `native/src/context-handles.zig#slot_count_max_default` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:22` | `de3a1f332ff1` (synced) |
-| `native/src/context-handles.zig#Table` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:128` | `bc79217882f8` (synced) |
+| `native/src/context-handles.zig#Table` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:128` | `bc79217882f8` -> `b308dcbbb53a` (**DRIFT**) |
 | `native/src/context-image-abi.zig#imageReleaseIccCache` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4553` | `b59adf93a9f9` (synced) |
 | `native/src/context-image-abi.zig#imageRetainIccCache` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4548` | `b3a7cb960435` (synced) |
 | `native/src/context-image-abi.zig#imageTestFailIccProfileCopyAllocationOnce` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:4558` | `849c2b0519ef` (synced) |
@@ -4841,8 +6393,8 @@
 | `native/src/context.zig#BufferDraw` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:456` | `3862318183bd` (synced) |
 | `native/src/context.zig#BufferGrid` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:453` | `366392cea0c8` (synced) |
 | `native/src/context.zig#BufferOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:432` | `bf271a65d983` (synced) |
-| `native/src/context.zig#BufferStack` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:459` | `e453e9bcf481` (synced) |
-| `native/src/context.zig#Context` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:703` | `6998e0adf6a8` (synced) |
+| `native/src/context.zig#BufferStack` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:459` | `e453e9bcf481` -> `21d154f82eae` (**DRIFT**) |
+| `native/src/context.zig#Context` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:703` | `6998e0adf6a8` -> `0f2955a343fc` (**DRIFT**) |
 | `native/src/context.zig#Diagnostic` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:367` | `1fa71c281771` (synced) |
 | `native/src/context.zig#Edit` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:468` | `733805752e6e` (synced) |
 | `native/src/context.zig#EditCommand` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:537` | `5764d4b365fa` (synced) |
@@ -4860,8 +6412,8 @@
 | `native/src/context.zig#Handle` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:364` | `60613aa7ce8b` (synced) |
 | `native/src/context.zig#ImageDraw` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:450` | `a5bb488a0254` (synced) |
 | `native/src/context.zig#LayerReplacement` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:621` | `70b2a6df9ae1` (synced) |
-| `native/src/context.zig#MarkdownDoc` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:526` | `1416678e1399` (synced) |
-| `native/src/context.zig#MarkdownOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:520` | `57337b1a8952` (synced) |
+| `native/src/context.zig#MarkdownDoc` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:526` | `1416678e1399` -> `fc22d23c62d6` (**DRIFT**) |
+| `native/src/context.zig#MarkdownOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:520` | `57337b1a8952` -> `18e400e6e0a8` (**DRIFT**) |
 | `native/src/context.zig#MarkdownResult` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:523` | `0ec7a2690dc3` (synced) |
 | `native/src/context.zig#Options` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:680` | `ea825616a4e5` (synced) |
 | `native/src/context.zig#RendererBuffer` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:419` | `23f5c552126b` (synced) |
@@ -4869,7 +6421,7 @@
 | `native/src/context.zig#SceneTextSelectionOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:677` | `6c5254c56c3b` (synced) |
 | `native/src/context.zig#SharedText` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:494` | `4df60e9af99d` (synced) |
 | `native/src/context.zig#StyledTextChunk` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:644` | `658c75977c21` (synced) |
-| `native/src/context.zig#Text` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:683` | `f1a2c8868b55` (synced) |
+| `native/src/context.zig#Text` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:683` | `f1a2c8868b55` -> `5c05b9ff4a8b` (**DRIFT**) |
 | `native/src/context.zig#TextDefaults` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:570` | `e2ea1ab22c42` (synced) |
 | `native/src/context.zig#TextHighlight` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:587` | `395f3025d860` (synced) |
 | `native/src/context.zig#TextSelection` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:641` | `0eec1cf76d11` (synced) |
@@ -4896,7 +6448,7 @@
 | `native/src/cov_runner.zig#runner_test_name` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6321` | `234251babd93` (synced) |
 | `native/src/cov_runner.zig#runner_test_run` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6330` | `93ce4783832f` (synced) |
 | `native/src/edit-buffer.zig#Cursor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1068` | `504df6f03b75` (synced) |
-| `native/src/edit-buffer.zig#EditBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1101` | `7ed0dcc86b0e` (synced) |
+| `native/src/edit-buffer.zig#EditBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1101` | `7ed0dcc86b0e` -> `734a0c2b566f` (**DRIFT**) |
 | `native/src/edit-buffer.zig#EditBufferError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1037` | `9ec5d034115f` (synced) |
 | `native/src/edit-buffer.zig#EditBufferEvent` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1043` | `fd0ac816a5c6` (synced) |
 | `native/src/edit-buffer.zig#Measure` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1090` | `4018b420df62` (synced) |
@@ -4907,10 +6459,10 @@
 | `native/src/edit-marks.zig#clear` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1175` | `65adde30397d` (synced) |
 | `native/src/edit-marks.zig#count_max` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:996` | `0c8471a025d5` (synced) |
 | `native/src/edit-marks.zig#live` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1113` | `ca849c919a62` (synced) |
-| `native/src/edit-marks.zig#Mark` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:999` | `4aa15d46b87d` (synced) |
+| `native/src/edit-marks.zig#Mark` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:999` | `4aa15d46b87d` -> `a3cc94412ffa` (**DRIFT**) |
 | `native/src/edit-marks.zig#remove` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1164` | `230d2982c275` (synced) |
 | `native/src/edit-marks.zig#splice` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1118` | `742705cc4e2b` (synced) |
-| `native/src/editor-view.zig#EditorView` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1225` | `8d48f82bce2d` (synced) |
+| `native/src/editor-view.zig#EditorView` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1225` | `8d48f82bce2d` -> `f27ae8a0398d` (**DRIFT**) |
 | `native/src/editor-view.zig#EditorViewError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1189` | `915a2125679d` (synced) |
 | `native/src/editor-view.zig#VisualCursor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1194` | `6c19d4b7507e` (synced) |
 | `native/src/embedded-terminal/compositor.zig#compose` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3936` | `9da5614a8d8e` (synced) |
@@ -4932,7 +6484,7 @@
 | `native/src/embedded-terminal/ghostty.zig#Terminal` | `adapted` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3756` | `68bf85a1d4fe` (synced) |
 | `native/src/embedded-terminal/ghostty.zig#TerminalStream` | `adapted` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3759` | `f6f62a678ac2` (synced) |
 | `native/src/embedded-terminal/main.zig#Cursor` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3989` | `359c83ec3af0` (synced) |
-| `native/src/embedded-terminal/main.zig#EmbeddedTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:4050` | `5b778003f26d` (synced) |
+| `native/src/embedded-terminal/main.zig#EmbeddedTerminal` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:4050` | `5b778003f26d` -> `36acbbfda595` (**DRIFT**) |
 | `native/src/embedded-terminal/main.zig#Error` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3981` | `ae5b50b0ade9` (synced) |
 | `native/src/embedded-terminal/main.zig#Options` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:4034` | `385c096b75b4` (synced) |
 | `native/src/embedded-terminal/main.zig#response_limit` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:4047` | `0bec3381f6dc` (synced) |
@@ -4956,9 +6508,9 @@
 | `native/src/grapheme.zig#charRightExtent` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:100` | `65a14c2f1f84` (synced) |
 | `native/src/grapheme.zig#encodedCharWidth` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:132` | `b48dd663edfa` (synced) |
 | `native/src/grapheme.zig#graphemeIdFromChar` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:93` | `f1432dfa2f88` (synced) |
-| `native/src/grapheme.zig#GraphemePool` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:143` | `c9cb0e2bf79c` (synced) |
+| `native/src/grapheme.zig#GraphemePool` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:143` | `c9cb0e2bf79c` -> `b160994b7d64` (**DRIFT**) |
 | `native/src/grapheme.zig#GraphemePoolError` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:37` | `f9320e7c2062` (synced) |
-| `native/src/grapheme.zig#GraphemeTracker` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:332` | `c130357725f5` (synced) |
+| `native/src/grapheme.zig#GraphemeTracker` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:332` | `c130357725f5` -> `8ea647d63adf` (**DRIFT**) |
 | `native/src/grapheme.zig#imageFallbackFromChar` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:68` | `d960e465014d` (synced) |
 | `native/src/grapheme.zig#imageIdFromChar` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:61` | `7cd9f92e0f90` (synced) |
 | `native/src/grapheme.zig#isClusterChar` | `implemented` | `Sources/OpenTUICore/GraphemePool.swift:87` | `83a6c7090c21` (synced) |
@@ -4978,7 +6530,7 @@
 | `native/src/highlight-layers.zig#Layer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1374` | `57e05f969454` (synced) |
 | `native/src/highlight-layers.zig#layer_count_max` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1201` | `f98d9d3cb01e` (synced) |
 | `native/src/highlight-layers.zig#LayerRun` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1359` | `28e48896c8c8` (synced) |
-| `native/src/highlight-layers.zig#Layers` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1385` | `82f420fb96e3` (synced) |
+| `native/src/highlight-layers.zig#Layers` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1385` | `82f420fb96e3` -> `9be92a44c129` (**DRIFT**) |
 | `native/src/highlight-layers.zig#suppliesNothing` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1354` | `89e76e972093` (synced) |
 | `native/src/image.zig#Blend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2209` | `44927f5d9646` (synced) |
 | `native/src/image.zig#clearIccCache` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2382` | `3a69c3702dcf` (synced) |
@@ -4996,7 +6548,7 @@
 | `native/src/image.zig#Format` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2047` | `92be84a6cc6b` (synced) |
 | `native/src/image.zig#getIccCacheStats` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2408` | `16080d5d89bb` (synced) |
 | `native/src/image.zig#IccCacheStats` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2359` | `a8e6aa99a49b` (synced) |
-| `native/src/image.zig#Image` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2265` | `751013a53630` (synced) |
+| `native/src/image.zig#Image` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2265` | `751013a53630` -> `e245061cd318` (**DRIFT**) |
 | `native/src/image.zig#Info` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2111` | `097aa3d6d3ed` (synced) |
 | `native/src/image.zig#inspect` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2435` | `b667ff6c7688` (synced) |
 | `native/src/image.zig#inspectOwned` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2440` | `f9a4718c1942` (synced) |
@@ -5018,9 +6570,9 @@
 | `native/src/image.zig#Transform` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2200` | `a9c6bd2e2e05` (synced) |
 | `native/src/image.zig#updatePixels` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2489` | `1eb6406551e1` (synced) |
 | `native/src/input-parser.zig#Event` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:269` | `3d3e879eeb0a` (synced) |
-| `native/src/input-parser.zig#Expectations` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:140` | `16306c4ab578` (synced) |
+| `native/src/input-parser.zig#Expectations` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:140` | `16306c4ab578` -> `f7be18f84249` (**DRIFT**) |
 | `native/src/input-parser.zig#flags` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:227` | `a173c61ed8ca` (synced) |
-| `native/src/input-parser.zig#InputParser` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:425` | `33c8ec597e46` (synced) |
+| `native/src/input-parser.zig#InputParser` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:425` | `33c8ec597e46` -> `e5fe162881fa` (**DRIFT**) |
 | `native/src/input-parser.zig#key` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:239` | `44a26959a214` (synced) |
 | `native/src/input-parser.zig#KeyAction` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:199` | `630b000e2731` (synced) |
 | `native/src/input-parser.zig#Kind` | `implemented` | `Sources/OpenTUICore/StdinParser.swift:189` | `b205c6b32f73` (synced) |
@@ -5033,12 +6585,12 @@
 | `native/src/kitty-transport.zig#FileState` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2636` | `b3e031e05131` (synced) |
 | `native/src/kitty-transport.zig#LEASES_MAX` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2658` | `ec4232db5d31` (synced) |
 | `native/src/kitty-transport.zig#Mode` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2629` | `ff208b4453b1` (synced) |
-| `native/src/kitty-transport.zig#Transport` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2695` | `820adffaffea` (synced) |
+| `native/src/kitty-transport.zig#Transport` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2695` | `820adffaffea` -> `4333b80c358a` (**DRIFT**) |
 | `native/src/lib.zig#io` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6212` | `edcc0ff76b18` (synced) |
 | `native/src/lib.zig#std_options` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6215` | `8a53ac4f30d5` (synced) |
 | `native/src/link.zig#IdPayload` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:16` | `e0288d62a1d2` (synced) |
 | `native/src/link.zig#isWritableUrl` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:30` | `fc562d7dfe0a` (synced) |
-| `native/src/link.zig#LinkPool` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:46` | `4449c956cf41` (synced) |
+| `native/src/link.zig#LinkPool` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:46` | `4449c956cf41` -> `d9d4139ace0a` (**DRIFT**) |
 | `native/src/link.zig#LinkPoolError` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:19` | `2b07c871bb09` (synced) |
 | `native/src/link.zig#LinkTracker` | `implemented` | `Sources/OpenTUICore/LinkPool.swift:188` | `80329df5ac7b` (synced) |
 | `native/src/logger.zig#debug` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1857` | `cdb774bf101b` (synced) |
@@ -5054,8 +6606,8 @@
 | `native/src/logger.zig#processLogReady` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1781` | `29aefc7ab5cb` (synced) |
 | `native/src/logger.zig#setLogCallback` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1788` | `a858aea6a127` (synced) |
 | `native/src/logger.zig#warn` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:1847` | `7a87622aae88` (synced) |
-| `native/src/markdown-inline.zig#appendTokenDisplay` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:418` | `51d710e8a703` (synced) |
-| `native/src/markdown-inline.zig#appendTokenDisplayBefore` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:405` | `8c1fff322a4e` (synced) |
+| `native/src/markdown-inline.zig#appendTokenDisplay` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:418` | `51d710e8a703` -> `e10c4ea31107` (**DRIFT**) |
+| `native/src/markdown-inline.zig#appendTokenDisplayBefore` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:405` | `8c1fff322a4e` -> `cdd97f796323` (**DRIFT**) |
 | `native/src/markdown-inline.zig#codeSpanBody` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:620` | `763b63cfb50a` (synced) |
 | `native/src/markdown-inline.zig#decodeEntity` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:371` | `6b2ad5e0629a` (synced) |
 | `native/src/markdown-inline.zig#Delimiter` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:107` | `d238b3a9e949` (synced) |
@@ -5074,38 +6626,38 @@
 | `native/src/markdown-inline.zig#Link` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:146` | `c14b05cdfb21` (synced) |
 | `native/src/markdown-inline.zig#Match` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:133` | `3193e340abf9` (synced) |
 | `native/src/markdown-inline.zig#MatchKind` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:100` | `d8c846b386c1` (synced) |
-| `native/src/markdown-inline.zig#Options` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:175` | `243c32bb3a60` (synced) |
-| `native/src/markdown-inline.zig#parse` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:364` | `f8ca5c048a58` (synced) |
-| `native/src/markdown-inline.zig#Parser` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:236` | `2b3c937417e3` (synced) |
+| `native/src/markdown-inline.zig#Options` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:175` | `243c32bb3a60` -> `368c5cc1c83f` (**DRIFT**) |
+| `native/src/markdown-inline.zig#parse` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:364` | `f8ca5c048a58` -> `a70b9a368393` (**DRIFT**) |
+| `native/src/markdown-inline.zig#Parser` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:236` | `2b3c937417e3` -> `51d592ef08e7` (**DRIFT**) |
 | `native/src/markdown-inline.zig#PendingRun` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:481` | `d66f86fd856f` (synced) |
-| `native/src/markdown-inline.zig#PendingScan` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:443` | `23cc2ec55160` (synced) |
-| `native/src/markdown-inline.zig#PendingSpans` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:505` | `d0c7617ecda1` (synced) |
-| `native/src/markdown-inline.zig#References` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:157` | `7bc80bcebc1e` (synced) |
-| `native/src/markdown-inline.zig#renderPending` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:567` | `1a97a65f443c` (synced) |
-| `native/src/markdown-inline.zig#renderPendingRuns` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:579` | `35120f329fe5` (synced) |
+| `native/src/markdown-inline.zig#PendingScan` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:443` | `23cc2ec55160` -> `8d19e20345ff` (**DRIFT**) |
+| `native/src/markdown-inline.zig#PendingSpans` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:505` | `d0c7617ecda1` -> `a35fafcbfee3` (**DRIFT**) |
+| `native/src/markdown-inline.zig#References` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:157` | `7bc80bcebc1e` -> `066b8de683ff` (**DRIFT**) |
+| `native/src/markdown-inline.zig#renderPending` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:567` | `1a97a65f443c` -> `165547dd36bc` (**DRIFT**) |
+| `native/src/markdown-inline.zig#renderPendingRuns` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:579` | `35120f329fe5` -> `c7afaa2bea36` (**DRIFT**) |
 | `native/src/markdown-inline.zig#Result` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:186` | `7b7e81317bf2` (synced) |
 | `native/src/markdown-inline.zig#runLength` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:635` | `351fde401316` (synced) |
-| `native/src/markdown-inline.zig#scanDestination` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:1971` | `cea75bae89ea` (synced) |
+| `native/src/markdown-inline.zig#scanDestination` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:1971` | `cea75bae89ea` -> `255bf0510cf2` (**DRIFT**) |
 | `native/src/markdown-inline.zig#scanEntity` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:412` | `f7cbb0631b22` (synced) |
-| `native/src/markdown-inline.zig#scanHtmlTag` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2116` | `9c54c9b85991` (synced) |
-| `native/src/markdown-inline.zig#scanHtmlTagFrom` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:761` | `a95beef38630` (synced) |
-| `native/src/markdown-inline.zig#scanLinkLabel` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:1945` | `c82d5099f542` (synced) |
+| `native/src/markdown-inline.zig#scanHtmlTag` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2116` | `9c54c9b85991` -> `2f1ac805c392` (**DRIFT**) |
+| `native/src/markdown-inline.zig#scanHtmlTagFrom` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:761` | `a95beef38630` -> `cf8d882a60c2` (**DRIFT**) |
+| `native/src/markdown-inline.zig#scanLinkLabel` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:1945` | `c82d5099f542` -> `174bd2d3a566` (**DRIFT**) |
 | `native/src/markdown-inline.zig#Scanned` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:644` | `b5072e93ab7f` (synced) |
-| `native/src/markdown-inline.zig#scanOpenTag` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2051` | `14c6b255baec` (synced) |
-| `native/src/markdown-inline.zig#scanTitle` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2018` | `23b6e85ee7df` (synced) |
+| `native/src/markdown-inline.zig#scanOpenTag` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2051` | `14c6b255baec` -> `f401f87ab361` (**DRIFT**) |
+| `native/src/markdown-inline.zig#scanTitle` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:2018` | `23b6e85ee7df` -> `4a667c0e7995` (**DRIFT**) |
 | `native/src/markdown-inline.zig#titleFrom` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:662` | `27c366fa0108` (synced) |
 | `native/src/markdown-inline.zig#TitleScan` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:655` | `e634ecfbf7c6` (synced) |
 | `native/src/markdown-inline.zig#Token` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:85` | `6cda765e697c` (synced) |
 | `native/src/markdown-inline.zig#tokenDisplayLength` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:382` | `61b66976d5ea` (synced) |
 | `native/src/markdown-inline.zig#TokenKind` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:55` | `a0fa50a2be1c` (synced) |
-| `native/src/markdown-inline.zig#unescapeText` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:454` | `796e3127346a` (synced) |
-| `native/src/markdown-tables.zig#entity_code_points` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3600` | `858cb13edd7d` (synced) |
+| `native/src/markdown-inline.zig#unescapeText` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:454` | `796e3127346a` -> `bca8bbc27b06` (**DRIFT**) |
+| `native/src/markdown-tables.zig#entity_code_points` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3600` | `858cb13edd7d` -> `a32f15b99d78` (**DRIFT**) |
 | `native/src/markdown-tables.zig#entity_names` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3599` | `73db30cf1cc5` (synced) |
-| `native/src/markdown-tables.zig#fold_multi` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3566` | `c7add68fca9f` (synced) |
-| `native/src/markdown-tables.zig#fold_runs` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3514` | `0da5547fc897` (synced) |
+| `native/src/markdown-tables.zig#fold_multi` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3566` | `c7add68fca9f` -> `edbb257862c6` (**DRIFT**) |
+| `native/src/markdown-tables.zig#fold_runs` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3514` | `0da5547fc897` -> `89a8e75bfbb4` (**DRIFT**) |
 | `native/src/markdown-tables.zig#FoldMulti` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:38` | `2692ea5a3588` (synced) |
 | `native/src/markdown-tables.zig#FoldRun` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:23` | `806ddefcac9d` (synced) |
-| `native/src/markdown-tables.zig#punctuation_ranges` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3462` | `a199cb3a8337` (synced) |
+| `native/src/markdown-tables.zig#punctuation_ranges` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3462` | `a199cb3a8337` -> `9659f4aa1782` (**DRIFT**) |
 | `native/src/markdown-tables.zig#space_separators` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:3459` | `a5c32eb646b5` (synced) |
 | `native/src/markdown.zig#Alignment` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:17` | `ac9b87ff2e38` (synced) |
 | `native/src/markdown.zig#Block` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:922` | `a1ed233f5e8a` (synced) |
@@ -5113,28 +6665,28 @@
 | `native/src/markdown.zig#Counters` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1048` | `8b6f299d4f55` (synced) |
 | `native/src/markdown.zig#Definition` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:960` | `a8374f4e5e8c` (synced) |
 | `native/src/markdown.zig#definitionProse` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1253` | `24978262f2d0` (synced) |
-| `native/src/markdown.zig#DefinitionScan` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1240` | `a49625d48b56` (synced) |
-| `native/src/markdown.zig#Doc` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1283` | `304a9e2ceeda` (synced) |
+| `native/src/markdown.zig#DefinitionScan` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1240` | `a49625d48b56` -> `a07db69913a0` (**DRIFT**) |
+| `native/src/markdown.zig#Doc` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1283` | `304a9e2ceeda` -> `074807db94fc` (**DRIFT**) |
 | `native/src/markdown.zig#Error` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1040` | `89d36ab57dbf` (synced) |
 | `native/src/markdown.zig#Flags` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:900` | `44f6f7a286cc` (synced) |
 | `native/src/markdown.zig#Kind` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:885` | `a53bd31668be` (synced) |
 | `native/src/markdown.zig#Leaf` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1156` | `6fc6b3806e85` (synced) |
 | `native/src/markdown.zig#Limits` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:992` | `f22f56b08cfb` (synced) |
 | `native/src/markdown.zig#lineContentEnd` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1274` | `1c784932ffac` (synced) |
-| `native/src/markdown.zig#NodeWrite` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1184` | `fecff71eb2f1` (synced) |
+| `native/src/markdown.zig#NodeWrite` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1184` | `fecff71eb2f1` -> `b5acf7cbbd86` (**DRIFT**) |
 | `native/src/markdown.zig#normalizeLabel` | `implemented` | `Sources/OpenTUIRenderables/MarkdownParser.swift:319` | `35fd866d06d6` (synced) |
 | `native/src/markdown.zig#Options` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1012` | `9e84192e6172` (synced) |
 | `native/src/markdown.zig#RunRange` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1169` | `29bca0dc7c1b` (synced) |
 | `native/src/markdown.zig#Scope` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1087` | `2f2ddc5ca65d` (synced) |
 | `native/src/markdown.zig#Span` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1125` | `36ec1dfc729f` (synced) |
-| `native/src/markdown.zig#TailSink` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1211` | `ae90b3933100` (synced) |
+| `native/src/markdown.zig#TailSink` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1211` | `ae90b3933100` -> `bb3a3a6aa9e4` (**DRIFT**) |
 | `native/src/markdown.zig#Writer` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1201` | `b36428f335a3` (synced) |
 | `native/src/mem-registry.zig#MemBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:441` | `147f999b324e` (synced) |
-| `native/src/mem-registry.zig#MemRegistry` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:454` | `fff2cc64e5d4` (synced) |
+| `native/src/mem-registry.zig#MemRegistry` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:454` | `fff2cc64e5d4` -> `cbb85df4fc9e` (**DRIFT**) |
 | `native/src/mem-registry.zig#MemRegistryError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:435` | `929f463be1ff` (synced) |
 | `native/src/native-renderable.zig#measureCells` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1886` | `5e4aef9393f0` (synced) |
 | `native/src/native-renderable.zig#MeasureTarget` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1829` | `208821f00c20` (synced) |
-| `native/src/native-renderable.zig#NativeRenderable` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1836` | `3a6e99b912e5` (synced) |
+| `native/src/native-renderable.zig#NativeRenderable` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1836` | `3a6e99b912e5` -> `ef9a37459f8c` (**DRIFT**) |
 | `native/src/native-renderable.zig#NodeStorage` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1855` | `f6a48f223e96` (synced) |
 | `native/src/native-renderable.zig#normalizeYogaMeasureHeightInput` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1881` | `0f94c113ff16` (synced) |
 | `native/src/native-renderable.zig#normalizeYogaMeasureWidthInput` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1873` | `64f4351b2c02` (synced) |
@@ -5154,7 +6706,7 @@
 | `native/src/native-span-feed.zig#SpanInfo` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3487` | `aa592d381fc4` (synced) |
 | `native/src/native-span-feed.zig#Stats` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3448` | `9cae5b6f87a6` (synced) |
 | `native/src/native-span-feed.zig#Status` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3565` | `12909ce7eccf` (synced) |
-| `native/src/native-span-feed.zig#Stream` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3594` | `3b51e8da7943` (synced) |
+| `native/src/native-span-feed.zig#Stream` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3594` | `3b51e8da7943` -> `8f2f55c6a363` (**DRIFT**) |
 | `native/src/native-span-feed.zig#streamClose` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3667` | `bd271193fd84` (synced) |
 | `native/src/native-span-feed.zig#streamCommit` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3710` | `3de1d4ff83e0` (synced) |
 | `native/src/native-span-feed.zig#streamCommitReserved` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3749` | `08ddca041a4a` (synced) |
@@ -5192,10 +6744,10 @@
 | `native/src/opentui.zig#UnifiedTextBufferView` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6297` | `d1e751597665` (synced) |
 | `native/src/opentui.zig#yoga` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6261` | `80c60e7f74af` (synced) |
 | `native/src/opentui.zig#yoga_c` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6258` | `ebb486494907` (synced) |
-| `native/src/renderer-output.zig#FeedBackend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3873` | `1d51e183009a` (synced) |
+| `native/src/renderer-output.zig#FeedBackend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3873` | `1d51e183009a` -> `3214131a072c` (**DRIFT**) |
 | `native/src/renderer-output.zig#StdoutOutput` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:3812` | `d366b3a2a8c3` (synced) |
 | `native/src/renderer-output.zig#WriteStatus` | `implemented` | `Sources/OpenTUICore/AnsiDiffRenderer.swift:8` | `d796f4e77f64` (synced) |
-| `native/src/renderer.zig#CliRenderer` | `adapted` | `Sources/OpenTUICore/AnsiDiffRenderer.swift:138` | `fb455a0184cb` (synced) |
+| `native/src/renderer.zig#CliRenderer` | `adapted` | `Sources/OpenTUICore/AnsiDiffRenderer.swift:138` | `fb455a0184cb` -> `3edebfbadba4` (**DRIFT**) |
 | `native/src/renderer.zig#CursorStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:4137` | `16d75e8f2485` (synced) |
 | `native/src/renderer.zig#DebugOverlayCorner` | `implemented` | `Sources/OpenTUICore/AnsiDiffRenderer.swift:36` | `9a8f943eb0a3` (synced) |
 | `native/src/renderer.zig#FeedBackend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:4143` | `53428ed45793` (synced) |
@@ -5212,7 +6764,7 @@
 | `native/src/renderer.zig#SplitSnapshot` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:4146` | `6cf23f1458d0` (synced) |
 | `native/src/renderer.zig#StdoutOutput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:4140` | `92abfbef1705` (synced) |
 | `native/src/renderer.zig#TextAttributes` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:4134` | `a8cf516ce20f` (synced) |
-| `native/src/rope.zig#Rope` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:187` | `671a3053d616` (synced) |
+| `native/src/rope.zig#Rope` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:187` | `671a3053d616` -> `305d40c38294` (**DRIFT**) |
 | `native/src/runtime-abi.zig#ExternalAllocatorStats` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6168` | `c207b445f85a` (synced) |
 | `native/src/runtime-abi.zig#ExternalBuildOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6165` | `bfe26837a0e5` (synced) |
 | `native/src/runtime-abi.zig#getAllocatorStats` | `implemented` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6195` | `4b465e905f63` (synced) |
@@ -5223,7 +6775,7 @@
 | `native/src/runtime.zig#io` | `adapted` | `Sources/OpenTUIRenderables/NativeContextABI.swift:6154` | `d8bec8d1369c` (synced) |
 | `native/src/scene-record.zig#bufferDrawFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2777` | `5d65572b17c8` (synced) |
 | `native/src/scene-record.zig#Command` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2805` | `6994a676f184` (synced) |
-| `native/src/scene-record.zig#fingerprint` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2890` | `f3fcb0f9ce61` (synced) |
+| `native/src/scene-record.zig#fingerprint` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2890` | `f3fcb0f9ce61` -> `a7e7e2c0c3f3` (**DRIFT**) |
 | `native/src/scene-record.zig#Fingerprint` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2864` | `b1ae1ecf4539` (synced) |
 | `native/src/scene-record.zig#gridFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2789` | `5a83233fd46e` (synced) |
 | `native/src/scene-record.zig#handleFromC` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2768` | `617bbbc31160` (synced) |
@@ -5246,16 +6798,16 @@
 | `native/src/scene.zig#getPaintLayout` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2621` | `6f7ad625cb4f` (synced) |
 | `native/src/scene.zig#Hit` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2495` | `a1e79f142640` (synced) |
 | `native/src/scene.zig#ImageState` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2394` | `7c233efa175f` (synced) |
-| `native/src/scene.zig#Layout` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2060` | `d3b8d27f6e0b` (synced) |
-| `native/src/scene.zig#Node` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2437` | `1c0e8edaa149` (synced) |
+| `native/src/scene.zig#Layout` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2060` | `d3b8d27f6e0b` -> `ff532fee7e3b` (**DRIFT**) |
+| `native/src/scene.zig#Node` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2437` | `1c0e8edaa149` -> `1813ddfeb6eb` (**DRIFT**) |
 | `native/src/scene.zig#Paint` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2260` | `fd67beb2bbd9` (synced) |
 | `native/src/scene.zig#paint_fields` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2301` | `4af05c000cc7` (synced) |
 | `native/src/scene.zig#PaintSlot` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2463` | `21b427467188` (synced) |
-| `native/src/scene.zig#Scene` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2533` | `b76ae93ced2f` (synced) |
+| `native/src/scene.zig#Scene` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2533` | `b76ae93ced2f` -> `0622a2970974` (**DRIFT**) |
 | `native/src/scene.zig#ScrollBarOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2005` | `d79f8135d3e6` (synced) |
 | `native/src/scene.zig#ScrollOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2034` | `603ed338276b` (synced) |
 | `native/src/scene.zig#scrollReport` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2597` | `9e2cb3935d2a` (synced) |
-| `native/src/scene.zig#ScrollState` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2095` | `b61129c0404e` (synced) |
+| `native/src/scene.zig#ScrollState` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2095` | `b61129c0404e` -> `6d98d18e1628` (**DRIFT**) |
 | `native/src/scene.zig#SliderOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1943` | `5edf0e8faba7` (synced) |
 | `native/src/scene.zig#sliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2565` | `3708023de0eb` (synced) |
 | `native/src/scene.zig#SliderThumb` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1972` | `29d2230b7a6c` (synced) |
@@ -5265,7 +6817,7 @@
 | `native/src/scene.zig#TextOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2145` | `b1561313dc01` (synced) |
 | `native/src/scene.zig#topmostHit` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2514` | `bda85a589a51` (synced) |
 | `native/src/scene.zig#topmostHitExcept` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2519` | `a596f44f0375` (synced) |
-| `native/src/scene.zig#VideoState` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2417` | `d30900906dda` (synced) |
+| `native/src/scene.zig#VideoState` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:2417` | `d30900906dda` -> `7508bb30b814` (**DRIFT**) |
 | `native/src/session.zig#Control` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3186` | `27466d1aa62f` (synced) |
 | `native/src/session.zig#CursorOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3110` | `56d6d7d42543` (synced) |
 | `native/src/session.zig#EnvironmentEntry` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3012` | `983556c0b0b8` (synced) |
@@ -5284,7 +6836,7 @@
 | `native/src/session.zig#PumpStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3215` | `55f746dcfdd5` (synced) |
 | `native/src/session.zig#RendererOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3022` | `4930ab717a39` (synced) |
 | `native/src/session.zig#RenderStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3254` | `8e124a027d6c` (synced) |
-| `native/src/session.zig#Session` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3292` | `5c6e78b35ae7` (synced) |
+| `native/src/session.zig#Session` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3292` | `5c6e78b35ae7` -> `40f6c7bf3687` (**DRIFT**) |
 | `native/src/session.zig#SplitControl` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3235` | `5b09db5ff866` (synced) |
 | `native/src/session.zig#State` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3245` | `5e94f730568a` (synced) |
 | `native/src/session.zig#TerminalOptions` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:3033` | `3bc6d21e57bd` (synced) |
@@ -5297,7 +6849,7 @@
 | `native/src/stdout-writer.zig#FdSink` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2183` | `6510bc662e5e` (synced) |
 | `native/src/stdout-writer.zig#Outcome` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2048` | `efd20a92d8e5` (synced) |
 | `native/src/stdout-writer.zig#Parked` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2230` | `cd03832ab0bf` (synced) |
-| `native/src/stdout-writer.zig#pinLibrary` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2476` | `21991db784e1` (synced) |
+| `native/src/stdout-writer.zig#pinLibrary` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2476` | `21991db784e1` -> `0943ece5d8da` (**DRIFT**) |
 | `native/src/stdout-writer.zig#readExactly` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2505` | `a75ad5bbf95a` (synced) |
 | `native/src/stdout-writer.zig#SinkError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2041` | `7896d5bfd660` (synced) |
 | `native/src/stdout-writer.zig#State` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2031` | `ea6a79c7daeb` (synced) |
@@ -5307,11 +6859,11 @@
 | `native/src/stdout-writer.zig#testPipe` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2486` | `43026e067559` (synced) |
 | `native/src/stdout-writer.zig#ThreadRunner` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2211` | `298e0deb09ff` (synced) |
 | `native/src/stdout-writer.zig#waitThreadsGone` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2559` | `6e96c3c1de74` (synced) |
-| `native/src/stdout-writer.zig#Writer` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2240` | `95f4268bd033` (synced) |
+| `native/src/stdout-writer.zig#Writer` | `adapted` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2240` | `95f4268bd033` -> `b1063e970df9` (**DRIFT**) |
 | `native/src/syntax-style.zig#Borrower` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:85` | `2a396152eea4` (synced) |
 | `native/src/syntax-style.zig#RGBA` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:20` | `7137f217292d` (synced) |
 | `native/src/syntax-style.zig#StyleDefinition` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:23` | `8b376591d82c` (synced) |
-| `native/src/syntax-style.zig#SyntaxStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:119` | `6f75bd6f74df` (synced) |
+| `native/src/syntax-style.zig#SyntaxStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:119` | `6f75bd6f74df` -> `915731df8c12` (**DRIFT**) |
 | `native/src/syntax-style.zig#SyntaxStyleError` | `implemented` | `Sources/OpenTUICore/SyntaxStyle.swift:5` | `78e3a49e1da5` (synced) |
 | `native/src/terminal-image.zig#KITTY_PREPARE_BYTES_MAX` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2635` | `9558ccc61235` (synced) |
 | `native/src/terminal-image.zig#KittyEncoding` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2627` | `1a91dfa9af3b` (synced) |
@@ -5319,21 +6871,21 @@
 | `native/src/terminal-image.zig#KittyPixelFormat` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2620` | `6340034568b1` (synced) |
 | `native/src/terminal-image.zig#kittyPlacementZ` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2742` | `3c0829852a36` (synced) |
 | `native/src/terminal-image.zig#QuantizedSixel` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2800` | `a022881be45a` (synced) |
-| `native/src/terminal-image.zig#quantizeSixel` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2815` | `f59877321f4f` (synced) |
+| `native/src/terminal-image.zig#quantizeSixel` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2815` | `f59877321f4f` -> `abf7ac9ad586` (**DRIFT**) |
 | `native/src/terminal-image.zig#writeKittyDelete` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2782` | `a3edca49ad85` (synced) |
 | `native/src/terminal-image.zig#writeKittyPayload` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2643` | `bb8b84529ca6` (synced) |
 | `native/src/terminal-image.zig#writeKittyPlacement` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2748` | `61025e7ef9a4` (synced) |
 | `native/src/terminal-image.zig#writeKittyPlacementAtCursor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2768` | `a3b79e0f85ed` (synced) |
 | `native/src/terminal-image.zig#writeKittyTransmit` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2712` | `7b5ec21f40e8` (synced) |
 | `native/src/terminal-image.zig#writeKittyTransmitEncoded` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2661` | `7767b1efb3dc` (synced) |
-| `native/src/terminal-image.zig#writeKittyTransmitFormat` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2717` | `0d12fd5daacf` (synced) |
+| `native/src/terminal-image.zig#writeKittyTransmitFormat` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2717` | `0d12fd5daacf` -> `fd6dd72903ac` (**DRIFT**) |
 | `native/src/terminal-image.zig#writeSixel` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2938` | `fc2a4bae3adb` (synced) |
 | `native/src/terminal-image.zig#writeSixelFramedPayload` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2930` | `9d2438ad2a19` (synced) |
 | `native/src/terminal-image.zig#writeSixelIndexedPayload` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2863` | `4797b0897e46` (synced) |
 | `native/src/terminal-image.zig#writeSixelPayload` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2924` | `629f5f2ca395` (synced) |
 | `native/src/terminal.zig#adoptHostEnvironment` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1326` | `a75826aaa69e` (synced) |
 | `native/src/terminal.zig#Capabilities` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:875` | `642b29a1bc0a` (synced) |
-| `native/src/terminal.zig#checkEnvironmentOverrides` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1666` | `00f5275fdf68` (synced) |
+| `native/src/terminal.zig#checkEnvironmentOverrides` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1666` | `00f5275fdf68` -> `33de96a31d3b` (**DRIFT**) |
 | `native/src/terminal.zig#CLIPBOARD_PAYLOAD_SIZE_MAX` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1025` | `eb7259c1eb1a` (synced) |
 | `native/src/terminal.zig#clipboardSequenceSize` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2790` | `bd85d00d61e0` (synced) |
 | `native/src/terminal.zig#ClipboardTarget` | `implemented` | `Sources/OpenTUICore/Clipboard.swift:70` | `c0265b34550c` (synced) |
@@ -5346,8 +6898,8 @@
 | `native/src/terminal.zig#forceDisableMouseMode` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1944` | `b830a15794bc` (synced) |
 | `native/src/terminal.zig#getCapabilities` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2616` | `7b190a3cabec` (synced) |
 | `native/src/terminal.zig#getCursorColor` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2663` | `5479a6868742` (synced) |
-| `native/src/terminal.zig#getCursorPosition` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2653` | `579fd0b27f49` (synced) |
-| `native/src/terminal.zig#getCursorStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2658` | `18ef4dc70c1d` (synced) |
+| `native/src/terminal.zig#getCursorPosition` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2653` | `579fd0b27f49` -> `6a71845fd8a7` (**DRIFT**) |
+| `native/src/terminal.zig#getCursorStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2658` | `18ef4dc70c1d` -> `8f00f3b4c666` (**DRIFT**) |
 | `native/src/terminal.zig#getMousePointer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2626` | `685634f4e52f` (synced) |
 | `native/src/terminal.zig#getTerminalInfo` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2926` | `04a86fb28e1a` (synced) |
 | `native/src/terminal.zig#getTerminalName` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2931` | `7527c23e035d` (synced) |
@@ -5364,11 +6916,11 @@
 | `native/src/terminal.zig#MousePointerStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1063` | `b48637c27374` (synced) |
 | `native/src/terminal.zig#Multiplexer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:990` | `727c7d2ca4c3` (synced) |
 | `native/src/terminal.zig#NotificationProtocol` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:952` | `18938afb9831` (synced) |
-| `native/src/terminal.zig#Options` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1144` | `6c75275a5edd` (synced) |
+| `native/src/terminal.zig#Options` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1144` | `6c75275a5edd` -> `3eec256c2b53` (**DRIFT**) |
 | `native/src/terminal.zig#Osc52Support` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1007` | `9d26776e15b4` (synced) |
-| `native/src/terminal.zig#processCapabilityResponse` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2342` | `2de3eee832a7` (synced) |
+| `native/src/terminal.zig#processCapabilityResponse` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2342` | `2de3eee832a7` -> `151d78ac60d4` (**DRIFT**) |
 | `native/src/terminal.zig#queryExplicitWidth` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1421` | `dd401471442e` (synced) |
-| `native/src/terminal.zig#queryTerminalSend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1385` | `4f81530365fe` (synced) |
+| `native/src/terminal.zig#queryTerminalSend` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1385` | `4f81530365fe` -> `e3abb1c0b376` (**DRIFT**) |
 | `native/src/terminal.zig#queryThemeColors` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1485` | `f5c3bbd73fb2` (synced) |
 | `native/src/terminal.zig#refusesForcedSixel` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2936` | `9488f852a81a` (synced) |
 | `native/src/terminal.zig#RemoteMode` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:968` | `177c2e96a0b4` (synced) |
@@ -5383,12 +6935,12 @@
 | `native/src/terminal.zig#setCursorStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2642` | `990746c15218` (synced) |
 | `native/src/terminal.zig#setFocusTracking` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1960` | `b4d2f1df95a0` (synced) |
 | `native/src/terminal.zig#setHostEnvVar` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1315` | `b8d3cfd03443` (synced) |
-| `native/src/terminal.zig#setKittyKeyboard` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1969` | `cae762944b16` (synced) |
+| `native/src/terminal.zig#setKittyKeyboard` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1969` | `cae762944b16` -> `58ca0b7aead3` (**DRIFT**) |
 | `native/src/terminal.zig#setKittyKeyboardFlags` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2668` | `07ee09e3bfd8` (synced) |
 | `native/src/terminal.zig#setModifyOtherKeys` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2019` | `275a5ba171dc` (synced) |
 | `native/src/terminal.zig#setMouseMode` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1912` | `bca59bd43a66` (synced) |
 | `native/src/terminal.zig#setMousePointerStyle` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2621` | `b71b877862a5` (synced) |
-| `native/src/terminal.zig#synchronizedOutput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2607` | `6c0ee6fdb73c` (synced) |
+| `native/src/terminal.zig#synchronizedOutput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:2607` | `6c0ee6fdb73c` -> `8e3aff4e0b5c` (**DRIFT**) |
 | `native/src/terminal.zig#SynchronizedOutput` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:975` | `9dab56c5c8a9` (synced) |
 | `native/src/terminal.zig#Terminal` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:859` | `7a5d859da330` (synced) |
 | `native/src/terminal.zig#TerminalInfo` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsTerminal.swift:1163` | `5036a4fa6f93` (synced) |
@@ -5403,7 +6955,7 @@
 | `native/src/text-buffer-iterators.zig#getGraphemeWidthAt` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4262` | `c0367d9923ed` (synced) |
 | `native/src/text-buffer-iterators.zig#getLineCount` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4064` | `e99695aa0a14` (synced) |
 | `native/src/text-buffer-iterators.zig#getMaxLineWidth` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4069` | `a6dfbcfc701f` (synced) |
-| `native/src/text-buffer-iterators.zig#getPrevGraphemeWidth` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4286` | `0566539bd2c5` (synced) |
+| `native/src/text-buffer-iterators.zig#getPrevGraphemeWidth` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4286` | `0566539bd2c5` -> `076b0e8d7d10` (**DRIFT**) |
 | `native/src/text-buffer-iterators.zig#getTotalWidth` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4074` | `ecb2e1f4bb89` (synced) |
 | `native/src/text-buffer-iterators.zig#GraphemeBounds` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3978` | `00d367414698` (synced) |
 | `native/src/text-buffer-iterators.zig#leafCount` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4099` | `d6c9496738e9` (synced) |
@@ -5416,7 +6968,7 @@
 | `native/src/text-buffer-iterators.zig#offsetToCoords` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4124` | `306fc71a9f37` (synced) |
 | `native/src/text-buffer-iterators.zig#SegmentCallback` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3968` | `be46415d861a` (synced) |
 | `native/src/text-buffer-iterators.zig#textBytes` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4094` | `2594fb499a25` (synced) |
-| `native/src/text-buffer-iterators.zig#walkLineRange` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4005` | `c35846dbfef3` (synced) |
+| `native/src/text-buffer-iterators.zig#walkLineRange` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4005` | `c35846dbfef3` -> `b9a2a2d0e5fb` (**DRIFT**) |
 | `native/src/text-buffer-iterators.zig#walkLinesAndSegments` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3989` | `c5136875f72a` (synced) |
 | `native/src/text-buffer-iterators.zig#weight` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:4084` | `74b8be997e0b` (synced) |
 | `native/src/text-buffer-segment.zig#ChunkLayoutCache` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3055` | `ab20d25c56ea` (synced) |
@@ -5424,10 +6976,10 @@
 | `native/src/text-buffer-segment.zig#Highlight` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3302` | `7f21057108ea` (synced) |
 | `native/src/text-buffer-segment.zig#RenderClusterInfo` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3019` | `6cdaa0f7eddf` (synced) |
 | `native/src/text-buffer-segment.zig#RGBA` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2996` | `7137f217292d` (synced) |
-| `native/src/text-buffer-segment.zig#Segment` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3367` | `b8b32706136b` (synced) |
-| `native/src/text-buffer-segment.zig#StyleSpan` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3328` | `04c278f5d8d9` (synced) |
+| `native/src/text-buffer-segment.zig#Segment` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3367` | `b8b32706136b` -> `ef2ead4f0728` (**DRIFT**) |
+| `native/src/text-buffer-segment.zig#StyleSpan` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3328` | `04c278f5d8d9` -> `0686c61534e7` (**DRIFT**) |
 | `native/src/text-buffer-segment.zig#TextBufferError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3002` | `1c229d6ee9a8` (synced) |
-| `native/src/text-buffer-segment.zig#TextChunk` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3105` | `a8d898469a9a` (synced) |
+| `native/src/text-buffer-segment.zig#TextChunk` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3105` | `a8d898469a9a` -> `501db992420d` (**DRIFT**) |
 | `native/src/text-buffer-segment.zig#TextChunkColdState` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3038` | `f75458e33631` (synced) |
 | `native/src/text-buffer-segment.zig#TextSelection` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:2999` | `fa3020fb837e` (synced) |
 | `native/src/text-buffer-segment.zig#UnifiedRope` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:3622` | `3e6395147c36` (synced) |
@@ -5444,7 +6996,7 @@
 | `native/src/text-buffer-view.zig#TextAlign` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:888` | `a1de0673a730` (synced) |
 | `native/src/text-buffer-view.zig#TextBufferView` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:1030` | `f01d904771e4` (synced) |
 | `native/src/text-buffer-view.zig#TextBufferViewError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:641` | `d0acdb8c32ae` (synced) |
-| `native/src/text-buffer-view.zig#UnifiedTextBufferView` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:921` | `44d9b3cfd958` (synced) |
+| `native/src/text-buffer-view.zig#UnifiedTextBufferView` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:921` | `44d9b3cfd958` -> `3dd658e1caad` (**DRIFT**) |
 | `native/src/text-buffer-view.zig#Viewport` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:701` | `16772aff5b10` (synced) |
 | `native/src/text-buffer-view.zig#VirtualChunk` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:758` | `d403a0841eaa` (synced) |
 | `native/src/text-buffer-view.zig#VirtualLine` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:781` | `50dbffc43662` (synced) |
@@ -5455,7 +7007,7 @@
 | `native/src/text-buffer.zig#Highlight` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:407` | `9bdbf140ff9b` (synced) |
 | `native/src/text-buffer.zig#LayerRun` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:488` | `afca73b5c46c` (synced) |
 | `native/src/text-buffer.zig#LineMark` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:516` | `12889566c475` (synced) |
-| `native/src/text-buffer.zig#LineSpans` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:503` | `1da996af5c24` (synced) |
+| `native/src/text-buffer.zig#LineSpans` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:503` | `1da996af5c24` -> `9c21f2798572` (**DRIFT**) |
 | `native/src/text-buffer.zig#MemRegistry` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:359` | `93ad34159a97` (synced) |
 | `native/src/text-buffer.zig#OwnedStyledChunk` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:477` | `5babe7cd8825` (synced) |
 | `native/src/text-buffer.zig#RenderClusterInfo` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:426` | `ee994972e6a8` (synced) |
@@ -5469,7 +7021,7 @@
 | `native/src/text-buffer.zig#TextBufferError` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:398` | `f09bedff43f5` (synced) |
 | `native/src/text-buffer.zig#TextChunk` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:356` | `c444b44a0083` (synced) |
 | `native/src/text-buffer.zig#TextSelection` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:395` | `96f47201893e` (synced) |
-| `native/src/text-buffer.zig#UnifiedTextBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:529` | `8181abf6c3bd` (synced) |
+| `native/src/text-buffer.zig#UnifiedTextBuffer` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:529` | `8181abf6c3bd` -> `7bb0298c5fe1` (**DRIFT**) |
 | `native/src/text-buffer.zig#WrapMode` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:423` | `a19ad2be691e` (synced) |
 | `native/src/text-work.zig#add` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:100` | `f01babf83247` (synced) |
 | `native/src/text-work.zig#Counts` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:19` | `7bff69da9697` (synced) |
@@ -5481,7 +7033,7 @@
 | `native/src/utf8.zig#ControlDisplay` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:14` | `2fd139c6a1a2` (synced) |
 | `native/src/utf8.zig#controlNotationGlyph` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:415` | `d97d12aebeaa` (synced) |
 | `native/src/utf8.zig#controlNotationWidth` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:404` | `4080a8b4d03a` (synced) |
-| `native/src/utf8.zig#decodeUtf8Unchecked` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:575` | `ac4891fe83a8` (synced) |
+| `native/src/utf8.zig#decodeUtf8Unchecked` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:575` | `ac4891fe83a8` -> `54d83830704b` (**DRIFT**) |
 | `native/src/utf8.zig#eastAsianWidth` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:463` | `6666ba7e5ca4` (synced) |
 | `native/src/utf8.zig#findChunkLayoutInfo` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:1545` | `0f246d96e3e3` (synced) |
 | `native/src/utf8.zig#findGraphemePosByWidth` | `implemented` | `Sources/OpenTUICore/UnicodeWidth.swift:1285` | `3c6ef88aa1fb` (synced) |
@@ -5526,12 +7078,12 @@
 | `native/src/utils.zig#repeat` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsIO.swift:163` | `203fed1115f9` (synced) |
 | `native/src/video.zig#Info` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2959` | `c29fc9f4faab` (synced) |
 | `native/src/video.zig#LatencyWindow` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3044` | `8face6d7df56` (synced) |
-| `native/src/video.zig#Player` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3309` | `c6910e281ba9` (synced) |
+| `native/src/video.zig#Player` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3309` | `c6910e281ba9` -> `b0970a72afef` (**DRIFT**) |
 | `native/src/video.zig#PlayerState` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3274` | `fbd0e33d3f2c` (synced) |
 | `native/src/video.zig#Quality` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3080` | `e26583cd551a` (synced) |
 | `native/src/video.zig#quality_scales` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3077` | `8d19b25c0db8` (synced) |
 | `native/src/video.zig#State` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:2991` | `f203b785be91` (synced) |
-| `native/src/video.zig#Video` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3158` | `ce81ebfd076c` (synced) |
+| `native/src/video.zig#Video` | `implemented` | `Sources/OpenTUICore/NativeSubsystemsCoreB.swift:3158` | `ce81ebfd076c` -> `8421408151ce` (**DRIFT**) |
 | `native/src/yoga.zig#Callbacks` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1532` | `9564b9157aa7` (synced) |
 | `native/src/yoga.zig#check` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1411` | `e7dc1d2ba852` (synced) |
 | `native/src/yoga.zig#Config` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1546` | `073481b40666` (synced) |
@@ -5544,7 +7096,7 @@
 | `native/src/yoga.zig#NativeMeasureCallback` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1529` | `64cdceadb045` (synced) |
 | `native/src/yoga.zig#nodeStorageBytes` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1619` | `9e24ea4698b0` (synced) |
 | `native/src/yoga.zig#nodeTeardownStatus` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1558` | `50443d9f156b` (synced) |
-| `native/src/yoga.zig#reportMeasureError` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1575` | `12b201453b44` (synced) |
+| `native/src/yoga.zig#reportMeasureError` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1575` | `12b201453b44` -> `e3c807469524` (**DRIFT**) |
 | `native/src/yoga.zig#Status` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1390` | `7f78610443ec` (synced) |
 | `native/src/yoga.zig#testAllocationCount` | `adapted` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1774` | `a1c0cf6ae79d` (synced) |
 | `native/src/yoga.zig#TestCacheAxis` | `implemented` | `Sources/OpenTUIRenderables/NativeSubsystemsRenderables.swift:1763` | `22e1bb867bb2` (synced) |
@@ -5611,27 +7163,27 @@
 | `qrcode/src/lib/qrcode.render.ts#NormalizedTerminalRenderOptions` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:156` | `3b65f410fb94` (synced) |
 | `qrcode/src/lib/qrcode.render.ts#normalizeTerminalOptions` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:170` | `501f7bd9db10` (synced) |
 | `qrcode/src/lib/qrcode.render.ts#TerminalRenderOptions` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:142` | `65a8f667c8ff` (synced) |
-| `qrcode/src/lib/qrcode.shift-jis.ts#SHIFT_JIS_CODE_BY_CHAR` | `implemented` | `Sources/OpenTUIRenderables/QRCodeShiftJIS.swift:6` | `5f2331290062` (synced) |
-| `qrcode/src/lib/qrcode.ts#createQrSvg` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1837` | `c019a180cafb` (synced) |
+| `qrcode/src/lib/qrcode.shift-jis.ts#SHIFT_JIS_CODE_BY_CHAR` | `implemented` | `Sources/OpenTUIRenderables/QRCodeShiftJIS.swift:6` | `5f2331290062` -> `2a80b42560b0` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#createQrSvg` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1837` | `c019a180cafb` -> `b87ebc4655c3` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#EncodeOptions` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:386` | `6f24aff1bc9b` (synced) |
 | `qrcode/src/lib/qrcode.ts#ErrorCorrectionLevel` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:322` | `de08ddf04520` (synced) |
 | `qrcode/src/lib/qrcode.ts#Fnc1SecondPositionInfo` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:367` | `3d707d1b5117` (synced) |
 | `qrcode/src/lib/qrcode.ts#Gs1Element` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:437` | `7341ad091178` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1081` | `83f671a341ce` (synced) |
+| `qrcode/src/lib/qrcode.ts#QRCode` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1081` | `83f671a341ce` -> `b214c125cd00` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QRCode.computeStructuredAppendParity` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1279` | `20c032ccccc9` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeBytes` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1212` | `2bbb92c41246` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeEciText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1221` | `56a6a21f8158` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeGs1Text` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1231` | `49758d80d9c9` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1290` | `2d41d6c2e846` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeStructuredAppend` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1259` | `0bf0344aecf3` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.encodeText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1169` | `598bbf1a2967` (synced) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeBytes` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1212` | `2bbb92c41246` -> `8938caa9bf81` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeEciText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1221` | `56a6a21f8158` -> `6396e580190f` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeGs1Text` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1231` | `49758d80d9c9` -> `de50818a1e97` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1290` | `2d41d6c2e846` -> `58d6209e20ba` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeStructuredAppend` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1259` | `0bf0344aecf3` -> `c0cea15663b7` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.encodeText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1169` | `598bbf1a2967` -> `686b49ae71f1` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QRCode.getModule` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1371` | `7e87ca9f7514` (synced) |
 | `qrcode/src/lib/qrcode.ts#QRCode.maskCondition` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1420` | `fdd8eef03737` (synced) |
 | `qrcode/src/lib/qrcode.ts#QRCode.toMatrix` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1380` | `47b61f413ddf` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.toSvgString` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1386` | `964c8ecc5c52` (synced) |
-| `qrcode/src/lib/qrcode.ts#QRCode.toTerminalString` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1404` | `168393936817` (synced) |
+| `qrcode/src/lib/qrcode.ts#QRCode.toSvgString` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1386` | `964c8ecc5c52` -> `3879582a796a` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QRCode.toTerminalString` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1404` | `168393936817` -> `2d1c3eda1bc8` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QRCode.validateVersionPublic` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:1415` | `d5eb14f1b04f` (synced) |
-| `qrcode/src/lib/qrcode.ts#QrSegment` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:619` | `34638f4e36f8` (synced) |
+| `qrcode/src/lib/qrcode.ts#QrSegment` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:619` | `34638f4e36f8` -> `f2cc25a8e5ac` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.getTotalBits` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:885` | `719e66bcc152` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.isAlphanumeric` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:652` | `a80f4c38d3b3` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.isKanji` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:665` | `b6e6fe9aa240` (synced) |
@@ -5640,14 +7192,14 @@
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeBytes` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:711` | `32e4eaf4baeb` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeBytesFromText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:720` | `ce022b46342d` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeEci` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:767` | `8d81eba9fbeb` (synced) |
-| `qrcode/src/lib/qrcode.ts#QrSegment.makeEciSegmentsFromEscapedText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:828` | `71ba0857f046` (synced) |
+| `qrcode/src/lib/qrcode.ts#QrSegment.makeEciSegmentsFromEscapedText` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:828` | `71ba0857f046` -> `61e8e02faabe` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeFnc1FirstPosition` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:792` | `0e9243fb8c5e` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeFnc1SecondPosition` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:797` | `4b002300a041` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeKanji` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:726` | `2ebb2463d2bb` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeKanjiFromShiftJis` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:743` | `766b1c1e8a5c` (synced) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeNumeric` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:674` | `a88c6c069055` (synced) |
-| `qrcode/src/lib/qrcode.ts#QrSegment.makeOptimizedSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:818` | `25200bf7e34c` (synced) |
-| `qrcode/src/lib/qrcode.ts#QrSegment.makeSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:804` | `42d265c36ad3` (synced) |
+| `qrcode/src/lib/qrcode.ts#QrSegment.makeOptimizedSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:818` | `25200bf7e34c` -> `78e501b44876` (**DRIFT**) |
+| `qrcode/src/lib/qrcode.ts#QrSegment.makeSegments` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:804` | `42d265c36ad3` -> `5a2bfd7e99e7` (**DRIFT**) |
 | `qrcode/src/lib/qrcode.ts#QrSegment.makeStructuredAppendHeader` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:783` | `79eb30957d8e` (synced) |
 | `qrcode/src/lib/qrcode.ts#StructuredAppendInfo` | `implemented` | `Sources/OpenTUIRenderables/QRCode.swift:353` | `0ef9c44bc8c6` (synced) |
 | `qrcode/src/react.ts#registerQRCode` | `adapted` | `Sources/OpenTUIView/QRCodeRegistration.swift:113` | `6ef753bd9ff1` (synced) |
@@ -5655,59 +7207,59 @@
 | `qrcode/src/renderables/QRCode.ts#QRCodeOptions` | `implemented` | `Sources/OpenTUIRenderables/QRCodeRenderable.swift:28` | `e240bdb613a0` (synced) |
 | `qrcode/src/renderables/QRCode.ts#QRCodeRenderable` | `implemented` | `Sources/OpenTUIRenderables/QRCodeRenderable.swift:539` | `543aa36f11b5` (synced) |
 | `qrcode/src/solid.ts#registerQRCode` | `adapted` | `Sources/OpenTUIView/QRCodeRegistration.swift:114` | `d2b5b27f61da` (synced) |
-| `ssh/src/auth.ts#attemptFromAuthContext` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:133` | `5cf223e5605c` (synced) |
-| `ssh/src/auth.ts#AuthAttempt` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:37` | `4fcc60ce206d` (synced) |
+| `ssh/src/auth.ts#attemptFromAuthContext` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:133` | `5cf223e5605c` -> `c6887f964538` (**DRIFT**) |
+| `ssh/src/auth.ts#AuthAttempt` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:37` | `4fcc60ce206d` -> `185757981184` (**DRIFT**) |
 | `ssh/src/auth.ts#Authenticator` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:199` | `d084e8e417b4` (synced) |
 | `ssh/src/auth.ts#AuthMethod` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:27` | `c9e8c06b72c4` (synced) |
-| `ssh/src/auth.ts#AuthOutcome` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:72` | `254e9f702ae9` (synced) |
-| `ssh/src/auth.ts#createAuthenticator` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:339` | `ed75437247f8` (synced) |
+| `ssh/src/auth.ts#AuthOutcome` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:72` | `254e9f702ae9` -> `4eacb2bf4ad0` (**DRIFT**) |
+| `ssh/src/auth.ts#createAuthenticator` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:339` | `ed75437247f8` -> `1d5341653d9d` (**DRIFT**) |
 | `ssh/src/auth.ts#NormalizedAuthConfig` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:5` | `7f30c2be55c1` (synced) |
 | `ssh/src/auth.ts#resolveAuth` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:430` | `20db9ee9f93b` (synced) |
 | `ssh/src/auth.ts#ResolvedAuth` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHAuth.swift:368` | `e8f342e5557c` (synced) |
 | `ssh/src/banner.ts#BannerDescriptor` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBanner.swift:4` | `089cefcb83e4` (synced) |
 | `ssh/src/banner.ts#formatBanner` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBanner.swift:29` | `623d5346f204` (synced) |
 | `ssh/src/bridge.ts#CLIENT_ENV_VALUE_BYTES_MAX` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:42` | `4962889c2ee6` (synced) |
-| `ssh/src/bridge.ts#createSessionBridge` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:1055` | `8fbe2fc861b2` (synced) |
+| `ssh/src/bridge.ts#createSessionBridge` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:1055` | `8fbe2fc861b2` -> `152e4cb3388b` (**DRIFT**) |
 | `ssh/src/bridge.ts#DEFAULT_PTY` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:34` | `53458a00f89f` (synced) |
 | `ssh/src/bridge.ts#isClientEnvValue` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:53` | `3f5d305c2af2` (synced) |
 | `ssh/src/bridge.ts#MAX_PTY` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:38` | `0a45d26e50a8` (synced) |
 | `ssh/src/bridge.ts#PtyInfo` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:11` | `8aca5a5ab2ce` (synced) |
 | `ssh/src/bridge.ts#RendererFactory` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:7` | `df9ae970f099` (synced) |
-| `ssh/src/bridge.ts#SessionBridge` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:281` | `c15189a0a23b` (synced) |
+| `ssh/src/bridge.ts#SessionBridge` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:281` | `c15189a0a23b` -> `d79761590d65` (**DRIFT**) |
 | `ssh/src/bridge.ts#SessionBridgeOptions` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHBridge.swift:309` | `4669b77ab717` (synced) |
 | `ssh/src/connection.ts#ConnectionDependencies` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHConnection.swift:94` | `92a8ed1666e1` (synced) |
-| `ssh/src/connection.ts#createConnectionHandler` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHConnection.swift:474` | `8b8a68e48b7a` (synced) |
+| `ssh/src/connection.ts#createConnectionHandler` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHConnection.swift:474` | `8b8a68e48b7a` -> `f93b325a2b5a` (**DRIFT**) |
 | `ssh/src/errors.ts#ConfigError` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHErrors.swift:40` | `1128d56e9f2c` (synced) |
 | `ssh/src/errors.ts#DenyError` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHErrors.swift:96` | `6c62a0f5beb4` (synced) |
 | `ssh/src/errors.ts#isDeny` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHErrors.swift:114` | `7c106bc982d5` (synced) |
 | `ssh/src/errors.ts#OutputPressureError` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHErrors.swift:60` | `e04f2fc398f2` (synced) |
 | `ssh/src/errors.ts#SshError` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHErrors.swift:17` | `99cdbeb57ab1` (synced) |
 | `ssh/src/keys.ts#parseOneKey` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHKeys.swift:373` | `812e8d1ca92b` (synced) |
-| `ssh/src/keys.ts#resolveHostKey` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHKeys.swift:661` | `40d0fb178383` (synced) |
+| `ssh/src/keys.ts#resolveHostKey` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHKeys.swift:661` | `40d0fb178383` -> `5ea1409ceada` (**DRIFT**) |
 | `ssh/src/keys.ts#sha256Fingerprint` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHKeys.swift:338` | `bf1503a6846f` (synced) |
-| `ssh/src/logging.ts#LogEvent` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHLogging.swift:6` | `2c100ccd3176` (synced) |
-| `ssh/src/logging.ts#logging` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHLogging.swift:133` | `d74b2f49b42e` (synced) |
+| `ssh/src/logging.ts#LogEvent` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHLogging.swift:6` | `2c100ccd3176` -> `87fb2610f84d` (**DRIFT**) |
+| `ssh/src/logging.ts#logging` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHLogging.swift:133` | `d74b2f49b42e` -> `9b26c4dc3f8d` (**DRIFT**) |
 | `ssh/src/logging.ts#LoggingOptions` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHLogging.swift:75` | `5c86e74a748f` (synced) |
 | `ssh/src/run-session.ts#runSession` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHConnection.swift:20` | `9fec3ff46c53` (synced) |
 | `ssh/src/run-session.ts#RuntimeMiddleware` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHConnection.swift:6` | `f297c83f1d30` (synced) |
 | `ssh/src/runtime.ts#ResolvedRuntime` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHServer.swift:21` | `0205ed0b1fad` (synced) |
 | `ssh/src/runtime.ts#ResolvedSessionLimits` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHServer.swift:9` | `270d9ca16b92` (synced) |
 | `ssh/src/runtime.ts#resolveRuntime` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHServer.swift:119` | `f3d9eb907a2d` (synced) |
-| `ssh/src/safe.ts#createSafeInvoke` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHSafe.swift:41` | `fc9c172ed919` (synced) |
+| `ssh/src/safe.ts#createSafeInvoke` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHSafe.swift:41` | `fc9c172ed919` -> `c9b9a835f470` (**DRIFT**) |
 | `ssh/src/safe.ts#ignoreErrors` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHSafe.swift:57` | `6f139b40773d` (synced) |
 | `ssh/src/safe.ts#SafeInvoke` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHSafe.swift:7` | `4b79ede5c4ee` (synced) |
-| `ssh/src/server.ts#createServer` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHServer.swift:341` | `4307665b712a` (synced) |
+| `ssh/src/server.ts#createServer` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHServer.swift:341` | `4307665b712a` -> `1959a080a47b` (**DRIFT**) |
 | `ssh/src/types.ts#AuthConfig` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:461` | `4f3ec0675734` (synced) |
 | `ssh/src/types.ts#AuthMethods` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:435` | `e64eab9063b6` (synced) |
 | `ssh/src/types.ts#CredentialMethods` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:416` | `abad3ba943e8` (synced) |
 | `ssh/src/types.ts#Handoff` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:158` | `44b6bfe3873b` (synced) |
-| `ssh/src/types.ts#Identity` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:24` | `7142bb4a9a91` (synced) |
+| `ssh/src/types.ts#Identity` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:24` | `7142bb4a9a91` -> `7f1112a9eaee` (**DRIFT**) |
 | `ssh/src/types.ts#IdentityFor` | `adapted` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:60` | `aadcef72c10e` (synced) |
-| `ssh/src/types.ts#KeyboardPrompt` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:346` | `e2370c52bc7d` (synced) |
+| `ssh/src/types.ts#KeyboardPrompt` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:346` | `e2370c52bc7d` -> `74e6363fad84` (**DRIFT**) |
 | `ssh/src/types.ts#ListenInfo` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:564` | `d8c766b75625` (synced) |
 | `ssh/src/types.ts#Middleware` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:308` | `833dcf87749e` (synced) |
-| `ssh/src/types.ts#MiddlewareFunction` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:312` | `4673c75de4ef` (synced) |
-| `ssh/src/types.ts#MiddlewareSession` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:292` | `27fd3122b341` (synced) |
+| `ssh/src/types.ts#MiddlewareFunction` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:312` | `4673c75de4ef` -> `1065ea0ec582` (**DRIFT**) |
+| `ssh/src/types.ts#MiddlewareSession` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:292` | `27fd3122b341` -> `59a85d3292bd` (**DRIFT**) |
 | `ssh/src/types.ts#Next` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:166` | `86fb33f0cc96` (synced) |
 | `ssh/src/types.ts#PublicKey` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:7` | `c5bf3afe2a2c` (synced) |
 | `ssh/src/types.ts#PublicKeyPolicy` | `implemented` | `Sources/OpenTUITerminal/SSH/SSHTypes.swift:373` | `6107589102c6` (synced) |
