@@ -59,6 +59,7 @@ public actor PlatformTerminalBackend: TerminalBackend {
         self.inputFD = inputFD
         self.outputFD = outputFD
         self.defaultSize = defaultSize
+        ensurePlatformHostClipboardRegistered()
     }
     #elseif os(Windows)
     private var savedInputMode: DWORD?
@@ -66,10 +67,12 @@ public actor PlatformTerminalBackend: TerminalBackend {
 
     public init(defaultSize: TerminalSize = TerminalSize(width: 80, height: 24)) {
         self.defaultSize = defaultSize
+        ensurePlatformHostClipboardRegistered()
     }
     #else
     public init(defaultSize: TerminalSize = TerminalSize(width: 80, height: 24)) {
         self.defaultSize = defaultSize
+        ensurePlatformHostClipboardRegistered()
     }
     #endif
 

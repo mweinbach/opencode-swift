@@ -2762,6 +2762,21 @@ public func uninstallPlatformHostClipboard() {
     NativeHostClipboardBackendRegistry.register(nil)
 }
 
+private let platformHostClipboardEnsureLock = Mutex<Void>(())
+
+/// Idempotently registers the native OS clipboard backend (`pbcopy`/`pbpaste` on macOS,
+/// `wl-copy`/`xclip`/`xsel` on Linux/FreeBSD/Android, Win32 on Windows) into
+/// `NativeHostClipboardBackendRegistry` if no backend factory is currently registered.
+///
+/// Safe to call repeatedly from any thread; preserves any custom factory already installed.
+public func ensurePlatformHostClipboardRegistered() {
+    platformHostClipboardEnsureLock.withLock { _ in
+        if NativeHostClipboardBackendRegistry.currentFactory() == nil {
+            installPlatformHostClipboard()
+        }
+    }
+}
+
 // ============================================================================
 // MARK: - 11. Host Clipboard Service & ABI Layer (`src/clipboard/host.zig`, `src/clipboard-abi.zig`)
 // ============================================================================

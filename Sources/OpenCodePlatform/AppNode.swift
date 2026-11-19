@@ -27,6 +27,7 @@ public enum LayerNodePlatform {
     public static let pathKey = "@opencode/Path"
     public static let fetchKey = "@opencode/Fetch"
     public static let httpClientKey = "@opencode/HttpClient"
+    private static let nativeTransportKey = "@opencode/NativeHttpTransport"
 
     // parity: util/src/effect/app-node-platform.ts#Fetch [status=implemented hash=3a8c3b0953ee]
     public typealias Fetch = @Sendable (HTTPRequest) async throws -> HTTPResponse
@@ -52,12 +53,25 @@ public enum LayerNodePlatform {
                 return LayerNode.Output([fetchKey: fetch])
             }
             if let existing = deps.get(fetchKey, as: Fetch.self) {
+                if let native = deps.get(nativeTransportKey, as: (any HTTPTransport).self) {
+                    return LayerNode.Output([fetchKey: existing, nativeTransportKey: native])
+                }
                 return LayerNode.Output([fetchKey: existing])
             }
+            #if !os(WASI)
+            let defaultFetch: Fetch = { request in
+                try await URLSessionHTTPTransport.shared.send(request)
+            }
+            return LayerNode.Output([
+                fetchKey: defaultFetch,
+                nativeTransportKey: URLSessionHTTPTransport.shared as any HTTPTransport,
+            ])
+            #else
             let fallback: Fetch = { _ in
                 throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "HTTPTransport.defaultFetch")
             }
             return LayerNode.Output([fetchKey: fallback])
+            #endif
         }
     }
 
@@ -95,11 +109,22 @@ public enum LayerNodePlatform {
     public static let httpClient: LayerNode.Provider = AppNode.makeGlobalNode(
         httpClientKey,
         LayerNode.ExecutableLayer { deps, _ in
-            let fetch = deps.get(fetchKey, as: Fetch.self) ?? { _ in
+            if let nativeTransport = deps.get(nativeTransportKey, as: (any HTTPTransport).self) {
+                return LayerNode.Output([httpClientKey: nativeTransport])
+            }
+            if let fetch = deps.get(fetchKey, as: Fetch.self) {
+                let transport: any HTTPTransport = FetchTransport(fetch)
+                return LayerNode.Output([httpClientKey: transport])
+            }
+            #if !os(WASI)
+            return LayerNode.Output([httpClientKey: URLSessionHTTPTransport.shared as any HTTPTransport])
+            #else
+            let fallback: Fetch = { _ in
                 throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "HTTPTransport.httpClient")
             }
-            let transport: any HTTPTransport = FetchTransport(fetch)
+            let transport: any HTTPTransport = FetchTransport(fallback)
             return LayerNode.Output([httpClientKey: transport])
+            #endif
         },
         [httpFetch]
     )

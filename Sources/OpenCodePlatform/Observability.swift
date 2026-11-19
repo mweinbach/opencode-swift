@@ -262,22 +262,46 @@ public enum Otlp {
         }
     }
 
+    /// Default HTTP transport for OTLP export (`URLSessionHTTPTransport.shared` on host OSes, `nil` on WASI).
+    public static var defaultTransport: (any HTTPTransport)? {
+        #if !os(WASI)
+        return URLSessionHTTPTransport.shared
+        #else
+        return nil
+        #endif
+    }
+
     public final class OtlpLogSink: LogSink, Sendable {
         public let url: String
         public let resource: Resource
         public let headers: [String: String]
-        private let transport: (any HTTPTransport)?
+        public let transport: (any HTTPTransport)?
 
-        public init(url: String, resource: Resource, headers: [String: String], transport: (any HTTPTransport)? = nil) {
+        public init(
+            url: String,
+            resource: Resource,
+            headers: [String: String],
+            transport: (any HTTPTransport)? = Otlp.defaultTransport
+        ) {
             self.url = url
             self.resource = resource
             self.headers = headers
             self.transport = transport
         }
 
+        /// Encodes a `StructuredLogRecord` as a spec-compliant OTLP/HTTP JSON `ExportLogsServiceRequest`
+        /// (`resourceLogs` -> `scopeLogs` -> `logRecords`).
+        public func encodePayload(_ record: StructuredLogRecord, observedTimeUnixNano: UInt64? = nil) -> String {
+            Otlp.encodeLogPayload(
+                record: record,
+                resource: resource,
+                observedTimeUnixNano: observedTimeUnixNano
+            )
+        }
+
         public func log(_ record: StructuredLogRecord) async {
             guard let transport else { return }
-            let body = Logging.formatRecord(record)
+            let body = encodePayload(record)
             var reqHeaders = headers
             reqHeaders["Content-Type"] = "application/json"
             _ = try? await transport.send(HTTPRequest(
@@ -287,6 +311,173 @@ public enum Otlp {
                 body: Array(body.utf8)
             ))
         }
+    }
+
+    /// Encodes a `StructuredLogRecord` and `Resource` into an OTLP/HTTP JSON `resourceLogs` envelope.
+    public static func encodeLogPayload(
+        record: StructuredLogRecord,
+        resource: Resource,
+        observedTimeUnixNano: UInt64? = nil
+    ) -> String {
+        let nowNs = observedTimeUnixNano ?? UInt64(max(Int64(0), Flock.currentEpochMs())) &* 1_000_000
+        let recordTimeNs = parseISO8601ToUnixNano(record.timestamp) ?? nowNs
+
+        let (severityNumber, severityText): (Int, String)
+        switch record.level {
+        case .debug:
+            (severityNumber, severityText) = (5, "DEBUG")
+        case .info:
+            (severityNumber, severityText) = (9, "INFO")
+        case .warn:
+            (severityNumber, severityText) = (13, "WARN")
+        case .error:
+            (severityNumber, severityText) = (17, "ERROR")
+        }
+
+        var resAttrMap = resource.attributes
+        if resAttrMap["service.name"] == nil {
+            resAttrMap["service.name"] = resource.serviceName
+        }
+        if resAttrMap["service.version"] == nil {
+            resAttrMap["service.version"] = resource.serviceVersion
+        }
+        let resourceAttributesJSON: [PureJSONValue] = resAttrMap
+            .sorted { $0.key < $1.key }
+            .map { key, value in
+                .object([
+                    ("key", .string(key)),
+                    ("value", .object([("stringValue", .string(value))])),
+                ])
+            }
+
+        var logAttributesJSON: [PureJSONValue] = []
+        if !record.timestamp.isEmpty && parseISO8601ToUnixNano(record.timestamp) == nil {
+            logAttributesJSON.append(.object([
+                ("key", .string("log.timestamp")),
+                ("value", .object([("stringValue", .string(record.timestamp))])),
+            ]))
+        }
+        if let cause = record.cause {
+            logAttributesJSON.append(.object([
+                ("key", .string("cause")),
+                ("value", .object([("stringValue", .string(cause))])),
+            ]))
+        }
+        for (key, value) in record.fields {
+            logAttributesJSON.append(.object([
+                ("key", .string(key)),
+                ("value", .object([("stringValue", .string(value))])),
+            ]))
+        }
+
+        var logRecordPairs: [(String, PureJSONValue)] = [
+            ("timeUnixNano", .string(String(recordTimeNs))),
+            ("observedTimeUnixNano", .string(String(nowNs))),
+            ("severityNumber", .number(Double(severityNumber))),
+            ("severityText", .string(severityText)),
+            ("body", .object([("stringValue", .string(record.message))])),
+        ]
+        if !logAttributesJSON.isEmpty {
+            logRecordPairs.append(("attributes", .array(logAttributesJSON)))
+        }
+
+        let envelope: PureJSONValue = .object([
+            ("resourceLogs", .array([
+                .object([
+                    ("resource", .object([
+                        ("attributes", .array(resourceAttributesJSON)),
+                    ])),
+                    ("scopeLogs", .array([
+                        .object([
+                            ("scope", .object([
+                                ("name", .string(resource.serviceName)),
+                                ("version", .string(resource.serviceVersion)),
+                            ])),
+                            ("logRecords", .array([
+                                .object(logRecordPairs),
+                            ])),
+                        ]),
+                    ])),
+                ]),
+            ])),
+        ])
+        return PureJSON.stringifyCompact(envelope)
+    }
+
+    /// Parses an RFC 3339 / ISO-8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SS[.fff...]Z`) into Unix epoch nanoseconds.
+    private static func parseISO8601ToUnixNano(_ value: String) -> UInt64? {
+        let bytes = Array(value.utf8)
+        // Minimum format: YYYY-MM-DDTHH:MM:SSZ (20 bytes)
+        guard bytes.count >= 20,
+              bytes[4] == 0x2D, bytes[7] == 0x2D,
+              (bytes[10] == 0x54 || bytes[10] == 0x74 || bytes[10] == 0x20),
+              bytes[13] == 0x3A, bytes[16] == 0x3A else {
+            return nil
+        }
+        func parseDigits(_ start: Int, _ count: Int) -> Int64? {
+            guard start + count <= bytes.count else { return nil }
+            var acc: Int64 = 0
+            for i in start..<(start + count) {
+                let b = bytes[i]
+                guard b >= 0x30 && b <= 0x39 else { return nil }
+                acc = acc * 10 + Int64(b - 0x30)
+            }
+            return acc
+        }
+        guard let year = parseDigits(0, 4),
+              let month = parseDigits(5, 2),
+              let day = parseDigits(8, 2),
+              let hour = parseDigits(11, 2),
+              let minute = parseDigits(14, 2),
+              let second = parseDigits(17, 2),
+              (1...12).contains(month),
+              (1...31).contains(day),
+              (0...23).contains(hour),
+              (0...59).contains(minute),
+              (0...60).contains(second) else {
+            return nil
+        }
+        var idx = 19
+        var nanos: Int64 = 0
+        if idx < bytes.count && bytes[idx] == 0x2E { // '.'
+            idx += 1
+            var scale: Int64 = 100_000_000
+            var sawDigit = false
+            while idx < bytes.count && bytes[idx] >= 0x30 && bytes[idx] <= 0x39 {
+                sawDigit = true
+                if scale > 0 {
+                    nanos += Int64(bytes[idx] - 0x30) * scale
+                    scale /= 10
+                }
+                idx += 1
+            }
+            guard sawDigit else { return nil }
+        }
+        var tzOffsetSeconds: Int64 = 0
+        if idx < bytes.count && (bytes[idx] == 0x5A || bytes[idx] == 0x7A) { // 'Z' / 'z'
+            idx += 1
+        } else if idx + 6 <= bytes.count && (bytes[idx] == 0x2B || bytes[idx] == 0x2D) && bytes[idx + 3] == 0x3A {
+            let sign: Int64 = bytes[idx] == 0x2B ? 1 : -1
+            guard let tzH = parseDigits(idx + 1, 2), let tzM = parseDigits(idx + 4, 2) else { return nil }
+            tzOffsetSeconds = sign * (tzH * 3600 + tzM * 60)
+            idx += 6
+        } else {
+            return nil
+        }
+        guard idx == bytes.count else { return nil }
+
+        // Howard Hinnant days-from-civil algorithm
+        var y = year
+        if month <= 2 { y -= 1 }
+        let era = (y >= 0 ? y : y - 399) / 400
+        let yoe = y - era * 400
+        let mAdj = month > 2 ? month - 3 : month + 9
+        let doy = (153 * mAdj + 2) / 5 + day - 1
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+        let days = era * 146_097 + doe - 719_468
+        let totalSeconds = days * 86_400 + hour * 3600 + minute * 60 + second - tzOffsetSeconds
+        guard totalSeconds >= 0 else { return nil }
+        return UInt64(totalSeconds) &* 1_000_000_000 &+ UInt64(nanos)
     }
 
     public static func parseHeaders(_ value: String?) -> [String: String]? {
@@ -339,7 +530,7 @@ public enum Otlp {
     public static func loggers(
         options: Options?,
         app: App,
-        transport: (any HTTPTransport)? = nil
+        transport: (any HTTPTransport)? = Otlp.defaultTransport
     ) -> [OtlpLogSink] {
         guard let endpoint = options?.endpoint, !endpoint.isEmpty else { return [] }
         return [
@@ -403,7 +594,8 @@ public enum Observability {
     public static func layer(
         options: Options? = nil,
         environment: any EnvironmentProviding = SystemEnvironment.shared,
-        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        transport: (any HTTPTransport)? = Otlp.defaultTransport
     ) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { _, _ in
             let opts = options ?? Options(
@@ -422,7 +614,8 @@ public enum Observability {
             )
             let otlpSinks: [any LogSink] = Otlp.loggers(
                 options: Otlp.Options(endpoint: opts.endpoint, headers: opts.headers),
-                app: app
+                app: app,
+                transport: transport
             )
             let svc = Service(
                 minimumLevel: Logging.minimumLogLevel(environment: environment),

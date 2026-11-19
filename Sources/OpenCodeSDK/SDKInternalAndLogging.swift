@@ -1566,10 +1566,11 @@ public enum WorkerdProfile {
 /// (`packages/sdk/src/internal/host.ts`).
 public enum EmbeddedHost {
     /// Context handed to an injectable `RouterFactory` (such as `OpenCodeServer`'s router)
-    /// or the default built-in `EmbeddedCoreRouter`.
+    /// or the default `OpenCodeServer.ServerRouter` bridge.
     public struct RouterContext: Sendable {
         public let appInfo: CoreSubsystems.App.Info
         public let serverOptions: EmbeddedServerOptions
+        public let serverRuntime: ServerAppRuntime?
         public let services: LayerNode.Output
         public let loggingContext: LayerNode.Output
         public let logger: SDKLogging.LoggerService
@@ -1592,6 +1593,7 @@ public enum EmbeddedHost {
         public init(
             appInfo: CoreSubsystems.App.Info,
             serverOptions: EmbeddedServerOptions,
+            serverRuntime: ServerAppRuntime? = nil,
             services: LayerNode.Output,
             loggingContext: LayerNode.Output,
             logger: SDKLogging.LoggerService,
@@ -1613,6 +1615,7 @@ public enum EmbeddedHost {
         ) {
             self.appInfo = appInfo
             self.serverOptions = serverOptions
+            self.serverRuntime = serverRuntime
             self.services = services
             self.loggingContext = loggingContext
             self.logger = logger
@@ -1852,68 +1855,80 @@ public enum EmbeddedHost {
             let logger = loggingOutput.get(SDKLogging.currentLoggersKey, as: SDKLogging.LoggerService.self)
                 ?? SDKLogging.LoggerService(options: options.log)
 
-            // 2. Database (workerd DurableObjectStorage or SQLite WAL / :memory:)
-            let database: CoreDatabaseStore.Service
-            if let doStorage = embed.durableObjectStorage {
-                let adapter = CoreDatabaseWorkerdSQLite.StorageClientAdapter(storage: doStorage)
-                database = try CoreDatabaseStore.bootstrap(
-                    client: adapter,
-                    fileSystem: fileSystem,
-                    legacyCredentials: false
-                )
-            } else {
-                let dbOptions = CoreDatabaseStore.Options(path: options.server.database?.path ?? ":memory:")
-                database = try await CoreDatabaseStore.open(
-                    options: dbOptions,
-                    fileSystem: fileSystem
-                )
-            }
-            scope.addFinalizer {
-                try? database.db.close()
-            }
-
-            // 3. Event bus + durable session projections
-            let bus = CoreBus.Service(
-                db: database.db,
-                options: CoreBus.Options(persist: options.server.events?.persist ?? false)
+            // 2. Boot complete OpenCodeServer ServerAppRuntime (shared DB, bus, eventFeed, session core, locations)
+            let isWorkerd = embed.durableObjectStorage != nil
+            let defaultDir = options.server.config?.directory ?? "/"
+            let serverOptions = ServerOptions(
+                app: ServerOptions.AppOptions(
+                    name: appInfo.name,
+                    version: appInfo.version,
+                    channel: appInfo.channel
+                ),
+                hostname: nil,
+                port: nil,
+                password: nil,
+                cors: options.server.cors,
+                simulation: options.server.simulation,
+                database: options.server.database ?? CoreDatabaseStore.Options(path: ":memory:"),
+                pty: options.server.pty,
+                events: ServerOptions.EventsOptions(persist: options.server.events?.persist ?? false),
+                models: options.server.models,
+                fetch: options.server.fetch,
+                config: options.server.config.map {
+                    ServerOptions.ConfigOptions(
+                        directory: $0.directory,
+                        project: $0.project,
+                        claude: $0.claude,
+                        file: $0.file,
+                        content: $0.content
+                    )
+                },
+                instructions: options.server.instructions.map {
+                    ServerOptions.InstructionsOptions(claude: $0.claude)
+                },
+                windows: options.server.windows.map {
+                    ServerOptions.WindowsOptions(gitbash: $0.gitbash)
+                },
+                fs: options.server.fs.map {
+                    ServerOptions.FSOptions(filewatcher: $0.filewatcher, fff: $0.fff)
+                }
             )
-            CoreSessionProjector.register(bus: bus, db: database.db)
+            let databaseClient: (any SQLiteDatabase)? = embed.durableObjectStorage.map {
+                CoreDatabaseWorkerdSQLite.StorageClientAdapter(storage: $0)
+            }
+            let httpTransport: any HTTPTransport = options.server.fetch.map {
+                LayerNodePlatform.FetchTransport($0)
+            } ?? URLSessionHTTPTransport.shared
 
-            // 4. Session store, inbox, execution, session facade, move, instruction entries, restart
-            let sessionStore = CoreSessionStore.Service(db: database.db)
-            let sessionInbox = CoreSessionInbox.Service(db: database.db, bus: bus)
-            let sessionExecution: any CoreSessionExecution.Interface = CoreSessionExecution.NoopService()
-            let sessions = CoreSession.Service(
-                db: database.db,
-                bus: bus,
-                store: sessionStore,
-                inbox: sessionInbox,
-                execution: sessionExecution,
+            let serverRuntime = try await ServerAppRuntime.make(
+                options: serverOptions,
+                serviceURLs: { [] },
                 fileSystem: fileSystem,
-                version: appInfo.version
+                httpTransport: httpTransport,
+                defaultDirectory: defaultDir,
+                databaseClient: databaseClient,
+                workerdProfile: isWorkerd
             )
-            let sessionMove = CoreSessionMove.Service(
-                db: database.db,
-                bus: bus,
-                store: sessionStore,
-                inbox: sessionInbox,
-                execution: sessionExecution,
-                fileSystem: fileSystem
-            )
-            let instructionEntries = CoreSessionInstructionEntry.Service(db: database.db)
-            let sessionRestart = CoreSessionRestart.Service(
-                db: database.db,
-                store: sessionStore,
-                execution: sessionExecution,
-                bus: bus
-            )
+            scope.addFinalizer {
+                await serverRuntime.close()
+                try? serverRuntime.db.close()
+            }
+
+            // 3-4. Reuse the ServerAppRuntime's database, bus, session core, inbox, move, instructions & restart
+            let database = serverRuntime.databaseService
+            let bus = serverRuntime.bus
+            let sessionStore = serverRuntime.sessionStore
+            let sessionInbox = serverRuntime.sessionInbox
+            let sessions = serverRuntime.session
+            let sessionMove = serverRuntime.sessionMove
+            let instructionEntries = serverRuntime.sessionInstructions
+            let sessionRestart = serverRuntime.sessionRestart
 
             // 5. Workspace registry & service
             let workspaceRegistry = CoreProject.Workspace.Driver.RegistryService(options.workspaceProviders ?? [:])
             let workspace = try CoreProject.Workspace.Service(database: database.db, registry: workspaceRegistry)
 
             // 6. Default Location plugin host & host-global SDK plugin store
-            let defaultDir = options.server.config?.directory ?? "/"
             let defaultLocationInfo = LocationSchema.Info(
                 directory: SchemaPrimitive.AbsolutePath(rawValue: defaultDir),
                 workspaceID: nil,
@@ -2033,10 +2048,11 @@ public enum EmbeddedHost {
                 try? await sessionRestart.resumeSuspendedSessions()
             }
 
-            // 11. Build in-process HTTP router (injectable via embed.routerFactory, defaulting to EmbeddedCoreRouter).
+            // 11. Build in-process HTTP router (injectable via embed.routerFactory, defaulting to real OpenCodeServer.ServerRouter).
             let routerContext = RouterContext(
                 appInfo: appInfo,
                 serverOptions: options.server,
+                serverRuntime: serverRuntime,
                 services: runtime.services,
                 loggingContext: loggingContext,
                 logger: logger,
@@ -2053,10 +2069,11 @@ public enum EmbeddedHost {
                 instances: selector,
                 defaultPluginEnvironment: defaultPluginEnvironment,
                 defaultPluginService: defaultPluginService,
-                isWorkerd: embed.durableObjectStorage != nil,
-                tmpDirectory: defaultDir
+                isWorkerd: isWorkerd,
+                tmpDirectory: serverRuntime.global.tmp
             )
-            let handler = embed.routerFactory?(routerContext) ?? EmbeddedCoreRouter.make(routerContext)
+            let handler = embed.routerFactory?(routerContext)
+                ?? EmbeddedServerRouter.make(serverRuntime: serverRuntime, ctx: routerContext)
             let transport = OwnedFetch.make(handler: handler) {
                 await runtime.dispose()
             }
@@ -2081,771 +2098,392 @@ public enum EmbeddedHost {
     }
 }
 
-// MARK: - Default In-Process Core HTTP Router (Zero-Conflict Bridge Until Full OpenCodeServer Merges)
+// MARK: - In-Process OpenCodeServer.ServerRouter Bridge (All 173 Protocol Endpoints)
 
-internal enum EmbeddedCoreRouter {
-    static func make(_ ctx: EmbeddedHost.RouterContext) -> OwnedFetch.RequestHandler {
-        { request, signal in
-            try await handle(request: request, signal: signal, ctx: ctx)
-        }
-    }
-
-    private static func currentPID(isWorkerd: Bool) -> Int {
-        if isWorkerd { return 0 }
-        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-        return Int(getpid())
-        #elseif canImport(WinSDK)
-        return Int(GetCurrentProcessId())
-        #else
-        return 0
-        #endif
-    }
-
-    private static func handle(
-        request: HTTPRequest,
-        signal: AbortSignal,
+/// Adapts the real `OpenCodeServer.ServerRouter` (backed by `ServerAppRuntime`) into
+/// `OwnedFetch.RequestHandler`, layering SDK host plugin inventory, session-selected
+/// `SdkInstances.SelectorService`, and prompt/fork plugin hooks on top of all 173 protocol routes.
+internal enum EmbeddedServerRouter {
+    static func make(
+        serverRuntime: ServerAppRuntime,
         ctx: EmbeddedHost.RouterContext
-    ) async throws -> OwnedFetch.HandlerResponse {
-        let (path, query) = parseURL(request.url)
-        let method = request.method.uppercased()
-
-        // 1. GET /api/info
-        if method == "GET", path == "/api/info" {
-            let info = OpenCodeProtocol.ServerInfo(
-                version: ctx.appInfo.version,
-                pid: currentPID(isWorkerd: ctx.isWorkerd),
-                hostname: ctx.isWorkerd ? nil : "opencode.local",
-                urls: [],
-                paths: .init(tmp: ctx.tmpDirectory),
-                capabilities: .init(persistentPty: false)
+    ) -> OwnedFetch.RequestHandler {
+        let adaptedGroups = OpenCodeServer.handlers.map { group in
+            adaptHandlerGroup(group, ctx: ctx)
+        }
+        let router = ServerRouter(runtime: serverRuntime, handlerGroups: adaptedGroups)
+        return { request, signal in
+            if signal.isAborted {
+                throw signal.reason ?? AbortError.sharedReason
+            }
+            let parsed = ServerParsedURL(request.url)
+            var headers = request.headers
+            if ServerHeaders.value(in: headers, for: "host") == nil, let host = parsed.host {
+                headers["host"] = host
+            }
+            let target = parsed.pathname + parsed.search
+            let serverReq = ServerHTTPRequest(
+                method: request.method,
+                url: target,
+                headers: headers,
+                body: request.body ?? []
             )
-            return try jsonResponse(info)
-        }
-
-        // 2. GET /api/event (SSE live event stream)
-        if method == "GET", path == "/api/event" {
-            let filterTypes = query["types"].map { raw -> Set<String> in
-                Set(raw.split(separator: ",").map(String.init))
+            let serverResp = await router.handle(serverReq)
+            var respHeaders = serverResp.headers
+            if !serverResp.setCookies.isEmpty {
+                respHeaders["set-cookie"] = serverResp.setCookies.joined(separator: ", ")
             }
-            return .streaming(makeEventStream(bus: ctx.bus, types: filterTypes, signal: signal))
-        }
-
-        // 3. GET /api/plugin (Non-blocking immediate snapshot — NEVER awaits plugin activation)
-        if method == "GET", path == "/api/plugin" {
-            let locRef = parsePublicLocationQuery(query) ?? defaultPublicLocationRef(ctx)
-            let list = ctx.defaultPluginService.list()
-            let envelope = LocationSchema.ResponseEnvelope(location: locRef, data: list)
-            return try jsonResponse(envelope)
-        }
-
-        // 4. GET /api/permission/request (acquires session's instance when sessionID is provided)
-        if method == "GET", path == "/api/permission/request" {
-            if let sidStr = query["sessionID"], let sid = SessionID(rawValue: sidStr) {
-                if let session = try ctx.sessionStore.get(sid), let selector = ctx.instances {
-                    _ = try await selector.acquire(session: session)
-                }
-            }
-            let locRef = parsePublicLocationQuery(query) ?? defaultPublicLocationRef(ctx)
-            let envelope = LocationSchema.ResponseEnvelope<[PermissionSchema.Request]>(location: locRef, data: [])
-            return try jsonResponse(envelope)
-        }
-
-        // 5. GET /api/message
-        if method == "GET", path == "/api/message" {
-            guard let sidStr = query["sessionID"], let sid = SessionID(rawValue: sidStr) else {
-                return try jsonResponse(SessionMessagesResponse(data: []))
-            }
-            do {
-                let messages = try ctx.sessions.messages(CoreSessionStore.MessagesInput(sessionID: sid))
-                return try jsonResponse(SessionMessagesResponse(data: messages))
-            } catch let err as CoreSessionErrors.NotFoundError {
-                return try sessionNotFoundResponse(err.sessionID)
+            let head = HTTPResponseHead(statusCode: serverResp.statusCode, headers: respHeaders)
+            switch serverResp.body {
+            case .empty:
+                return .buffered(HTTPResponse(head: head, body: []))
+            case .bytes(let data):
+                return .buffered(HTTPResponse(head: head, body: data))
+            case .stream(let chunks):
+                return .streaming(HTTPStreamingResponse(head: head, chunks: chunks))
             }
         }
-
-        // 6. GET /api/websearch/provider & POST /api/websearch
-        if method == "GET", path == "/api/websearch/provider" {
-            let locRef = parsePublicLocationQuery(query) ?? defaultPublicLocationRef(ctx)
-            let providers = ctx.defaultPluginEnvironment.registeredWebSearchProviders()
-            let envelope = LocationSchema.ResponseEnvelope(location: locRef, data: providers)
-            return try jsonResponse(envelope)
-        }
-
-        // 7. Session collection endpoints: GET /api/session, POST /api/session, GET /api/session/active
-        if path == "/api/session" {
-            if method == "GET" {
-                let parentFilter: SessionSchema.ParentFilter? = query["parentID"].flatMap { raw in
-                    if raw == "root" || raw == "null" { return .root }
-                    return SessionID(rawValue: raw).map { .session($0) }
-                }
-                let input = CoreSession.ListInput(
-                    directory: query["directory"],
-                    project: query["project"].map { ProjectID(rawValue: $0) },
-                    subpath: query["subpath"],
-                    search: query["search"],
-                    limit: query["limit"].flatMap(Int.init),
-                    order: query["order"].flatMap { SessionSchema.SortOrder(rawValue: $0) },
-                    parentID: parentFilter,
-                    archived: query["archived"].map { $0 == "true" }
-                )
-                let page = try ctx.sessions.list(input)
-                return try jsonResponse(SessionsResponse(data: page.data))
-            }
-            if method == "POST" {
-                let bodyObj = try decodeJSONObject(request.body)
-                let id = stringField(bodyObj, "id").flatMap { SessionID(rawValue: $0) }
-                let parentID = stringField(bodyObj, "parentID").flatMap { SessionID(rawValue: $0) }
-                let title = stringField(bodyObj, "title")
-                let agent = stringField(bodyObj, "agent")
-                let model: SessionSchema.ModelRef? = try decodeField(bodyObj, "model")
-                let location: OpenCodeLocation? = decodeLocationField(bodyObj)
-                let metadata: SessionSchema.Metadata? = objectField(bodyObj, "metadata")
-                let permissions: SessionSchema.PermissionRuleset? = try decodeField(bodyObj, "permissions")
-
-                let created = try await ctx.sessions.create(
-                    CoreSession.CreateInput(
-                        id: id,
-                        location: location,
-                        parentID: parentID,
-                        title: title,
-                        agent: agent,
-                        model: model,
-                        metadata: metadata,
-                        permissions: permissions
-                    )
-                )
-                return try jsonDataResponse(created)
-            }
-        }
-
-        if method == "GET", path == "/api/session/active" {
-            let active: [String: SessionActiveInfo] = [:]
-            return try jsonDataResponse(active)
-        }
-
-        // 8. Per-session endpoints: /api/session/:id[...]
-        if path.hasPrefix("/api/session/") {
-            let remainder = String(path.dropFirst("/api/session/".count))
-            let parts = remainder.split(separator: "/", omittingEmptySubsequences: false).map { decodeURIComponent(String($0)) }
-            if let rawID = parts.first, !rawID.isEmpty, let sessionID = SessionID(rawValue: rawID) {
-                return try await handleSessionRoute(
-                    method: method,
-                    sessionID: sessionID,
-                    subpath: Array(parts.dropFirst()),
-                    query: query,
-                    body: request.body,
-                    ctx: ctx
-                )
-            }
-        }
-
-        // 9. Experimental session routes: /api/experimental/session/:id/...
-        if path.hasPrefix("/api/experimental/session/") {
-            let remainder = String(path.dropFirst("/api/experimental/session/".count))
-            let parts = remainder.split(separator: "/", omittingEmptySubsequences: false).map { decodeURIComponent(String($0)) }
-            if let rawID = parts.first, !rawID.isEmpty, let sessionID = SessionID(rawValue: rawID) {
-                return try await handleExperimentalSessionRoute(
-                    method: method,
-                    sessionID: sessionID,
-                    subpath: Array(parts.dropFirst()),
-                    query: query,
-                    body: request.body,
-                    signal: signal,
-                    ctx: ctx
-                )
-            }
-        }
-
-        return .buffered(
-            HTTPResponse(
-                head: HTTPResponseHead(statusCode: 404, headers: ["content-type": "application/json"]),
-                body: Array(#"{"_tag":"NotFoundError","message":"Route not found"}"#.utf8)
-            )
-        )
     }
 
-    private static func handleSessionRoute(
-        method: String,
-        sessionID: SessionID,
-        subpath: [String],
-        query: [String: String],
-        body: [UInt8]?,
+    private static func adaptHandlerGroup(
+        _ group: ServerHandlerGroup,
         ctx: EmbeddedHost.RouterContext
-    ) async throws -> OwnedFetch.HandlerResponse {
-        do {
-            // /api/session/:id
-            if subpath.isEmpty {
-                switch method {
-                case "GET":
-                    let info = try ctx.sessions.get(sessionID)
-                    return try jsonDataResponse(info)
-                case "DELETE":
-                    try await ctx.sessions.remove(sessionID)
-                    return emptyResponse(204)
-                case "PATCH":
-                    let obj = try decodeJSONObject(body)
-                    if let title = stringField(obj, "title") {
-                        try await ctx.sessions.rename(sessionID: sessionID, title: title)
-                    }
-                    if case .bool(let archived) = obj["archived"] {
-                        if archived {
-                            try await ctx.sessions.archive(sessionID)
-                        } else {
-                            try await ctx.sessions.unarchive(sessionID)
-                        }
-                    }
-                    return emptyResponse(204)
-                default:
-                    break
-                }
-            }
-
-            // /api/session/:id/inbox
-            if subpath == ["inbox"], method == "GET" {
-                _ = try ctx.sessions.get(sessionID)
-                let items = try ctx.sessionInbox.list(sessionID)
-                return try jsonDataResponse(items)
-            }
-
-            // /api/session/:id/context
-            if subpath == ["context"], method == "GET" {
-                _ = try ctx.sessions.get(sessionID)
-                let items = try ctx.sessionStore.context(sessionID)
-                return try jsonDataResponse(items)
-            }
-
-            // /api/session/:id/message (MessageClientAPI.list)
-            if subpath == ["message"], method == "GET" {
-                let messages = try ctx.sessions.messages(
-                    CoreSessionStore.MessagesInput(
-                        sessionID: sessionID,
-                        limit: query["limit"].flatMap(Int.init),
-                        order: query["order"].flatMap { SessionSchema.SortOrder(rawValue: $0) }
-                    )
-                )
-                return try jsonResponse(SessionMessagesResponse(data: messages))
-            }
-
-            // /api/session/:id/permission (PermissionClientAPI.list — acquires session's instance!)
-            if subpath == ["permission"], method == "GET" {
-                let session = try ctx.sessions.get(sessionID)
-                if let selector = ctx.instances {
-                    _ = try await selector.acquire(session: session)
-                }
-                let requests: [PermissionSchema.Request] = []
-                return try jsonDataResponse(requests)
-            }
-
-            // /api/session/:id/form (acquires session's instance!)
-            if subpath == ["form"], method == "GET" {
-                let session = try ctx.sessions.get(sessionID)
-                if let selector = ctx.instances {
-                    _ = try await selector.acquire(session: session)
-                }
-                let forms: [FormSchema.Info] = []
-                return try jsonDataResponse(forms)
-            }
-
-            // /api/session/:id/message/:messageID
-            if subpath.count == 2, subpath[0] == "message", method == "GET" {
-                _ = try ctx.sessions.get(sessionID)
-                guard let msgID = SessionMessageSchema.ID(rawValue: subpath[1]),
-                      let found = try ctx.sessionStore.message(msgID),
-                      found.sessionID == sessionID
-                else {
-                    return try messageNotFoundResponse(sessionID: sessionID, messageID: subpath[1])
-                }
-                return try jsonDataResponse(found.message)
-            }
-
-            // /api/session/:id/agent
-            if subpath == ["agent"], method == "POST" {
-                let obj = try decodeJSONObject(body)
-                let agent = stringField(obj, "agent") ?? ""
-                try await ctx.sessions.selectAgent(sessionID: sessionID, agent: agent)
-                return emptyResponse(204)
-            }
-
-            // /api/session/:id/model
-            if subpath == ["model"], method == "POST" {
-                let obj = try decodeJSONObject(body)
-                guard let model: SessionSchema.ModelRef = try decodeField(obj, "model") else {
-                    return badRequestResponse("Missing model")
-                }
-                try await ctx.sessions.selectModel(sessionID: sessionID, model: model)
-                return emptyResponse(204)
-            }
-
-            // /api/session/:id/move
-            if subpath == ["move"], method == "POST" {
-                let obj = try decodeJSONObject(body)
-                let directory = stringField(obj, "directory") ?? "/"
-                let workspaceID = stringField(obj, "workspaceID").flatMap { WorkspaceID(rawValue: $0) }
-                let delivery = stringField(obj, "delivery").flatMap { SessionInboxSchema.Delivery(rawValue: $0) }
-                try await ctx.sessionMove.move(
-                    CoreSessionMove.MoveInput(
-                        sessionID: sessionID,
-                        directory: directory,
-                        workspaceID: workspaceID,
-                        delivery: delivery
-                    )
-                )
-                return emptyResponse(204)
-            }
-
-            // /api/session/:id/fork
-            if subpath == ["fork"], method == "POST" {
-                let obj = try decodeJSONObject(body)
-                let before = stringField(obj, "before").flatMap { SessionMessageSchema.ID(rawValue: $0) }
-                let forked = try await ctx.sessions.fork(sessionID: sessionID, before: before)
-                // Trigger currently registered fork hooks with error containment so a throwing hook
-                // still returns the saved fork (`instances.test.ts:148-170`).
-                if let selector = ctx.instances, let container = try? await selector.acquire(session: forked) {
-                    _ = await container.pluginEnvironment.hooks.triggerSession(.fork(sessionID: forked.id))
-                } else {
-                    _ = await ctx.defaultPluginEnvironment.hooks.triggerSession(.fork(sessionID: forked.id))
-                }
-                return try jsonDataResponse(forked)
-            }
-
-            // /api/session/:id/interrupt
-            if subpath == ["interrupt"], method == "POST" {
-                let resume = query["resume"] == "true"
-                let interrupted = try await ctx.sessions.interrupt(sessionID, resume: resume)
-                return try jsonResponse(SessionInterruptResponse(interrupted: interrupted))
-            }
-
-            // /api/session/:id/prompt
-            if subpath == ["prompt"], method == "POST" {
-                let session = try ctx.sessions.get(sessionID)
-
-                // Acquire Session-selected instance BEFORE prompt preparation/admission.
-                // Configuration or instance-plugin failure rejects with 500 and admits nothing.
-                let hooks: CorePlugin.Hooks.Service
-                if let selector = ctx.instances {
-                    do {
-                        let container = try await selector.acquire(session: session)
-                        hooks = container.pluginEnvironment.hooks
-                    } catch {
-                        ctx.logger.error(
-                            "Instance acquisition failed during prompt",
-                            attributes: ["sessionID": .string(sessionID.rawValue)],
-                            cause: .string(String(describing: error))
+    ) -> ServerHandlerGroup {
+        switch group.groupIdentifier {
+        case "server.server":
+            guard ctx.isWorkerd else { return group }
+            return ServerHandlerGroup(
+                groupIdentifier: group.groupIdentifier,
+                routes: group.routes.map { route in
+                    guard route.endpointName == "server.info" else { return route }
+                    return ServerRoute(
+                        method: route.method,
+                        pathTemplate: route.pathTemplate,
+                        endpointName: route.endpointName,
+                        groupIdentifier: route.groupIdentifier,
+                        openAPIIdentifier: route.openAPIIdentifier,
+                        requiresLocation: route.requiresLocation,
+                        requiresSessionLocation: route.requiresSessionLocation,
+                        requiresFormLocation: route.requiresFormLocation
+                    ) { _ in
+                        let wire = OpenCodeProtocol.ServerInfo(
+                            version: ctx.appInfo.version,
+                            pid: 0,
+                            hostname: nil,
+                            urls: [],
+                            paths: OpenCodeProtocol.ServerInfo.Paths(tmp: ctx.tmpDirectory),
+                            capabilities: OpenCodeProtocol.ServerInfo.Capabilities(persistentPty: false)
                         )
-                        return internalErrorResponse(String(describing: error))
+                        return ServerHTTPResponse.json(wire)
                     }
-                } else {
-                    hooks = ctx.defaultPluginEnvironment.hooks
                 }
-
-                let obj = try decodeJSONObject(body)
-                let id = stringField(obj, "id").flatMap { SessionMessageSchema.ID(rawValue: $0) }
-                let text = stringField(obj, "text") ?? ""
-                let files: [PromptInputSchema.FileAttachment]? = try decodeField(obj, "files")
-                let agents: [PromptSchema.AgentAttachment]? = try decodeField(obj, "agents")
-                let skills: [PromptInputSchema.SkillAttachment]? = try decodeField(obj, "skills")
-                let metadata: [String: JSONValue]? = objectField(obj, "metadata")
-                let delivery = stringField(obj, "delivery").flatMap { SessionInboxSchema.Delivery(rawValue: $0) }
-                let resume: Bool? = {
-                    if case .bool(let b) = obj["resume"] { return b }
-                    return nil
-                }()
-
-                let resolvedMessageID = id ?? SessionMessageSchema.ID.create()
-                let resolvedDelivery = delivery ?? .steer
-
-                // Check idempotency BEFORE running prompt hooks so retries return the original admission unchanged.
-                if let existing = try ctx.sessionInbox.reconcile(
-                    id: resolvedMessageID,
-                    sessionID: session.id,
-                    type: "user",
-                    delivery: resolvedDelivery
-                ), case .user(let userItem) = existing {
-                    return try jsonDataResponse(userItem)
-                }
-
-                // Trigger currently registered prompt hooks (without blocking on unloaded plugins).
-                let promptEvent = PluginEffect.SessionPrompt(
-                    sessionID: session.id,
-                    messageID: resolvedMessageID,
-                    prompt: PromptInputSchema.Prompt(
-                        text: text,
-                        files: files,
-                        agents: agents,
-                        skills: skills
-                    ),
-                    metadata: metadata,
-                    delivery: resolvedDelivery
-                )
-                let triggered = await hooks.triggerSession(.prompt(promptEvent))
-                let finalPrompt: PluginEffect.SessionPrompt
-                if case .prompt(let updated) = triggered {
-                    finalPrompt = updated
-                } else {
-                    finalPrompt = promptEvent
-                }
-
-                let admitted = try await ctx.sessions.prompt(
-                    CoreSession.PromptRequest(
-                        sessionID: session.id,
-                        id: resolvedMessageID,
-                        input: CoreSessionPrompt.Input(
-                            text: finalPrompt.prompt.text,
-                            files: finalPrompt.prompt.files,
-                            agents: finalPrompt.prompt.agents,
-                            skills: finalPrompt.prompt.skills,
-                            metadata: finalPrompt.metadata,
-                            delivery: finalPrompt.delivery
-                        ),
-                        resume: resume
-                    )
-                )
-                guard case .user(let userItem) = admitted else {
-                    return internalErrorResponse("Unexpected non-user inbox item")
-                }
-                return try jsonDataResponse(userItem)
-            }
-        } catch let err as CoreSessionErrors.NotFoundError {
-            return try sessionNotFoundResponse(err.sessionID)
-        } catch let err as CoreSessionErrors.MessageNotFoundError {
-            return try messageNotFoundResponse(sessionID: err.sessionID, messageID: err.messageID.rawValue)
-        }
-
-        return .buffered(
-            HTTPResponse(
-                head: HTTPResponseHead(statusCode: 404, headers: ["content-type": "application/json"]),
-                body: Array(#"{"_tag":"NotFoundError","message":"Session route not found"}"#.utf8)
             )
-        )
-    }
 
-    private static func handleExperimentalSessionRoute(
-        method: String,
-        sessionID: SessionID,
-        subpath: [String],
-        query: [String: String],
-        body: [UInt8]?,
-        signal: AbortSignal,
-        ctx: EmbeddedHost.RouterContext
-    ) async throws -> OwnedFetch.HandlerResponse {
-        do {
-            _ = try ctx.sessions.get(sessionID)
-        } catch let err as CoreSessionErrors.NotFoundError {
-            return try sessionNotFoundResponse(err.sessionID)
-        }
-
-        // GET /api/experimental/session/:id/log
-        if subpath == ["log"], method == "GET" {
-            let after = query["after"].flatMap(Int64.init)
-            let follow = query["follow"] == "true"
-            return .streaming(makeSessionLogStream(bus: ctx.bus, sessionID: sessionID, after: after, follow: follow, signal: signal))
-        }
-
-        // GET /api/experimental/session/:id/export
-        if subpath == ["export"], method == "GET" {
-            let info = try ctx.sessions.get(sessionID)
-            let messages = try ctx.sessions.messages(CoreSessionStore.MessagesInput(sessionID: sessionID))
-            let payload: [String: JSONValue] = [
-                "info": try ClientCodec.toJSONValue(info),
-                "messages": try ClientCodec.toJSONValue(messages),
-            ]
-            return try jsonDataResponse(payload)
-        }
-
-        // POST /api/experimental/session/:id/wait
-        if subpath == ["wait"], method == "POST" {
-            try await ctx.sessions.awaitIdle(sessionID)
-            return emptyResponse(204)
-        }
-
-        // /api/experimental/session/:id/instructions/entries[/:key]
-        if subpath.count >= 2, subpath[0] == "instructions", subpath[1] == "entries" {
-            if subpath.count == 2, method == "GET" {
-                let entries = try ctx.instructionEntries.list(sessionID)
-                return try jsonDataResponse(entries)
-            }
-            if subpath.count == 3 {
-                let key = subpath[2]
-                if method == "PUT" {
-                    let obj = try decodeJSONObject(body)
-                    let value = obj["value"] ?? .null
-                    do {
-                        try ctx.instructionEntries.put(sessionID: sessionID, key: key, value: value)
-                        return emptyResponse(204)
-                    } catch let err as CoreSessionInstructionEntry.ValueTooLargeError {
-                        let schemaErr = InstructionEntrySchema.ValueTooLargeError(
-                            actualBytes: err.actualBytes,
-                            maxBytes: err.maxBytes,
-                            message: err.description
-                        )
-                        return try jsonResponse(schemaErr, statusCode: 413)
-                    }
-                }
-                if method == "DELETE" {
-                    try ctx.instructionEntries.remove(sessionID: sessionID, key: key)
-                    return emptyResponse(204)
-                }
-            }
-        }
-
-        return .buffered(
-            HTTPResponse(
-                head: HTTPResponseHead(statusCode: 404, headers: ["content-type": "application/json"]),
-                body: Array(#"{"_tag":"NotFoundError","message":"Experimental session route not found"}"#.utf8)
-            )
-        )
-    }
-
-    private static func makeEventStream(
-        bus: CoreBus.Service,
-        types: Set<String>?,
-        signal: AbortSignal
-    ) -> HTTPStreamingResponse {
-        let chunks = AsyncThrowingStream<[UInt8], Error> { continuation in
-            let task = Task {
-                // Emit initial `server.connected` handshake event immediately.
-                let connected = OpenCodeEvent(
-                    id: "evt_\(OpenCodeUtil.uuid().replacing("-", with: ""))",
-                    type: "server.connected",
-                    data: .object([:])
-                )
-                if let frame = encodeSSEFrame(connected) {
-                    continuation.yield(frame)
-                }
-
-                let subscription: AsyncStream<CoreBus.SubscribePayload>
-                if let types, !types.isEmpty {
-                    subscription = bus.subscribe(types: types, location: nil)
-                } else {
-                    subscription = bus.subscribe(location: nil)
-                }
-                for await payload in subscription {
-                    if Task.isCancelled || signal.isAborted { break }
-                    let event = OpenCodeEvent(
-                        id: payload.id.rawValue,
-                        type: payload.type,
-                        created: Double(payload.created),
-                        metadata: payload.metadata,
-                        location: payload.location,
-                        data: payload.data
-                    )
-                    if let frame = encodeSSEFrame(event) {
-                        continuation.yield(frame)
-                    }
-                }
-                continuation.finish()
-            }
-            let removeAbort = signal.onAbort {
-                task.cancel()
-                continuation.finish(throwing: signal.reason ?? AbortError.sharedReason)
-            }
-            continuation.onTermination = { _ in
-                removeAbort()
-                task.cancel()
-            }
-        }
-        return HTTPStreamingResponse(
-            head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "text/event-stream"]),
-            chunks: chunks
-        )
-    }
-
-    private static func makeSessionLogStream(
-        bus: CoreBus.Service,
-        sessionID: SessionID,
-        after: Int64?,
-        follow: Bool,
-        signal: AbortSignal
-    ) -> HTTPStreamingResponse {
-        let chunks = AsyncThrowingStream<[UInt8], Error> { continuation in
-            let task = Task {
-                let stream = bus.log(CoreBus.LogInput(aggregateID: sessionID.rawValue, after: after, follow: follow))
-                for await item in stream {
-                    if Task.isCancelled || signal.isAborted { break }
-                    switch item {
-                    case .event(let anyEvent):
-                        if let frame = encodeSSEFrame(anyEvent) {
-                            continuation.yield(frame)
+        case "server.plugin":
+            return ServerHandlerGroup(
+                groupIdentifier: group.groupIdentifier,
+                routes: group.routes.map { route in
+                    guard route.endpointName == "plugin.list" else { return route }
+                    return ServerRoute(
+                        method: route.method,
+                        pathTemplate: route.pathTemplate,
+                        endpointName: route.endpointName,
+                        groupIdentifier: route.groupIdentifier,
+                        openAPIIdentifier: route.openAPIIdentifier,
+                        requiresLocation: route.requiresLocation,
+                        requiresSessionLocation: route.requiresSessionLocation,
+                        requiresFormLocation: route.requiresFormLocation
+                    ) { routeCtx in
+                        let loc = try routeCtx.requireLocation()
+                        // Non-blocking immediate snapshot combining host SDK plugins and location plugins.
+                        var merged = ctx.defaultPluginService.list()
+                        var seen = Set(merged.compactMap { $0.id?.rawValue })
+                        for item in loc.plugin.list() {
+                            if let id = item.id?.rawValue {
+                                if seen.insert(id).inserted {
+                                    merged.append(item)
+                                }
+                            } else {
+                                merged.append(item)
+                            }
                         }
-                    case .synced(let synced):
-                        if let frame = encodeSSEFrame(synced) {
-                            continuation.yield(frame)
+                        return ServerHTTPResponse.json(response(location: loc, data: merged))
+                    }
+                }
+            )
+
+        case "server.websearch":
+            return ServerHandlerGroup(
+                groupIdentifier: group.groupIdentifier,
+                routes: group.routes.map { route in
+                    guard route.endpointName == "websearch.providers" else { return route }
+                    return ServerRoute(
+                        method: route.method,
+                        pathTemplate: route.pathTemplate,
+                        endpointName: route.endpointName,
+                        groupIdentifier: route.groupIdentifier,
+                        openAPIIdentifier: route.openAPIIdentifier,
+                        requiresLocation: route.requiresLocation,
+                        requiresSessionLocation: route.requiresSessionLocation,
+                        requiresFormLocation: route.requiresFormLocation
+                    ) { routeCtx in
+                        let loc = try routeCtx.requireLocation()
+                        var providers = ctx.defaultPluginEnvironment.registeredWebSearchProviders()
+                        var seen = Set(providers.map(\.id))
+                        for item in await loc.webSearch.providers() {
+                            if seen.insert(item.id).inserted {
+                                providers.append(item)
+                            }
+                        }
+                        return ServerHTTPResponse.json(response(location: loc, data: providers))
+                    }
+                }
+            )
+
+        case "server.permission":
+            guard let selector = ctx.instances else { return group }
+            return ServerHandlerGroup(
+                groupIdentifier: group.groupIdentifier,
+                routes: group.routes.map { route in
+                    if route.endpointName == "permission.request.list" {
+                        return ServerRoute(
+                            method: route.method,
+                            pathTemplate: route.pathTemplate,
+                            endpointName: route.endpointName,
+                            groupIdentifier: route.groupIdentifier,
+                            openAPIIdentifier: route.openAPIIdentifier,
+                            requiresLocation: route.requiresLocation,
+                            requiresSessionLocation: route.requiresSessionLocation,
+                            requiresFormLocation: route.requiresFormLocation
+                        ) { routeCtx in
+                            if let sidStr = routeCtx.request.query("sessionID"),
+                               let sid = SessionID(rawValue: sidStr),
+                               let session = try? routeCtx.runtime.sessionStore.get(sid) {
+                                _ = try await selector.acquire(session: session)
+                            }
+                            return try await route.handler(routeCtx)
                         }
                     }
+                    if route.endpointName == "session.permission.list" {
+                        return ServerRoute(
+                            method: route.method,
+                            pathTemplate: route.pathTemplate,
+                            endpointName: route.endpointName,
+                            groupIdentifier: route.groupIdentifier,
+                            openAPIIdentifier: route.openAPIIdentifier,
+                            requiresLocation: route.requiresLocation,
+                            requiresSessionLocation: route.requiresSessionLocation,
+                            requiresFormLocation: route.requiresFormLocation
+                        ) { routeCtx in
+                            let rawSessionID = try routeCtx.requireParam("sessionID")
+                            let info = try sessionInfo(routeCtx.runtime.session, rawSessionID)
+                            _ = try await selector.acquire(session: info)
+                            return try await route.handler(routeCtx)
+                        }
+                    }
+                    return route
                 }
-                continuation.finish()
-            }
-            let removeAbort = signal.onAbort {
-                task.cancel()
-                continuation.finish(throwing: signal.reason ?? AbortError.sharedReason)
-            }
-            continuation.onTermination = { _ in
-                removeAbort()
-                task.cancel()
-            }
-        }
-        return HTTPStreamingResponse(
-            head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "text/event-stream"]),
-            chunks: chunks
-        )
-    }
-
-    private static func encodeSSEFrame<T: Encodable>(_ value: T) -> [UInt8]? {
-        guard let encoded = try? ClientCodec.encodeString(value) else { return nil }
-        return Array("data: \(encoded)\n\n".utf8)
-    }
-
-    private static func jsonResponse<T: Encodable>(
-        _ value: T,
-        statusCode: Int = 200
-    ) throws -> OwnedFetch.HandlerResponse {
-        let bytes = try ClientCodec.encode(value)
-        return .buffered(
-            HTTPResponse(
-                head: HTTPResponseHead(statusCode: statusCode, headers: ["content-type": "application/json"]),
-                body: bytes
             )
-        )
-    }
 
-    private static func jsonDataResponse<T: Equatable & Hashable & Sendable & Codable>(
-        _ value: T,
-        statusCode: Int = 200
-    ) throws -> OwnedFetch.HandlerResponse {
-        try jsonResponse(ClientDataEnvelope(data: value), statusCode: statusCode)
-    }
+        case "server.session":
+            return ServerHandlerGroup(
+                groupIdentifier: group.groupIdentifier,
+                routes: group.routes.map { route in
+                    switch route.endpointName {
+                    case "session.form.list":
+                        guard let selector = ctx.instances else { return route }
+                        return ServerRoute(
+                            method: route.method,
+                            pathTemplate: route.pathTemplate,
+                            endpointName: route.endpointName,
+                            groupIdentifier: route.groupIdentifier,
+                            openAPIIdentifier: route.openAPIIdentifier,
+                            requiresLocation: false,
+                            requiresSessionLocation: false,
+                            requiresFormLocation: false
+                        ) { routeCtx in
+                            let rawSessionID = try routeCtx.requireParam("sessionID")
+                            if rawSessionID != "global" {
+                                let info = try sessionInfo(routeCtx.runtime.session, rawSessionID)
+                                _ = try await selector.acquire(session: info)
+                                let locRef = LocationSchema.Ref(
+                                    directory: SchemaPrimitive.AbsolutePath(rawValue: info.location.directory),
+                                    workspaceID: info.location.workspaceID
+                                )
+                                let isLive = await routeCtx.runtime.instance.live(location: locRef)
+                                guard isLive else {
+                                    return ServerHTTPResponse.json(ServerDataWrapper(data: [FormSchema.Info]()))
+                                }
+                                let loc = try await routeCtx.runtime.resolveLocation(locRef)
+                                let forms = await loc.form.list(CoreIntegration.Form.ListInput(sessionID: rawSessionID))
+                                return ServerHTTPResponse.json(ServerDataWrapper(data: forms))
+                            }
+                            let ref = requestRef(routeCtx.request, defaultDirectory: routeCtx.runtime.defaultDirectory)
+                            let loc = try await routeCtx.runtime.resolveLocation(ref)
+                            let forms = await loc.form.list(CoreIntegration.Form.ListInput(sessionID: rawSessionID))
+                            return ServerHTTPResponse.json(ServerDataWrapper(data: forms))
+                        }
 
-    private static func emptyResponse(_ statusCode: Int) -> OwnedFetch.HandlerResponse {
-        .buffered(HTTPResponse(head: HTTPResponseHead(statusCode: statusCode, headers: [:]), body: []))
-    }
+                    case "session.fork":
+                        return ServerRoute(
+                            method: route.method,
+                            pathTemplate: route.pathTemplate,
+                            endpointName: route.endpointName,
+                            groupIdentifier: route.groupIdentifier,
+                            openAPIIdentifier: route.openAPIIdentifier,
+                            requiresLocation: route.requiresLocation,
+                            requiresSessionLocation: route.requiresSessionLocation,
+                            requiresFormLocation: route.requiresFormLocation
+                        ) { routeCtx in
+                            struct ForkPayload: Decodable { let before: SessionMessageSchema.ID? }
+                            let rawSessionID = try routeCtx.requireParam("sessionID")
+                            let info = try sessionInfo(routeCtx.runtime.session, rawSessionID)
+                            let payload = try routeCtx.decodeOptionalJSONBody(ForkPayload.self) ?? ForkPayload(before: nil)
+                            do {
+                                let forked = try await routeCtx.runtime.session.fork(sessionID: info.id, before: payload.before)
+                                // Trigger registered fork hooks with error containment so a throwing hook
+                                // still returns the saved fork.
+                                if let selector = ctx.instances, let container = try? await selector.acquire(session: forked) {
+                                    _ = await container.pluginEnvironment.hooks.triggerSession(.fork(sessionID: forked.id))
+                                } else {
+                                    _ = await ctx.defaultPluginEnvironment.hooks.triggerSession(.fork(sessionID: forked.id))
+                                }
+                                return ServerHTTPResponse.json(ServerDataWrapper(data: forked))
+                            } catch let e as CoreSessionErrors.NotFoundError {
+                                throw missingSession(e)
+                            } catch let e as CoreSessionErrors.MessageNotFoundError {
+                                throw missingMessage(e)
+                            } catch let e as CoreSessionErrors.ForkEmptyError {
+                                throw InvalidRequestError(message: e.description, kind: "empty_session")
+                            }
+                        }
 
-    private static func sessionNotFoundResponse(_ sessionID: SessionID) throws -> OwnedFetch.HandlerResponse {
-        let err = OpenCodeProtocol.SessionNotFoundError(
-            sessionID: sessionID.rawValue,
-            message: "Session not found: \(sessionID.rawValue)"
-        )
-        return try jsonResponse(err, statusCode: 404)
-    }
+                    case "session.prompt":
+                        return ServerRoute(
+                            method: route.method,
+                            pathTemplate: route.pathTemplate,
+                            endpointName: route.endpointName,
+                            groupIdentifier: route.groupIdentifier,
+                            openAPIIdentifier: route.openAPIIdentifier,
+                            requiresLocation: false,
+                            requiresSessionLocation: false,
+                            requiresFormLocation: false
+                        ) { routeCtx in
+                            struct PromptPayload: Decodable {
+                                let id: SessionMessageSchema.ID?
+                                let text: String?
+                                let files: [PromptInputSchema.FileAttachment]?
+                                let agents: [PromptSchema.AgentAttachment]?
+                                let skills: [PromptInputSchema.SkillAttachment]?
+                                let metadata: SessionSchema.Metadata?
+                                let delivery: SessionInboxSchema.Delivery?
+                                let resume: Bool?
+                            }
+                            let rawSessionID = try routeCtx.requireParam("sessionID")
+                            let session = try sessionInfo(routeCtx.runtime.session, rawSessionID)
 
-    private static func messageNotFoundResponse(sessionID: SessionID, messageID: String) throws -> OwnedFetch.HandlerResponse {
-        let err = OpenCodeProtocol.MessageNotFoundError(
-            sessionID: sessionID.rawValue,
-            messageID: messageID,
-            message: "Message \(messageID) not found in session \(sessionID.rawValue)"
-        )
-        return try jsonResponse(err, statusCode: 404)
-    }
+                            // Acquire session-selected instance BEFORE prompt preparation/admission.
+                            // Configuration or instance-plugin failure rejects with 500 and admits nothing.
+                            let hooks: CorePlugin.Hooks.Service
+                            if let selector = ctx.instances {
+                                do {
+                                    let container = try await selector.acquire(session: session)
+                                    hooks = container.pluginEnvironment.hooks
+                                } catch {
+                                    ctx.logger.error(
+                                        "Instance acquisition failed during prompt",
+                                        attributes: ["sessionID": .string(session.id.rawValue)],
+                                        cause: .string(String(describing: error))
+                                    )
+                                    return ServerHTTPResponse.json(
+                                        ["_tag": "InternalError", "message": String(describing: error)],
+                                        statusCode: 500
+                                    )
+                                }
+                            } else {
+                                hooks = ctx.defaultPluginEnvironment.hooks
+                            }
 
-    private static func badRequestResponse(_ message: String) -> OwnedFetch.HandlerResponse {
-        let body = (try? ClientCodec.encode(["_tag": "BadRequestError", "message": message])) ?? []
-        return .buffered(HTTPResponse(head: HTTPResponseHead(statusCode: 400, headers: ["content-type": "application/json"]), body: body))
-    }
+                            let payload = try routeCtx.decodeJSONBody(PromptPayload.self)
+                            let resolvedMessageID = payload.id ?? SessionMessageSchema.ID.create()
+                            let resolvedDelivery = payload.delivery ?? .steer
 
-    private static func internalErrorResponse(_ message: String) -> OwnedFetch.HandlerResponse {
-        let body = (try? ClientCodec.encode(["_tag": "InternalError", "message": message])) ?? []
-        return .buffered(HTTPResponse(head: HTTPResponseHead(statusCode: 500, headers: ["content-type": "application/json"]), body: body))
-    }
+                            // Check idempotency BEFORE running prompt hooks so retries return the original admission unchanged.
+                            if let existing = try routeCtx.runtime.sessionInbox.reconcile(
+                                id: resolvedMessageID,
+                                sessionID: session.id,
+                                type: "user",
+                                delivery: resolvedDelivery
+                            ), case .user(let userItem) = existing {
+                                return ServerHTTPResponse.json(ServerDataWrapper(data: userItem))
+                            }
 
-    private static func defaultPublicLocationRef(_ ctx: EmbeddedHost.RouterContext) -> LocationSchema.PublicRef {
-        LocationSchema.PublicRef(
-            directory: SchemaPrimitive.AbsolutePath(rawValue: ctx.serverOptions.config?.directory ?? "/")
-        )
-    }
+                            // Trigger currently registered prompt hooks (without blocking on unloaded plugins).
+                            let promptEvent = PluginEffect.SessionPrompt(
+                                sessionID: session.id,
+                                messageID: resolvedMessageID,
+                                prompt: PromptInputSchema.Prompt(
+                                    text: payload.text ?? "",
+                                    files: payload.files,
+                                    agents: payload.agents,
+                                    skills: payload.skills
+                                ),
+                                metadata: payload.metadata,
+                                delivery: resolvedDelivery
+                            )
+                            let triggered = await hooks.triggerSession(.prompt(promptEvent))
+                            let finalPrompt: PluginEffect.SessionPrompt
+                            if case .prompt(let updated) = triggered {
+                                finalPrompt = updated
+                            } else {
+                                finalPrompt = promptEvent
+                            }
 
-    private static func parsePublicLocationQuery(_ query: [String: String]) -> LocationSchema.PublicRef? {
-        guard let dir = query["location[directory]"], !dir.isEmpty else { return nil }
-        return LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
-    }
+                            do {
+                                let admitted = try await routeCtx.runtime.session.prompt(
+                                    CoreSession.PromptRequest(
+                                        sessionID: session.id,
+                                        id: resolvedMessageID,
+                                        input: CoreSessionPrompt.Input(
+                                            text: finalPrompt.prompt.text,
+                                            files: finalPrompt.prompt.files,
+                                            agents: finalPrompt.prompt.agents,
+                                            skills: finalPrompt.prompt.skills,
+                                            metadata: finalPrompt.metadata,
+                                            delivery: finalPrompt.delivery
+                                        ),
+                                        resume: payload.resume
+                                    )
+                                )
+                                guard case .user(let userItem) = admitted else {
+                                    throw ConflictError(
+                                        message: "Prompt message ID conflicts with an existing durable record: \(admitted.id.rawValue)",
+                                        resource: admitted.id.rawValue
+                                    )
+                                }
+                                return ServerHTTPResponse.json(ServerDataWrapper(data: userItem))
+                            } catch let e as CoreSessionErrors.NotFoundError {
+                                throw missingSession(e)
+                            } catch let e as CoreSessionErrors.PromptConflictError {
+                                throw ConflictError(
+                                    message: "Prompt message ID conflicts with an existing durable record: \(e.messageID.rawValue)",
+                                    resource: e.messageID.rawValue
+                                )
+                            } catch let e as CoreSessionErrors.AttachmentError {
+                                throw InvalidRequestError(message: e.description, field: "files")
+                            } catch let e as CoreSessionErrors.SkillNotFoundError {
+                                throw InvalidRequestError(message: "Skill not found: \(e.skill)", field: "skills")
+                            }
+                        }
 
-    private static func decodeJSONObject(_ bytes: [UInt8]?) throws -> [String: JSONValue] {
-        guard let bytes, !bytes.isEmpty else { return [:] }
-        let value = try ClientCodec.decode(JSONValue.self, from: bytes)
-        guard case .object(let dict) = value else { return [:] }
-        return dict
-    }
+                    default:
+                        return route
+                    }
+                }
+            )
 
-    private static func stringField(_ obj: [String: JSONValue], _ key: String) -> String? {
-        if case .string(let s) = obj[key] { return s }
-        return nil
-    }
-
-    private static func objectField(_ obj: [String: JSONValue], _ key: String) -> [String: JSONValue]? {
-        if case .object(let dict) = obj[key] { return dict }
-        return nil
-    }
-
-    private static func decodeField<T: Decodable>(_ obj: [String: JSONValue], _ key: String) throws -> T? {
-        guard let raw = obj[key], raw != .null else { return nil }
-        return try ClientCodec.fromJSONValue(T.self, value: raw)
-    }
-
-    private static func decodeLocationField(_ obj: [String: JSONValue]) -> OpenCodeLocation? {
-        guard case .object(let locObj) = obj["location"],
-              case .string(let dir) = locObj["directory"]
-        else { return nil }
-        let wid: WorkspaceID? = {
-            if case .string(let w) = locObj["workspaceID"] { return WorkspaceID(rawValue: w) }
-            return nil
-        }()
-        return OpenCodeLocation(directory: dir, workspaceID: wid)
-    }
-
-    private static func parseURL(_ rawURL: String) -> (path: String, query: [String: String]) {
-        let withoutFragment = rawURL.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? rawURL
-        let parts = withoutFragment.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
-        let prefix = String(parts[0])
-        let queryString = parts.count > 1 ? String(parts[1]) : ""
-
-        let path: String
-        if let schemeRange = prefix.range(of: "://") {
-            let afterScheme = prefix[schemeRange.upperBound...]
-            if let slash = afterScheme.firstIndex(of: "/") {
-                path = String(afterScheme[slash...])
-            } else {
-                path = "/"
-            }
-        } else {
-            path = prefix.isEmpty ? "/" : prefix
-        }
-
-        var query: [String: String] = [:]
-        if !queryString.isEmpty {
-            for pair in queryString.split(separator: "&", omittingEmptySubsequences: true) {
-                let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-                let key = decodeURIComponent(String(kv[0]).replacing("+", with: " "))
-                let value = kv.count > 1 ? decodeURIComponent(String(kv[1]).replacing("+", with: " ")) : ""
-                query[key] = value
-            }
-        }
-        return (path, query)
-    }
-
-    private static func decodeURIComponent(_ value: String) -> String {
-        let bytes = Array(value.utf8)
-        var out: [UInt8] = []
-        out.reserveCapacity(bytes.count)
-        var i = 0
-        while i < bytes.count {
-            if bytes[i] == 0x25, i + 2 < bytes.count,
-               let hi = hexVal(bytes[i + 1]),
-               let lo = hexVal(bytes[i + 2])
-            {
-                out.append((hi << 4) | lo)
-                i += 3
-            } else {
-                out.append(bytes[i])
-                i += 1
-            }
-        }
-        return String(decoding: out, as: UTF8.self)
-    }
-
-    private static func hexVal(_ byte: UInt8) -> UInt8? {
-        switch byte {
-        case 0x30...0x39: return byte - 0x30
-        case 0x41...0x46: return byte - 0x41 + 10
-        case 0x61...0x66: return byte - 0x61 + 10
-        default: return nil
+        default:
+            return group
         }
     }
 }

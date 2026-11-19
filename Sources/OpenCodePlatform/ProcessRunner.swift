@@ -1,4 +1,6 @@
-#if canImport(FoundationEssentials)
+#if os(macOS) || os(Linux) || os(Windows)
+import Foundation
+#elseif canImport(FoundationEssentials)
 import FoundationEssentials
 #else
 import Foundation
@@ -12,6 +14,161 @@ import Musl
 #endif
 import Synchronization
 import OpenCodeUtil
+
+#if os(macOS) || os(Linux) || os(Windows)
+private final class ActiveProcessController: @unchecked Sendable {
+    private struct State: Sendable {
+        var exited: Bool = false
+        var terminationRequested: Bool = false
+    }
+
+    let process: Process
+    private let forceKillAfterMs: Int
+    private let state = Mutex(State())
+
+    init(process: Process, forceKillAfterMs: Int = 500) {
+        self.process = process
+        self.forceKillAfterMs = forceKillAfterMs
+    }
+
+    func markExited() {
+        state.withLock { $0.exited = true }
+    }
+
+    var isExited: Bool {
+        state.withLock { $0.exited }
+    }
+
+    /// Terminates the running child process with SIGTERM -> SIGKILL escalation.
+    /// Idempotent and safe to invoke from any thread.
+    func terminate() {
+        let shouldTerminate = state.withLock { s -> Bool in
+            if s.exited || s.terminationRequested { return false }
+            s.terminationRequested = true
+            return true
+        }
+        guard shouldTerminate else { return }
+
+        let pid = process.processIdentifier
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+        if pid > 0 {
+            _ = kill(pid, SIGTERM)
+        } else if process.isRunning {
+            process.terminate()
+        }
+        #else
+        if process.isRunning {
+            process.terminate()
+        }
+        #endif
+
+        let graceMs = max(50, forceKillAfterMs)
+        Thread.detachNewThread { [self] in
+            let stepMs = 10
+            var elapsed = 0
+            while elapsed < graceMs {
+                if self.isExited || !self.process.isRunning {
+                    return
+                }
+                Thread.sleep(forTimeInterval: Double(stepMs) / 1000.0)
+                elapsed += stepMs
+            }
+            if !self.isExited && self.process.isRunning {
+                #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                if pid > 0 {
+                    _ = kill(pid, SIGKILL)
+                }
+                #else
+                self.process.terminate()
+                #endif
+            }
+        }
+    }
+}
+
+private final class ConcurrentProcessCollector: @unchecked Sendable {
+    private struct State {
+        var stdout: [UInt8]? = nil
+        var stderr: [UInt8]? = nil
+        var exitCode: Int32? = nil
+        var terminationError: (any Error)? = nil
+        var resumed: Bool = false
+        var continuation: CheckedContinuation<ProcessOutput, any Error>? = nil
+    }
+
+    private let state = Mutex(State())
+
+    func setStdout(_ bytes: [UInt8]) {
+        let completion = state.withLock { s -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? in
+            s.stdout = bytes
+            return tryTakeCompletion(&s)
+        }
+        if let (cont, result) = completion {
+            cont.resume(with: result)
+        }
+    }
+
+    func setStderr(_ bytes: [UInt8]) {
+        let completion = state.withLock { s -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? in
+            s.stderr = bytes
+            return tryTakeCompletion(&s)
+        }
+        if let (cont, result) = completion {
+            cont.resume(with: result)
+        }
+    }
+
+    func setExited(exitCode: Int32) {
+        let completion = state.withLock { s -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? in
+            s.exitCode = exitCode
+            return tryTakeCompletion(&s)
+        }
+        if let (cont, result) = completion {
+            cont.resume(with: result)
+        }
+    }
+
+    /// Records a timeout / abort / cancellation error if the child has not already exited cleanly.
+    func recordTerminationError(_ error: any Error) {
+        let completion = state.withLock { s -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? in
+            guard !s.resumed, s.exitCode == nil, s.terminationError == nil else { return nil }
+            s.terminationError = error
+            return tryTakeCompletion(&s)
+        }
+        if let (cont, result) = completion {
+            cont.resume(with: result)
+        }
+    }
+
+    func install(continuation: CheckedContinuation<ProcessOutput, any Error>) {
+        let completion = state.withLock { s -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? in
+            s.continuation = continuation
+            return tryTakeCompletion(&s)
+        }
+        if let (cont, result) = completion {
+            cont.resume(with: result)
+        }
+    }
+
+    private func tryTakeCompletion(
+        _ s: inout State
+    ) -> (CheckedContinuation<ProcessOutput, any Error>, Result<ProcessOutput, any Error>)? {
+        guard !s.resumed, let cont = s.continuation else { return nil }
+        guard let exitCode = s.exitCode else { return nil }
+        // If the child was forcibly terminated by timeout/abort/cancel, resume as soon as
+        // waitUntilExit() completes so orphaned grandchildren holding pipe FDs cannot hang teardown.
+        if let termErr = s.terminationError {
+            s.resumed = true
+            s.continuation = nil
+            return (cont, .failure(termErr))
+        }
+        guard let stdout = s.stdout, let stderr = s.stderr else { return nil }
+        s.resumed = true
+        s.continuation = nil
+        return (cont, .success(ProcessOutput(exitCode: exitCode, stdout: stdout, stderr: stderr)))
+    }
+}
+#endif
 
 // MARK: - CrossSpawnSpawner (`cross-spawn-spawner.ts`)
 
@@ -42,6 +199,18 @@ public enum CrossSpawnSpawner {
         public init() {}
 
         public func run(_ spec: ProcessSpec) async throws -> ProcessOutput {
+            try await run(spec, timeoutMs: nil, signal: nil, forceKillAfterMs: 500)
+        }
+
+        /// Runs `spec` draining stdout and stderr concurrently on dedicated threads (preventing pipe deadlocks),
+        /// with optional `timeoutMs`, live `AbortSignal`, and Swift Task cancellation triggering
+        /// `SIGTERM` -> `SIGKILL` escalation.
+        public func run(
+            _ spec: ProcessSpec,
+            timeoutMs: Int?,
+            signal: AbortSignal?,
+            forceKillAfterMs: Int = 500
+        ) async throws -> ProcessOutput {
             #if os(macOS) || os(Linux) || os(Windows)
             // Validate no NUL characters in command/args/env matching upstream `findNulCharacter`.
             if spec.executable.contains("\u{0}") {
@@ -54,6 +223,16 @@ public enum CrossSpawnSpawner {
                 for (name, value) in env where value.contains("\u{0}") {
                     throw PlatformError.ioFailure("The environment variable \(name) contains a NUL character")
                 }
+            }
+
+            if let signal, signal.isAborted {
+                throw AppProcess.abortError(signal)
+            }
+            if let timeoutMs, timeoutMs <= 0 {
+                throw PlatformError.ioFailure("Timed out")
+            }
+            if Task.isCancelled {
+                throw CancellationError()
             }
 
             let process = Process()
@@ -92,21 +271,89 @@ public enum CrossSpawnSpawner {
             defer { settle() }
 
             try process.run()
+
+            let controller = ActiveProcessController(process: process, forceKillAfterMs: forceKillAfterMs)
+            let collector = ConcurrentProcessCollector()
+
+            // Feed stdin on its own background thread so large stdin payloads cannot deadlock with stdout/stderr.
             if let inputBytes = spec.stdin, let pipe = stdinPipe {
-                try pipe.fileHandleForWriting.write(contentsOf: Data(inputBytes))
-                try pipe.fileHandleForWriting.close()
+                let writeHandle = pipe.fileHandleForWriting
+                Thread.detachNewThread {
+                    if !inputBytes.isEmpty {
+                        try? writeHandle.write(contentsOf: Data(inputBytes))
+                    }
+                    try? writeHandle.close()
+                }
             }
 
-            let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
+            // Drain stdout and stderr CONCURRENTLY on dedicated threads before waitUntilExit()
+            // so heavy output on either stream can never fill an OS pipe buffer and deadlock the child.
+            let stdoutReadHandle = stdoutPipe.fileHandleForReading
+            let stderrReadHandle = stderrPipe.fileHandleForReading
 
-            return ProcessOutput(
-                exitCode: process.terminationStatus,
-                stdout: Array(stdoutData),
-                stderr: Array(stderrData)
-            )
+            Thread.detachNewThread {
+                let data = (try? stdoutReadHandle.readToEnd()) ?? Data()
+                try? stdoutReadHandle.close()
+                collector.setStdout(Array(data))
+            }
+
+            Thread.detachNewThread {
+                let data = (try? stderrReadHandle.readToEnd()) ?? Data()
+                try? stderrReadHandle.close()
+                collector.setStderr(Array(data))
+            }
+
+            Thread.detachNewThread {
+                process.waitUntilExit()
+                controller.markExited()
+                collector.setExited(exitCode: process.terminationStatus)
+            }
+
+            // Wire live AbortSignal termination.
+            let removeAbortListener: @Sendable () -> Void
+            if let signal {
+                removeAbortListener = signal.onAbort {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+                if signal.isAborted {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+            } else {
+                removeAbortListener = {}
+            }
+            defer { removeAbortListener() }
+
+            // Wire timeout termination (SIGTERM -> SIGKILL escalation).
+            let timeoutTask: Task<Void, Never>?
+            if let timeoutMs {
+                timeoutTask = Task {
+                    do {
+                        try await Task.sleep(for: .milliseconds(timeoutMs))
+                    } catch {
+                        return
+                    }
+                    if !controller.isExited {
+                        collector.recordTerminationError(PlatformError.ioFailure("Timed out"))
+                        controller.terminate()
+                    }
+                }
+            } else {
+                timeoutTask = nil
+            }
+            defer { timeoutTask?.cancel() }
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    collector.install(continuation: continuation)
+                }
+            } onCancel: {
+                collector.recordTerminationError(CancellationError())
+                controller.terminate()
+            }
             #else
+            _ = (timeoutMs, signal, forceKillAfterMs)
             throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "ProcessSpawner.run")
             #endif
         }
@@ -255,6 +502,9 @@ public enum AppProcess {
                 let err = AppProcess.abortError(signal)
                 throw AppProcessError(command: description, causeMessage: String(describing: err))
             }
+            if let timeoutMs = options.timeoutMs, timeoutMs <= 0 {
+                throw AppProcessError(command: description, causeMessage: "Timed out")
+            }
             let effectiveSpec = options.stdin != nil
                 ? ProcessSpec(
                     executable: spec.executable,
@@ -265,7 +515,23 @@ public enum AppProcess {
                 )
                 : spec
             do {
-                let raw = try await spawner.run(effectiveSpec)
+                let raw: ProcessOutput
+                if let hostSpawner = spawner as? CrossSpawnSpawner.HostProcessSpawner {
+                    raw = try await hostSpawner.run(
+                        effectiveSpec,
+                        timeoutMs: options.timeoutMs,
+                        signal: options.signal
+                    )
+                } else if options.timeoutMs != nil || options.signal != nil {
+                    raw = try await runWithCustomSpawnerControls(
+                        effectiveSpec,
+                        description: description,
+                        timeoutMs: options.timeoutMs,
+                        signal: options.signal
+                    )
+                } else {
+                    raw = try await spawner.run(effectiveSpec)
+                }
                 if options.combineOutput {
                     let combined = AppProcess.collectStream([raw.stdout, raw.stderr], maxOutputBytes: options.maxOutputBytes)
                     return RunResult(
@@ -292,7 +558,80 @@ public enum AppProcess {
             } catch let e as AppProcessError {
                 throw e
             } catch {
-                throw AppProcessError(command: description, causeMessage: String(describing: error))
+                let message: String
+                if case PlatformError.ioFailure(let detail, _) = error {
+                    message = detail
+                } else {
+                    message = String(describing: error)
+                }
+                throw AppProcessError(command: description, causeMessage: message)
+            }
+        }
+
+        private func runWithCustomSpawnerControls(
+            _ spec: ProcessSpec,
+            description: String,
+            timeoutMs: Int?,
+            signal: AbortSignal?
+        ) async throws -> ProcessOutput {
+            let spawner = self.spawner
+            let worker = Task<ProcessOutput, any Error> {
+                try await spawner.run(spec)
+            }
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ProcessOutput, any Error>) in
+                    let gate = Mutex(false)
+                    let resumeOnce: @Sendable (Result<ProcessOutput, any Error>) -> Void = { result in
+                        let shouldResume = gate.withLock { done -> Bool in
+                            if done { return false }
+                            done = true
+                            return true
+                        }
+                        if shouldResume {
+                            continuation.resume(with: result)
+                        }
+                    }
+
+                    let removeAbort: @Sendable () -> Void
+                    if let signal {
+                        removeAbort = signal.onAbort {
+                            worker.cancel()
+                            let err = AppProcess.abortError(signal)
+                            resumeOnce(.failure(AppProcessError(command: description, causeMessage: String(describing: err))))
+                        }
+                        if signal.isAborted {
+                            worker.cancel()
+                            let err = AppProcess.abortError(signal)
+                            resumeOnce(.failure(AppProcessError(command: description, causeMessage: String(describing: err))))
+                        }
+                    } else {
+                        removeAbort = {}
+                    }
+
+                    let timerTask: Task<Void, Never>?
+                    if let timeoutMs {
+                        timerTask = Task {
+                            do {
+                                try await Task.sleep(for: .milliseconds(timeoutMs))
+                            } catch {
+                                return
+                            }
+                            worker.cancel()
+                            resumeOnce(.failure(AppProcessError(command: description, causeMessage: "Timed out")))
+                        }
+                    } else {
+                        timerTask = nil
+                    }
+
+                    Task {
+                        let result = await worker.result
+                        timerTask?.cancel()
+                        removeAbort()
+                        resumeOnce(result)
+                    }
+                }
+            } onCancel: {
+                worker.cancel()
             }
         }
 
@@ -422,6 +761,25 @@ public enum AppProcess {
 
 // MARK: - ProcessSignal (`process-signal.ts`)
 
+#if os(macOS) || os(Linux)
+/// Async-signal-safe write end of the process-wide self-pipe used to forward POSIX signals
+/// out of C signal context into a dedicated Swift dispatcher thread without touching GCD or locks.
+private nonisolated(unsafe) var posixSignalPipeWriteFD: Int32 = -1
+
+private func posixSignalTrampoline(_ sig: Int32) {
+    let fd = posixSignalPipeWriteFD
+    guard fd >= 0 else { return }
+    var byte = UInt8(truncatingIfNeeded: sig)
+    #if canImport(Darwin)
+    _ = Darwin.write(fd, &byte, 1)
+    #elseif canImport(Glibc)
+    _ = Glibc.write(fd, &byte, 1)
+    #elseif canImport(Musl)
+    _ = Musl.write(fd, &byte, 1)
+    #endif
+}
+#endif
+
 public enum ProcessSignal {
     private struct Registry: Sendable {
         var nextID: UInt64 = 1
@@ -429,15 +787,157 @@ public enum ProcessSignal {
         var listeners: [String: [UInt64: @Sendable () -> Void]] = [:]
     }
 
+    private struct PosixState: Sendable {
+        var pumpStarted: Bool = false
+        var installedSignals: Set<Int32> = []
+    }
+
     private static let registry = Mutex(Registry())
+    private static let posixState = Mutex(PosixState())
+
+    #if os(macOS) || os(Linux)
+    private static func posixSignalNumber(for name: String) -> Int32? {
+        switch name.uppercased() {
+        case "SIGHUP": return SIGHUP
+        case "SIGINT": return SIGINT
+        case "SIGQUIT": return SIGQUIT
+        case "SIGUSR1": return SIGUSR1
+        case "SIGUSR2": return SIGUSR2
+        case "SIGPIPE": return SIGPIPE
+        case "SIGALRM": return SIGALRM
+        case "SIGTERM": return SIGTERM
+        case "SIGCHLD": return SIGCHLD
+        case "SIGCONT": return SIGCONT
+        case "SIGTSTP": return SIGTSTP
+        case "SIGTTIN": return SIGTTIN
+        case "SIGTTOU": return SIGTTOU
+        case "SIGWINCH": return SIGWINCH
+        #if canImport(Darwin)
+        case "SIGINFO": return SIGINFO
+        #endif
+        default: return nil
+        }
+    }
+
+    private static func posixSignalName(for number: Int32) -> String? {
+        switch number {
+        case SIGHUP: return "SIGHUP"
+        case SIGINT: return "SIGINT"
+        case SIGQUIT: return "SIGQUIT"
+        case SIGUSR1: return "SIGUSR1"
+        case SIGUSR2: return "SIGUSR2"
+        case SIGPIPE: return "SIGPIPE"
+        case SIGALRM: return "SIGALRM"
+        case SIGTERM: return "SIGTERM"
+        case SIGCHLD: return "SIGCHLD"
+        case SIGCONT: return "SIGCONT"
+        case SIGTSTP: return "SIGTSTP"
+        case SIGTTIN: return "SIGTTIN"
+        case SIGTTOU: return "SIGTTOU"
+        case SIGWINCH: return "SIGWINCH"
+        #if canImport(Darwin)
+        case SIGINFO: return "SIGINFO"
+        #endif
+        default: return nil
+        }
+    }
+
+    private static func installPosixHandlerIfSupported(for signalName: String) {
+        guard let sigNum = posixSignalNumber(for: signalName) else { return }
+
+        let (needsPump, needsSigaction): (Bool, Bool) = posixState.withLock { s in
+            let startPump = !s.pumpStarted
+            if startPump {
+                s.pumpStarted = true
+            }
+            let installHandler = s.installedSignals.insert(sigNum).inserted
+            return (startPump, installHandler)
+        }
+
+        if needsPump {
+            var fds: [Int32] = [-1, -1]
+            #if canImport(Darwin)
+            let pipeRC = Darwin.pipe(&fds)
+            #elseif canImport(Glibc)
+            let pipeRC = Glibc.pipe(&fds)
+            #elseif canImport(Musl)
+            let pipeRC = Musl.pipe(&fds)
+            #else
+            let pipeRC: Int32 = -1
+            #endif
+            if pipeRC == 0 {
+                let readFD = fds[0]
+                let writeFD = fds[1]
+                _ = fcntl(readFD, F_SETFD, FD_CLOEXEC)
+                _ = fcntl(writeFD, F_SETFD, FD_CLOEXEC)
+                let writeFlags = fcntl(writeFD, F_GETFL)
+                if writeFlags >= 0 {
+                    _ = fcntl(writeFD, F_SETFL, writeFlags | O_NONBLOCK)
+                }
+                posixSignalPipeWriteFD = writeFD
+
+                Thread.detachNewThread {
+                    var buffer = [UInt8](repeating: 0, count: 64)
+                    while true {
+                        let n: Int = buffer.withUnsafeMutableBytes { rawBuf in
+                            guard let base = rawBuf.baseAddress else { return -1 }
+                            #if canImport(Darwin)
+                            return Darwin.read(readFD, base, rawBuf.count)
+                            #elseif canImport(Glibc)
+                            return Glibc.read(readFD, base, rawBuf.count)
+                            #elseif canImport(Musl)
+                            return Musl.read(readFD, base, rawBuf.count)
+                            #else
+                            return -1
+                            #endif
+                        }
+                        if n < 0 {
+                            if errno == EINTR { continue }
+                            break
+                        }
+                        if n == 0 { break }
+                        for i in 0..<n {
+                            let sigNumber = Int32(buffer[i])
+                            if let name = ProcessSignal.posixSignalName(for: sigNumber) {
+                                ProcessSignal.dispatch(signal: name)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if needsSigaction {
+            #if canImport(Darwin)
+            var act = sigaction()
+            act.__sigaction_u.__sa_handler = posixSignalTrampoline
+            sigemptyset(&act.sa_mask)
+            act.sa_flags = SA_RESTART
+            _ = sigaction(sigNum, &act, nil)
+            #elseif canImport(Glibc)
+            _ = Glibc.signal(sigNum, posixSignalTrampoline)
+            #elseif canImport(Musl)
+            _ = Musl.signal(sigNum, posixSignalTrampoline)
+            #endif
+        }
+    }
+    #endif
 
     // parity: util/src/process-signal.ts#install [status=implemented hash=ec1d26a15ffe]
     public static func install(signal: String, unavailable: @escaping @Sendable () -> Void) {
-        registry.withLock { reg in
-            if reg.listeners[signal] != nil { return }
+        let inserted = registry.withLock { reg -> Bool in
+            if reg.listeners[signal] != nil { return false }
             reg.listeners[signal] = [:]
             reg.unavailable[signal] = unavailable
+            return true
         }
+        #if os(macOS) || os(Linux)
+        if inserted {
+            installPosixHandlerIfSupported(for: signal)
+        }
+        #else
+        _ = inserted
+        #endif
     }
 
     // parity: util/src/process-signal.ts#subscribe [status=implemented hash=d466134be985]
@@ -571,6 +1071,63 @@ public enum HeapSnapshot {
 
     private static let serializeGate = Mutex(false)
 
+    /// Reads current process memory statistics (RSS and native heap where available) using OS APIs.
+    public static func currentMemorySummary() -> MemorySummary {
+        var rss: Int64 = 0
+        var heapTotal: Int64 = 0
+        var heapUsed: Int64 = 0
+
+        #if canImport(Darwin)
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(task_self_trap(), task_flavor_t(MACH_TASK_BASIC_INFO), intPtr, &count)
+            }
+        }
+        if kerr == KERN_SUCCESS {
+            rss = Int64(info.resident_size)
+        } else {
+            var usage = rusage()
+            if getrusage(RUSAGE_SELF, &usage) == 0 {
+                rss = Int64(usage.ru_maxrss) // macOS ru_maxrss is in bytes
+            }
+        }
+        var mallocStats = malloc_statistics_t()
+        malloc_zone_statistics(nil, &mallocStats)
+        heapTotal = Int64(mallocStats.size_allocated)
+        heapUsed = Int64(mallocStats.size_in_use)
+        #elseif os(Linux)
+        if let statm = try? String(contentsOfFile: "/proc/self/statm", encoding: .utf8) {
+            let fields = statm.split(whereSeparator: \.isWhitespace)
+            if fields.count >= 2, let residentPages = Int64(fields[1]), residentPages > 0 {
+                #if canImport(Glibc) || canImport(Musl)
+                let pageSize = Int64(sysconf(Int32(_SC_PAGESIZE)))
+                if pageSize > 0 {
+                    rss = residentPages * pageSize
+                }
+                #endif
+            }
+        }
+        if rss == 0 {
+            #if canImport(Glibc) || canImport(Musl)
+            var usage = rusage()
+            if getrusage(Int32(RUSAGE_SELF.rawValue), &usage) == 0 {
+                rss = Int64(usage.ru_maxrss) * 1024 // Linux ru_maxrss is in KiB
+            }
+            #endif
+        }
+        #endif
+
+        return MemorySummary(
+            rss: rss,
+            heapTotal: heapTotal,
+            heapUsed: heapUsed,
+            external: 0,
+            arrayBuffers: 0
+        )
+    }
+
     /// Writes a diagnostic memory snapshot file into `directory` (native Swift adaptation of V8 heap snapshot).
     // parity: util/src/heap-snapshot.ts#write [status=adapted hash=721d3e0e7a6c]
     public static func write(
@@ -599,8 +1156,8 @@ public enum HeapSnapshot {
         let nowMs = Flock.currentEpochMs()
         let file = "\(directory)/heap-\(pid)-\(nowMs).heapsnapshot"
         try await fileSystem.makeDirectory(at: directory, recursive: true)
-        let memory = MemorySummary(rss: 0, heapTotal: 0, heapUsed: 0, external: 0, arrayBuffers: 0)
-        let payload = "{\"runtime\":\"swift\",\"pid\":\(pid),\"timestampMs\":\(nowMs)}"
+        let memory = currentMemorySummary()
+        let payload = "{\"runtime\":\"swift\",\"pid\":\(pid),\"timestampMs\":\(nowMs),\"memory\":{\"rss\":\(memory.rss),\"heapTotal\":\(memory.heapTotal),\"heapUsed\":\(memory.heapUsed),\"external\":\(memory.external),\"arrayBuffers\":\(memory.arrayBuffers)}}"
         try await fileSystem.writeFileExclusive(Array(payload.utf8), to: file)
         return Result(path: file, pid: pid, memory: memory)
     }
