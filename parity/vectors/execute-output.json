@@ -1,0 +1,28 @@
+[
+  {
+    "fn": "util/src/execute-output.ts#formatExecuteOutput",
+    "cases": [
+      { "name": "compact json object", "args": ["{\"a\":1,\"b\":[2]}"] },
+      { "name": "compact json array", "args": ["[\"x\",\"y\"]"] },
+      { "name": "empty object", "args": ["{}"] },
+      { "name": "empty array", "args": ["[]"] },
+      { "name": "nested objects arrays booleans null and escapes", "args": ["{\"ok\":true,\"off\":false,\"nil\":null,\"nested\":{\"arr\":[1,-2,3.5,\"a\\nb\\t\\\"c\\\"\\\\d\"]}}"] },
+      { "name": "json with emoji and unicode", "args": ["{\"emoji\":\"😀\",\"jp\":\"日本語\"}"] },
+      { "name": "json with integer-like keys sorted per JS OwnPropertyKeys", "args": ["{\"b\":1,\"2\":\"two\",\"0\":\"zero\",\"a\":2}"] },
+      { "name": "json with duplicate keys", "args": ["{\"a\":1,\"b\":2,\"a\":3}"] },
+      { "name": "json followed by warnings and logs", "args": ["[\"x\"]\n\nWarnings:\n- [unhandled] boom\n\nLogs:\nhi"] },
+      { "name": "json followed by logs only", "args": ["{\"ok\":true}\n\nLogs:\nline 1\nline 2"] },
+      { "name": "plain text without sections", "args": ["hello world"] },
+      { "name": "plain text with logs section", "args": ["exit 0\nok\n\nLogs:\nhi"] },
+      { "name": "invalid json starting with brace", "args": ["{not json"] },
+      { "name": "invalid json starting with bracket", "args": ["[1, 2,"] },
+      { "name": "json primitive string left unformatted", "args": ["\"hello\""] },
+      { "name": "json primitive number left unformatted", "args": ["42"] },
+      { "name": "output starting directly with Logs", "args": ["Logs:\nhi"] },
+      { "name": "output starting directly with Warnings and Logs", "args": ["Warnings:\n- [unhandled] boom\n\nLogs:\nhi"] },
+      { "name": "trailing whitespace on rest trimmed", "args": ["{\"a\":1}\n\nLogs:\nhi   \n"] },
+      { "name": "json with negative zero and floats", "args": ["{\"zero\":-0,\"pi\":3.14,\"neg\":-42,\"big\":1e20,\"small\":1e-7}"] },
+      { "name": "json with ecma262 number formatting boundaries", "args": ["{\"e_neg6\":1e-6,\"e_neg7\":1.23e-7,\"e20\":1e20,\"e21\":1e21,\"f21\":1.5e21,\"maxSafe\":9007199254740991,\"tiny\":0.0001}"] }
+    ]
+  }
+]

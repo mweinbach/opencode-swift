@@ -1,0 +1,174 @@
+[
+  {
+    "fn": "util/src/activity-calendar.ts#activityCalendar",
+    "cases": [
+      {
+        "name": "empty range to equals from",
+        "args": [
+          {
+            "activity": [],
+            "from": 1767268800000,
+            "to": 1767268800000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "reversed range to less than from",
+        "args": [
+          {
+            "activity": [{ "date": "2026-06-15", "steps": 5 }],
+            "from": 1781524801000,
+            "to": 1781524800000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "single day range on Monday",
+        "args": [
+          {
+            "activity": [{ "date": "2026-06-15", "steps": 5 }],
+            "from": 1781524800000,
+            "to": 1781524801000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "Monday-aligned 2-week range with out-of-range -1 and levels 0/2/4",
+        "args": [
+          {
+            "activity": [
+              { "date": "2026-01-01", "steps": 1 },
+              { "date": "2026-01-02", "steps": 50 }
+            ],
+            "from": 1767268800000,
+            "to": 1767787201000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "clipped maxWeeks 1 keeps intensity relative to full activity map",
+        "args": [
+          {
+            "activity": [
+              { "date": "2026-01-01", "steps": 50 },
+              { "date": "2026-01-05", "steps": 1 }
+            ],
+            "from": 1767268800000,
+            "to": 1767787201000,
+            "maxWeeks": 1
+          }
+        ]
+      },
+      {
+        "name": "maxWeeks fractional and zero clamped to 1",
+        "args": [
+          {
+            "activity": [],
+            "from": 1767268800000,
+            "to": 1767787201000,
+            "maxWeeks": 0.5
+          }
+        ]
+      },
+      {
+        "name": "duplicate dates keep last entry",
+        "args": [
+          {
+            "activity": [
+              { "date": "2026-06-15", "steps": 100 },
+              { "date": "2026-06-15", "steps": 0 }
+            ],
+            "from": 1781524800000,
+            "to": 1781524801000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "8 distinct positive step counts scale evenly across levels 1..4",
+        "args": [
+          {
+            "activity": [
+              { "date": "2026-01-01", "steps": 1 },
+              { "date": "2026-01-02", "steps": 2 },
+              { "date": "2026-01-03", "steps": 3 },
+              { "date": "2026-01-04", "steps": 4 },
+              { "date": "2026-01-05", "steps": 5 },
+              { "date": "2026-01-06", "steps": 6 },
+              { "date": "2026-01-07", "steps": 7 },
+              { "date": "2026-01-08", "steps": 8 }
+            ],
+            "from": 1767268800000,
+            "to": 1767960001000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "single distinct positive count uses highest level 4",
+        "args": [
+          {
+            "activity": [
+              { "date": "2026-01-01", "steps": 10 },
+              { "date": "2026-01-02", "steps": 10 }
+            ],
+            "from": 1767268800000,
+            "to": 1767787201000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "month span transition across Apr to May",
+        "args": [
+          {
+            "activity": [],
+            "from": 1777464000000,
+            "to": 1779192001000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "month span transition across year boundary Dec to Jan",
+        "args": [
+          {
+            "activity": [],
+            "from": 1766404800000,
+            "to": 1768132801000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "leap day Feb 29 2024 preserved cleanly",
+        "args": [
+          {
+            "activity": [
+              { "date": "2024-02-29", "steps": 1 },
+              { "date": "2024-03-10", "steps": 2 }
+            ],
+            "from": 1708948800000,
+            "to": 1710158401000,
+            "maxWeeks": 53
+          }
+        ]
+      },
+      {
+        "name": "long multi-year range capped at 53 weeks",
+        "args": [
+          {
+            "activity": [{ "date": "2026-01-01", "steps": 4 }],
+            "from": 1577880000000,
+            "to": 1767787201000,
+            "maxWeeks": 200
+          }
+        ]
+      }
+    ]
+  }
+]

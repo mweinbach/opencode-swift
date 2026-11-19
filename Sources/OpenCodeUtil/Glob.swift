@@ -91,7 +91,7 @@ public enum Glob {
         let expanded = expandBraces(pat)
         let normalizedPath = normalizeSlashes(filepath)
         let matched = expanded.contains { p in
-            matchSinglePattern(normalizeSlashes(p), path: normalizedPath, dot: dot)
+            matchSinglePattern(p, path: normalizedPath, dot: dot)
         }
         return negated ? !matched : matched
     }
@@ -288,6 +288,13 @@ public enum Glob {
                 s += 1
                 continue
             }
+            // Extglob operators: @(a|b), ?(a|b), *(a|b), +(a|b), !(a|b)
+            // Must be checked before plain `*` and `?` wildcards.
+            if (ch == "@" || ch == "?" || ch == "*" || ch == "+" || ch == "!"),
+               p + 1 < pat.count && pat[p + 1] == "(",
+               let (alts, closeIdx) = parseExtglob(pat, openParen: p + 1) {
+                return matchExtglob(op: ch, alts: alts, restPat: pat, restPi: closeIdx + 1, str: str, si: s)
+            }
             if ch == "*" {
                 while p < pat.count && pat[p] == "*" { p += 1 }
                 if p == pat.count { return true }
@@ -309,12 +316,6 @@ public enum Glob {
                     s += 1
                     continue
                 }
-            }
-            // Extglob operators: @(a|b), ?(a|b), *(a|b), +(a|b), !(a|b)
-            if (ch == "@" || ch == "?" || ch == "*" || ch == "+" || ch == "!"),
-               p + 1 < pat.count && pat[p + 1] == "(",
-               let (alts, closeIdx) = parseExtglob(pat, openParen: p + 1) {
-                return matchExtglob(op: ch, alts: alts, restPat: pat, restPi: closeIdx + 1, str: str, si: s)
             }
 
             guard s < str.count && str[s] == ch else { return false }
@@ -424,10 +425,12 @@ public enum Glob {
             return false
         case "*":
             if matchSegment(restPat, pi: restPi, str, si: si) { return true }
-            for end in (si + 1)...max(si, str.count) where end <= str.count {
-                if matchesAnyAlt(Array(str[si..<end])) {
-                    if matchExtglob(op: "*", alts: alts, restPat: restPat, restPi: restPi, str: str, si: end) {
-                        return true
+            if si < str.count {
+                for end in (si + 1)...str.count {
+                    if matchesAnyAlt(Array(str[si..<end])) {
+                        if matchExtglob(op: "*", alts: alts, restPat: restPat, restPi: restPi, str: str, si: end) {
+                            return true
+                        }
                     }
                 }
             }

@@ -1,0 +1,45 @@
+[
+  {
+    "fn": "util/src/fs-util.ts#FSUtil.windowsPath",
+    "cases": [
+      { "name": "empty path", "args": [""] },
+      { "name": "posix absolute path", "args": ["/Users/dev/project"] },
+      { "name": "relative path", "args": ["src/app.ts"] },
+      { "name": "already canonical windows drive", "args": ["C:/work/repo"] },
+      { "name": "multi-letter top dir not drive", "args": ["/usr/local/bin"] },
+      { "name": "mnt non-drive folder unchanged", "args": ["/mnt/data/file.txt"] },
+      { "name": "cygdrive non-drive folder unchanged", "args": ["/cygdrive/foo/bar"] }
+    ]
+  },
+  {
+    "fn": "util/src/fs-util.ts#FSUtil.contains",
+    "cases": [
+      { "name": "identical path", "args": ["/repo", "/repo"] },
+      { "name": "trailing slash on child", "args": ["/repo", "/repo/"] },
+      { "name": "trailing slash on parent", "args": ["/repo/", "/repo/src"] },
+      { "name": "direct child", "args": ["/repo", "/repo/src"] },
+      { "name": "deep nested child", "args": ["/repo", "/repo/a/b/c.ts"] },
+      { "name": "sibling prefix trap", "args": ["/repo", "/repo-other"] },
+      { "name": "parent does not contain ancestor", "args": ["/repo/src", "/repo"] },
+      { "name": "root contains nested path", "args": ["/", "/anywhere/here"] },
+      { "name": "nested does not contain root", "args": ["/a", "/"] },
+      { "name": "dotdot escapes parent", "args": ["/repo/sub", "/repo/sub/../other"] },
+      { "name": "dotdot stays inside parent", "args": ["/repo", "/repo/a/../b"] },
+      { "name": "filename starting with double dot inside parent", "args": ["/repo", "/repo/..foo"] },
+      { "name": "relative same base child", "args": ["src", "src/util/patch.ts"] },
+      { "name": "relative disjoint siblings", "args": ["src/a", "src/b"] }
+    ]
+  },
+  {
+    "fn": "util/src/fs-util.ts#FSUtil.overlaps",
+    "cases": [
+      { "name": "equal paths", "args": ["/repo", "/repo"] },
+      { "name": "parent and child", "args": ["/repo", "/repo/src"] },
+      { "name": "child and parent", "args": ["/repo/src", "/repo"] },
+      { "name": "disjoint siblings", "args": ["/repo/a", "/repo/b"] },
+      { "name": "sibling prefix trap", "args": ["/repo", "/repo2"] },
+      { "name": "root and nested", "args": ["/", "/a/b"] },
+      { "name": "nested and root", "args": ["/a/b", "/"] }
+    ]
+  }
+]

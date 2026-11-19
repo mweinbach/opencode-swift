@@ -1,0 +1,251 @@
+[
+  {
+    "fn": "util/src/patch.ts#parse",
+    "cases": [
+      {
+        "name": "empty patch",
+        "args": ["*** Begin Patch\n*** End Patch"]
+      },
+      {
+        "name": "add update and delete hunks",
+        "args": ["*** Begin Patch\n*** Add File: add.txt\n+added\n*** Update File: update.txt\n@@ section\n-old\n+new\n*** Delete File: delete.txt\n*** End Patch"]
+      },
+      {
+        "name": "codex environment preamble ignored",
+        "args": ["*** Begin Patch\n*** Environment ID: remote\n*** Add File: file.txt\n+content\n*** End Patch"]
+      },
+      {
+        "name": "update followed by add",
+        "args": ["*** Begin Patch\n*** Update File: update.txt\n@@\n+line\n*** Add File: add.txt\n+content\n*** End Patch"]
+      },
+      {
+        "name": "file move with update",
+        "args": ["*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "whitespace after end marker",
+        "args": ["*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\n \t\n"]
+      },
+      {
+        "name": "heredoc wrapper with cat and single quotes",
+        "args": ["cat <<'EOF'\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF"]
+      },
+      {
+        "name": "heredoc wrapper without cat",
+        "args": ["<<EOF\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF"]
+      },
+      {
+        "name": "heredoc wrapper double quotes",
+        "args": ["<<\"EOF\"\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF"]
+      },
+      {
+        "name": "malformed heredoc mismatched quotes",
+        "args": ["<<\"EOF'\n*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nEOF"]
+      },
+      {
+        "name": "missing begin boundary",
+        "args": ["This is not a valid patch"]
+      },
+      {
+        "name": "missing end boundary",
+        "args": ["*** Begin Patch\n*** Add File: add.txt\n+added"]
+      },
+      {
+        "name": "extra line before begin boundary",
+        "args": ["extra\n*** Begin Patch\n*** End Patch"]
+      },
+      {
+        "name": "extra line after end boundary",
+        "args": ["*** Begin Patch\n*** Add File: add.txt\n+added\n*** End Patch\nextra"]
+      },
+      {
+        "name": "whitespace padded hunk header and markers",
+        "args": [" *** Begin Patch \n  *** Update File: foo.txt\n@@\n-old\n+new\n *** End Patch "]
+      },
+      {
+        "name": "crlf patch lines stripped cleanly",
+        "args": ["*** Begin Patch\r\n*** Update File: file.txt\r\n@@\r\n-old\r\n+new\r\n*** End Patch\r\n"]
+      },
+      {
+        "name": "extra carriage return preserved in crlf patch",
+        "args": ["*** Begin Patch\r\n*** Update File: file.txt\r\n@@\r\n-old\r\r\n+new\r\n*** End Patch\r\n"]
+      },
+      {
+        "name": "end of file marker on chunk",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n+quux\n*** End of File\n\n*** End Patch"]
+      },
+      {
+        "name": "end of file marker before explicit chunk",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n*** End of File\n@@\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "end of file marker before implicit chunk",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n*** End of File\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "end of file marker before move",
+        "args": ["*** Begin Patch\n*** Update File: old.txt\n*** End of File\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "implicit first update chunk without @@",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n import foo\n+bar\n*** End Patch"]
+      },
+      {
+        "name": "indented update move and eof markers stay context",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n before\n *** Move to: moved.txt\n *** End of File\n *** Update File: b.txt\n*** End Patch"]
+      },
+      {
+        "name": "update context indentation preserved",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@   section\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "bare empty lines in update preserved as context",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n context before\n\n context after\n*** End Patch"]
+      },
+      {
+        "name": "invalid add line without plus",
+        "args": ["*** Begin Patch\n*** Add File: file.txt\nbad\n*** End Patch"]
+      },
+      {
+        "name": "invalid body line after delete",
+        "args": ["*** Begin Patch\n*** Delete File: file.txt\nbad\n*** End Patch"]
+      },
+      {
+        "name": "invalid hunk header after delete",
+        "args": ["*** Begin Patch\n*** Delete File: file.txt\n*** Frobnicate File: next.txt\n*** End Patch"]
+      },
+      {
+        "name": "empty move destination error",
+        "args": ["*** Begin Patch\n*** Update File: old.txt\n*** Move to:\n@@\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "empty update hunk error",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n*** End Patch"]
+      },
+      {
+        "name": "empty update chunk before end patch error",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n*** End Patch"]
+      },
+      {
+        "name": "empty update chunk before eof error",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n*** End of File\n*** End Patch"]
+      },
+      {
+        "name": "consecutive empty @@ markers error",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n@@\n-old\n+new\n*** End Patch"]
+      },
+      {
+        "name": "unexpected line after end of file marker error",
+        "args": ["*** Begin Patch\n*** Update File: file.txt\n@@\n-old\n+new\n*** End of File\n-more\n*** End Patch"]
+      },
+      {
+        "name": "invalid top level hunk header",
+        "args": ["*** Begin Patch\n*** Unknown: a.txt\n*** End Patch"]
+      }
+    ]
+  },
+  {
+    "fn": "util/src/patch.ts#derive",
+    "cases": [
+      {
+        "name": "exact single line replacement",
+        "args": ["a.txt", [{ "oldLines": ["old"], "newLines": ["new"] }], "old\n"]
+      },
+      {
+        "name": "rstrip match trailing spaces",
+        "args": ["a.txt", [{ "oldLines": ["line"], "newLines": ["next"] }], "line   \n"]
+      },
+      {
+        "name": "trim match leading and trailing whitespace",
+        "args": ["a.txt", [{ "oldLines": ["  line   "], "newLines": ["next"] }], "line\n"]
+      },
+      {
+        "name": "unicode smart quotes normalized",
+        "args": ["a.txt", [{ "oldLines": ["He said \"hello\" and 'bye'"], "newLines": ["He said \"hi\""] }], "He said \u201Chello\u201D and \u2018bye\u2019\n"]
+      },
+      {
+        "name": "unicode dashes and spaces normalized",
+        "args": ["a.txt", [{ "oldLines": ["value - 1"], "newLines": ["value - 2"] }], "value\u00A0\u2212\u20031\n"]
+      },
+      {
+        "name": "prefers later exact match over earlier normalized match",
+        "args": ["quotes.txt", [{ "oldLines": ["He said \"hello\""], "newLines": ["He said \"goodbye\""] }], "He said \u201Chello\u201D\nmiddle\nHe said \"hello\"\n"]
+      },
+      {
+        "name": "does not normalize ellipsis",
+        "args": ["ellipsis.txt", [{ "oldLines": ["wait..."], "newLines": ["done"] }], "wait\u2026\n"],
+        "compare": "expect_error"
+      },
+      {
+        "name": "eof anchored match from end",
+        "args": ["update.txt", [{ "oldLines": ["marker", "end"], "newLines": ["marker changed", "end"], "endOfFile": true }], "marker\nmiddle\nmarker\nend\n"]
+      },
+      {
+        "name": "eof anchored does not fall back to earlier match",
+        "args": ["update.txt", [{ "oldLines": ["marker", "end"], "newLines": ["changed", "end"], "endOfFile": true }], "marker\nend\nmiddle\n"],
+        "compare": "expect_error"
+      },
+      {
+        "name": "trailing blank line fallback",
+        "args": ["a.txt", [{ "oldLines": ["alpha", ""], "newLines": ["beta", ""] }], "alpha\n"]
+      },
+      {
+        "name": "preserves bom from original",
+        "args": ["bom.txt", [{ "oldLines": ["  old   "], "newLines": ["new"] }], "\uFEFFold\n"]
+      },
+      {
+        "name": "preserves bom introduced by chunk",
+        "args": ["bom.txt", [{ "oldLines": ["old"], "newLines": ["\uFEFFnew"] }], "old\n"]
+      },
+      {
+        "name": "multiple chunks in order",
+        "args": ["m.txt", [{ "oldLines": ["line 2"], "newLines": ["LINE 2"] }, { "oldLines": ["line 4"], "newLines": ["LINE 4"] }], "line 1\nline 2\nline 3\nline 4\n"]
+      },
+      {
+        "name": "equal offset pure additions preserve order",
+        "args": ["m.txt", [{ "oldLines": [], "newLines": ["first"] }, { "oldLines": [], "newLines": ["second", "third"] }], "original\n"]
+      },
+      {
+        "name": "pure addition before earlier replacement",
+        "args": ["m.txt", [{ "oldLines": [], "newLines": ["after-context", "second-line"] }, { "oldLines": ["line1", "line2", "line3"], "newLines": ["line1", "line2-replacement"] }], "line1\nline2\nline3\n"]
+      },
+      {
+        "name": "deletion only chunk",
+        "args": ["d.txt", [{ "oldLines": ["line1", "line2", "line3"], "newLines": ["line1", "line3"] }], "line1\nline2\nline3\n"]
+      },
+      {
+        "name": "delete all content leaves empty string",
+        "args": ["d.txt", [{ "oldLines": ["only"], "newLines": [] }], "only\n"]
+      },
+      {
+        "name": "empty file addition and no trailing newline normalization",
+        "args": ["empty.txt", [{ "oldLines": [], "newLines": ["First line"] }], ""]
+      },
+      {
+        "name": "changeContext disambiguates duplicate lines",
+        "args": ["ctx.txt", [{ "oldLines": ["x=10"], "newLines": ["x=11"], "changeContext": "fn b" }], "fn a\nx=10\nfn b\nx=10\n"]
+      },
+      {
+        "name": "missing changeContext fails",
+        "args": ["ctx.txt", [{ "oldLines": ["x=10"], "newLines": ["x=11"], "changeContext": "fn missing" }], "fn a\nx=10\n"],
+        "compare": "expect_error"
+      },
+      {
+        "name": "missing blank line fails",
+        "args": ["blank.txt", [{ "oldLines": [""], "newLines": ["added"] }], "content\n"],
+        "compare": "expect_error"
+      }
+    ]
+  },
+  {
+    "fn": "util/src/patch.ts#joinBom",
+    "cases": [
+      { "name": "plain false", "args": ["hello\n", false] },
+      { "name": "plain true", "args": ["hello\n", true] },
+      { "name": "existing bom true idempotent", "args": ["\uFEFFhello\n", true] },
+      { "name": "existing bom false strips", "args": ["\uFEFFhello\n", false] },
+      { "name": "empty true", "args": ["", true] },
+      { "name": "empty false", "args": ["", false] }
+    ]
+  }
+]

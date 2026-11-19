@@ -143,6 +143,13 @@ enum DispatchError: Error, CustomStringConvertible {
     }
 }
 
+func jsonNumber(_ d: Double) -> JSONValue {
+    if d.isFinite && d.rounded(.towardZero) == d && abs(d) < 9_007_199_254_740_992.0 {
+        return .int(Int64(d))
+    }
+    return .double(d)
+}
+
 func requireString(_ args: [JSONValue], _ idx: Int) throws -> String {
     guard idx < args.count, let s = args[idx].stringValue else {
         throw DispatchError.invalidArguments("Expected string at arg \(idx)")
@@ -184,9 +191,116 @@ func requireBytes(_ args: [JSONValue], _ idx: Int) throws -> [UInt8] {
     return bytes
 }
 
+func decodeSessionTurnMessage(_ value: JSONValue) throws -> SessionTurn.Message {
+    guard let obj = value.objectValue,
+          let id = obj["id"]?.stringValue,
+          let type = obj["type"]?.stringValue,
+          let timeObj = obj["time"]?.objectValue,
+          let created = timeObj["created"]?.doubleValue else {
+        throw DispatchError.invalidArguments("Invalid SessionTurn.Message")
+    }
+    let time = SessionTurn.Time(
+        created: created,
+        firstToken: timeObj["firstToken"]?.doubleValue,
+        streamed: timeObj["streamed"]?.doubleValue,
+        completed: timeObj["completed"]?.doubleValue
+    )
+    let tokens: SessionTurn.Tokens?
+    if let tokObj = obj["tokens"]?.objectValue,
+       let output = tokObj["output"]?.doubleValue,
+       let reasoning = tokObj["reasoning"]?.doubleValue {
+        tokens = SessionTurn.Tokens(output: output, reasoning: reasoning)
+    } else {
+        tokens = nil
+    }
+    return SessionTurn.Message(id: id, type: type, time: time, tokens: tokens)
+}
+
+func decodeSessionTurnOptions(_ args: [JSONValue], _ idx: Int) -> SessionTurn.Options {
+    guard idx < args.count, let obj = args[idx].objectValue else {
+        return SessionTurn.Options()
+    }
+    return SessionTurn.Options(
+        index: obj["index"]?.intValue,
+        legacy: obj["legacy"]?.boolValue
+    )
+}
+
+func decodeUpdateChunks(_ value: JSONValue) throws -> [Patch.UpdateFileChunk] {
+    guard let arr = value.arrayValue else {
+        throw DispatchError.invalidArguments("Expected chunks array")
+    }
+    return try arr.map { item in
+        guard let obj = item.objectValue,
+              let oldArr = obj["oldLines"]?.arrayValue,
+              let newArr = obj["newLines"]?.arrayValue else {
+            throw DispatchError.invalidArguments("Invalid UpdateFileChunk")
+        }
+        let oldLines = try oldArr.map { v -> String in
+            guard let s = v.stringValue else { throw DispatchError.invalidArguments("Expected string in oldLines") }
+            return s
+        }
+        let newLines = try newArr.map { v -> String in
+            guard let s = v.stringValue else { throw DispatchError.invalidArguments("Expected string in newLines") }
+            return s
+        }
+        return Patch.UpdateFileChunk(
+            oldLines: oldLines,
+            newLines: newLines,
+            changeContext: obj["changeContext"]?.stringValue,
+            endOfFile: obj["endOfFile"]?.boolValue
+        )
+    }
+}
+
 func dispatch(_ req: ParityRequest) throws -> JSONValue {
     let args = req.args
     switch req.fn {
+    // MARK: activity-calendar.ts
+    case "util/src/activity-calendar.ts#activityCalendar":
+        guard let obj = args.first?.objectValue,
+              let actArr = obj["activity"]?.arrayValue,
+              let from = obj["from"]?.int64Value,
+              let to = obj["to"]?.int64Value,
+              let maxWeeks = obj["maxWeeks"]?.doubleValue else {
+            throw DispatchError.invalidArguments("Expected ActivityCalendarInput object")
+        }
+        let activity = try actArr.map { item -> ActivityDayInput in
+            guard let d = item.objectValue,
+                  let date = d["date"]?.stringValue,
+                  let steps = d["steps"]?.intValue else {
+                throw DispatchError.invalidArguments("Invalid ActivityDayInput")
+            }
+            return ActivityDayInput(date: date, steps: steps)
+        }
+        let res = activityCalendar(ActivityCalendarInput(activity: activity, from: from, to: to, maxWeeks: maxWeeks))
+        return .object([
+            "clipped": .bool(res.clipped),
+            "months": .array(res.months.map {
+                .object([
+                    "label": .string($0.label),
+                    "span": .int(Int64($0.span)),
+                    "week": .int(Int64($0.week)),
+                ])
+            }),
+            "weeks": .array(res.weeks.map { week in
+                .array(week.map { cell in
+                    .object([
+                        "date": .string(cell.date),
+                        "level": .int(Int64(cell.level)),
+                        "steps": .int(Int64(cell.steps)),
+                    ])
+                })
+            }),
+        ])
+
+    // MARK: artifact.ts
+    case "util/src/artifact.ts#artifactMime":
+        return artifactMime(try requireString(args, 0)).map { .string($0) } ?? .null
+
+    case "util/src/artifact.ts#artifactKind":
+        return .string(artifactKind(try requireString(args, 0)).rawValue)
+
     // MARK: base64.ts
     case "util/src/base64.ts#bytesToBase64":
         return .string(bytesToBase64(try requireBytes(args, 0)))
@@ -261,12 +375,90 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
         let limit = args.count > 1 ? (args[1].intValue ?? 500_000) : 500_000
         return sampledChecksum(input, limit: limit).map { .string($0) } ?? .null
 
+    // MARK: execute-output.ts
+    case "util/src/execute-output.ts#formatExecuteOutput":
+        let res = formatExecuteOutput(try requireString(args, 0))
+        return .object([
+            "json": res.json.map { .string($0) } ?? .null,
+            "rest": res.rest.map { .string($0) } ?? .null,
+            "text": .string(res.text),
+        ])
+
+    // MARK: fs-util.ts
+    case "util/src/fs-util.ts#FSUtil.windowsPath":
+        return .string(FSPathUtil.windowsPath(try requireString(args, 0)))
+
+    case "util/src/fs-util.ts#FSUtil.contains":
+        return .bool(FSPathUtil.contains(parent: try requireString(args, 0), child: try requireString(args, 1)))
+
+    case "util/src/fs-util.ts#FSUtil.overlaps":
+        return .bool(FSPathUtil.overlaps(try requireString(args, 0), try requireString(args, 1)))
+
     // MARK: hash.ts
     case "util/src/hash.ts#Hash.fast":
         return .string(Hash.fast(try requireString(args, 0)))
 
     case "util/src/hash.ts#Hash.sha256":
         return .string(Hash.sha256(try requireString(args, 0)))
+
+    // MARK: npm.ts
+    case "util/src/npm.ts#sanitize":
+        return .string(NpmSpec.sanitize(try requireString(args, 0)))
+
+    // MARK: patch.ts
+    case "util/src/patch.ts#parse":
+        switch Patch.parse(try requireString(args, 0)) {
+        case .success(let hunks):
+            return .object([
+                "ok": .bool(true),
+                "hunks": .array(hunks.map { hunk in
+                    switch hunk {
+                    case let .add(path, contents):
+                        return .object(["type": .string("add"), "path": .string(path), "contents": .string(contents)])
+                    case let .delete(path):
+                        return .object(["type": .string("delete"), "path": .string(path)])
+                    case let .update(path, movePath, chunks):
+                        return .object([
+                            "type": .string("update"),
+                            "path": .string(path),
+                            "movePath": movePath.map { .string($0) } ?? .null,
+                            "chunks": .array(chunks.map { c in
+                                .object([
+                                    "oldLines": .array(c.oldLines.map { .string($0) }),
+                                    "newLines": .array(c.newLines.map { .string($0) }),
+                                    "changeContext": c.changeContext.map { .string($0) } ?? .null,
+                                    "endOfFile": c.endOfFile.map { .bool($0) } ?? .null,
+                                ])
+                            }),
+                        ])
+                    }
+                }),
+            ])
+        case .failure(let err):
+            let tag: String
+            switch err {
+            case .boundary: tag = "Patch.BoundaryError"
+            case .invalidHunk: tag = "Patch.InvalidHunkError"
+            }
+            return .object([
+                "ok": .bool(false),
+                "tag": .string(tag),
+                "message": .string(err.message),
+            ])
+        }
+
+    case "util/src/patch.ts#derive":
+        let path = try requireString(args, 0)
+        guard args.count >= 3 else {
+            throw DispatchError.invalidArguments("Expected 3 arguments for Patch.derive")
+        }
+        let chunks = try decodeUpdateChunks(args[1])
+        let original = try requireString(args, 2)
+        let res = try Patch.derive(path: path, chunks: chunks, original: original)
+        return .object(["content": .string(res.content), "bom": .bool(res.bom)])
+
+    case "util/src/patch.ts#joinBom":
+        return .string(Patch.joinBom(try requireString(args, 0), bom: try requireBool(args, 1)))
 
     // MARK: path.ts
     case "util/src/path.ts#getFilename":
@@ -304,6 +496,25 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
             .object(["start": .int(Int64($0.start)), "end": .int(Int64($0.end))])
         } ?? .null
         return .object(["path": .string(parsed.path), "selection": sel])
+
+    // MARK: qr.ts
+    case "util/src/qr.ts#encode":
+        let matrix = try QR.encode(try requireString(args, 0))
+        return .array(matrix.map { row in .array(row.map { .bool($0) }) })
+
+    case "util/src/qr.ts#renderSVG":
+        let text = try requireString(args, 0)
+        let opts = args.count > 1 ? args[1].objectValue : nil
+        let border = opts?["border"]?.intValue ?? 1
+        let blackColor = opts?["blackColor"]?.stringValue ?? "black"
+        let whiteColor = opts?["whiteColor"]?.stringValue ?? "white"
+        return .string(try QR.renderSVG(text, border: border, blackColor: blackColor, whiteColor: whiteColor))
+
+    case "util/src/qr.ts#renderUnicodeCompact":
+        let text = try requireString(args, 0)
+        let opts = args.count > 1 ? args[1].objectValue : nil
+        let border = opts?["border"]?.intValue ?? 1
+        return .string(try QR.renderUnicodeCompact(text, border: border))
 
     // MARK: session-mention.ts
     case "util/src/session-mention.ts#sessionMentions":
@@ -369,6 +580,32 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
                 created: created
             )
         )
+
+    // MARK: session-turn.ts
+    case "util/src/session-turn.ts#duration":
+        guard args.count >= 2, let arr = args[0].arrayValue else {
+            throw DispatchError.invalidArguments("Expected messages array and message")
+        }
+        let messages = try arr.map(decodeSessionTurnMessage)
+        let message = try decodeSessionTurnMessage(args[1])
+        let opts = decodeSessionTurnOptions(args, 2)
+        return jsonNumber(SessionTurn.duration(messages, message: message, options: opts))
+
+    case "util/src/session-turn.ts#tokensPerSecond":
+        guard args.count >= 2, let arr = args[0].arrayValue else {
+            throw DispatchError.invalidArguments("Expected messages array and message")
+        }
+        let messages = try arr.map(decodeSessionTurnMessage)
+        let message = try decodeSessionTurnMessage(args[1])
+        let opts = decodeSessionTurnOptions(args, 2)
+        return SessionTurn.tokensPerSecond(messages, message: message, options: opts).map(jsonNumber) ?? .null
+
+    case "util/src/session-turn.ts#legacy":
+        guard let arr = args.first?.arrayValue else {
+            throw DispatchError.invalidArguments("Expected messages array")
+        }
+        let messages = try arr.map(decodeSessionTurnMessage)
+        return .bool(SessionTurn.legacy(messages))
 
     // MARK: text-boundary.ts
     case "util/src/text-boundary.ts#head":

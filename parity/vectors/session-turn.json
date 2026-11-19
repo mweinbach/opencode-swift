@@ -1,0 +1,251 @@
+[
+  {
+    "fn": "util/src/session-turn.ts#legacy",
+    "cases": [
+      { "name": "empty messages", "args": [[]] },
+      {
+        "name": "user and assistant without idle is legacy",
+        "args": [
+          [
+            { "id": "u1", "type": "user", "time": { "created": 1000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 2000, "completed": 3000 } }
+          ]
+        ]
+      },
+      {
+        "name": "presence of idle marker is non-legacy",
+        "args": [
+          [
+            { "id": "u1", "type": "user", "time": { "created": 1000 } },
+            { "id": "i1", "type": "idle", "time": { "created": 2000 } }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "util/src/session-turn.ts#duration",
+    "cases": [
+      {
+        "name": "multi-step turn from user prompt",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "assistant-1", "type": "assistant", "time": { "created": 8000, "completed": 11000 } },
+            { "id": "assistant-2", "type": "assistant", "time": { "created": 27000, "completed": 30000 } }
+          ],
+          { "id": "assistant-2", "type": "assistant", "time": { "created": 27000, "completed": 30000 } }
+        ]
+      },
+      {
+        "name": "incomplete message returns 0",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "assistant-1", "type": "assistant", "time": { "created": 2000 } }
+          ],
+          { "id": "assistant-1", "type": "assistant", "time": { "created": 2000 } }
+        ]
+      },
+      {
+        "name": "completed before prompt clamps to 0",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 5000 } },
+            { "id": "assistant-1", "type": "assistant", "time": { "created": 6000, "completed": 4000 } }
+          ],
+          { "id": "assistant-1", "type": "assistant", "time": { "created": 6000, "completed": 4000 } }
+        ]
+      },
+      {
+        "name": "historical step with explicit index",
+        "args": [
+          [
+            { "id": "u1", "type": "user", "time": { "created": 3000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 4000, "streamed": 5000, "completed": 6000 } },
+            { "id": "sys", "type": "system", "time": { "created": 6500 } },
+            { "id": "a2", "type": "assistant", "time": { "created": 7000, "streamed": 8000, "completed": 9000 } },
+            { "id": "syn", "type": "synthetic", "time": { "created": 10000 } },
+            { "id": "a3", "type": "assistant", "time": { "created": 11000, "streamed": 13000, "completed": 14000 } }
+          ],
+          { "id": "a2", "type": "assistant", "time": { "created": 7000, "streamed": 8000, "completed": 9000 } },
+          { "index": 3 }
+        ]
+      },
+      {
+        "name": "synthetic prompt starts new legacy turn",
+        "args": [
+          [
+            { "id": "u1", "type": "user", "time": { "created": 3000 } },
+            { "id": "syn", "type": "synthetic", "time": { "created": 10000 } },
+            { "id": "a3", "type": "assistant", "time": { "created": 11000, "completed": 14000 } }
+          ],
+          { "id": "a3", "type": "assistant", "time": { "created": 11000, "completed": 14000 } }
+        ]
+      },
+      {
+        "name": "absent message with prompt in history",
+        "args": [
+          [
+            { "id": "input", "type": "user", "time": { "created": 5000 } },
+            { "id": "stored", "type": "assistant", "time": { "created": 6000, "streamed": 8000, "completed": 9000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "absent", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 900, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "absent message with empty history falls back to own created",
+        "args": [
+          [],
+          { "id": "absent", "type": "assistant", "time": { "created": 8000, "completed": 10000 } }
+        ]
+      },
+      {
+        "name": "marker-era turn spans steers from first prompt after idle",
+        "args": [
+          [
+            { "id": "old-input", "type": "user", "time": { "created": 0 } },
+            { "id": "old-step", "type": "assistant", "time": { "created": 1000, "streamed": 2000, "completed": 3000 }, "tokens": { "output": 5, "reasoning": 0 } },
+            { "id": "idle-1", "type": "idle", "time": { "created": 3500 } },
+            { "id": "input", "type": "user", "time": { "created": 4000 } },
+            { "id": "first-step", "type": "assistant", "time": { "created": 5000, "streamed": 6000, "completed": 7000 }, "tokens": { "output": 10, "reasoning": 0 } },
+            { "id": "steer", "type": "user", "time": { "created": 7500 } },
+            { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "marker-era turn with forced legacy override uses steer prompt",
+        "args": [
+          [
+            { "id": "old-input", "type": "user", "time": { "created": 0 } },
+            { "id": "old-step", "type": "assistant", "time": { "created": 1000, "streamed": 2000, "completed": 3000 }, "tokens": { "output": 5, "reasoning": 0 } },
+            { "id": "idle-1", "type": "idle", "time": { "created": 3500 } },
+            { "id": "input", "type": "user", "time": { "created": 4000 } },
+            { "id": "first-step", "type": "assistant", "time": { "created": 5000, "streamed": 6000, "completed": 7000 }, "tokens": { "output": 10, "reasoning": 0 } },
+            { "id": "steer", "type": "user", "time": { "created": 7500 } },
+            { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } },
+          { "index": 6, "legacy": true }
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "util/src/session-turn.ts#tokensPerSecond",
+    "cases": [
+      {
+        "name": "decode throughput from firstToken across multi-step turn",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 6000, "firstToken": 8000, "streamed": 10000, "completed": 20000 }, "tokens": { "output": 20, "reasoning": 5 } },
+            { "id": "a2", "type": "assistant", "time": { "created": 24000, "firstToken": 25000, "streamed": 28000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+          ],
+          { "id": "a2", "type": "assistant", "time": { "created": 24000, "firstToken": 25000, "streamed": 28000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+        ]
+      },
+      {
+        "name": "firstToken fallback to created on older step (weighted aggregate)",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 6000, "streamed": 10000, "completed": 20000 }, "tokens": { "output": 20, "reasoning": 5 } },
+            { "id": "a2", "type": "assistant", "time": { "created": 24000, "firstToken": 25000, "streamed": 28000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+          ],
+          { "id": "a2", "type": "assistant", "time": { "created": 24000, "firstToken": 25000, "streamed": 28000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+        ]
+      },
+      {
+        "name": "all steps without firstToken",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 6000, "streamed": 10000, "completed": 20000 }, "tokens": { "output": 20, "reasoning": 5 } },
+            { "id": "a2", "type": "assistant", "time": { "created": 24000, "streamed": 30000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+          ],
+          { "id": "a2", "type": "assistant", "time": { "created": 24000, "streamed": 30000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+        ]
+      },
+      {
+        "name": "returns null if any step is unstreamed",
+        "args": [
+          [
+            { "id": "user-1", "type": "user", "time": { "created": 1000 } },
+            { "id": "a1", "type": "assistant", "time": { "created": 6000, "completed": 20000 }, "tokens": { "output": 20, "reasoning": 5 } },
+            { "id": "a2", "type": "assistant", "time": { "created": 24000, "streamed": 30000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+          ],
+          { "id": "a2", "type": "assistant", "time": { "created": 24000, "streamed": 30000, "completed": 31000 }, "tokens": { "output": 30, "reasoning": 10 } }
+        ]
+      },
+      {
+        "name": "returns null for zero output tokens",
+        "args": [
+          [
+            { "id": "a1", "type": "assistant", "time": { "created": 1000, "streamed": 2000 }, "tokens": { "output": 0, "reasoning": 0 } }
+          ],
+          { "id": "a1", "type": "assistant", "time": { "created": 1000, "streamed": 2000 }, "tokens": { "output": 0, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "returns null for zero duration",
+        "args": [
+          [
+            { "id": "a1", "type": "assistant", "time": { "created": 1000, "firstToken": 2000, "streamed": 2000 }, "tokens": { "output": 10, "reasoning": 0 } }
+          ],
+          { "id": "a1", "type": "assistant", "time": { "created": 1000, "firstToken": 2000, "streamed": 2000 }, "tokens": { "output": 10, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "absent message with stored step excludes absent tokens",
+        "args": [
+          [
+            { "id": "input", "type": "user", "time": { "created": 5000 } },
+            { "id": "stored", "type": "assistant", "time": { "created": 6000, "streamed": 8000, "completed": 9000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "absent", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 900, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "absent message with empty history returns null",
+        "args": [
+          [],
+          { "id": "absent", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 900, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "marker-era turn aggregates across steers",
+        "args": [
+          [
+            { "id": "old-input", "type": "user", "time": { "created": 0 } },
+            { "id": "old-step", "type": "assistant", "time": { "created": 1000, "streamed": 2000, "completed": 3000 }, "tokens": { "output": 5, "reasoning": 0 } },
+            { "id": "idle-1", "type": "idle", "time": { "created": 3500 } },
+            { "id": "input", "type": "user", "time": { "created": 4000 } },
+            { "id": "first-step", "type": "assistant", "time": { "created": 5000, "streamed": 6000, "completed": 7000 }, "tokens": { "output": 10, "reasoning": 0 } },
+            { "id": "steer", "type": "user", "time": { "created": 7500 } },
+            { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+        ]
+      },
+      {
+        "name": "marker-era turn with forced legacy override only counts post-steer step",
+        "args": [
+          [
+            { "id": "old-input", "type": "user", "time": { "created": 0 } },
+            { "id": "old-step", "type": "assistant", "time": { "created": 1000, "streamed": 2000, "completed": 3000 }, "tokens": { "output": 5, "reasoning": 0 } },
+            { "id": "idle-1", "type": "idle", "time": { "created": 3500 } },
+            { "id": "input", "type": "user", "time": { "created": 4000 } },
+            { "id": "first-step", "type": "assistant", "time": { "created": 5000, "streamed": 6000, "completed": 7000 }, "tokens": { "output": 10, "reasoning": 0 } },
+            { "id": "steer", "type": "user", "time": { "created": 7500 } },
+            { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } }
+          ],
+          { "id": "second-step", "type": "assistant", "time": { "created": 8000, "streamed": 9000, "completed": 10000 }, "tokens": { "output": 20, "reasoning": 0 } },
+          { "index": 6, "legacy": true }
+        ]
+      }
+    ]
+  }
+]

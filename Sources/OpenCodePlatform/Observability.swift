@@ -171,25 +171,33 @@ public enum Logging {
             acquired = false
         }
         guard acquired else { return }
-        defer {
-            Task { try? await fileSystem.remove(at: lock) }
-        }
-
-        let info = try await fileSystem.stat(at: target)
-        guard Int(info.size) > maxBytes else { return }
-        let data = try await fileSystem.readFile(at: target)
-        guard data.count > maxBytes else { return }
-
-        let cut = max(0, data.count - keepBytes)
-        var start = data.count
-        for idx in cut..<data.count {
-            if data[idx] == 0x0A {
-                start = idx + 1
-                break
+        do {
+            let info = try await fileSystem.stat(at: target)
+            guard Int(info.size) > maxBytes else {
+                try? await fileSystem.remove(at: lock)
+                return
             }
+            let data = try await fileSystem.readFile(at: target)
+            guard data.count > maxBytes else {
+                try? await fileSystem.remove(at: lock)
+                return
+            }
+
+            let cut = max(0, data.count - keepBytes)
+            var start = data.count
+            for idx in cut..<data.count {
+                if data[idx] == 0x0A {
+                    start = idx + 1
+                    break
+                }
+            }
+            let retained = start < data.count ? Array(data[start...]) : []
+            try await fileSystem.writeFile(retained, to: target, createDirectories: false)
+            try? await fileSystem.remove(at: lock)
+        } catch {
+            try? await fileSystem.remove(at: lock)
+            throw error
         }
-        let retained = start < data.count ? Array(data[start...]) : []
-        try await fileSystem.writeFile(retained, to: target, createDirectories: false)
     }
 
     // parity: util/src/observability/logging.ts#minimumLogLevel [status=implemented hash=ca840d0315fb]

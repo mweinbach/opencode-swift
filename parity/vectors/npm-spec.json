@@ -1,0 +1,13 @@
+[
+  {
+    "fn": "util/src/npm.ts#sanitize",
+    "cases": [
+      { "name": "empty string", "args": [""] },
+      { "name": "unscoped package", "args": ["prettier"] },
+      { "name": "scoped package", "args": ["@opencode/acme"] },
+      { "name": "scoped package with version", "args": ["@opencode/acme@1.0.0"] },
+      { "name": "semver range with caret", "args": ["lodash@^4.17.21"] },
+      { "name": "prerelease tag", "args": ["@scope/pkg-name_1.2.3-beta.1"] }
+    ]
+  }
+]

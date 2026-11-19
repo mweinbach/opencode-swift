@@ -255,19 +255,73 @@ public enum PureJSON {
     private static func formatJSNumber(_ n: Double) -> String {
         if !n.isFinite { return "null" }
         if n == 0 { return "0" }
+        let sign = n < 0 ? "-" : ""
         let absVal = abs(n)
-        if n.rounded(.towardZero) == n && absVal < 1e21 && absVal <= Double(Int64.max) && absVal >= Double(Int64.min) {
-            if absVal < 1e16 {
-                return String(Int64(n))
+
+        // Parse Swift's exact shortest-roundtrip decimal representation into (digits, decimalExp)
+        // where absVal == Int(digits) * 10^(decimalPos - digits.count), then apply ECMA-262 Number::toString.
+        let raw = String(absVal)
+        let mantissaPart: Substring
+        let explicitExp: Int
+        if let eIdx = raw.firstIndex(where: { $0 == "e" || $0 == "E" }) {
+            mantissaPart = raw[..<eIdx]
+            explicitExp = Int(raw[raw.index(after: eIdx)...]) ?? 0
+        } else {
+            mantissaPart = raw[...]
+            explicitExp = 0
+        }
+
+        var rawDigits: [Character] = []
+        var dotPos: Int? = nil
+        for ch in mantissaPart {
+            if ch == "." {
+                dotPos = rawDigits.count
+            } else {
+                rawDigits.append(ch)
             }
         }
-        return String(n)
+        var decimalPos = (dotPos ?? rawDigits.count) + explicitExp
+
+        // Strip leading zeros (adjusting decimalPos) and trailing zeros.
+        var start = 0
+        while start < rawDigits.count && rawDigits[start] == "0" {
+            start += 1
+            decimalPos -= 1
+        }
+        var end = rawDigits.count
+        while end > start && rawDigits[end - 1] == "0" {
+            end -= 1
+        }
+        guard start < end else { return "0" }
+
+        let digits = String(rawDigits[start..<end])
+        let k = digits.count
+        let pos = decimalPos
+
+        if k <= pos && pos <= 21 {
+            return sign + digits + String(repeating: "0", count: pos - k)
+        }
+        if 0 < pos && pos <= 21 {
+            let split = digits.index(digits.startIndex, offsetBy: pos)
+            return sign + String(digits[..<split]) + "." + String(digits[split...])
+        }
+        if -6 < pos && pos <= 0 {
+            return sign + "0." + String(repeating: "0", count: -pos) + digits
+        }
+        let exp = pos - 1
+        let expSign = exp >= 0 ? "+" : "-"
+        let expStr = "\(expSign)\(abs(exp))"
+        if k == 1 {
+            return sign + digits + "e" + expStr
+        }
+        let afterFirst = digits.index(after: digits.startIndex)
+        return sign + String(digits[..<afterFirst]) + "." + String(digits[afterFirst...]) + "e" + expStr
     }
 
     private static func writeJSONString(_ s: String, into out: inout String) {
         out.append("\"")
-        for u in s.utf16 {
-            switch u {
+        for scalar in s.unicodeScalars {
+            switch scalar.value {
             case 0x22: out.append("\\\"")
             case 0x5C: out.append("\\\\")
             case 0x08: out.append("\\b")
@@ -277,15 +331,9 @@ public enum PureJSON {
             case 0x09: out.append("\\t")
             case 0x00..<0x20:
                 out.append("\\u")
-                out.append(hex4(u))
+                out.append(hex4(UInt16(scalar.value)))
             default:
-                if let scalar = Unicode.Scalar(u) {
-                    out.unicodeScalars.append(scalar)
-                } else {
-                    // Lone surrogate in UTF-16 -> \udxxx
-                    out.append("\\u")
-                    out.append(hex4(u))
-                }
+                out.unicodeScalars.append(scalar)
             }
         }
         out.append("\"")

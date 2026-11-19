@@ -209,27 +209,33 @@ public enum Flock {
             }
 
             guard claimedBreaker else { return nil }
-            defer {
-                Task { try? await fileSystem.remove(at: breakerPath) }
-            }
-
-            guard await isStale(
-                lockDir: lockDir,
-                heartbeatPath: heartbeatPath,
-                metaPath: metaPath,
-                staleMs: staleMs,
-                fileSystem: fileSystem,
-                nowMs: nowMs
-            ) else {
-                return nil
-            }
-
-            try? await fileSystem.remove(at: lockDir)
+            let reacquired: Bool
             do {
-                try await fileSystem.makeDirectory(at: lockDir, recursive: false)
-            } catch PlatformError.alreadyExists {
-                return nil
+                guard await isStale(
+                    lockDir: lockDir,
+                    heartbeatPath: heartbeatPath,
+                    metaPath: metaPath,
+                    staleMs: staleMs,
+                    fileSystem: fileSystem,
+                    nowMs: nowMs
+                ) else {
+                    try? await fileSystem.remove(at: breakerPath)
+                    return nil
+                }
+
+                try? await fileSystem.remove(at: lockDir)
+                do {
+                    try await fileSystem.makeDirectory(at: lockDir, recursive: false)
+                    reacquired = true
+                } catch PlatformError.alreadyExists {
+                    reacquired = false
+                }
+            } catch {
+                try? await fileSystem.remove(at: breakerPath)
+                throw error
             }
+            try? await fileSystem.remove(at: breakerPath)
+            guard reacquired else { return nil }
         }
 
         do {
