@@ -1502,7 +1502,19 @@ public final class ServerAppRuntime: Sendable {
                 httpTransport: capturedHttp,
                 artifact: artifactService,
                 flags: flagService,
-                globalPaths: capturedGlobal
+                globalPaths: capturedGlobal,
+                projectID: resolvedProject.id,
+                webSearch: webSearchService,
+                form: formService,
+                sessionStore: sessionStore,
+                skill: skillService,
+                mcp: mcpService,
+                worktree: worktree,
+                worktreeStrategies: worktreeStrategies,
+                model: modelService,
+                provider: providerService,
+                agent: agentService,
+                generate: generateService
             )
             _ = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
 

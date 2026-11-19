@@ -842,6 +842,381 @@ public enum ServerLiveRuntime {
                 ),
             ]
         ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "opencode-go"),
+            name: "OpenCode Go",
+            envVars: ["OPENCODE_API_KEY"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "https://opencode.ai/zen/go/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "glm-5",
+                    providerID: ProviderSchema.ID(rawValue: "opencode-go"),
+                    name: "GLM-5",
+                    family: "glm",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 200_000,
+                    output: 64_000,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2026, 2, 10),
+                    inputModalities: ["text"]
+                ),
+                makeModel(
+                    id: "kimi-k2.5",
+                    providerID: ProviderSchema.ID(rawValue: "opencode-go"),
+                    name: "Kimi K2.5",
+                    family: "kimi",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 256_000,
+                    output: 64_000,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2026, 1, 25),
+                    inputModalities: ["text", "image"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "github-copilot"),
+            name: "GitHub Copilot",
+            envVars: ["GITHUB_TOKEN"],
+            package: "@opencode/ai/providers/github-copilot",
+            baseURL: "https://api.githubcopilot.com",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "claude-sonnet-4.6",
+                    providerID: ProviderSchema.ID(rawValue: "github-copilot"),
+                    name: "Claude Sonnet 4.6",
+                    family: "claude-sonnet",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 200_000,
+                    output: 64_000,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2026, 2, 17)
+                ),
+                makeModel(
+                    id: "gpt-5.4",
+                    providerID: ProviderSchema.ID(rawValue: "github-copilot"),
+                    name: "GPT-5.4",
+                    family: "gpt",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 400_000,
+                    output: 128_000,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2026, 3, 5)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "deepseek"),
+            name: "DeepSeek",
+            envVars: ["DEEPSEEK_API_KEY"],
+            package: "@opencode/ai/providers/deepseek",
+            baseURL: "https://api.deepseek.com/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "deepseek-reasoner",
+                    providerID: ProviderSchema.ID(rawValue: "deepseek"),
+                    name: "DeepSeek Reasoner (R1)",
+                    family: "deepseek",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 128_000,
+                    output: 64_000,
+                    inputCost: 0.55,
+                    outputCost: 2.19,
+                    cacheRead: 0.14,
+                    released: (2025, 5, 28),
+                    inputModalities: ["text"],
+                    reasoning: [.effort(values: ["low", "medium", "high"])]
+                ),
+                makeModel(
+                    id: "deepseek-chat",
+                    providerID: ProviderSchema.ID(rawValue: "deepseek"),
+                    name: "DeepSeek Chat (V3)",
+                    family: "deepseek",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 128_000,
+                    output: 8_192,
+                    inputCost: 0.27,
+                    outputCost: 1.1,
+                    cacheRead: 0.07,
+                    released: (2025, 3, 24),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "mistral"),
+            name: "Mistral",
+            envVars: ["MISTRAL_API_KEY"],
+            package: "@opencode/ai/providers/mistral",
+            baseURL: "https://api.mistral.ai/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "mistral-large-latest",
+                    providerID: ProviderSchema.ID(rawValue: "mistral"),
+                    name: "Mistral Large",
+                    family: "mistral",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 128_000,
+                    output: 32_768,
+                    inputCost: 2.0,
+                    outputCost: 6.0,
+                    released: (2025, 11, 18),
+                    inputModalities: ["text"]
+                ),
+                makeModel(
+                    id: "codestral-latest",
+                    providerID: ProviderSchema.ID(rawValue: "mistral"),
+                    name: "Codestral",
+                    family: "codestral",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 256_000,
+                    output: 32_768,
+                    inputCost: 0.3,
+                    outputCost: 0.9,
+                    released: (2025, 1, 13),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "cerebras"),
+            name: "Cerebras",
+            envVars: ["CEREBRAS_API_KEY"],
+            package: "@opencode/ai/providers/cerebras",
+            baseURL: "https://api.cerebras.ai/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "qwen-3-coder-480b",
+                    providerID: ProviderSchema.ID(rawValue: "cerebras"),
+                    name: "Qwen 3 Coder 480B",
+                    family: "qwen",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 131_072,
+                    output: 40_000,
+                    inputCost: 2.0,
+                    outputCost: 2.0,
+                    released: (2025, 7, 23),
+                    inputModalities: ["text"]
+                ),
+                makeModel(
+                    id: "llama-3.3-70b",
+                    providerID: ProviderSchema.ID(rawValue: "cerebras"),
+                    name: "Llama 3.3 70B",
+                    family: "llama",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 128_000,
+                    output: 8_192,
+                    inputCost: 0.85,
+                    outputCost: 1.2,
+                    released: (2024, 12, 6),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "togetherai"),
+            name: "Together AI",
+            envVars: ["TOGETHER_API_KEY"],
+            package: "@opencode/ai/providers/togetherai",
+            baseURL: "https://api.together.xyz/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+                    providerID: ProviderSchema.ID(rawValue: "togetherai"),
+                    name: "Qwen3 Coder 480B",
+                    family: "qwen",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 262_144,
+                    output: 32_768,
+                    inputCost: 2.0,
+                    outputCost: 2.0,
+                    released: (2025, 7, 23),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "fireworks-ai"),
+            name: "Fireworks AI",
+            envVars: ["FIREWORKS_API_KEY"],
+            package: "@opencode/ai/providers/fireworks-ai",
+            baseURL: "https://api.fireworks.ai/inference/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "accounts/fireworks/models/deepseek-r1-0528",
+                    providerID: ProviderSchema.ID(rawValue: "fireworks-ai"),
+                    name: "DeepSeek R1",
+                    family: "deepseek",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 163_840,
+                    output: 16_384,
+                    inputCost: 3.0,
+                    outputCost: 8.0,
+                    released: (2025, 5, 28),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "perplexity"),
+            name: "Perplexity",
+            envVars: ["PERPLEXITY_API_KEY"],
+            package: "@opencode/ai/providers/perplexity",
+            baseURL: "https://api.perplexity.ai",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "sonar-pro",
+                    providerID: ProviderSchema.ID(rawValue: "perplexity"),
+                    name: "Sonar Pro",
+                    family: "sonar",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 200_000,
+                    output: 8_192,
+                    inputCost: 3.0,
+                    outputCost: 15.0,
+                    released: (2025, 1, 21),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "amazon-bedrock"),
+            name: "Amazon Bedrock",
+            envVars: ["AWS_BEARER_TOKEN_BEDROCK", "AWS_ACCESS_KEY_ID"],
+            package: "@opencode/ai/providers/amazon-bedrock",
+            baseURL: "https://bedrock-runtime.us-east-1.amazonaws.com",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+                    providerID: ProviderSchema.ID(rawValue: "amazon-bedrock"),
+                    name: "Claude Sonnet 4.5 (Bedrock)",
+                    family: "claude-sonnet",
+                    package: "@opencode/ai/providers/amazon-bedrock",
+                    context: 200_000,
+                    output: 64_000,
+                    inputCost: 3.0,
+                    outputCost: 15.0,
+                    released: (2025, 9, 29)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "azure"),
+            name: "Azure OpenAI",
+            envVars: ["AZURE_OPENAI_API_KEY", "AZURE_API_KEY"],
+            package: "@opencode/ai/providers/azure",
+            baseURL: "https://api.openai.com/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "gpt-4.1",
+                    providerID: ProviderSchema.ID(rawValue: "azure"),
+                    name: "GPT-4.1 (Azure)",
+                    family: "gpt",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 1_047_576,
+                    output: 32_768,
+                    inputCost: 2.0,
+                    outputCost: 8.0,
+                    released: (2025, 4, 14)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "google-vertex"),
+            name: "Google Vertex AI",
+            envVars: ["GOOGLE_VERTEX_API_KEY", "GEMINI_API_KEY"],
+            package: "@opencode/ai/providers/google-vertex",
+            baseURL: AIProtocols.Gemini.DEFAULT_BASE_URL,
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "gemini-2.5-pro",
+                    providerID: ProviderSchema.ID(rawValue: "google-vertex"),
+                    name: "Gemini 2.5 Pro (Vertex)",
+                    family: "gemini-pro",
+                    package: "@opencode/ai/providers/google",
+                    context: 1_048_576,
+                    output: 65_536,
+                    inputCost: 1.25,
+                    outputCost: 10.0,
+                    released: (2025, 6, 17)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "ollama"),
+            name: "Ollama (Local)",
+            envVars: ["OLLAMA_API_KEY"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "http://127.0.0.1:11434/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "qwen2.5-coder:32b",
+                    providerID: ProviderSchema.ID(rawValue: "ollama"),
+                    name: "Qwen 2.5 Coder 32B",
+                    family: "qwen",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 131_072,
+                    output: 16_384,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2024, 11, 12),
+                    inputModalities: ["text"]
+                ),
+                makeModel(
+                    id: "llama3.3:latest",
+                    providerID: ProviderSchema.ID(rawValue: "ollama"),
+                    name: "Llama 3.3",
+                    family: "llama",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 131_072,
+                    output: 16_384,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2024, 12, 6),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "lmstudio"),
+            name: "LM Studio (Local)",
+            envVars: ["LMSTUDIO_API_KEY"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "http://127.0.0.1:1234/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "local-model",
+                    providerID: ProviderSchema.ID(rawValue: "lmstudio"),
+                    name: "Local Model",
+                    family: "local",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 131_072,
+                    output: 16_384,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2025, 1, 1),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
     ]
 
     /// Seeds built-in integrations, providers, models, and merges providers/models/default-model

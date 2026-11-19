@@ -19,16 +19,19 @@ final class TUIRealParityHarness {
     init(
         width: Int = 100,
         height: Int = 34,
-        state: TUIInteractiveState
+        state: TUIInteractiveState,
+        kittyKeyboard: Bool = false,
+        transport: MockHTTPTransport = MockHTTPTransport()
     ) {
         let resolvedTheme = state.resolveTheme()
         self.testRenderer = createTestRenderer(
             width: width,
             height: height,
+            kittyKeyboard: kittyKeyboard,
             backgroundColor: resolvedTheme.background.base
         )
         self.store = TUIInteractiveStore(state)
-        self.transport = MockHTTPTransport()
+        self.transport = transport
         self.client = OpenCodeClient(options: ClientOptions(
             baseUrl: state.serverURL,
             transport: transport

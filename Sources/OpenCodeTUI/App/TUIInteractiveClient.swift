@@ -245,12 +245,190 @@ public enum TUITranscriptItem: Equatable, Hashable, Sendable {
     }
 }
 
+public enum TUIIntegrationMethod: Equatable, Hashable, Sendable {
+    case key(label: String)
+    case oauth(id: String, label: String)
+    case external(id: String, label: String)
+    case command(id: String, label: String)
+    case env(names: [String])
+
+    public var isInteractive: Bool {
+        if case .env = self { return false }
+        return true
+    }
+
+    public var displayLabel: String {
+        switch self {
+        case .key(let label): return label.isEmpty ? "API key" : label
+        case .oauth(_, let label): return label.isEmpty ? "Sign in with OAuth" : label
+        case .external(_, let label): return label.isEmpty ? "External auth" : label
+        case .command(_, let label): return label.isEmpty ? "CLI sign in" : label
+        case .env(let names): return names.map { "$\($0)" }.joined(separator: ", ")
+        }
+    }
+
+    public var rowID: String {
+        switch self {
+        case .key: return "method:key"
+        case .oauth(let id, _): return "method:oauth:\(id)"
+        case .external(let id, _): return "method:external:\(id)"
+        case .command(let id, _): return "method:command:\(id)"
+        case .env(let names): return "method:env:\(names.joined(separator: ","))"
+        }
+    }
+}
+
+public enum TUIIntegrationConnection: Equatable, Hashable, Sendable {
+    case credential(id: String, label: String, method: String, statusMessage: String?)
+    case env(name: String, statusMessage: String?)
+
+    public var statusMessage: String? {
+        switch self {
+        case .credential(_, _, _, let msg), .env(_, let msg): return msg
+        }
+    }
+}
+
+public struct TUIIntegrationItem: Equatable, Hashable, Sendable {
+    public static let popularPriority: [String: Int] = [
+        "opencode": 0,
+        "opencode-go": 1,
+        "openai": 2,
+        "github-copilot": 3,
+        "anthropic": 4,
+        "google": 5,
+    ]
+
+    public let id: String
+    public let name: String
+    public let source: String?
+    public let methods: [TUIIntegrationMethod]
+    public let connections: [TUIIntegrationConnection]
+
+    public init(
+        id: String,
+        name: String,
+        source: String? = nil,
+        methods: [TUIIntegrationMethod] = [.key(label: "API key")],
+        connections: [TUIIntegrationConnection] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.source = source
+        self.methods = methods
+        self.connections = connections
+    }
+
+    public var priority: Int {
+        Self.popularPriority[id] ?? 99
+    }
+
+    public var isPopular: Bool {
+        Self.popularPriority[id] != nil
+    }
+
+    public var isConnected: Bool {
+        !connections.isEmpty
+    }
+
+    /// Non-env interactive connect methods, matching upstream ordering (OAuth/external/command before API key).
+    public var connectMethods: [TUIIntegrationMethod] {
+        let nonEnv = methods.filter(\.isInteractive)
+        return nonEnv.sorted { lhs, rhs in
+            let lIsKey = (lhs.rowID == "method:key") ? 1 : 0
+            let rIsKey = (rhs.rowID == "method:key") ? 1 : 0
+            return lIsKey < rIsKey
+        }
+    }
+
+    public var envVarNames: [String] {
+        methods.flatMap { method -> [String] in
+            if case .env(let names) = method { return names }
+            return []
+        }
+    }
+
+    public var credentialConnections: [(id: String, label: String, method: String, statusMessage: String?)] {
+        connections.compactMap { conn in
+            if case .credential(let id, let label, let method, let status) = conn {
+                return (id, label, method, status)
+            }
+            return nil
+        }
+    }
+
+    public var connectionSummary: String {
+        if connections.count > 1 {
+            return "\(connections.count) connections"
+        }
+        guard let first = connections.first else { return "" }
+        switch first {
+        case .credential(_, let label, _, _): return label
+        case .env(let name, _): return "$\(name)"
+        }
+    }
+
+    public static func from(_ info: IntegrationSchema.Info) -> TUIIntegrationItem {
+        let mappedMethods: [TUIIntegrationMethod] = info.methods.map { method in
+            switch method {
+            case .key(let k):
+                return .key(label: k.label ?? "API key")
+            case .oauth(let o):
+                return .oauth(id: o.id.rawValue, label: o.label)
+            case .external(let e):
+                return .external(id: e.id.rawValue, label: e.label)
+            case .command(let c):
+                return .command(id: c.id.rawValue, label: c.label)
+            case .env(let env):
+                return .env(names: env.names)
+            }
+        }
+        let mappedConnections: [TUIIntegrationConnection] = info.connections.map { conn in
+            switch conn {
+            case .credential(let c):
+                return .credential(
+                    id: c.id.rawValue,
+                    label: c.label,
+                    method: c.method.rawValue,
+                    statusMessage: c.status?.message
+                )
+            case .env(let e):
+                return .env(name: e.name, statusMessage: e.status?.message)
+            }
+        }
+        let sourceStr: String?
+        if case .string(let s) = info.metadata?["source"] {
+            sourceStr = s
+        } else {
+            sourceStr = nil
+        }
+        return TUIIntegrationItem(
+            id: info.id.rawValue,
+            name: info.name,
+            source: sourceStr,
+            methods: mappedMethods,
+            connections: mappedConnections
+        )
+    }
+}
+
 public enum TUIActiveDialog: String, Equatable, Hashable, Sendable {
     case commandPalette
     case modelPicker
+    case connectProvider
+    case connectMethod
+    case connectAPIKey
+    case connectOAuth
+    case manageConnections
+    case agentPicker
+    case variantPicker
     case sessionList
     case themePicker
     case mcpStatus
+
+    public var isInputPrompt: Bool {
+        self == .connectAPIKey || self == .connectOAuth
+    }
 }
 
 public struct TUISlashCommand: Equatable, Hashable, Sendable {
@@ -263,10 +441,13 @@ public struct TUISlashCommand: Equatable, Hashable, Sendable {
     }
 
     public static let builtIn: [TUISlashCommand] = [
+        TUISlashCommand(name: "/connect", description: "Connect a provider or API key"),
         TUISlashCommand(name: "/models", description: "Switch active model"),
+        TUISlashCommand(name: "/agents", description: "Switch active agent"),
         TUISlashCommand(name: "/sessions", description: "Switch or browse sessions"),
         TUISlashCommand(name: "/themes", description: "Switch theme or light/dark mode"),
         TUISlashCommand(name: "/mcps", description: "View MCP server status"),
+        TUISlashCommand(name: "/variants", description: "Switch model reasoning variant"),
         TUISlashCommand(name: "/new", description: "Start a new session"),
         TUISlashCommand(name: "/home", description: "Return to the home screen"),
         TUISlashCommand(name: "/sidebar", description: "Toggle session sidebar"),
@@ -279,7 +460,10 @@ public struct TUISlashCommand: Equatable, Hashable, Sendable {
 public enum TUIPaletteActionID: String, Equatable, Hashable, Sendable {
     case switchSession
     case switchModel
+    case connectProvider
+    case switchAgent
     case cycleAgent
+    case switchVariant
     case switchTheme
     case toggleMode
     case mcpServers
@@ -362,6 +546,9 @@ public struct TUIInteractiveState: Equatable, Sendable {
     public var models: [TUIModelItem]
     public var selectedModel: TUIModelItem?
     public var selectedVariant: String?
+    public var integrations: [TUIIntegrationItem]
+    public var favoriteModels: [String]
+    public var recentModels: [String]
 
     public var mcpServers: [TUIMCPServerItem]
     public var sessions: [TUISessionItem]
@@ -380,12 +567,26 @@ public struct TUIInteractiveState: Equatable, Sendable {
     public var slashAutocompleteDismissed: Bool
     public var interruptArmed: Bool
     public var interruptArmedAtMs: Double
+    public var leaderArmed: Bool
+    public var leaderArmedAtMs: Double
     public var spinnerTick: Int
     public var scrollDeltaPending: Int
 
     public var activeDialog: TUIActiveDialog?
     public var dialogFilter: String
     public var dialogSelectedIndex: Int
+    public var modelPickerProviderID: String?
+    public var connectTargetIntegrationID: String?
+    public var connectTargetIntegrationName: String
+    public var connectMethodLabel: String
+    public var connectOAuthMethodID: String?
+    public var connectOAuthAttemptID: String?
+    public var connectOAuthURL: String?
+    public var connectOAuthInstructions: String?
+    public var connectOAuthNeedsCode: Bool
+    public var connectSubmitting: Bool
+    public var connectErrorMessage: String?
+    public var pendingDeleteCredentialID: String?
 
     public var toastMessage: String?
     public var toastIsError: Bool
@@ -412,6 +613,9 @@ public struct TUIInteractiveState: Equatable, Sendable {
         models: [TUIModelItem] = [],
         selectedModel: TUIModelItem? = nil,
         selectedVariant: String? = nil,
+        integrations: [TUIIntegrationItem] = [],
+        favoriteModels: [String] = [],
+        recentModels: [String] = [],
         mcpServers: [TUIMCPServerItem] = [],
         sessions: [TUISessionItem] = [],
         activeSessionID: String? = nil,
@@ -444,6 +648,9 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.models = models
         self.selectedModel = selectedModel
         self.selectedVariant = selectedVariant
+        self.integrations = integrations
+        self.favoriteModels = favoriteModels
+        self.recentModels = recentModels
         self.mcpServers = mcpServers
         self.sessions = sessions
         self.activeSessionID = activeSessionID
@@ -460,11 +667,25 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.slashAutocompleteDismissed = false
         self.interruptArmed = false
         self.interruptArmedAtMs = 0
+        self.leaderArmed = false
+        self.leaderArmedAtMs = 0
         self.spinnerTick = 0
         self.scrollDeltaPending = 0
         self.activeDialog = nil
         self.dialogFilter = ""
         self.dialogSelectedIndex = 0
+        self.modelPickerProviderID = nil
+        self.connectTargetIntegrationID = nil
+        self.connectTargetIntegrationName = ""
+        self.connectMethodLabel = "API key"
+        self.connectOAuthMethodID = nil
+        self.connectOAuthAttemptID = nil
+        self.connectOAuthURL = nil
+        self.connectOAuthInstructions = nil
+        self.connectOAuthNeedsCode = false
+        self.connectSubmitting = false
+        self.connectErrorMessage = nil
+        self.pendingDeleteCredentialID = nil
         self.toastMessage = nil
         self.toastIsError = false
         self.shouldQuit = false
@@ -508,11 +729,26 @@ public struct TUIInteractiveState: Equatable, Sendable {
         return "Ask anything… \"\(sample)\""
     }
 
+    public var isAnyProviderConnected: Bool {
+        !models.isEmpty || integrations.contains { $0.source != "mcp" && $0.isConnected }
+    }
+
+    public var visibleProviderIntegrations: [TUIIntegrationItem] {
+        integrations
+            .filter { $0.source != "mcp" }
+            .sorted { lhs, rhs in
+                if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+                let cmp = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if cmp != .orderedSame { return cmp == .orderedAscending }
+                return lhs.id < rhs.id
+            }
+    }
+
     public var activeModelLabel: String {
         if let selected = selectedModel {
             return selected.name.isEmpty ? selected.id : selected.name
         }
-        return "Select model"
+        return isAnyProviderConnected ? "Select model" : "Connect a provider (/connect)"
     }
 
     public var activeProviderLabel: String {
@@ -597,7 +833,10 @@ public struct TUIInteractiveState: Equatable, Sendable {
             let items: [(TUIPaletteActionID, String, String)] = [
                 (.switchSession, "Switch session", "/sessions"),
                 (.switchModel, "Switch model", "/models"),
+                (.connectProvider, "Connect a provider", "/connect"),
+                (.switchAgent, "Switch agent", "/agents"),
                 (.cycleAgent, "Cycle agent (\(activeAgent.displayName))", "shift+tab"),
+                (.switchVariant, "Switch model variant", "/variants"),
                 (.switchTheme, "Switch theme", "/themes"),
                 (.toggleMode, "Toggle Light / Dark mode (\(effectiveMode.rawValue))", "ctrl+t"),
                 (.mcpServers, "MCP servers", "/mcps"),
@@ -613,20 +852,190 @@ public struct TUIInteractiveState: Equatable, Sendable {
             }
 
         case .modelPicker:
-            return models.compactMap { item in
+            let favSet = Set(favoriteModels)
+            let filtered = models.filter { item in
+                if let filterPID = modelPickerProviderID, !filterPID.isEmpty, item.providerID != filterPID {
+                    return false
+                }
                 let prov = item.providerName.isEmpty
                     ? (providers[item.providerID] ?? TUIUtil.titlecase(item.providerID))
                     : item.providerName
-                guard matches(item.name, "\(item.id) \(prov)") else { return nil }
+                return matches(item.name, "\(item.id) \(prov)")
+            }
+            let ordered = filtered.sorted { lhs, rhs in
+                let lk = "\(lhs.providerID)/\(lhs.id)"
+                let rk = "\(rhs.providerID)/\(rhs.id)"
+                let lf = favSet.contains(lk)
+                let rf = favSet.contains(rk)
+                if lf != rf { return lf }
+                if let li = recentModels.firstIndex(of: lk), let ri = recentModels.firstIndex(of: rk), li != ri {
+                    return li < ri
+                } else if recentModels.contains(lk) != recentModels.contains(rk) {
+                    return recentModels.contains(lk)
+                }
+                return false
+            }
+            var rows: [TUIDialogRow] = ordered.map { item in
+                let prov = item.providerName.isEmpty
+                    ? (providers[item.providerID] ?? TUIUtil.titlecase(item.providerID))
+                    : item.providerName
+                let key = "\(item.providerID)/\(item.id)"
                 let active = selectedModel?.id == item.id && selectedModel?.providerID == item.providerID
+                let isFav = favSet.contains(key)
+                let trailing: String?
+                if active && isFav {
+                    trailing = "★ active"
+                } else if isFav {
+                    trailing = "★"
+                } else if active {
+                    trailing = "active"
+                } else {
+                    trailing = nil
+                }
                 return TUIDialogRow(
-                    id: "\(item.providerID)/\(item.id)",
+                    id: key,
                     title: item.name.isEmpty ? item.id : item.name,
                     subtitle: prov,
+                    trailing: trailing,
+                    isActive: active
+                )
+            }
+            if rows.isEmpty && needle.isEmpty {
+                rows.append(TUIDialogRow(
+                    id: "__connect_provider__",
+                    title: "+ Connect a provider",
+                    subtitle: "Add an API key or account to unlock models",
+                    trailing: "ctrl+a",
+                    badgeColorKind: .success
+                ))
+            }
+            return rows
+
+        case .connectProvider:
+            return visibleProviderIntegrations.compactMap { integration in
+                let envHint = integration.envVarNames.joined(separator: " ")
+                let category = integration.isPopular ? "Popular" : "Provider"
+                guard matches(integration.name, "\(integration.id) \(category) \(envHint)") else { return nil }
+                let hasStatus = integration.connections.first?.statusMessage != nil
+                let subtitle: String?
+                if integration.connectMethods.isEmpty && integration.credentialConnections.isEmpty {
+                    subtitle = "Environment only"
+                } else if integration.isPopular {
+                    subtitle = "Popular"
+                } else {
+                    subtitle = nil
+                }
+                let trailing: String?
+                if hasStatus {
+                    trailing = "Sign in required →"
+                } else if !integration.connectionSummary.isEmpty {
+                    trailing = integration.connectionSummary
+                } else if let firstMethod = integration.connectMethods.first {
+                    trailing = firstMethod.displayLabel
+                } else if let firstEnv = integration.envVarNames.first {
+                    trailing = "$\(firstEnv)"
+                } else {
+                    trailing = nil
+                }
+                let badge: TUIDialogRow.BadgeColorKind? = integration.isConnected
+                    ? (hasStatus ? .warning : .success)
+                    : nil
+                return TUIDialogRow(
+                    id: integration.id,
+                    title: integration.name,
+                    subtitle: subtitle,
+                    trailing: trailing,
+                    isActive: integration.isConnected,
+                    badgeColorKind: badge
+                )
+            }
+
+        case .connectMethod:
+            guard let targetID = connectTargetIntegrationID,
+                  let integration = integrations.first(where: { $0.id == targetID })
+            else {
+                return []
+            }
+            return integration.connectMethods.compactMap { method in
+                let label = method.displayLabel
+                guard matches(label, method.rowID) else { return nil }
+                return TUIDialogRow(id: method.rowID, title: label)
+            }
+
+        case .manageConnections:
+            guard let targetID = connectTargetIntegrationID,
+                  let integration = integrations.first(where: { $0.id == targetID })
+            else {
+                return []
+            }
+            var rows: [TUIDialogRow] = []
+            if !integration.connectMethods.isEmpty, matches("Add account", "connect") {
+                rows.append(TUIDialogRow(
+                    id: "__add_account__",
+                    title: "+ Add account",
+                    subtitle: "Connect another API key or account",
+                    badgeColorKind: .success
+                ))
+            }
+            let creds = integration.credentialConnections
+            for (idx, cred) in creds.enumerated() {
+                guard matches(cred.label, "\(cred.id) \(cred.method)") else { continue }
+                let isConfirming = pendingDeleteCredentialID == cred.id
+                let title = isConfirming ? "Press ctrl+d again to remove \(cred.label)" : cred.label
+                let trailing = cred.statusMessage != nil
+                    ? "Sign in required →"
+                    : (idx == 0 ? "active" : cred.method)
+                rows.append(TUIDialogRow(
+                    id: "cred:\(cred.id)",
+                    title: title,
+                    subtitle: isConfirming ? "Confirm removal" : cred.method,
+                    trailing: trailing,
+                    isActive: idx == 0,
+                    badgeColorKind: isConfirming ? .error : (cred.statusMessage != nil ? .warning : .success)
+                ))
+            }
+            return rows
+
+        case .connectAPIKey, .connectOAuth:
+            return []
+
+        case .agentPicker:
+            return agents.compactMap { agent in
+                guard matches(agent.displayName, "\(agent.id) \(agent.description ?? "")") else { return nil }
+                let active = activeAgent.id == agent.id
+                return TUIDialogRow(
+                    id: agent.id,
+                    title: agent.displayName,
+                    subtitle: agent.description,
                     trailing: active ? "active" : nil,
                     isActive: active
                 )
             }
+
+        case .variantPicker:
+            let variants = selectedModel?.variants ?? []
+            var rows: [TUIDialogRow] = []
+            let isDefault = (selectedVariant == nil || selectedVariant == "default")
+            if matches("Default", "default") {
+                rows.append(TUIDialogRow(
+                    id: "default",
+                    title: "Default",
+                    subtitle: "Model default reasoning",
+                    trailing: isDefault ? "active" : nil,
+                    isActive: isDefault
+                ))
+            }
+            for variant in variants where variant != "default" {
+                guard matches(variant) else { continue }
+                let active = selectedVariant == variant
+                rows.append(TUIDialogRow(
+                    id: variant,
+                    title: variant,
+                    trailing: active ? "active" : nil,
+                    isActive: active
+                ))
+            }
+            return rows
 
         case .sessionList:
             return sessions.compactMap { session in
@@ -735,6 +1144,7 @@ public final class TUIInteractiveClient: Sendable {
     public struct EventSideEffect: Equatable, Sendable {
         public var refreshAgents: Bool = false
         public var refreshModels: Bool = false
+        public var refreshIntegrations: Bool = false
         public var refreshMCP: Bool = false
         public var refreshVCS: Bool = false
         public var refreshSessions: Bool = false
@@ -743,6 +1153,7 @@ public final class TUIInteractiveClient: Sendable {
         public init(
             refreshAgents: Bool = false,
             refreshModels: Bool = false,
+            refreshIntegrations: Bool = false,
             refreshMCP: Bool = false,
             refreshVCS: Bool = false,
             refreshSessions: Bool = false,
@@ -750,6 +1161,7 @@ public final class TUIInteractiveClient: Sendable {
         ) {
             self.refreshAgents = refreshAgents
             self.refreshModels = refreshModels
+            self.refreshIntegrations = refreshIntegrations
             self.refreshMCP = refreshMCP
             self.refreshVCS = refreshVCS
             self.refreshSessions = refreshSessions
@@ -795,6 +1207,7 @@ public final class TUIInteractiveClient: Sendable {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await self.refreshServerInfo() }
                 group.addTask { await self.refreshAgents() }
+                group.addTask { await self.refreshIntegrations() }
                 group.addTask { await self.refreshProvidersAndModels() }
                 group.addTask { await self.refreshMCP() }
                 group.addTask { await self.refreshVCS() }
@@ -804,6 +1217,15 @@ public final class TUIInteractiveClient: Sendable {
                 await self.loadMessages(sessionID: activeID)
             }
         }
+    }
+
+    public func refreshIntegrations() async {
+        guard let resp = try? await client.integration.list(IntegrationListInput(location: locationQuery)) else { return }
+        let items = resp.data.map(TUIIntegrationItem.from)
+        store.withLock { state in
+            state.integrations = items
+        }
+        markDirty()
     }
 
     public func refreshServerInfo() async {
@@ -1211,6 +1633,9 @@ public final class TUIInteractiveClient: Sendable {
         if effect.refreshAgents {
             Task { await self.refreshAgents() }
         }
+        if effect.refreshIntegrations {
+            Task { await self.refreshIntegrations() }
+        }
         if effect.refreshModels {
             Task { await self.refreshProvidersAndModels() }
         }
@@ -1504,8 +1929,13 @@ public final class TUIInteractiveClient: Sendable {
         case "agent.updated":
             effect.refreshAgents = true
 
+        case "integration.updated":
+            effect.refreshIntegrations = true
+            effect.refreshModels = true
+
         case "model.updated", "provider.updated":
             effect.refreshModels = true
+            effect.refreshIntegrations = true
 
         default:
             break
@@ -1686,9 +2116,20 @@ public final class TUIInteractiveClient: Sendable {
             startNewSession()
             return true
 
+        case "/connect", "/providers", "/provider", "/login":
+            openConnectProvider()
+            return true
+
         case "/models", "/model":
-            openDialog(.modelPicker)
-            Task { await self.refreshProvidersAndModels() }
+            openModelPicker(providerID: nil)
+            return true
+
+        case "/agents", "/agent":
+            openAgentPicker()
+            return true
+
+        case "/variants", "/variant", "/thinking", "/effort":
+            openVariantPicker()
             return true
 
         case "/sessions", "/session":
@@ -1734,9 +2175,16 @@ public final class TUIInteractiveClient: Sendable {
                     preference: state.themePreference
                 )
             }
+            if dialog != .modelPicker {
+                state.modelPickerProviderID = nil
+            }
             state.activeDialog = dialog
             state.dialogFilter = ""
             state.dialogSelectedIndex = 0
+            state.pendingDeleteCredentialID = nil
+            state.connectErrorMessage = nil
+            state.connectSubmitting = false
+            state.leaderArmed = false
             if state.promptText.hasPrefix("/") {
                 state.promptText = ""
             }
@@ -1745,7 +2193,76 @@ public final class TUIInteractiveClient: Sendable {
         markDirty()
     }
 
+    public func openModelPicker(providerID: String? = nil) {
+        store.withLock { state in
+            state.modelPickerProviderID = providerID
+            state.activeDialog = .modelPicker
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.pendingDeleteCredentialID = nil
+            state.connectErrorMessage = nil
+            state.connectSubmitting = false
+            state.leaderArmed = false
+            if state.promptText.hasPrefix("/") {
+                state.promptText = ""
+            }
+            state.slashAutocompleteDismissed = false
+        }
+        markDirty()
+        Task { [weak self] in
+            guard let self else { return }
+            await self.refreshProvidersAndModels()
+            await self.refreshIntegrations()
+        }
+    }
+
+    public func openConnectProvider() {
+        openDialog(.connectProvider)
+        Task { [weak self] in
+            await self?.refreshIntegrations()
+        }
+    }
+
+    public func openAgentPicker() {
+        openDialog(.agentPicker)
+        Task { [weak self] in
+            await self?.refreshAgents()
+        }
+    }
+
+    public func openVariantPicker() {
+        let variants = store.withLock { $0.selectedModel?.variants ?? [] }
+        if variants.isEmpty {
+            store.withLock { state in
+                state.toastMessage = "Current model has no configurable variants"
+                state.toastIsError = false
+                if state.promptText.hasPrefix("/") {
+                    state.promptText = ""
+                }
+            }
+            markDirty()
+            return
+        }
+        openDialog(.variantPicker)
+    }
+
     public func closeDialog(commitTheme: Bool = false) {
+        let activeOAuth = store.withLock { state -> (String, String)? in
+            if state.activeDialog == .connectOAuth,
+               let intID = state.connectTargetIntegrationID,
+               let attemptID = state.connectOAuthAttemptID {
+                return (intID, attemptID)
+            }
+            return nil
+        }
+        if let (intID, attemptID) = activeOAuth {
+            Task { [weak self] in
+                guard let self else { return }
+                _ = try? await self.client.integration.oauth.cancel(
+                    IntegrationOauthCancelInput(integrationID: intID, attemptID: attemptID, location: self.locationQuery)
+                )
+            }
+        }
         store.withLock { state in
             if !commitTheme, let restore = state.themePreviewRestore {
                 state.themeName = restore.themeName
@@ -1755,6 +2272,14 @@ public final class TUIInteractiveClient: Sendable {
             state.activeDialog = nil
             state.dialogFilter = ""
             state.dialogSelectedIndex = 0
+            state.modelPickerProviderID = nil
+            state.connectErrorMessage = nil
+            state.connectSubmitting = false
+            state.connectOAuthAttemptID = nil
+            state.connectOAuthURL = nil
+            state.connectOAuthInstructions = nil
+            state.connectOAuthNeedsCode = false
+            state.pendingDeleteCredentialID = nil
         }
         markDirty()
     }
@@ -1814,6 +2339,25 @@ public final class TUIInteractiveClient: Sendable {
         }
     }
 
+    public func selectAgent(id: String) {
+        let info = store.withLock { state -> (sessionID: String?, agentID: String)? in
+            guard let idx = state.agents.firstIndex(where: { $0.id == id }) else { return nil }
+            state.selectedAgentIndex = idx
+            state.activeDialog = nil
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            return (state.activeSessionID, state.agents[idx].id)
+        }
+        markDirty()
+        if let info, let sid = info.sessionID {
+            Task { [weak self] in
+                _ = try? await self?.client.session.switchAgent(
+                    SessionSwitchAgentInput(sessionID: sid, agent: info.agentID)
+                )
+            }
+        }
+    }
+
     public func selectModel(_ model: TUIModelItem) {
         let activeSID = store.withLock { state -> String? in
             state.selectedModel = model
@@ -1821,9 +2365,16 @@ public final class TUIInteractiveClient: Sendable {
             if let variant = state.selectedVariant, !model.variants.contains(variant) {
                 state.selectedVariant = nil
             }
+            let key = "\(model.providerID)/\(model.id)"
+            state.recentModels.removeAll { $0 == key }
+            state.recentModels.insert(key, at: 0)
+            if state.recentModels.count > 10 {
+                state.recentModels = Array(state.recentModels.prefix(10))
+            }
             state.activeDialog = nil
             state.dialogFilter = ""
             state.dialogSelectedIndex = 0
+            state.modelPickerProviderID = nil
             return state.activeSessionID
         }
         markDirty()
@@ -1834,6 +2385,531 @@ public final class TUIInteractiveClient: Sendable {
                     SessionSwitchModelInput(sessionID: sid, model: ref)
                 )
             }
+        }
+    }
+
+    public func selectVariant(_ variant: String?) {
+        let normalized = (variant == nil || variant == "default" || variant?.isEmpty == true) ? nil : variant
+        let syncInfo = store.withLock { state -> (String, ModelSchema.Ref)? in
+            state.selectedVariant = normalized
+            state.activeDialog = nil
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            guard let sid = state.activeSessionID, let model = state.selectedModel else { return nil }
+            return (sid, model.ref(variant: normalized))
+        }
+        markDirty()
+        if let (sid, ref) = syncInfo {
+            Task { [weak self] in
+                _ = try? await self?.client.session.switchModel(
+                    SessionSwitchModelInput(sessionID: sid, model: ref)
+                )
+            }
+        }
+    }
+
+    public func cycleVariant() {
+        let nextVariant = store.withLock { state -> (String?, Bool) in
+            guard let model = state.selectedModel, !model.variants.isEmpty else { return (nil, false) }
+            let options: [String?] = [nil] + model.variants.filter { $0 != "default" }.map { Optional($0) }
+            let curIdx = options.firstIndex(where: { $0 == state.selectedVariant }) ?? 0
+            let next = options[(curIdx + 1) % options.count]
+            return (next, true)
+        }
+        guard nextVariant.1 else { return }
+        selectVariant(nextVariant.0)
+    }
+
+    public func toggleFavoriteSelectedModel() {
+        store.withLock { state in
+            guard state.activeDialog == .modelPicker else { return }
+            let rows = state.dialogRows()
+            guard !rows.isEmpty else { return }
+            let idx = min(max(0, state.dialogSelectedIndex), rows.count - 1)
+            let key = rows[idx].id
+            guard key != "__connect_provider__" else { return }
+            if let existing = state.favoriteModels.firstIndex(of: key) {
+                state.favoriteModels.remove(at: existing)
+            } else {
+                state.favoriteModels.insert(key, at: 0)
+            }
+        }
+        markDirty()
+    }
+
+    public func cycleRecentModel(direction: Int = 1) {
+        let chosen = store.withLock { state -> TUIModelItem? in
+            let pool: [TUIModelItem]
+            let recentItems = state.recentModels.compactMap { key in
+                state.models.first(where: { "\($0.providerID)/\($0.id)" == key })
+            }
+            if recentItems.count >= 2 {
+                pool = recentItems
+            } else {
+                pool = state.models
+            }
+            guard pool.count >= 2 else { return nil }
+            let currentIdx = state.selectedModel.flatMap { cur in
+                pool.firstIndex(where: { $0.id == cur.id && $0.providerID == cur.providerID })
+            } ?? 0
+            let nextIdx = ((currentIdx + direction) % pool.count + pool.count) % pool.count
+            return pool[nextIdx]
+        }
+        if let chosen {
+            selectModel(chosen)
+        }
+    }
+
+    // MARK: - Provider & Integration Connection Flows (`dialog-integration.tsx`)
+
+    public func selectIntegration(_ item: TUIIntegrationItem) {
+        if !item.credentialConnections.isEmpty {
+            store.withLock { state in
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.activeDialog = .manageConnections
+                state.dialogFilter = ""
+                state.dialogSelectedIndex = 0
+                state.pendingDeleteCredentialID = nil
+                state.connectErrorMessage = nil
+            }
+            markDirty()
+            return
+        }
+        beginConnectIntegration(item)
+    }
+
+    public func beginConnectIntegration(_ item: TUIIntegrationItem) {
+        let methods = item.connectMethods
+        if methods.isEmpty {
+            let envHint = item.envVarNames.isEmpty ? "environment variables" : item.envVarNames.map { "$\($0)" }.joined(separator: " or ")
+            store.withLock { state in
+                state.toastMessage = "Set \(envHint) to connect \(item.name)"
+                state.toastIsError = false
+            }
+            markDirty()
+            return
+        }
+        if methods.count == 1 {
+            beginConnectMethod(item, method: methods[0])
+            return
+        }
+        store.withLock { state in
+            state.connectTargetIntegrationID = item.id
+            state.connectTargetIntegrationName = item.name
+            state.activeDialog = .connectMethod
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.connectErrorMessage = nil
+        }
+        markDirty()
+    }
+
+    public func beginConnectMethod(_ item: TUIIntegrationItem, method: TUIIntegrationMethod) {
+        switch method {
+        case .key(let label):
+            store.withLock { state in
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label.isEmpty ? "API key" : label
+                state.activeDialog = .connectAPIKey
+                state.dialogFilter = ""
+                state.dialogSelectedIndex = 0
+                state.connectErrorMessage = nil
+                state.connectSubmitting = false
+            }
+            markDirty()
+
+        case .external(let methodID, _):
+            store.withLock { state in
+                state.connectSubmitting = true
+                state.connectErrorMessage = nil
+                state.toastMessage = "Connecting \(item.name)…"
+                state.toastIsError = false
+            }
+            markDirty()
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.client.integration.connect.external(
+                        IntegrationConnectExternalInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID
+                        )
+                    )
+                    await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
+                } catch {
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.connectErrorMessage = "\(error)"
+                        state.toastMessage = "Failed to connect \(item.name): \(error)"
+                        state.toastIsError = true
+                    }
+                    self.markDirty()
+                }
+            }
+
+        case .oauth(let methodID, let label):
+            store.withLock { state in
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label.isEmpty ? "OAuth" : label
+                state.connectOAuthMethodID = methodID
+                state.connectOAuthAttemptID = nil
+                state.connectOAuthURL = nil
+                state.connectOAuthInstructions = "Starting authorization…"
+                state.connectOAuthNeedsCode = false
+                state.connectSubmitting = true
+                state.connectErrorMessage = nil
+                state.activeDialog = .connectOAuth
+                state.dialogFilter = ""
+                state.dialogSelectedIndex = 0
+            }
+            markDirty()
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let started = try await self.client.integration.oauth.connect(
+                        IntegrationOauthConnectInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID
+                        )
+                    )
+                    let data = started.data
+                    let attemptID = data.attemptID.rawValue
+                    let needsCode = (data.mode == .code)
+                    self.store.withLock { state in
+                        guard state.activeDialog == .connectOAuth else { return }
+                        state.connectOAuthAttemptID = attemptID
+                        state.connectOAuthURL = data.url
+                        state.connectOAuthInstructions = data.instructions
+                        state.connectOAuthNeedsCode = needsCode
+                        state.connectSubmitting = false
+                    }
+                    self.markDirty()
+                    if !needsCode {
+                        await self.pollOAuthAttempt(
+                            integrationID: item.id,
+                            integrationName: item.name,
+                            attemptID: attemptID
+                        )
+                    }
+                } catch {
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.connectErrorMessage = "\(error)"
+                    }
+                    self.markDirty()
+                }
+            }
+
+        case .command(let methodID, let label):
+            store.withLock { state in
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label
+                state.connectSubmitting = true
+                state.toastMessage = "Running \(label)…"
+                state.toastIsError = false
+            }
+            markDirty()
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let started = try await self.client.integration.command.connect(
+                        IntegrationCommandConnectInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID
+                        )
+                    )
+                    let attemptID = started.data.attemptID.rawValue
+                    for _ in 0..<120 {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        let status = try await self.client.integration.command.status(
+                            IntegrationCommandStatusInput(
+                                integrationID: item.id,
+                                attemptID: attemptID,
+                                location: self.locationQuery
+                            )
+                        )
+                        switch status.data {
+                        case .pending:
+                            continue
+                        case .complete:
+                            await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
+                            return
+                        case .failed(let msg, _):
+                            self.store.withLock { state in
+                                state.connectSubmitting = false
+                                state.toastMessage = msg
+                                state.toastIsError = true
+                            }
+                            self.markDirty()
+                            return
+                        case .expired:
+                            self.store.withLock { state in
+                                state.connectSubmitting = false
+                                state.toastMessage = "Authentication expired"
+                                state.toastIsError = true
+                            }
+                            self.markDirty()
+                            return
+                        }
+                    }
+                } catch {
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.toastMessage = "Failed to connect \(item.name): \(error)"
+                        state.toastIsError = true
+                    }
+                    self.markDirty()
+                }
+            }
+
+        case .env(let names):
+            let hint = names.map { "$\($0)" }.joined(separator: " or ")
+            store.withLock { state in
+                state.toastMessage = "Set \(hint) to connect \(item.name)"
+                state.toastIsError = false
+            }
+            markDirty()
+        }
+    }
+
+    public func submitAPIKey(_ rawKey: String? = nil) {
+        let info = store.withLock { state -> (id: String, name: String, key: String)? in
+            guard state.activeDialog == .connectAPIKey,
+                  !state.connectSubmitting,
+                  let id = state.connectTargetIntegrationID
+            else {
+                return nil
+            }
+            let key = (rawKey ?? state.dialogFilter).trimmingCharacters(in: .whitespacesAndNewlines)
+            if key.isEmpty {
+                state.connectErrorMessage = "Please enter an API key"
+                return nil
+            }
+            state.connectSubmitting = true
+            state.connectErrorMessage = nil
+            return (id, state.connectTargetIntegrationName, key)
+        }
+        markDirty()
+        guard let info else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.client.integration.connect.key(
+                    IntegrationConnectKeyInput(
+                        integrationID: info.id,
+                        location: self.locationQuery,
+                        key: info.key
+                    )
+                )
+                await self.finishProviderConnected(integrationID: info.id, integrationName: info.name)
+            } catch {
+                self.store.withLock { state in
+                    state.connectSubmitting = false
+                    state.connectErrorMessage = "\(error)"
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    public func submitOAuthCode(_ rawCode: String? = nil) {
+        let info = store.withLock { state -> (id: String, name: String, attemptID: String, code: String)? in
+            guard state.activeDialog == .connectOAuth,
+                  !state.connectSubmitting,
+                  let id = state.connectTargetIntegrationID,
+                  let attemptID = state.connectOAuthAttemptID
+            else {
+                return nil
+            }
+            let code = (rawCode ?? state.dialogFilter).trimmingCharacters(in: .whitespacesAndNewlines)
+            if state.connectOAuthNeedsCode && code.isEmpty {
+                state.connectErrorMessage = "Please paste the authorization code"
+                return nil
+            }
+            state.connectSubmitting = true
+            state.connectErrorMessage = nil
+            return (id, state.connectTargetIntegrationName, attemptID, code)
+        }
+        markDirty()
+        guard let info else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.client.integration.oauth.complete(
+                    IntegrationOauthCompleteInput(
+                        integrationID: info.id,
+                        attemptID: info.attemptID,
+                        location: self.locationQuery,
+                        code: info.code.isEmpty ? nil : info.code
+                    )
+                )
+                await self.finishProviderConnected(integrationID: info.id, integrationName: info.name)
+            } catch {
+                self.store.withLock { state in
+                    state.connectSubmitting = false
+                    state.connectErrorMessage = "\(error)"
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    private func pollOAuthAttempt(integrationID: String, integrationName: String, attemptID: String) async {
+        for _ in 0..<240 {
+            try? await Task.sleep(for: .milliseconds(500))
+            let stillActive = store.withLock { state in
+                state.activeDialog == .connectOAuth && state.connectOAuthAttemptID == attemptID
+            }
+            guard stillActive else { return }
+            guard let resp = try? await client.integration.oauth.status(
+                IntegrationOauthStatusInput(
+                    integrationID: integrationID,
+                    attemptID: attemptID,
+                    location: locationQuery
+                )
+            ) else {
+                continue
+            }
+            switch resp.data {
+            case .pending:
+                continue
+            case .complete:
+                await finishProviderConnected(integrationID: integrationID, integrationName: integrationName)
+                return
+            case .failed(let msg, _):
+                store.withLock { state in
+                    state.connectSubmitting = false
+                    state.connectErrorMessage = msg
+                }
+                markDirty()
+                return
+            case .expired:
+                store.withLock { state in
+                    state.connectSubmitting = false
+                    state.connectErrorMessage = "Authorization expired"
+                }
+                markDirty()
+                return
+            }
+        }
+    }
+
+    private func finishProviderConnected(integrationID: String, integrationName: String) async {
+        await refreshIntegrations()
+        await refreshProvidersAndModels()
+        let firstProviderModel = store.withLock { state -> TUIModelItem? in
+            state.connectSubmitting = false
+            state.connectErrorMessage = nil
+            state.connectOAuthAttemptID = nil
+            state.connectOAuthURL = nil
+            state.connectOAuthInstructions = nil
+            state.connectOAuthNeedsCode = false
+            state.toastMessage = "Connected \(integrationName)"
+            state.toastIsError = false
+            let matched = state.models.first(where: { $0.providerID == integrationID })
+            if state.selectedModel == nil, let matched {
+                state.selectedModel = matched
+                state.contextLimit = matched.contextLimit
+            }
+            return matched
+        }
+        if firstProviderModel != nil {
+            openModelPicker(providerID: integrationID)
+        } else {
+            closeDialog(commitTheme: true)
+        }
+    }
+
+    public func activateCredential(_ credID: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.client.credential.activate(CredentialActivateInput(credentialID: credID))
+                await self.refreshIntegrations()
+                await self.refreshProvidersAndModels()
+                self.store.withLock { state in
+                    state.pendingDeleteCredentialID = nil
+                    state.toastMessage = "Switched active account"
+                    state.toastIsError = false
+                }
+                self.markDirty()
+            } catch {
+                self.store.withLock { state in
+                    state.toastMessage = "Failed to switch account: \(error)"
+                    state.toastIsError = true
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    public func requestRemoveSelectedCredential() {
+        let action = store.withLock { state -> (removeID: String?, integrationName: String) in
+            guard state.activeDialog == .manageConnections else { return (nil, "") }
+            let rows = state.dialogRows()
+            guard !rows.isEmpty else { return (nil, state.connectTargetIntegrationName) }
+            let idx = min(max(0, state.dialogSelectedIndex), rows.count - 1)
+            let row = rows[idx]
+            guard row.id.hasPrefix("cred:") else { return (nil, state.connectTargetIntegrationName) }
+            let credID = String(row.id.dropFirst("cred:".count))
+            if state.pendingDeleteCredentialID == credID {
+                state.pendingDeleteCredentialID = nil
+                return (credID, state.connectTargetIntegrationName)
+            } else {
+                state.pendingDeleteCredentialID = credID
+                return (nil, state.connectTargetIntegrationName)
+            }
+        }
+        markDirty()
+        guard let credID = action.removeID else { return }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.client.credential.remove(CredentialRemoveInput(credentialID: credID))
+                await self.refreshIntegrations()
+                await self.refreshProvidersAndModels()
+                self.store.withLock { state in
+                    state.toastMessage = "Removed account from \(action.integrationName)"
+                    state.toastIsError = false
+                    if let targetID = state.connectTargetIntegrationID,
+                       let updated = state.integrations.first(where: { $0.id == targetID }),
+                       updated.credentialConnections.isEmpty {
+                        state.activeDialog = .connectProvider
+                        state.dialogFilter = ""
+                        state.dialogSelectedIndex = 0
+                    }
+                }
+                self.markDirty()
+            } catch {
+                self.store.withLock { state in
+                    state.toastMessage = "Failed to remove account: \(error)"
+                    state.toastIsError = true
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    public func navigateBackFromSubDialog() {
+        let current = store.withLock { $0.activeDialog }
+        switch current {
+        case .connectAPIKey, .connectMethod, .manageConnections:
+            openConnectProvider()
+        case .connectOAuth:
+            closeDialog(commitTheme: false)
+            openConnectProvider()
+        default:
+            closeDialog(commitTheme: false)
         }
     }
 
@@ -1918,6 +2994,16 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func confirmSelectedDialogRow() {
+        let currentDialog = store.withLock { $0.activeDialog }
+        if currentDialog == .connectAPIKey {
+            submitAPIKey()
+            return
+        }
+        if currentDialog == .connectOAuth {
+            submitOAuthCode()
+            return
+        }
+
         let selection = store.withLock { state -> (TUIActiveDialog, TUIDialogRow)? in
             guard let dialog = state.activeDialog else { return nil }
             let rows = state.dialogRows()
@@ -1938,10 +3024,15 @@ public final class TUIInteractiveClient: Sendable {
                 openDialog(.sessionList)
                 Task { await self.refreshSessions() }
             case .switchModel:
-                openDialog(.modelPicker)
-                Task { await self.refreshProvidersAndModels() }
+                openModelPicker(providerID: nil)
+            case .connectProvider:
+                openConnectProvider()
+            case .switchAgent:
+                openAgentPicker()
             case .cycleAgent:
                 cycleAgent(direction: 1)
+            case .switchVariant:
+                openVariantPicker()
             case .switchTheme:
                 openDialog(.themePicker)
             case .toggleMode:
@@ -1968,6 +3059,10 @@ public final class TUIInteractiveClient: Sendable {
             }
 
         case .modelPicker:
+            if row.id == "__connect_provider__" {
+                openConnectProvider()
+                return
+            }
             let model = store.withLock { state in
                 state.models.first(where: { "\($0.providerID)/\($0.id)" == row.id })
             }
@@ -1976,6 +3071,61 @@ public final class TUIInteractiveClient: Sendable {
             } else {
                 closeDialog(commitTheme: true)
             }
+
+        case .connectProvider:
+            let integration = store.withLock { state in
+                state.integrations.first(where: { $0.id == row.id })
+            }
+            if let integration {
+                selectIntegration(integration)
+            } else {
+                closeDialog(commitTheme: false)
+            }
+
+        case .connectMethod:
+            let match = store.withLock { state -> (TUIIntegrationItem, TUIIntegrationMethod)? in
+                guard let id = state.connectTargetIntegrationID,
+                      let item = state.integrations.first(where: { $0.id == id }),
+                      let method = item.connectMethods.first(where: { $0.rowID == row.id })
+                else {
+                    return nil
+                }
+                return (item, method)
+            }
+            if let (item, method) = match {
+                beginConnectMethod(item, method: method)
+            } else {
+                openConnectProvider()
+            }
+
+        case .manageConnections:
+            if row.id == "__add_account__" {
+                let integration = store.withLock { state in
+                    state.connectTargetIntegrationID.flatMap { id in
+                        state.integrations.first(where: { $0.id == id })
+                    }
+                }
+                if let integration {
+                    beginConnectIntegration(integration)
+                }
+                return
+            }
+            if row.id.hasPrefix("cred:") {
+                let credID = String(row.id.dropFirst("cred:".count))
+                activateCredential(credID)
+            }
+
+        case .connectAPIKey:
+            submitAPIKey()
+
+        case .connectOAuth:
+            submitOAuthCode()
+
+        case .agentPicker:
+            selectAgent(id: row.id)
+
+        case .variantPicker:
+            selectVariant(row.id == "default" ? nil : row.id)
 
         case .sessionList:
             openSession(id: row.id, title: row.title)

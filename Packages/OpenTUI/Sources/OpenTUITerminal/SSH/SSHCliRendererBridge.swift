@@ -7,7 +7,8 @@ import Synchronization
 private func makeTerminalSetupSequence(
     screenMode: ScreenMode,
     useMouse: Bool,
-    enableMouseMovement: Bool
+    enableMouseMovement: Bool,
+    kittyKeyboardFlags: UInt32 = 0
 ) -> String {
     var seq = ""
     if screenMode == .alternateScreen {
@@ -17,6 +18,10 @@ private func makeTerminalSetupSequence(
     }
     // Enable bracketed paste mode
     seq += "\u{1B}[?2004h"
+    if kittyKeyboardFlags != 0 {
+        // Push Kitty keyboard protocol progressive enhancement flags
+        seq += "\u{1B}[>\(kittyKeyboardFlags)u"
+    }
     if useMouse {
         // Enable VT200 mouse, button-event drag tracking, optional any-event motion, and SGR extended coordinates
         seq += "\u{1B}[?1000h\u{1B}[?1002h"
@@ -31,7 +36,8 @@ private func makeTerminalSetupSequence(
 private func makeTerminalTeardownSequence(
     screenMode: ScreenMode,
     useMouse: Bool,
-    enableMouseMovement: Bool
+    enableMouseMovement: Bool,
+    kittyKeyboardFlags: UInt32 = 0
 ) -> String {
     var seq = ""
     if useMouse {
@@ -40,6 +46,10 @@ private func makeTerminalTeardownSequence(
             seq += "\u{1B}[?1003l"
         }
         seq += "\u{1B}[?1002l\u{1B}[?1000l"
+    }
+    if kittyKeyboardFlags != 0 {
+        // Pop Kitty keyboard protocol mode cleanly
+        seq += "\u{1B}[<u"
     }
     // Disable bracketed paste mode
     seq += "\u{1B}[?2004l"
@@ -411,6 +421,7 @@ public final class SSHCliRendererAdapter: SSHAttachableRenderer, @unchecked Send
     private let screenMode: ScreenMode
     private let initialMouseEnabled: Bool
     private let enableMouseMovement: Bool
+    private let kittyKeyboardFlags: UInt32
     private let outputWriter: SerialTerminalOutputWriter
     private let state: Mutex<State>
 
@@ -435,6 +446,7 @@ public final class SSHCliRendererAdapter: SSHAttachableRenderer, @unchecked Send
         self.screenMode = renderer.screenMode
         self.initialMouseEnabled = renderer.useMouse
         self.enableMouseMovement = enableMouseMovement
+        self.kittyKeyboardFlags = renderer.activeKittyKeyboardFlags
         self.outputWriter = SerialTerminalOutputWriter(
             backend: options.backend,
             maxPendingBytes: maxPendingOutputBytes,
@@ -469,7 +481,8 @@ public final class SSHCliRendererAdapter: SSHAttachableRenderer, @unchecked Send
             let setup = makeTerminalSetupSequence(
                 screenMode: self.screenMode,
                 useMouse: self.initialMouseEnabled,
-                enableMouseMovement: self.enableMouseMovement
+                enableMouseMovement: self.enableMouseMovement,
+                kittyKeyboardFlags: self.kittyKeyboardFlags
             )
             if !setup.isEmpty {
                 writer.enqueue(Array(setup.utf8), force: true)
@@ -624,7 +637,8 @@ public final class SSHCliRendererAdapter: SSHAttachableRenderer, @unchecked Send
             let teardown = makeTerminalTeardownSequence(
                 screenMode: screenMode,
                 useMouse: initialMouseEnabled,
-                enableMouseMovement: enableMouseMovement
+                enableMouseMovement: enableMouseMovement,
+                kittyKeyboardFlags: kittyKeyboardFlags
             )
             teardownBytes = teardown.isEmpty ? nil : Array(teardown.utf8)
         } else {
@@ -826,6 +840,7 @@ public func runWithTerminalBackend<Result: Sendable>(
 ) async throws -> Result {
     let screenMode = renderer.screenMode
     let useMouse = renderer.useMouse
+    let kittyKeyboardFlags = renderer.activeKittyKeyboardFlags
     var enteredRawMode = false
 
     if options.enterRawMode {
@@ -851,7 +866,8 @@ public func runWithTerminalBackend<Result: Sendable>(
             let seq = makeTerminalTeardownSequence(
                 screenMode: screenMode,
                 useMouse: useMouse,
-                enableMouseMovement: options.enableMouseMovement
+                enableMouseMovement: options.enableMouseMovement,
+                kittyKeyboardFlags: kittyKeyboardFlags
             )
             finalBytes = seq.isEmpty ? nil : Array(seq.utf8)
         } else {
@@ -874,7 +890,8 @@ public func runWithTerminalBackend<Result: Sendable>(
             let setup = makeTerminalSetupSequence(
                 screenMode: screenMode,
                 useMouse: useMouse,
-                enableMouseMovement: options.enableMouseMovement
+                enableMouseMovement: options.enableMouseMovement,
+                kittyKeyboardFlags: kittyKeyboardFlags
             )
             if !setup.isEmpty {
                 writer.enqueue(Array(setup.utf8), force: true)

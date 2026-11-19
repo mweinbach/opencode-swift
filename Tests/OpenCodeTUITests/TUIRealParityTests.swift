@@ -1,3 +1,5 @@
+import OpenCodePlatform
+import Synchronization
 import Testing
 import OpenCodeClient
 import OpenCodeProtocol
@@ -553,6 +555,185 @@ struct TUIRealParityTests {
             }
         } else {
             Issue.record("Expected single assembled assistant message")
+        }
+    }
+
+    // MARK: - 6. Cmd+P / Cmd+A, Leader Chords, Provider Connect Flow, Agents & Variants
+
+    @Test("Cmd+P (Kitty CSI u super+p), Cmd+K, and Ctrl+X leader chords open Commands, Models, Agents, and Connect Provider")
+    func superShortcutsAndLeaderChords() {
+        var state = TUIRealParityFixtures.makeHomeState(width: 100, height: 34, mode: .light)
+        state.promptText = ""
+        let harness = TUIRealParityHarness(width: 100, height: 34, state: state, kittyKeyboard: true)
+        defer { harness.destroy() }
+
+        // Raw Kitty CSI u Cmd+P (`\x1b[112;9u`) toggles Command Palette
+        harness.testRenderer.renderer.feedInput("\u{1B}[112;9u")
+        #expect(harness.store.snapshot().activeDialog == .commandPalette)
+        #expect(harness.frame().contains("Connect a provider"))
+        #expect(harness.frame().contains("Switch agent"))
+
+        // Pressing Cmd+P again closes Command Palette
+        harness.testRenderer.renderer.feedInput("\u{1B}[112;9u")
+        #expect(harness.store.snapshot().activeDialog == nil)
+
+        // Raw Kitty CSI u Cmd+A (`\x1b[97;9u`) on empty prompt opens Agent Picker
+        harness.testRenderer.renderer.feedInput("\u{1B}[97;9u")
+        #expect(harness.store.snapshot().activeDialog == .agentPicker)
+        let agentFrame = harness.frame()
+        #expect(agentFrame.contains("Select agent"))
+        #expect(agentFrame.contains("Build"))
+        #expect(agentFrame.contains("Plan"))
+
+        // Select Plan agent and confirm
+        harness.testRenderer.mockInput.pressArrow(.down)
+        harness.testRenderer.mockInput.pressEnter()
+        #expect(harness.store.snapshot().activeDialog == nil)
+        #expect(harness.store.snapshot().activeAgent.id == "plan")
+
+        // `<leader>m` (Ctrl+X then m) opens Model Picker
+        harness.testRenderer.mockInput.pressKey("x", modifiers: MockKeyModifiers(ctrl: true))
+        #expect(harness.store.snapshot().leaderArmed == true)
+        #expect(harness.frame().contains("m models"))
+        harness.testRenderer.mockInput.pressKey("m")
+        #expect(harness.store.snapshot().leaderArmed == false)
+        #expect(harness.store.snapshot().activeDialog == .modelPicker)
+
+        // Inside Model Picker: Ctrl+F favorites selected model (`★`), Ctrl+A / Cmd+A opens Connect Provider
+        harness.testRenderer.mockInput.pressKey("f", modifiers: MockKeyModifiers(ctrl: true))
+        #expect(harness.store.snapshot().favoriteModels.contains("anthropic/claude-sonnet-4-5"))
+        #expect(harness.frame().contains("★"))
+        #expect(harness.frame().contains("ctrl+a connect"))
+
+        // Raw Kitty CSI u Cmd+A inside Model Picker opens Connect Provider
+        harness.testRenderer.renderer.feedInput("\u{1B}[97;9u")
+        #expect(harness.store.snapshot().activeDialog == .connectProvider)
+        let connectFrame = harness.frame()
+        #expect(connectFrame.contains("Connect a provider"))
+        #expect(connectFrame.contains("Anthropic"))
+        #expect(connectFrame.contains("OpenAI"))
+        #expect(connectFrame.contains("Google"))
+
+        // Close and open Variant Picker via `<leader>v`
+        harness.pressEscapeAndFlush()
+        harness.testRenderer.mockInput.pressKey("x", modifiers: MockKeyModifiers(ctrl: true))
+        harness.testRenderer.mockInput.pressKey("v")
+        #expect(harness.store.snapshot().activeDialog == .variantPicker)
+        let variantFrame = harness.frame()
+        #expect(variantFrame.contains("Select variant"))
+        #expect(variantFrame.contains("high"))
+        #expect(variantFrame.contains("xhigh"))
+        harness.testRenderer.mockInput.pressArrow(.down) // "high"
+        harness.testRenderer.mockInput.pressEnter()
+        #expect(harness.store.snapshot().selectedVariant == "high")
+    }
+
+    @Test("Connecting a provider API key calls /api/integration/:id/connect/key and unlocks its models in Select Model")
+    func connectProviderAPIKeyEndToEnd() async throws {
+        var state = TUIRealParityFixtures.makeHomeState(width: 100, height: 34, mode: .light)
+        state.models = []
+        state.selectedModel = nil
+        state.providers = [:]
+        state.integrations = [
+            TUIIntegrationItem(
+                id: "google",
+                name: "Google",
+                methods: [.key(label: "API key"), .env(names: ["GEMINI_API_KEY"])],
+                connections: []
+            ),
+        ]
+
+        let isConnected = Mutex(false)
+        let transport = MockHTTPTransport { req in
+            if req.method == "POST" && req.url.contains("/api/integration/google/connect/key") {
+                isConnected.withLock { $0 = true }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204, headers: [:]), body: [])
+            }
+            let connectedNow = isConnected.withLock { $0 }
+            if req.method == "GET" && req.url.contains("/api/integration") {
+                let conns = connectedNow
+                    ? #"[{"type":"credential","id":"cred_g1","label":"Google API key","method":"key"}]"#
+                    : "[]"
+                let json = """
+                {"location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"data":[{"id":"google","name":"Google","methods":[{"type":"key","label":"API key"}],"connections":\(conns)}]}
+                """
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "GET" && req.url.contains("/api/provider") {
+                let data = connectedNow
+                    ? #"[{"id":"google","name":"Google","activation":"auto","package":"@opencode/ai/providers/google"}]"#
+                    : "[]"
+                let json = """
+                {"location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"data":\(data)}
+                """
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "GET" && req.url.contains("/api/model/default") {
+                let data = connectedNow
+                    ? #"{"id":"gemini-2.5-pro","modelID":"gemini-2.5-pro","providerID":"google","type":"chat","name":"Gemini 2.5 Pro","capabilities":{"tools":true,"input":["text"],"output":["text"],"temperature":true},"variants":[],"time":{"released":1750118400000},"cost":[],"status":"active","enabled":true,"limit":{"context":1048576,"output":65536}}"#
+                    : "null"
+                let json = """
+                {"location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"data":\(data)}
+                """
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            if req.method == "GET" && req.url.contains("/api/model") {
+                let data = connectedNow
+                    ? #"[{"id":"gemini-2.5-pro","modelID":"gemini-2.5-pro","providerID":"google","type":"chat","name":"Gemini 2.5 Pro","capabilities":{"tools":true,"input":["text"],"output":["text"],"temperature":true},"variants":[],"time":{"released":1750118400000},"cost":[],"status":"active","enabled":true,"limit":{"context":1048576,"output":65536}}]"#
+                    : "[]"
+                let json = """
+                {"location":{"directory":"/Users/dev/.t3/projects/swift-opencode"},"data":\(data)}
+                """
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array(json.utf8))
+            }
+            return HTTPResponse(head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]), body: Array("{}".utf8))
+        }
+
+        let harness = TUIRealParityHarness(width: 100, height: 34, state: state, transport: transport)
+        defer { harness.destroy() }
+
+        // Empty Model Picker shows direct "+ Connect a provider" row
+        harness.controller.openModelPicker()
+        let emptyModelFrame = harness.frame()
+        #expect(emptyModelFrame.contains("+ Connect a provider"))
+
+        // Pressing Enter on "+ Connect a provider" opens Connect Provider list
+        harness.testRenderer.mockInput.pressEnter()
+        #expect(harness.store.snapshot().activeDialog == .connectProvider)
+        #expect(harness.frame().contains("Google"))
+
+        // Pressing Enter on Google opens the API key prompt dialog
+        harness.testRenderer.mockInput.pressEnter()
+        #expect(harness.store.snapshot().activeDialog == .connectAPIKey)
+        let keyPromptFrame = harness.frame()
+        #expect(keyPromptFrame.contains("Connect Google"))
+        #expect(keyPromptFrame.contains("Enter your API key"))
+
+        // Type API key and submit
+        harness.testRenderer.mockInput.typeText("AIzaSyTestKey123")
+        harness.testRenderer.mockInput.pressEnter()
+
+        // Wait briefly for async connect/key -> refresh -> model picker transition
+        for _ in 0..<40 {
+            if harness.store.snapshot().activeDialog == .modelPicker && !harness.store.snapshot().models.isEmpty {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        let after = harness.store.snapshot()
+        #expect(after.activeDialog == .modelPicker)
+        #expect(after.modelPickerProviderID == "google")
+        #expect(after.models.contains(where: { $0.id == "gemini-2.5-pro" && $0.providerID == "google" }))
+        #expect(after.selectedModel?.id == "gemini-2.5-pro")
+        let unlockedFrame = harness.frame()
+        #expect(unlockedFrame.contains("Gemini 2.5 Pro"))
+
+        let recorded = transport.recordedRequests
+        let connectReq = recorded.first(where: { $0.method == "POST" && $0.url.contains("/api/integration/google/connect/key") })
+        #expect(connectReq != nil)
+        if let body = connectReq?.body {
+            #expect(String(decoding: body, as: UTF8.self).contains("AIzaSyTestKey123"))
         }
     }
 }

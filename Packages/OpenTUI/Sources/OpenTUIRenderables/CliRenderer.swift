@@ -730,6 +730,11 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         }
     }
 
+    /// Active Kitty keyboard protocol enhancement bitmask (`0` when disabled).
+    public var activeKittyKeyboardFlags: UInt32 {
+        kittyKeyboardFlags
+    }
+
     // parity: core/src/renderer.ts#CliRenderer.enableKittyKeyboard [status=implemented hash=60b9e808d6c9]
     public func enableKittyKeyboard(flags: UInt32 = kittyFlagDisambiguate | kittyFlagEventTypes) {
         kittyKeyboardFlags = flags

@@ -826,6 +826,7 @@ public let CredentialHandler = ServerHandlerGroup(
                     active: false,
                     value: created.value
                 )
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.json(ServerDataWrapper(data: entry))
         },
         ServerRoute(
@@ -839,6 +840,7 @@ public let CredentialHandler = ServerHandlerGroup(
             let id = CredentialSchema.ID(rawValue: rawID)
             let payload = try ctx.decodeJSONBody(UpdatePayload.self)
             try await ctx.runtime.credential.update(id, label: payload.label, value: nil)
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
         ServerRoute(
@@ -850,6 +852,7 @@ public let CredentialHandler = ServerHandlerGroup(
             let rawID = try ctx.requireParam("credentialID")
             let id = CredentialSchema.ID(rawValue: rawID)
             try await ctx.runtime.credential.activate(id)
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
         ServerRoute(
@@ -861,10 +864,18 @@ public let CredentialHandler = ServerHandlerGroup(
             let rawID = try ctx.requireParam("credentialID")
             let id = CredentialSchema.ID(rawValue: rawID)
             try await ctx.runtime.credential.remove(id)
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
     ]
 )
+
+private func emitIntegrationCatalogUpdated(_ bus: CoreBus.Service) async {
+    let empty = JSONValue.object([:])
+    await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: "integration.updated"), data: empty)
+    await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: "provider.updated"), data: empty)
+    await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: "model.updated"), data: empty)
+}
 
 private func formatCredentialEntries(_ credentials: [CoreProvider.Credential.Info]) -> [CredentialSchema.Entry] {
     var selected: [IntegrationID: CredentialSchema.ID] = [:]
@@ -1499,6 +1510,7 @@ public let IntegrationHandler = ServerHandlerGroup(
             } catch {
                 throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
             }
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
         ServerRoute(
@@ -1531,6 +1543,7 @@ public let IntegrationHandler = ServerHandlerGroup(
             } catch {
                 throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
             }
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
         ServerRoute(
@@ -1616,6 +1629,7 @@ public let IntegrationHandler = ServerHandlerGroup(
                 label: entry.label,
                 activate: true
             )
+            await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
         ServerRoute(

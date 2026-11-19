@@ -524,8 +524,23 @@ public enum TUIScreens {
 
         return AnyTUIView(
             HStack(spacing: 2, alignment: .center) {
-                // Left side: Running spinner + esc interrupt OR abbreviated path:branch
-                if !isHome && state.sessionStatus.isRunning {
+                // Left side: Leader chord hint OR Running spinner + esc interrupt OR abbreviated path:branch
+                if state.leaderArmed {
+                    let leaderHints = TUIUtil.truncateWidth(
+                        "m models  a agents  p connect  l sessions  n new  b sidebar",
+                        max(16, columnWidth - 10)
+                    )
+                    TUIText(
+                        StyledText(chunks: [
+                            TextChunk(text: "ctrl+x ", fg: agentColor, attributes: TextAttributes.bold),
+                            TextChunk(text: leaderHints, fg: theme.text.muted),
+                        ]),
+                        wrapMode: TextWrapMode.none,
+                        truncate: true
+                    )
+                    .id("prompt-footer-leader")
+                    .flexShrink(1)
+                } else if !isHome && state.sessionStatus.isRunning {
                     buildRunningPromptStatus(
                         state: state,
                         theme: theme,
@@ -542,7 +557,7 @@ public enum TUIScreens {
                 TUISpacer()
 
                 // Right side: shift+tab agents   ctrl+p commands (or context/cost + ctrl+p commands)
-                if showShortcuts {
+                if showShortcuts && !state.leaderArmed {
                     if showUsageOnSession {
                         HStack(spacing: 2) {
                             let usageParts: [String] = [
@@ -1098,11 +1113,34 @@ public enum TUIScreens {
         actions: TUIScreenActions
     ) -> AnyTUIView {
         let dialogTheme = theme.surface(.dialog)
-        let cardWidth = min(64, max(36, state.cols - 4))
+        let cardWidth = min(66, max(36, state.cols - 4))
         let innerWidth = max(24, cardWidth - 6)
         let topPad = max(2, state.rows / 5)
+        let cardBg = dialogTheme.background.base
+
+        if dialog == .connectAPIKey {
+            return buildAPIKeyDialogOverlay(
+                state: state,
+                dialogTheme: dialogTheme,
+                cardBg: cardBg,
+                cardWidth: cardWidth,
+                topPad: topPad,
+                actions: actions
+            )
+        }
+        if dialog == .connectOAuth {
+            return buildOAuthDialogOverlay(
+                state: state,
+                dialogTheme: dialogTheme,
+                cardBg: cardBg,
+                cardWidth: cardWidth,
+                topPad: topPad,
+                actions: actions
+            )
+        }
+
         let rows = state.dialogRows()
-        let maxVisible = max(4, min(10, state.rows - topPad - 8))
+        let maxVisible = max(4, min(11, state.rows - topPad - 8))
         let selectedIndex = rows.isEmpty ? 0 : min(max(0, state.dialogSelectedIndex), rows.count - 1)
         let startIdx = rows.count <= maxVisible
             ? 0
@@ -1118,9 +1156,33 @@ public enum TUIScreens {
             searchPlaceholder = "Search commands"
             emptyMessage = "No matching commands"
         case .modelPicker:
-            title = "Select model"
+            if let pid = state.modelPickerProviderID, !pid.isEmpty {
+                title = state.providers[pid] ?? state.integrations.first(where: { $0.id == pid })?.name ?? TUIUtil.titlecase(pid)
+            } else {
+                title = "Select model"
+            }
             searchPlaceholder = "Search models"
-            emptyMessage = state.models.isEmpty ? "No models available from server" : "No matching models"
+            emptyMessage = state.models.isEmpty ? "No models connected — press ctrl+a to connect a provider" : "No matching models"
+        case .connectProvider:
+            title = "Connect a provider"
+            searchPlaceholder = "Search providers"
+            emptyMessage = state.visibleProviderIntegrations.isEmpty ? "No providers available" : "No matching providers"
+        case .connectMethod:
+            title = "Connect \(state.connectTargetIntegrationName)"
+            searchPlaceholder = "Select method"
+            emptyMessage = "No connection methods available"
+        case .manageConnections:
+            title = state.connectTargetIntegrationName.isEmpty ? "Connected accounts" : state.connectTargetIntegrationName
+            searchPlaceholder = "Filter accounts"
+            emptyMessage = "No connected accounts"
+        case .agentPicker:
+            title = "Select agent"
+            searchPlaceholder = "Search agents"
+            emptyMessage = "No matching agents"
+        case .variantPicker:
+            title = "Select variant"
+            searchPlaceholder = "Search variants"
+            emptyMessage = "No variants available"
         case .sessionList:
             title = "Sessions"
             searchPlaceholder = "Search sessions"
@@ -1133,11 +1195,72 @@ public enum TUIScreens {
             title = "MCP Servers"
             searchPlaceholder = "Filter MCP servers"
             emptyMessage = "No MCP servers configured"
+        case .connectAPIKey, .connectOAuth:
+            title = "Connect"
+            searchPlaceholder = ""
+            emptyMessage = ""
         }
 
-        let cardBg = dialogTheme.background.base
         let selBg = dialogTheme.background.action.primary.focused
         let selFg = dialogTheme.text.action.primary.focused
+
+        let footerChunks: [TextChunk]
+        switch dialog {
+        case .modelPicker:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "select", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  ctrl+a ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "connect", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  ctrl+f ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "favorite", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "  esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .connectProvider:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "connect", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ↑↓ ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "navigate", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .manageConnections:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "select", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ctrl+d ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "remove", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "back", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .connectMethod:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "select", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "back", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        case .mcpStatus:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "toggle", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ↑↓ ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "navigate", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        default:
+            footerChunks = [
+                TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "select", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   ↑↓ ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "navigate", fg: dialogTheme.text.muted, bg: cardBg),
+                TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
+                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+            ]
+        }
 
         return AnyTUIView(
             TUIBox(
@@ -1181,7 +1304,7 @@ public enum TUIScreens {
                             onInput: actions.onDialogFilterInput,
                             onSubmit: { _ in actions.onDialogSubmit() }
                         )
-                        .key("dialog-filter-input")
+                        .key("dialog-filter-input-\(dialog.rawValue)")
                         .id("dialog-filter-input")
                         .width(.percent(100))
                         .focused(true)
@@ -1212,15 +1335,233 @@ public enum TUIScreens {
                         }
                         .width(.percent(100))
 
-                        // Footer Hints (`enter select · ↑↓ navigate · esc close`)
+                        // Footer Hints
+                        TUIText(
+                            StyledText(chunks: footerChunks),
+                            bg: .rgba(cardBg),
+                            wrapMode: TextWrapMode.none,
+                            truncate: true
+                        )
+                    }
+                    .width(.percent(100))
+                }
+                .id("opencode-dialog-card")
+                .padding(top: 1, right: 3, bottom: 1, left: 3)
+                .width(cardWidth)
+            }
+            .id("opencode-dialog-backdrop")
+            .position(.absolute, top: 0, right: 0, bottom: 0, left: 0)
+            .alignItems(.center)
+            .justifyContent(.flexStart)
+            .padding(top: .point(Float(topPad)))
+            .zIndex(3000)
+        )
+    }
+
+    private static func buildAPIKeyDialogOverlay(
+        state: TUIInteractiveState,
+        dialogTheme: ResolvedTheme,
+        cardBg: RGBA,
+        cardWidth: Int,
+        topPad: Int,
+        actions: TUIScreenActions
+    ) -> AnyTUIView {
+        let title = "Connect \(state.connectTargetIntegrationName)"
+        let inputBg = dialogTheme.decrease(cardBg)
+
+        return AnyTUIView(
+            TUIBox(
+                border: false,
+                backgroundColor: .rgba(RGBA.fromInts(0, 0, 0, 140)),
+                shouldFill: true
+            ) {
+                TUIBox(
+                    border: false,
+                    backgroundColor: .rgba(cardBg),
+                    shouldFill: true
+                ) {
+                    VStack(spacing: 1) {
+                        HStack(spacing: 2) {
+                            TUIText(
+                                title,
+                                fg: .rgba(dialogTheme.text.base),
+                                bg: .rgba(cardBg),
+                                attributes: TextAttributes.bold,
+                                wrapMode: TextWrapMode.none
+                            )
+                            TUISpacer()
+                            TUIText("esc", fg: .rgba(dialogTheme.text.muted), bg: .rgba(cardBg), wrapMode: TextWrapMode.none)
+                                .onMouseUp { _ in actions.onDialogClose() }
+                        }
+                        .width(.percent(100))
+
+                        TUIText(
+                            "Enter your \(state.connectMethodLabel) to connect \(state.connectTargetIntegrationName).",
+                            fg: .rgba(dialogTheme.text.muted),
+                            bg: .rgba(cardBg),
+                            wrapMode: .word
+                        )
+                        .width(.percent(100))
+
+                        TUIBox(
+                            border: false,
+                            backgroundColor: .rgba(inputBg),
+                            shouldFill: true
+                        ) {
+                            TUIInput(
+                                value: state.dialogFilter,
+                                placeholder: "Paste API key…",
+                                placeholderColor: .rgba(dialogTheme.text.muted),
+                                maxLength: 512,
+                                textColor: .rgba(dialogTheme.text.base),
+                                backgroundColor: .rgba(inputBg),
+                                focusedTextColor: .rgba(dialogTheme.text.formfield.focused),
+                                focusedBackgroundColor: .rgba(inputBg),
+                                showCursor: !state.connectSubmitting,
+                                cursorColor: .rgba(dialogTheme.text.formfield.focused),
+                                onInput: actions.onDialogFilterInput,
+                                onSubmit: { _ in actions.onDialogSubmit() }
+                            )
+                            .key("dialog-apikey-input")
+                            .id("dialog-apikey-input")
+                            .width(.percent(100))
+                            .focused(true)
+                        }
+                        .padding(top: 0, right: 1, bottom: 0, left: 1)
+                        .width(.percent(100))
+
+                        if state.connectSubmitting {
+                            TUIText("Connecting…", fg: .rgba(dialogTheme.text.muted), bg: .rgba(cardBg))
+                        } else if let err = state.connectErrorMessage, !err.isEmpty {
+                            TUIText(err, fg: .rgba(dialogTheme.text.feedback.error.base), bg: .rgba(cardBg), wrapMode: .word)
+                                .width(.percent(100))
+                        }
+
                         TUIText(
                             StyledText(chunks: [
                                 TextChunk(text: "enter ", fg: dialogTheme.text.base, bg: cardBg),
-                                TextChunk(text: dialog == .mcpStatus ? "toggle" : "select", fg: dialogTheme.text.muted, bg: cardBg),
-                                TextChunk(text: "   ↑↓ ", fg: dialogTheme.text.base, bg: cardBg),
-                                TextChunk(text: "navigate", fg: dialogTheme.text.muted, bg: cardBg),
+                                TextChunk(text: "connect", fg: dialogTheme.text.muted, bg: cardBg),
                                 TextChunk(text: "   esc ", fg: dialogTheme.text.base, bg: cardBg),
-                                TextChunk(text: "close", fg: dialogTheme.text.muted, bg: cardBg),
+                                TextChunk(text: "back", fg: dialogTheme.text.muted, bg: cardBg),
+                            ]),
+                            bg: .rgba(cardBg),
+                            wrapMode: TextWrapMode.none
+                        )
+                    }
+                    .width(.percent(100))
+                }
+                .id("opencode-dialog-card")
+                .padding(top: 1, right: 3, bottom: 1, left: 3)
+                .width(cardWidth)
+            }
+            .id("opencode-dialog-backdrop")
+            .position(.absolute, top: 0, right: 0, bottom: 0, left: 0)
+            .alignItems(.center)
+            .justifyContent(.flexStart)
+            .padding(top: .point(Float(topPad)))
+            .zIndex(3000)
+        )
+    }
+
+    private static func buildOAuthDialogOverlay(
+        state: TUIInteractiveState,
+        dialogTheme: ResolvedTheme,
+        cardBg: RGBA,
+        cardWidth: Int,
+        topPad: Int,
+        actions: TUIScreenActions
+    ) -> AnyTUIView {
+        let title = "Connect \(state.connectTargetIntegrationName)"
+        let inputBg = dialogTheme.decrease(cardBg)
+
+        return AnyTUIView(
+            TUIBox(
+                border: false,
+                backgroundColor: .rgba(RGBA.fromInts(0, 0, 0, 140)),
+                shouldFill: true
+            ) {
+                TUIBox(
+                    border: false,
+                    backgroundColor: .rgba(cardBg),
+                    shouldFill: true
+                ) {
+                    VStack(spacing: 1) {
+                        HStack(spacing: 2) {
+                            TUIText(
+                                title,
+                                fg: .rgba(dialogTheme.text.base),
+                                bg: .rgba(cardBg),
+                                attributes: TextAttributes.bold,
+                                wrapMode: TextWrapMode.none
+                            )
+                            TUISpacer()
+                            TUIText("esc", fg: .rgba(dialogTheme.text.muted), bg: .rgba(cardBg), wrapMode: TextWrapMode.none)
+                                .onMouseUp { _ in actions.onDialogClose() }
+                        }
+                        .width(.percent(100))
+
+                        if let url = state.connectOAuthURL, !url.isEmpty {
+                            TUIText(
+                                url,
+                                fg: .rgba(dialogTheme.text.action.primary.selected),
+                                bg: .rgba(cardBg),
+                                wrapMode: .word
+                            )
+                            .width(.percent(100))
+                        }
+
+                        if let instructions = state.connectOAuthInstructions, !instructions.isEmpty {
+                            TUIText(
+                                instructions,
+                                fg: .rgba(dialogTheme.text.muted),
+                                bg: .rgba(cardBg),
+                                wrapMode: .word
+                            )
+                            .width(.percent(100))
+                        }
+
+                        if state.connectOAuthNeedsCode {
+                            TUIBox(
+                                border: false,
+                                backgroundColor: .rgba(inputBg),
+                                shouldFill: true
+                            ) {
+                                TUIInput(
+                                    value: state.dialogFilter,
+                                    placeholder: "Paste authorization code…",
+                                    placeholderColor: .rgba(dialogTheme.text.muted),
+                                    maxLength: 512,
+                                    textColor: .rgba(dialogTheme.text.base),
+                                    backgroundColor: .rgba(inputBg),
+                                    focusedTextColor: .rgba(dialogTheme.text.formfield.focused),
+                                    focusedBackgroundColor: .rgba(inputBg),
+                                    showCursor: !state.connectSubmitting,
+                                    cursorColor: .rgba(dialogTheme.text.formfield.focused),
+                                    onInput: actions.onDialogFilterInput,
+                                    onSubmit: { _ in actions.onDialogSubmit() }
+                                )
+                                .key("dialog-oauth-input")
+                                .id("dialog-oauth-input")
+                                .width(.percent(100))
+                                .focused(true)
+                            }
+                            .padding(top: 0, right: 1, bottom: 0, left: 1)
+                            .width(.percent(100))
+                        } else if state.connectErrorMessage == nil {
+                            TUIText("Waiting for authorization…", fg: .rgba(dialogTheme.text.muted), bg: .rgba(cardBg))
+                        }
+
+                        if let err = state.connectErrorMessage, !err.isEmpty {
+                            TUIText(err, fg: .rgba(dialogTheme.text.feedback.error.base), bg: .rgba(cardBg), wrapMode: .word)
+                                .width(.percent(100))
+                        }
+
+                        TUIText(
+                            StyledText(chunks: [
+                                TextChunk(text: state.connectOAuthNeedsCode ? "enter " : "", fg: dialogTheme.text.base, bg: cardBg),
+                                TextChunk(text: state.connectOAuthNeedsCode ? "complete   " : "", fg: dialogTheme.text.muted, bg: cardBg),
+                                TextChunk(text: "esc ", fg: dialogTheme.text.base, bg: cardBg),
+                                TextChunk(text: "cancel", fg: dialogTheme.text.muted, bg: cardBg),
                             ]),
                             bg: .rgba(cardBg),
                             wrapMode: TextWrapMode.none

@@ -167,6 +167,7 @@ public enum TUIInteractiveLoop {
     }
 
     private static let doubleEscInterruptWindowMs: Double = 2_000
+    private static let leaderTimeoutWindowMs: Double = 1_500
     private static let spinnerFrameIntervalMs: Double = 80
 
     /// Runs the live interactive terminal UI loop over `PlatformTerminalBackend` with automatic
@@ -231,6 +232,7 @@ public enum TUIInteractiveLoop {
                 exitOnCtrlC: false,
                 debounceDelay: 0,
                 useMouse: resolved.mouse,
+                useKittyKeyboard: KittyKeyboardOptions(disambiguate: true, alternateKeys: true),
                 backgroundColor: initialTheme.background.base,
                 clock: clock
             )
@@ -344,6 +346,10 @@ public enum TUIInteractiveLoop {
                     var changed = false
                     if state.interruptArmed && (clockNow - state.interruptArmedAtMs >= doubleEscInterruptWindowMs) {
                         state.interruptArmed = false
+                        changed = true
+                    }
+                    if state.leaderArmed && (clockNow - state.leaderArmedAtMs >= leaderTimeoutWindowMs) {
+                        state.leaderArmed = false
                         changed = true
                     }
                     if state.sessionStatus.isRunning {
@@ -465,6 +471,35 @@ public enum TUIInteractiveLoop {
             providers: ["anthropic": "Anthropic", "openai": "OpenAI"],
             models: [claude, gpt],
             selectedModel: claude,
+            integrations: [
+                TUIIntegrationItem(
+                    id: "opencode",
+                    name: "OpenCode",
+                    methods: [.key(label: "API key"), .env(names: ["OPENCODE_API_KEY"])]
+                ),
+                TUIIntegrationItem(
+                    id: "openai",
+                    name: "OpenAI",
+                    methods: [.key(label: "API key"), .env(names: ["OPENAI_API_KEY"])],
+                    connections: [.env(name: "OPENAI_API_KEY", statusMessage: nil)]
+                ),
+                TUIIntegrationItem(
+                    id: "anthropic",
+                    name: "Anthropic",
+                    methods: [.key(label: "API key"), .env(names: ["ANTHROPIC_API_KEY"])],
+                    connections: [.env(name: "ANTHROPIC_API_KEY", statusMessage: nil)]
+                ),
+                TUIIntegrationItem(
+                    id: "google",
+                    name: "Google",
+                    methods: [.key(label: "API key"), .env(names: ["GEMINI_API_KEY"])]
+                ),
+                TUIIntegrationItem(
+                    id: "openrouter",
+                    name: "OpenRouter",
+                    methods: [.key(label: "API key"), .env(names: ["OPENROUTER_API_KEY"])]
+                ),
+            ],
             mcpServers: [
                 TUIMCPServerItem(name: "github", status: .connected),
                 TUIMCPServerItem(name: "linear", status: .connected),
@@ -528,6 +563,8 @@ public enum TUIInteractiveLoop {
                 store.withLock { state in
                     state.dialogFilter = value
                     state.dialogSelectedIndex = 0
+                    state.connectErrorMessage = nil
+                    state.pendingDeleteCredentialID = nil
                 }
                 clientController.previewThemeRowIfNeeded()
                 markDirty()
@@ -536,7 +573,7 @@ public enum TUIInteractiveLoop {
                 clientController.confirmSelectedDialogRow()
             },
             onDialogClose: {
-                clientController.closeDialog(commitTheme: false)
+                clientController.navigateBackFromSubDialog()
             },
             onOpenMCPDialog: {
                 clientController.openDialog(.mcpStatus)
@@ -545,9 +582,17 @@ public enum TUIInteractiveLoop {
 
         _ = renderer.keyInput.onKeypress { [weak renderer] event in
             let snap = store.snapshot()
+            let keyName = event.name.lowercased()
+            let isSuper = (event.`super` == true)
+            let isCtrlOrSuper = event.ctrl || isSuper
 
-            // Ctrl+D always exits cleanly
-            if event.ctrl && event.name == "d" {
+            // Ctrl+D: remove selected credential inside Manage Connections, otherwise exit cleanly
+            if event.ctrl && keyName == "d" {
+                if snap.activeDialog == .manageConnections {
+                    clientController.requestRemoveSelectedCredential()
+                    event.preventDefault()
+                    return
+                }
                 store.withLock {
                     $0.shouldQuit = true
                     $0.exitReason = "ctrl_d"
@@ -558,7 +603,13 @@ public enum TUIInteractiveLoop {
             }
 
             // Ctrl+C: close/clear dialog filter, clear non-empty prompt, or quit
-            if event.ctrl && event.name == "c" {
+            if event.ctrl && keyName == "c" {
+                if snap.leaderArmed {
+                    store.withLock { $0.leaderArmed = false }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                }
                 if snap.activeDialog != nil {
                     if !snap.dialogFilter.isEmpty {
                         store.withLock {
@@ -590,8 +641,8 @@ public enum TUIInteractiveLoop {
                 return
             }
 
-            // Ctrl+P toggles Command Palette
-            if event.ctrl && event.name == "p" {
+            // Ctrl+P / Cmd+P / Cmd+K toggles Command Palette
+            if (isCtrlOrSuper && keyName == "p") || (isSuper && keyName == "k") {
                 if snap.activeDialog == .commandPalette {
                     clientController.closeDialog(commitTheme: false)
                 } else {
@@ -601,35 +652,41 @@ public enum TUIInteractiveLoop {
                 return
             }
 
-            // Ctrl+T toggles Light / Dark theme mode immediately
-            if event.ctrl && event.name == "t" {
-                clientController.toggleThemeMode()
-                if let r = renderer {
-                    r.setBackgroundColor(store.snapshot().resolveTheme().background.base)
+            // Modal Dialog Keyboard Handling
+            if let activeDialog = snap.activeDialog {
+                // Inside Model Picker: Ctrl+A / Cmd+A opens Connect Provider; Ctrl+F / Cmd+F toggles Favorite
+                if activeDialog == .modelPicker {
+                    if isCtrlOrSuper && keyName == "a" {
+                        clientController.openConnectProvider()
+                        event.preventDefault()
+                        return
+                    }
+                    if isCtrlOrSuper && keyName == "f" {
+                        clientController.toggleFavoriteSelectedModel()
+                        event.preventDefault()
+                        return
+                    }
                 }
-                event.preventDefault()
-                return
-            }
 
-            // Ctrl+B toggles right Session Sidebar
-            if event.ctrl && event.name == "b" {
-                clientController.toggleSidebar()
-                event.preventDefault()
-                return
-            }
+                // Input prompt dialogs (API Key / OAuth Code): let editing & paste pass through
+                if activeDialog.isInputPrompt {
+                    switch keyName {
+                    case "escape":
+                        clientController.navigateBackFromSubDialog()
+                        event.preventDefault()
+                        return
+                    case "return", "enter":
+                        clientController.confirmSelectedDialogRow()
+                        event.preventDefault()
+                        return
+                    default:
+                        return
+                    }
+                }
 
-            // Ctrl+N starts a new session
-            if event.ctrl && event.name == "n" {
-                clientController.startNewSession()
-                event.preventDefault()
-                return
-            }
-
-            // Modal Dialog Keyboard Handling (arrows, pageup/down, enter, escape)
-            if snap.activeDialog != nil {
-                switch event.name {
+                switch keyName {
                 case "escape":
-                    clientController.closeDialog(commitTheme: false)
+                    clientController.navigateBackFromSubDialog()
                     event.preventDefault()
                     return
 
@@ -664,8 +721,113 @@ public enum TUIInteractiveLoop {
                 }
             }
 
+            // Leader Chord Handling (`Ctrl+X` followed by `m`, `a`, `p`, `l`, `n`, `b`, `c`, `t`, `v`, `q`)
+            if snap.leaderArmed {
+                store.withLock { $0.leaderArmed = false }
+                switch keyName {
+                case "m":
+                    clientController.openModelPicker(providerID: nil)
+                case "a":
+                    clientController.openAgentPicker()
+                case "p", "k":
+                    clientController.openConnectProvider()
+                case "l":
+                    clientController.openDialog(.sessionList)
+                    Task { await clientController.refreshSessions() }
+                case "n":
+                    clientController.startNewSession()
+                case "b":
+                    clientController.toggleSidebar()
+                case "c":
+                    clientController.compactActiveSession()
+                case "t":
+                    clientController.openDialog(.themePicker)
+                case "v":
+                    clientController.openVariantPicker()
+                case "q":
+                    store.withLock {
+                        $0.shouldQuit = true
+                        $0.exitReason = "leader_quit"
+                    }
+                    markDirty()
+                default:
+                    markDirty()
+                }
+                event.preventDefault()
+                return
+            }
+
+            // Arm `<leader>` (`Ctrl+X`)
+            if event.ctrl && !event.shift && keyName == "x" {
+                let nowMs = renderer?.clock.now() ?? 0
+                store.withLock { state in
+                    state.leaderArmed = true
+                    state.leaderArmedAtMs = nowMs
+                }
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            // Cmd+M opens Model Picker directly
+            if isSuper && keyName == "m" {
+                clientController.openModelPicker(providerID: nil)
+                event.preventDefault()
+                return
+            }
+
+            // Cmd+A when prompt is empty opens Agent Picker (when prompt has text, let TUIInput select all)
+            if isSuper && keyName == "a" && snap.promptText.isEmpty {
+                clientController.openAgentPicker()
+                event.preventDefault()
+                return
+            }
+
+            // Ctrl+O / Cmd+O opens Session List (upstream `open.menu`)
+            if isCtrlOrSuper && keyName == "o" {
+                clientController.openDialog(.sessionList)
+                Task { await clientController.refreshSessions() }
+                event.preventDefault()
+                return
+            }
+
+            // F2 / Shift+F2 cycles recent models (upstream `model.cycle_recent`)
+            if keyName == "f2" {
+                clientController.cycleRecentModel(direction: event.shift ? -1 : 1)
+                event.preventDefault()
+                return
+            }
+
+            // Ctrl+Shift+T cycles model reasoning variants; Ctrl+T toggles Light / Dark theme mode
+            if event.ctrl && keyName == "t" {
+                if event.shift {
+                    clientController.cycleVariant()
+                } else {
+                    clientController.toggleThemeMode()
+                    if let r = renderer {
+                        r.setBackgroundColor(store.snapshot().resolveTheme().background.base)
+                    }
+                }
+                event.preventDefault()
+                return
+            }
+
+            // Ctrl+B toggles right Session Sidebar
+            if event.ctrl && keyName == "b" {
+                clientController.toggleSidebar()
+                event.preventDefault()
+                return
+            }
+
+            // Ctrl+N / Cmd+N starts a new session
+            if isCtrlOrSuper && keyName == "n" {
+                clientController.startNewSession()
+                event.preventDefault()
+                return
+            }
+
             // Shift+Tab cycles active agent (`Build` <-> `Plan` <-> server agents)
-            if event.name == "tab" && event.shift {
+            if keyName == "tab" && event.shift {
                 clientController.cycleAgent(direction: 1)
                 event.preventDefault()
                 return
@@ -797,6 +959,7 @@ public enum TUIInteractiveLoop {
         markDirty: @escaping @Sendable () -> Void
     ) {
         store.withLock { state in
+            state.pendingDeleteCredentialID = nil
             let count = state.dialogRows().count
             guard count > 0 else {
                 state.dialogSelectedIndex = 0
