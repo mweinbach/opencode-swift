@@ -38,7 +38,7 @@ public struct SSHSafeInvoke: Sendable {
 }
 
 /// Build a `SSHSafeInvoke` over a potentially throwing `onError` sink.
-// parity: ssh/src/safe.ts#createSafeInvoke [status=implemented hash=fc9c172ed919]
+// parity: ssh/src/safe.ts#createSafeInvoke [status=implemented hash=c9b9a835f470]
 public func createSafeInvoke(
     onError: @escaping @Sendable (any Error) throws -> Void
 ) -> SSHSafeInvoke {

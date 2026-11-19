@@ -625,7 +625,7 @@ public func sceneSetDimension(
 // MARK: - YogaHost
 
 /// Callback and config lifecycle host matching `core/src/yoga.internal.ts#YogaHost`.
-// parity: core/src/yoga.internal.ts#YogaHost [status=implemented hash=ff8eb7b2db45]
+// parity: core/src/yoga.internal.ts#YogaHost [status=implemented hash=9942af05bc75]
 public final class YogaHost: @unchecked Sendable {
     public static let shared = YogaHost()
 
@@ -728,7 +728,7 @@ public final class YogaHost: @unchecked Sendable {
         return result!
     }
 
-    // parity: core/src/yoga.internal.ts#YogaHost.throwCallbackError [status=implemented hash=b72729d528aa]
+    // parity: core/src/yoga.internal.ts#YogaHost.throwCallbackError [status=implemented hash=5d1f85c73a2e]
     public func throwCallbackError(failure: (any Error)? = nil) throws {
         if callbackDepth != 0 || mutationDepth != 0 {
             if let failure { throw failure }
@@ -736,11 +736,11 @@ public final class YogaHost: @unchecked Sendable {
         }
         let cbErr = callbackError
         callbackError = nil
-        if let failure, cbErr != nil {
+        if let failure, let cbErr {
             throw YogaError(
                 operation: "runMutation",
                 status: .exception,
-                message: "Yoga operation and callback both failed: \(failure)"
+                message: "Yoga operation and callback both failed: \(failure) | \(cbErr)"
             )
         }
         if let failure { throw failure }
@@ -764,16 +764,46 @@ public final class YogaHost: @unchecked Sendable {
 
 // MARK: - YogaConfig
 
+/// Diagnostic logger callback attached to a `YogaConfig` via `setLogger(_:)`.
+public typealias YogaNativeLogger = @Sendable (LogLevel, String) -> Void
+
+/// Measure trampoline callback registered on a `YogaConfig` via `yogaConfigSetCallbacks`.
+public typealias YogaJSMeasureTrampoline = @Sendable (YogaNode, Float, UInt32, Float, UInt32) -> Void
+
+/// Dirtied trampoline callback registered on a `YogaConfig` via `yogaConfigSetCallbacks`.
+public typealias YogaJSDirtiedTrampoline = @Sendable (YogaNode) -> Void
+
+/// Native Yoga config callbacks matching `native/src/yoga.zig#Callbacks`.
+public struct YogaBridgeCallbacks: Sendable {
+    public var measure: (@Sendable (YogaNode, Float, UInt32, Float, UInt32) -> FlexSize)?
+    public var dirtied: (@Sendable (YogaNode) -> Void)?
+
+    public init(
+        measure: (@Sendable (YogaNode, Float, UInt32, Float, UInt32) -> FlexSize)? = nil,
+        dirtied: (@Sendable (YogaNode) -> Void)? = nil
+    ) {
+        self.measure = measure
+        self.dirtied = dirtied
+    }
+}
+
 /// Yoga layout configuration matching `core/src/yoga.ts#Config`.
-// parity: core/src/yoga.ts#Config [status=implemented hash=e288493c1b02]
+// parity: core/src/yoga.ts#Config [status=implemented hash=05b741fdb293]
 public final class YogaConfig: @unchecked Sendable {
     public let id: UInt64
     public let host: YogaHost
-    private let ownsConfig: Bool
+    internal let ownsConfig: Bool
 
     internal var nodes: [ObjectIdentifier: YogaNode] = [:]
     internal var measures: [ObjectIdentifier: YogaMeasureFunction] = [:]
     internal var dirtied: [ObjectIdentifier: YogaDirtiedFunction] = [:]
+    internal var nativeCallbacks: YogaBridgeCallbacks = YogaBridgeCallbacks()
+    internal var logger: YogaNativeLogger? = nil
+    internal var callbackOwnerID: UInt64? = nil
+    internal var jsMeasureCallback: YogaJSMeasureTrampoline? = nil
+    internal var jsDirtiedCallback: YogaJSDirtiedTrampoline? = nil
+    internal var measureResult: FlexSize = FlexSize(width: .nan, height: .nan)
+    internal var roundsPositionsFromAbsoluteEdges: Bool = false
 
     private var freed: Bool = false
     private var callbacksInstalled: Bool = false
@@ -784,11 +814,25 @@ public final class YogaConfig: @unchecked Sendable {
 
     public var isFreed: Bool { freed }
 
-    private init(id: UInt64, host: YogaHost, ownsConfig: Bool) {
+    private init(id: UInt64, host: YogaHost, ownsConfig: Bool, callbacks: YogaBridgeCallbacks = YogaBridgeCallbacks()) {
         self.id = id
         self.host = host
         self.ownsConfig = ownsConfig
+        self.nativeCallbacks = callbacks
+        self._useWebDefaults = false
+        self._pointScaleFactor = 1.0
         host.configs[id] = self
+    }
+
+    /// Initializes a managed Yoga configuration with default OpenTUI settings (`useWebDefaults = false`,
+    /// `pointScaleFactor = 1.0`), matching `native/src/yoga.zig#Config.init`.
+    // parity: native/src/yoga.zig#Config.init [status=implemented hash=5ddbd2aecf67]
+    public convenience init(
+        host: YogaHost = .shared,
+        callbacks: YogaBridgeCallbacks = YogaBridgeCallbacks(),
+        heapOwned: Bool = true
+    ) {
+        self.init(id: host.allocateConfigId(), host: host, ownsConfig: heapOwned, callbacks: callbacks)
     }
 
     // parity: core/src/yoga.ts#Config.create [status=implemented hash=19d67d10933b]
@@ -809,6 +853,74 @@ public final class YogaConfig: @unchecked Sendable {
         try config.free()
     }
 
+    /// Tears down this configuration once all owned nodes have been freed,
+    /// matching `native/src/yoga.zig#Config.deinit`.
+    // parity: native/src/yoga.zig#Config.deinit [status=implemented hash=eaed8353a07b]
+    public func deinitConfig() throws(YogaError) {
+        guard !freed else { return }
+        if hasLiveNodes() {
+            throw YogaError(
+                operation: "Config.deinit",
+                status: .busy,
+                message: "Cannot deinit Yoga config while Yoga nodes are active"
+            )
+        }
+        measures.removeAll()
+        dirtied.removeAll()
+        nativeCallbacks = YogaBridgeCallbacks()
+        logger = nil
+        callbackOwnerID = nil
+        jsMeasureCallback = nil
+        jsDirtiedCallback = nil
+        measureResult = FlexSize(width: .nan, height: .nan)
+        callbacksInstalled = false
+        host.configs.removeValue(forKey: id)
+        freed = true
+    }
+
+    /// Attaches a diagnostic logger to this configuration, matching `native/src/yoga.zig#Config.setLogger`.
+    // parity: native/src/yoga.zig#Config.setLogger [status=implemented hash=30a76771ac3f]
+    public func setLogger(_ logger: YogaNativeLogger?) {
+        if freed { return }
+        self.logger = logger
+    }
+
+    /// Emits a formatted Yoga diagnostic message to the configured logger, if present.
+    public func emitLog(level: LogLevel, message: String) {
+        guard !freed, let logger else { return }
+        logger(level, "Yoga: \(message)")
+    }
+
+    /// Allocates and registers a new `YogaNode` owned by this configuration,
+    /// matching `native/src/yoga.zig#Config.createNode`.
+    // parity: native/src/yoga.zig#Config.createNode [status=implemented hash=f18385c5707e]
+    public func createNode() throws(YogaError) -> YogaNode {
+        try assertAlive()
+        return YogaNode.createWithConfig(self)
+    }
+
+    /// Returns whether this configuration currently owns any live (unfreed) nodes,
+    /// matching `native/src/yoga.zig#Config.hasLiveNodes`.
+    // parity: native/src/yoga.zig#Config.hasLiveNodes [status=implemented hash=b8b37fdbee96]
+    public func hasLiveNodes() -> Bool {
+        !nodes.isEmpty
+    }
+
+    /// Enables or disables scene-mode absolute-edge rounding and list layout support.
+    public func setRoundsPositionsFromAbsoluteEdges(_ enabled: Bool) {
+        if freed { return }
+        roundsPositionsFromAbsoluteEdges = enabled
+    }
+
+    internal func hasActiveLayout() -> Bool {
+        for node in nodes.values {
+            if node.treeRoot().activeRoot != nil {
+                return true
+            }
+        }
+        return false
+    }
+
     // parity: core/src/yoga.ts#Config.free [status=implemented hash=303fddad7056]
     public func free() throws {
         if freed { return }
@@ -816,10 +928,14 @@ public final class YogaConfig: @unchecked Sendable {
         try assertUnused()
         measures.removeAll()
         dirtied.removeAll()
+        nativeCallbacks = YogaBridgeCallbacks()
+        logger = nil
+        callbackOwnerID = nil
+        jsMeasureCallback = nil
+        jsDirtiedCallback = nil
         callbacksInstalled = false
         host.configs.removeValue(forKey: id)
         freed = true
-        _ = ownsConfig
     }
 
     // parity: core/src/yoga.ts#Config.assertUnused [status=implemented hash=f2a26d07d4fe]
@@ -866,6 +982,7 @@ public final class YogaConfig: @unchecked Sendable {
     // parity: core/src/yoga.ts#Config.setPointScaleFactor [status=implemented hash=ef59c63c0f14]
     public func setPointScaleFactor(_ pointScaleFactor: Float) {
         if freed { return }
+        guard pointScaleFactor.isFinite && pointScaleFactor >= 0 else { return }
         _pointScaleFactor = pointScaleFactor
         for node in nodes.values {
             node.flexNode.pointScaleFactor = pointScaleFactor
@@ -917,6 +1034,11 @@ public final class YogaNode: @unchecked Sendable {
     private weak var _parent: YogaNode?
     private var _children: [YogaNode] = []
     private var freed: Bool = false
+
+    internal var isPoisoned: Bool = false
+    internal var activeRoot: YogaNode? = nil
+    internal var measureError: YogaStatus = .ok
+    internal var layoutMode: LayoutMode = .flex
 
     private var _flexShorthand: Float = .nan
     private var _flexGrowExplicit: Float = .nan
@@ -1745,6 +1867,92 @@ public final class YogaNode: @unchecked Sendable {
         flexNode.dirtiedFunc = nil
     }
 
+    // MARK: Internal Native Bridge Helpers
+
+    internal func treeRoot() -> YogaNode {
+        var current = self
+        while let parent = current._parent {
+            current = parent
+        }
+        return current
+    }
+
+    internal func subtreeMaxDepth() -> UInt32 {
+        var queue: [(node: YogaNode, depth: UInt32)] = [(self, 1)]
+        var index = 0
+        var maxDepth: UInt32 = 1
+        while index < queue.count {
+            let entry = queue[index]
+            index += 1
+            if entry.depth > maxDepth {
+                maxDepth = entry.depth
+            }
+            for child in entry.node._children {
+                queue.append((child, entry.depth &+ 1))
+            }
+        }
+        return maxDepth
+    }
+
+    internal func poisonTree() {
+        let top = treeRoot()
+        var queue: [YogaNode] = [top]
+        var index = 0
+        while index < queue.count {
+            let current = queue[index]
+            index += 1
+            current.isPoisoned = true
+            queue.append(contentsOf: current._children)
+        }
+    }
+
+    internal func moveChildInternal(_ child: YogaNode, to finalIndex: Int) -> YogaStatus {
+        let previous = child._parent
+        if let previous {
+            guard let prevIndex = previous._children.firstIndex(where: { $0 === child }) else {
+                return .invalidArgument
+            }
+            if previous === self && prevIndex == finalIndex {
+                return .ok
+            }
+            previous._children.remove(at: prevIndex)
+            previous.flexNode.removeChild(child.flexNode)
+        }
+        let clamped = max(0, min(finalIndex, _children.count))
+        _children.insert(child, at: clamped)
+        child._parent = self
+        flexNode.insertChild(child.flexNode, at: clamped)
+        if previous != nil {
+            child.flexNode.computedLayout = .zero
+        }
+        return .ok
+    }
+
+    internal func resetNativeState() {
+        flexNode.reset()
+        flexNode.pointScaleFactor = config.getPointScaleFactor()
+        if config.useWebDefaults() {
+            flexNode.style.flexDirection = .row
+            flexNode.style.alignContent = .stretch
+            flexNode.style.flexShrink = 1
+        }
+        _flexShorthand = .nan
+        _flexGrowExplicit = .nan
+        _flexShrinkExplicit = .nan
+        _isReferenceBaseline = false
+        _alwaysFormsContainingBlock = false
+        layoutMode = .flex
+        isPoisoned = false
+        activeRoot = nil
+        measureError = .ok
+        unregisterCallbacks()
+    }
+
+    internal func setHasNewLayoutFlag(_ value: Bool) {
+        if freed { return }
+        flexNode.hasNewLayout = value
+    }
+
     // MARK: Private Cleanup Helpers
 
     private func collectSubtree(_ result: inout [YogaNode]) {
@@ -1772,6 +1980,7 @@ public final class YogaNode: @unchecked Sendable {
 // MARK: - Yoga Namespace Facade
 
 /// Namespace matching the default export of `core/src/yoga.ts` (`Yoga.Node.create()`, `Yoga.Config.create()`, etc.).
+// parity: core/src/yoga.ts#default [status=implemented hash=26defb10022d]
 public enum Yoga {
     public typealias Config = YogaConfig
     public typealias Node = YogaNode

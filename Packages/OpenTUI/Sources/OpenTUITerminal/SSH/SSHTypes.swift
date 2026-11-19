@@ -21,7 +21,7 @@ public struct SSHPublicKey: Equatable, Hashable, Sendable {
 /// Security note: `username` is client-supplied. For `publickey`, key ownership is
 /// verified but the name is not; authorize by `fingerprint` and pair names to keys
 /// in `auth.publicKey.allow` if you need that binding.
-// parity: ssh/src/types.ts#Identity [status=implemented hash=7142bb4a9a91]
+// parity: ssh/src/types.ts#Identity [status=implemented hash=7f1112a9eaee]
 public enum SSHIdentity: Equatable, Hashable, Sendable {
     case none(username: String)
     case password(username: String)
@@ -289,7 +289,7 @@ public protocol SSHSessionCommon: AnyObject, Sendable {
 }
 
 /// The session shape middleware receives before renderer attachment.
-// parity: ssh/src/types.ts#MiddlewareSession [status=implemented hash=27fd3122b341]
+// parity: ssh/src/types.ts#MiddlewareSession [status=implemented hash=59a85d3292bd]
 public protocol SSHMiddlewareSession: SSHSessionCommon {
     /// Per-session context bag populated by upstream middleware.
     var context: SSHContextBag { get }
@@ -309,7 +309,7 @@ public extension SSHMiddlewareSession {
 public typealias SSHMiddleware = @Sendable (any SSHMiddlewareSession, SSHNext) async throws -> SSHHandoff
 
 /// The call signature `.use(...)` accepts.
-// parity: ssh/src/types.ts#MiddlewareFunction [status=implemented hash=4673c75de4ef]
+// parity: ssh/src/types.ts#MiddlewareFunction [status=implemented hash=1065ea0ec582]
 public typealias SSHMiddlewareFunction = @Sendable (any SSHMiddlewareSession, SSHNext) async throws -> SSHHandoff
 
 /// The per-session app handler. Receives a `SSHSession` with the live renderer
@@ -343,7 +343,7 @@ public struct SSHKeyboardQuestion: Equatable, Hashable, Sendable {
 }
 
 /// Async keyboard-interactive prompt callback bridged onto the SSH transport.
-// parity: ssh/src/types.ts#KeyboardPrompt [status=implemented hash=e2370c52bc7d]
+// parity: ssh/src/types.ts#KeyboardPrompt [status=implemented hash=74e6363fad84]
 public typealias SSHKeyboardPrompt = @Sendable ([SSHKeyboardQuestion]) async -> [String]
 
 /// Static allowlist source for `SSHPublicKeyPolicy`.

@@ -115,7 +115,7 @@ public typealias FlexDirtiedFunc = @Sendable (FlexNode) -> Void
 
 /// Pure-Swift Yoga-compatible Flexbox layout tree node.
 /// Like upstream `Yoga.Node`, mutations and `calculateLayout` are single-owner operations.
-// parity: core/src/yoga.ts#Node [status=adapted hash=6e196f262b13]
+// parity: core/src/yoga.ts#Node [status=adapted hash=c41dbe875476]
 public final class FlexNode: @unchecked Sendable {
     public var style: FlexStyle {
         didSet {

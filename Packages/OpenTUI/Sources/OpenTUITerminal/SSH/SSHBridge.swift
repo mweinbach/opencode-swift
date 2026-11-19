@@ -278,7 +278,7 @@ public final class SSHHeadlessRenderer: SSHAttachableRenderer, @unchecked Sendab
 // MARK: - Session Bridge Protocol & Options
 
 /// Wired-up OpenTUI session bridge over a single SSH shell channel.
-// parity: ssh/src/bridge.ts#SessionBridge [status=implemented hash=c15189a0a23b]
+// parity: ssh/src/bridge.ts#SessionBridge [status=implemented hash=d79761590d65]
 public protocol SSHSessionBridge: AnyObject, Sendable {
     /// One runtime object exposed through middleware and handler session views.
     var session: any SSHSession & SSHMiddlewareSession { get }
@@ -1052,7 +1052,7 @@ private final class DefaultSSHSessionBridge: SSHSessionBridge, SSHSession, SSHMi
 /// Turn an SSH shell channel into a wired-up OpenTUI session bridge.
 /// The session starts without a renderer; `enterApp()` attaches it only after
 /// the middleware chain authorizes and reaches the handler.
-// parity: ssh/src/bridge.ts#createSessionBridge [status=implemented hash=8fbe2fc861b2]
+// parity: ssh/src/bridge.ts#createSessionBridge [status=implemented hash=152e4cb3388b]
 public func createSessionBridge(
     channel: any SSHChannel,
     options: SSHSessionBridgeOptions

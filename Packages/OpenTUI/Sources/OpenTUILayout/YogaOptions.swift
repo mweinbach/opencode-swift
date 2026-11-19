@@ -156,7 +156,7 @@ public enum Wrap: Int32, Equatable, Hashable, Sendable, Codable, CaseIterable {
 
 // MARK: - Yoga String Option Types
 
-// parity: core/src/lib/yoga.options.ts#AlignString [status=implemented hash=af79ea874c9b]
+// parity: core/src/lib/yoga.options.ts#AlignString [status=implemented hash=d66c516fe0de]
 public enum AlignString: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case auto = "auto"
     case flexStart = "flex-start"

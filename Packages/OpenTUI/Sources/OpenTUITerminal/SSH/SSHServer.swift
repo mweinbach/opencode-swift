@@ -338,7 +338,7 @@ public struct SSHServerBuilder: SSHServerBuilderProtocol, Sendable {
 
 /// Create an SSH server builder. Chain `.use(middleware)` and seal with
 /// `.serve(handler)` / `.handle(handler)` before calling `await server.listen()`.
-// parity: ssh/src/server.ts#createServer [status=implemented hash=4307665b712a]
+// parity: ssh/src/server.ts#createServer [status=implemented hash=1959a080a47b]
 public func createSSHServer(
     config: SSHServerConfig = SSHServerConfig(),
     driver: any SSHTransportDriver = InMemorySSHTransportDriver()

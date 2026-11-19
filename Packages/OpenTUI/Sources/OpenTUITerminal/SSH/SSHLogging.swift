@@ -3,7 +3,7 @@
 /// on teardown. Sink failures are isolated and never affect the session.
 
 /// Lifecycle event emitted by `sshLogging(options:)`.
-// parity: ssh/src/logging.ts#LogEvent [status=implemented hash=2c100ccd3176]
+// parity: ssh/src/logging.ts#LogEvent [status=implemented hash=87fb2610f84d]
 public enum SSHLogEvent: Equatable, Sendable {
     case connect(
         identity: SSHIdentity,
@@ -130,7 +130,7 @@ public func formatLogEvent(_ event: SSHLogEvent) -> String {
 /// Lifecycle logging as a `.use(...)` middleware: a `"connect"` event on entry,
 /// a `"disconnect"` (with duration) on teardown. Runs teardown even when a
 /// downstream gate denies or the handler throws, without ever swallowing errors.
-// parity: ssh/src/logging.ts#logging [status=implemented hash=d74b2f49b42e]
+// parity: ssh/src/logging.ts#logging [status=implemented hash=9b26c4dc3f8d]
 public func sshLogging(options: SSHLoggingOptions = SSHLoggingOptions()) -> SSHMiddleware {
     let lineSink: @Sendable (String) -> Void = options.lineSink ?? { print($0) }
     let sink: @Sendable (SSHLogEvent) async throws -> Void = options.log ?? { event in

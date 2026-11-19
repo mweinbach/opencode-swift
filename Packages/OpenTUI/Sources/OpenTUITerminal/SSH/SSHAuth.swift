@@ -34,7 +34,7 @@ public enum SSHAuthMethod: String, Equatable, Hashable, Sendable, CaseIterable {
 
 /// A single auth attempt, narrowed to the fields a decision needs so the auth
 /// core stays testable without a live SSH handshake.
-// parity: ssh/src/auth.ts#AuthAttempt [status=implemented hash=4fcc60ce206d]
+// parity: ssh/src/auth.ts#AuthAttempt [status=implemented hash=185757981184]
 public enum SSHAuthAttempt: Sendable {
     case none(username: String)
     case password(username: String, password: String)
@@ -69,7 +69,7 @@ public enum SSHAuthAttempt: Sendable {
 /// The verdict for one attempt. `.acceptProbe` is the publickey query reply
 /// (`PK_OK`): the key is acceptable, so the client should sign — no identity yet.
 /// Only a verified attempt yields `.accept(identity:)`.
-// parity: ssh/src/auth.ts#AuthOutcome [status=implemented hash=254e9f702ae9]
+// parity: ssh/src/auth.ts#AuthOutcome [status=implemented hash=4eacb2bf4ad0]
 public enum SSHAuthOutcome: Equatable, Sendable {
     case accept(identity: SSHIdentity)
     case acceptProbe
@@ -130,7 +130,7 @@ public struct SSHRawAuthContext: Sendable {
 /// Adapt a transport's live `SSHRawAuthContext` into a plain `SSHAuthAttempt`.
 /// Read-only (never calls `accept()` / `reject()`). Returns `nil` for unmodeled
 /// methods (e.g. `"hostbased"`) so `handle()` rejects them fail-closed.
-// parity: ssh/src/auth.ts#attemptFromAuthContext [status=implemented hash=5cf223e5605c]
+// parity: ssh/src/auth.ts#attemptFromAuthContext [status=implemented hash=c6887f964538]
 public func attemptFromAuthContext(_ ctx: SSHRawAuthContext) -> SSHAuthAttempt? {
     switch ctx.method {
     case "none":
@@ -336,7 +336,7 @@ private struct DefaultSSHAuthenticator: SSHAuthenticator {
 
 /// Build the auth decision core from normalized config and an optional pre-parsed
 /// allowlist of Base64 public-SSH blobs (or `SHA256:...` fingerprints).
-// parity: ssh/src/auth.ts#createAuthenticator [status=implemented hash=ed75437247f8]
+// parity: ssh/src/auth.ts#createAuthenticator [status=implemented hash=1d5341653d9d]
 public func createAuthenticator(
     auth: SSHNormalizedAuthConfig,
     authorizedKeys: [String]? = nil,

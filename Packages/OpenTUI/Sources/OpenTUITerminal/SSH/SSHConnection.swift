@@ -471,7 +471,7 @@ public protocol SSHDirectShellSessionChannel: SSHSessionChannel {
 }
 
 /// Build the per-connection SSH lifecycle controller (`onConnection`, `closeAll`, `setAccepting`).
-// parity: ssh/src/connection.ts#createConnectionHandler [status=implemented hash=8b8a68e48b7a]
+// parity: ssh/src/connection.ts#createConnectionHandler [status=implemented hash=f93b325a2b5a]
 public func createConnectionHandler(_ dependencies: SSHConnectionDependencies) -> SSHConnectionHandler {
     SSHConnectionHandler(dependencies: dependencies)
 }

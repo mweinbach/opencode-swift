@@ -658,7 +658,7 @@ public func generateEd25519KeyPair(comment: String = "") -> (privatePem: String,
 }
 
 /// Resolve host-key PEM(s) + fingerprints: explicit PEM, persisted path, or ephemeral.
-// parity: ssh/src/keys.ts#resolveHostKey [status=implemented hash=40d0fb178383]
+// parity: ssh/src/keys.ts#resolveHostKey [status=implemented hash=5ea1409ceada]
 public func resolveHostKey(
     _ hostKey: SSHHostKeyConfig?,
     fileStore: any SSHKeyFileStore = DefaultSSHKeyFileStore()
