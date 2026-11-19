@@ -187,6 +187,7 @@ public struct TUIMarkdown: TUIView {
     public let tableOptions: MarkdownTableOptions?
     public let fg: Color?
     public let bg: Color?
+    public let renderNodeProvider: ((any RenderContext) -> MarkdownRenderBlockCallback)?
 
     public init(
         _ content: String,
@@ -197,7 +198,8 @@ public struct TUIMarkdown: TUIView {
         streaming: Bool = false,
         tableOptions: MarkdownTableOptions? = nil,
         fg: Color? = nil,
-        bg: Color? = nil
+        bg: Color? = nil,
+        renderNodeProvider: ((any RenderContext) -> MarkdownRenderBlockCallback)? = nil
     ) {
         self.content = content
         self.syntaxStyle = syntaxStyle
@@ -208,6 +210,7 @@ public struct TUIMarkdown: TUIView {
         self.tableOptions = tableOptions
         self.fg = fg
         self.bg = bg
+        self.renderNodeProvider = renderNodeProvider
     }
 
     public func resolveNodes() -> [TUIViewNode] {
@@ -229,7 +232,8 @@ public struct TUIMarkdown: TUIView {
                             concealCode: snapshot.concealCode,
                             highlighter: snapshot.highlighter,
                             streaming: snapshot.streaming,
-                            tableOptions: snapshot.tableOptions
+                            tableOptions: snapshot.tableOptions,
+                            renderNode: snapshot.renderNodeProvider?(ctx)
                         )
                     )
                 },

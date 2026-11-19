@@ -1260,6 +1260,8 @@ public enum TUIScreens {
         case .text(let id, let text):
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return AnyTUIView(EmptyTUIView()) }
+            let activeTheme = theme
+            let activeMode: Mode = state.effectiveMode == .light ? .light : .dark
             return AnyTUIView(
                 TUIMarkdown(
                     trimmed,
@@ -1267,7 +1269,16 @@ public enum TUIScreens {
                     conceal: state.preferences.concealMarkdown,
                     streaming: !completed,
                     fg: .rgba(theme.markdown.text),
-                    bg: .rgba(theme.background.base)
+                    bg: .rgba(theme.background.base),
+                    renderNodeProvider: { ctx in
+                        var renderers = LatexPlugin.createCodeBlockRenderers(context: ctx) { activeTheme }
+                        let palette = Merman.resolveOpenCodeDiagramPalette(theme: activeTheme, mode: activeMode)
+                        renderers["mermaid"] = Merman.createMermaidCodeBlockRenderer(
+                            ctx: ctx,
+                            options: Merman.MermaidMarkdownRendererOptions(colors: palette.asColorOverrides())
+                        )
+                        return createMarkdownCodeBlockRenderer(renderers)
+                    }
                 )
                 .key("part-text-\(id)")
                 .padding(left: 3)
