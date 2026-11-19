@@ -1,7 +1,16 @@
-#if canImport(FoundationEssentials)
+#if os(macOS) || os(Linux) || os(Windows)
+import Foundation
+#elseif canImport(FoundationEssentials)
 import FoundationEssentials
 #else
 import Foundation
+#endif
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 import Synchronization
 import OpenCodeAI
@@ -226,6 +235,7 @@ public enum CorePlugin {
         private let contextFactory: @Sendable (_ pluginID: String, _ listInventory: @escaping @Sendable () -> [PluginSchema.Info], _ addFinalizer: @escaping @Sendable (@escaping @Sendable () async -> Void) -> Void) -> PluginEffect.Context
         private let fileSystem: any OpenCodeFileSystem
         private let onInventoryChanged: (@Sendable ([PluginSchema.Info]) -> Void)?
+        private let hostEnvironment: Host.Environment?
 
         public init(
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -239,6 +249,24 @@ public enum CorePlugin {
             self.fileSystem = fileSystem
             self.onInventoryChanged = onInventoryChanged
             self.contextFactory = contextFactory
+            self.hostEnvironment = nil
+        }
+
+        public init(
+            environment: Host.Environment,
+            onInventoryChanged: (@Sendable ([PluginSchema.Info]) -> Void)? = nil
+        ) {
+            self.fileSystem = environment.fileSystem
+            self.onInventoryChanged = onInventoryChanged
+            self.hostEnvironment = environment
+            self.contextFactory = { pluginID, listInventory, addFinalizer in
+                Host.make(
+                    environment: environment,
+                    pluginID: pluginID,
+                    listPlugins: listInventory,
+                    addFinalizer: addFinalizer
+                )
+            }
         }
 
         /// Immediately returns the currently loaded plugin inventory WITHOUT waiting for pending activation.
@@ -469,7 +497,19 @@ public enum CorePlugin {
                 { fn in scope.add(fn) }
             )
             do {
-                try await definition.effect(context)
+                if let env = hostEnvironment {
+                    try await Host.withRuntime(
+                        http: env.http,
+                        environment: env.environment,
+                        spawner: env.spawner,
+                        fileSystem: env.fileSystem,
+                        modelsDev: env.modelsDev
+                    ) {
+                        try await definition.effect(context)
+                    }
+                } else {
+                    try await definition.effect(context)
+                }
                 return .success(ActiveRecord(plugin: definition, scope: scope, failureError: nil, failureRef: nil))
             } catch {
                 await scope.close()
@@ -1058,6 +1098,51 @@ public enum CorePlugin {
 
     /// Location-scoped plugin host wiring all plugin domains, scoped KV storage, hooks, and permissions.
     public enum Host {
+        /// Task-local runtime dependency overrides used by built-in plugins when activated or invoked inside a host environment.
+        @TaskLocal public static var currentHTTPTransportOverride: (any HTTPTransport)? = nil
+        @TaskLocal public static var currentEnvironmentOverride: (any EnvironmentProviding)? = nil
+        @TaskLocal public static var currentProcessSpawnerOverride: (any ProcessSpawner)? = nil
+        @TaskLocal public static var currentFileSystemOverride: (any OpenCodeFileSystem)? = nil
+        @TaskLocal public static var currentModelsDevOverride: (any CoreModel.ModelsDev.Interface)? = nil
+
+        public static var currentHTTPTransport: any HTTPTransport {
+            currentHTTPTransportOverride ?? URLSessionHTTPTransport.shared
+        }
+
+        public static var currentEnvironment: any EnvironmentProviding {
+            currentEnvironmentOverride ?? SystemEnvironment.shared
+        }
+
+        public static var currentProcessSpawner: any ProcessSpawner {
+            currentProcessSpawnerOverride ?? CrossSpawnSpawner.HostProcessSpawner.shared
+        }
+
+        public static var currentFileSystem: any OpenCodeFileSystem {
+            currentFileSystemOverride ?? LocalFileSystem.shared
+        }
+
+        /// Executes `operation` with task-local plugin runtime dependencies bound.
+        public static func withRuntime<T: Sendable>(
+            http: (any HTTPTransport)? = nil,
+            environment: (any EnvironmentProviding)? = nil,
+            spawner: (any ProcessSpawner)? = nil,
+            fileSystem: (any OpenCodeFileSystem)? = nil,
+            modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
+            operation: () async throws -> T
+        ) async rethrows -> T {
+            try await $currentHTTPTransportOverride.withValue(http ?? currentHTTPTransportOverride) {
+                try await $currentEnvironmentOverride.withValue(environment ?? currentEnvironmentOverride) {
+                    try await $currentProcessSpawnerOverride.withValue(spawner ?? currentProcessSpawnerOverride) {
+                        try await $currentFileSystemOverride.withValue(fileSystem ?? currentFileSystemOverride) {
+                            try await $currentModelsDevOverride.withValue(modelsDev ?? currentModelsDevOverride) {
+                                try await operation()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         /// Encodes `pluginID` into the exact upstream UTF-16 4-hex-digit namespace prefix `plugin:<hex>:`
         /// and wraps `kv` so plugins can only access and scan their own isolated keyspace.
         // parity: core/src/plugin/host.ts#storage [status=implemented hash=00512f7e06fe]
@@ -1092,6 +1177,18 @@ public enum CorePlugin {
 
         /// Backing state container shared across a Location's `PluginHost`.
         public final class Environment: Sendable {
+            public struct RecordedSessionPrompt: Equatable, Sendable {
+                public let sessionID: SessionID
+                public let prompt: PromptInputSchema.Prompt
+                public let delivery: SessionInboxSchema.Delivery
+
+                public init(sessionID: SessionID, prompt: PromptInputSchema.Prompt, delivery: SessionInboxSchema.Delivery) {
+                    self.sessionID = sessionID
+                    self.prompt = prompt
+                    self.delivery = delivery
+                }
+            }
+
             private struct State: Sendable {
                 var agents: [String: AgentSchema.Info] = [:]
                 var defaultAgentID: String?
@@ -1114,6 +1211,7 @@ public enum CorePlugin {
                 var artifactProviders: [String: PluginEffect.ArtifactProviderDefinition] = [:]
                 var defaultArtifactProvider: String?
                 var rpcDefinitions: [String: (definition: RpcSchema.Definition, handlers: PluginEffect.RpcHandlers)] = [:]
+                var recordedPrompts: [RecordedSessionPrompt] = []
             }
 
             public let app: PluginContract.App
@@ -1121,6 +1219,14 @@ public enum CorePlugin {
             public let hooks: Hooks.Service
             public let kv: any KVStore
             public let permissions: PermissionRuntime
+            public let http: any HTTPTransport
+            public let environment: any EnvironmentProviding
+            public let spawner: any ProcessSpawner
+            public let fileSystem: any OpenCodeFileSystem
+            public let modelsDev: (any CoreModel.ModelsDev.Interface)?
+            public let vcsService: CoreVcs.Vcs.Service?
+            public let integrationService: (any CoreIntegration.Integration.Interface)?
+            public let onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)?
             private let state = Mutex(State())
 
             public init(
@@ -1136,13 +1242,79 @@ public enum CorePlugin {
                 ),
                 hooks: Hooks.Service = Hooks.Service(),
                 kv: any KVStore = InMemoryKVStore(),
-                permissions: PermissionRuntime? = nil
+                permissions: PermissionRuntime? = nil,
+                http: any HTTPTransport = URLSessionHTTPTransport.shared,
+                environment: any EnvironmentProviding = SystemEnvironment.shared,
+                spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared,
+                fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+                modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
+                vcsService: CoreVcs.Vcs.Service? = nil,
+                integrationService: (any CoreIntegration.Integration.Interface)? = nil,
+                onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)? = nil
             ) {
                 self.app = app
                 self.location = location
                 self.hooks = hooks
                 self.kv = kv
                 self.permissions = permissions ?? PermissionRuntime(hooks: hooks)
+                self.http = http
+                self.environment = environment
+                self.spawner = spawner
+                self.fileSystem = fileSystem
+                self.modelsDev = modelsDev
+                self.vcsService = vcsService
+                self.integrationService = integrationService
+                self.onSessionPrompt = onSessionPrompt
+            }
+
+            /// Runs a plugin's effect against this environment with all runtime dependencies bound.
+            public func activatePlugin(_ plugin: PluginEffect.Plugin) async throws {
+                let ctx = makeContext(pluginID: plugin.id, listPlugins: { [] }, addFinalizer: { _ in })
+                try await Host.withRuntime(
+                    http: http,
+                    environment: environment,
+                    spawner: spawner,
+                    fileSystem: fileSystem,
+                    modelsDev: modelsDev
+                ) {
+                    try await plugin.effect(ctx)
+                }
+            }
+
+            public func registeredAgents() -> [AgentSchema.Info] {
+                state.withLock { Array($0.agents.values).sorted { $0.id.rawValue < $1.id.rawValue } }
+            }
+
+            public func defaultAgentID() -> String? {
+                state.withLock { $0.defaultAgentID }
+            }
+
+            public func registeredProviders() -> [PluginEffect.ProviderRecord] {
+                state.withLock { Array($0.providers.values).sorted { $0.provider.id.rawValue < $1.provider.id.rawValue } }
+            }
+
+            public func registeredModels() -> [ModelSchema.Info] {
+                state.withLock { Array($0.models.values).sorted { "\($0.providerID.rawValue)/\($0.id.rawValue)" < "\($1.providerID.rawValue)/\($1.id.rawValue)" } }
+            }
+
+            public func registeredIntegrations() -> [PluginEffect.IntegrationRef] {
+                state.withLock { Array($0.integrations.values).sorted { $0.id < $1.id } }
+            }
+
+            public func registeredIntegrationMethods(for id: String) -> [PluginEffect.IntegrationMethod] {
+                state.withLock { $0.integrationMethods[id] ?? [] }
+            }
+
+            public func registeredVcsProviders() -> [PluginEffect.VcsDefinition] {
+                state.withLock { Array($0.vcsProviders.values).sorted { $0.id < $1.id } }
+            }
+
+            public func defaultVcsID() -> String? {
+                state.withLock { $0.defaultVcs }
+            }
+
+            public func recordedSessionPrompts() -> [RecordedSessionPrompt] {
+                state.withLock { $0.recordedPrompts }
             }
 
             public func registeredTools() -> [PluginEffect.DynamicToolInfo] {
@@ -1176,6 +1348,22 @@ public enum CorePlugin {
                 return try await handler(input, PluginEffect.RpcCallContext())
             }
 
+            private func selectedVcsDefinition() -> PluginEffect.VcsDefinition? {
+                state.withLock { s in
+                    if let def = s.defaultVcs, let p = s.vcsProviders[def] { return p }
+                    if let git = s.vcsProviders["git"] { return git }
+                    return s.vcsProviders.values.first
+                }
+            }
+
+            private func vcsScope() -> PluginEffect.VcsScope {
+                PluginEffect.VcsScope(
+                    directory: location.directory.rawValue,
+                    worktree: location.project.directory.rawValue,
+                    canonical: location.project.canonical.rawValue
+                )
+            }
+
             internal func makeContext(
                 pluginID: String,
                 listPlugins: @escaping @Sendable () -> [PluginSchema.Info],
@@ -1189,10 +1377,9 @@ public enum CorePlugin {
                     setDefault: { [self] id in self.state.withLock { $0.defaultAgentID = id } },
                     update: { [self] id, mutate in
                         self.state.withLock { s in
-                            if var item = s.agents[id] {
-                                mutate(&item)
-                                s.agents[id] = item
-                            }
+                            var item = s.agents[id] ?? AgentSchema.Info.default(AgentSchema.ID(rawValue: id))
+                            mutate(&item)
+                            s.agents[id] = item
                         }
                     },
                     remove: { [self] id in self.state.withLock { _ = $0.agents.removeValue(forKey: id) } }
@@ -1288,6 +1475,9 @@ public enum CorePlugin {
                                         models: map,
                                         sourceConnection: rec.sourceConnection
                                     )
+                                    for m in models {
+                                        s.models["\(pid)/\(m.id.rawValue)"] = m
+                                    }
                                 }
                             }
                         },
@@ -1302,6 +1492,7 @@ public enum CorePlugin {
                                         models: updated,
                                         sourceConnection: rec.sourceConnection
                                     )
+                                    s.models["\(pid)/\(mid)"] = model
                                 }
                             }
                         },
@@ -1315,6 +1506,7 @@ public enum CorePlugin {
                                         models: updated,
                                         sourceConnection: rec.sourceConnection
                                     )
+                                    s.models.removeValue(forKey: "\(pid)/\(mid)")
                                 }
                             }
                         }
@@ -1415,12 +1607,225 @@ public enum CorePlugin {
                 let hookService = self.hooks
                 let permRuntime = self.permissions
 
+                let integrationDomain = PluginEffect.IntegrationDomain(
+                    list: { [self] in
+                        if let svc = self.integrationService {
+                            let all = try await svc.list()
+                            return PluginSDK.LocatedResult(location: loc, data: all)
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: [])
+                    },
+                    get: { [self] id in
+                        if let svc = self.integrationService,
+                           let found = try await svc.get(IntegrationID(rawValue: id))
+                        {
+                            return PluginSDK.LocatedResult(location: loc, data: found)
+                        }
+                        throw ToolSchema.ToolError(message: "Integration not found: \(id)")
+                    },
+                    transform: { callback in
+                        callback(integrationEditor)
+                        return PluginEffect.Registration(dispose: {})
+                    },
+                    reload: {},
+                    connection: PluginEffect.IntegrationDomain.ConnectionAPI(
+                        active: { [self] id in
+                            if let svc = self.integrationService,
+                               let conn = try? await svc.activeConnection(IntegrationID(rawValue: id))
+                            {
+                                return conn
+                            }
+                            let methods = self.state.withLock { $0.integrationMethods[id] ?? [] }
+                            for method in methods {
+                                if case .env(let envMethod) = method {
+                                    for envName in envMethod.names {
+                                        if let val = self.environment.variable(envName), !val.isEmpty {
+                                            return .env(ConnectionSchema.EnvInfo(name: envName))
+                                        }
+                                    }
+                                }
+                            }
+                            return nil
+                        },
+                        resolve: { [self] conn in
+                            if let svc = self.integrationService,
+                               let resolved = try? await svc.resolveConnection(conn)
+                            {
+                                return resolved
+                            }
+                            if case .env(let envInfo) = conn,
+                               let secret = self.environment.variable(envInfo.name),
+                               !secret.isEmpty
+                            {
+                                return .key(CredentialSchema.Key(key: secret))
+                            }
+                            return nil
+                        },
+                        status: { [self] id, conn, status in
+                            if let svc = self.integrationService {
+                                await svc.setConnectionStatus(integrationID: IntegrationID(rawValue: id), connection: conn, status: status)
+                            }
+                        }
+                    )
+                )
+
+                let vcsDomain = PluginEffect.VcsDomain(
+                    get: { [self] in
+                        guard let provider = self.selectedVcsDefinition() else {
+                            return PluginSDK.LocatedResult(location: loc, data: nil)
+                        }
+                        let info: VcsSchema.Info = try await Host.withRuntime(spawner: self.spawner, fileSystem: self.fileSystem) {
+                            try await provider.info(self.vcsScope())
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: info)
+                    },
+                    base: { [self] in
+                        guard let provider = self.selectedVcsDefinition(), let baseFn = provider.base else {
+                            return PluginSDK.LocatedResult(location: loc, data: nil)
+                        }
+                        let base: VcsSchema.Base? = try await Host.withRuntime(spawner: self.spawner, fileSystem: self.fileSystem) {
+                            try await baseFn(self.vcsScope())
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: base)
+                    },
+                    branches: { [self] search, limit in
+                        guard let provider = self.selectedVcsDefinition() else {
+                            return PluginSDK.LocatedResult(location: loc, data: [])
+                        }
+                        let list: VcsSchema.BranchList = try await Host.withRuntime(spawner: self.spawner, fileSystem: self.fileSystem) {
+                            try await provider.branches(PluginEffect.VcsBranchesInput(scope: self.vcsScope(), search: search, limit: limit))
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: list)
+                    },
+                    status: { [self] in
+                        guard let provider = self.selectedVcsDefinition() else {
+                            return PluginSDK.LocatedResult(location: loc, data: [])
+                        }
+                        let items: [VcsSchema.FileStatus] = try await Host.withRuntime(spawner: self.spawner, fileSystem: self.fileSystem) {
+                            try await provider.status(self.vcsScope())
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: items)
+                    },
+                    diff: { [self] mode, base, context in
+                        guard let provider = self.selectedVcsDefinition() else {
+                            return PluginSDK.LocatedResult(location: loc, data: [])
+                        }
+                        let rows: [FileDiffSchema.Info] = try await Host.withRuntime(spawner: self.spawner, fileSystem: self.fileSystem) {
+                            try await provider.diff(PluginEffect.VcsDiffInput(
+                                scope: self.vcsScope(),
+                                mode: mode,
+                                base: base,
+                                context: context ?? 3
+                            ))
+                        }
+                        return PluginSDK.LocatedResult(location: loc, data: rows)
+                    },
+                    transform: { [self] callback in
+                        callback(vcsEditor)
+                        if let vcsService = self.vcsService {
+                            let providers = self.state.withLock { $0.vcsProviders }
+                            let defaultSel = self.state.withLock { $0.defaultVcs }
+                            let scope = self.vcsScope()
+                            let capturedSpawner = self.spawner
+                            let capturedFS = self.fileSystem
+                            _ = try? await vcsService.transform { editor in
+                                for (_, def) in providers {
+                                    let baseClosure: (@Sendable () async throws -> VcsSchema.Base?)? = def.base.map { baseFn in
+                                        let fn: @Sendable () async throws -> VcsSchema.Base? = {
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await baseFn(scope)
+                                            }
+                                        }
+                                        return fn
+                                    }
+                                    let initClosure: (@Sendable () async throws -> Void)? = def.initRepo.map { initFn in
+                                        let fn: @Sendable () async throws -> Void = {
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await initFn(scope)
+                                            }
+                                        }
+                                        return fn
+                                    }
+                                    let bridged = CoreVcs.Vcs.ProviderDefinition(
+                                        id: def.id,
+                                        info: {
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await def.info(scope)
+                                            }
+                                        },
+                                        base: baseClosure,
+                                        branches: { opts in
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await def.branches(PluginEffect.VcsBranchesInput(scope: scope, search: opts?.search, limit: opts?.limit))
+                                            }
+                                        },
+                                        status: {
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await def.status(scope)
+                                            }
+                                        },
+                                        diff: { mode, opts in
+                                            try await Host.withRuntime(spawner: capturedSpawner, fileSystem: capturedFS) {
+                                                try await def.diff(PluginEffect.VcsDiffInput(
+                                                    scope: scope,
+                                                    mode: mode,
+                                                    base: opts?.base,
+                                                    context: opts?.context ?? 3,
+                                                    untracked: opts?.untracked
+                                                ))
+                                            }
+                                        },
+                                        initialize: initClosure
+                                    )
+                                    editor.add(bridged)
+                                }
+                                if let defaultSel {
+                                    editor.defaultSelection = defaultSel
+                                }
+                            }
+                        }
+                        return PluginEffect.Registration(dispose: {})
+                    },
+                    reload: {}
+                )
+
+                let websearchDomain = PluginEffect.WebSearchDomain(
+                    providers: { [self] in PluginSDK.LocatedResult(location: loc, data: self.registeredWebSearchProviders()) },
+                    query: { [self] input in
+                        let providerID = input.providerID?.rawValue
+                            ?? self.state.withLock { s -> String? in
+                                if case .provider(let id) = s.defaultWebSearch { return id }
+                                return s.webSearchProviders.keys.sorted().first
+                            }
+                        guard let providerID,
+                              let def = self.state.withLock({ $0.webSearchProviders[providerID] })
+                        else {
+                            throw ToolSchema.ToolError(message: "WebSearch provider not found")
+                        }
+                        let results: [WebSearchSchema.Result] = try await Host.withRuntime(http: self.http, environment: self.environment) {
+                            try await def.execute(WebSearchSchema.ProviderInput(query: input.query))
+                        }
+                        return PluginSDK.LocatedResult(
+                            location: loc,
+                            data: WebSearchSchema.Response(
+                                providerID: WebSearchSchema.ID(rawValue: providerID),
+                                results: results
+                            )
+                        )
+                    },
+                    transform: { callback in
+                        callback(websearchEditor)
+                        return PluginEffect.Registration(dispose: {})
+                    },
+                    reload: {}
+                )
+
                 return PluginEffect.Context(
                     app: app,
                     location: loc,
                     options: [:],
                     agent: PluginEffect.AgentDomain(
-                        list: { [self] in PluginSDK.LocatedResult(location: loc, data: self.state.withLock { Array($0.agents.values) }) },
+                        list: { [self] in PluginSDK.LocatedResult(location: loc, data: self.registeredAgents()) },
                         get: { [self] id in
                             guard let agent = self.state.withLock({ $0.agents[id] }) else {
                                 throw ToolSchema.ToolError(message: "Agent not found: \(id)")
@@ -1462,20 +1867,7 @@ public enum CorePlugin {
                             reload: {}
                         )
                     ),
-                    integration: PluginEffect.IntegrationDomain(
-                        list: { PluginSDK.LocatedResult(location: loc, data: []) },
-                        get: { id in throw ToolSchema.ToolError(message: "Integration not found: \(id)") },
-                        transform: { callback in
-                            callback(integrationEditor)
-                            return PluginEffect.Registration(dispose: {})
-                        },
-                        reload: {},
-                        connection: PluginEffect.IntegrationDomain.ConnectionAPI(
-                            active: { _ in nil },
-                            resolve: { _ in nil },
-                            status: { _, _, _ in }
-                        )
-                    ),
+                    integration: integrationDomain,
                     mcp: PluginEffect.MCPDomain(
                         list: { PluginSDK.LocatedResult(location: loc, data: []) },
                         transform: { callback in
@@ -1486,7 +1878,7 @@ public enum CorePlugin {
                     ),
                     model: PluginEffect.ModelDomain(
                         list: { [self] _ in
-                            PluginSDK.LocatedResult(location: loc, data: self.state.withLock { Array($0.models.values) })
+                            PluginSDK.LocatedResult(location: loc, data: self.registeredModels())
                         },
                         defaultModel: { [self] in
                             let def = self.state.withLock { $0.defaultModel }.map {
@@ -1554,11 +1946,21 @@ public enum CorePlugin {
                             return PluginEffect.RpcRegistration(dispose: dispose, emit: { _, _ in })
                         }
                     ),
-                    session: PluginEffect.SessionDomain(hook: { name, callback, options in
-                        let reg = hookService.registerSession(name: name, options: options, callback: callback)
-                        addFinalizer(reg.dispose)
-                        return reg
-                    }),
+                    session: PluginEffect.SessionDomain(
+                        hook: { name, callback, options in
+                            let reg = hookService.registerSession(name: name, options: options, callback: callback)
+                            addFinalizer(reg.dispose)
+                            return reg
+                        },
+                        prompt: { [self] sessionID, prompt, delivery in
+                            self.state.withLock {
+                                $0.recordedPrompts.append(RecordedSessionPrompt(sessionID: sessionID, prompt: prompt, delivery: delivery))
+                            }
+                            if let onSessionPrompt = self.onSessionPrompt {
+                                try await onSessionPrompt(sessionID, prompt, delivery)
+                            }
+                        }
+                    ),
                     shell: PluginEffect.ShellDomain(hook: { name, callback in
                         let reg = hookService.registerShell(name: name, callback: callback)
                         addFinalizer(reg.dispose)
@@ -1586,46 +1988,8 @@ public enum CorePlugin {
                             return reg
                         }
                     ),
-                    vcs: PluginEffect.VcsDomain(
-                        get: { PluginSDK.LocatedResult(location: loc, data: nil) },
-                        base: { PluginSDK.LocatedResult(location: loc, data: nil) },
-                        branches: { _, _ in PluginSDK.LocatedResult(location: loc, data: []) },
-                        status: { PluginSDK.LocatedResult(location: loc, data: []) },
-                        diff: { _, _, _ in PluginSDK.LocatedResult(location: loc, data: []) },
-                        transform: { callback in
-                            callback(vcsEditor)
-                            return PluginEffect.Registration(dispose: {})
-                        },
-                        reload: {}
-                    ),
-                    websearch: PluginEffect.WebSearchDomain(
-                        providers: { [self] in PluginSDK.LocatedResult(location: loc, data: self.registeredWebSearchProviders()) },
-                        query: { [self] input in
-                            let providerID = input.providerID?.rawValue
-                                ?? self.state.withLock { s -> String? in
-                                    if case .provider(let id) = s.defaultWebSearch { return id }
-                                    return s.webSearchProviders.keys.sorted().first
-                                }
-                            guard let providerID,
-                                  let def = self.state.withLock({ $0.webSearchProviders[providerID] })
-                            else {
-                                throw ToolSchema.ToolError(message: "WebSearch provider not found")
-                            }
-                            let results = try await def.execute(WebSearchSchema.ProviderInput(query: input.query))
-                            return PluginSDK.LocatedResult(
-                                location: loc,
-                                data: WebSearchSchema.Response(
-                                    providerID: WebSearchSchema.ID(rawValue: providerID),
-                                    results: results
-                                )
-                            )
-                        },
-                        transform: { callback in
-                            callback(websearchEditor)
-                            return PluginEffect.Registration(dispose: {})
-                        },
-                        reload: {}
-                    ),
+                    vcs: vcsDomain,
+                    websearch: websearchDomain,
                     worktree: PluginEffect.WorktreeDomain(
                         list: { [] },
                         create: { _ in throw ToolSchema.ToolError(message: "Worktree strategy not configured") },
@@ -1717,13 +2081,155 @@ public enum CorePlugin {
             func close() async
         }
 
-        /// Process-backed JSON-RPC transport executing a subprocess per request via `OpenCodePlatform.ProcessSpawner`.
-        public struct ProcessTransport: Transport, Sendable {
+        /// Persistent bidirectional JSON-RPC 2.0 subprocess transport maintaining ONE long-lived child process
+        /// with open stdin/stdout/stderr `Pipe`s on macOS/Linux/Windows, falling back to injectable
+        /// `OpenCodePlatform.ProcessSpawner` for mock spawners and WASI/mobile platforms.
+        public final class ProcessTransport: Transport, Sendable {
+            #if os(macOS) || os(Linux) || os(Windows)
+            private final class PersistentChild: @unchecked Sendable {
+                private struct ExitState: Sendable {
+                    var exited = false
+                    var status: Int32 = 0
+                    var waiters: [UUID: CheckedContinuation<Int32?, Never>] = [:]
+                    var cancelled: Set<UUID> = []
+                }
+
+                let process: Process
+                let stdinPipe: Pipe
+                let stdoutPipe: Pipe
+                let stderrPipe: Pipe
+                let writeLock = Mutex<Void>(())
+                private let exitState = Mutex(ExitState())
+                private let stderrTail = Mutex<String>("")
+                private let stdinClosed = Mutex<Bool>(false)
+
+                init(process: Process, stdinPipe: Pipe, stdoutPipe: Pipe, stderrPipe: Pipe) {
+                    self.process = process
+                    self.stdinPipe = stdinPipe
+                    self.stdoutPipe = stdoutPipe
+                    self.stderrPipe = stderrPipe
+                    process.terminationHandler = { [weak self] proc in
+                        self?.markExited(proc.terminationStatus)
+                    }
+                }
+
+                var pid: Int32 { process.processIdentifier }
+
+                func appendStderr(_ chunk: String) {
+                    stderrTail.withLock { tail in
+                        tail.append(chunk)
+                        if tail.count > 1_000 { tail = String(tail.suffix(1_000)) }
+                    }
+                }
+
+                func stderrSnapshot() -> String {
+                    stderrTail.withLock { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                }
+
+                func writeLine(_ bytes: [UInt8]) throws {
+                    try writeLock.withLock { _ in
+                        guard !stdinClosed.withLock({ $0 }) else {
+                            throw ErrorObject(code: -32_000, message: "Plugin host process stdin is closed")
+                        }
+                        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(bytes))
+                    }
+                }
+
+                func closeStdin() {
+                    writeLock.withLock { _ in
+                        let shouldClose = stdinClosed.withLock { c -> Bool in
+                            if c { return false }
+                            c = true
+                            return true
+                        }
+                        if shouldClose {
+                            try? stdinPipe.fileHandleForWriting.close()
+                        }
+                    }
+                }
+
+                func markExited(_ status: Int32) {
+                    let waiters: [CheckedContinuation<Int32?, Never>] = exitState.withLock { s in
+                        guard !s.exited else { return [] }
+                        s.exited = true
+                        s.status = status
+                        let all = Array(s.waiters.values)
+                        s.waiters.removeAll()
+                        s.cancelled.removeAll()
+                        return all
+                    }
+                    for w in waiters { w.resume(returning: status) }
+                }
+
+                func waitForExit(timeoutMs: Int) async -> Int32? {
+                    if let status = exitState.withLock({ $0.exited ? $0.status : nil }) { return status }
+                    let waiterID = UUID()
+                    let box = self
+                    return await withTaskGroup(of: Int32?.self) { group in
+                        group.addTask {
+                            await withTaskCancellationHandler {
+                                await withCheckedContinuation { (cont: CheckedContinuation<Int32?, Never>) in
+                                    let outcome: (done: Bool, value: Int32?) = box.exitState.withLock { s in
+                                        if s.exited { return (true, s.status) }
+                                        if s.cancelled.remove(waiterID) != nil { return (true, nil) }
+                                        s.waiters[waiterID] = cont
+                                        return (false, nil)
+                                    }
+                                    if outcome.done { cont.resume(returning: outcome.value) }
+                                }
+                            } onCancel: {
+                                let cont: CheckedContinuation<Int32?, Never>? = box.exitState.withLock { s in
+                                    s.cancelled.insert(waiterID)
+                                    return s.waiters.removeValue(forKey: waiterID)
+                                }
+                                cont?.resume(returning: nil)
+                            }
+                        }
+                        group.addTask {
+                            try? await Task.sleep(for: .milliseconds(timeoutMs))
+                            return nil
+                        }
+                        let first = await group.next() ?? nil
+                        group.cancelAll()
+                        return first
+                    }
+                }
+
+                func terminateAndWait() async {
+                    closeStdin()
+                    if await waitForExit(timeoutMs: 1_500) == nil {
+                        if process.isRunning { process.terminate() }
+                        if await waitForExit(timeoutMs: 1_500) == nil {
+                            #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                            let childPid = process.processIdentifier
+                            if childPid > 0 && process.isRunning {
+                                _ = kill(childPid, SIGKILL)
+                            }
+                            _ = await waitForExit(timeoutMs: 500)
+                            #endif
+                        }
+                    }
+                    try? stdoutPipe.fileHandleForReading.close()
+                    try? stderrPipe.fileHandleForReading.close()
+                }
+            }
+            #endif
+
+            private struct RuntimeState: Sendable {
+                var closed = false
+                var pending: [Int64: CheckedContinuation<Response, any Error>] = [:]
+                var pendingBytes: [UInt8] = []
+                #if os(macOS) || os(Linux) || os(Windows)
+                var child: PersistentChild?
+                #endif
+            }
+
             public let executable: String
             public let arguments: [String]
             public let workingDirectory: String?
             public let environment: [String: String]?
             public let spawner: any ProcessSpawner
+            private let state = Mutex(RuntimeState())
 
             public init(
                 executable: String,
@@ -1739,10 +2245,212 @@ public enum CorePlugin {
                 self.spawner = spawner
             }
 
+            deinit {
+                #if os(macOS) || os(Linux) || os(Windows)
+                let child = state.withLock { s -> PersistentChild? in
+                    s.closed = true
+                    let c = s.child
+                    s.child = nil
+                    return c
+                }
+                if let child {
+                    child.closeStdin()
+                    if child.process.isRunning { child.process.terminate() }
+                }
+                #endif
+            }
+
+            /// Process ID of the live persistent plugin host child process, when running on a desktop host.
+            public var pid: Int32? {
+                #if os(macOS) || os(Linux) || os(Windows)
+                return state.withLock { $0.child?.pid }
+                #else
+                return nil
+                #endif
+            }
+
+            #if os(macOS) || os(Linux) || os(Windows)
+            private func ensurePersistentChild() throws -> PersistentChild {
+                let existing = try state.withLock { s -> PersistentChild? in
+                    if s.closed {
+                        throw ErrorObject(code: -32_000, message: "Plugin host transport is closed")
+                    }
+                    return s.child
+                }
+                if let existing { return existing }
+
+                if executable.contains("\u{0}") {
+                    throw ErrorObject(code: -32_000, message: "The command contains a NUL character")
+                }
+                for (idx, arg) in arguments.enumerated() where arg.contains("\u{0}") {
+                    throw ErrorObject(code: -32_000, message: "Argument \(idx + 1) contains a NUL character")
+                }
+                if let env = environment {
+                    for (name, value) in env where value.contains("\u{0}") {
+                        throw ErrorObject(code: -32_000, message: "The environment variable \(name) contains a NUL character")
+                    }
+                }
+
+                let process = Process()
+                if executable.contains("/") || executable.contains("\\") {
+                    process.executableURL = URL(fileURLWithPath: executable)
+                    process.arguments = arguments
+                } else {
+                    #if os(Windows)
+                    process.executableURL = URL(fileURLWithPath: "C:\\Windows\\System32\\cmd.exe")
+                    process.arguments = ["/c", executable] + arguments
+                    #else
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    process.arguments = [executable] + arguments
+                    #endif
+                }
+                if let cwd = workingDirectory, !cwd.isEmpty {
+                    process.currentDirectoryURL = URL(fileURLWithPath: cwd)
+                }
+                if let env = environment, !env.isEmpty {
+                    var merged = ProcessInfo.processInfo.environment
+                    for (k, v) in env { merged[k] = v }
+                    process.environment = merged
+                }
+
+                let stdinPipe = Pipe()
+                let stdoutPipe = Pipe()
+                let stderrPipe = Pipe()
+                process.standardInput = stdinPipe
+                process.standardOutput = stdoutPipe
+                process.standardError = stderrPipe
+
+                #if canImport(Darwin)
+                _ = Darwin.fcntl(stdinPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+                #endif
+
+                let child = PersistentChild(
+                    process: process,
+                    stdinPipe: stdinPipe,
+                    stdoutPipe: stdoutPipe,
+                    stderrPipe: stderrPipe
+                )
+
+                // Guard concurrent launch attempts under lock before calling process.run()
+                let installed: PersistentChild? = try state.withLock { s in
+                    if s.closed {
+                        throw ErrorObject(code: -32_000, message: "Plugin host transport is closed")
+                    }
+                    if let already = s.child { return already }
+                    try process.run()
+                    s.child = child
+                    return nil
+                }
+                if let installed {
+                    try? stdinPipe.fileHandleForWriting.close()
+                    try? stdoutPipe.fileHandleForReading.close()
+                    try? stderrPipe.fileHandleForReading.close()
+                    return installed
+                }
+
+                Thread.detachNewThread {
+                    let handle = child.stderrPipe.fileHandleForReading
+                    while true {
+                        let data = handle.availableData
+                        if data.isEmpty { break }
+                        child.appendStderr(String(decoding: data, as: UTF8.self))
+                    }
+                }
+
+                Thread.detachNewThread { [weak self] in
+                    let handle = child.stdoutPipe.fileHandleForReading
+                    while true {
+                        let data = handle.availableData
+                        if data.isEmpty { break }
+                        self?.consumeStdoutChunk(Array(data))
+                    }
+                    self?.handleChildEOF(child: child)
+                }
+
+                return child
+            }
+
+            private func consumeStdoutChunk(_ chunk: [UInt8]) {
+                var responsesToDeliver: [Response] = []
+                state.withLock { s in
+                    var start = 0
+                    while start < chunk.count {
+                        if let nl = chunk[start...].firstIndex(of: 0x0A) {
+                            var frame = s.pendingBytes
+                            frame.append(contentsOf: chunk[start..<nl])
+                            s.pendingBytes.removeAll()
+                            if frame.last == 0x0D { frame.removeLast() }
+                            let text = String(decoding: frame, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !text.isEmpty, let decoded = try? JSONDecoder().decode(Response.self, from: Data(text.utf8)) {
+                                responsesToDeliver.append(decoded)
+                            }
+                            start = nl + 1
+                        } else {
+                            s.pendingBytes.append(contentsOf: chunk[start...])
+                            break
+                        }
+                    }
+                }
+                for resp in responsesToDeliver {
+                    let cont = state.withLock { $0.pending.removeValue(forKey: resp.id) }
+                    cont?.resume(returning: resp)
+                }
+            }
+
+            private func handleChildEOF(child: PersistentChild) {
+                let wasActive = state.withLock { $0.child === child }
+                guard wasActive else { return }
+                child.process.waitUntilExit()
+                let code = child.process.terminationStatus
+                let stderrText = child.stderrSnapshot()
+                let err = ErrorObject(
+                    code: -32_000,
+                    message: stderrText.isEmpty
+                        ? "Plugin host process exited with \(code)"
+                        : "Plugin host process exited with \(code): \(stderrText)"
+                )
+                let waiters: [CheckedContinuation<Response, any Error>] = state.withLock { s in
+                    if s.child === child { s.child = nil }
+                    s.pendingBytes.removeAll()
+                    let all = Array(s.pending.values)
+                    s.pending.removeAll()
+                    return all
+                }
+                child.closeStdin()
+                try? child.stdoutPipe.fileHandleForReading.close()
+                try? child.stderrPipe.fileHandleForReading.close()
+                for w in waiters { w.resume(throwing: err) }
+            }
+            #endif
+
             public func send(_ request: Request) async throws -> Response {
                 let encoded = try JSONEncoder().encode(request)
                 var stdinBytes = Array(encoded)
                 stdinBytes.append(0x0A)
+
+                #if os(macOS) || os(Linux) || os(Windows)
+                if spawner is CrossSpawnSpawner.HostProcessSpawner {
+                    let child = try ensurePersistentChild()
+                    return try await withCheckedThrowingContinuation { continuation in
+                        let closedNow = state.withLock { s -> Bool in
+                            if s.closed { return true }
+                            s.pending[request.id] = continuation
+                            return false
+                        }
+                        if closedNow {
+                            continuation.resume(throwing: ErrorObject(code: -32_000, message: "Plugin host transport is closed"))
+                            return
+                        }
+                        do {
+                            try child.writeLine(stdinBytes)
+                        } catch {
+                            let cont = state.withLock { $0.pending.removeValue(forKey: request.id) }
+                            cont?.resume(throwing: error)
+                        }
+                    }
+                }
+                #endif
+
                 let output = try await spawner.run(
                     ProcessSpec(
                         executable: executable,
@@ -1759,7 +2467,33 @@ public enum CorePlugin {
                 return try JSONDecoder().decode(Response.self, from: Data(output.stdout))
             }
 
-            public func close() async {}
+            public func close() async {
+                #if os(macOS) || os(Linux) || os(Windows)
+                let (child, waiters) = state.withLock { s -> (PersistentChild?, [CheckedContinuation<Response, any Error>]) in
+                    s.closed = true
+                    let c = s.child
+                    s.child = nil
+                    s.pendingBytes.removeAll()
+                    let all = Array(s.pending.values)
+                    s.pending.removeAll()
+                    return (c, all)
+                }
+                let closeErr = ErrorObject(code: -32_000, message: "Plugin host transport closed")
+                for w in waiters { w.resume(throwing: closeErr) }
+                if let child {
+                    await child.terminateAndWait()
+                }
+                #else
+                let waiters = state.withLock { s -> [CheckedContinuation<Response, any Error>] in
+                    s.closed = true
+                    let all = Array(s.pending.values)
+                    s.pending.removeAll()
+                    return all
+                }
+                let closeErr = ErrorObject(code: -32_000, message: "Plugin host transport closed")
+                for w in waiters { w.resume(throwing: closeErr) }
+                #endif
+            }
         }
 
         /// Handshake metadata returned by `plugin.initialize` from an external JSON-RPC plugin process.
@@ -2511,11 +3245,188 @@ public enum CorePlugin {
     // MARK: - Core Built-in Plugins (`agent`, `command`, `fork-notice`, `goal`, `identity`, `mcp-codemode-defaults`, `models-dev`, `optimize`, `plan`, `skill`, `tool-input-repair`, `verbosity`, `warming`)
 
     public enum AgentPlugin {
-        /// Built-in agent catalog plugin (`opencode.agent`) defining Build, Explore, Title, and Summary agents.
+        public static let explorePrompt = """
+        You are a file search specialist. You excel at thoroughly navigating and exploring codebases.
+
+        Guidelines:
+        - Your role is EXCLUSIVELY to search and analyze
+        - Parallelize independent tool calls for searches and reads whenever possible
+        - Adapt your search approach based on the thoroughness level specified by the caller
+        - Return file paths as absolute paths in your final response
+        - You MUST NOT create, modify, delete, move, or copy files, including temporary files and reports
+        - Shell commands MUST be read-only. NEVER run commands that write files or change system state
+
+        Complete the user's search request efficiently and report your findings clearly.
+        """
+
+        public static let titlePrompt = """
+        You name conversations so the user can find them later in a list of past sessions.
+
+        You will receive the first message of a conversation, or for an ongoing conversation its original request and recent messages. Reply with a title for it and nothing else: one line, no quotes, no trailing period, no label such as "Title:".
+
+        Aim for three to five words. Name the specific subject, such as the feature, file, issue number, error, or tool involved. Use sentence case, not title case. Keep identifiers exactly as written. Use the same language as the message.
+        """
+
+        public static let summaryPrompt = """
+        Summarize what was done in this conversation. Write like a pull request description.
+
+        Rules:
+        - 2-3 sentences max
+        - Describe the changes made, not the process
+        - Do not mention running tests, builds, or other validation steps
+        - Do not explain what the user asked for
+        - Write in first person (I added..., I fixed...)
+        - Never ask questions or add new questions
+        - If the conversation ends with an unanswered question or imperative request to the user, preserve it
+        """
+
+        /// Built-in agent catalog plugin (`opencode.agent`) defining Build, Plan, General, Explore, Compaction, Title, and Summary agents.
         // parity: core/src/plugin/agent.ts#Plugin [status=adapted hash=1f30747747d3]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.agent") { ctx in
+                let planDir = PluginContract.joinPath(
+                    PluginContract.joinPath(Host.currentEnvironment.homeDirectory ?? "/tmp", ".opencode"),
+                    "plan"
+                )
                 _ = await ctx.agent.transform { editor in
+                    editor.update("build") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "build"),
+                            name: AgentSchema.Name(rawValue: "Build"),
+                            model: item.model,
+                            request: item.request,
+                            system: item.system,
+                            description: "The default agent. Executes tools based on configured permissions.",
+                            mode: .primary,
+                            hidden: false,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: item.permissions + [
+                                PermissionSchema.Rule(action: "question", resource: "*", effect: .allow),
+                            ]
+                        )
+                    }
+
+                    editor.update("plan") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "plan"),
+                            name: AgentSchema.Name(rawValue: "Plan"),
+                            model: item.model,
+                            request: item.request,
+                            system: item.system,
+                            description: "Read-only agent for exploring the codebase and planning work before implementation.",
+                            mode: .primary,
+                            hidden: false,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: item.permissions + [
+                                PermissionSchema.Rule(action: "question", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "edit", resource: "*", effect: .deny),
+                                PermissionSchema.Rule(action: "edit", resource: PluginContract.joinPath(planDir, "*"), effect: .allow),
+                            ]
+                        )
+                    }
+
+                    editor.update("general") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "general"),
+                            name: AgentSchema.Name(rawValue: "General"),
+                            model: item.model,
+                            request: item.request,
+                            system: item.system,
+                            description: "General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.",
+                            mode: .subagent,
+                            hidden: false,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: item.permissions + [
+                                PermissionSchema.Rule(action: "question", resource: "*", effect: .deny),
+                                PermissionSchema.Rule(action: "subagent", resource: "*", effect: .deny),
+                            ]
+                        )
+                    }
+
+                    editor.update("explore") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "explore"),
+                            name: AgentSchema.Name(rawValue: "Explore"),
+                            model: item.model,
+                            request: item.request,
+                            system: explorePrompt,
+                            description: #"Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions."#,
+                            mode: .subagent,
+                            hidden: false,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: [
+                                PermissionSchema.Rule(action: "*", resource: "*", effect: .deny),
+                                PermissionSchema.Rule(action: "shell", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "grep", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "glob", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "webfetch", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "websearch", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "read", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "read", resource: "*.env", effect: .ask),
+                                PermissionSchema.Rule(action: "read", resource: "*.env.*", effect: .ask),
+                                PermissionSchema.Rule(action: "read", resource: "*.env.example", effect: .allow),
+                                PermissionSchema.Rule(action: "subagent", resource: "*", effect: .deny),
+                                PermissionSchema.Rule(action: "external_directory", resource: "*", effect: .allow),
+                            ]
+                        )
+                    }
+
+                    editor.update("compaction") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "compaction"),
+                            name: AgentSchema.Name(rawValue: "Compaction"),
+                            model: item.model,
+                            request: item.request,
+                            system: item.system,
+                            description: item.description,
+                            mode: .primary,
+                            hidden: true,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: item.permissions
+                        )
+                    }
+
+                    editor.update("title") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "title"),
+                            name: AgentSchema.Name(rawValue: "Title"),
+                            model: item.model,
+                            request: item.request,
+                            system: titlePrompt,
+                            description: item.description,
+                            mode: .primary,
+                            hidden: true,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: [
+                                PermissionSchema.Rule(action: "*", resource: "*", effect: .deny),
+                            ]
+                        )
+                    }
+
+                    editor.update("summary") { item in
+                        item = AgentSchema.Info(
+                            id: AgentSchema.ID(rawValue: "summary"),
+                            name: AgentSchema.Name(rawValue: "Summary"),
+                            model: item.model,
+                            request: item.request,
+                            system: summaryPrompt,
+                            description: item.description,
+                            mode: .primary,
+                            hidden: true,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: [
+                                PermissionSchema.Rule(action: "*", resource: "*", effect: .deny),
+                            ]
+                        )
+                    }
+
                     editor.setDefault("build")
                 }
             }
@@ -2523,23 +3434,125 @@ public enum CorePlugin {
     }
 
     public enum CommandPlugin {
-        /// Built-in slash command plugin (`opencode.command`) registering `/init`, `/review`, and MCP prompt commands.
+        public static let initTemplate = """
+        Create or update `AGENTS.md` for this repository.
+
+        The goal is a compact instruction file that helps future OpenCode sessions avoid mistakes and ramp up quickly. Every line should answer: "Would an agent likely miss this without help?" If not, leave it out.
+
+        User-provided focus or constraints (honor these):
+        $ARGUMENTS
+
+        ## How to investigate
+
+        Read the highest-value sources first:
+        - `README*`, root manifests, workspace config, lockfiles
+        - build, test, lint, formatter, typecheck, and codegen config
+        - CI workflows and pre-commit / task runner config
+        - existing instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`)
+        - repo-local OpenCode config such as `opencode.json`
+
+        Prefer executable sources of truth over prose. If docs conflict with config or scripts, trust the executable source and only keep what you can verify.
+
+        ## What to extract
+
+        Look for the highest-signal facts for an agent working in this repo:
+        - exact developer commands, especially non-obvious ones
+        - how to run a single test, a single package, or a focused verification step
+        - required command order when it matters, such as `lint -> typecheck -> test`
+        - monorepo or multi-package boundaries, ownership of major directories, and the real app/library entrypoints
+        - framework or toolchain quirks: generated code, migrations, codegen, build artifacts, special env loading, dev servers, infra deploy flow
+        - testing quirks: fixtures, integration test prerequisites, snapshot workflows, required services, flaky or expensive suites
+        - important constraints from existing instruction files worth preserving
+
+        If `AGENTS.md` already exists at `${path}`, improve it in place rather than rewriting blindly. Preserve verified useful guidance, delete fluff or stale claims, and reconcile it with the current codebase.
+        """
+
+        public static let reviewTemplate = """
+        You are a code reviewer. Your job is to review code changes and provide actionable feedback.
+
+        ---
+
+        Input: $ARGUMENTS
+
+        ---
+
+        ## Determining What to Review
+
+        Based on the input provided, determine which type of review to perform:
+
+        1. **No arguments (default)**: Review all uncommitted changes
+           - Run: `git diff` for unstaged changes
+           - Run: `git diff --cached` for staged changes
+           - Run: `git status --short` to identify untracked (net new) files
+
+        2. **Commit hash** (40-char SHA or short hash): Review that specific commit
+           - Run: `git show $ARGUMENTS`
+
+        3. **Branch name**: Compare current branch to the specified branch
+           - Run: `git diff $ARGUMENTS...HEAD`
+
+        4. **PR URL or number** (contains "github.com" or "pull" or looks like a PR number): Review the pull request
+           - Run: `gh pr view $ARGUMENTS` to get PR context
+           - Run: `gh pr diff $ARGUMENTS` to get the diff
+
+        ## Gathering Context
+
+        **Diffs alone are not enough.** After getting the diff, read the entire file(s) being modified to understand the full context. Focus on bugs, structure, obvious performance issues, and unintended behavior changes. Be direct, clear, and matter-of-fact.
+        """
+
+        public static func renderTemplate(_ template: String, projectDirectory: String, arguments: String) -> String {
+            let withPath = template.replacing("${path}", with: projectDirectory)
+            let trimmed = arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+            if withPath.contains("$ARGUMENTS") {
+                return withPath.replacing("$ARGUMENTS", with: trimmed)
+            }
+            return trimmed.isEmpty ? withPath : "\(withPath)\n\n\(trimmed)"
+        }
+
+        /// Built-in slash command plugin (`opencode.command`) registering `/init` and `/review` with real prompt templates.
         // parity: core/src/plugin/command.ts#Plugin [status=adapted hash=3a478a54668e]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.command") { ctx in
+                let projectDirectory = ctx.location.project.directory.rawValue
                 _ = await ctx.command.transform { editor in
                     editor.add(
                         PluginEffect.CommandDefinition(
                             name: "init",
                             description: "guided AGENTS.md setup",
-                            execute: { _ in }
+                            execute: { invocation in
+                                let rendered = renderTemplate(
+                                    initTemplate,
+                                    projectDirectory: projectDirectory,
+                                    arguments: invocation.prompt.text
+                                )
+                                let nextPrompt = PromptInputSchema.Prompt(
+                                    text: rendered,
+                                    files: invocation.prompt.files,
+                                    agents: invocation.prompt.agents,
+                                    skills: invocation.prompt.skills
+                                )
+                                try await ctx.session.prompt(invocation.sessionID, nextPrompt, invocation.delivery)
+                            }
                         )
                     )
                     editor.add(
                         PluginEffect.CommandDefinition(
                             name: "review",
                             description: "review changes [commit|branch|pr], defaults to uncommitted",
-                            execute: { _ in }
+                            execute: { invocation in
+                                let rendered = renderTemplate(
+                                    reviewTemplate,
+                                    projectDirectory: projectDirectory,
+                                    arguments: invocation.prompt.text
+                                )
+                                let nextPrompt = PromptInputSchema.Prompt(
+                                    text: rendered,
+                                    files: invocation.prompt.files,
+                                    agents: invocation.prompt.agents,
+                                    skills: invocation.prompt.skills
+                                )
+                                try await ctx.session.prompt(invocation.sessionID, nextPrompt, invocation.delivery)
+                            }
                         )
                     )
                 }
@@ -2729,11 +3742,306 @@ public enum CorePlugin {
         )
     }
 
+    private static let bedrockProfileOnlyIDs: Set<String> = [
+        "amazon.nova-2-lite-v1:0",
+        "anthropic.claude-fable-5",
+        "anthropic.claude-fable-5-1",
+        "anthropic.claude-haiku-4-5-20251001-v1:0",
+        "anthropic.claude-haiku-5-5",
+        "anthropic.claude-opus-4-1-20250805-v1:0",
+        "anthropic.claude-opus-4-5-20251101-v1:0",
+        "anthropic.claude-opus-4-7",
+        "anthropic.claude-opus-4-8",
+        "anthropic.claude-opus-5",
+        "anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "anthropic.claude-sonnet-5",
+        "anthropic.claude-sonnet-5-5",
+        "deepseek.r1-v1:0",
+        "meta.llama4-maverick-17b-instruct-v1:0",
+        "meta.llama4-scout-17b-instruct-v1:0",
+        "mistral.pixtral-large-2502-v1:0",
+        "writer.palmyra-x4-v1:0",
+        "writer.palmyra-x5-v1:0",
+    ]
+
+    private static func makeDefaultModel(
+        id: String,
+        providerID: ProviderSchema.ID,
+        name: String,
+        package: String,
+        family: String? = nil,
+        baseURL: String? = nil,
+        context: Int,
+        output: Int,
+        inputModalities: [String] = ["text", "image"]
+    ) -> ModelSchema.Info {
+        let settings: ModelSchema.Settings? = baseURL.map { ModelSchema.Settings(extra: ["baseURL": .string($0)]) }
+        return ModelSchema.Info(
+            id: ModelSchema.ID(rawValue: id),
+            modelID: ModelSchema.ID(rawValue: id),
+            providerID: providerID,
+            family: family.map { ModelSchema.Family(rawValue: $0) },
+            name: name,
+            package: package,
+            settings: settings,
+            capabilities: ModelSchema.Capabilities(tools: true, input: inputModalities, output: ["text"]),
+            variants: [],
+            time: ModelSchema.Info.Time(released: 1_750_000_000),
+            cost: [ModelSchema.Cost(input: .zero, output: .zero, cache: ModelSchema.Cost.Cache(read: .zero, write: .zero))],
+            status: .active,
+            enabled: true,
+            limit: ModelSchema.Info.Limit(context: context, input: nil, output: output)
+        )
+    }
+
+    /// Curated built-in default snapshots used by `ModelsDevPlugin` when no live or cached catalog is available.
+    public static func defaultModelsDevSnapshots() -> [CoreModel.ModelsDev.Snapshot] {
+        [
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .anthropic,
+                    integrationID: IntegrationID(rawValue: "anthropic"),
+                    name: "Anthropic",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/anthropic",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.anthropic.com/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "claude-sonnet-4-6", providerID: .anthropic, name: "Claude Sonnet 4.6", package: "@opencode/ai/providers/anthropic", family: "claude-sonnet", baseURL: "https://api.anthropic.com/v1", context: 200_000, output: 64_000),
+                    makeDefaultModel(id: "claude-opus-4-6", providerID: .anthropic, name: "Claude Opus 4.6", package: "@opencode/ai/providers/anthropic", family: "claude-opus", baseURL: "https://api.anthropic.com/v1", context: 200_000, output: 32_000),
+                    makeDefaultModel(id: "claude-haiku-4-5-20251001", providerID: .anthropic, name: "Claude Haiku 4.5", package: "@opencode/ai/providers/anthropic", family: "claude-haiku", baseURL: "https://api.anthropic.com/v1", context: 200_000, output: 16_000),
+                ],
+                environment: ["ANTHROPIC_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .openai,
+                    integrationID: IntegrationID(rawValue: "openai"),
+                    name: "OpenAI",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/openai",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.openai.com/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "gpt-5", providerID: .openai, name: "GPT-5", package: "@opencode/ai/providers/openai", family: "gpt-5", baseURL: "https://api.openai.com/v1", context: 272_000, output: 128_000),
+                    makeDefaultModel(id: "gpt-5-mini", providerID: .openai, name: "GPT-5 Mini", package: "@opencode/ai/providers/openai", family: "gpt-5", baseURL: "https://api.openai.com/v1", context: 272_000, output: 64_000),
+                ],
+                environment: ["OPENAI_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .google,
+                    integrationID: IntegrationID(rawValue: "google"),
+                    name: "Google",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/google",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://generativelanguage.googleapis.com/v1beta")])
+                ),
+                models: [
+                    makeDefaultModel(id: "gemini-2.5-pro", providerID: .google, name: "Gemini 2.5 Pro", package: "@opencode/ai/providers/google", family: "gemini-2.5", baseURL: "https://generativelanguage.googleapis.com/v1beta", context: 1_048_576, output: 65_536),
+                    makeDefaultModel(id: "gemini-2.5-flash", providerID: .google, name: "Gemini 2.5 Flash", package: "@opencode/ai/providers/google", family: "gemini-2.5", baseURL: "https://generativelanguage.googleapis.com/v1beta", context: 1_048_576, output: 65_536),
+                ],
+                environment: ["GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .openrouter,
+                    integrationID: IntegrationID(rawValue: "openrouter"),
+                    name: "OpenRouter",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/openrouter",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://openrouter.ai/api/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "anthropic/claude-sonnet-4", providerID: .openrouter, name: "Claude Sonnet 4 (OpenRouter)", package: "@opencode/ai/providers/openrouter", baseURL: "https://openrouter.ai/api/v1", context: 200_000, output: 16_000),
+                ],
+                environment: ["OPENROUTER_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: "xai"),
+                    integrationID: IntegrationID(rawValue: "xai"),
+                    name: "xAI",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/xai",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.x.ai/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "grok-4", providerID: ProviderSchema.ID(rawValue: "xai"), name: "Grok 4", package: "@opencode/ai/providers/xai", family: "grok-4", baseURL: "https://api.x.ai/v1", context: 256_000, output: 32_000),
+                ],
+                environment: ["XAI_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: "groq"),
+                    integrationID: IntegrationID(rawValue: "groq"),
+                    name: "Groq",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/groq",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.groq.com/openai/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "llama-3.3-70b-versatile", providerID: ProviderSchema.ID(rawValue: "groq"), name: "Llama 3.3 70B", package: "@opencode/ai/providers/groq", baseURL: "https://api.groq.com/openai/v1", context: 131_072, output: 32_768, inputModalities: ["text"]),
+                ],
+                environment: ["GROQ_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: "deepseek"),
+                    integrationID: IntegrationID(rawValue: "deepseek"),
+                    name: "DeepSeek",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/deepseek",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.deepseek.com")])
+                ),
+                models: [
+                    makeDefaultModel(id: "deepseek-chat", providerID: ProviderSchema.ID(rawValue: "deepseek"), name: "DeepSeek Chat", package: "@opencode/ai/providers/deepseek", baseURL: "https://api.deepseek.com", context: 128_000, output: 8_192, inputModalities: ["text"]),
+                    makeDefaultModel(id: "deepseek-reasoner", providerID: ProviderSchema.ID(rawValue: "deepseek"), name: "DeepSeek Reasoner", package: "@opencode/ai/providers/deepseek", baseURL: "https://api.deepseek.com", context: 128_000, output: 64_000, inputModalities: ["text"]),
+                ],
+                environment: ["DEEPSEEK_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .mistral,
+                    integrationID: IntegrationID(rawValue: "mistral"),
+                    name: "Mistral",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/mistral",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.mistral.ai/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "mistral-large-latest", providerID: .mistral, name: "Mistral Large", package: "@opencode/ai/providers/mistral", baseURL: "https://api.mistral.ai/v1", context: 128_000, output: 16_384, inputModalities: ["text"]),
+                ],
+                environment: ["MISTRAL_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: "cerebras"),
+                    integrationID: IntegrationID(rawValue: "cerebras"),
+                    name: "Cerebras",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/cerebras",
+                    settings: ProviderSchema.Settings(extra: ["baseURL": .string("https://api.cerebras.ai/v1")])
+                ),
+                models: [
+                    makeDefaultModel(id: "llama-3.3-70b", providerID: ProviderSchema.ID(rawValue: "cerebras"), name: "Llama 3.3 70B (Cerebras)", package: "@opencode/ai/providers/cerebras", baseURL: "https://api.cerebras.ai/v1", context: 128_000, output: 8_192, inputModalities: ["text"]),
+                ],
+                environment: ["CEREBRAS_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .amazonBedrock,
+                    integrationID: IntegrationID(rawValue: "amazon-bedrock"),
+                    name: "Amazon Bedrock",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/amazon-bedrock"
+                ),
+                models: [
+                    makeDefaultModel(id: "anthropic.claude-sonnet-4-6", providerID: .amazonBedrock, name: "Claude Sonnet 4.6 (Bedrock)", package: "@opencode/ai/providers/amazon-bedrock", context: 200_000, output: 64_000),
+                ],
+                environment: ["AWS_BEARER_TOKEN_BEDROCK"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .azure,
+                    integrationID: IntegrationID(rawValue: "azure"),
+                    name: "Azure OpenAI",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/azure"
+                ),
+                models: [
+                    makeDefaultModel(id: "gpt-5", providerID: .azure, name: "GPT-5 (Azure)", package: "@opencode/ai/providers/azure", context: 272_000, output: 64_000),
+                ],
+                environment: ["AZURE_OPENAI_API_KEY", "AZURE_API_KEY"]
+            ),
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: .googleVertex,
+                    integrationID: IntegrationID(rawValue: "google-vertex"),
+                    name: "Google Vertex AI",
+                    activation: .auto,
+                    package: "@opencode/ai/providers/google-vertex"
+                ),
+                models: [
+                    makeDefaultModel(id: "gemini-2.5-pro", providerID: .googleVertex, name: "Gemini 2.5 Pro (Vertex)", package: "@opencode/ai/providers/google-vertex", context: 1_048_576, output: 65_536),
+                ],
+                environment: ["GOOGLE_VERTEX_API_KEY"]
+            ),
+        ]
+    }
+
+    private static func filterModelsDevSnapshots(_ data: [CoreModel.ModelsDev.Snapshot]) -> [CoreModel.ModelsDev.Snapshot] {
+        data
+            .filter { $0.info.id.rawValue != "azure-cognitive-services" && $0.info.id.rawValue != "google-vertex-anthropic" }
+            .map { snap in
+                let filteredModels = snap.models.filter { model in
+                    model.status != .deprecated
+                        && ((model.type ?? .chat) != .chat || CoreModel.Model.supportsText(model))
+                        && !(snap.info.id == .amazonBedrock && bedrockProfileOnlyIDs.contains(model.modelID.rawValue))
+                }
+                return CoreModel.ModelsDev.Snapshot(info: snap.info, models: filteredModels, environment: snap.environment)
+            }
+            .filter { !$0.models.isEmpty }
+    }
+
+    /// Constructs a `ModelsDevPlugin` backed by an explicit or task-local `CoreModel.ModelsDev.Interface`,
+    /// falling back to built-in default snapshots when offline or uncached.
+    public static func makeModelsDevPlugin(
+        modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
+        fallbackDefaults: [CoreModel.ModelsDev.Snapshot] = defaultModelsDevSnapshots()
+    ) -> PluginEffect.Plugin {
+        PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.models.dev") { ctx in
+                let service = modelsDev ?? Host.currentModelsDevOverride
+                let fetched: [CoreModel.ModelsDev.Snapshot]
+                if let service, let loaded = try? await service.get(), !loaded.isEmpty {
+                    fetched = filterModelsDevSnapshots(loaded)
+                } else {
+                    fetched = []
+                }
+                let snapshots = fetched.isEmpty ? filterModelsDevSnapshots(fallbackDefaults) : fetched
+                let env = Host.currentEnvironment
+
+                _ = await ctx.integration.transform { editor in
+                    for snap in snapshots where !snap.environment.isEmpty {
+                        let intID = snap.info.id.rawValue
+                        editor.update(intID) { item in item.name = snap.info.name }
+                        editor.method.update(.key(integrationID: intID, method: PluginEffect.IntegrationKeyMethod()))
+                        editor.method.update(.env(integrationID: intID, method: PluginEffect.IntegrationEnvMethod(names: snap.environment)))
+                    }
+                }
+
+                _ = await ctx.provider.transform { editor in
+                    for snap in snapshots {
+                        let hasEnvKey = snap.environment.contains { key in
+                            if let val = env.variable(key), !val.isEmpty { return true }
+                            return false
+                        }
+                        let activation: ProviderSchema.Activation = (snap.info.activation == .auto && hasEnvKey)
+                            ? .enabled
+                            : snap.info.activation
+                        let info = ProviderSchema.Info(
+                            id: snap.info.id,
+                            canonical: snap.info.canonical,
+                            integrationID: snap.info.integrationID ?? IntegrationID(rawValue: snap.info.id.rawValue),
+                            name: snap.info.name,
+                            activation: activation,
+                            package: snap.info.package,
+                            compatibility: snap.info.compatibility,
+                            settings: snap.info.settings,
+                            headers: snap.info.headers,
+                            body: snap.info.body
+                        )
+                        editor.add(info, snap.models, nil)
+                    }
+                }
+            }
+        )
+    }
+
     /// Built-in models.dev catalog synchronization plugin (`opencode.models.dev`).
     // parity: core/src/plugin/models-dev.ts#ModelsDevPlugin [status=adapted hash=1f5b39ed3fba]
-    public static let ModelsDevPlugin = PluginEffect.define(
-        PluginEffect.Plugin(id: "opencode.models.dev") { _ in }
-    )
+    public static let ModelsDevPlugin = makeModelsDevPlugin()
 
     public enum OptimizePlugin {
         /// Resolves full `ModelSchema.Info` metadata for a session hook's `ModelSchema.Ref`.
@@ -2743,26 +4051,91 @@ public enum CorePlugin {
             return located.data.first { $0.providerID == model.providerID && $0.id == model.id }
         }
 
+        private static func registerOptimization(
+            id: String,
+            providerMatcher: @escaping @Sendable (ModelSchema.Ref, ModelSchema.Info?) -> Bool,
+            optionKey: String,
+            optionValue: JSONValue
+        ) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: id) { ctx in
+                    _ = await ctx.session.hook("context", { event in
+                        guard case .context(var c) = event else { return event }
+                        let resolved = await resolveModel(ctx: ctx, model: c.model)
+                        if providerMatcher(c.model, resolved), c.options.providerOptions[optionKey] == nil {
+                            c.options.providerOptions[optionKey] = optionValue
+                        }
+                        return .context(c)
+                    }, nil)
+                }
+            )
+        }
+
         // parity: core/src/plugin/optimize.ts#OpenAIPlugin [status=adapted hash=9c958fc08236]
-        public static let OpenAIPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.openai") { _ in })
+        public static let OpenAIPlugin = registerOptimization(
+            id: "opencode.prompt.openai",
+            providerMatcher: { ref, info in
+                ref.providerID.rawValue == "openai" || info?.id.rawValue.hasPrefix("gpt-") == true
+            },
+            optionKey: "parallelToolCalls",
+            optionValue: .bool(true)
+        )
 
         // parity: core/src/plugin/optimize.ts#AnthropicPlugin [status=adapted hash=9b457cb8f764]
-        public static let AnthropicPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.anthropic") { _ in })
+        public static let AnthropicPlugin = registerOptimization(
+            id: "opencode.prompt.anthropic",
+            providerMatcher: { ref, info in
+                ref.providerID.rawValue == "anthropic" || info?.id.rawValue.contains("claude") == true
+            },
+            optionKey: "promptCaching",
+            optionValue: .bool(true)
+        )
 
         // parity: core/src/plugin/optimize.ts#OpenAIToolsPlugin [status=adapted hash=3936764cfa14]
-        public static let OpenAIToolsPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.optimize.openai.tools") { _ in })
+        public static let OpenAIToolsPlugin = registerOptimization(
+            id: "opencode.optimize.openai.tools",
+            providerMatcher: { ref, _ in ref.providerID.rawValue == "openai" },
+            optionKey: "strictToolSchemas",
+            optionValue: .bool(true)
+        )
 
         // parity: core/src/plugin/optimize.ts#AnthropicToolsPlugin [status=adapted hash=0008a6a9b515]
-        public static let AnthropicToolsPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.optimize.anthropic.tools") { _ in })
+        public static let AnthropicToolsPlugin = registerOptimization(
+            id: "opencode.optimize.anthropic.tools",
+            providerMatcher: { ref, _ in ref.providerID.rawValue == "anthropic" },
+            optionKey: "cacheToolDefinitions",
+            optionValue: .bool(true)
+        )
 
         // parity: core/src/plugin/optimize.ts#KimiPlugin [status=adapted hash=73f62a9f888f]
-        public static let KimiPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.kimi") { _ in })
+        public static let KimiPlugin = registerOptimization(
+            id: "opencode.prompt.kimi",
+            providerMatcher: { ref, info in
+                ref.id.rawValue.lowercased().contains("kimi") || info?.family?.rawValue.lowercased().contains("kimi") == true
+            },
+            optionKey: "promptFamily",
+            optionValue: .string("kimi")
+        )
 
         // parity: core/src/plugin/optimize.ts#ArceePlugin [status=adapted hash=91424a8b68d0]
-        public static let ArceePlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.arcee") { _ in })
+        public static let ArceePlugin = registerOptimization(
+            id: "opencode.prompt.arcee",
+            providerMatcher: { ref, info in
+                ref.id.rawValue.lowercased().contains("arcee") || info?.family?.rawValue.lowercased().contains("arcee") == true
+            },
+            optionKey: "promptFamily",
+            optionValue: .string("arcee")
+        )
 
         // parity: core/src/plugin/optimize.ts#MetaPlugin [status=adapted hash=4c1cee47fa9c]
-        public static let MetaPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.meta") { _ in })
+        public static let MetaPlugin = registerOptimization(
+            id: "opencode.prompt.meta",
+            providerMatcher: { ref, info in
+                ref.providerID.rawValue == "meta" || ref.id.rawValue.lowercased().contains("llama") || info?.family?.rawValue.lowercased().contains("llama") == true
+            },
+            optionKey: "promptFamily",
+            optionValue: .string("meta")
+        )
 
         /// Active prompt optimization plugins registered during core startup.
         // parity: core/src/plugin/optimize.ts#Plugins [status=implemented hash=58b6bd3d3f99]
@@ -2776,9 +4149,83 @@ public enum CorePlugin {
     }
 
     public enum PlanPlugin {
+        public static func enterReminder(directory: String) -> String {
+            """
+            <system-reminder>
+            You are in Plan mode. Discuss the plan with the user directly in the conversation. Do not create or update plan files unless the user explicitly asks you to; when they do, write them only in:
+            \(directory)
+
+            Do not modify any other files or ask a subagent to do so.
+
+            You remain in Plan mode until the user switches agents. If the user asks you to implement changes, do not do so. Tell them they need to switch agents.
+            </system-reminder>
+            """
+        }
+
+        public static let leaveReminder = """
+        <system-reminder>
+        You are NO LONGER in Plan mode. The previous Plan restrictions no longer apply. Any Plan mode instructions from earlier in this conversation are no longer active.
+        </system-reminder>
+        """
+
         /// Built-in Plan mode agent & read-only guardrails plugin (`opencode.plan`).
         // parity: core/src/plugin/plan.ts#Plugin [status=adapted hash=ce3d530b95e0]
-        public static let Plugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.plan") { _ in })
+        public static let Plugin = PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.plan") { ctx in
+                let planID = AgentSchema.ID(rawValue: "plan")
+                let home = Host.currentEnvironment.homeDirectory ?? "/tmp"
+                let directory = PluginContract.joinPath(PluginContract.joinPath(home, ".opencode"), "plan")
+                let enterText = enterReminder(directory: directory)
+
+                _ = await ctx.agent.transform { editor in
+                    editor.update("plan") { item in
+                        item = AgentSchema.Info(
+                            id: planID,
+                            name: AgentSchema.Name(rawValue: "Plan"),
+                            model: item.model,
+                            request: item.request,
+                            system: item.system,
+                            description: "Read-only agent for exploring the codebase and planning work before implementation.",
+                            mode: .primary,
+                            hidden: false,
+                            color: item.color,
+                            steps: item.steps,
+                            permissions: item.permissions + [
+                                PermissionSchema.Rule(action: "question", resource: "*", effect: .allow),
+                                PermissionSchema.Rule(action: "edit", resource: "*", effect: .deny),
+                                PermissionSchema.Rule(action: "edit", resource: PluginContract.joinPath(directory, "*"), effect: .allow),
+                            ]
+                        )
+                    }
+                }
+
+                _ = await ctx.tool.hook("execute.after") { event in
+                    guard case .executeAfter(var after) = event else { return event }
+                    guard after.agent == planID,
+                          after.tool == "edit" || after.tool == "write" || after.tool == "patch",
+                          case .error(let err) = after.outcome,
+                          err.message.lowercased().contains("permission") || err.message.lowercased().contains("denied")
+                    else { return event }
+                    after.outcome = .error(
+                        ToolSchema.ToolError(
+                            message: "Cannot use \(after.tool) to modify files outside the Plan directory: \(directory)"
+                        )
+                    )
+                    return .executeAfter(after)
+                }
+
+                _ = await ctx.session.hook("context", { event in
+                    guard case .context(var c) = event else { return event }
+                    if c.agent == planID {
+                        let alreadyPresent = c.system.contains { $0.text == enterText }
+                        if !alreadyPresent {
+                            c.system.append(AISchema.SystemPart(text: enterText))
+                        }
+                    }
+                    return .context(c)
+                }, nil)
+            }
+        )
     }
 
     public enum SkillPlugin {
@@ -2866,27 +4313,225 @@ public enum CorePlugin {
     public enum VerbosityPlugin {
         /// Built-in GPT-5/GPT-6 default `textVerbosity = "low"` plugin (`opencode.prompt.verbosity`).
         // parity: core/src/plugin/verbosity.ts#Plugin [status=adapted hash=652288a21817]
-        public static let Plugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.prompt.verbosity") { _ in })
+        public static let Plugin = PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.prompt.verbosity") { ctx in
+                _ = await ctx.session.hook("context", { event in
+                    guard case .context(var c) = event else { return event }
+                    let modelID = c.model.id.rawValue.lowercased()
+                    if (modelID.hasPrefix("gpt-5") || modelID.hasPrefix("gpt-6")),
+                       c.options.providerOptions["textVerbosity"] == nil
+                    {
+                        c.options.providerOptions["textVerbosity"] = .string("low")
+                    }
+                    return .context(c)
+                }, nil)
+            }
+        )
     }
 
     public enum WarmingPlugin {
         /// Built-in prompt-cache keep-alive warming plugin (`opencode.warming`).
         // parity: core/src/plugin/warming.ts#Plugin [status=adapted hash=0c5c942d7545]
-        public static let Plugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.warming") { _ in })
+        public static let Plugin = PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.warming") { ctx in
+                _ = await ctx.session.hook("context", { event in
+                    guard case .context(var c) = event else { return event }
+                    if c.options.providerOptions["promptCacheWarming"] == nil {
+                        c.options.providerOptions["promptCacheWarming"] = .bool(true)
+                    }
+                    return .context(c)
+                }, nil)
+            }
+        )
     }
 
     // MARK: - VCS Plugins (`plugin/vcs/git.ts`, `plugin/vcs/hg.ts`)
 
     public enum VcsGitPlugin {
-        /// Built-in Git VCS plugin (`opencode.vcs.git`).
+        /// Builds a `PluginEffect.VcsDefinition` backed by `CoreVcs.Git.Service`.
+        public static func definition(
+            git: CoreVcs.Git.Service? = nil
+        ) -> PluginEffect.VcsDefinition {
+            let capturedGit = git
+            @Sendable func resolveGit() -> CoreVcs.Git.Service {
+                capturedGit ?? CoreVcs.Git.Service(
+                    spawner: Host.currentProcessSpawner,
+                    fileSystem: Host.currentFileSystem
+                )
+            }
+            return PluginEffect.VcsDefinition(
+                id: "git",
+                name: "Git",
+                initRepo: { scope in
+                    try await resolveGit().initRepository(at: scope.worktree)
+                },
+                info: { scope in
+                    let g = resolveGit()
+                    let current = await g.currentBranch(in: scope.directory)
+                    let root = await g.defaultBranch(in: scope.directory)
+                    return VcsSchema.Info(
+                        provider: "git",
+                        branch: VcsSchema.Branch(current: current, defaultBranch: root?.name)
+                    )
+                },
+                base: { scope in
+                    try await resolveGit().base(in: scope.directory)
+                },
+                branches: { input in
+                    await resolveGit().branches(
+                        in: input.scope.directory,
+                        options: CoreVcs.Vcs.BranchOptions(search: input.search, limit: input.limit)
+                    )
+                },
+                status: { scope in
+                    await resolveGit().status(in: scope.directory, worktree: scope.worktree)
+                },
+                diff: { input in
+                    try await resolveGit().diff(
+                        in: input.scope.directory,
+                        worktree: input.scope.worktree,
+                        mode: input.mode,
+                        options: CoreVcs.Vcs.DiffOptions(
+                            context: input.context,
+                            base: input.base,
+                            untracked: input.untracked
+                        )
+                    )
+                }
+            )
+        }
+
+        /// Registers the real Git VCS provider directly onto a `CoreVcs.Vcs.Service`.
+        @discardableResult
+        public static func register(
+            on vcsService: CoreVcs.Vcs.Service,
+            directory: String? = nil,
+            worktree: String? = nil,
+            git: CoreVcs.Git.Service = CoreVcs.Git.Service()
+        ) async throws -> CoreState.Registration {
+            let dir = directory ?? vcsService.directory.rawValue
+            let provider = CoreVcs.Git.makeVcsProvider(directory: dir, worktree: worktree ?? dir, git: git)
+            return try await vcsService.transform { editor in
+                editor.add(provider)
+                if editor.defaultSelection == nil {
+                    editor.defaultSelection = "git"
+                }
+            }
+        }
+
+        /// Constructs a `VcsGitPlugin` bound to an optional explicit `CoreVcs.Git.Service`.
+        public static func make(git: CoreVcs.Git.Service? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.vcs.git") { ctx in
+                    let gitService = git ?? CoreVcs.Git.Service(
+                        spawner: Host.currentProcessSpawner,
+                        fileSystem: Host.currentFileSystem
+                    )
+                    let def = definition(git: gitService)
+                    _ = await ctx.vcs.transform { editor in
+                        editor.add(def)
+                        if editor.getDefault() == nil {
+                            editor.setDefault("git")
+                        }
+                    }
+                }
+            )
+        }
+
+        /// Built-in Git VCS plugin (`opencode.vcs.git`) backed by `CoreVcs.Git.Service`.
         // parity: core/src/plugin/vcs/git.ts#Plugin [status=adapted hash=df2b85e1b539]
-        public static let Plugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.vcs.git") { _ in })
+        public static let Plugin = make()
     }
 
     public enum VcsHgPlugin {
-        /// Built-in Mercurial VCS plugin (`opencode.vcs.hg`).
+        /// Built-in Mercurial VCS plugin (`opencode.vcs.hg`) invoking `hg` via `ProcessSpawner`.
         // parity: core/src/plugin/vcs/hg.ts#Plugin [status=adapted hash=5f7b3ce3e912]
-        public static let Plugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.vcs.hg") { _ in })
+        public static let Plugin = PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.vcs.hg") { ctx in
+                let capturedSpawner = Host.currentProcessSpawnerOverride
+                @Sendable func runHg(_ args: [String], cwd: String) async -> ProcessOutput? {
+                    let spawner = capturedSpawner ?? Host.currentProcessSpawner
+                    return try? await spawner.run(ProcessSpec(executable: "hg", arguments: args, workingDirectory: cwd))
+                }
+                let def = PluginEffect.VcsDefinition(
+                    id: "hg",
+                    name: "Mercurial",
+                    initRepo: { scope in
+                        guard let out = await runHg(["init"], cwd: scope.worktree), out.exitCode == 0 else {
+                            throw CoreVcs.Vcs.InitializeError(kind: .failed)
+                        }
+                    },
+                    info: { scope in
+                        let out = await runHg(["branch"], cwd: scope.directory)
+                        let branchName: String? = (out?.exitCode == 0)
+                            ? String(decoding: out?.stdout ?? [], as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            : nil
+                        return VcsSchema.Info(
+                            provider: "hg",
+                            branch: VcsSchema.Branch(current: (branchName?.isEmpty == false) ? branchName : nil, defaultBranch: "default")
+                        )
+                    },
+                    base: nil,
+                    branches: { input in
+                        guard let out = await runHg(["branches", "-T", "{branch}\n"], cwd: input.scope.directory),
+                              out.exitCode == 0
+                        else { return [] }
+                        var list = String(decoding: out.stdout, as: UTF8.self)
+                            .split(whereSeparator: \.isNewline)
+                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty }
+                        if let search = input.search?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !search.isEmpty {
+                            list = list.filter { $0.lowercased().contains(search) }
+                        }
+                        if let limit = input.limit, limit >= 0, list.count > limit {
+                            return Array(list.prefix(limit))
+                        }
+                        return list
+                    },
+                    status: { scope in
+                        guard let out = await runHg(["status"], cwd: scope.directory), out.exitCode == 0 else { return [] }
+                        var items: [VcsSchema.FileStatus] = []
+                        for line in String(decoding: out.stdout, as: UTF8.self).split(whereSeparator: \.isNewline) {
+                            guard line.count >= 3 else { continue }
+                            let code = line.first
+                            let file = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                            guard !file.isEmpty else { continue }
+                            let status: VcsSchema.FileStatus.Status = switch code {
+                            case "A", "?": .added
+                            case "R", "!": .deleted
+                            default: .modified
+                            }
+                            items.append(VcsSchema.FileStatus(file: file, additions: .zero, deletions: .zero, status: status))
+                        }
+                        return items.sorted { $0.file < $1.file }
+                    },
+                    diff: { input in
+                        guard let out = await runHg(["diff", "--git"], cwd: input.scope.directory), out.exitCode == 0 else {
+                            return []
+                        }
+                        let raw = String(decoding: out.stdout, as: UTF8.self)
+                        let byFile = CoreVcs.Patch.chunksByFile(CoreVcs.Patch.Info(text: raw, truncated: false))
+                        return byFile.keys.sorted().map { file in
+                            let chunk = byFile[file] ?? ""
+                            let counts = CoreVcs.Patch.countPatch(chunk)
+                            let status: FileDiffSchema.Status = chunk.contains("new file mode")
+                                ? .added
+                                : chunk.contains("deleted file mode") ? .deleted : .modified
+                            return FileDiffSchema.Info(
+                                file: file,
+                                patch: chunk,
+                                additions: SchemaPrimitive.NonNegativeInt(rawValue: counts.additions) ?? .zero,
+                                deletions: SchemaPrimitive.NonNegativeInt(rawValue: counts.deletions) ?? .zero,
+                                status: status
+                            )
+                        }
+                    }
+                )
+                _ = await ctx.vcs.transform { editor in
+                    editor.add(def)
+                }
+            }
+        )
     }
 
     // MARK: - WebSearch Plugins (`plugin/websearch/*`)
@@ -2956,6 +4601,38 @@ public enum CorePlugin {
             }
             return parseResponse(String(decoding: response.body, as: UTF8.self))
         }
+
+        internal static func firstTextContent(in result: JSONValue?) -> String? {
+            guard case .object(let obj) = result, case .array(let content) = obj["content"] else { return nil }
+            for item in content {
+                if case .object(let entry) = item, case .string(let text) = entry["text"], !text.isEmpty {
+                    return text
+                }
+            }
+            return nil
+        }
+
+        internal static func parseISOEpochMs(_ raw: String?) -> Double? {
+            guard let raw else { return nil }
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed != "N/A" else { return nil }
+            #if os(macOS) || os(Linux) || os(Windows)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = formatter.date(from: trimmed) {
+                return d.timeIntervalSince1970 * 1_000.0
+            }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let d = formatter.date(from: trimmed) {
+                return d.timeIntervalSince1970 * 1_000.0
+            }
+            formatter.formatOptions = [.withFullDate]
+            if let d = formatter.date(from: trimmed) {
+                return d.timeIntervalSince1970 * 1_000.0
+            }
+            #endif
+            return nil
+        }
     }
 
     public enum WebSearchProvider {
@@ -2989,60 +4666,339 @@ public enum CorePlugin {
         // parity: core/src/plugin/websearch/exa.ts#endpoint [status=implemented hash=48be7f0e793f]
         public static let endpoint = "https://mcp.exa.ai/mcp"
 
-        // parity: core/src/plugin/websearch/exa.ts#Plugin [status=adapted hash=5496dfb55fb0]
-        public static let Plugin = PluginEffect.define(
-            PluginEffect.Plugin(id: "opencode.websearch.exa") { ctx in
-                await WebSearchProvider.register(ctx: ctx, id: "exa", name: "Exa", env: "EXA_API_KEY") { _, _ in [] }
+        public static func parseResults(_ text: String) -> [WebSearchSchema.Result] {
+            let blocks = text.components(separatedBy: "\n\n---\n\n")
+            var out: [WebSearchSchema.Result] = []
+            for block in blocks {
+                var url: String?
+                var title: String?
+                var publishedText: String?
+                var contentLines: [String] = []
+                var inContent = false
+                for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
+                    let line = String(rawLine)
+                    if inContent {
+                        contentLines.append(line)
+                        continue
+                    }
+                    if line.hasPrefix("URL:") {
+                        url = line.dropFirst(4).trimmingCharacters(in: .whitespaces)
+                    } else if line.hasPrefix("Title:") {
+                        let t = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                        if !t.isEmpty && t != "N/A" { title = t }
+                    } else if line.hasPrefix("Published:") {
+                        publishedText = line.dropFirst(10).trimmingCharacters(in: .whitespaces)
+                    } else if line.hasPrefix("Highlights:") {
+                        inContent = true
+                        let rest = line.dropFirst(11).trimmingCharacters(in: .whitespaces)
+                        if !rest.isEmpty { contentLines.append(rest) }
+                    } else if line.hasPrefix("Text:") {
+                        inContent = true
+                        let rest = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                        if !rest.isEmpty { contentLines.append(rest) }
+                    }
+                }
+                guard let url, !url.isEmpty else { continue }
+                let content = contentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                let published = WebSearchMcp.parseISOEpochMs(publishedText)
+                out.append(WebSearchSchema.Result(
+                    url: url,
+                    title: title,
+                    content: content.isEmpty ? nil : content,
+                    time: WebSearchSchema.Result.Time(published: published)
+                ))
             }
-        )
+            return out
+        }
+
+        public static func make(http explicitHTTP: (any HTTPTransport)? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.websearch.exa") { ctx in
+                    let activationHTTP = explicitHTTP ?? Host.currentHTTPTransportOverride
+                    await WebSearchProvider.register(ctx: ctx, id: "exa", name: "Exa", env: "EXA_API_KEY") { input, credential in
+                        let transport = activationHTTP ?? Host.currentHTTPTransport
+                        var targetURL = endpoint
+                        if case .key(let k) = credential, !k.key.isEmpty {
+                            let encodedKey = k.key.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? k.key
+                            targetURL = "\(endpoint)?exaApiKey=\(encodedKey)"
+                        }
+                        let result = try await WebSearchMcp.call(
+                            transport: transport,
+                            url: targetURL,
+                            tool: "web_search_exa",
+                            arguments: .object([
+                                "query": .string(input.query),
+                                "numResults": .int(8),
+                            ])
+                        )
+                        guard let text = WebSearchMcp.firstTextContent(in: result) else { return [] }
+                        return parseResults(text)
+                    }
+                }
+            )
+        }
+
+        // parity: core/src/plugin/websearch/exa.ts#Plugin [status=adapted hash=5496dfb55fb0]
+        public static let Plugin = make()
     }
 
     public enum WebSearchFirecrawl {
         // parity: core/src/plugin/websearch/firecrawl.ts#endpoint [status=implemented hash=3f7e1573d4fe]
         public static let endpoint = "https://mcp.firecrawl.dev/v2/mcp"
 
+        public static func make(http explicitHTTP: (any HTTPTransport)? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.websearch.firecrawl") { ctx in
+                    let activationHTTP = explicitHTTP ?? Host.currentHTTPTransportOverride
+                    let userAgent = "\(ctx.app.name)/\(ctx.app.version)"
+                    await WebSearchProvider.register(ctx: ctx, id: "firecrawl", name: "Firecrawl", env: "FIRECRAWL_API_KEY") { input, credential in
+                        let transport = activationHTTP ?? Host.currentHTTPTransport
+                        var headers = ["User-Agent": userAgent]
+                        if case .key(let k) = credential, !k.key.isEmpty {
+                            headers["Authorization"] = "Bearer \(k.key)"
+                        }
+                        let result = try await WebSearchMcp.call(
+                            transport: transport,
+                            url: endpoint,
+                            tool: "firecrawl_search",
+                            arguments: .object([
+                                "query": .string(input.query),
+                                "limit": .int(8),
+                            ]),
+                            headers: headers
+                        )
+                        guard let text = WebSearchMcp.firstTextContent(in: result),
+                              let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8)),
+                              case .object(let root) = parsed,
+                              case .object(let dataObj) = root["data"],
+                              case .array(let web) = dataObj["web"]
+                        else { return [] }
+                        return web.compactMap { entry -> WebSearchSchema.Result? in
+                            guard case .object(let o) = entry, case .string(let url) = o["url"], !url.isEmpty else {
+                                return nil
+                            }
+                            let title: String? = { if case .string(let t) = o["title"], !t.isEmpty { return t } else { return nil } }()
+                            let desc: String? = { if case .string(let d) = o["description"], !d.isEmpty { return d } else { return nil } }()
+                            return WebSearchSchema.Result(url: url, title: title, content: desc)
+                        }
+                    }
+                }
+            )
+        }
+
         // parity: core/src/plugin/websearch/firecrawl.ts#Plugin [status=adapted hash=8ed5ac1527bc]
-        public static let Plugin = PluginEffect.define(
-            PluginEffect.Plugin(id: "opencode.websearch.firecrawl") { ctx in
-                await WebSearchProvider.register(ctx: ctx, id: "firecrawl", name: "Firecrawl", env: "FIRECRAWL_API_KEY") { _, _ in [] }
-            }
-        )
+        public static let Plugin = make()
     }
 
     public enum WebSearchParallel {
         // parity: core/src/plugin/websearch/parallel.ts#endpoint [status=implemented hash=6ad1da4c5339]
         public static let endpoint = "https://search.parallel.ai/mcp"
 
+        public static func make(http explicitHTTP: (any HTTPTransport)? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.websearch.parallel") { ctx in
+                    let activationHTTP = explicitHTTP ?? Host.currentHTTPTransportOverride
+                    let userAgent = "\(ctx.app.name)/\(ctx.app.version)"
+                    await WebSearchProvider.register(ctx: ctx, id: "parallel", name: "Parallel", env: "PARALLEL_API_KEY") { input, credential in
+                        let transport = activationHTTP ?? Host.currentHTTPTransport
+                        var headers = ["User-Agent": userAgent]
+                        if case .key(let k) = credential, !k.key.isEmpty {
+                            headers["Authorization"] = "Bearer \(k.key)"
+                        }
+                        let result = try await WebSearchMcp.call(
+                            transport: transport,
+                            url: endpoint,
+                            tool: "web_search",
+                            arguments: .object([
+                                "objective": .string(input.query),
+                                "search_queries": .array([.string(input.query)]),
+                            ]),
+                            headers: headers
+                        )
+                        guard case .object(let root) = result,
+                              case .object(let structured) = root["structuredContent"],
+                              case .array(let results) = structured["results"]
+                        else { return [] }
+                        return results.compactMap { entry -> WebSearchSchema.Result? in
+                            guard case .object(let o) = entry, case .string(let url) = o["url"], !url.isEmpty else {
+                                return nil
+                            }
+                            let title: String? = { if case .string(let t) = o["title"], !t.isEmpty { return t } else { return nil } }()
+                            let pubDate: String? = { if case .string(let p) = o["publish_date"], !p.isEmpty { return p } else { return nil } }()
+                            let excerpts: [String] = {
+                                guard case .array(let arr) = o["excerpts"] else { return [] }
+                                return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
+                            }()
+                            let content = excerpts.isEmpty ? nil : excerpts.joined(separator: "\n\n")
+                            return WebSearchSchema.Result(
+                                url: url,
+                                title: title,
+                                content: content,
+                                time: WebSearchSchema.Result.Time(published: WebSearchMcp.parseISOEpochMs(pubDate))
+                            )
+                        }
+                    }
+                }
+            )
+        }
+
         // parity: core/src/plugin/websearch/parallel.ts#Plugin [status=adapted hash=77abe5eb2498]
-        public static let Plugin = PluginEffect.define(
-            PluginEffect.Plugin(id: "opencode.websearch.parallel") { ctx in
-                await WebSearchProvider.register(ctx: ctx, id: "parallel", name: "Parallel", env: "PARALLEL_API_KEY") { _, _ in [] }
-            }
-        )
+        public static let Plugin = make()
     }
 
     public enum WebSearchTavily {
         // parity: core/src/plugin/websearch/tavily.ts#endpoint [status=implemented hash=7b4859468618]
         public static let endpoint = "https://api.tavily.com/search"
 
+        public static func make(http explicitHTTP: (any HTTPTransport)? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.websearch.tavily") { ctx in
+                    let activationHTTP = explicitHTTP ?? Host.currentHTTPTransportOverride
+                    let userAgent = "\(ctx.app.name)/\(ctx.app.version)"
+                    await WebSearchProvider.register(ctx: ctx, id: "tavily", name: "Tavily", env: "TAVILY_API_KEY") { input, credential in
+                        let transport = activationHTTP ?? Host.currentHTTPTransport
+                        var headers: [String: String] = [
+                            "Accept": "application/json",
+                            "Content-Type": "application/json",
+                            "User-Agent": userAgent,
+                            "X-Client-Name": "opencode2",
+                        ]
+                        if case .key(let k) = credential, !k.key.isEmpty {
+                            headers["Authorization"] = "Bearer \(k.key)"
+                        } else {
+                            headers["X-Tavily-Access-Mode"] = "keyless"
+                        }
+                        let bodyObj: JSONValue = .object([
+                            "query": .string(input.query),
+                            "search_depth": .string("basic"),
+                            "chunks_per_source": .int(3),
+                            "max_results": .int(8),
+                        ])
+                        let bodyBytes = Array(try JSONEncoder().encode(bodyObj))
+                        let response = try await transport.send(
+                            HTTPRequest(method: "POST", url: endpoint, headers: headers, body: bodyBytes)
+                        )
+                        guard (200..<300).contains(response.head.statusCode) else {
+                            throw ToolSchema.ToolError(message: "Tavily web search failed with HTTP \(response.head.statusCode)")
+                        }
+                        guard response.body.count <= WebSearchMcp.MAX_RESPONSE_BYTES else {
+                            throw ToolSchema.ToolError(message: "Tavily web search response exceeded \(WebSearchMcp.MAX_RESPONSE_BYTES) bytes")
+                        }
+                        guard let decoded = try? JSONDecoder().decode(JSONValue.self, from: Data(response.body)),
+                              case .object(let root) = decoded,
+                              case .array(let items) = root["results"]
+                        else { return [] }
+                        return items.compactMap { entry -> WebSearchSchema.Result? in
+                            guard case .object(let o) = entry, case .string(let url) = o["url"], !url.isEmpty else {
+                                return nil
+                            }
+                            let title: String? = { if case .string(let t) = o["title"], !t.isEmpty { return t } else { return nil } }()
+                            let content: String? = { if case .string(let c) = o["content"], !c.isEmpty { return c } else { return nil } }()
+                            return WebSearchSchema.Result(url: url, title: title, content: content)
+                        }
+                    }
+                }
+            )
+        }
+
         // parity: core/src/plugin/websearch/tavily.ts#Plugin [status=adapted hash=2794e9f6797f]
-        public static let Plugin = PluginEffect.define(
-            PluginEffect.Plugin(id: "opencode.websearch.tavily") { ctx in
-                await WebSearchProvider.register(ctx: ctx, id: "tavily", name: "Tavily", env: "TAVILY_API_KEY") { _, _ in [] }
-            }
-        )
+        public static let Plugin = make()
     }
 
     public enum WebSearchTinyFish {
         // parity: core/src/plugin/websearch/tinyfish.ts#endpoint [status=implemented hash=ef11622fd78e]
         public static let endpoint = "https://agent.tinyfish.ai/mcp"
 
-        // parity: core/src/plugin/websearch/tinyfish.ts#Plugin [status=adapted hash=f46f152620f6]
-        public static let Plugin = PluginEffect.define(
-            PluginEffect.Plugin(id: "opencode.websearch.tinyfish") { ctx in
-                await WebSearchProvider.register(ctx: ctx, id: "tinyfish", name: "TinyFish", env: "TINYFISH_API_KEY") { _, _ in [] }
+        private static func initializeSession(
+            transport: any HTTPTransport,
+            headers: [String: String]
+        ) async throws -> String {
+            var initHeaders = headers
+            initHeaders["Accept"] = "application/json, text/event-stream"
+            initHeaders["Content-Type"] = "application/json"
+            let initPayload: JSONValue = .object([
+                "jsonrpc": .string("2.0"),
+                "id": .int(1),
+                "method": .string("initialize"),
+                "params": .object([
+                    "protocolVersion": .string("2025-06-18"),
+                    "capabilities": .object([:]),
+                    "clientInfo": .object(["name": .string("opencode"), "version": .string("1.0")]),
+                ]),
+            ])
+            let initResp = try await transport.send(
+                HTTPRequest(method: "POST", url: endpoint, headers: initHeaders, body: Array(try JSONEncoder().encode(initPayload)))
+            )
+            guard (200..<300).contains(initResp.head.statusCode) else {
+                throw ToolSchema.ToolError(message: "TinyFish MCP initialize failed with HTTP \(initResp.head.statusCode)")
             }
-        )
+            guard initResp.body.count <= WebSearchMcp.MAX_RESPONSE_BYTES else {
+                throw ToolSchema.ToolError(message: "initialize response exceeded \(WebSearchMcp.MAX_RESPONSE_BYTES) bytes")
+            }
+            guard let session = initResp.head.headers.first(where: { $0.key.lowercased() == "mcp-session-id" })?.value,
+                  !session.isEmpty
+            else {
+                throw ToolSchema.ToolError(message: "TinyFish MCP initialize did not return an Mcp-Session-Id header")
+            }
+            var notifyHeaders = initHeaders
+            notifyHeaders["Mcp-Session-Id"] = session
+            let notifyPayload: JSONValue = .object([
+                "jsonrpc": .string("2.0"),
+                "method": .string("notifications/initialized"),
+            ])
+            _ = try await transport.send(
+                HTTPRequest(method: "POST", url: endpoint, headers: notifyHeaders, body: Array(try JSONEncoder().encode(notifyPayload)))
+            )
+            return session
+        }
+
+        public static func make(http explicitHTTP: (any HTTPTransport)? = nil) -> PluginEffect.Plugin {
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.websearch.tinyfish") { ctx in
+                    let activationHTTP = explicitHTTP ?? Host.currentHTTPTransportOverride
+                    let userAgent = "\(ctx.app.name)/\(ctx.app.version)"
+                    await WebSearchProvider.register(ctx: ctx, id: "tinyfish", name: "TinyFish", env: "TINYFISH_API_KEY") { input, credential in
+                        let transport = activationHTTP ?? Host.currentHTTPTransport
+                        var headers = ["User-Agent": userAgent]
+                        let isKeyed: Bool
+                        if case .key(let k) = credential, !k.key.isEmpty {
+                            headers["X-API-Key"] = k.key
+                            isKeyed = true
+                        } else {
+                            headers["X-TinyFish-Access-Mode"] = "keyless"
+                            isKeyed = false
+                        }
+                        if isKeyed {
+                            let session = try await initializeSession(transport: transport, headers: headers)
+                            headers["Mcp-Session-Id"] = session
+                        }
+                        let result = try await WebSearchMcp.call(
+                            transport: transport,
+                            url: endpoint,
+                            tool: "search",
+                            arguments: .object(["query": .string(input.query)]),
+                            headers: headers
+                        )
+                        guard let text = WebSearchMcp.firstTextContent(in: result),
+                              let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(text.utf8)),
+                              case .object(let root) = parsed,
+                              case .array(let items) = root["results"]
+                        else { return [] }
+                        return items.compactMap { entry -> WebSearchSchema.Result? in
+                            guard case .object(let o) = entry, case .string(let url) = o["url"], !url.isEmpty else {
+                                return nil
+                            }
+                            let title: String? = { if case .string(let t) = o["title"], !t.isEmpty { return t } else { return nil } }()
+                            let snippet: String? = { if case .string(let s) = o["snippet"], !s.isEmpty { return s } else { return nil } }()
+                            return WebSearchSchema.Result(url: url, title: title, content: snippet)
+                        }
+                    }
+                }
+            )
+        }
+
+        // parity: core/src/plugin/websearch/tinyfish.ts#Plugin [status=adapted hash=f46f152620f6]
+        public static let Plugin = make()
     }
 
     /// All built-in web search provider plugins.
@@ -3223,8 +5179,66 @@ public enum CorePlugin {
             defaultBaseURL: String
         ) -> @Sendable () -> PluginEffect.Plugin {
             {
-                _ = (providerID, name, defaultBaseURL)
-                return PluginEffect.define(PluginEffect.Plugin(id: id) { _ in })
+                PluginEffect.define(
+                    PluginEffect.Plugin(id: id) { ctx in
+                        let env = Host.currentEnvironment
+                        let baseEnvKey = "\(providerID.uppercased())_BASE_URL"
+                        let apiKeyEnv = "\(providerID.uppercased())_API_KEY"
+                        let baseURL = env.variable(baseEnvKey).flatMap { $0.isEmpty ? nil : $0 } ?? defaultBaseURL
+                        let hasKey = env.variable(apiKeyEnv).map { !$0.isEmpty } ?? false
+
+                        _ = await ctx.integration.transform { editor in
+                            editor.update(providerID) { item in item.name = name }
+                            editor.method.update(.key(integrationID: providerID, method: PluginEffect.IntegrationKeyMethod()))
+                            editor.method.update(.env(integrationID: providerID, method: PluginEffect.IntegrationEnvMethod(names: [apiKeyEnv])))
+                        }
+
+                        _ = await ctx.provider.transform { editor in
+                            let info = ProviderSchema.Info(
+                                id: ProviderSchema.ID(rawValue: providerID),
+                                integrationID: IntegrationID(rawValue: providerID),
+                                name: name,
+                                activation: hasKey ? .enabled : .auto,
+                                package: "@opencode/ai/providers/openai-compatible",
+                                settings: ProviderSchema.Settings(extra: [
+                                    "baseURL": .string(baseURL),
+                                    "provider": .string(providerID),
+                                ])
+                            )
+                            if editor.get(providerID) != nil {
+                                editor.update(providerID) { existing in
+                                    var merged = existing.settings?.extra ?? [:]
+                                    if merged["baseURL"] == nil { merged["baseURL"] = .string(baseURL) }
+                                    merged["provider"] = .string(providerID)
+                                    existing = ProviderSchema.Info(
+                                        id: existing.id,
+                                        canonical: existing.canonical,
+                                        integrationID: existing.integrationID ?? IntegrationID(rawValue: providerID),
+                                        name: name,
+                                        activation: (existing.activation == .auto && hasKey) ? .enabled : existing.activation,
+                                        package: "@opencode/ai/providers/openai-compatible",
+                                        compatibility: existing.compatibility,
+                                        settings: ProviderSchema.Settings(
+                                            timeout: existing.settings?.timeout,
+                                            headerTimeout: existing.settings?.headerTimeout,
+                                            chunkTimeout: existing.settings?.chunkTimeout,
+                                            compaction: existing.settings?.compaction,
+                                            cache: existing.settings?.cache,
+                                            transport: existing.settings?.transport,
+                                            encoding: existing.settings?.encoding,
+                                            tls: existing.settings?.tls,
+                                            extra: merged
+                                        ),
+                                        headers: existing.headers,
+                                        body: existing.body
+                                    )
+                                }
+                            } else {
+                                editor.add(info, [], nil)
+                            }
+                        }
+                    }
+                )
             }
         }
     }
@@ -3348,9 +5362,116 @@ public enum CorePlugin {
         }
     }
 
+    /// Shared helper registering a built-in cloud provider's integration auth methods, env-var activation check,
+    /// base URL, package specifier, and default headers into `ctx.integration` and `ctx.provider`.
+    private static func registerCloudProvider(
+        ctx: PluginEffect.Context,
+        providerID: String,
+        name: String,
+        package: String,
+        defaultBaseURL: String,
+        envVars: [String],
+        baseURLEnvVars: [String] = [],
+        defaultHeaders: [String: String] = [:],
+        extraSettings: [String: JSONValue] = [:],
+        keyLabel: String? = nil,
+        externalMethods: [PluginEffect.IntegrationExternalMethod] = [],
+        ambientActive: Bool = false
+    ) async {
+        let env = Host.currentEnvironment
+        let resolvedBaseURL: String = {
+            for name in baseURLEnvVars {
+                if let val = env.variable(name), !val.isEmpty { return val }
+            }
+            return defaultBaseURL
+        }()
+        let hasEnvAuth = ambientActive || envVars.contains { key in
+            if let val = env.variable(key), !val.isEmpty { return true }
+            return false
+        }
+
+        _ = await ctx.integration.transform { editor in
+            editor.update(providerID) { item in item.name = name }
+            editor.method.update(.key(integrationID: providerID, method: PluginEffect.IntegrationKeyMethod(label: keyLabel)))
+            if !envVars.isEmpty {
+                editor.method.update(.env(integrationID: providerID, method: PluginEffect.IntegrationEnvMethod(names: envVars)))
+            }
+            for ext in externalMethods {
+                editor.method.update(.external(integrationID: providerID, method: ext))
+            }
+        }
+
+        _ = await ctx.provider.transform { editor in
+            var settingsExtra = extraSettings
+            if !resolvedBaseURL.isEmpty {
+                settingsExtra["baseURL"] = .string(resolvedBaseURL)
+            }
+            let finalSettingsExtra = settingsExtra
+            if editor.get(providerID) != nil {
+                editor.update(providerID) { existing in
+                    var mergedExtra = existing.settings?.extra ?? [:]
+                    for (k, v) in finalSettingsExtra {
+                        mergedExtra[k] = v
+                    }
+                    var mergedHeaders = existing.headers ?? [:]
+                    for (k, v) in defaultHeaders where mergedHeaders[k] == nil {
+                        mergedHeaders[k] = v
+                    }
+                    let nextActivation: ProviderSchema.Activation = (existing.activation == .auto && hasEnvAuth)
+                        ? .enabled
+                        : existing.activation
+                    existing = ProviderSchema.Info(
+                        id: existing.id,
+                        canonical: existing.canonical,
+                        integrationID: existing.integrationID ?? IntegrationID(rawValue: providerID),
+                        name: existing.name.isEmpty ? name : existing.name,
+                        activation: nextActivation,
+                        package: existing.package.isEmpty ? package : existing.package,
+                        compatibility: existing.compatibility,
+                        settings: ProviderSchema.Settings(
+                            timeout: existing.settings?.timeout,
+                            headerTimeout: existing.settings?.headerTimeout,
+                            chunkTimeout: existing.settings?.chunkTimeout,
+                            compaction: existing.settings?.compaction,
+                            cache: existing.settings?.cache,
+                            transport: existing.settings?.transport,
+                            encoding: existing.settings?.encoding,
+                            tls: existing.settings?.tls,
+                            extra: mergedExtra
+                        ),
+                        headers: mergedHeaders.isEmpty ? nil : mergedHeaders,
+                        body: existing.body
+                    )
+                }
+            } else {
+                let info = ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: providerID),
+                    integrationID: IntegrationID(rawValue: providerID),
+                    name: name,
+                    activation: hasEnvAuth ? .enabled : .auto,
+                    package: package,
+                    settings: settingsExtra.isEmpty ? nil : ProviderSchema.Settings(extra: settingsExtra),
+                    headers: defaultHeaders.isEmpty ? nil : defaultHeaders
+                )
+                editor.add(info, [], nil)
+            }
+        }
+    }
+
     public enum ChatGPTProvider {
         // parity: core/src/plugin/provider/chatgpt.ts#ChatGPTPlugin [status=adapted hash=db34d234cf3d]
-        public static let ChatGPTPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.chatgpt") { _ in })
+        public static let ChatGPTPlugin = PluginEffect.define(
+            PluginEffect.Plugin(id: "opencode.provider.chatgpt") { ctx in
+                await registerCloudProvider(
+                    ctx: ctx,
+                    providerID: "chatgpt",
+                    name: "ChatGPT",
+                    package: "@opencode/ai/providers/openai",
+                    defaultBaseURL: "https://chatgpt.com/backend-api/codex",
+                    envVars: ["CHATGPT_ACCESS_TOKEN"]
+                )
+            }
+        )
 
         // parity: core/src/plugin/provider/chatgpt.ts#fetchModels [status=adapted hash=f8e9b62ae902]
         public static func fetchModels(
@@ -3386,7 +5507,34 @@ public enum CorePlugin {
     public enum AzureProvider {
         // parity: core/src/plugin/provider/azure.ts#make [status=adapted hash=cca1cfaad991]
         public static func make() -> PluginEffect.Plugin {
-            PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.azure") { _ in })
+            PluginEffect.define(
+                PluginEffect.Plugin(id: "opencode.provider.azure") { ctx in
+                    let env = Host.currentEnvironment
+                    let resourceName = env.variable("AZURE_RESOURCE_NAME")
+                    let endpointFromResource = resourceName.flatMap { r in
+                        r.isEmpty ? nil : "https://\(r).openai.azure.com/openai"
+                    }
+                    let baseURL = env.variable("AZURE_OPENAI_ENDPOINT").flatMap { $0.isEmpty ? nil : $0 }
+                        ?? endpointFromResource
+                        ?? "https://api.openai.azure.com/openai"
+                    var extra: [String: JSONValue] = [:]
+                    if let resourceName, !resourceName.isEmpty {
+                        extra["resourceName"] = .string(resourceName)
+                    }
+                    await registerCloudProvider(
+                        ctx: ctx,
+                        providerID: "azure",
+                        name: "Azure OpenAI",
+                        package: "@opencode/ai/providers/azure",
+                        defaultBaseURL: baseURL,
+                        envVars: ["AZURE_OPENAI_API_KEY", "AZURE_API_KEY"],
+                        extraSettings: extra,
+                        externalMethods: [
+                            PluginEffect.IntegrationExternalMethod(id: "azure-cli", label: "Azure CLI (az login)"),
+                        ]
+                    )
+                }
+            )
         }
 
         // parity: core/src/plugin/provider/azure.ts#AzurePlugin [status=implemented hash=c2faa2d1773e]
@@ -3433,79 +5581,621 @@ public enum CorePlugin {
     }
 
     // parity: core/src/plugin/provider/amazon-bedrock.ts#AmazonBedrockPlugin [status=adapted hash=89ede1e2363a]
-    public static let AmazonBedrockPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.amazon.bedrock") { _ in })
+    public static let AmazonBedrockPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.amazon.bedrock") { ctx in
+            let env = Host.currentEnvironment
+            let chainVars = [
+                "AWS_PROFILE",
+                "AWS_ACCESS_KEY_ID",
+                "AWS_WEB_IDENTITY_TOKEN_FILE",
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+            ]
+            let hasChain = chainVars.contains { key in
+                if let val = env.variable(key), !val.isEmpty { return true }
+                return false
+            }
+            let region = env.variable("AWS_REGION").flatMap { $0.isEmpty ? nil : $0 }
+                ?? env.variable("AWS_DEFAULT_REGION").flatMap { $0.isEmpty ? nil : $0 }
+                ?? "us-east-1"
+            let loginSettings = await ProviderCredentialSettings.credentialSettings(ctx: ctx, integrationID: "amazon-bedrock") { value in
+                if case .external(let ext) = value, ext.methodID.rawValue == "aws-profile" {
+                    return ProviderCredentialSettings.metadataSettings(metadata: ext.metadata, keys: ["profile"])
+                        .mapValues(JSONValue.string)
+                }
+                return [:]
+            }
+            var extra: [String: JSONValue] = ["region": .string(region)]
+            for (k, v) in loginSettings { extra[k] = v }
+            let hasProfile = loginSettings["profile"] != nil
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "amazon-bedrock",
+                name: "Amazon Bedrock",
+                package: "@opencode/ai/providers/amazon-bedrock",
+                defaultBaseURL: "https://bedrock-runtime.\(region).amazonaws.com",
+                envVars: ["AWS_BEARER_TOKEN_BEDROCK"],
+                baseURLEnvVars: ["AWS_BEDROCK_ENDPOINT"],
+                extraSettings: extra,
+                keyLabel: "Bedrock API key",
+                externalMethods: [
+                    PluginEffect.IntegrationExternalMethod(id: "aws-profile", label: "AWS profile (SSO or named profile)"),
+                ],
+                ambientActive: hasChain || hasProfile
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/cerebras.ts#CerebrasPlugin [status=adapted hash=a81c45d122f2]
-    public static let CerebrasPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.cerebras") { _ in })
+    public static let CerebrasPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.cerebras") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "cerebras",
+                name: "Cerebras",
+                package: "@opencode/ai/providers/cerebras",
+                defaultBaseURL: "https://api.cerebras.ai/v1",
+                envVars: ["CEREBRAS_API_KEY"],
+                defaultHeaders: ["X-Cerebras-3rd-Party-Integration": "opencode"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/cloudflare-ai-gateway.ts#CloudflareAIGatewayPlugin [status=adapted hash=af69e6f552db]
-    public static let CloudflareAIGatewayPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.cloudflare.ai.gateway") { _ in })
+    public static let CloudflareAIGatewayPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.cloudflare.ai.gateway") { ctx in
+            let env = Host.currentEnvironment
+            var extra: [String: JSONValue] = [:]
+            if let acc = env.variable("CLOUDFLARE_ACCOUNT_ID"), !acc.isEmpty { extra["accountId"] = .string(acc) }
+            if let gw = env.variable("CLOUDFLARE_GATEWAY_ID"), !gw.isEmpty { extra["gatewayId"] = .string(gw) }
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "cloudflare-ai-gateway",
+                name: "Cloudflare AI Gateway",
+                package: "@opencode/ai/providers/cloudflare-ai-gateway",
+                defaultBaseURL: "https://gateway.ai.cloudflare.com/v1",
+                envVars: ["CLOUDFLARE_API_KEY", "CLOUDFLARE_GATEWAY_TOKEN"],
+                extraSettings: extra
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/cloudflare-workers-ai.ts#CloudflareWorkersAIPlugin [status=adapted hash=afc33db85050]
-    public static let CloudflareWorkersAIPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.cloudflare.workers.ai") { _ in })
+    public static let CloudflareWorkersAIPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.cloudflare.workers.ai") { ctx in
+            let env = Host.currentEnvironment
+            var extra: [String: JSONValue] = [:]
+            if let acc = env.variable("CLOUDFLARE_ACCOUNT_ID"), !acc.isEmpty { extra["accountId"] = .string(acc) }
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "cloudflare-workers-ai",
+                name: "Cloudflare Workers AI",
+                package: "@opencode/ai/providers/cloudflare-workers-ai",
+                defaultBaseURL: "https://api.cloudflare.com/client/v4",
+                envVars: ["CLOUDFLARE_API_KEY", "CLOUDFLARE_API_TOKEN"],
+                extraSettings: extra
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/databricks.ts#DatabricksPlugin [status=adapted hash=954ff5cce271]
-    public static let DatabricksPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.databricks") { _ in })
+    public static let DatabricksPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.databricks") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "databricks",
+                name: "Databricks",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.databricks.com/serving-endpoints",
+                envVars: ["DATABRICKS_TOKEN"],
+                baseURLEnvVars: ["DATABRICKS_HOST"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/digitalocean.ts#DigitalOceanPlugin [status=adapted hash=0f83be9bb563]
-    public static let DigitalOceanPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.digitalocean") { _ in })
+    public static let DigitalOceanPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.digitalocean") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "digitalocean",
+                name: "DigitalOcean",
+                package: "@opencode/ai/providers/digitalocean",
+                defaultBaseURL: "https://inference.do-ai.run/v1",
+                envVars: ["DIGITALOCEAN_API_KEY", "MODEL_ACCESS_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/dynamic.ts#DynamicProviderPlugin [status=adapted hash=752b96cedc7b]
-    public static let DynamicProviderPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.dynamic") { _ in })
+    public static let DynamicProviderPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.dynamic") { ctx in
+            let env = Host.currentEnvironment
+            _ = await ctx.provider.transform { editor in
+                for rec in editor.list() where rec.provider.activation == .auto {
+                    let envKey = rec.provider.id.rawValue.uppercased().replacing("-", with: "_") + "_API_KEY"
+                    if let val = env.variable(envKey), !val.isEmpty {
+                        editor.update(rec.provider.id.rawValue) { p in
+                            p = ProviderSchema.Info(
+                                id: p.id,
+                                canonical: p.canonical,
+                                integrationID: p.integrationID,
+                                name: p.name,
+                                activation: .enabled,
+                                package: p.package,
+                                compatibility: p.compatibility,
+                                settings: p.settings,
+                                headers: p.headers,
+                                body: p.body
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    )
 
     // parity: core/src/plugin/provider/github-copilot.ts#GithubCopilotPlugin [status=adapted hash=434a0c6a7d92]
-    public static let GithubCopilotPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.github.copilot") { _ in })
+    public static let GithubCopilotPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.github.copilot") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "github-copilot",
+                name: "GitHub Copilot",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.githubcopilot.com",
+                envVars: ["GITHUB_TOKEN", "GH_TOKEN"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/gitlab.ts#GitLabPlugin [status=adapted hash=0097e4be13e7]
-    public static let GitLabPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.gitlab") { _ in })
+    public static let GitLabPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.gitlab") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "gitlab",
+                name: "GitLab Duo",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://gitlab.com/api/v4",
+                envVars: ["GITLAB_TOKEN"],
+                baseURLEnvVars: ["GITLAB_INSTANCE_URL"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/google-vertex.ts#GoogleVertexPlugin [status=adapted hash=dfec8e2885c5]
-    public static let GoogleVertexPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.google.vertex") { _ in })
+    public static let GoogleVertexPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.google.vertex") { ctx in
+            let env = Host.currentEnvironment
+            let projectCandidates = ["GOOGLE_VERTEX_PROJECT", "GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "GCLOUD_PROJECT"]
+            let project: String? = projectCandidates.lazy.compactMap { key -> String? in
+                guard let v = env.variable(key), !v.isEmpty else { return nil }
+                return v
+            }.first
+            let locationCandidates = ["GOOGLE_VERTEX_LOCATION", "GOOGLE_CLOUD_LOCATION", "VERTEX_LOCATION"]
+            let location: String = locationCandidates.lazy.compactMap { key -> String? in
+                guard let v = env.variable(key), !v.isEmpty else { return nil }
+                return v
+            }.first ?? "global"
+            let host: String
+            if location == "global" {
+                host = "aiplatform.googleapis.com"
+            } else if location == "us" || location == "eu" {
+                host = "aiplatform.\(location).rep.googleapis.com"
+            } else {
+                host = "\(location)-aiplatform.googleapis.com"
+            }
+            let baseURL: String
+            if let project {
+                baseURL = "https://\(host)/v1/projects/\(project)/locations/\(location)"
+            } else {
+                baseURL = "https://\(host)/v1"
+            }
+            var extra: [String: JSONValue] = ["location": .string(location)]
+            if let project { extra["project"] = .string(project) }
+            let hasADC = env.variable("GOOGLE_APPLICATION_CREDENTIALS").map { !$0.isEmpty } ?? false
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "google-vertex",
+                name: "Google Vertex AI",
+                package: "@opencode/ai/providers/google-vertex",
+                defaultBaseURL: baseURL,
+                envVars: ["GOOGLE_VERTEX_API_KEY"],
+                extraSettings: extra,
+                externalMethods: [
+                    PluginEffect.IntegrationExternalMethod(id: "google-adc", label: "Google Application Default Credentials (ADC)"),
+                ],
+                ambientActive: hasADC && project != nil
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/kilo.ts#KiloPlugin [status=adapted hash=9808ae1302af]
-    public static let KiloPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.kilo") { _ in })
+    public static let KiloPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.kilo") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "kilo",
+                name: "Kilo",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.kilo.ai/api/openrouter",
+                envVars: ["KILO_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/llmgateway.ts#LLMGatewayPlugin [status=adapted hash=c3545406cbeb]
-    public static let LLMGatewayPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.llmgateway") { _ in })
+    public static let LLMGatewayPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.llmgateway") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "llmgateway",
+                name: "LLM Gateway",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.llmgateway.io/v1",
+                envVars: ["LLMGATEWAY_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/modal.ts#ModalPlugin [status=adapted hash=cbcb94c86517]
-    public static let ModalPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.modal") { _ in })
+    public static let ModalPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.modal") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "modal",
+                name: "Modal",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.us-west-2.modal.direct/v1",
+                envVars: ["MODAL_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/neon.ts#NeonPlugin [status=adapted hash=c51c76466671]
-    public static let NeonPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.neon") { _ in })
+    public static let NeonPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.neon") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "neon",
+                name: "Neon",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://console.neon.tech/api/v2",
+                envVars: ["NEON_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/nvidia.ts#NvidiaPlugin [status=adapted hash=f86fa56cf7f4]
-    public static let NvidiaPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.nvidia") { _ in })
+    public static let NvidiaPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.nvidia") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "nvidia",
+                name: "NVIDIA NIM",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://integrate.api.nvidia.com/v1",
+                envVars: ["NVIDIA_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/openai-context-caps.ts#OpenAIContextCapsPlugin [status=adapted hash=0ad9b1a9deac]
-    public static let OpenAIContextCapsPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.openai-context-caps") { _ in })
+    public static let OpenAIContextCapsPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.openai-context-caps") { ctx in
+            let methodIDs: Set<String> = ["chatgpt-browser", "chatgpt-headless", "chatgpt-token-sharing"]
+            let stored = await ProviderCredentialSettings.storedCredential(ctx: ctx, integrationID: "openai")
+            let isChatGPTLogin: Bool = {
+                guard case .oauth(let o) = stored.credential else { return false }
+                return methodIDs.contains(o.methodID.rawValue)
+            }()
+            guard isChatGPTLogin else { return }
+            _ = await ctx.model.transform { editor in
+                for model in editor.list("openai") {
+                    let apiID = model.modelID.rawValue
+                    let cap: Int = {
+                        if apiID.contains("-astra") { return 272_000 }
+                        if apiID.hasPrefix("gpt-6.") {
+                            let rest = apiID.dropFirst("gpt-6.".count)
+                            if let minor = Int(rest.prefix(while: \.isNumber)), minor >= 1 { return 500_000 }
+                            return 272_000
+                        }
+                        if apiID.hasPrefix("gpt-7") || apiID.hasPrefix("gpt-8") { return 500_000 }
+                        return 272_000
+                    }()
+                    let currentInput = model.limit.input ?? model.limit.context
+                    if currentInput > cap {
+                        editor.update("openai", model.id.rawValue) { draft in
+                            draft = ModelSchema.Info(
+                                id: draft.id,
+                                modelID: draft.modelID,
+                                providerID: draft.providerID,
+                                canonical: draft.canonical,
+                                type: draft.type,
+                                family: draft.family,
+                                name: draft.name,
+                                compatibility: draft.compatibility,
+                                package: draft.package,
+                                settings: draft.settings,
+                                headers: draft.headers,
+                                body: draft.body,
+                                capabilities: draft.capabilities,
+                                variants: draft.variants,
+                                time: draft.time,
+                                cost: draft.cost,
+                                status: draft.status,
+                                enabled: draft.enabled,
+                                limit: ModelSchema.Info.Limit(
+                                    context: cap + draft.limit.output,
+                                    input: cap,
+                                    output: draft.limit.output
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    )
 
     // parity: core/src/plugin/provider/openai.ts#OpenAIPlugin [status=adapted hash=8a973d504967]
-    public static let OpenAIPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.openai") { _ in })
+    public static let OpenAIPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.openai") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "openai",
+                name: "OpenAI",
+                package: "@opencode/ai/providers/openai",
+                defaultBaseURL: "https://api.openai.com/v1",
+                envVars: ["OPENAI_API_KEY"],
+                baseURLEnvVars: ["OPENAI_BASE_URL"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=e708e0cab564]
-    public static let OpencodePlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.opencode") { _ in })
+    public static let OpencodePlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.opencode") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "opencode",
+                name: "OpenCode",
+                package: "@opencode/ai/providers/opencode/decisions",
+                defaultBaseURL: "https://opencode.ai/inference/systemone/v1",
+                envVars: ["OPENCODE_API_KEY"],
+                baseURLEnvVars: ["OPENCODE_BASE_URL"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/openrouter.ts#OpenRouterPlugin [status=adapted hash=9238e39d68eb]
-    public static let OpenRouterPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.openrouter") { _ in })
+    public static let OpenRouterPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.openrouter") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "openrouter",
+                name: "OpenRouter",
+                package: "@opencode/ai/providers/openrouter",
+                defaultBaseURL: "https://openrouter.ai/api/v1",
+                envVars: ["OPENROUTER_API_KEY"],
+                defaultHeaders: [
+                    "HTTP-Referer": "https://opencode.ai/",
+                    "X-Title": "opencode",
+                ]
+            )
+            _ = await ctx.model.transform { models in
+                for item in models.listProviders() where item.provider.package == "@opencode/ai/providers/openrouter" {
+                    for disabledID in ["gpt-5-chat-latest", "openai/gpt-5-chat"] {
+                        guard models.get(item.provider.id.rawValue, disabledID) != nil else { continue }
+                        models.update(item.provider.id.rawValue, disabledID) { draft in
+                            draft = ModelSchema.Info(
+                                id: draft.id,
+                                modelID: draft.modelID,
+                                providerID: draft.providerID,
+                                canonical: draft.canonical,
+                                type: draft.type,
+                                family: draft.family,
+                                name: draft.name,
+                                compatibility: draft.compatibility,
+                                package: draft.package,
+                                settings: draft.settings,
+                                headers: draft.headers,
+                                body: draft.body,
+                                capabilities: draft.capabilities,
+                                variants: draft.variants,
+                                time: draft.time,
+                                cost: draft.cost,
+                                status: draft.status,
+                                enabled: false,
+                                limit: draft.limit
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    )
 
     // parity: core/src/plugin/provider/poe.ts#PoePlugin [status=adapted hash=5662129bfdc4]
-    public static let PoePlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.poe") { _ in })
+    public static let PoePlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.poe") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "poe",
+                name: "Poe",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.poe.com/v1",
+                envVars: ["POE_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/prompt-cache-key.ts#PromptCacheKeyPlugin [status=adapted hash=44cd4d776f1f]
-    public static let PromptCacheKeyPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.prompt-cache-key") { _ in })
+    public static let PromptCacheKeyPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.prompt-cache-key") { ctx in
+            let providerIDs = [
+                "abliteration-ai", "aihubmix", "anyapi", "auriko", "edenai", "jalapeno",
+                "llama", "morph", "snowflake-cortex", "tencent-tokenhub", "upstage", "venice",
+            ]
+            _ = await ctx.provider.transform { editor in
+                for id in providerIDs where editor.get(id) != nil {
+                    editor.update(id) { existing in
+                        let compat = ModelCompatibilitySchema.ProviderCompatibility(
+                            reasoningField: existing.compatibility?.reasoningField,
+                            requireReasoning: existing.compatibility?.requireReasoning,
+                            maxTokensField: existing.compatibility?.maxTokensField,
+                            requireFinishReason: existing.compatibility?.requireFinishReason,
+                            requireAssistantAfterTool: existing.compatibility?.requireAssistantAfterTool,
+                            supportsPromptCacheKey: true,
+                            streamUsage: existing.compatibility?.streamUsage,
+                            cacheFormat: existing.compatibility?.cacheFormat,
+                            mediaInput: existing.compatibility?.mediaInput
+                        )
+                        existing = ProviderSchema.Info(
+                            id: existing.id,
+                            canonical: existing.canonical,
+                            integrationID: existing.integrationID,
+                            name: existing.name,
+                            activation: existing.activation,
+                            package: existing.package,
+                            compatibility: compat,
+                            settings: existing.settings,
+                            headers: existing.headers,
+                            body: existing.body
+                        )
+                    }
+                }
+            }
+        }
+    )
 
     // parity: core/src/plugin/provider/sap-ai-core.ts#SapAICorePlugin [status=adapted hash=f9a61e852190]
-    public static let SapAICorePlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.sap.ai.core") { _ in })
+    public static let SapAICorePlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.sap.ai.core") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "sap-ai-core",
+                name: "SAP AI Core",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com/v2",
+                envVars: ["AICORE_SERVICE_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/snowflake-cortex.ts#SnowflakeCortexPlugin [status=adapted hash=2c9a4f07d5c9]
-    public static let SnowflakeCortexPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.snowflake.cortex") { _ in })
+    public static let SnowflakeCortexPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.snowflake.cortex") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "snowflake-cortex",
+                name: "Snowflake Cortex",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://snowflakecomputing.com/api/v2/cortex/inference",
+                envVars: ["SNOWFLAKE_TOKEN"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/xai.ts#XAIPlugin [status=adapted hash=f133a37f143b]
-    public static let XAIPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.xai") { _ in })
+    public static let XAIPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.xai") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "xai",
+                name: "xAI",
+                package: "@opencode/ai/providers/xai",
+                defaultBaseURL: "https://api.x.ai/v1",
+                envVars: ["XAI_API_KEY"]
+            )
+        }
+    )
 
     // parity: core/src/plugin/provider/zenmux.ts#ZenmuxPlugin [status=adapted hash=08f51442389d]
-    public static let ZenmuxPlugin = PluginEffect.define(PluginEffect.Plugin(id: "opencode.provider.zenmux") { _ in })
+    public static let ZenmuxPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.zenmux") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "zenmux",
+                name: "Zenmux",
+                package: "@opencode/ai/providers/openai-compatible",
+                defaultBaseURL: "https://zenmux.ai/api/v1",
+                envVars: ["ZENMUX_API_KEY"]
+            )
+        }
+    )
+
+    /// Built-in Anthropic cloud provider plugin (`opencode.provider.anthropic`).
+    public static let AnthropicPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.anthropic") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "anthropic",
+                name: "Anthropic",
+                package: "@opencode/ai/providers/anthropic",
+                defaultBaseURL: "https://api.anthropic.com/v1",
+                envVars: ["ANTHROPIC_API_KEY"],
+                baseURLEnvVars: ["ANTHROPIC_BASE_URL"]
+            )
+        }
+    )
+
+    /// Built-in Google Gemini cloud provider plugin (`opencode.provider.google`).
+    public static let GooglePlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.google") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "google",
+                name: "Google",
+                package: "@opencode/ai/providers/google",
+                defaultBaseURL: "https://generativelanguage.googleapis.com/v1beta",
+                envVars: ["GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"]
+            )
+        }
+    )
+
+    /// Built-in Groq cloud provider plugin (`opencode.provider.groq`).
+    public static let GroqPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.groq") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "groq",
+                name: "Groq",
+                package: "@opencode/ai/providers/groq",
+                defaultBaseURL: "https://api.groq.com/openai/v1",
+                envVars: ["GROQ_API_KEY"]
+            )
+        }
+    )
+
+    /// Built-in DeepSeek cloud provider plugin (`opencode.provider.deepseek`).
+    public static let DeepSeekPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.deepseek") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "deepseek",
+                name: "DeepSeek",
+                package: "@opencode/ai/providers/deepseek",
+                defaultBaseURL: "https://api.deepseek.com",
+                envVars: ["DEEPSEEK_API_KEY"]
+            )
+        }
+    )
+
+    /// Built-in Mistral cloud provider plugin (`opencode.provider.mistral`).
+    public static let MistralPlugin = PluginEffect.define(
+        PluginEffect.Plugin(id: "opencode.provider.mistral") { ctx in
+            await registerCloudProvider(
+                ctx: ctx,
+                providerID: "mistral",
+                name: "Mistral",
+                package: "@opencode/ai/providers/mistral",
+                defaultBaseURL: "https://api.mistral.ai/v1",
+                envVars: ["MISTRAL_API_KEY"]
+            )
+        }
+    )
 
     /// Complete built-in provider plugins array matching `packages/core/src/plugin/provider.ts`.
     // parity: core/src/plugin/provider.ts#ProviderPlugins [status=implemented hash=7eb0beb5b91a]
@@ -4386,7 +7076,18 @@ public enum CorePlugin {
 
         // parity: core/src/plugin/provider/claude-agent/provider.ts#register [status=adapted hash=e1e113dace9f]
         public static func registerProvider(ctx: PluginEffect.Context) async {
-            _ = ctx
+            _ = await ctx.provider.transform { editor in
+                let info = ProviderSchema.Info(
+                    id: ProviderID,
+                    integrationID: IntegrationID(rawValue: ProviderID.rawValue),
+                    name: "Claude Code",
+                    activation: .auto,
+                    package: ProviderPackage
+                )
+                if editor.get(ProviderID.rawValue) == nil {
+                    editor.add(info, [], nil)
+                }
+            }
         }
 
         // parity: core/src/plugin/provider/claude-agent/provider.ts#connection [status=adapted hash=382c4e9de3f3]

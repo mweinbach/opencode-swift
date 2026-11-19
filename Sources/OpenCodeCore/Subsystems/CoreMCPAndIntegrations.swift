@@ -1,7 +1,16 @@
-#if canImport(FoundationEssentials)
+#if os(macOS) || os(Linux) || os(Windows)
+import Foundation
+#elseif canImport(FoundationEssentials)
 import FoundationEssentials
 #else
 import Foundation
+#endif
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 import Synchronization
 import OpenCodeAI
@@ -126,7 +135,9 @@ public enum CoreMCP {
         }
 
         public static func encodeLine(_ message: JSONRPCMessage) throws -> String {
-            let data = try JSONEncoder().encode(message)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.withoutEscapingSlashes]
+            let data = try encoder.encode(message)
             return String(decoding: data, as: UTF8.self) + "\n"
         }
 
@@ -230,16 +241,159 @@ public enum CoreMCP {
             return CoreSubsystems.Util.GitExecutable.normalizePosix("\(cleanBase)/\(cwd)")
         }
 
-        /// Newline-delimited JSON-RPC 2.0 Stdio transport backed by `OpenCodePlatform.ProcessSpawner`
-        /// (and direct byte-chunk feeding for streaming/test harnesses).
+        /// Persistent bidirectional newline-delimited JSON-RPC 2.0 Stdio transport.
+        /// Launches ONE long-lived child process in `start()` with open stdin/stdout/stderr `Pipe`s
+        /// on macOS/Linux/Windows, streams stdout continuously to `feedStdout(_:)`, writes NDJSON frames
+        /// to live stdin in `send(_:)`, and terminates cleanly in `close()`.
+        /// Keeps the injectable `OpenCodePlatform.ProcessSpawner` fallback for mock spawners and WASI/mobile targets.
         public final class StdioTransport: Transport, Sendable {
+            #if os(macOS) || os(Linux) || os(Windows)
+            private final class LiveProcessBox: @unchecked Sendable {
+                private struct ExitState: Sendable {
+                    var exited = false
+                    var status: Int32 = 0
+                    var waiters: [UUID: CheckedContinuation<Int32?, Never>] = [:]
+                    var cancelled: Set<UUID> = []
+                }
+
+                let process: Process
+                let stdinPipe: Pipe
+                let stdoutPipe: Pipe
+                let stderrPipe: Pipe
+                let writeLock = Mutex<Void>(())
+                private let exitState = Mutex(ExitState())
+                private let stderrState = Mutex<String>("")
+                private let stdinClosed = Mutex<Bool>(false)
+
+                init(process: Process, stdinPipe: Pipe, stdoutPipe: Pipe, stderrPipe: Pipe) {
+                    self.process = process
+                    self.stdinPipe = stdinPipe
+                    self.stdoutPipe = stdoutPipe
+                    self.stderrPipe = stderrPipe
+                    process.terminationHandler = { [weak self] proc in
+                        self?.markExited(proc.terminationStatus)
+                    }
+                }
+
+                var pid: Int32 { process.processIdentifier }
+
+                func appendStderr(_ chunk: String) {
+                    stderrState.withLock { tail in
+                        tail.append(chunk)
+                        if tail.count > 1_000 {
+                            tail = String(tail.suffix(1_000))
+                        }
+                    }
+                }
+
+                func stderrTailSnapshot() -> String {
+                    stderrState.withLock { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                }
+
+                func writeLine(_ bytes: [UInt8]) throws {
+                    try writeLock.withLock { _ in
+                        guard !stdinClosed.withLock({ $0 }) else {
+                            throw PlatformError.ioFailure("Stdio stdin pipe is closed")
+                        }
+                        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(bytes))
+                    }
+                }
+
+                func closeStdin() {
+                    writeLock.withLock { _ in
+                        let shouldClose = stdinClosed.withLock { closed -> Bool in
+                            if closed { return false }
+                            closed = true
+                            return true
+                        }
+                        if shouldClose {
+                            try? stdinPipe.fileHandleForWriting.close()
+                        }
+                    }
+                }
+
+                func markExited(_ status: Int32) {
+                    let waiters: [CheckedContinuation<Int32?, Never>] = exitState.withLock { s in
+                        guard !s.exited else { return [] }
+                        s.exited = true
+                        s.status = status
+                        let all = Array(s.waiters.values)
+                        s.waiters.removeAll()
+                        s.cancelled.removeAll()
+                        return all
+                    }
+                    for w in waiters { w.resume(returning: status) }
+                }
+
+                func waitForExit(timeoutMs: Int) async -> Int32? {
+                    if let status = exitState.withLock({ $0.exited ? $0.status : nil }) {
+                        return status
+                    }
+                    let waiterID = UUID()
+                    let box = self
+                    return await withTaskGroup(of: Int32?.self) { group in
+                        group.addTask {
+                            await withTaskCancellationHandler {
+                                await withCheckedContinuation { (cont: CheckedContinuation<Int32?, Never>) in
+                                    let outcome: (done: Bool, value: Int32?) = box.exitState.withLock { s in
+                                        if s.exited { return (true, s.status) }
+                                        if s.cancelled.remove(waiterID) != nil { return (true, nil) }
+                                        s.waiters[waiterID] = cont
+                                        return (false, nil)
+                                    }
+                                    if outcome.done { cont.resume(returning: outcome.value) }
+                                }
+                            } onCancel: {
+                                let cont: CheckedContinuation<Int32?, Never>? = box.exitState.withLock { s in
+                                    s.cancelled.insert(waiterID)
+                                    return s.waiters.removeValue(forKey: waiterID)
+                                }
+                                cont?.resume(returning: nil)
+                            }
+                        }
+                        group.addTask {
+                            try? await Task.sleep(for: .milliseconds(timeoutMs))
+                            return nil
+                        }
+                        let first = await group.next() ?? nil
+                        group.cancelAll()
+                        return first
+                    }
+                }
+
+                func terminateAndWait() async {
+                    closeStdin()
+                    if await waitForExit(timeoutMs: 1_500) == nil {
+                        if process.isRunning {
+                            process.terminate()
+                        }
+                        if await waitForExit(timeoutMs: 1_500) == nil {
+                            #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                            let childPid = process.processIdentifier
+                            if childPid > 0 && process.isRunning {
+                                _ = kill(childPid, SIGKILL)
+                            }
+                            _ = await waitForExit(timeoutMs: 500)
+                            #endif
+                        }
+                    }
+                    try? stdoutPipe.fileHandleForReading.close()
+                    try? stderrPipe.fileHandleForReading.close()
+                }
+            }
+            #endif
+
             private struct State: Sendable {
-                var phase: String = "ready" // ready, open, closed
+                var phase: String = "ready" // ready, starting, open, closed
                 var pendingBytes: [UInt8] = []
                 var outgoingLines: [String] = []
                 var onMessage: (@Sendable (JSONRPCMessage) -> Void)?
                 var onError: (@Sendable (any Error) -> Void)?
                 var onClose: (@Sendable () -> Void)?
+                var onCloseFired: Bool = false
+                #if os(macOS) || os(Linux) || os(Windows)
+                var liveProcess: LiveProcessBox?
+                #endif
             }
 
             public let options: Options
@@ -249,6 +403,32 @@ public enum CoreMCP {
             public init(options: Options, spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared) {
                 self.options = options
                 self.spawner = spawner
+            }
+
+            deinit {
+                #if os(macOS) || os(Linux) || os(Windows)
+                let box = state.withLock { s -> LiveProcessBox? in
+                    let b = s.liveProcess
+                    s.liveProcess = nil
+                    s.phase = "closed"
+                    return b
+                }
+                if let box {
+                    box.closeStdin()
+                    if box.process.isRunning {
+                        box.process.terminate()
+                    }
+                }
+                #endif
+            }
+
+            /// Process ID of the live persistent child process, when running on a desktop host.
+            public var pid: Int32? {
+                #if os(macOS) || os(Linux) || os(Windows)
+                return state.withLock { $0.liveProcess?.pid }
+                #else
+                return nil
+                #endif
             }
 
             public func setHandlers(
@@ -266,20 +446,169 @@ public enum CoreMCP {
             public func start() async throws {
                 let canStart = state.withLock { s -> Bool in
                     guard s.phase == "ready" else { return false }
-                    s.phase = "open"
+                    s.phase = "starting"
                     return true
                 }
                 guard canStart else {
                     throw PlatformError.ioFailure("Stdio transport already started")
                 }
+
+                #if os(macOS) || os(Linux) || os(Windows)
+                if !options.command.isEmpty && (spawner is CrossSpawnSpawner.HostProcessSpawner) {
+                    if options.command.contains("\u{0}") {
+                        state.withLock { $0.phase = "closed" }
+                        throw PlatformError.ioFailure("The command contains a NUL character")
+                    }
+                    for (idx, arg) in options.args.enumerated() where arg.contains("\u{0}") {
+                        state.withLock { $0.phase = "closed" }
+                        throw PlatformError.ioFailure("Argument \(idx + 1) contains a NUL character")
+                    }
+                    for (name, value) in options.environment where value.contains("\u{0}") {
+                        state.withLock { $0.phase = "closed" }
+                        throw PlatformError.ioFailure("The environment variable \(name) contains a NUL character")
+                    }
+
+                    let process = Process()
+                    if options.command.contains("/") || options.command.contains("\\") {
+                        process.executableURL = URL(fileURLWithPath: options.command)
+                        process.arguments = options.args
+                    } else {
+                        #if os(Windows)
+                        process.executableURL = URL(fileURLWithPath: "C:\\Windows\\System32\\cmd.exe")
+                        process.arguments = ["/c", options.command] + options.args
+                        #else
+                        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                        process.arguments = [options.command] + options.args
+                        #endif
+                    }
+                    if !options.cwd.isEmpty {
+                        process.currentDirectoryURL = URL(fileURLWithPath: options.cwd)
+                    }
+                    if !options.environment.isEmpty {
+                        var merged = ProcessInfo.processInfo.environment
+                        for (k, v) in options.environment { merged[k] = v }
+                        process.environment = merged
+                    }
+
+                    let stdinPipe = Pipe()
+                    let stdoutPipe = Pipe()
+                    let stderrPipe = Pipe()
+                    process.standardInput = stdinPipe
+                    process.standardOutput = stdoutPipe
+                    process.standardError = stderrPipe
+
+                    #if canImport(Darwin)
+                    _ = Darwin.fcntl(stdinPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+                    #endif
+
+                    let box = LiveProcessBox(
+                        process: process,
+                        stdinPipe: stdinPipe,
+                        stdoutPipe: stdoutPipe,
+                        stderrPipe: stderrPipe
+                    )
+
+                    do {
+                        try process.run()
+                    } catch {
+                        state.withLock { $0.phase = "closed" }
+                        try? stdinPipe.fileHandleForWriting.close()
+                        try? stdoutPipe.fileHandleForReading.close()
+                        try? stderrPipe.fileHandleForReading.close()
+                        throw PlatformError.ioFailure("Failed to start MCP server \(options.server): \(error)")
+                    }
+
+                    let closedDuringStart = state.withLock { s -> Bool in
+                        if s.phase == "closed" { return true }
+                        s.liveProcess = box
+                        s.phase = "open"
+                        return false
+                    }
+                    if closedDuringStart {
+                        await box.terminateAndWait()
+                        return
+                    }
+
+                    // Continuously drain stderr on a dedicated OS thread so chatty servers cannot stall on a full pipe.
+                    Thread.detachNewThread {
+                        let handle = box.stderrPipe.fileHandleForReading
+                        while true {
+                            let data = handle.availableData
+                            if data.isEmpty { break }
+                            box.appendStderr(String(decoding: data, as: UTF8.self))
+                        }
+                    }
+
+                    // Continuously read stdout on a dedicated OS thread and feed NDJSON frames into feedStdout(_:).
+                    Thread.detachNewThread { [weak self] in
+                        let handle = box.stdoutPipe.fileHandleForReading
+                        while true {
+                            let data = handle.availableData
+                            if data.isEmpty { break }
+                            self?.feedStdout(Array(data))
+                        }
+                        self?.handleLiveProcessEOF(box: box)
+                    }
+                    return
+                }
+                #endif
+
+                state.withLock { s in
+                    if s.phase == "starting" { s.phase = "open" }
+                }
             }
+
+            #if os(macOS) || os(Linux) || os(Windows)
+            private func handleLiveProcessEOF(box: LiveProcessBox) {
+                let isUnexpected = state.withLock { $0.phase == "open" && $0.liveProcess === box }
+                guard isUnexpected else { return }
+
+                // Safe to wait on this dedicated OS reader thread for final exit status & stderr flush.
+                box.process.waitUntilExit()
+                let code = box.process.terminationStatus
+                let stderrText = box.stderrTailSnapshot()
+
+                let (onError, onClose) = state.withLock { s -> ((@Sendable (any Error) -> Void)?, (@Sendable () -> Void)?) in
+                    guard s.phase != "closed" else { return (nil, nil) }
+                    s.phase = "closed"
+                    s.liveProcess = nil
+                    s.pendingBytes.removeAll()
+                    let closeCb: (@Sendable () -> Void)? = s.onCloseFired ? nil : s.onClose
+                    s.onCloseFired = true
+                    return (s.onError, closeCb)
+                }
+
+                box.closeStdin()
+                try? box.stdoutPipe.fileHandleForReading.close()
+                try? box.stderrPipe.fileHandleForReading.close()
+
+                let baseMessage = "MCP server process exited with code \(code)"
+                let err = PlatformError.ioFailure(stderrText.isEmpty ? baseMessage : "\(baseMessage): \(stderrText)")
+                onError?(err)
+                onClose?()
+            }
+            #endif
 
             public func send(_ message: JSONRPCMessage) async throws {
                 let isOpen = state.withLock { $0.phase == "open" }
                 guard isOpen else { throw PlatformError.ioFailure("Not connected") }
                 let line = try JSONRPCMessage.encodeLine(message)
                 state.withLock { $0.outgoingLines.append(line) }
-                // Execute request/response via spawner when an external stdio command is configured.
+
+                #if os(macOS) || os(Linux) || os(Windows)
+                if let box = state.withLock({ $0.liveProcess }) {
+                    do {
+                        try box.writeLine(Array(line.utf8))
+                        return
+                    } catch {
+                        let err = PlatformError.ioFailure("Failed to write to MCP server \(options.server): \(error)")
+                        state.withLock { $0.onError }?(err)
+                        throw err
+                    }
+                }
+                #endif
+
+                // Fallback for injectable non-host ProcessSpawner (tests/WASI/mobile).
                 if !options.command.isEmpty {
                     let spec = ProcessSpec(
                         executable: options.command,
@@ -308,6 +637,9 @@ public enum CoreMCP {
             /// Feeds raw stdout bytes into the newline-delimited JSON-RPC frame parser (enforcing 16 MiB cap).
             public func feedStdout(_ chunk: [UInt8]) {
                 var callbacksToRun: [@Sendable () -> Void] = []
+                #if os(macOS) || os(Linux) || os(Windows)
+                var processToTerminate: LiveProcessBox? = nil
+                #endif
                 state.withLock { s in
                     guard s.phase != "closed" else { return }
                     var start = 0
@@ -321,8 +653,15 @@ public enum CoreMCP {
                                 )
                                 s.phase = "closed"
                                 s.pendingBytes.removeAll()
+                                #if os(macOS) || os(Linux) || os(Windows)
+                                processToTerminate = s.liveProcess
+                                s.liveProcess = nil
+                                #endif
                                 if let onErr = s.onError { callbacksToRun.append { onErr(err) } }
-                                if let onCl = s.onClose { callbacksToRun.append(onCl) }
+                                if !s.onCloseFired, let onCl = s.onClose {
+                                    s.onCloseFired = true
+                                    callbacksToRun.append(onCl)
+                                }
                                 return
                             }
                             var frame = s.pendingBytes
@@ -348,8 +687,15 @@ public enum CoreMCP {
                                 )
                                 s.phase = "closed"
                                 s.pendingBytes.removeAll()
+                                #if os(macOS) || os(Linux) || os(Windows)
+                                processToTerminate = s.liveProcess
+                                s.liveProcess = nil
+                                #endif
                                 if let onErr = s.onError { callbacksToRun.append { onErr(err) } }
-                                if let onCl = s.onClose { callbacksToRun.append(onCl) }
+                                if !s.onCloseFired, let onCl = s.onClose {
+                                    s.onCloseFired = true
+                                    callbacksToRun.append(onCl)
+                                }
                                 return
                             }
                             s.pendingBytes.append(contentsOf: tail)
@@ -358,16 +704,40 @@ public enum CoreMCP {
                     }
                 }
                 for cb in callbacksToRun { cb() }
+                #if os(macOS) || os(Linux) || os(Windows)
+                if let proc = processToTerminate {
+                    Task { await proc.terminateAndWait() }
+                }
+                #endif
             }
 
             public func close() async throws {
+                #if os(macOS) || os(Linux) || os(Windows)
+                let (box, onClose) = state.withLock { s -> (LiveProcessBox?, (@Sendable () -> Void)?) in
+                    guard s.phase != "closed" else { return (nil, nil) }
+                    s.phase = "closed"
+                    s.pendingBytes.removeAll()
+                    let b = s.liveProcess
+                    s.liveProcess = nil
+                    let cb: (@Sendable () -> Void)? = s.onCloseFired ? nil : s.onClose
+                    s.onCloseFired = true
+                    return (b, cb)
+                }
+                if let box {
+                    await box.terminateAndWait()
+                }
+                onClose?()
+                #else
                 let onClose = state.withLock { s -> (@Sendable () -> Void)? in
                     guard s.phase != "closed" else { return nil }
                     s.phase = "closed"
                     s.pendingBytes.removeAll()
-                    return s.onClose
+                    let cb: (@Sendable () -> Void)? = s.onCloseFired ? nil : s.onClose
+                    s.onCloseFired = true
+                    return cb
                 }
                 onClose?()
+                #endif
             }
         }
 
@@ -4057,57 +4427,767 @@ public enum CoreIntegration {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Generate"
             private let resolver: any CoreModel.Resolver.Interface
+            private let models: (any CoreModel.Model.Interface)?
+            private let http: (any HTTPTransport)?
             private let textHandler: (@Sendable (CoreModel.Resolver.Resolved, String) async throws -> String)?
+            private let imageHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult)?
+            private let decisionHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult)?
 
             public init(
                 resolver: any CoreModel.Resolver.Interface,
-                textHandler: (@Sendable (CoreModel.Resolver.Resolved, String) async throws -> String)? = nil
+                models: (any CoreModel.Model.Interface)? = nil,
+                http: (any HTTPTransport)? = nil,
+                textHandler: (@Sendable (CoreModel.Resolver.Resolved, String) async throws -> String)? = nil,
+                imageHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult)? = nil,
+                decisionHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult)? = nil
             ) {
                 self.resolver = resolver
+                self.models = models
+                self.http = http
                 self.textHandler = textHandler
+                self.imageHandler = imageHandler
+                self.decisionHandler = decisionHandler
+            }
+
+            private static func mapResolutionError(_ error: any Error, ref: ModelSchema.Ref?, capability: String) -> any Error {
+                if let err = error as? CoreIntegration.Integration.AuthorizationError {
+                    _ = err
+                    return UnavailableError(message: "Generation credentials are unavailable")
+                }
+                if let err = error as? CoreModel.Resolver.VariantUnavailableError {
+                    return InvalidRequestError(message: err.description, field: "model.variant")
+                }
+                if let err = error as? CoreModel.Resolver.UnsupportedPackageError {
+                    let pid = ref?.providerID.rawValue ?? err.providerID.rawValue
+                    let mid = ref?.id.rawValue ?? err.modelID.rawValue
+                    return UnsupportedModelError(
+                        providerID: pid,
+                        modelID: mid,
+                        capability: capability,
+                        message: "\(pid)/\(mid) has no \(capability) API opencode can call (package \(err.package))"
+                    )
+                }
+                if ref == nil {
+                    return UnavailableError(message: String(describing: error))
+                }
+                return InvalidRequestError(message: String(describing: error), field: "model")
+            }
+
+            private static func mapHTTPFailure(providerID: String, status: Int, body: String) -> ProviderRequestError {
+                let reason: ProviderFailure
+                switch status {
+                case 401, 403: reason = .authentication
+                case 429: reason = .rateLimit
+                case 400, 422: reason = .invalidRequest
+                case 503, 529: reason = .overloaded
+                default: reason = .provider
+                }
+                let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                let msg = trimmed.isEmpty ? "Provider request failed with HTTP \(status)" : trimmed
+                return ProviderRequestError(providerID: providerID, reason: reason, message: msg, status: status)
+            }
+
+            private func missingError(ref: ModelSchema.Ref, capability: ModelSchema.ModelType) async -> any Error {
+                if let models,
+                   let avail = try? await models.available(types: [.chat, .image, .video, .decision]),
+                   let other = avail.first(where: { $0.providerID == ref.providerID && $0.id == ref.id })
+                {
+                    let actual = (other.type ?? .chat).rawValue
+                    return UnsupportedModelError(
+                        providerID: ref.providerID.rawValue,
+                        modelID: ref.id.rawValue,
+                        capability: capability.rawValue,
+                        message: "\(ref.providerID.rawValue)/\(ref.id.rawValue) is a \(actual) model, not a \(capability.rawValue) model"
+                    )
+                }
+                return ModelNotFoundError(providerID: ref.providerID.rawValue, modelID: ref.id.rawValue)
+            }
+
+            private static func providerConfig(from descriptor: CoreModel.Resolver.ResolvedModelDescriptor) -> AIProviders.ProviderConfig {
+                var apiKey: AIProviders.APIKeyOption = .inherited
+                if case .string(let k) = descriptor.settings["apiKey"], !k.isEmpty {
+                    apiKey = .explicit(k)
+                }
+                func str(_ key: String) -> String? {
+                    if case .string(let s) = descriptor.settings[key], !s.isEmpty { return s }
+                    return nil
+                }
+                return AIProviders.ProviderConfig(
+                    apiKey: apiKey,
+                    authToken: str("authToken"),
+                    baseURL: descriptor.baseURL,
+                    headers: descriptor.headers.isEmpty ? nil : descriptor.headers,
+                    body: descriptor.body.isEmpty ? nil : descriptor.body,
+                    region: str("region"),
+                    resourceName: str("resourceName"),
+                    accountId: str("accountId"),
+                    gatewayId: str("gatewayId"),
+                    project: str("project"),
+                    location: str("location"),
+                    accessToken: str("accessToken"),
+                    organization: str("organization"),
+                    providerOverride: str("provider") ?? descriptor.provider
+                )
+            }
+
+            private static func resolveChatModel(
+                from descriptor: CoreModel.Resolver.ResolvedModelDescriptor,
+                ref: ModelSchema.Ref
+            ) throws -> AIProviders.ConfiguredModel {
+                let cfg = providerConfig(from: descriptor)
+                let pkg = descriptor.package
+                do {
+                    switch pkg {
+                    case "@opencode/ai/providers/anthropic":
+                        return try AIProviders.Anthropic.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/anthropic-compatible":
+                        return try AIProviders.AnthropicCompatible.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/openai", "@opencode/ai/providers/openai/responses":
+                        return AIProviders.OpenAI.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/openai/chat":
+                        return AIProviders.OpenAI.chatModel(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/google":
+                        return AIProviders.Google.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/google/interactions":
+                        return AIProviders.Google.Interactions.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/google-vertex", "@opencode/ai/providers/google-vertex/gemini":
+                        return try AIProviders.GoogleVertex.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/google-vertex/messages", "@opencode/ai/providers/google-vertex-messages":
+                        return try AIProviders.GoogleVertexMessages.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/azure", "@opencode/ai/providers/azure/responses":
+                        return try AIProviders.Azure.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/azure/chat":
+                        return try AIProviders.Azure.chatModel(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/openrouter":
+                        return AIProviders.OpenRouter.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/xai":
+                        return AIProviders.XAI.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/groq":
+                        return AIProviders.Groq.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/deepseek":
+                        return AIProviders.DeepSeek.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/mistral":
+                        return AIProviders.Mistral.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/cerebras":
+                        return AIProviders.Cerebras.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/amazon-bedrock":
+                        return AIProviders.AmazonBedrock.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/amazon-bedrock/mantle", "@opencode/ai/providers/amazon-bedrock/mantle/responses":
+                        return AIProviders.AmazonBedrockMantle.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/amazon-bedrock/mantle/chat":
+                        return AIProviders.AmazonBedrockMantle.chatModel(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/cohere", "@opencode/ai/providers/cohere/chat":
+                        return AIProviders.Cohere.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/deepinfra":
+                        return AIProviders.DeepInfra.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/fireworks":
+                        return AIProviders.Fireworks.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/togetherai":
+                        return AIProviders.TogetherAI.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/venice":
+                        return AIProviders.Venice.model(descriptor.id, settings: cfg)
+                    case "@opencode/ai/providers/openai-compatible/responses", "@opencode/ai/providers/openai-compatible-responses":
+                        return AIProviders.OpenAICompatibleResponses.model(descriptor.id, settings: cfg)
+                    case _ where pkg.hasPrefix("@opencode/ai/providers/"):
+                        return AIProviders.OpenAICompatible.model(descriptor.id, settings: cfg)
+                    default:
+                        throw UnsupportedModelError(
+                            providerID: ref.providerID.rawValue,
+                            modelID: ref.id.rawValue,
+                            capability: "chat",
+                            message: "\(ref.providerID.rawValue)/\(ref.id.rawValue) has no chat API opencode can call (package \(pkg))"
+                        )
+                    }
+                } catch let err as UnsupportedModelError {
+                    throw err
+                } catch {
+                    throw InvalidRequestError(message: String(describing: error), field: "model")
+                }
+            }
+
+            private static func extractTextFallback(from body: [UInt8]) -> String? {
+                guard let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(body)),
+                      case .object(let obj) = parsed
+                else { return nil }
+                // OpenAI Chat Completions JSON
+                if case .array(let choices) = obj["choices"],
+                   case .object(let first) = choices.first,
+                   case .object(let msg) = first["message"],
+                   case .string(let content) = msg["content"]
+                {
+                    return content
+                }
+                // OpenAI Responses JSON
+                if case .string(let outputText) = obj["output_text"] {
+                    return outputText
+                }
+                if case .array(let output) = obj["output"] {
+                    var pieces: [String] = []
+                    for item in output {
+                        if case .object(let o) = item, case .array(let content) = o["content"] {
+                            for c in content {
+                                if case .object(let co) = c, case .string(let text) = co["text"] {
+                                    pieces.append(text)
+                                }
+                            }
+                        }
+                    }
+                    if !pieces.isEmpty { return pieces.joined() }
+                }
+                // Anthropic Messages JSON
+                if case .array(let content) = obj["content"] {
+                    let texts: [String] = content.compactMap { block in
+                        if case .object(let b) = block,
+                           case .string("text") = b["type"],
+                           case .string(let t) = b["text"]
+                        { return t }
+                        return nil
+                    }
+                    if !texts.isEmpty { return texts.joined() }
+                }
+                // Gemini generateContent JSON
+                if case .array(let candidates) = obj["candidates"],
+                   case .object(let first) = candidates.first,
+                   case .object(let content) = first["content"],
+                   case .array(let parts) = content["parts"]
+                {
+                    let texts: [String] = parts.compactMap { part in
+                        if case .object(let p) = part, case .string(let t) = p["text"] { return t }
+                        return nil
+                    }
+                    if !texts.isEmpty { return texts.joined() }
+                }
+                return nil
+            }
+
+            private static func authHeaders(for descriptor: CoreModel.Resolver.ResolvedModelDescriptor, googleKeyHeader: Bool = false) -> [String: String] {
+                var headers = descriptor.headers
+                if case .string(let token) = descriptor.settings["authToken"], !token.isEmpty {
+                    headers["Authorization"] = "Bearer \(token)"
+                } else if case .string(let token) = descriptor.settings["accessToken"], !token.isEmpty {
+                    headers["Authorization"] = "Bearer \(token)"
+                } else if case .string(let key) = descriptor.settings["apiKey"], !key.isEmpty {
+                    if googleKeyHeader {
+                        headers["x-goog-api-key"] = key
+                    } else {
+                        headers["Authorization"] = "Bearer \(key)"
+                    }
+                }
+                return headers
             }
 
             public func text(_ input: TextInput) async throws -> String {
-                guard let resolved = try await resolver.resolve(input.model) else {
+                let resolved: CoreModel.Resolver.Resolved?
+                do {
+                    resolved = try await resolver.resolve(input.model)
+                } catch {
+                    throw Self.mapResolutionError(error, ref: input.model, capability: "chat")
+                }
+                guard let resolved else {
                     if let ref = input.model {
-                        throw ModelNotFoundError(providerID: ref.providerID.rawValue, modelID: ref.id.rawValue)
+                        throw await missingError(ref: ref, capability: .chat)
                     }
                     throw UnavailableError(message: "No model specified and no supported model is available")
                 }
-                guard let textHandler else {
-                    throw UnavailableError(message: "No LLM execution handler configured for Generate.text", service: resolved.ref.providerID.rawValue)
+                if let textHandler {
+                    return try await textHandler(resolved, input.prompt)
                 }
-                return try await textHandler(resolved, input.prompt)
+                guard let http else {
+                    throw UnavailableError(
+                        message: "No HTTP transport configured for Generate.text",
+                        service: resolved.ref.providerID.rawValue
+                    )
+                }
+                let configured = try Self.resolveChatModel(from: resolved.model, ref: resolved.ref)
+                var reqHeaders = resolved.model.headers
+                reqHeaders["x-opencode-session"] = SessionID.create().rawValue
+                let llmReq = AIProtocolUtils.LLMRequest(
+                    model: configured.descriptor,
+                    messages: [AIProtocolUtils.Message(role: .user, content: [.text(AIProtocolUtils.TextPart(text: input.prompt))])],
+                    http: AIProtocolUtils.HTTPOverlay(
+                        headers: reqHeaders,
+                        body: resolved.model.body.isEmpty ? nil : resolved.model.body
+                    )
+                )
+                let httpReq: HTTPRequest
+                do {
+                    httpReq = try configured.route.prepareHTTPRequest(for: llmReq)
+                } catch {
+                    throw InvalidRequestError(message: String(describing: error))
+                }
+                let resp: HTTPResponse
+                do {
+                    resp = try await http.send(httpReq)
+                } catch {
+                    throw ProviderRequestError(
+                        providerID: resolved.ref.providerID.rawValue,
+                        reason: .provider,
+                        message: String(describing: error)
+                    )
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw Self.mapHTTPFailure(
+                        providerID: resolved.ref.providerID.rawValue,
+                        status: resp.head.statusCode,
+                        body: String(decoding: resp.body, as: UTF8.self)
+                    )
+                }
+                if let events = try? configured.route.`protocol`.parseStream(resp.body, llmReq) {
+                    var pieces: [String] = []
+                    for ev in events {
+                        if case .textDelta(_, let delta, _) = ev {
+                            pieces.append(delta)
+                        }
+                    }
+                    if !pieces.isEmpty {
+                        return pieces.joined()
+                    }
+                }
+                if let fallbackText = Self.extractTextFallback(from: resp.body) {
+                    return fallbackText
+                }
+                return ""
             }
 
             public func image(_ input: GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult {
-                throw ModelNotFoundError(providerID: input.model.providerID.rawValue, modelID: input.model.id.rawValue)
+                let descriptor: CoreModel.Resolver.ResolvedModelDescriptor?
+                do {
+                    descriptor = try await resolver.resolveImage(input.model)
+                } catch {
+                    throw Self.mapResolutionError(error, ref: input.model, capability: "image")
+                }
+                guard let descriptor else {
+                    throw await missingError(ref: input.model, capability: .image)
+                }
+                if let imageHandler {
+                    return try await imageHandler(descriptor, input)
+                }
+                guard let http else {
+                    throw UnavailableError(
+                        message: "No HTTP transport configured for Generate.image",
+                        service: input.model.providerID.rawValue
+                    )
+                }
+
+                let isGoogle = descriptor.package.contains("/google") && !descriptor.package.contains("openai")
+                let isXAI = descriptor.package.contains("/xai")
+                let defaultBase: String
+                let defaultPath: String
+                if isGoogle {
+                    defaultBase = AIProtocols.GoogleImages.DEFAULT_BASE_URL
+                    defaultPath = "/models/\(descriptor.id):predict"
+                } else if isXAI {
+                    defaultBase = AIProtocols.XAIImages.DEFAULT_BASE_URL
+                    defaultPath = AIProtocols.XAIImages.PATH
+                } else {
+                    defaultBase = AIProtocols.OpenAIImages.DEFAULT_BASE_URL
+                    defaultPath = AIProtocols.OpenAIImages.PATH
+                }
+                var base = descriptor.baseURL ?? defaultBase
+                while base.hasSuffix("/") { base.removeLast() }
+                let url = "\(base)\(defaultPath)"
+
+                var payload: [String: JSONValue]
+                if isGoogle {
+                    var params: [String: JSONValue] = [:]
+                    if let n = input.n { params["sampleCount"] = .int(Int64(n.rawValue)) }
+                    if let aspect = input.aspect { params["aspectRatio"] = .string(aspect.rawValue) }
+                    payload = [
+                        "instances": .array([.object(["prompt": .string(input.prompt)])]),
+                        "parameters": .object(params),
+                    ]
+                } else {
+                    payload = [
+                        "model": .string(descriptor.id),
+                        "prompt": .string(input.prompt),
+                        "response_format": .string("b64_json"),
+                    ]
+                    if let n = input.n { payload["n"] = .int(Int64(n.rawValue)) }
+                    let sizeReq = AIProtocols.ImageRequestPayload(
+                        modelID: descriptor.id,
+                        prompt: input.prompt,
+                        n: input.n?.rawValue,
+                        aspect: input.aspect?.rawValue,
+                        resolution: input.resolution?.rawValue
+                    )
+                    if let sized = AIProtocols.OpenAIImages.pixelSize(sizeReq) {
+                        for (k, v) in sized { payload[k] = v }
+                    } else if let aspect = input.aspect {
+                        payload["aspect_ratio"] = .string(aspect.rawValue)
+                    }
+                    if let res = input.resolution, isXAI {
+                        payload["resolution"] = .string(AIProtocols.XAIImages.resolution(res.rawValue) ?? res.rawValue)
+                    }
+                }
+                for (k, v) in descriptor.body { payload[k] = v }
+
+                var headers = Self.authHeaders(for: descriptor, googleKeyHeader: isGoogle)
+                headers["Content-Type"] = "application/json"
+                headers["Accept"] = "application/json"
+                let bodyBytes = Array(try JSONEncoder().encode(JSONValue.object(payload)))
+                let resp: HTTPResponse
+                do {
+                    resp = try await http.send(HTTPRequest(method: "POST", url: url, headers: headers, body: bodyBytes))
+                } catch {
+                    throw ProviderRequestError(
+                        providerID: input.model.providerID.rawValue,
+                        reason: .provider,
+                        message: String(describing: error)
+                    )
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw Self.mapHTTPFailure(
+                        providerID: input.model.providerID.rawValue,
+                        status: resp.head.statusCode,
+                        body: String(decoding: resp.body, as: UTF8.self)
+                    )
+                }
+                guard let decoded = try? JSONDecoder().decode(JSONValue.self, from: Data(resp.body)),
+                      case .object(let obj) = decoded
+                else {
+                    throw ProviderRequestError(
+                        providerID: input.model.providerID.rawValue,
+                        reason: .provider,
+                        message: "Invalid image generation response"
+                    )
+                }
+
+                var outputs: [GenerateSchema.ImageOutput] = []
+                // OpenAI / xAI / OpenAI-compatible format: { data: [{ b64_json | url, revised_prompt? }] }
+                if case .array(let items) = obj["data"] {
+                    for item in items {
+                        guard case .object(let entry) = item else { continue }
+                        let mime: String = {
+                            if case .string(let m) = entry["mime_type"], !m.isEmpty { return m }
+                            if case .string(let m) = entry["mime"], !m.isEmpty { return m }
+                            return "image/png"
+                        }()
+                        if case .string(let b64) = entry["b64_json"], !b64.isEmpty {
+                            outputs.append(GenerateSchema.ImageOutput(data: b64, mime: mime))
+                        } else if case .string(let imageURL) = entry["url"], !imageURL.isEmpty {
+                            let dl = try await http.send(HTTPRequest(method: "GET", url: imageURL))
+                            guard (200..<300).contains(dl.head.statusCode) else {
+                                throw Self.mapHTTPFailure(
+                                    providerID: input.model.providerID.rawValue,
+                                    status: dl.head.statusCode,
+                                    body: "Failed to download generated image from \(imageURL)"
+                                )
+                            }
+                            let dlMime = dl.head.headers.first { $0.key.lowercased() == "content-type" }?.value
+                                .split(separator: ";").first.map(String.init) ?? mime
+                            outputs.append(GenerateSchema.ImageOutput(data: bytesToBase64(dl.body), mime: dlMime))
+                        }
+                    }
+                }
+                // Google Imagen format: { predictions: [{ bytesBase64Encoded, mimeType? }] }
+                if case .array(let preds) = obj["predictions"] {
+                    for pred in preds {
+                        guard case .object(let entry) = pred,
+                              case .string(let b64) = entry["bytesBase64Encoded"], !b64.isEmpty
+                        else { continue }
+                        let mime: String = {
+                            if case .string(let m) = entry["mimeType"], !m.isEmpty { return m }
+                            return "image/png"
+                        }()
+                        outputs.append(GenerateSchema.ImageOutput(data: b64, mime: mime))
+                    }
+                }
+                // Token usage if returned
+                var tokens: GenerateSchema.Usage? = nil
+                if case .object(let usageObj) = obj["usage"] {
+                    let inp = AIProtocolUtils.JSONCodec.doubleValue(usageObj["input_tokens"])
+                    let out = AIProtocolUtils.JSONCodec.doubleValue(usageObj["output_tokens"])
+                    if inp != nil || out != nil {
+                        tokens = GenerateSchema.Usage(input: inp, output: out)
+                    }
+                }
+                return GenerateSchema.ImageResult(images: outputs, tokens: tokens, native: obj)
             }
 
             public func decisions(_ input: GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult {
-                throw ModelNotFoundError(providerID: input.model.providerID.rawValue, modelID: input.model.id.rawValue)
+                let descriptor: CoreModel.Resolver.ResolvedModelDescriptor?
+                do {
+                    descriptor = try await resolver.resolveDecision(input.model)
+                } catch {
+                    throw Self.mapResolutionError(error, ref: input.model, capability: "decision")
+                }
+                guard let descriptor else {
+                    throw await missingError(ref: input.model, capability: .decision)
+                }
+                if let decisionHandler {
+                    return try await decisionHandler(descriptor, input)
+                }
+                guard let http else {
+                    throw UnavailableError(
+                        message: "No HTTP transport configured for Generate.decisions",
+                        service: input.model.providerID.rawValue
+                    )
+                }
+
+                let protoParts: [AIProtocols.SystemOneProtocol.DecisionInputPart] = input.input.map { part in
+                    switch part {
+                    case .text(let t): return .text(t.text)
+                    case .json(let j): return .json(j.value)
+                    case .file(let f):
+                        return .media(
+                            AIProtocolUtils.MediaAsset(source: .base64(f.data), mediaType: f.mime),
+                            filename: f.name
+                        )
+                    }
+                }
+                let protoQuestions: [AIProtocols.SystemOneProtocol.DecisionQuestion] = input.questions.map { q in
+                    switch q {
+                    case .predicate(let p):
+                        let criteriaText: String? = [
+                            p.criteria?.whenTrue.map { "true: \($0)" },
+                            p.criteria?.whenFalse.map { "false: \($0)" },
+                        ].compactMap { $0 }.joined(separator: "; ")
+                        return .predicate(
+                            name: p.name,
+                            instructions: p.instructions,
+                            criteria: (criteriaText?.isEmpty == false) ? criteriaText : nil
+                        )
+                    case .choice(let c):
+                        let opts: [(value: String, description: String?)] = c.choices.map { opt in
+                            let key: String
+                            switch opt.value {
+                            case .string(let s): key = s
+                            case .bool(let b): key = b ? "true" : "false"
+                            }
+                            return (value: key, description: opt.description)
+                        }
+                        return .choice(name: c.name, instructions: c.instructions, choices: opts)
+                    case .score(let s):
+                        return .score(
+                            name: s.name,
+                            instructions: s.instructions,
+                            levels: s.levels.map { ($0.label, $0.description) }
+                        )
+                    }
+                }
+
+                let isGoogle = descriptor.package.contains("/google")
+                let isOpenAI = descriptor.package.contains("/openai") || descriptor.package.contains("/openrouter")
+                let isCloudflare = descriptor.package.contains("/cloudflare")
+                let route: AIProtocols.DecisionRouteSpec? = isGoogle
+                    ? AIProtocols.GoogleDecisions.route
+                    : isCloudflare
+                    ? AIProtocols.CloudflareRunDecisions.route
+                    : isOpenAI
+                    ? AIProtocols.OpenAIDecisions.route
+                    : nil
+
+                let modelDesc = AIProtocolUtils.ModelDescriptor(
+                    id: descriptor.id,
+                    provider: descriptor.provider,
+                    routeID: route?.id ?? AIProtocols.SystemOneProtocol.id,
+                    providerMetadataKey: descriptor.provider,
+                    baseURL: descriptor.baseURL ?? route?.defaultBaseURL ?? AIProtocols.SystemOneProtocol.DEFAULT_BASE_URL
+                )
+                let protoReq = AIProtocols.SystemOneProtocol.DecisionRequest(
+                    model: modelDesc,
+                    input: protoParts,
+                    questions: protoQuestions,
+                    providerOptions: nil,
+                    httpBody: descriptor.body.isEmpty ? nil : descriptor.body
+                )
+
+                let bodyDict: [String: JSONValue]
+                do {
+                    if let route {
+                        bodyDict = try route.`protocol`.buildBody(protoReq)
+                    } else {
+                        var encoded = try AIProtocols.SystemOneProtocol.encodeBody(protoReq)
+                        encoded["model"] = .string(descriptor.id)
+                        bodyDict = encoded
+                    }
+                } catch {
+                    throw InvalidRequestError(message: String(describing: error))
+                }
+
+                var base = descriptor.baseURL ?? route?.defaultBaseURL ?? AIProtocols.SystemOneProtocol.DEFAULT_BASE_URL
+                while base.hasSuffix("/") { base.removeLast() }
+                let path = route?.pathBuilder(descriptor.id) ?? AIProtocols.SystemOneProtocol.DEFAULT_PATH
+                let url = "\(base)\(path.hasPrefix("/") ? path : "/\(path)")"
+
+                var headers = Self.authHeaders(for: descriptor, googleKeyHeader: isGoogle)
+                headers["Content-Type"] = "application/json"
+                headers["Accept"] = "application/json"
+                let bodyBytes = Array(try JSONEncoder().encode(JSONValue.object(bodyDict)))
+                let resp: HTTPResponse
+                do {
+                    resp = try await http.send(HTTPRequest(method: "POST", url: url, headers: headers, body: bodyBytes))
+                } catch {
+                    throw ProviderRequestError(
+                        providerID: input.model.providerID.rawValue,
+                        reason: .provider,
+                        message: String(describing: error)
+                    )
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw Self.mapHTTPFailure(
+                        providerID: input.model.providerID.rawValue,
+                        status: resp.head.statusCode,
+                        body: String(decoding: resp.body, as: UTF8.self)
+                    )
+                }
+                guard let decoded = try? JSONDecoder().decode(JSONValue.self, from: Data(resp.body)),
+                      case .object(let obj) = decoded
+                else {
+                    throw ProviderRequestError(
+                        providerID: input.model.providerID.rawValue,
+                        reason: .provider,
+                        message: "Invalid decision response"
+                    )
+                }
+
+                let answers = try Self.decodeDecisionAnswers(from: obj, questions: input.questions, providerID: input.model.providerID.rawValue)
+                var tokens: GenerateSchema.Usage? = nil
+                var cost: MoneySchema.USD? = nil
+                if case .object(let u) = obj["usage"] {
+                    let inp = AIProtocolUtils.JSONCodec.doubleValue(u["input_tokens"])
+                    let out = AIProtocolUtils.JSONCodec.doubleValue(u["output_tokens"])
+                    if inp != nil || out != nil {
+                        tokens = GenerateSchema.Usage(input: inp, output: out)
+                    }
+                    if let c = AIProtocolUtils.JSONCodec.doubleValue(u["cost"]) {
+                        cost = MoneySchema.USD(rawValue: c)
+                    }
+                }
+                return GenerateSchema.DecisionResult(answers: answers, cost: cost, tokens: tokens, native: obj)
+            }
+
+            private static func decodeDecisionAnswers(
+                from obj: [String: JSONValue],
+                questions: [GenerateSchema.DecisionQuestion],
+                providerID: String
+            ) throws -> [GenerateSchema.DecisionAnswer] {
+                // Support both structured array `{ answers: [...] }` and SystemOne map `{ answers: { <name>: ... } }`.
+                if case .array(let arr) = obj["answers"] {
+                    let data = try JSONEncoder().encode(JSONValue.array(arr))
+                    if let direct = try? JSONDecoder().decode([GenerateSchema.DecisionAnswer].self, from: data) {
+                        return direct
+                    }
+                }
+                guard case .object(let answerMap) = obj["answers"] else {
+                    throw ProviderRequestError(providerID: providerID, reason: .provider, message: "Decision response missing answers")
+                }
+                var out: [GenerateSchema.DecisionAnswer] = []
+                for question in questions {
+                    switch question {
+                    case .predicate(let p):
+                        let raw = answerMap[p.name]
+                        if let prob = AIProtocolUtils.JSONCodec.doubleValue(raw) {
+                            out.append(.predicate(GenerateSchema.PredicateAnswer(name: p.name, probability: max(0, min(1, prob)))))
+                        } else if case .object(let ao) = raw, let prob = AIProtocolUtils.JSONCodec.doubleValue(ao["probability"] ?? ao["score"]) {
+                            out.append(.predicate(GenerateSchema.PredicateAnswer(name: p.name, probability: max(0, min(1, prob)))))
+                        } else {
+                            out.append(.error(GenerateSchema.ErrorAnswer(name: p.name, reason: "invalid_answer", message: "Missing predicate probability")))
+                        }
+                    case .choice(let c):
+                        guard case .object(let ao) = answerMap[c.name] else {
+                            out.append(.error(GenerateSchema.ErrorAnswer(name: c.name, reason: "invalid_answer", message: "Missing choice answer")))
+                            continue
+                        }
+                        var probs: [GenerateSchema.ChoiceAnswer.Entry] = []
+                        if case .object(let pm) = ao["probabilities"] {
+                            for opt in c.choices {
+                                let key: String = {
+                                    switch opt.value {
+                                    case .string(let s): return s
+                                    case .bool(let b): return b ? "true" : "false"
+                                    }
+                                }()
+                                let p = max(0, min(1, AIProtocolUtils.JSONCodec.doubleValue(pm[key]) ?? 0))
+                                probs.append(.init(value: opt.value, probability: p))
+                            }
+                        } else if case .array(let pa) = ao["probabilities"] {
+                            for item in pa {
+                                if case .object(let eo) = item, let p = AIProtocolUtils.JSONCodec.doubleValue(eo["probability"]) {
+                                    let val: GenerateSchema.ChoiceValue
+                                    if case .bool(let b) = eo["value"] { val = .bool(b) }
+                                    else if case .string(let s) = eo["value"] { val = .string(s) }
+                                    else { continue }
+                                    probs.append(.init(value: val, probability: max(0, min(1, p))))
+                                }
+                            }
+                        }
+                        let chosen: GenerateSchema.ChoiceValue = {
+                            if case .bool(let b) = ao["choice"] { return .bool(b) }
+                            if case .string(let s) = ao["choice"] {
+                                if let match = c.choices.first(where: { opt in
+                                    switch opt.value {
+                                    case .string(let os): return os == s
+                                    case .bool(let ob): return (ob ? "true" : "false") == s
+                                    }
+                                }) { return match.value }
+                                return .string(s)
+                            }
+                            return probs.max(by: { $0.probability < $1.probability })?.value ?? c.choices[0].value
+                        }()
+                        let confidence = max(0, min(1, AIProtocolUtils.JSONCodec.doubleValue(ao["confidence"])
+                            ?? probs.first(where: { $0.value == chosen })?.probability
+                            ?? 1.0))
+                        out.append(.choice(GenerateSchema.ChoiceAnswer(name: c.name, choice: chosen, probabilities: probs, confidence: confidence)))
+                    case .score(let s):
+                        guard case .object(let ao) = answerMap[s.name] else {
+                            out.append(.error(GenerateSchema.ErrorAnswer(name: s.name, reason: "invalid_answer", message: "Missing score answer")))
+                            continue
+                        }
+                        let scoreVal = AIProtocolUtils.JSONCodec.doubleValue(ao["score"]) ?? 0
+                        var probs: [GenerateSchema.ScoreAnswer.Entry] = []
+                        if case .array(let pa) = ao["probabilities"] {
+                            for (idx, item) in pa.enumerated() {
+                                if let p = AIProtocolUtils.JSONCodec.doubleValue(item), idx < s.levels.count {
+                                    probs.append(.init(value: idx, label: s.levels[idx].label, probability: max(0, min(1, p))))
+                                } else if case .object(let eo) = item,
+                                          let p = AIProtocolUtils.JSONCodec.doubleValue(eo["probability"])
+                                {
+                                    let val = AIProtocolUtils.JSONCodec.intValue(eo["value"]) ?? idx
+                                    let lbl = AIProtocolUtils.JSONCodec.stringValue(eo["label"])
+                                        ?? (val >= 0 && val < s.levels.count ? s.levels[val].label : String(val))
+                                    probs.append(.init(value: val, label: lbl, probability: max(0, min(1, p))))
+                                }
+                            }
+                        }
+                        let confidence = max(0, min(1, AIProtocolUtils.JSONCodec.doubleValue(ao["confidence"]) ?? 1.0))
+                        out.append(.score(GenerateSchema.ScoreAnswer(name: s.name, score: scoreVal, probabilities: probs, confidence: confidence)))
+                    }
+                }
+                return out
             }
 
             public func videoStart(_ input: VideoInput) async throws -> String {
-                throw ModelNotFoundError(providerID: input.model.providerID.rawValue, modelID: input.model.id.rawValue)
+                guard (try await resolver.resolveVideo(input.model)) != nil else {
+                    throw await missingError(ref: input.model, capability: .video)
+                }
+                throw UnavailableError(message: "Video generation transport is not configured", service: input.model.providerID.rawValue)
             }
 
             public func videoStatus(model: ModelSchema.Ref, id: String) async throws -> String {
                 _ = id
-                throw ModelNotFoundError(providerID: model.providerID.rawValue, modelID: model.id.rawValue)
+                guard (try await resolver.resolveVideo(model)) != nil else {
+                    throw await missingError(ref: model, capability: .video)
+                }
+                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
             }
 
             public func videoResult(model: ModelSchema.Ref, id: String) async throws -> [VideoFile] {
                 _ = id
-                throw ModelNotFoundError(providerID: model.providerID.rawValue, modelID: model.id.rawValue)
+                guard (try await resolver.resolveVideo(model)) != nil else {
+                    throw await missingError(ref: model, capability: .video)
+                }
+                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
             }
         }
 
         // parity: core/src/generate.ts#layer [status=implemented hash=fd273a1bee2e]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
+            let models = deps.get(CoreModel.Model.Service.serviceKey, as: CoreModel.Model.Service.self)
             let resolver = deps.get(CoreModel.Resolver.Service.serviceKey, as: CoreModel.Resolver.Service.self)
-                ?? CoreModel.Resolver.Service(providers: CoreProvider.Provider.Service(), models: CoreModel.Model.Service(providers: CoreProvider.Provider.Service()))
-            return LayerNode.Output([Service.serviceKey: Service(resolver: resolver)])
+                ?? CoreModel.Resolver.Service(providers: CoreProvider.Provider.Service(), models: models ?? CoreModel.Model.Service(providers: CoreProvider.Provider.Service()))
+            let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)
+            return LayerNode.Output([Service.serviceKey: Service(resolver: resolver, models: models, http: http)])
         }
 
         // parity: core/src/generate.ts#node [status=implemented hash=f2d6d71c42fa]
@@ -4266,17 +5346,109 @@ public enum CoreIntegration {
 
             public struct NativePhoton: Photon, Sendable {
                 public init() {}
+
                 public func dimensions(of bytes: [UInt8]) -> (width: Int, height: Int)? {
-                    // Parse PNG IHDR header (bytes 16..23) or GIF header (bytes 6..9)
+                    // 1. PNG IHDR header (bytes 16..23, big-endian UInt32)
                     if bytes.count >= 24 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
                         let w = (Int(bytes[16]) << 24) | (Int(bytes[17]) << 16) | (Int(bytes[18]) << 8) | Int(bytes[19])
                         let h = (Int(bytes[20]) << 24) | (Int(bytes[21]) << 16) | (Int(bytes[22]) << 8) | Int(bytes[23])
-                        return (w, h)
+                        return (w > 0 && h > 0) ? (w, h) : nil
                     }
+
+                    // 2. GIF87a / GIF89a header (bytes 6..9, little-endian UInt16)
                     if bytes.count >= 10 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 {
                         let w = Int(bytes[6]) | (Int(bytes[7]) << 8)
                         let h = Int(bytes[8]) | (Int(bytes[9]) << 8)
-                        return (w, h)
+                        return (w > 0 && h > 0) ? (w, h) : nil
+                    }
+
+                    // 3. JPEG (SOI 0xFF 0xD8, scan markers for SOF0/SOF2/etc.)
+                    if bytes.count >= 4 && bytes[0] == 0xFF && bytes[1] == 0xD8 {
+                        return Self.parseJPEGDimensions(bytes)
+                    }
+
+                    // 4. WebP (RIFF....WEBP container: VP8 / VP8L / VP8X)
+                    if bytes.count >= 25
+                        && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46
+                        && bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50
+                    {
+                        return Self.parseWebPDimensions(bytes)
+                    }
+
+                    return nil
+                }
+
+                private static func parseJPEGDimensions(_ bytes: [UInt8]) -> (width: Int, height: Int)? {
+                    var offset = 2
+                    while offset < bytes.count {
+                        // Advance to marker prefix 0xFF
+                        while offset < bytes.count && bytes[offset] != 0xFF {
+                            offset += 1
+                        }
+                        // Skip fill 0xFF bytes
+                        while offset < bytes.count && bytes[offset] == 0xFF {
+                            offset += 1
+                        }
+                        guard offset < bytes.count else { return nil }
+                        let marker = bytes[offset]
+                        offset += 1
+
+                        // Standalone markers without length field
+                        if marker == 0x00 || marker == 0x01 || marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD7) {
+                            continue
+                        }
+                        // EOI or SOS (entropy-coded image scan starts)
+                        if marker == 0xD9 || marker == 0xDA {
+                            return nil
+                        }
+                        guard offset + 2 <= bytes.count else { return nil }
+                        let segmentLength = (Int(bytes[offset]) << 8) | Int(bytes[offset + 1])
+                        guard segmentLength >= 2 else { return nil }
+
+                        // SOF markers: C0-C3, C5-C7, C9-CB, CD-CF (excluding C4 DHT, C8 JPG, CC DAC)
+                        let isSOF = (marker >= 0xC0 && marker <= 0xCF)
+                            && marker != 0xC4 && marker != 0xC8 && marker != 0xCC
+                        if isSOF {
+                            guard segmentLength >= 7, offset + 7 <= bytes.count else { return nil }
+                            let height = (Int(bytes[offset + 3]) << 8) | Int(bytes[offset + 4])
+                            let width = (Int(bytes[offset + 5]) << 8) | Int(bytes[offset + 6])
+                            return (width > 0 && height > 0) ? (width, height) : nil
+                        }
+                        offset += segmentLength
+                    }
+                    return nil
+                }
+
+                private static func parseWebPDimensions(_ bytes: [UInt8]) -> (width: Int, height: Int)? {
+                    let c0 = bytes[12], c1 = bytes[13], c2 = bytes[14], c3 = bytes[15]
+                    // "VP8 " (lossy WebP)
+                    if c0 == 0x56 && c1 == 0x50 && c2 == 0x38 && c3 == 0x20 {
+                        guard bytes.count >= 30 else { return nil }
+                        // Frame tag bit 0 == 0 indicates keyframe; start code 0x9D 0x01 0x2A at bytes 23..25
+                        guard (bytes[20] & 0x01) == 0,
+                              bytes[23] == 0x9D && bytes[24] == 0x01 && bytes[25] == 0x2A
+                        else { return nil }
+                        let width = (Int(bytes[26]) | (Int(bytes[27]) << 8)) & 0x3FFF
+                        let height = (Int(bytes[28]) | (Int(bytes[29]) << 8)) & 0x3FFF
+                        return (width > 0 && height > 0) ? (width, height) : nil
+                    }
+                    // "VP8L" (lossless WebP)
+                    if c0 == 0x56 && c1 == 0x50 && c2 == 0x38 && c3 == 0x4C {
+                        guard bytes.count >= 25, bytes[20] == 0x2F else { return nil }
+                        let bits = UInt32(bytes[21])
+                            | (UInt32(bytes[22]) << 8)
+                            | (UInt32(bytes[23]) << 16)
+                            | (UInt32(bytes[24]) << 24)
+                        let width = Int(bits & 0x3FFF) + 1
+                        let height = Int((bits >> 14) & 0x3FFF) + 1
+                        return (width > 0 && height > 0) ? (width, height) : nil
+                    }
+                    // "VP8X" (extended WebP)
+                    if c0 == 0x56 && c1 == 0x50 && c2 == 0x38 && c3 == 0x58 {
+                        guard bytes.count >= 30 else { return nil }
+                        let width = (Int(bytes[24]) | (Int(bytes[25]) << 8) | (Int(bytes[26]) << 16)) + 1
+                        let height = (Int(bytes[27]) | (Int(bytes[28]) << 8) | (Int(bytes[29]) << 16)) + 1
+                        return (width > 0 && height > 0) ? (width, height) : nil
                     }
                     return nil
                 }
@@ -4493,10 +5665,22 @@ public enum CoreIntegration {
         public struct SessionInput: Equatable, Hashable, Sendable {
             public let model: String
             public let transport: String
+            public let sdp: String?
+            public let dcid: Int?
+            public let session: [String: JSONValue]?
 
-            public init(model: String, transport: String) {
+            public init(
+                model: String,
+                transport: String,
+                sdp: String? = nil,
+                dcid: Int? = nil,
+                session: [String: JSONValue]? = nil
+            ) {
                 self.model = model
                 self.transport = transport
+                self.sdp = sdp
+                self.dcid = dcid
+                self.session = session
             }
         }
 
@@ -4533,50 +5717,177 @@ public enum CoreIntegration {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Voice"
             private let integrations: any Integration.Interface
+            private let executor: AIRequestExecutor.RequestExecutorService
 
-            private static let engines: [(id: String, model: String, provider: String, transports: [String])] = [
-                ("openai-live", "gpt-realtime", "openai", ["webrtc", "websocket"]),
-                ("xai-voice", "grok-voice", "xai", ["websocket"]),
-                ("google-live", "gemini-live", "google", ["websocket"]),
+            private static let openCodeLiveProvider = "opencode"
+            private static let openCodeLiveBaseURL = "https://opencode.ai/inference/openai/v1"
+
+            private static let missingLiveKeyMessage =
+                "GPT-Live needs an OpenAI API key (a stored key or OPENAI_API_KEY) or an OpenCode Console connection on the server. ChatGPT sign-in can't start voice sessions."
+
+            private static let missingKeyMessages: [String: String] = [
+                "openai": "Voice needs an OpenAI API key on the server (a stored key or OPENAI_API_KEY). ChatGPT sign-in can't start voice sessions.",
+                "xai": "Voice needs an xAI API key on the server (a stored key or XAI_API_KEY).",
+                "google": "Voice needs a Google API key on the server (a stored key, GEMINI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or GOOGLE_API_KEY).",
             ]
 
-            public init(integrations: any Integration.Interface) {
+            public init(
+                integrations: any Integration.Interface,
+                executor: AIRequestExecutor.RequestExecutorService? = nil,
+                http: any HTTPTransport = URLSessionHTTPTransport.shared
+            ) {
                 self.integrations = integrations
+                self.executor = executor ?? AIRequestExecutor.layer(transport: http)
+            }
+
+            private func findConnection(
+                provider: String,
+                methods: [ConnectionSchema.CredentialInfo.Method] = [.key]
+            ) async -> ConnectionSchema.Info? {
+                guard let info = try? await integrations.get(IntegrationID(rawValue: provider)) else { return nil }
+                return info.connections.first { conn in
+                    switch conn {
+                    case .env: return true
+                    case .credential(let cred): return methods.contains(cred.method)
+                    }
+                }
+            }
+
+            private func resolveSource(
+                for engine: AIExperimental.RealtimeEngineSpec
+            ) async -> (provider: String, connection: ConnectionSchema.Info)? {
+                if let direct = await findConnection(provider: engine.provider, methods: [.key]) {
+                    return (engine.provider, direct)
+                }
+                guard engine.id == "openai-live" else { return nil }
+                if let hosted = await findConnection(provider: Self.openCodeLiveProvider, methods: [.key, .oauth]) {
+                    return (Self.openCodeLiveProvider, hosted)
+                }
+                return nil
+            }
+
+            private struct SessionAccess {
+                let apiKey: AIAuth.RedactedSecret
+                let baseURL: String?
+                let headers: [String: String]?
+            }
+
+            private static func sessionAccess(provider: String, credential: CredentialSchema.Value) -> SessionAccess? {
+                if provider != openCodeLiveProvider {
+                    if case .key(let k) = credential, !k.key.isEmpty {
+                        return SessionAccess(apiKey: AIAuth.RedactedSecret(k.key), baseURL: nil, headers: nil)
+                    }
+                    return nil
+                }
+                switch credential {
+                case .external:
+                    return nil
+                case .key(let k):
+                    guard !k.key.isEmpty else { return nil }
+                    var headers: [String: String]? = nil
+                    if case .string(let orgID) = k.metadata?["orgID"], !orgID.isEmpty {
+                        headers = ["x-opencode-org-id": orgID]
+                    }
+                    return SessionAccess(apiKey: AIAuth.RedactedSecret(k.key), baseURL: openCodeLiveBaseURL, headers: headers)
+                case .oauth(let o):
+                    guard !o.access.isEmpty else { return nil }
+                    var headers: [String: String]? = nil
+                    if case .string(let orgID) = o.metadata?["orgID"], !orgID.isEmpty {
+                        headers = ["x-opencode-org-id": orgID]
+                    }
+                    return SessionAccess(apiKey: AIAuth.RedactedSecret(o.access), baseURL: openCodeLiveBaseURL, headers: headers)
+                }
             }
 
             public func models() async throws -> Models {
                 var list: [ModelInfo] = []
-                for engine in Self.engines {
-                    let direct = try? await integrations.get(IntegrationID(rawValue: engine.provider))
-                    let hasDirect = !(direct?.connections.isEmpty ?? true)
-                    var provider = engine.provider
-                    var available = hasDirect
-                    if !available && engine.id == "openai-live" {
-                        let hosted = try? await integrations.get(IntegrationID(rawValue: "opencode"))
-                        if !(hosted?.connections.isEmpty ?? true) {
-                            provider = "opencode"
-                            available = true
-                        }
-                    }
-                    list.append(ModelInfo(model: engine.model, provider: provider, transports: engine.transports, available: available))
+                for engine in AIExperimental.Realtime.engines {
+                    let found = await resolveSource(for: engine)
+                    list.append(ModelInfo(
+                        model: engine.model,
+                        provider: found?.provider ?? engine.provider,
+                        transports: engine.transports.map(\.rawValue),
+                        available: found != nil
+                    ))
                 }
                 let def = list.first(where: \.available)?.model
                 return Models(models: list, defaultModel: def)
             }
 
             public func session(_ input: SessionInput) async throws -> [String: JSONValue] {
-                guard let engine = Self.engines.first(where: { $0.model == input.model }) else {
+                guard let engine = AIExperimental.Realtime.engine(input.model) else {
                     throw InvalidRequestError(message: "Unsupported voice model: \(input.model)")
                 }
-                let available = try await models().models.first(where: { $0.model == engine.model })?.available ?? false
-                guard available else {
-                    throw UnavailableError(message: "Voice needs an API key for \(engine.provider)", service: engine.provider)
+                let found = await resolveSource(for: engine)
+                let credential: CredentialSchema.Value?
+                if let found {
+                    do {
+                        credential = try await integrations.resolveConnection(found.connection)
+                    } catch {
+                        throw UnavailableError(message: String(describing: error), service: found.provider)
+                    }
+                } else {
+                    credential = nil
                 }
-                return [
-                    "model": .string(engine.model),
-                    "provider": .string(engine.provider),
-                    "transport": .string(input.transport),
-                ]
+                guard let found, let credential,
+                      let access = Self.sessionAccess(provider: found.provider, credential: credential)
+                else {
+                    let msg = engine.id == "openai-live"
+                        ? Self.missingLiveKeyMessage
+                        : (Self.missingKeyMessages[engine.provider] ?? "Voice needs an API key for \(engine.provider)")
+                    throw UnavailableError(message: msg, service: engine.provider)
+                }
+
+                let transportInput: AIExperimental.RealtimeTransportInput
+                switch input.transport {
+                case "websocket":
+                    transportInput = .websocket
+                case "webrtc":
+                    transportInput = .webrtc(sdp: input.sdp ?? "", dcid: input.dcid)
+                default:
+                    throw InvalidRequestError(message: "Unsupported voice transport: \(input.transport)")
+                }
+
+                do {
+                    let connected = try await AIExperimental.Realtime.connect(
+                        AIExperimental.RealtimeConnectInput(
+                            model: input.model,
+                            apiKey: access.apiKey,
+                            baseURL: access.baseURL,
+                            headers: access.headers,
+                            session: input.session,
+                            transport: transportInput
+                        ),
+                        executor: executor
+                    )
+                    switch connected {
+                    case .webrtc(let sdp):
+                        return [
+                            "type": .string("webrtc"),
+                            "sdp": .string(sdp),
+                        ]
+                    case .websocket(let url, let token, let expiresAt):
+                        return [
+                            "type": .string("websocket"),
+                            "url": .string(url),
+                            "token": .string(token),
+                            "expiresAt": .double(expiresAt),
+                        ]
+                    }
+                } catch let aiError as AISchema.AIError {
+                    switch aiError.reason {
+                    case .invalidRequest, .unsupportedOperation:
+                        throw InvalidRequestError(message: aiError.description)
+                    default:
+                        throw UnavailableError(message: aiError.description, service: found.provider)
+                    }
+                } catch let err as InvalidRequestError {
+                    throw err
+                } catch let err as UnavailableError {
+                    throw err
+                } catch {
+                    throw UnavailableError(message: String(describing: error), service: found.provider)
+                }
             }
         }
 
@@ -4584,7 +5895,9 @@ public enum CoreIntegration {
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let integrations = try deps.get(Integration.Service.serviceKey, as: Integration.Service.self)
                 ?? Integration.Service(credentials: CoreProvider.Credential.Service.inMemory())
-            return LayerNode.Output([Service.serviceKey: Service(integrations: integrations)])
+            let executor = deps.get(CoreSubsystems.Effect.AppNodePlatform.requestExecutorKey, as: AIRequestExecutor.RequestExecutorService.self)
+            let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self) ?? URLSessionHTTPTransport.shared
+            return LayerNode.Output([Service.serviceKey: Service(integrations: integrations, executor: executor, http: http)])
         }
 
         // parity: core/src/voice.ts#node [status=implemented hash=3d1e48cf38ae]

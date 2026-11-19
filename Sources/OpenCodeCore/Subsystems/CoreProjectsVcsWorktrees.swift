@@ -1632,6 +1632,395 @@ public enum CoreVcs {
                 ))
             }
 
+            private static let safeConfigArgs: [String] = [
+                "--no-optional-locks",
+                "-c", "core.autocrlf=false",
+                "-c", "core.fsmonitor=false",
+                "-c", "core.longpaths=true",
+                "-c", "core.symlinks=true",
+                "-c", "core.quotepath=false",
+            ]
+
+            private func runSafeGit(_ args: [String], cwd: String) async throws -> ProcessOutput {
+                try await runGit(Self.safeConfigArgs + args, cwd: cwd)
+            }
+
+            private static func parsePorcelainStatus(_ code: String) -> VcsSchema.FileStatus.Status {
+                if code == "??" { return .added }
+                if code.contains("U") { return .modified }
+                if code.contains("A") && !code.contains("D") { return .added }
+                if code.contains("D") && !code.contains("A") { return .deleted }
+                return .modified
+            }
+
+            private static func parseDiffStatus(_ status: VcsSchema.FileStatus.Status) -> FileDiffSchema.Status {
+                switch status {
+                case .added: return .added
+                case .deleted: return .deleted
+                case .modified: return .modified
+                }
+            }
+
+            private static func parseNumstat(_ text: String) -> [String: (additions: Int, deletions: Int)] {
+                var result: [String: (additions: Int, deletions: Int)] = [:]
+                for raw in text.split(separator: "\0", omittingEmptySubsequences: true) {
+                    let parts = raw.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+                    guard parts.count == 3 else { continue }
+                    let file = String(parts[2])
+                    guard !file.isEmpty else { continue }
+                    let add = parts[0] == "-" ? 0 : (Int(parts[0]) ?? 0)
+                    let del = parts[1] == "-" ? 0 : (Int(parts[1]) ?? 0)
+                    result[file] = (add, del)
+                }
+                return result
+            }
+
+            private static func parsePorcelainEntries(_ text: String) -> [(file: String, code: String, status: VcsSchema.FileStatus.Status)] {
+                var items: [(file: String, code: String, status: VcsSchema.FileStatus.Status)] = []
+                for raw in text.split(separator: "\0", omittingEmptySubsequences: true) {
+                    guard raw.count >= 4 else { continue }
+                    let idx2 = raw.index(raw.startIndex, offsetBy: 2)
+                    let idx3 = raw.index(raw.startIndex, offsetBy: 3)
+                    let code = String(raw[..<idx2])
+                    let file = String(raw[idx3...])
+                    guard !file.isEmpty else { continue }
+                    items.append((file: file, code: code, status: parsePorcelainStatus(code)))
+                }
+                return items
+            }
+
+            public func initRepository(at directory: String) async throws {
+                let out = try await runGit(["init"], cwd: directory)
+                guard out.exitCode == 0 else {
+                    throw OperationError(
+                        operation: .create,
+                        message: String(decoding: out.stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines),
+                        directory: SchemaPrimitive.AbsolutePath(rawValue: directory)
+                    )
+                }
+            }
+
+            public func hasHead(in directory: String) async -> Bool {
+                guard let out = try? await runSafeGit(["rev-parse", "--verify", "HEAD"], cwd: directory) else {
+                    return false
+                }
+                return out.exitCode == 0
+            }
+
+            public func currentBranch(in directory: String) async -> String? {
+                if let out = try? await runSafeGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd: directory),
+                   out.exitCode == 0
+                {
+                    let name = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty && name != "HEAD" {
+                        return name
+                    }
+                }
+                if let out = try? await runSafeGit(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd: directory),
+                   out.exitCode == 0
+                {
+                    let name = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty {
+                        return name
+                    }
+                }
+                return nil
+            }
+
+            public func defaultBranch(in directory: String) async -> (name: String, ref: String)? {
+                if let remotesOut = try? await runSafeGit(["remote"], cwd: directory), remotesOut.exitCode == 0 {
+                    let remotes = String(decoding: remotesOut.stdout, as: UTF8.self)
+                        .split(whereSeparator: \.isNewline)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    let primary: String? = if remotes.contains("origin") {
+                        "origin"
+                    } else if remotes.count == 1 {
+                        remotes[0]
+                    } else if remotes.contains("upstream") {
+                        "upstream"
+                    } else {
+                        remotes.first
+                    }
+                    if let primary,
+                       let headOut = try? await runSafeGit(["symbolic-ref", "refs/remotes/\(primary)/HEAD"], cwd: directory),
+                       headOut.exitCode == 0
+                    {
+                        var ref = String(decoding: headOut.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if ref.hasPrefix("refs/remotes/") {
+                            ref = String(ref.dropFirst("refs/remotes/".count))
+                        }
+                        let prefix = "\(primary)/"
+                        if ref.hasPrefix(prefix) {
+                            let name = String(ref.dropFirst(prefix.count))
+                            if !name.isEmpty { return (name, ref) }
+                        }
+                    }
+                }
+                if let headsOut = try? await runSafeGit(["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads"], cwd: directory),
+                   headsOut.exitCode == 0
+                {
+                    let heads = String(decoding: headsOut.stdout, as: UTF8.self)
+                        .split(whereSeparator: \.isNewline)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    if let cfgOut = try? await runSafeGit(["config", "init.defaultBranch"], cwd: directory),
+                       cfgOut.exitCode == 0
+                    {
+                        let configured = String(decoding: cfgOut.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !configured.isEmpty && heads.contains(configured) {
+                            return (configured, configured)
+                        }
+                    }
+                    if heads.contains("main") { return ("main", "main") }
+                    if heads.contains("master") { return ("master", "master") }
+                }
+                return nil
+            }
+
+            public func branches(in directory: String, options: CoreVcs.Vcs.BranchOptions? = nil) async -> VcsSchema.BranchList {
+                guard let out = try? await runSafeGit(
+                    ["for-each-ref", "--sort=refname", "--sort=-committerdate", "--format=%(refname:lstrip=2)", "refs/heads", "refs/remotes"],
+                    cwd: directory
+                ), out.exitCode == 0 else {
+                    return []
+                }
+                let needle = options?.search?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                var list = String(decoding: out.stdout, as: UTF8.self)
+                    .split(whereSeparator: \.isNewline)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty && !$0.hasSuffix("/HEAD") }
+                if let needle, !needle.isEmpty {
+                    list = list.filter { $0.lowercased().contains(needle) }
+                }
+                if let limit = options?.limit, limit >= 0, list.count > limit {
+                    return Array(list.prefix(limit))
+                }
+                return list
+            }
+
+            public func base(in directory: String) async throws -> VcsSchema.Base? {
+                guard await hasHead(in: directory) else { return nil }
+                guard let current = await currentBranch(in: directory) else {
+                    throw CoreVcs.Vcs.DiffError(message: "Choose a review base")
+                }
+                guard let root = await defaultBranch(in: directory), current == root.name else {
+                    throw CoreVcs.Vcs.DiffError(message: "Choose a review base")
+                }
+                guard let refOut = try? await runSafeGit(
+                    ["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", root.ref],
+                    cwd: directory
+                ), refOut.exitCode == 0 else {
+                    throw CoreVcs.Vcs.DiffError(message: "The default review base is unavailable")
+                }
+                let fullRef = String(decoding: refOut.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !fullRef.isEmpty else {
+                    throw CoreVcs.Vcs.DiffError(message: "The default review base is unavailable")
+                }
+                return VcsSchema.Base(name: root.name, ref: fullRef, source: .default)
+            }
+
+            private func statUntrackedFile(worktree: String, file: String) async -> (additions: Int, deletions: Int) {
+                guard !file.hasSuffix("/") else { return (0, 0) }
+                if let out = try? await runSafeGit(["diff", "--no-index", "--numstat", "--", "/dev/null", file], cwd: worktree) {
+                    let line = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let parts = line.split(separator: "\t")
+                    if parts.count >= 2 {
+                        let add = parts[0] == "-" ? 0 : (Int(parts[0]) ?? 0)
+                        let del = parts[1] == "-" ? 0 : (Int(parts[1]) ?? 0)
+                        return (add, del)
+                    }
+                }
+                let fullPath = worktree.hasSuffix("/") ? "\(worktree)\(file)" : "\(worktree)/\(file)"
+                if let bytes = try? await fileSystem.readFile(at: fullPath), !bytes.isEmpty {
+                    let text = String(decoding: bytes, as: UTF8.self)
+                    let count = text.split(separator: "\n", omittingEmptySubsequences: false).count
+                    return (max(1, count), 0)
+                }
+                return (0, 0)
+            }
+
+            public func status(in directory: String, worktree: String? = nil) async -> [VcsSchema.FileStatus] {
+                guard let statusOut = try? await runSafeGit(
+                    ["status", "--porcelain=v1", "--untracked-files=all", "--no-renames", "-z", "--", "."],
+                    cwd: directory
+                ), statusOut.exitCode == 0 else {
+                    return []
+                }
+                let entries = Self.parsePorcelainEntries(String(decoding: statusOut.stdout, as: UTF8.self))
+                let headExists = await hasHead(in: directory)
+                var numstats: [String: (additions: Int, deletions: Int)] = [:]
+                if headExists,
+                   let statOut = try? await runSafeGit(
+                       ["diff", "--no-ext-diff", "--no-renames", "--numstat", "-z", "HEAD", "--", "."],
+                       cwd: directory
+                   ), statOut.exitCode == 0
+                {
+                    numstats = Self.parseNumstat(String(decoding: statOut.stdout, as: UTF8.self))
+                }
+                let wt = worktree ?? directory
+                var results: [VcsSchema.FileStatus] = []
+                for entry in entries.sorted(by: { $0.file < $1.file }) {
+                    let counts: (additions: Int, deletions: Int)
+                    if let existing = numstats[entry.file] {
+                        counts = existing
+                    } else if entry.status == .added {
+                        counts = await statUntrackedFile(worktree: wt, file: entry.file)
+                    } else {
+                        counts = (0, 0)
+                    }
+                    results.append(VcsSchema.FileStatus(
+                        file: entry.file,
+                        additions: SchemaPrimitive.NonNegativeInt(rawValue: max(0, counts.additions)) ?? .zero,
+                        deletions: SchemaPrimitive.NonNegativeInt(rawValue: max(0, counts.deletions)) ?? .zero,
+                        status: entry.status
+                    ))
+                }
+                return results
+            }
+
+            private func patchUntrackedFile(worktree: String, file: String, context: Int) async -> String {
+                guard !file.hasSuffix("/") else { return Patch.emptyPatch(file) }
+                if let out = try? await runSafeGit(
+                    ["diff", "--no-color", "--no-index", "--patch", "--no-ext-diff", "--no-renames", "--unified=\(context)", "--", "/dev/null", file],
+                    cwd: worktree
+                ) {
+                    let text = String(decoding: out.stdout, as: UTF8.self)
+                    if !text.isEmpty { return text }
+                }
+                let fullPath = worktree.hasSuffix("/") ? "\(worktree)\(file)" : "\(worktree)/\(file)"
+                if let bytes = try? await fileSystem.readFile(at: fullPath) {
+                    return Patch.addPatch(file: file, content: String(decoding: bytes, as: UTF8.self))
+                }
+                return Patch.emptyPatch(file)
+            }
+
+            public func diff(
+                in directory: String,
+                worktree: String? = nil,
+                mode: VcsSchema.Mode,
+                options: CoreVcs.Vcs.DiffOptions? = nil
+            ) async throws -> [FileDiffSchema.Info] {
+                let context = options?.context ?? 3
+                let wt = worktree ?? directory
+                let headExists = await hasHead(in: directory)
+
+                if mode == .working || !headExists {
+                    if mode == .committed && !headExists { return [] }
+                    let statusOut = try? await runSafeGit(
+                        ["status", "--porcelain=v1", "--untracked-files=all", "--no-renames", "-z", "--", "."],
+                        cwd: directory
+                    )
+                    let entries = statusOut.map { Self.parsePorcelainEntries(String(decoding: $0.stdout, as: UTF8.self)) } ?? []
+                    var rawPatch = ""
+                    if headExists {
+                        if let diffOut = try? await runSafeGit(
+                            ["diff", "--no-color", "--patch", "--no-ext-diff", "--no-renames", "--unified=\(context)", "HEAD", "--", "."],
+                            cwd: directory
+                        ), diffOut.exitCode == 0 {
+                            rawPatch = String(decoding: diffOut.stdout, as: UTF8.self)
+                        }
+                    } else {
+                        if let diffOut = try? await runSafeGit(
+                            ["diff", "--cached", "--no-color", "--patch", "--no-ext-diff", "--no-renames", "--unified=\(context)", "--", "."],
+                            cwd: directory
+                        ), diffOut.exitCode == 0 {
+                            rawPatch = String(decoding: diffOut.stdout, as: UTF8.self)
+                        }
+                    }
+                    let chunks = Patch.chunksByFile(Patch.Info(text: rawPatch, truncated: false))
+                    var rowsByFile: [String: FileDiffSchema.Info] = [:]
+                    for (file, chunk) in chunks {
+                        let counts = Patch.countPatch(chunk)
+                        let status: FileDiffSchema.Status = chunk.contains("new file mode")
+                            ? .added
+                            : chunk.contains("deleted file mode") ? .deleted : .modified
+                        rowsByFile[file] = FileDiffSchema.Info(
+                            file: file,
+                            patch: chunk,
+                            additions: SchemaPrimitive.NonNegativeInt(rawValue: counts.additions) ?? .zero,
+                            deletions: SchemaPrimitive.NonNegativeInt(rawValue: counts.deletions) ?? .zero,
+                            status: status
+                        )
+                    }
+                    for entry in entries where rowsByFile[entry.file] == nil {
+                        let patchText = entry.code == "??" || entry.status == .added
+                            ? await patchUntrackedFile(worktree: wt, file: entry.file, context: context)
+                            : Patch.emptyPatch(entry.file)
+                        let counts = Patch.countPatch(patchText)
+                        rowsByFile[entry.file] = FileDiffSchema.Info(
+                            file: entry.file,
+                            patch: patchText,
+                            additions: SchemaPrimitive.NonNegativeInt(rawValue: counts.additions) ?? .zero,
+                            deletions: SchemaPrimitive.NonNegativeInt(rawValue: counts.deletions) ?? .zero,
+                            status: Self.parseDiffStatus(entry.status)
+                        )
+                    }
+                    return rowsByFile.keys.sorted().compactMap { rowsByFile[$0] }
+                }
+
+                let baseRef: String?
+                if let explicitBase = options?.base {
+                    baseRef = explicitBase
+                } else {
+                    baseRef = (await defaultBranch(in: directory))?.ref
+                }
+                guard let baseRef else {
+                    throw CoreVcs.Vcs.DiffError(message: "No review base available")
+                }
+                guard let mbOut = try? await runSafeGit(["merge-base", baseRef, "HEAD"], cwd: directory),
+                      mbOut.exitCode == 0
+                else {
+                    throw CoreVcs.Vcs.DiffError(message: "No merge base available for \(baseRef)")
+                }
+                let mergeBase = String(decoding: mbOut.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !mergeBase.isEmpty else {
+                    throw CoreVcs.Vcs.DiffError(message: "No merge base available for \(baseRef)")
+                }
+
+                var args = ["diff", "--no-color", "--patch", "--no-ext-diff", "--no-renames", "--unified=\(context)", mergeBase]
+                if mode == .committed { args.append("HEAD") }
+                args += ["--", "."]
+                let diffOut = try await runSafeGit(args, cwd: directory)
+                guard diffOut.exitCode == 0 else {
+                    throw CoreVcs.Vcs.DiffError(message: "Unable to produce Git diff")
+                }
+                let chunks = Patch.chunksByFile(Patch.Info(text: String(decoding: diffOut.stdout, as: UTF8.self), truncated: false))
+                var rowsByFile: [String: FileDiffSchema.Info] = [:]
+                for (file, chunk) in chunks {
+                    let counts = Patch.countPatch(chunk)
+                    let status: FileDiffSchema.Status = chunk.contains("new file mode")
+                        ? .added
+                        : chunk.contains("deleted file mode") ? .deleted : .modified
+                    rowsByFile[file] = FileDiffSchema.Info(
+                        file: file,
+                        patch: chunk,
+                        additions: SchemaPrimitive.NonNegativeInt(rawValue: counts.additions) ?? .zero,
+                        deletions: SchemaPrimitive.NonNegativeInt(rawValue: counts.deletions) ?? .zero,
+                        status: status
+                    )
+                }
+                if mode == .branch,
+                   let statusOut = try? await runSafeGit(
+                       ["status", "--porcelain=v1", "--untracked-files=all", "--no-renames", "-z", "--", "."],
+                       cwd: directory
+                   ), statusOut.exitCode == 0
+                {
+                    for entry in Self.parsePorcelainEntries(String(decoding: statusOut.stdout, as: UTF8.self)) where entry.code == "??" && rowsByFile[entry.file] == nil {
+                        let patchText = await patchUntrackedFile(worktree: wt, file: entry.file, context: context)
+                        let counts = Patch.countPatch(patchText)
+                        rowsByFile[entry.file] = FileDiffSchema.Info(
+                            file: entry.file,
+                            patch: patchText,
+                            additions: SchemaPrimitive.NonNegativeInt(rawValue: counts.additions) ?? .zero,
+                            deletions: SchemaPrimitive.NonNegativeInt(rawValue: counts.deletions) ?? .zero,
+                            status: .added
+                        )
+                    }
+                }
+                return rowsByFile.keys.sorted().compactMap { rowsByFile[$0] }
+            }
+
             public func discover(_ input: SchemaPrimitive.AbsolutePath) async -> Repository? {
                 guard let out = try? await runGit(
                     ["rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir"],
@@ -1872,6 +2261,41 @@ public enum CoreVcs {
             }
         }
 
+        /// Builds a real `CoreVcs.Vcs.ProviderDefinition` backed by `CoreVcs.Git.Service`.
+        public static func makeVcsProvider(
+            directory: String,
+            worktree: String? = nil,
+            git: Service = Service()
+        ) -> CoreVcs.Vcs.ProviderDefinition {
+            let wt = worktree ?? directory
+            return CoreVcs.Vcs.ProviderDefinition(
+                id: "git",
+                info: {
+                    let current = await git.currentBranch(in: directory)
+                    let root = await git.defaultBranch(in: directory)
+                    return VcsSchema.Info(
+                        provider: "git",
+                        branch: VcsSchema.Branch(current: current, defaultBranch: root?.name)
+                    )
+                },
+                base: {
+                    try await git.base(in: directory)
+                },
+                branches: { options in
+                    await git.branches(in: directory, options: options)
+                },
+                status: {
+                    await git.status(in: directory, worktree: wt)
+                },
+                diff: { mode, options in
+                    try await git.diff(in: directory, worktree: wt, mode: mode, options: options)
+                },
+                initialize: {
+                    try await git.initRepository(at: wt)
+                }
+            )
+        }
+
         // parity: core/src/git.ts#node [status=implemented hash=4450d31b6ef9]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
@@ -2027,6 +2451,8 @@ public enum CoreVcs {
                     commitEditor: { $0.data }
                 ))
             }
+
+            public var directory: SchemaPrimitive.AbsolutePath { projectDirectory }
 
             private func selectedProvider() -> ProviderDefinition? {
                 let data = state.get()
