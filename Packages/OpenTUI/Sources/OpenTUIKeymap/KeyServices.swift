@@ -141,7 +141,7 @@ public func cloneKeyStroke(_ stroke: NormalizedKeyStroke) -> NormalizedKeyStroke
     )
 }
 
-// parity: keymap/src/services/keys.ts#createKeySequencePart [status=implemented hash=5fe992126b44]
+// parity: keymap/src/services/keys.ts#createKeySequencePart [status=implemented hash=3f90872913ee]
 public func createKeySequencePart(
     _ input: KeyStrokeInput,
     display: String? = nil,

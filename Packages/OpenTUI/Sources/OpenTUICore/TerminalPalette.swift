@@ -406,7 +406,7 @@ public func containsOsc4ColorResponse(_ sequence: String) -> Bool {
 // MARK: - TerminalPalette Detector
 
 /// Pure-Swift terminal palette detector managing OSC subscriptions and synchronous/streamed reply collection.
-// parity: core/src/lib/terminal-palette.ts#TerminalPalette [status=implemented hash=8bb96eeebfc3]
+// parity: core/src/lib/terminal-palette.ts#TerminalPalette [status=implemented hash=e5f689f0c740]
 public final class TerminalPalette: TerminalPaletteDetector {
     private let isTTY: Bool
     private let writeFn: WriteFunction

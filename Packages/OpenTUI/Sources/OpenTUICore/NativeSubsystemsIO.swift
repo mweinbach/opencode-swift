@@ -258,11 +258,28 @@ public enum NativeUtils: Sendable {
     public static func nextPaintEpoch() -> UInt64 {
         paintClock.wrappingAdd(1, ordering: .relaxed).newValue
     }
+
+    // parity: native/src/utils.zig#fillU32 [status=implemented hash=010ba28267d7]
+    public static func fillU32(_ destination: inout [UInt32], value: UInt32) {
+        guard !destination.isEmpty else { return }
+        destination.withUnsafeMutableBufferPointer { buf in
+            buf.update(repeating: value)
+        }
+    }
+
+    public static func fillU32(_ destination: inout ArraySlice<UInt32>, value: UInt32) {
+        guard !destination.isEmpty else { return }
+        var idx = destination.startIndex
+        while idx < destination.endIndex {
+            destination[idx] = value
+            destination.formIndex(after: &idx)
+        }
+    }
 }
 
-// MARK: - 3. native/src/event-emitter.zig (1 symbol)
+// MARK: - 3. native/src/event-emitter.zig (6 symbols)
 
-// parity: native/src/event-emitter.zig#EventEmitter [status=implemented hash=c18e4be7f942]
+// parity: native/src/event-emitter.zig#EventEmitter [status=adapted hash=c18e4be7f942]
 public final class NativeEventEmitter<EventType: Hashable & Sendable>: @unchecked Sendable {
     public struct Listener: Equatable, Hashable, Sendable {
         public let id: UInt64
@@ -287,10 +304,19 @@ public final class NativeEventEmitter<EventType: Hashable & Sendable>: @unchecke
         var nextId: UInt64 = 1
     }
 
-    private let state = Mutex(State())
+    private let state: Mutex<State>
 
-    public init() {}
+    // parity: native/src/event-emitter.zig#EventEmitter.init [status=implemented hash=a7967484642d]
+    public init() {
+        self.state = Mutex(State())
+    }
 
+    // parity: native/src/event-emitter.zig#EventEmitter.deinit [status=implemented hash=e33142c55461]
+    deinit {
+        state.withLock { $0.listeners.removeAll(keepingCapacity: false) }
+    }
+
+    // parity: native/src/event-emitter.zig#EventEmitter.on [status=implemented hash=43d888400327]
     public func on(_ event: EventType, listener: Listener) {
         state.withLock { s in
             s.listeners[event, default: []].append(listener)
@@ -308,6 +334,7 @@ public final class NativeEventEmitter<EventType: Hashable & Sendable>: @unchecke
         }
     }
 
+    // parity: native/src/event-emitter.zig#EventEmitter.off [status=implemented hash=f30be31d55a9]
     public func off(_ event: EventType, listener: Listener) {
         state.withLock { s in
             guard var list = s.listeners[event] else { return }
@@ -327,6 +354,7 @@ public final class NativeEventEmitter<EventType: Hashable & Sendable>: @unchecke
         }
     }
 
+    // parity: native/src/event-emitter.zig#EventEmitter.emit [status=implemented hash=aa4ead84308a]
     public func emit(_ event: EventType) {
         let snapshot = state.withLock { $0.listeners[event] ?? [] }
         for listener in snapshot {
@@ -355,11 +383,13 @@ public struct NativeSplitScrollback: Equatable, Hashable, Sendable, Codable {
         self.tailColumn = tailColumn
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.reset [status=implemented hash=ef51da7cc17c]
     public mutating func reset(seedRows: UInt32 = 0) {
         self.publishedRows = seedRows
         self.tailColumn = 0
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.renderOffset [status=implemented hash=1dcfa5e88518]
     public func renderOffset(surfaceOffset: UInt32) -> UInt32 {
         if surfaceOffset == 0 {
             return 0
@@ -367,6 +397,7 @@ public struct NativeSplitScrollback: Equatable, Hashable, Sendable, Codable {
         return min(publishedRows, surfaceOffset)
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.noteViewportScroll [status=implemented hash=3802272753ad]
     public mutating func noteViewportScroll(lines: UInt32) {
         publishedRows -= min(lines, publishedRows)
         if publishedRows == 0 {
@@ -374,6 +405,7 @@ public struct NativeSplitScrollback: Equatable, Hashable, Sendable, Codable {
         }
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.noteNewline [status=implemented hash=88d0235f8a1b]
     public mutating func noteNewline() {
         if publishedRows == 0 {
             publishedRows = 1
@@ -382,6 +414,7 @@ public struct NativeSplitScrollback: Equatable, Hashable, Sendable, Codable {
         tailColumn = 0
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.publishSnapshotRows [status=implemented hash=d3fc370985b0]
     public mutating func publishSnapshotRows(
         rowCount: UInt32,
         rowColumns: UInt32,
@@ -398,6 +431,7 @@ public struct NativeSplitScrollback: Equatable, Hashable, Sendable, Codable {
         }
     }
 
+    // parity: native/src/split-scrollback.zig#SplitScrollback.publishRow [status=implemented hash=891397360f67]
     public mutating func publishRow(columns: UInt32, width: UInt32, trailingNewline: Bool) {
         publishColumns(columns: columns, width: width)
         if trailingNewline {
@@ -451,15 +485,26 @@ public struct NativeMemBuffer: Equatable, Hashable, Sendable {
     }
 }
 
-// parity: native/src/mem-registry.zig#MemRegistry [status=implemented hash=fff2cc64e5d4]
+// parity: native/src/mem-registry.zig#MemRegistry [status=implemented hash=cbb85df4fc9e]
 public struct NativeMemRegistry: Equatable, Sendable {
     public static let maxSlots: Int = 255
 
     public private(set) var buffers: [NativeMemBuffer] = []
     public private(set) var freeSlots: [UInt8] = []
 
-    public init() {}
+    // parity: native/src/mem-registry.zig#MemRegistry.init [status=implemented hash=83b3c63a61db]
+    public init() {
+        self.buffers = []
+        self.freeSlots = []
+    }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.deinit [status=implemented hash=b27558578a20]
+    public mutating func deinitRegistry() {
+        buffers.removeAll(keepingCapacity: false)
+        freeSlots.removeAll(keepingCapacity: false)
+    }
+
+    // parity: native/src/mem-registry.zig#MemRegistry.register [status=implemented hash=0af557e1ffdc]
     public mutating func register(_ data: [UInt8], owned: Bool = true) throws(NativeMemRegistryError) -> UInt8 {
         if let id = freeSlots.popLast() {
             buffers[Int(id)] = NativeMemBuffer(data: data, owned: owned, active: true)
@@ -477,6 +522,7 @@ public struct NativeMemRegistry: Equatable, Sendable {
         try register(Array(text.utf8), owned: owned)
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.cancelLastRegistration [status=implemented hash=8cc807726c67]
     public mutating func cancelLastRegistration(id: UInt8, previousBufferCount: Int) {
         let idx = Int(id)
         precondition(idx < buffers.count && buffers[idx].active)
@@ -491,6 +537,7 @@ public struct NativeMemRegistry: Equatable, Sendable {
         }
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.get [status=implemented hash=b467508cccaa]
     public func get(_ id: UInt8) -> [UInt8]? {
         let idx = Int(id)
         guard idx < buffers.count else { return nil }
@@ -498,6 +545,7 @@ public struct NativeMemRegistry: Equatable, Sendable {
         return buf.active ? buf.data : nil
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.replace [status=implemented hash=d4a7dbbea34d]
     public mutating func replace(_ id: UInt8, data: [UInt8], owned: Bool = true) throws(NativeMemRegistryError) {
         let idx = Int(id)
         guard idx < buffers.count, buffers[idx].active else {
@@ -506,6 +554,7 @@ public struct NativeMemRegistry: Equatable, Sendable {
         buffers[idx] = NativeMemBuffer(data: data, owned: owned, active: true)
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.unregister [status=implemented hash=f3803c20c211]
     public mutating func unregister(_ id: UInt8) throws(NativeMemRegistryError) {
         let idx = Int(id)
         guard idx < buffers.count, buffers[idx].active else {
@@ -515,11 +564,13 @@ public struct NativeMemRegistry: Equatable, Sendable {
         freeSlots.append(id)
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.clear [status=implemented hash=a210ab59a8db]
     public mutating func clear() {
         buffers.removeAll(keepingCapacity: true)
         freeSlots.removeAll(keepingCapacity: true)
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.getUsedSlots [status=implemented hash=e159a4002912]
     public func getUsedSlots() -> Int {
         var count = 0
         for buf in buffers where buf.active {
@@ -528,6 +579,7 @@ public struct NativeMemRegistry: Equatable, Sendable {
         return count
     }
 
+    // parity: native/src/mem-registry.zig#MemRegistry.getFreeSlots [status=implemented hash=233e822569bf]
     public func getFreeSlots() -> Int {
         Self.maxSlots - buffers.count + freeSlots.count
     }
@@ -540,10 +592,17 @@ public enum NativeUtf8Extras: Sendable {
     public struct LineBreakResult: Equatable, Hashable, Sendable {
         public var breaks: [LineBreak]
 
+        // parity: native/src/utf8.zig#LineBreakResult.init [status=implemented hash=f6dedc2d9125]
         public init(breaks: [LineBreak] = []) {
             self.breaks = breaks
         }
 
+        // parity: native/src/utf8.zig#LineBreakResult.deinit [status=implemented hash=02bf9c690a72]
+        public mutating func deinitResult() {
+            breaks.removeAll(keepingCapacity: false)
+        }
+
+        // parity: native/src/utf8.zig#LineBreakResult.reset [status=implemented hash=0858f54c964c]
         public mutating func reset() {
             breaks.removeAll(keepingCapacity: true)
         }
@@ -553,10 +612,17 @@ public enum NativeUtf8Extras: Sendable {
     public struct TabStopResult: Equatable, Hashable, Sendable {
         public var positions: [Int]
 
+        // parity: native/src/utf8.zig#TabStopResult.init [status=implemented hash=2b4ed904608b]
         public init(positions: [Int] = []) {
             self.positions = positions
         }
 
+        // parity: native/src/utf8.zig#TabStopResult.deinit [status=implemented hash=a5611bce3399]
+        public mutating func deinitResult() {
+            positions.removeAll(keepingCapacity: false)
+        }
+
+        // parity: native/src/utf8.zig#TabStopResult.reset [status=implemented hash=ded0f9c144bc]
         public mutating func reset() {
             positions.removeAll(keepingCapacity: true)
         }
@@ -572,7 +638,7 @@ public enum NativeUtf8Extras: Sendable {
         }
     }
 
-    // parity: native/src/utf8.zig#decodeUtf8Unchecked [status=implemented hash=ac4891fe83a8]
+    // parity: native/src/utf8.zig#decodeUtf8Unchecked [status=implemented hash=54d83830704b]
     @inline(__always)
     public static func decodeUtf8Unchecked(_ text: [UInt8], at pos: Int) -> DecodedUtf8 {
         precondition(pos >= 0 && pos < text.count)
@@ -904,6 +970,7 @@ public enum NativeEncodedUnicode: Sendable {
             self.chars = chars
         }
 
+        // parity: native/src/encoded-unicode.zig#EncodedUnicode.init [status=implemented hash=45912de2e708]
         public static func create(
             pool: GraphemePool,
             text: [UInt8],
@@ -977,6 +1044,7 @@ public enum NativeEncodedUnicode: Sendable {
             try create(pool: pool, text: Array(text.utf8), widthMethod: widthMethod)
         }
 
+        // parity: native/src/encoded-unicode.zig#EncodedUnicode.deinit [status=implemented hash=2dd997bdbc6c]
         public func release(pool: GraphemePool) {
             Self.releaseChars(pool: pool, chars: chars)
             chars.removeAll(keepingCapacity: false)
@@ -996,7 +1064,7 @@ public enum NativeEditMarks: Sendable {
     // parity: native/src/edit-marks.zig#count_max [status=implemented hash=0c8471a025d5]
     public static let countMax: Int = 65_536
 
-    // parity: native/src/edit-marks.zig#Mark [status=implemented hash=4aa15d46b87d]
+    // parity: native/src/edit-marks.zig#Mark [status=implemented hash=a3cc94412ffa]
     public struct Mark: Equatable, Hashable, Sendable, Codable {
         public var id: UInt32
         public var kind: UInt32
@@ -1027,6 +1095,7 @@ public enum NativeEditMarks: Sendable {
             self.styleValue = styleValue
         }
 
+        // parity: native/src/edit-marks.zig#Mark.styled [status=implemented hash=a5c7ff41b513]
         public var styled: Bool {
             style != 0 || styleValue
         }
@@ -1228,8 +1297,21 @@ public enum NativeHighlightLayers: Sendable {
         private var nameEndBytes: [UInt32] = []
         private var setNameEnds: [UInt32] = []
 
-        public init() {}
+        // parity: native/src/highlight-layers.zig#GroupSets.init [status=implemented hash=569773125175]
+        public init() {
+            self.nameBytes = []
+            self.nameEndBytes = []
+            self.setNameEnds = []
+        }
 
+        // parity: native/src/highlight-layers.zig#GroupSets.deinit [status=implemented hash=dd9659cb280e]
+        public mutating func deinitGroupSets() {
+            nameBytes.removeAll(keepingCapacity: false)
+            nameEndBytes.removeAll(keepingCapacity: false)
+            setNameEnds.removeAll(keepingCapacity: false)
+        }
+
+        // parity: native/src/highlight-layers.zig#GroupSets.count [status=implemented hash=bd954bd4b885]
         public var count: UInt32 {
             UInt32(setNameEnds.count)
         }
@@ -1238,6 +1320,7 @@ public enum NativeHighlightLayers: Sendable {
             nameBytes.count
         }
 
+        // parity: native/src/highlight-layers.zig#GroupSets.nameCount [status=implemented hash=a96c28ff360b]
         public func nameCount(id: UInt32) -> UInt32 {
             precondition(id != 0 && id <= count)
             let idx = Int(id)
@@ -1245,6 +1328,7 @@ public enum NativeHighlightLayers: Sendable {
             return setNameEnds[idx - 1] - first
         }
 
+        // parity: native/src/highlight-layers.zig#GroupSets.name [status=implemented hash=e1a0d8a488e0]
         public func name(id: UInt32, index: UInt32) -> [UInt8] {
             precondition(index < nameCount(id: id))
             let idx = Int(id)
@@ -1258,6 +1342,7 @@ public enum NativeHighlightLayers: Sendable {
             String(decoding: name(id: id, index: index), as: UTF8.self)
         }
 
+        // parity: native/src/highlight-layers.zig#GroupSets.intern [status=implemented hash=db4261c97c36]
         public mutating func intern(_ names: [[UInt8]]) throws(HighlightLayerError) -> UInt32 {
             if names.isEmpty { throw .invalidIndex }
             if names.count > groupSetNameCountMax { throw .groupSetLimit }
@@ -1382,23 +1467,27 @@ public enum NativeHighlightLayers: Sendable {
         }
     }
 
-    // parity: native/src/highlight-layers.zig#Layers [status=implemented hash=82f420fb96e3]
+    // parity: native/src/highlight-layers.zig#Layers [status=implemented hash=9be92a44c129]
     public struct Layers: Equatable, Sendable {
         private var items: [Layer] = []
 
         public init() {}
 
+        // parity: native/src/highlight-layers.zig#Layers.slice [status=implemented hash=e5613ee47691]
         public var slice: [Layer] { items }
 
         public var count: Int { items.count }
 
+        // parity: native/src/highlight-layers.zig#Layers.isEmpty [status=implemented hash=e25d88feb121]
         public var isEmpty: Bool { items.isEmpty }
 
+        // parity: native/src/highlight-layers.zig#Layers.runsOf [status=implemented hash=5d9f6105cb8f]
         public func runsOf(_ layerId: UInt32) -> [LayerRun] {
             let found = position(layerId)
             return found.exists ? items[found.index].runs : []
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.set [status=implemented hash=1cc7d3775e3f]
         @discardableResult
         public mutating func set(
             linkPool: LinkPool,
@@ -1418,6 +1507,7 @@ public enum NativeHighlightLayers: Sendable {
             )
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.setWithSpare [status=implemented hash=8f9d15b0e65b]
         @discardableResult
         public mutating func setWithSpare(
             linkPool: LinkPool,
@@ -1555,6 +1645,7 @@ public enum NativeHighlightLayers: Sendable {
             return true
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.insertBytes [status=implemented hash=5185cccf1f27]
         public mutating func insertBytes(atByte: UInt32, byteCount: UInt32) {
             precondition(byteCount > 0)
             for li in 0..<items.count {
@@ -1569,6 +1660,7 @@ public enum NativeHighlightLayers: Sendable {
             }
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.deleteBytes [status=implemented hash=c5e895cab16d]
         public mutating func deleteBytes(linkPool: LinkPool, startByte: UInt32, endByte: UInt32) {
             precondition(startByte <= endByte)
             guard startByte < endByte else { return }
@@ -1602,6 +1694,7 @@ public enum NativeHighlightLayers: Sendable {
             }
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.reset [status=implemented hash=30f1e620de9f]
         public mutating func reset(linkPool: LinkPool) {
             for layer in items {
                 for run in layer.runs where run.linkId != 0 {
@@ -1611,6 +1704,7 @@ public enum NativeHighlightLayers: Sendable {
             items.removeAll(keepingCapacity: false)
         }
 
+        // parity: native/src/highlight-layers.zig#Layers.firstEndingAfter [status=implemented hash=eba26ea54e0a]
         public static func firstEndingAfter(_ runs: [LayerRun], byte: UInt32) -> Int {
             var low = 0
             var high = runs.count
@@ -1706,12 +1800,21 @@ public final class NativeDiagnostics: @unchecked Sendable {
     private let state: Mutex<State>
 
     /// Zero capacity disables storage but still counts dropped messages.
+    // parity: native/src/logger.zig#Diagnostics.init [status=implemented hash=5fd8156eb8e2]
     public init(capacity: UInt32) {
         let cap = Int(capacity)
         self.state = Mutex(State(
             events: Array(repeating: nil, count: cap),
             capacity: cap
         ))
+    }
+
+    // parity: native/src/logger.zig#Diagnostics.deinit [status=implemented hash=d520a5bcfd44]
+    deinit {
+        state.withLock { s in
+            s.events.removeAll(keepingCapacity: false)
+            s.count = 0
+        }
     }
 
     public var count: UInt32 {
@@ -1726,6 +1829,7 @@ public final class NativeDiagnostics: @unchecked Sendable {
         state.withLock { UInt32($0.capacity) }
     }
 
+    // parity: native/src/logger.zig#Diagnostics.pop [status=implemented hash=c6a4fc233bbd]
     public func pop() -> NativeDiagnostic? {
         state.withLock { s in
             guard s.count > 0, s.capacity > 0 else { return nil }
@@ -1797,6 +1901,7 @@ public enum NativeLogger: Sendable {
         processState.withLock { $0.minLevel = level }
     }
 
+    // parity: native/src/logger.zig#Logger.logMessage [status=implemented hash=6232f36a090f]
     public func logMessage(_ level: NativeLogLevel, _ message: String, threadToken: UInt64 = 0) {
         switch self {
         case .diagnostics(let queue):
@@ -1818,18 +1923,22 @@ public enum NativeLogger: Sendable {
         }
     }
 
+    // parity: native/src/logger.zig#Logger.err [status=implemented hash=aee0ad6c8224]
     public func err(_ message: String, threadToken: UInt64 = 0) {
         logMessage(.err, message, threadToken: threadToken)
     }
 
+    // parity: native/src/logger.zig#Logger.warn [status=implemented hash=f2e3b8e62ae1]
     public func warn(_ message: String, threadToken: UInt64 = 0) {
         logMessage(.warn, message, threadToken: threadToken)
     }
 
+    // parity: native/src/logger.zig#Logger.info [status=implemented hash=6d1ffbe97704]
     public func info(_ message: String, threadToken: UInt64 = 0) {
         logMessage(.info, message, threadToken: threadToken)
     }
 
+    // parity: native/src/logger.zig#Logger.debug [status=implemented hash=1eefe8bef591]
     public func debug(_ message: String, threadToken: UInt64 = 0) {
         logMessage(.debug, message, threadToken: threadToken)
     }
@@ -2015,6 +2124,7 @@ public protocol NativeStdoutRunner: Sendable {
 
 public enum NativeStdoutWriter: Sendable {
     /// Maximum bytes copied per hand-over (64 KiB).
+    // parity: native/src/stdout-writer.zig#handover_max [status=implemented hash=330243154c12]
     public static let handoverMax: Int = 64 * 1024
 
     /// Synchronized output framing sequences (DEC private mode 2026).
@@ -2196,6 +2306,7 @@ public enum NativeStdoutWriter: Sendable {
             self.customWaitWritable = waitWritable
         }
 
+        // parity: native/src/stdout-writer.zig#FdSink.write [status=adapted hash=790a919ac604]
         public func write(_ bytes: ArraySlice<UInt8>) throws(SinkError) -> Int {
             if let customWrite {
                 return try customWrite(bytes)
@@ -2203,8 +2314,92 @@ public enum NativeStdoutWriter: Sendable {
             return try InMemoryPipeRegistry.shared.write(fd: fd, bytes: bytes)
         }
 
+        // parity: native/src/stdout-writer.zig#FdSink.waitWritable [status=adapted hash=7e220eceece0]
         public func waitWritable() {
             customWaitWritable?()
+        }
+    }
+
+    /// Scripted test sink replaying a fixed sequence of write counts or `SinkError`s (`stdout-writer.zig#Script`).
+    public final class ScriptSink: NativeStdoutSink, @unchecked Sendable {
+        public enum Action: Equatable, Hashable, Sendable {
+            case wrote(Int)
+            case error(SinkError)
+        }
+
+        private let results: [Action]
+        private let index = Atomic<Int>(0)
+
+        public init(results: [Action]) {
+            self.results = results
+        }
+
+        public var callsMade: Int {
+            index.load(ordering: .relaxed)
+        }
+
+        // parity: native/src/stdout-writer.zig#Script.write [status=implemented hash=06bbdf43a3b3]
+        public func write(_ bytes: ArraySlice<UInt8>) throws(SinkError) -> Int {
+            let idx = index.wrappingAdd(1, ordering: .relaxed).oldValue
+            guard idx < results.count else { throw .failed }
+            switch results[idx] {
+            case .wrote(let count):
+                return min(count, bytes.count + 1)
+            case .error(let err):
+                throw err
+            }
+        }
+
+        // parity: native/src/stdout-writer.zig#Script.waitWritable [status=implemented hash=e3cc5836a902]
+        public func waitWritable() {}
+    }
+
+    /// Portable signal-mask observation sink matching `stdout-writer.zig#MaskSink`.
+    public final class MaskSink: NativeStdoutSink, @unchecked Sendable {
+        private let observedMask = Mutex<UInt64>(0)
+        private let maskProvider: @Sendable () -> UInt64
+
+        public init(maskProvider: @escaping @Sendable () -> UInt64 = { 0 }) {
+            self.maskProvider = maskProvider
+        }
+
+        public var lastObservedMask: UInt64 {
+            observedMask.withLock { $0 }
+        }
+
+        // parity: native/src/stdout-writer.zig#MaskSink.write [status=adapted hash=cb53b6471067]
+        public func write(_ bytes: ArraySlice<UInt8>) throws(SinkError) -> Int {
+            let mask = maskProvider()
+            observedMask.withLock { $0 = mask }
+            return bytes.count
+        }
+
+        // parity: native/src/stdout-writer.zig#MaskSink.waitWritable [status=implemented hash=87abff4afb82]
+        public func waitWritable() {}
+    }
+
+    /// Counting wrapper over `FdSink` tracking how many times the writer waited for room (`stdout-writer.zig#RoomSink`).
+    public final class RoomSink: NativeStdoutSink, @unchecked Sendable {
+        public let fd: FdSink
+        private let waits = Atomic<UInt32>(0)
+
+        public init(fd: FdSink) {
+            self.fd = fd
+        }
+
+        public var waitCount: UInt32 {
+            waits.load(ordering: .acquiring)
+        }
+
+        // parity: native/src/stdout-writer.zig#RoomSink.write [status=implemented hash=385376a15a3d]
+        public func write(_ bytes: ArraySlice<UInt8>) throws(SinkError) -> Int {
+            try fd.write(bytes)
+        }
+
+        // parity: native/src/stdout-writer.zig#RoomSink.waitWritable [status=implemented hash=15d335743584]
+        public func waitWritable() {
+            _ = waits.wrappingAdd(1, ordering: .releasing)
+            fd.waitWritable()
         }
     }
 
@@ -2234,10 +2429,11 @@ public enum NativeStdoutWriter: Sendable {
 
         public init() {}
 
+        // parity: native/src/stdout-writer.zig#Parked.waitChange [status=implemented hash=1e507cd6af56]
         public func waitChange(expected: State, hasTimeout: Bool) {}
     }
 
-    // parity: native/src/stdout-writer.zig#Writer [status=adapted hash=95f4268bd033]
+    // parity: native/src/stdout-writer.zig#Writer [status=adapted hash=b1063e970df9]
     public final class Writer<Sink: NativeStdoutSink, Runner: NativeStdoutRunner>: @unchecked Sendable {
         public enum Step: Equatable, Hashable, Sendable {
             case more
@@ -2265,6 +2461,7 @@ public enum NativeStdoutWriter: Sendable {
             }
         }
 
+        // parity: native/src/stdout-writer.zig#Writer.create [status=implemented hash=2eb5478071ce]
         public static func create(sink: Sink, runner: Runner) throws(WriterCreateError) -> Writer<Sink, Runner> {
             Writer(sink: sink, runner: runner)
         }
@@ -2273,6 +2470,7 @@ public enum NativeStdoutWriter: Sendable {
             State(rawValue: stateWord.load(ordering: .acquiring)) ?? .stop
         }
 
+        // parity: native/src/stdout-writer.zig#Writer.handle [status=implemented hash=06d7f37589bc]
         public func handle() -> Abandon {
             Abandon { [self] in
                 self.abandon()
@@ -2313,6 +2511,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Owner: the first `len` bytes of `buffer` are the copy to write.
+        // parity: native/src/stdout-writer.zig#Writer.start [status=implemented hash=d6d82edd1bae]
         public func start(_ len: UInt32) {
             precondition(len > 0 && Int(len) <= handoverMax)
             precondition(currentState == .idle)
@@ -2326,6 +2525,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Owner: the result of the hand-over, once published.
+        // parity: native/src/stdout-writer.zig#Writer.collect [status=implemented hash=e3cf7015e7b4]
         public func collect() -> Outcome {
             switch currentState {
             case .inFlight, .writing:
@@ -2344,6 +2544,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Owner, at exit: waits for a running write or reclaims an unpicked `.inFlight` hand-over.
+        // parity: native/src/stdout-writer.zig#Writer.waitCollect [status=implemented hash=4f81109eefa6]
         public func waitCollect(graceNs: UInt64) -> Outcome {
             var waitedInFlight = false
             while true {
@@ -2379,6 +2580,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Owner: gives the writer up. Afterwards the owner must not use it.
+        // parity: native/src/stdout-writer.zig#Writer.abandon [status=implemented hash=3ccb9c47bbe5]
         public func abandon() {
             let prevRaw = stateWord.exchange(State.stop.rawValue, ordering: .acquiringAndReleasing)
             let prev = State(rawValue: prevRaw) ?? .stop
@@ -2390,6 +2592,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Owner: state is `.stop` and no thread is inside a write.
+        // parity: native/src/stdout-writer.zig#Writer.release [status=implemented hash=f9a706e3eac9]
         public func release() {
             precondition(currentState == .stop)
             releaseLiveSlot()
@@ -2403,6 +2606,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Worker step 1: atomically claim `.inFlight -> .writing`.
+        // parity: native/src/stdout-writer.zig#Writer.pick [status=implemented hash=53d8e096da0f]
         public func pick() -> Bool {
             stateWord.compareExchange(
                 expected: State.inFlight.rawValue,
@@ -2412,6 +2616,7 @@ public enum NativeStdoutWriter: Sendable {
         }
 
         /// Worker step 2: one write attempt of the remaining slice.
+        // parity: native/src/stdout-writer.zig#Writer.writeStep [status=implemented hash=4fa3c659efd7]
         public func writeStep() -> Step {
             let startIdx = Int(done)
             let endIdx = Int(len)
@@ -2441,6 +2646,7 @@ public enum NativeStdoutWriter: Sendable {
 
         /// Worker step 3: publish result `.writing -> .doneOk/.doneFailed`.
         /// Returns `false` if the owner abandoned the writer meanwhile.
+        // parity: native/src/stdout-writer.zig#Writer.publish [status=implemented hash=5092d8d348ba]
         public func publish(written: Bool) -> Bool {
             let desired = written ? State.doneOk.rawValue : State.doneFailed.rawValue
             let exchanged = stateWord.compareExchange(
@@ -2473,7 +2679,7 @@ public enum NativeStdoutWriter: Sendable {
     // parity: native/src/stdout-writer.zig#StdoutWriter [status=adapted hash=8ddfdaa5b859]
     public typealias StdoutWriter = Writer<FdSink, ThreadRunner>
 
-    // parity: native/src/stdout-writer.zig#pinLibrary [status=adapted hash=21991db784e1]
+    // parity: native/src/stdout-writer.zig#pinLibrary [status=adapted hash=0943ece5d8da]
     public static func pinLibrary() -> Bool {
         supported
     }
@@ -2529,6 +2735,7 @@ public enum NativeStdoutWriter: Sendable {
         public let endNs: UInt64
         private let nowNs: @Sendable () -> UInt64
 
+        // parity: native/src/stdout-writer.zig#Deadline.init [status=adapted hash=201d3e0fa053]
         public init(
             timeoutNs: UInt64 = 10_000_000_000,
             clock: (@Sendable () -> UInt64)? = nil
@@ -2549,6 +2756,7 @@ public enum NativeStdoutWriter: Sendable {
 
         private static let epoch = ContinuousClock.now
 
+        // parity: native/src/stdout-writer.zig#Deadline.check [status=implemented hash=c776409406ab]
         public func check() throws(DeadlineError) {
             if nowNs() > endNs {
                 throw .timeout
@@ -2661,6 +2869,7 @@ public enum NativeKittyTransport: Sendable {
     // parity: native/src/kitty-transport.zig#BYTES_MAX [status=implemented hash=80709168557a]
     public static let bytesMax: Int = NativeZigTerminalImage.KITTY_PREPARE_BYTES_MAX
 
+    // parity: native/src/kitty-transport.zig#TIMEOUT_NS [status=implemented hash=88111c6a2408]
     public static let timeoutNs: UInt64 = 5_000_000_000
 
     public enum LeaseError: Swift.Error, Equatable, Hashable, Sendable {
@@ -2692,7 +2901,7 @@ public enum NativeKittyTransport: Sendable {
         }
     }
 
-    // parity: native/src/kitty-transport.zig#Transport [status=adapted hash=820adffaffea]
+    // parity: native/src/kitty-transport.zig#Transport [status=adapted hash=4333b80c358a]
     public final class Transport: @unchecked Sendable {
         public let fileStore: any NativeKittyFileStore
         public var mode: Mode = .raw
@@ -2713,18 +2922,21 @@ public enum NativeKittyTransport: Sendable {
             self.mode = mode
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.pendingBytes [status=implemented hash=bd3d432a0530]
         public func pendingBytes() -> Int {
             var bytes = 0
             for lease in leases { bytes += lease.size }
             return bytes
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.pendingCount [status=implemented hash=7463349a2966]
         public func pendingCount() -> UInt32 {
             var count: UInt32 = 0
             for lease in leases where lease.isActive { count += 1 }
             return count
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.cancel [status=implemented hash=9ae6a85fc53b]
         public func cancel(reason: FileState) {
             retryImages = retryImages || fileState == .ready
             for i in 0..<leases.count {
@@ -2736,6 +2948,7 @@ public enum NativeKittyTransport: Sendable {
         }
 
         /// Release new leases of a skipped frame; a published frame keeps them until ACK or expiry.
+        // parity: native/src/kitty-transport.zig#Transport.finishFrame [status=implemented hash=d7a303966685]
         public func finishFrame(published: Bool) {
             for i in 0..<leases.count {
                 if leases[i].unpublished && !published {
@@ -2746,6 +2959,7 @@ public enum NativeKittyTransport: Sendable {
         }
 
         /// Release the new lease of an upload that a published frame left out.
+        // parity: native/src/kitty-transport.zig#Transport.discard [status=implemented hash=cb70e9f4c1d8]
         public func discard(id: UInt32) {
             for i in 0..<leases.count {
                 if leases[i].unpublished && leases[i].id == id {
@@ -2756,6 +2970,7 @@ public enum NativeKittyTransport: Sendable {
 
         /// Arm new leases without releasing files referenced by an encoded frame.
         /// Clamps at `UInt64.max` so deadlines never wrap.
+        // parity: native/src/kitty-transport.zig#Transport.arm [status=implemented hash=d12d4bc0c6e0]
         public func arm(nowNs: UInt64) {
             for i in 0..<leases.count {
                 if leases[i].isActive && leases[i].deadlineNs == nil {
@@ -2766,6 +2981,7 @@ public enum NativeKittyTransport: Sendable {
         }
 
         /// Arm new leases and cancel with `.timeout` if any active lease reached its deadline.
+        // parity: native/src/kitty-transport.zig#Transport.expire [status=implemented hash=44fa8b68dabc]
         public func expire(nowNs: UInt64) {
             arm(nowNs: nowNs)
             for lease in leases {
@@ -2841,6 +3057,7 @@ public enum NativeKittyTransport: Sendable {
             return "\u{1B}_Ga=\(action),t=f,f=\(format),s=\(width),v=\(height),i=\(id),q=0;\(encoded)\u{1B}\\"
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.startProbe [status=implemented hash=c93e4cb7a373]
         public func startProbe(firstId: UInt32, directory: String) throws(LeaseError) -> String {
             guard mode == .file && fileState == .disabled else { return "" }
             fileState = .probing
@@ -2865,6 +3082,7 @@ public enum NativeKittyTransport: Sendable {
             handleReply(Array(response.utf8))
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.handleReply [status=implemented hash=20cbc43eddb7]
         public func handleReply(_ response: [UInt8]) -> Bool {
             let prefix: [UInt8] = [0x1B, UInt8(ascii: "_"), UInt8(ascii: "G")]
             let suffix: [UInt8] = [0x1B, UInt8(ascii: "\\")]
@@ -2932,6 +3150,7 @@ public enum NativeKittyTransport: Sendable {
             return false
         }
 
+        // parity: native/src/kitty-transport.zig#Transport.transmit [status=implemented hash=f9674edff9ce]
         public func transmit(
             image: NativeZigImage.Image,
             id: UInt32,
@@ -3068,17 +3287,20 @@ public enum NativeTextSegment: Sendable {
             entries.append(cold)
         }
 
+        // parity: native/src/text-buffer-segment.zig#ChunkLayoutCache.clear [status=implemented hash=15899c9fcf64]
         public func clear() {
             clears &+= 1
             release(onlyUnused: false)
         }
 
+        // parity: native/src/text-buffer-segment.zig#ChunkLayoutCache.beginLayout [status=implemented hash=67eb078444e5]
         public func beginLayout() {
             for cold in entries {
                 cold.layoutUsed = false
             }
         }
 
+        // parity: native/src/text-buffer-segment.zig#ChunkLayoutCache.endLayout [status=implemented hash=af75dc603c84]
         public func endLayout() {
             release(onlyUnused: true)
         }
@@ -3102,7 +3324,7 @@ public enum NativeTextSegment: Sendable {
         }
     }
 
-    // parity: native/src/text-buffer-segment.zig#TextChunk [status=implemented hash=a8d898469a9a]
+    // parity: native/src/text-buffer-segment.zig#TextChunk [status=implemented hash=501db992420d]
     public struct TextChunk: Equatable, Sendable {
         public enum Flags: Sendable {
             public static let asciiOnly: UInt8 = 0b0000_0001
@@ -3141,14 +3363,19 @@ public enum NativeTextSegment: Sendable {
                 && lhs.flags == rhs.flags
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.isAsciiOnly [status=implemented hash=d33b56b9ebd2]
         public var isAsciiOnly: Bool { (flags & Flags.asciiOnly) != 0 }
+        // parity: native/src/text-buffer-segment.zig#TextChunk.hasTab [status=implemented hash=952bffe87dae]
         public var hasTab: Bool { (flags & Flags.hasTab) != 0 }
+        // parity: native/src/text-buffer-segment.zig#TextChunk.is_empty [status=implemented hash=653b2cf615f6]
         public var isEmpty: Bool { widthCols == 0 }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.empty [status=implemented hash=7544085bda74]
         public static func empty() -> TextChunk {
             TextChunk()
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.getBytes [status=implemented hash=3e9d81b4a96b]
         public func getBytes(memRegistry: NativeMemRegistry) -> [UInt8] {
             let memBuf: [UInt8]
             if (flags & Flags.staticEllipsis) != 0 {
@@ -3171,6 +3398,7 @@ public enum NativeTextSegment: Sendable {
             return created
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.getCachedLayoutInfo [status=implemented hash=aef3ad62ad62]
         public func getCachedLayoutInfo(tabWidth: UInt8, widthMethod: WidthMethod) -> ChunkLayoutInfo? {
             guard let cold else { return nil }
             cold.layoutUsed = true
@@ -3179,6 +3407,7 @@ public enum NativeTextSegment: Sendable {
             return ChunkLayoutInfo(wrapBreaks: cached, cjkBreaks: cold.cjkBreaks, wordClasses: cold.wordClasses)
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.getRenderClusters [status=implemented hash=f624144ebf33]
         public mutating func getRenderClusters(
             memRegistry: NativeMemRegistry,
             tabWidth: UInt8 = 2,
@@ -3206,6 +3435,7 @@ public enum NativeTextSegment: Sendable {
             return computed
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.getLayoutInfo [status=implemented hash=38b2eaa0d0cc]
         public mutating func getLayoutInfo(
             cache: ChunkLayoutCache,
             memRegistry: NativeMemRegistry,
@@ -3254,6 +3484,7 @@ public enum NativeTextSegment: Sendable {
             return info
         }
 
+        // parity: native/src/text-buffer-segment.zig#TextChunk.getWordLayoutInfo [status=implemented hash=95c16e76b299]
         public mutating func getWordLayoutInfo(
             cache: ChunkLayoutCache,
             memRegistry: NativeMemRegistry,
@@ -3325,7 +3556,7 @@ public enum NativeTextSegment: Sendable {
         }
     }
 
-    // parity: native/src/text-buffer-segment.zig#StyleSpan [status=implemented hash=04c278f5d8d9]
+    // parity: native/src/text-buffer-segment.zig#StyleSpan [status=implemented hash=0686c61534e7]
     public struct StyleSpan: Equatable, Hashable, Sendable, Codable {
         public enum Kind: UInt8, Equatable, Hashable, Sendable, Codable {
             case legacy = 0
@@ -3351,20 +3582,23 @@ public enum NativeTextSegment: Sendable {
             self.linkIdAndKind = (UInt32(kind.rawValue) << 24) | (linkId & Self.linkIdMask)
         }
 
+        // parity: native/src/text-buffer-segment.zig#StyleSpan.legacy [status=implemented hash=646de2d4002b]
         public static func legacy(endColExclusive: UInt32, styleId: UInt32) -> StyleSpan {
             StyleSpan(endColExclusive: endColExclusive, styleId: styleId, linkIdAndKind: 0)
         }
 
+        // parity: native/src/text-buffer-segment.zig#StyleSpan.kind [status=implemented hash=57c135068ebf]
         public var kind: Kind {
             Kind(rawValue: UInt8(linkIdAndKind >> 24)) ?? .legacy
         }
 
+        // parity: native/src/text-buffer-segment.zig#StyleSpan.linkId [status=implemented hash=05c311190746]
         public var linkId: UInt32 {
             linkIdAndKind & Self.linkIdMask
         }
     }
 
-    // parity: native/src/text-buffer-segment.zig#Segment [status=implemented hash=b8b32706136b]
+    // parity: native/src/text-buffer-segment.zig#Segment [status=implemented hash=ef2ead4f0728]
     public enum Segment: Equatable, Sendable {
         case text(TextChunk)
         case brk
@@ -3403,6 +3637,7 @@ public enum NativeTextSegment: Sendable {
                 self.hasTabs = hasTabs
             }
 
+            // parity: native/src/text-buffer-segment.zig#Segment.Metrics.add [status=implemented hash=3dd55b60a6ec]
             public mutating func add(_ other: Metrics) {
                 if other.newlineCount == 0 {
                     lineWidthLast &+= other.totalWidthCols
@@ -3429,10 +3664,12 @@ public enum NativeTextSegment: Sendable {
                 hasTabs = hasTabs || other.hasTabs
             }
 
+            // parity: native/src/text-buffer-segment.zig#Segment.Metrics.lineWidthMax [status=implemented hash=8367b5b14d4c]
             public func lineWidthMax() -> UInt32 {
                 max(max(lineWidthFirst, lineWidthLast), lineWidthInnerMax)
             }
 
+            // parity: native/src/text-buffer-segment.zig#Segment.Metrics.weight [status=implemented hash=b69b5e8d7c83]
             public func weight() -> UInt32 {
                 totalWidthCols &+ newlineCount
             }
@@ -3450,6 +3687,7 @@ public enum NativeTextSegment: Sendable {
             }
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.measure [status=implemented hash=d2e7c0ecc73e]
         public func measure() -> Metrics {
             switch self {
             case .text(let chunk):
@@ -3471,8 +3709,10 @@ public enum NativeTextSegment: Sendable {
             }
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.empty [status=implemented hash=06c8bafc7d4f]
         public static func empty() -> Segment { .text(TextChunk.empty()) }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.is_empty [status=implemented hash=1dbab7b63bd6]
         public var isEmpty: Bool {
             switch self {
             case .text(let chunk): chunk.isEmpty
@@ -3480,6 +3720,7 @@ public enum NativeTextSegment: Sendable {
             }
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.isVoid [status=implemented hash=965e14e6c78c]
         public var isVoid: Bool {
             if case .text(let chunk) = self {
                 return chunk.byteStart == chunk.byteEnd
@@ -3487,6 +3728,7 @@ public enum NativeTextSegment: Sendable {
             return false
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.getBytes [status=implemented hash=3cae42662b6e]
         public func getBytes(memRegistry: NativeMemRegistry) -> [UInt8] {
             switch self {
             case .text(let chunk): chunk.getBytes(memRegistry: memRegistry)
@@ -3494,26 +3736,31 @@ public enum NativeTextSegment: Sendable {
             }
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.isBreak [status=implemented hash=82b6dcff8e6f]
         public var isBreak: Bool {
             if case .brk = self { return true }
             return false
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.isLineStart [status=implemented hash=be40f90cf0bd]
         public var isLineStart: Bool {
             if case .linestart = self { return true }
             return false
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.isText [status=implemented hash=14e147f9cd9f]
         public var isText: Bool {
             if case .text = self { return true }
             return false
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.asText [status=implemented hash=ab6635000fcd]
         public var asText: TextChunk? {
             if case .text(let chunk) = self { return chunk }
             return nil
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.canMerge [status=implemented hash=3c51ec9a5aec]
         public static func canMerge(left: Segment, right: Segment) -> Bool {
             guard let lc = left.asText, let rc = right.asText else { return false }
             if lc.memId != rc.memId { return false }
@@ -3522,6 +3769,7 @@ public enum NativeTextSegment: Sendable {
             return true
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.findJunction [status=implemented hash=66d4317373c7]
         public static func findJunction(
             left: [UInt8],
             right: [UInt8],
@@ -3584,6 +3832,7 @@ public enum NativeTextSegment: Sendable {
             return pos
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.rewriteBoundary [status=implemented hash=5f66fd6ebd1a]
         public static func rewriteBoundary(left: Segment?, right: Segment?) -> BoundaryAction {
             if right == nil, let left, left.isBreak {
                 return BoundaryAction(insertBetween: [.linestart])
@@ -3606,6 +3855,7 @@ public enum NativeTextSegment: Sendable {
             return BoundaryAction()
         }
 
+        // parity: native/src/text-buffer-segment.zig#Segment.rewriteEnds [status=implemented hash=ab2e1df9b688]
         public static func rewriteEnds(first: Segment?, last: Segment?) -> BoundaryAction {
             _ = last
             if let first {
@@ -4002,7 +4252,7 @@ public enum NativeTextIterators: Sendable {
         )
     }
 
-    // parity: native/src/text-buffer-iterators.zig#walkLineRange [status=implemented hash=c35846dbfef3]
+    // parity: native/src/text-buffer-iterators.zig#walkLineRange [status=implemented hash=b9a2a2d0e5fb]
     public static func walkLineRange(
         rope: NativeTextSegment.UnifiedRope,
         first: UInt32,
@@ -4283,7 +4533,7 @@ public enum NativeTextIterators: Sendable {
         return bounds.end > col ? bounds.end - col : 0
     }
 
-    // parity: native/src/text-buffer-iterators.zig#getPrevGraphemeWidth [status=implemented hash=0566539bd2c5]
+    // parity: native/src/text-buffer-iterators.zig#getPrevGraphemeWidth [status=implemented hash=076b0e8d7d10]
     public static func getPrevGraphemeWidth(
         rope: NativeTextSegment.UnifiedRope,
         memRegistry: NativeMemRegistry,

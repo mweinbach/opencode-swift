@@ -52,6 +52,7 @@ public enum LayoutWrapBreakKind: UInt8, Equatable, Hashable, Sendable, Codable {
 
     /// True when the break also ends a word. Word motion skips breaks that are
     /// line-break opportunities only.
+    // parity: native/src/utf8.zig#LayoutWrapBreakKind.isWordBoundary [status=implemented hash=b5194b3a9483]
     public var isWordBoundary: Bool {
         switch self {
         case .whitespace, .preservedWhitespace, .punctuation, .scriptTransition:
@@ -85,7 +86,9 @@ public struct LayoutWrapBreak: Equatable, Hashable, Sendable, Codable {
         self.kind = kind
     }
 
+    // parity: native/src/utf8.zig#LayoutWrapBreak.colEnd [status=implemented hash=b838fcb2731e]
     public var colEnd: UInt32 { colStart + widthCols }
+    // parity: native/src/utf8.zig#LayoutWrapBreak.byteEnd [status=implemented hash=14a2e17178fc]
     public var byteEnd: UInt32 { byteStart + byteLen }
 }
 
@@ -1381,6 +1384,7 @@ public struct TextWidthCursor: Sendable {
     }
 
     /// Advances the cursor to at least `byteEnd`, completing any grapheme cluster that straddles `byteEnd`.
+    // parity: native/src/utf8.zig#TextWidthCursor.advanceTo [status=implemented hash=9b420c3d116b]
     @discardableResult
     public mutating func advanceTo(_ byteEnd: Int) -> UInt32 {
         let end = min(byteEnd, bytes.count)

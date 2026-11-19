@@ -494,7 +494,7 @@ public struct ClipboardReadOptions: Sendable {
 }
 
 /// Outcome of a host clipboard read attempt.
-// parity: core/src/lib/clipboard.ts#ClipboardReadResult [status=implemented hash=2a5340d8be8b]
+// parity: core/src/lib/clipboard.ts#ClipboardReadResult [status=implemented hash=366dbd69825d]
 public enum ClipboardReadResult: Equatable, Hashable, Sendable {
     case read(ClipboardRepresentation)
     case empty
@@ -565,7 +565,7 @@ public struct HostClipboardWriteOptions: Sendable {
 }
 
 /// Outcome of a host clipboard text write attempt.
-// parity: core/src/lib/clipboard.ts#HostClipboardWriteResult [status=implemented hash=038f974e33b7]
+// parity: core/src/lib/clipboard.ts#HostClipboardWriteResult [status=implemented hash=ccea00bc4afa]
 public enum HostClipboardWriteResult: Equatable, Hashable, Sendable {
     case written
     case unsupported
@@ -585,7 +585,7 @@ public enum HostClipboardWriteResult: Equatable, Hashable, Sendable {
 }
 
 /// Outcome of a host clipboard clear attempt.
-// parity: core/src/lib/clipboard.ts#HostClipboardClearResult [status=implemented hash=8a23c2fde2f7]
+// parity: core/src/lib/clipboard.ts#HostClipboardClearResult [status=implemented hash=6369fe932bca]
 public enum HostClipboardClearResult: Equatable, Hashable, Sendable {
     case cleared
     case unsupported
@@ -605,7 +605,7 @@ public enum HostClipboardClearResult: Equatable, Hashable, Sendable {
 }
 
 /// Injectable backend contract for process-host clipboard reads, writes, and clears.
-// parity: core/src/lib/clipboard.ts#HostClipboardBackend [status=implemented hash=0a14389a5d6d]
+// parity: core/src/lib/clipboard.ts#HostClipboardBackend [status=implemented hash=c515328b0abe]
 public protocol HostClipboardBackend: Sendable {
     func read(_ options: HostClipboardReadOptions) async throws -> ClipboardReadResult
     func writeText(_ text: String, options: HostClipboardWriteOptions) async throws -> HostClipboardWriteResult
@@ -721,7 +721,7 @@ public struct ClipboardClearResult: Equatable, Hashable, Sendable {
 }
 
 /// High-level composed clipboard service coordinating host and terminal OSC 52 destinations.
-// parity: core/src/lib/clipboard.ts#ClipboardService [status=implemented hash=b6015b3c55ca]
+// parity: core/src/lib/clipboard.ts#ClipboardService [status=implemented hash=d8e5cb01b4b3]
 public protocol ClipboardService: Sendable {
     func read(_ options: ClipboardReadOptions) async throws -> ClipboardReadResult
     func writeText(_ text: String, options: ClipboardWriteOptions) async throws -> ClipboardWriteResult
@@ -1180,7 +1180,7 @@ public func createNativeHostClipboardBackend(_ options: NormalizedHostClipboardO
 }
 
 /// Creates a `HostClipboardService` using the registered native host clipboard backend factory.
-// parity: core/src/lib/clipboard.ts#createHostClipboard [status=implemented hash=aaacf7484ffd]
+// parity: core/src/lib/clipboard.ts#createHostClipboard [status=implemented hash=856d9d79d743]
 public func createHostClipboard(_ options: HostClipboardOptions = HostClipboardOptions()) throws -> any HostClipboardService {
     try createHostClipboardWithBackend(options: options, createBackend: createNativeHostClipboardBackend)
 }
@@ -1559,7 +1559,7 @@ private final class ComposedClipboardService: ClipboardService, Sendable {
 }
 
 /// Creates a composed `ClipboardService` uniting a `HostClipboardService` and a `TerminalClipboardAdapter`.
-// parity: core/src/lib/clipboard.ts#createClipboard [status=implemented hash=0e7f2fbb4748]
+// parity: core/src/lib/clipboard.ts#createClipboard [status=implemented hash=a75318d30634]
 public func createClipboard(_ options: ClipboardOptions) -> any ClipboardService {
     ComposedClipboardService(host: options.host, terminal: options.terminal)
 }

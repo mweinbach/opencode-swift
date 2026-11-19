@@ -398,7 +398,7 @@ public func isPixelResolutionResponse(_ sequence: String) -> Bool {
 }
 
 /// Parses pixel resolution `{ width, height }` from `ESC[4;height;widtht`, returning `nil` if invalid or out of Int32 range.
-// parity: core/src/lib/terminal-capability-detection.ts#parsePixelResolution [status=implemented hash=783987fc50f2]
+// parity: core/src/lib/terminal-capability-detection.ts#parsePixelResolution [status=implemented hash=46e5fb0488e8]
 public func parsePixelResolution(_ sequence: String) -> PixelResolution? {
     let bytes = Array(sequence.utf8)
     guard let ranges = findPixelResolutionDigitRanges(bytes) else {

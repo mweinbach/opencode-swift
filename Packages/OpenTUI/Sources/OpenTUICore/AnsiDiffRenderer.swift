@@ -135,7 +135,7 @@ public struct AnsiDiffRenderStats: Equatable, Hashable, Sendable {
 // MARK: - AnsiDiffRenderer
 
 /// Double-buffered front/back terminal frame differ emitting minimal ANSI escape sequences.
-// parity: native/src/renderer.zig#CliRenderer [status=adapted hash=fb455a0184cb]
+// parity: native/src/renderer.zig#CliRenderer [status=adapted hash=3edebfbadba4]
 public final class AnsiDiffRenderer: @unchecked Sendable {
     /// Sentinel character used to clear the front buffer so the initial frame repaints every cell.
     private static let clearCharSentinel: UInt32 = 0x0A00
@@ -174,6 +174,56 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
     private var lastCursorY: Int? = nil
     private var lastCursorVisible: Bool? = nil
 
+    // Native CliRenderer parity subsystem state (`native/src/renderer.zig`)
+    public var terminal: NativeTerminalState = NativeTerminalState()
+    public var kittyTransport: NativeKittyTransport.Transport = NativeKittyTransport.Transport()
+    public var splitScrollback: NativeSplitScrollback = NativeSplitScrollback()
+    public var pendingSplitFooterTransition: NativeRendererBridge.SplitFooterTransition = NativeRendererBridge.SplitFooterTransition()
+    public var backend: NativeRendererOutput.FeedBackend? = nil
+    public private(set) var debugOverlayEnabled: Bool = false
+    public private(set) var debugOverlayCorner: DebugOverlayCorner = .bottomRight
+    public private(set) var paletteEpoch: UInt32 = 0
+    public private(set) var defaultFgRGBA: RGBA = RGBA.fromInts(255, 255, 255, 255)
+    public private(set) var defaultBgRGBA: RGBA = RGBA.fromInts(0, 0, 0, 255)
+    public private(set) var nextSceneRetained: Bool = false
+    public private(set) var retainedFrameId: UInt64 = 0
+    public private(set) var retainedLost: UInt32 = 0
+    public private(set) var encodeAllRows: Bool = false
+    public private(set) var mousePointerStateValid: Bool = false
+    public private(set) var lastFrameCostUs: UInt32 = 0
+    public private(set) var pendingImageUploads: UInt32 = 0
+    public private(set) var pendingPresentationActive: Bool = false
+    public private(set) var presentationFailed: Bool = false
+    public private(set) var terminalSuspended: Bool = false
+    public private(set) var overallFrameTime: Double = 0
+    public private(set) var lastFps: UInt32 = 0
+    public private(set) var frameCallbackTime: Double = 0
+    public private(set) var heapUsed: UInt32 = 0
+    public private(set) var heapTotal: UInt32 = 0
+    public private(set) var arrayBuffers: UInt32 = 0
+    public private(set) var lastFrameWork: NativeRendererBridge.FrameWork = NativeRendererBridge.FrameWork()
+    private var lastFrameTimeSamples: [Double] = []
+    private var cellsUpdatedSamples: [UInt32] = []
+    private var kittyHistoryNextImageId: UInt32 = 1
+    private var committedKittyImageIds: [UInt32] = []
+
+    public enum PresentationError: Error, Equatable, Hashable, Sendable {
+        case presentationPending
+        case presentationFailed
+        case incompatibleOutput
+        case splitRenderPending
+        case noPendingPresentation
+        case invalidDimensions
+        case outOfMemory
+    }
+
+    public enum ResolvedImageProtocol: UInt8, Equatable, Hashable, Sendable {
+        case fallback = 0
+        case kitty = 1
+        case sixel = 2
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.createWithOptions [status=adapted hash=ed9c50a5de4a]
     public init(
         width: Int,
         height: Int,
@@ -236,6 +286,7 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
         return palette
     }
 
+    // parity: native/src/renderer.zig#CliRenderer.setBackgroundColor [status=implemented hash=bf64fd48e85f]
     public func setBackgroundColor(_ color: RGBA) {
         backgroundColor = color
         nextBuffer.blendBackdropColor = Self.opaqueBackdrop(from: color)
@@ -251,6 +302,28 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
         forceFullRepaint = true
     }
 
+    // parity: native/src/renderer.zig#CliRenderer.setPaletteState [status=implemented hash=4f4b37ab6f7c]
+    public func setPaletteState(
+        palette: [RGBA],
+        defaultFg: RGBA,
+        defaultBg: RGBA,
+        paletteEpoch newEpoch: UInt32
+    ) {
+        paletteRGBA = Self.buildDefaultAnsi256Palette()
+        let copyLen = min(palette.count, 256)
+        for i in 0..<copyLen {
+            paletteRGBA[i] = palette[i]
+        }
+        defaultFgRGBA = defaultFg
+        defaultBgRGBA = defaultBg
+        if paletteEpoch != newEpoch {
+            paletteEpoch = newEpoch
+            forceFullRepaint = true
+            paletteIndexCache.removeAll(keepingCapacity: true)
+        }
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.invalidateTerminalState [status=implemented hash=2892a781f617]
     public func invalidate() {
         forceFullRepaint = true
         lastCursorStyle = nil
@@ -259,8 +332,10 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
         lastCursorX = nil
         lastCursorY = nil
         lastCursorVisible = nil
+        mousePointerStateValid = false
     }
 
+    // parity: native/src/renderer.zig#CliRenderer.resize [status=implemented hash=3282f9d54885]
     public func resize(width newWidth: Int, height newHeight: Int) throws(BufferError) {
         guard newWidth > 0 && newHeight > 0 else {
             throw .invalidDimensions
@@ -275,7 +350,40 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
         nextBuffer.blendBackdropColor = Self.opaqueBackdrop(from: backgroundColor)
         currentBuffer.clear(bg: RGBA.fromInts(0, 0, 0, 255), char: Self.clearCharSentinel)
         nextBuffer.clear(bg: backgroundColor, char: defaultSpaceChar)
+        nextSceneRetained = false
+        taint(NativeRendererBridge.FrameWork.fullPathUnretained)
+        let cursor = terminal.getCursorPosition()
+        terminal.setCursorPosition(
+            x: min(cursor.x, UInt32(newWidth)),
+            y: min(cursor.y, UInt32(newHeight)),
+            visible: cursor.visible
+        )
         invalidate()
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.resizeWithOutput [status=implemented hash=48b9dde8291e]
+    public func resizeWithOutput(
+        width newWidth: Int,
+        height newHeight: Int,
+        bytes: [UInt8]? = nil
+    ) throws(PresentationError) {
+        if pendingPresentationActive { throw .presentationPending }
+        if presentationFailed { throw .presentationFailed }
+        if newWidth == width && newHeight == height {
+            if let packet = bytes, !packet.isEmpty {
+                backend?.writeOut(packet)
+            }
+            return
+        }
+        guard newWidth > 0 && newHeight > 0 else { throw .invalidDimensions }
+        do {
+            try resize(width: newWidth, height: newHeight)
+        } catch {
+            throw .invalidDimensions
+        }
+        if let packet = bytes, !packet.isEmpty {
+            backend?.writeOut(packet)
+        }
     }
 
     // MARK: - ANSI Emission Helpers
@@ -650,5 +758,343 @@ public final class AnsiDiffRenderer: @unchecked Sendable {
     /// Convenience wrapper returning UTF-8 bytes for `render(force:clearNextAfterRender:)`.
     public func renderBytes(force: Bool = false, clearNextAfterRender: Bool = true) -> [UInt8] {
         Array(render(force: force, clearNextAfterRender: clearNextAfterRender).utf8)
+    }
+
+    // MARK: - Native CliRenderer Parity Methods (`native/src/renderer.zig`)
+
+    // parity: native/src/renderer.zig#CliRenderer.destroyStorage [status=implemented hash=bafdf6c4ee06]
+    public func destroyStorage() {
+        kittyTransport.cancel(reason: .cancelled)
+        committedKittyImageIds.removeAll(keepingCapacity: false)
+        backend?.deinitBackend()
+        currentBuffer.destroy()
+        nextBuffer.destroy()
+        paletteIndexCache.removeAll(keepingCapacity: false)
+        pendingPresentationActive = false
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.writeShutdownImage [status=implemented hash=da6b67449535]
+    public func writeShutdownImage<S: NativeTerminalByteSink>(
+        into writer: inout S,
+        index: Int
+    ) throws(NativeANSI.AnsiError) {
+        guard index >= 0 && index < committedKittyImageIds.count else { return }
+        let imageId = committedKittyImageIds[index]
+        let seq = NativeZigTerminalImage.writeKittyDelete(
+            id: imageId,
+            placementId: nil,
+            freeImage: true,
+            tmux: terminal.isInTmux()
+        )
+        try writer.writeString(seq)
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.updateStats [status=implemented hash=efff314b4833]
+    public func updateStats(time: Double, fps: UInt32, frameCallbackTime callbackTime: Double) {
+        self.overallFrameTime = time
+        self.lastFps = fps
+        self.frameCallbackTime = callbackTime
+        lastFrameTimeSamples.append(time)
+        if lastFrameTimeSamples.count > 60 {
+            lastFrameTimeSamples.removeFirst(lastFrameTimeSamples.count - 60)
+        }
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.updateMemoryStats [status=implemented hash=1ecdb4d5b4ba]
+    public func updateMemoryStats(heapUsed: UInt32, heapTotal: UInt32, arrayBuffers: UInt32) {
+        self.heapUsed = heapUsed
+        self.heapTotal = heapTotal
+        self.arrayBuffers = arrayBuffers
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.getRenderStats [status=implemented hash=73a5fce25979]
+    public func getRenderStats() -> NativeRendererBridge.RenderStatsSnapshot {
+        let avgFrameTime: Double = lastFrameTimeSamples.isEmpty
+            ? overallFrameTime
+            : lastFrameTimeSamples.reduce(0, +) / Double(lastFrameTimeSamples.count)
+        let avgCells: UInt32 = cellsUpdatedSamples.isEmpty
+            ? UInt32(clamping: stats.cellsUpdated)
+            : UInt32(cellsUpdatedSamples.reduce(UInt64(0)) { $0 + UInt64($1) } / UInt64(cellsUpdatedSamples.count))
+        return NativeRendererBridge.RenderStatsSnapshot(
+            lastFrameTime: overallFrameTime,
+            averageFrameTime: avgFrameTime,
+            frameCount: stats.frameCount,
+            cellsUpdated: UInt32(clamping: stats.cellsUpdated),
+            averageCellsUpdated: avgCells,
+            renderTime: nil,
+            outputWriteTime: backend?.lastWriteTimeUs,
+            frameWork: lastFrameWork
+        )
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.clearSkippedFrameState [status=implemented hash=d44329249d3d]
+    public func clearSkippedFrameState() {
+        nextBuffer.clear(bg: backgroundColor, char: defaultSpaceChar)
+        nextSceneRetained = false
+        taint(NativeRendererBridge.FrameWork.fullPathUnretained)
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.taint [status=implemented hash=ee032cbe0694]
+    public func taint(_ reason: UInt32) {
+        retainedFrameId = 0
+        retainedLost |= reason
+        encodeAllRows = true
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.leaveRetained [status=implemented hash=d1ec5963c5c9]
+    public func leaveRetained() {
+        taint(NativeRendererBridge.FrameWork.fullPathTainted)
+        guard nextSceneRetained else { return }
+        nextBuffer.clear(bg: backgroundColor, char: defaultSpaceChar)
+        nextSceneRetained = false
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.renderDeferred [status=implemented hash=9124215dd4ff]
+    public func renderDeferred(force: Bool = false) throws(PresentationError) -> RenderStatus {
+        if pendingPresentationActive { throw .presentationPending }
+        if presentationFailed { throw .presentationFailed }
+        if pendingSplitFooterTransition.mode != .none { throw .splitRenderPending }
+        if let activeBackend = backend, activeBackend.frameActive { throw .incompatibleOutput }
+        if let activeBackend = backend {
+            let status = NativeRendererBridge.renderFrame(renderer: self, backend: activeBackend, force: force)
+            if status == .rendered {
+                pendingPresentationActive = true
+                cellsUpdatedSamples.append(UInt32(clamping: stats.cellsUpdated))
+                if cellsUpdatedSamples.count > 60 { cellsUpdatedSamples.removeFirst() }
+            }
+            return status
+        }
+        _ = renderBytes(force: force)
+        pendingPresentationActive = true
+        return .rendered
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.renderSplitDeferred [status=implemented hash=82df71917d9d]
+    public func renderSplitDeferred(
+        split: NativeRendererBridge.SplitRender,
+        force: Bool = false
+    ) throws(PresentationError) -> RenderStatus {
+        if pendingPresentationActive { throw .presentationPending }
+        if presentationFailed { throw .presentationFailed }
+        if let activeBackend = backend, activeBackend.frameActive { throw .incompatibleOutput }
+        for snap in split.snapshots {
+            splitScrollback.publishSnapshotRows(
+                rowCount: UInt32(max(0, snap.snapshot.height)),
+                rowColumns: snap.rowColumns,
+                terminalWidth: UInt32(max(1, width)),
+                trailingNewline: snap.trailingNewline
+            )
+        }
+        renderOffset = Int(splitScrollback.renderOffset(surfaceOffset: split.pinnedRenderOffset))
+        if split.suspended {
+            return .skipped
+        }
+        if !split.paintFooter {
+            return .rendered
+        }
+        return try renderDeferred(force: force)
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.completePresentation [status=implemented hash=1eba1866aacf]
+    public func completePresentation(outcome: PresentationOutcome) throws(PresentationError) {
+        guard pendingPresentationActive else { throw .noPendingPresentation }
+        pendingPresentationActive = false
+        if outcome == .failed {
+            presentationFailed = true
+            kittyTransport.cancel(reason: .ioError)
+            invalidate()
+            return
+        }
+        kittyTransport.finishFrame(published: true)
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.imageFrameCostUs [status=implemented hash=19dedec729c6]
+    public func imageFrameCostUs() -> UInt32 {
+        imageUploadsPending() != 0 ? UInt32.max : lastFrameCostUs
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.resetSplitScrollback [status=implemented hash=69ee1b052dc5]
+    @discardableResult
+    public func resetSplitScrollback(seedRows: UInt32, pinnedRenderOffset: UInt32) -> UInt32 {
+        precondition(!pendingPresentationActive)
+        splitScrollback.reset(seedRows: seedRows)
+        let offset = splitScrollback.renderOffset(surfaceOffset: pinnedRenderOffset)
+        renderOffset = Int(offset)
+        return offset
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.syncSplitScrollback [status=implemented hash=7350272a1302]
+    @discardableResult
+    public func syncSplitScrollback(pinnedRenderOffset: UInt32) -> UInt32 {
+        precondition(!pendingPresentationActive)
+        let outputOffset = splitScrollback.renderOffset(surfaceOffset: pinnedRenderOffset)
+        let clamped = min(max(UInt32(max(0, renderOffset)), outputOffset), pinnedRenderOffset)
+        renderOffset = Int(clamped)
+        return clamped
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.getSplitOutputOffset [status=implemented hash=1b00e1f68438]
+    public func getSplitOutputOffset(surfaceOffset: UInt32) -> UInt32 {
+        splitScrollback.renderOffset(surfaceOffset: surfaceOffset)
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.clearPendingSplitFooterTransition [status=implemented hash=fd6335be9db2]
+    public func clearPendingSplitFooterTransition() {
+        precondition(!pendingPresentationActive)
+        pendingSplitFooterTransition.clear()
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.getNextBuffer [status=implemented hash=b84006572835]
+    public func getNextBuffer() -> OptimizedBuffer {
+        nextBuffer
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.getCurrentBuffer [status=implemented hash=73ed21814db6]
+    public func getCurrentBuffer() -> OptimizedBuffer {
+        currentBuffer
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.resolveImageProtocol [status=implemented hash=3ead1a4887d2]
+    public func resolveImageProtocol(requested: NativeZigImage.RenderProtocol) -> ResolvedImageProtocol {
+        let configured: NativeTerminalState.ImageProtocol
+        switch requested {
+        case .auto: configured = terminal.imageProtocol
+        case .kitty: configured = .kitty
+        case .sixel: configured = .sixel
+        case .blocks: configured = .blocks
+        }
+        if configured == .sixel && terminal.refusesForcedSixel() {
+            return .fallback
+        }
+        switch configured {
+        case .kitty: return .kitty
+        case .sixel: return .sixel
+        case .blocks: return .fallback
+        case .auto: break
+        }
+        if terminal.isInTmux() { return .fallback }
+        let caps = terminal.getCapabilities()
+        if caps.kittyGraphics { return .kitty }
+        if caps.sixel { return .sixel }
+        return .fallback
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.imageUploadsPending [status=implemented hash=9fd580d51583]
+    public func imageUploadsPending() -> UInt32 {
+        pendingImageUploads
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.prepareRenderFrameWithWriter [status=implemented hash=7bd7cfca3c0b]
+    public func prepareRenderFrameWithWriter<S: NativeTerminalByteSink>(
+        into writer: inout S,
+        force: Bool = false,
+        syncStarted: Bool = false
+    ) throws(PresentationError) {
+        if pendingPresentationActive { throw .presentationPending }
+        if presentationFailed { throw .presentationFailed }
+        let bytes = renderBytes(force: force)
+        do {
+            if !syncStarted && capabilities.synchronizedOutput && !bytes.isEmpty {
+                try writer.writeBytes(bytes)
+            } else {
+                try writer.writeBytes(bytes)
+            }
+        } catch {
+            throw .presentationFailed
+        }
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.setDebugOverlay [status=implemented hash=cb858a7227e4]
+    public func setDebugOverlay(enabled: Bool, corner: DebugOverlayCorner) {
+        debugOverlayEnabled = enabled
+        debugOverlayCorner = corner
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.setTerminalEnvVar [status=implemented hash=b0ea1150173c]
+    @discardableResult
+    public func setTerminalEnvVar(key: String, value: String) -> Bool {
+        terminal.setHostEnvVar(key: key, value: value)
+        syncWidthMethod()
+        return true
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.syncWidthMethod [status=implemented hash=0340cd4aeb51]
+    public func syncWidthMethod() {
+        let widthMethod: WidthMethod = terminal.caps.unicode == .noZWJ ? .unicode : terminal.caps.unicode
+        if widthMethod != nextBuffer.widthMethod {
+            taint(NativeRendererBridge.FrameWork.fullPathUnretained)
+        }
+        currentBuffer.widthMethod = widthMethod
+        nextBuffer.widthMethod = widthMethod
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.setKittyImageTransport [status=implemented hash=a2fa0d807714]
+    @discardableResult
+    public func setKittyImageTransport(mode: UInt32) -> Bool {
+        guard let requested = NativeKittyTransport.Mode(rawValue: mode) else { return false }
+        if kittyTransport.mode == requested { return true }
+        kittyTransport.mode = requested
+        forceFullRepaint = true
+        return true
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.startKittyFileProbeFromSession [status=implemented hash=5375055dcaa4]
+    public func startKittyFileProbeFromSession(directory: String = "/tmp", nowNs: UInt64? = nil) {
+        guard !terminalSuspended && kittyTransport.mode == .file else { return }
+        _ = pollKittyImageTransport(nowNs: nowNs)
+        guard kittyTransport.fileState == .disabled else { return }
+        let base = kittyHistoryNextImageId
+        kittyHistoryNextImageId &+= 2
+        if let seq = try? kittyTransport.startProbe(firstId: base &+ 1, directory: directory) {
+            if let nowNs {
+                kittyTransport.arm(nowNs: nowNs)
+            }
+            if !seq.isEmpty {
+                backend?.writeOut(seq)
+            }
+        }
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.kittyImageTransportStatus [status=implemented hash=4075ce9176a6]
+    public func kittyImageTransportStatus() -> [UInt32] {
+        [
+            kittyTransport.mode.rawValue,
+            UInt32(kittyTransport.effective.rawValue),
+            kittyTransport.fileState.rawValue,
+            kittyTransport.fallback.rawValue,
+            kittyTransport.pendingCount(),
+            UInt32(clamping: kittyTransport.pendingBytes()),
+        ]
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.cancelKittyImageTransport [status=implemented hash=39e86217bc37]
+    public func cancelKittyImageTransport(failed: Bool) {
+        kittyTransport.cancel(reason: failed ? .ioError : .cancelled)
+        _ = pollKittyImageTransport()
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.pollKittyImageTransport [status=implemented hash=9698e729c37b]
+    @discardableResult
+    public func pollKittyImageTransport(nowNs: UInt64? = nil) -> Bool {
+        #if os(Windows)
+        kittyTransport.cancel(reason: .unsupported)
+        #else
+        if terminal.remote || terminal.multiplexer != .none || !terminal.graphicsEnabled {
+            kittyTransport.cancel(reason: .unsupported)
+        }
+        #endif
+        if let nowNs {
+            kittyTransport.expire(nowNs: nowNs)
+        }
+        guard kittyTransport.retryImages else { return false }
+        kittyTransport.retryImages = false
+        forceFullRepaint = true
+        return true
+    }
+
+    // parity: native/src/renderer.zig#CliRenderer.processKittyImageReply [status=implemented hash=41bbf5312efa]
+    public func processKittyImageReply(_ response: [UInt8]) -> UInt32 {
+        guard kittyTransport.handleReply(response) else { return 0 }
+        return pollKittyImageTransport() ? 2 : 1
     }
 }

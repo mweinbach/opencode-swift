@@ -570,7 +570,7 @@ public func applyChromaticAberration(buffer: OptimizedBuffer, strength: Double =
 public let defaultAsciiArtRamp: String = #" .'`^"",:;Il!i><~+_-?][}{1)(|\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$"#
 
 /// Converts `buffer` cells into ASCII art characters driven by background luminance.
-// parity: core/src/post/filters.ts#applyAsciiArt [status=implemented hash=653a5b0b3fe3]
+// parity: core/src/post/filters.ts#applyAsciiArt [status=implemented hash=fe927f47ed65]
 public func applyAsciiArt(
     buffer: OptimizedBuffer,
     ramp: String = defaultAsciiArtRamp,
@@ -914,7 +914,7 @@ public final class BloomEffect: PostProcessEffect {
         apply(buffer)
     }
 
-    // parity: core/src/post/filters.ts#BloomEffect.apply [status=implemented hash=d3af3692e1a4]
+    // parity: core/src/post/filters.ts#BloomEffect.apply [status=implemented hash=534184e2dc73]
     public func apply(_ buffer: OptimizedBuffer) {
         guard _strength > 0, _radius > 0, buffer.width > 0, buffer.height > 0 else { return }
 
@@ -975,7 +975,7 @@ public final class BloomEffect: PostProcessEffect {
 // MARK: - Animated Effects (`post/effects.ts`)
 
 /// Animated horizontal shift, row flip, and color-burst glitch effect.
-// parity: core/src/post/effects.ts#DistortionEffect [status=implemented hash=7796956b688e]
+// parity: core/src/post/effects.ts#DistortionEffect [status=implemented hash=dc731e7d17b4]
 public final class DistortionEffect: PostProcessEffect {
     private enum GlitchType {
         case shift
@@ -1026,7 +1026,7 @@ public final class DistortionEffect: PostProcessEffect {
         apply(buffer, deltaTime: deltaTime)
     }
 
-    // parity: core/src/post/effects.ts#DistortionEffect.apply [status=implemented hash=8e096e65683b]
+    // parity: core/src/post/effects.ts#DistortionEffect.apply [status=implemented hash=3bf52779fd30]
     public func apply(_ buffer: OptimizedBuffer, deltaTime: Double) {
         let width = buffer.width
         let height = buffer.height
@@ -1166,7 +1166,7 @@ public final class DistortionEffect: PostProcessEffect {
 }
 
 /// Corner-darkening radial vignette effect with cached attenuation masks and grapheme-run preservation.
-// parity: core/src/post/effects.ts#VignetteEffect [status=implemented hash=a4481c016ce3]
+// parity: core/src/post/effects.ts#VignetteEffect [status=implemented hash=63b0b15ec426]
 public final class VignetteEffect: PostProcessEffect {
     private static let zeroMatrix: [Float] = Array(repeating: 0, count: 16)
 
@@ -1250,7 +1250,7 @@ public final class VignetteEffect: PostProcessEffect {
         apply(buffer)
     }
 
-    // parity: core/src/post/effects.ts#VignetteEffect.apply [status=implemented hash=ef0b08537fcd]
+    // parity: core/src/post/effects.ts#VignetteEffect.apply [status=implemented hash=002389f8750b]
     public func apply(_ buffer: OptimizedBuffer) {
         let width = buffer.width
         let height = buffer.height

@@ -15,7 +15,7 @@ public enum ParsedKeySource: String, Equatable, Hashable, Sendable, Codable {
 }
 
 /// Decoded terminal keypress event, matching `packages/core/src/lib/parse.keypress.ts`.
-// parity: core/src/lib/parse.keypress.ts#ParsedKey [status=implemented hash=354a725b5db9]
+// parity: core/src/lib/parse.keypress.ts#ParsedKey [status=implemented hash=58acbedb4336]
 public struct ParsedKey: Equatable, Hashable, Sendable, Codable {
     public var name: String
     public var ctrl: Bool
@@ -86,7 +86,7 @@ public struct ParseKeypressOptions: Equatable, Hashable, Sendable, Codable {
 }
 
 /// The input parser's key names: Kitty's functional keys, linefeed, space, and the SS3 keypad keys' names.
-// parity: core/src/lib/parse.keypress.ts#terminalNamedSingleStrokeKeys [status=implemented hash=6fc5e8ec90b6]
+// parity: core/src/lib/parse.keypress.ts#terminalNamedSingleStrokeKeys [status=implemented hash=3f874ad92791]
 public let terminalNamedSingleStrokeKeys: [String] = {
     var seen: Set<String> = []
     var result: [String] = []
@@ -110,7 +110,7 @@ public let terminalNamedSingleStrokeKeys: [String] = {
 
 /// Decodes `input` as one complete input with the streaming stdin parser and returns its first event
 /// if that is a key, otherwise `nil`.
-// parity: core/src/lib/parse.keypress.ts#parseKeypress [status=implemented hash=b4c51f281770]
+// parity: core/src/lib/parse.keypress.ts#parseKeypress [status=implemented hash=d138d3e53b0a]
 public func parseKeypress(_ input: String = "", options: ParseKeypressOptions = ParseKeypressOptions()) -> ParsedKey? {
     parseKeypress(Array(input.utf8), options: options)
 }
@@ -137,7 +137,7 @@ public func parseKeypress(_ bytes: [UInt8], options: ParseKeypressOptions = Pars
 // MARK: - Low-Level Engine Types (native/src/input-parser.zig)
 
 /// Protocol expectations supplied by the host terminal session.
-// parity: native/src/input-parser.zig#Expectations [status=implemented hash=16306c4ab578]
+// parity: native/src/input-parser.zig#Expectations [status=implemented hash=f7be18f84249]
 public struct InputParserExpectations: Equatable, Hashable, Sendable {
     public var replies: Bool
     public var kittyKeyboard: Bool
@@ -259,6 +259,7 @@ public enum InputKeyCode {
     public static let functionalFirst: UInt32 = 57344
     public static let functionalLast: UInt32 = 57454
 
+    // parity: native/src/input-parser.zig#key.f [status=implemented hash=8e93f79bbce9]
     public static func f(_ number: UInt32) -> UInt32 {
         precondition(number >= 1 && number <= 35)
         return f1 + number - 1
@@ -318,7 +319,9 @@ private struct ByteSpan {
 /// Caller-owned records and payload buffer populated by `NativeInputParserEngine.feed`.
 // parity: native/src/input-parser.zig#Sink [status=implemented hash=92db3eb27fd4]
 public struct InputParserSink: Sendable {
+    // parity: native/src/input-parser.zig#events_per_byte_max [status=implemented hash=fb5226b6ebc9]
     public static let eventsPerByteMax: Int = 4
+    // parity: native/src/input-parser.zig#payload_per_byte_max [status=implemented hash=14ef7c85ac38]
     public static let payloadPerByteMax: Int = 4096 + 256 + 32
 
     public let eventCapacity: Int
@@ -343,17 +346,20 @@ public struct InputParserSink: Sendable {
         payload.removeAll(keepingCapacity: true)
     }
 
+    // parity: native/src/input-parser.zig#Sink.hasRoomForOneByte [status=implemented hash=fb120471b169]
     public func hasRoomForOneByte() -> Bool {
         (eventCapacity - events.count) >= Self.eventsPerByteMax &&
             (payloadCapacity - payload.count) >= Self.payloadPerByteMax
     }
 
+    // parity: native/src/input-parser.zig#Sink.raw [status=implemented hash=0bbe11d0ddd4]
     public func raw(for record: NativeInputEvent) -> ArraySlice<UInt8> {
         let start = Int(record.rawOffset)
         let end = start + Int(record.rawLen)
         return payload[start..<end]
     }
 
+    // parity: native/src/input-parser.zig#Sink.text [status=implemented hash=1a7e45bbc945]
     public func text(for record: NativeInputEvent) -> ArraySlice<UInt8> {
         let start = Int(record.textOffset)
         let end = start + Int(record.textLen)
@@ -422,14 +428,21 @@ public struct InputParserSink: Sendable {
 /// Allocation-minimal, clock-free streaming terminal input parser implementing legacy xterm/VT/SS3,
 /// Kitty keyboard protocol, X10 + SGR mouse, bracketed paste, terminal replies/CPR/pixel-size queries,
 /// 8-bit Alt, split UTF-8, and ESC timeout flushing.
-// parity: native/src/input-parser.zig#InputParser [status=implemented hash=33c8ec597e46]
+// parity: native/src/input-parser.zig#InputParser [status=implemented hash=e5fe162881fa]
 public struct NativeInputParserEngine: Sendable {
+    // parity: native/src/input-parser.zig#timeout_ns [status=implemented hash=736336cae661]
     public static let timeoutNs: UInt64 = 20_000_000
+    // parity: native/src/input-parser.zig#unit_bytes_max [status=implemented hash=0bf74a10ecbb]
     public static let unitBytesMax: Int = 4096
+    // parity: native/src/input-parser.zig#sequence_bytes_max [status=implemented hash=e4adf7e33a06]
     public static let sequenceBytesMax: Int = 256
+    // parity: native/src/input-parser.zig#reply_prefix_bytes_max [status=implemented hash=b5531e29e4e4]
     public static let replyPrefixBytesMax: Int = 8
+    // parity: native/src/input-parser.zig#params_max [status=implemented hash=868b964506c8]
     public static let paramsMax: Int = 16
+    // parity: native/src/input-parser.zig#subparams_max [status=implemented hash=7488bac0d278]
     public static let subparamsMax: Int = 8
+    // parity: native/src/input-parser.zig#mouse_button_none [status=implemented hash=645cc8372a19]
     public static let mouseButtonNone: UInt32 = 255
 
     private static let esc: UInt8 = 0x1B
@@ -619,6 +632,7 @@ public struct NativeInputParserEngine: Sendable {
 
     /// Parses bytes arriving at `nowNs`, writing records into `sink` and returning how many bytes were consumed.
     /// Passing an empty slice only performs timeout expiration.
+    // parity: native/src/input-parser.zig#InputParser.feed [status=implemented hash=c2f3c7832000]
     public mutating func feed(_ bytes: ArraySlice<UInt8>, nowNs: UInt64, sink: inout InputParserSink) -> Int {
         guard sink.hasRoomForOneByte() else { return 0 }
         // A new batch never extends a unit whose deadline already passed.
@@ -655,6 +669,7 @@ public struct NativeInputParserEngine: Sendable {
     }
 
     /// Timestamp in nanoseconds when the host should call `feed` with empty bytes, or `nil`.
+    // parity: native/src/input-parser.zig#InputParser.deadlineNs [status=implemented hash=2b3ec8c22866]
     public func deadlineNs() -> UInt64? {
         if expect.escapePrefix {
             let dueNow: Bool
@@ -688,12 +703,14 @@ public struct NativeInputParserEngine: Sendable {
     }
 
     /// Updates protocol expectations without emitting; the next `feed` re-evaluates any deferred unit.
+    // parity: native/src/input-parser.zig#InputParser.setExpectations [status=implemented hash=05c99d381eb4]
     public mutating func setExpectations(_ newExpect: InputParserExpectations) {
         self.expect = newExpect
     }
 
     /// Drops the pending unit and mouse button state while keeping expectations.
     /// With `keepReply: true`, a CSI unit that may begin a reply is kept deferred without a deadline.
+    // parity: native/src/input-parser.zig#InputParser.reset [status=implemented hash=1ad3ef080a1f]
     public mutating func reset(keepReply: Bool) {
         x10Button = 0
         buttonsHeld = 0
@@ -2135,7 +2152,7 @@ public enum MouseEncoding: String, Equatable, Hashable, Sendable, Codable {
 }
 
 /// Everything terminal stdin sends becomes exactly one of these events.
-// parity: core/src/lib/stdin-parser-native.ts#StdinEvent [status=implemented hash=6cc5857ebdf0]
+// parity: core/src/lib/stdin-parser-native.ts#StdinEvent [status=implemented hash=c57e39b806b2]
 public enum StdinEvent: Equatable, Hashable, Sendable {
     case key(raw: String, key: ParsedKey)
     case mouse(raw: String, encoding: MouseEncoding, event: RawMouseEvent)
@@ -2144,7 +2161,7 @@ public enum StdinEvent: Equatable, Hashable, Sendable {
 }
 
 /// Active terminal protocol context informing disambiguation and reply deferral.
-// parity: core/src/lib/stdin-parser-native.ts#StdinParserProtocolContext [status=implemented hash=f1b5b216d59d]
+// parity: core/src/lib/stdin-parser-native.ts#StdinParserProtocolContext [status=implemented hash=f577830d7163]
 public struct StdinParserProtocolContext: Equatable, Hashable, Sendable, Codable {
     public var kittyKeyboardEnabled: Bool
     public var privateCapabilityRepliesActive: Bool
@@ -2172,7 +2189,7 @@ public struct StdinParserProtocolContext: Equatable, Hashable, Sendable, Codable
 }
 
 /// Configuration options for `StdinParser`.
-// parity: core/src/lib/stdin-parser-native.ts#NativeStdinParserOptions [status=adapted hash=24e160ce25a0]
+// parity: core/src/lib/stdin-parser-native.ts#NativeStdinParserOptions [status=adapted hash=2eb7457fe631]
 public struct StdinParserOptions: Equatable, Hashable, Sendable {
     public var protocolContext: StdinParserProtocolContext
 
@@ -2182,7 +2199,7 @@ public struct StdinParserOptions: Equatable, Hashable, Sendable {
 }
 
 /// Pure-Swift streaming terminal stdin parser producing `StdinEvent` values from raw bytes.
-// parity: core/src/lib/stdin-parser-native.ts#NativeStdinParser [status=implemented hash=5c810fc74ffc]
+// parity: core/src/lib/stdin-parser-native.ts#NativeStdinParser [status=implemented hash=a78aeab4bca6]
 public struct StdinParser: Sendable {
     private var engine: NativeInputParserEngine
     private var sink: InputParserSink

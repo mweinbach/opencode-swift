@@ -182,7 +182,7 @@ public struct PerformanceStats: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Worker request protocol messages matching `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerRequest`.
-// parity: core/src/lib/tree-sitter/types.ts#TreeSitterWorkerRequest [status=implemented hash=fceef8b7c3c0]
+// parity: core/src/lib/tree-sitter/types.ts#TreeSitterWorkerRequest [status=implemented hash=aa4fd77b0a30]
 public enum TreeSitterWorkerRequest: Equatable, Hashable, Sendable, Codable {
     case `init`(dataPath: String, treeSitterWasmPath: String?)
     case addFiletypeParser(filetypeParser: FiletypeParserOptions)
@@ -200,7 +200,7 @@ public enum TreeSitterWorkerRequest: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Worker response protocol messages matching `core/src/lib/tree-sitter/types.ts#TreeSitterWorkerResponse`.
-// parity: core/src/lib/tree-sitter/types.ts#TreeSitterWorkerResponse [status=implemented hash=49b86a0de3f6]
+// parity: core/src/lib/tree-sitter/types.ts#TreeSitterWorkerResponse [status=implemented hash=d42d67a28697]
 public enum TreeSitterWorkerResponse: Equatable, Hashable, Sendable, Codable {
     case initResponse(error: String?)
     case parserInitResponse(bufferId: Int, messageId: String, hasParser: Bool, warning: String?, error: String?)
@@ -344,7 +344,7 @@ public final class InMemoryTreeSitterAssetLoader: TreeSitterAssetLoader, Sendabl
 }
 
 /// Pure-Swift parser/query download & cache utilities matching `core/src/lib/tree-sitter/download-utils.ts`.
-// parity: core/src/lib/tree-sitter/download-utils.ts#DownloadUtils [status=adapted hash=c1e24459242c]
+// parity: core/src/lib/tree-sitter/download-utils.ts#DownloadUtils [status=adapted hash=f84131b536f1]
 public enum DownloadUtils {
     /// Deterministic JavaScript-compatible 32-bit URL hash matching `DownloadUtils.hashUrl`.
     public static func hashUrl(_ url: String) -> String {
@@ -465,7 +465,7 @@ public enum DownloadUtils {
 // MARK: - Default Parsers & Asset Update CLI (`default-parsers.ts`, `default-parser-assets.bun.ts`, `assets/update.ts`)
 
 /// Package-relative asset paths shipped with OpenTUI's built-in tree-sitter parser set.
-// parity: core/src/lib/tree-sitter/default-parsers.ts#defaultParserAssetPaths [status=implemented hash=7dbffab27bfe]
+// parity: core/src/lib/tree-sitter/default-parsers.ts#defaultParserAssetPaths [status=implemented hash=75d904e2c040]
 public let defaultParserAssetPaths: [String] = [
     "assets/javascript/highlights.scm",
     "assets/javascript/tree-sitter-javascript.wasm",
@@ -601,6 +601,127 @@ public func getDefaultParsers() -> [FiletypeParserOptions] {
     return builtInDefaultParserDescriptors.filter { !overridden.contains($0.filetype) } + overrides
 }
 
+/// Configuration object matching `core/src/lib/tree-sitter/parsers-config.ts#default`.
+public struct DefaultParsersConfig: Equatable, Hashable, Sendable, Codable {
+    public var parsers: [FiletypeParserOptions]
+
+    public init(parsers: [FiletypeParserOptions]) {
+        self.parsers = parsers
+    }
+}
+
+/// Default upstream tree-sitter parser source definitions matching `core/src/lib/tree-sitter/parsers-config.ts`.
+// parity: core/src/lib/tree-sitter/parsers-config.ts#default [status=implemented hash=9ff6beec2724]
+public let defaultParsersConfig = DefaultParsersConfig(
+    parsers: [
+        FiletypeParserOptions(
+            filetype: "javascript",
+            aliases: ["javascriptreact"],
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "https://raw.githubusercontent.com/tree-sitter/tree-sitter-javascript/refs/heads/master/queries/highlights.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter/tree-sitter-javascript/releases/download/v0.25.0/tree-sitter-javascript.wasm"
+        ),
+        FiletypeParserOptions(
+            filetype: "typescript",
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/ecma/highlights.scm",
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/typescript/highlights.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter/tree-sitter-typescript/releases/download/v0.23.2/tree-sitter-typescript.wasm"
+        ),
+        FiletypeParserOptions(
+            filetype: "typescriptreact",
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/ecma/highlights.scm",
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/typescript/highlights.scm",
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/a8c082b4f5b3b70bde2ffb08cc112dfd7e515fb3/queries/jsx/highlights.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter/tree-sitter-typescript/releases/download/v0.23.2/tree-sitter-tsx.wasm"
+        ),
+        FiletypeParserOptions(
+            filetype: "markdown",
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "./assets/markdown/highlights.scm",
+                ],
+                injections: [
+                    "https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/markdown/injections.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter-grammars/tree-sitter-markdown/releases/download/v0.5.1/tree-sitter-markdown.wasm",
+            injectionMapping: InjectionMapping(
+                nodeTypes: [
+                    "inline": "markdown_inline",
+                    "pipe_table_cell": "markdown_inline",
+                ],
+                infoStringMap: [
+                    "javascript": "javascript",
+                    "js": "javascript",
+                    "jsx": "javascriptreact",
+                    "javascriptreact": "javascriptreact",
+                    "typescript": "typescript",
+                    "ts": "typescript",
+                    "tsx": "typescriptreact",
+                    "typescriptreact": "typescriptreact",
+                    "markdown": "markdown",
+                    "md": "markdown",
+                ]
+            )
+        ),
+        FiletypeParserOptions(
+            filetype: "markdown_inline",
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "./assets/markdown_inline/highlights.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter-grammars/tree-sitter-markdown/releases/download/v0.5.1/tree-sitter-markdown_inline.wasm"
+        ),
+        FiletypeParserOptions(
+            filetype: "zig",
+            queries: FiletypeParserQueries(
+                highlights: [
+                    "https://github.com/nvim-treesitter/nvim-treesitter/raw/refs/heads/master/queries/zig/highlights.scm",
+                ]
+            ),
+            wasm: "https://github.com/tree-sitter-grammars/tree-sitter-zig/releases/download/v1.1.2/tree-sitter-zig.wasm"
+        ),
+    ]
+)
+
+/// Result of running `updateAssets` for a single parser entry.
+public struct GeneratedParserAsset: Equatable, Hashable, Sendable, Codable {
+    public var filetype: String
+    public var aliases: [String]?
+    public var languagePath: String
+    public var highlightsPath: String
+    public var injectionsPath: String?
+    public var injectionMapping: InjectionMapping?
+
+    public init(
+        filetype: String,
+        aliases: [String]? = nil,
+        languagePath: String,
+        highlightsPath: String,
+        injectionsPath: String? = nil,
+        injectionMapping: InjectionMapping? = nil
+    ) {
+        self.filetype = filetype
+        self.aliases = aliases
+        self.languagePath = languagePath
+        self.highlightsPath = highlightsPath
+        self.injectionsPath = injectionsPath
+        self.injectionMapping = injectionMapping
+    }
+}
+
 /// Options for updating/generating bundled tree-sitter parser assets (`assets/update.ts`).
 // parity: core/src/lib/tree-sitter/assets/update.ts#UpdateOptions [status=implemented hash=5cb405539dad]
 public struct UpdateOptions: Equatable, Hashable, Sendable, Codable {
@@ -613,6 +734,140 @@ public struct UpdateOptions: Equatable, Hashable, Sendable, Codable {
         self.assetsDir = assetsDir
         self.outputPath = outputPath
     }
+}
+
+private func portableRelativeAssetPath(from baseDir: String, to targetPath: String) -> String {
+    let baseParts = baseDir.split(separator: "/").map(String.init)
+    let targetParts = targetPath.split(separator: "/").map(String.init)
+    var common = 0
+    while common < baseParts.count && common < targetParts.count && baseParts[common] == targetParts[common] {
+        common += 1
+    }
+    let up = Array(repeating: "..", count: baseParts.count - common)
+    let down = Array(targetParts[common...])
+    let joined = (up + down).joined(separator: "/")
+    return joined.hasPrefix(".") ? joined : "./" + joined
+}
+
+private func downloadAndCombineQueries(
+    filetype: String,
+    queryUrls: [String],
+    assetsDir: String,
+    outputPath: String,
+    queryType: String,
+    configPath: String,
+    loader: any TreeSitterAssetLoader
+) async throws -> String {
+    let queriesDir = joinPortablePath(assetsDir, filetype)
+    let queryPath = joinPortablePath(queriesDir, "\(queryType).scm")
+    var queryContents: [String] = []
+    let configDir = portableDirname(configPath)
+
+    for queryUrl in queryUrls {
+        if queryUrl.hasPrefix("./") {
+            let trimmed = String(queryUrl.dropFirst(2))
+            let localPath = joinPortablePath(configDir, trimmed)
+            if let bytes = try? await loader.readLocalFile(at: localPath) {
+                let text = String(decoding: bytes, as: UTF8.self)
+                if text.contains(where: { !$0.isWhitespace }) {
+                    queryContents.append(text)
+                }
+            }
+        } else {
+            let result = await DownloadUtils.downloadToPath(
+                source: queryUrl,
+                targetPath: joinPortablePath(queriesDir, portableBasename(queryUrl)),
+                loader: loader
+            )
+            if let bytes = result.content {
+                let text = String(decoding: bytes, as: UTF8.self)
+                if text.contains(where: { !$0.isWhitespace }) {
+                    queryContents.append("; Query from: \(queryUrl)\n\(text)")
+                }
+            }
+        }
+    }
+
+    let combined = queryContents.joined(separator: "\n\n")
+    try await loader.writeLocalFile(Array(combined.utf8), to: queryPath)
+    return portableRelativeAssetPath(from: portableDirname(outputPath), to: queryPath)
+}
+
+/// Downloads parser WASM binaries and combines highlight/injection `.scm` queries for each configured
+/// parser, writing the generated descriptor output via the injectable `TreeSitterAssetLoader`.
+/// Matches `core/src/lib/tree-sitter/assets/update.ts#updateAssets` (`main`).
+// parity: core/src/lib/tree-sitter/assets/update.ts#updateAssets [status=adapted hash=a1de0c2ee4e2]
+@discardableResult
+public func updateAssets(
+    options: UpdateOptions,
+    parsers: [FiletypeParserOptions] = defaultParsersConfig.parsers,
+    loader: any TreeSitterAssetLoader = InMemoryTreeSitterAssetLoader()
+) async throws -> [GeneratedParserAsset] {
+    var generated: [GeneratedParserAsset] = []
+    generated.reserveCapacity(parsers.count)
+
+    for parser in parsers {
+        let languageDir = joinPortablePath(options.assetsDir, parser.filetype)
+        let languageTarget = joinPortablePath(languageDir, portableBasename(parser.wasm))
+        let langResult = await DownloadUtils.downloadToPath(
+            source: parser.wasm,
+            targetPath: languageTarget,
+            loader: loader
+        )
+        if let err = langResult.error {
+            throw TreeSitterClientError.unknownDefaultAsset("Failed to download language for \(parser.filetype): \(err)")
+        }
+        let languagePath = portableRelativeAssetPath(from: portableDirname(options.outputPath), to: languageTarget)
+
+        let highlightsPath = try await downloadAndCombineQueries(
+            filetype: parser.filetype,
+            queryUrls: parser.queries.highlights,
+            assetsDir: options.assetsDir,
+            outputPath: options.outputPath,
+            queryType: "highlights",
+            configPath: options.configPath,
+            loader: loader
+        )
+
+        var injectionsPath: String? = nil
+        if let injections = parser.queries.injections, !injections.isEmpty {
+            injectionsPath = try await downloadAndCombineQueries(
+                filetype: parser.filetype,
+                queryUrls: injections,
+                assetsDir: options.assetsDir,
+                outputPath: options.outputPath,
+                queryType: "injections",
+                configPath: options.configPath,
+                loader: loader
+            )
+        }
+
+        generated.append(
+            GeneratedParserAsset(
+                filetype: parser.filetype,
+                aliases: parser.aliases,
+                languagePath: languagePath,
+                highlightsPath: highlightsPath,
+                injectionsPath: injectionsPath,
+                injectionMapping: parser.injectionMapping
+            )
+        )
+    }
+
+    let manifestLines = generated.map { entry -> String in
+        var fields = [
+            "filetype=\(entry.filetype)",
+            "wasm=\(entry.languagePath)",
+            "highlights=\(entry.highlightsPath)",
+        ]
+        if let inj = entry.injectionsPath {
+            fields.append("injections=\(inj)")
+        }
+        return fields.joined(separator: ";")
+    }
+    let outputContent = "// Generated by updateAssets\n" + manifestLines.joined(separator: "\n") + "\n"
+    try await loader.writeLocalFile(Array(outputContent.utf8), to: options.outputPath)
+    return generated
 }
 
 /// Portable Swift adaptation of `assets/update.ts#runUpdateAssetsCli` using an injectable `TreeSitterAssetLoader`.
@@ -631,6 +886,12 @@ public func runUpdateAssetsCli(
         for query in parser.queries.highlights {
             let queryTarget = joinPortablePath(langDir, "highlights.scm")
             results.append(await DownloadUtils.downloadToPath(source: query, targetPath: queryTarget, loader: loader))
+        }
+        if let injections = parser.queries.injections {
+            for query in injections {
+                let queryTarget = joinPortablePath(langDir, "injections.scm")
+                results.append(await DownloadUtils.downloadToPath(source: query, targetPath: queryTarget, loader: loader))
+            }
         }
     }
     return results
@@ -743,7 +1004,7 @@ public struct TreeSitterListenerToken: Equatable, Hashable, Sendable {
 ///
 /// Conforms to `SyntaxHighlighter` and defaults to `BuiltInSyntaxHighlighter.shared` so every
 /// supported language highlights out of the box on every Swift platform.
-// parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient [status=adapted hash=7471767ea77d]
+// parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient [status=adapted hash=fcdc5a9378e5]
 public final class TreeSitterClient: SyntaxHighlighter, Sendable {
     private struct CacheKey: Hashable, Sendable {
         let filetype: String
@@ -1181,7 +1442,7 @@ public final class TreeSitterClient: SyntaxHighlighter, Sendable {
     }
 
     /// Updates an existing managed buffer with edits and new content, emitting fresh line highlights.
-    // parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient.updateBuffer [status=adapted hash=f644a210fda9]
+    // parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient.updateBuffer [status=adapted hash=d3640391b01a]
     public func updateBuffer(id: Int, edits: [Edit], newContent: String, version: Int) async {
         guard isInitialized() else { return }
         let updated: BufferState? = state.withLock { s in
@@ -1218,7 +1479,7 @@ public final class TreeSitterClient: SyntaxHighlighter, Sendable {
     }
 
     /// Removes a managed buffer and emits `"buffer:disposed"`.
-    // parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient.removeBuffer [status=implemented hash=f876a0c3933c]
+    // parity: core/src/lib/tree-sitter/client.ts#TreeSitterClient.removeBuffer [status=implemented hash=e4dce071f7d9]
     public func removeBuffer(_ bufferId: Int) async {
         let wasInitialized = state.withLock { s -> Bool in
             s.buffers.removeValue(forKey: bufferId)

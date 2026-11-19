@@ -6,10 +6,15 @@
 
 /// 24-bit link ID layout: `[ generation (8 bits) | slot_index (16 bits) ]`.
 /// Generation starts at 1 so valid link IDs are always non-zero (`0` means no link).
+// parity: native/src/link.zig#GEN_BITS [status=implemented hash=577022c431a7]
 public let linkGenerationBits: UInt32 = 8
+// parity: native/src/link.zig#SLOT_BITS [status=implemented hash=3aed9389eacc]
 public let linkSlotBits: UInt32 = 16
+// parity: native/src/link.zig#GEN_MASK [status=implemented hash=191f08721baf]
 public let linkGenerationMask: UInt32 = (1 << linkGenerationBits) - 1
+// parity: native/src/link.zig#SLOT_MASK [status=implemented hash=8ff6b5ae5caf]
 public let linkSlotMask: UInt32 = (1 << linkSlotBits) - 1
+// parity: native/src/link.zig#MAX_URL_LENGTH [status=implemented hash=150d2a3c7207]
 public let linkMaxUrlLength: Int = 512
 private let linkRetiredGeneration: UInt32 = linkGenerationMask + 1
 
@@ -43,7 +48,7 @@ public func isWritableUrl(_ url: String) -> Bool {
 
 /// Reference-counted, interned OSC 8 hyperlink URL table returning 24-bit link IDs.
 /// Slots retire permanently after 255 generations so stale 24-bit IDs can never alias reused slots.
-// parity: native/src/link.zig#LinkPool [status=implemented hash=4449c956cf41]
+// parity: native/src/link.zig#LinkPool [status=implemented hash=d9d4139ace0a]
 public final class LinkPool: @unchecked Sendable {
     private struct Slot {
         var url: String = ""
@@ -57,7 +62,20 @@ public final class LinkPool: @unchecked Sendable {
     private var retiredSlotCount: Int = 0
     private var internedLiveIds: [String: LinkIdPayload] = [:]
 
-    public init() {}
+    // parity: native/src/link.zig#LinkPool.init [status=implemented hash=195de84aa513]
+    public init() {
+        self.slots = []
+        self.freeList = []
+        self.retiredSlotCount = 0
+        self.internedLiveIds = [:]
+    }
+
+    // parity: native/src/link.zig#LinkPool.deinit [status=implemented hash=a0b057606077]
+    deinit {
+        slots.removeAll(keepingCapacity: false)
+        freeList.removeAll(keepingCapacity: false)
+        internedLiveIds.removeAll(keepingCapacity: false)
+    }
 
     @inline(__always)
     private static func packId(slotIndex: UInt32, generation: UInt32) throws(LinkPoolError) -> LinkIdPayload {
@@ -75,6 +93,7 @@ public final class LinkPool: @unchecked Sendable {
     }
 
     /// Acquires one owned live reference to `url`, interning identical live URLs.
+    // parity: native/src/link.zig#LinkPool.acquire [status=implemented hash=c605c1e1a31a]
     public func acquire(_ url: String) throws(LinkPoolError) -> LinkIdPayload {
         let bytes = Array(url.utf8)
         guard isWritableUrl(bytes) else {
@@ -117,6 +136,7 @@ public final class LinkPool: @unchecked Sendable {
     }
 
     /// Retains an already-live link ID.
+    // parity: native/src/link.zig#LinkPool.incref [status=implemented hash=4e9c0a36906c]
     public func incref(_ id: LinkIdPayload) throws(LinkPoolError) {
         let (slotIndex, generation) = Self.unpackId(id)
         let idx = Int(slotIndex)
@@ -128,6 +148,7 @@ public final class LinkPool: @unchecked Sendable {
     }
 
     /// Releases one reference to `id`, recycling or retiring the slot at refcount 0.
+    // parity: native/src/link.zig#LinkPool.decref [status=implemented hash=143452796e90]
     public func decref(_ id: LinkIdPayload) throws(LinkPoolError) {
         let (slotIndex, generation) = Self.unpackId(id)
         let idx = Int(slotIndex)
@@ -151,6 +172,7 @@ public final class LinkPool: @unchecked Sendable {
     }
 
     /// Returns the URL string stored at `id`.
+    // parity: native/src/link.zig#LinkPool.get [status=implemented hash=d6cc2d9e9af7]
     public func get(_ id: LinkIdPayload) throws(LinkPoolError) -> String {
         let (slotIndex, generation) = Self.unpackId(id)
         let idx = Int(slotIndex)
@@ -169,6 +191,7 @@ public final class LinkPool: @unchecked Sendable {
     }
 
     /// Returns the current reference count of `id`.
+    // parity: native/src/link.zig#LinkPool.getRefcount [status=implemented hash=4930ea6443cf]
     public func getRefcount(_ id: LinkIdPayload) throws(LinkPoolError) -> UInt32 {
         let (slotIndex, generation) = Self.unpackId(id)
         let idx = Int(slotIndex)
@@ -177,8 +200,11 @@ public final class LinkPool: @unchecked Sendable {
         return slots[idx].refcount
     }
 
+    // parity: native/src/link.zig#LinkPool.getTotalSlots [status=implemented hash=1e5986e78d0a]
     public var totalSlots: Int { slots.count }
+    // parity: native/src/link.zig#LinkPool.getFreeSlotCount [status=implemented hash=fe49f0bb0109]
     public var freeSlotCount: Int { freeList.count }
+    // parity: native/src/link.zig#LinkPool.getLiveSlotCount [status=implemented hash=d741005c60bc]
     public var liveSlotCount: Int { slots.count - freeList.count - retiredSlotCount }
 }
 
@@ -190,14 +216,17 @@ public final class LinkTracker: @unchecked Sendable {
     public let pool: LinkPool
     public private(set) var usedIds: [UInt32: UInt32] = [:]
 
+    // parity: native/src/link.zig#LinkTracker.init [status=implemented hash=5557ecdee0e2]
     public init(pool: LinkPool) {
         self.pool = pool
     }
 
+    // parity: native/src/link.zig#LinkTracker.deinit [status=implemented hash=e2d8be6a8f7b]
     deinit {
         clear()
     }
 
+    // parity: native/src/link.zig#LinkTracker.clear [status=implemented hash=40235821cc21]
     public func clear() {
         for id in usedIds.keys {
             try? pool.decref(id)
@@ -206,6 +235,7 @@ public final class LinkTracker: @unchecked Sendable {
     }
 
     /// Tracks document membership once per URL, independent of chunk count.
+    // parity: native/src/link.zig#LinkTracker.trackUrl [status=implemented hash=b77f77ef8003]
     public func trackUrl(_ url: String) throws(LinkPoolError) -> LinkIdPayload {
         if let existing = pool.lookupLive(url), usedIds[existing] != nil {
             return existing
@@ -215,6 +245,7 @@ public final class LinkTracker: @unchecked Sendable {
         return id
     }
 
+    // parity: native/src/link.zig#LinkTracker.addCellRef [status=implemented hash=2d9d2c4caac8]
     public func addCellRef(_ id: UInt32) {
         if let existing = usedIds[id] {
             usedIds[id] = existing + 1
@@ -228,6 +259,7 @@ public final class LinkTracker: @unchecked Sendable {
         }
     }
 
+    // parity: native/src/link.zig#LinkTracker.removeCellRef [status=implemented hash=5060b902e37c]
     public func removeCellRef(_ id: UInt32) {
         guard let count = usedIds[id], count > 0 else { return }
         if count > 1 {
@@ -247,6 +279,8 @@ public final class LinkTracker: @unchecked Sendable {
         }
     }
 
+    // parity: native/src/link.zig#LinkTracker.hasAny [status=implemented hash=093b94ae8654]
     public var hasAny: Bool { !usedIds.isEmpty }
+    // parity: native/src/link.zig#LinkTracker.getLinkCount [status=implemented hash=8883887b1331]
     public var linkCount: UInt32 { UInt32(usedIds.count) }
 }

@@ -1349,7 +1349,7 @@ public struct KeymapProviderProps<Host: KeymapHost>: Sendable {
 
 /// Scopes `props.keymap` as the active keymap for all nested hook calls (`useKeymap`, `useActiveKeys`,
 /// `usePendingSequence`, `useBindings`).
-// parity: keymap/src/react/index.ts#KeymapProvider [status=adapted hash=269e4a41a3c0]
+// parity: keymap/src/react/index.ts#KeymapProvider [status=adapted hash=3d2bff023fae]
 public func KeymapProvider<Host: KeymapHost, Result>(
     _ props: KeymapProviderProps<Host>,
     content: () throws -> Result
@@ -1368,7 +1368,7 @@ public final class UseBindingsTargetRef<Target: Hashable & Sendable>: @unchecked
     }
 }
 
-// parity: keymap/src/react/index.ts#UseBindingsLayer [status=adapted hash=d66f83cd97b4]
+// parity: keymap/src/react/index.ts#UseBindingsLayer [status=adapted hash=3c67fc123834]
 public struct UseBindingsLayer<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable {
     public var targetRef: UseBindingsTargetRef<Target>?
     public var targetMode: TargetMode?
@@ -1571,7 +1571,7 @@ public func SolidKeymapProvider<Host: KeymapHost, Result>(
 // parity: keymap/src/solid/index.ts#UseBindingsTarget [status=adapted hash=328a5e677476]
 public typealias UseBindingsTarget<Target: Hashable & Sendable> = @Sendable () -> Target?
 
-// parity: keymap/src/solid/index.ts#UseBindingsLayer [status=adapted hash=d66f83cd97b4]
+// parity: keymap/src/solid/index.ts#UseBindingsLayer [status=adapted hash=3c67fc123834]
 public struct SolidUseBindingsLayer<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable {
     public var target: UseBindingsTarget<Target>?
     public var targetMode: TargetMode?

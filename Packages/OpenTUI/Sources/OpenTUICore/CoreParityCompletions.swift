@@ -669,7 +669,7 @@ public extension OptimizedBuffer {
     }
 
     /// Raw packed cell planes view matching `core/src/buffer.ts#OptimizedBuffer.buffers`.
-    // parity: core/src/buffer.ts#OptimizedBuffer.buffers [status=adapted hash=b8e3d4959beb]
+    // parity: core/src/buffer.ts#OptimizedBuffer.buffers [status=adapted hash=db6818a18db5]
     var buffers: BufferAccess {
         precondition(!isDestroyed, "Buffer \(id) is destroyed")
         return BufferAccess(buffer: self, generation: 1)
@@ -717,6 +717,7 @@ public extension OptimizedBuffer {
     /// Renders a `TextBufferView` (wrapped virtual lines, styled chunks, highlights via `SyntaxStyle`,
     /// alignment, tab indicators, and selection) into `self` starting at `(x, y)`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawTextBuffer [status=implemented hash=691e6221454c]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawTextBuffer [status=implemented hash=293b9705447a]
     func drawTextBuffer(_ textBufferView: TextBufferView, x: Int, y: Int) {
         guard !isDestroyed && !textBufferView.isDestroyed && !textBufferView.textBuffer.isDestroyed else { return }
 
@@ -931,8 +932,18 @@ public extension OptimizedBuffer {
         }
     }
 
+    /// Validates buffer & view state before drawing a `TextBufferView` (`drawTextBufferChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawTextBufferChecked [status=implemented hash=7339007548b3]
+    func drawTextBufferChecked(_ textBufferView: TextBufferView, x: Int, y: Int) throws(BufferError) {
+        guard !isDestroyed && !textBufferView.isDestroyed && !textBufferView.textBuffer.isDestroyed else {
+            throw .invalidDimensions
+        }
+        drawTextBuffer(textBufferView, x: x, y: y)
+    }
+
     /// Renders an `EditorView` (text content or placeholder chunks when empty) into `self` at `(x, y)`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawEditorView [status=implemented hash=b1c718ba9d9b]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawEditorView [status=implemented hash=6b4f708f9ed7]
     func drawEditorView(_ editorView: EditorView, x: Int, y: Int) {
         guard !isDestroyed && !editorView.isDestroyed && !editorView.editBuffer.isDestroyed else { return }
 
@@ -963,9 +974,43 @@ public extension OptimizedBuffer {
         drawTextBuffer(editorView.textBufferView, x: x, y: y)
     }
 
+    /// Validates buffer & editor view state before drawing an `EditorView` (`drawEditorViewChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawEditorViewChecked [status=implemented hash=5bdeab394fa0]
+    func drawEditorViewChecked(_ editorView: EditorView, x: Int, y: Int) throws(BufferError) {
+        guard !isDestroyed && !editorView.isDestroyed && !editorView.editBuffer.isDestroyed else {
+            throw .invalidDimensions
+        }
+        drawEditorView(editorView, x: x, y: y)
+    }
+
+    /// Validates pixel format and stride before drawing a supersampled buffer (`drawSuperSampleBufferChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawSuperSampleBufferChecked [status=implemented hash=9d7fb8b1f567]
+    func drawSuperSampleBufferChecked(
+        x posX: Int,
+        y posY: Int,
+        pixelData: [UInt8],
+        format: SuperSamplePixelFormat = .rgba8unorm,
+        alignedBytesPerRow: Int
+    ) throws(BufferError) {
+        guard !isDestroyed, alignedBytesPerRow > 0, alignedBytesPerRow % 4 == 0,
+              pixelData.count % alignedBytesPerRow == 0
+        else {
+            throw .invalidDimensions
+        }
+        drawSuperSampleBuffer(
+            x: posX,
+            y: posY,
+            pixelData: pixelData,
+            pixelDataLength: pixelData.count,
+            format: format,
+            alignedBytesPerRow: alignedBytesPerRow
+        )
+    }
+
     /// Draws 2×2 supersampled RGBA8/BGRA8 pixel data into terminal cells using Unicode quadrant blocks,
     /// matching `native/src/buffer.zig#drawSuperSampleBuffer`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawSuperSampleBuffer [status=implemented hash=95e0e6c22ab7]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawSuperSampleBuffer [status=implemented hash=dd7f13b1ab74]
     func drawSuperSampleBuffer(
         x posX: Int,
         y posY: Int,
@@ -1048,6 +1093,7 @@ public extension OptimizedBuffer {
 
     /// Draws a `NativeImage` (or source subregion) into `self` at `(x, y, width, height)`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawImage [status=adapted hash=55049f60dc17]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawImage [status=adapted hash=7308c2b8f9fb]
     @discardableResult
     func drawImage(
         _ image: NativeImage,
@@ -1104,9 +1150,34 @@ public extension OptimizedBuffer {
         return true
     }
 
+    /// Validates packed cell record length before drawing (`drawPackedBufferChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawPackedBufferChecked [status=implemented hash=9a22f467724b]
+    func drawPackedBufferChecked(
+        _ data: [UInt8],
+        posX: Int,
+        posY: Int,
+        terminalWidthCells: Int,
+        terminalHeightCells: Int
+    ) throws(BufferError) {
+        guard !isDestroyed, terminalWidthCells >= 0, terminalHeightCells >= 0 else {
+            throw .invalidDimensions
+        }
+        let needed = terminalWidthCells * terminalHeightCells * 48
+        guard data.count >= needed else { throw .bufferTooSmall }
+        drawPackedBuffer(
+            data,
+            dataLen: needed,
+            posX: posX,
+            posY: posY,
+            terminalWidthCells: terminalWidthCells,
+            terminalHeightCells: terminalHeightCells
+        )
+    }
+
     /// Draws pre-computed 48-byte `CellResult` records (`bg(4×f32) + fg(4×f32) + char(u32) + 12B pad`)
     /// matching `native/src/buffer.zig#drawPackedBuffer`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawPackedBuffer [status=implemented hash=23071322a727]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawPackedBuffer [status=implemented hash=703ec50fadae]
     func drawPackedBuffer(
         _ data: [UInt8],
         dataLen: Int? = nil,
@@ -1253,6 +1324,7 @@ public extension OptimizedBuffer {
     /// Draws an ASCII grayscale intensity map (`[0, 1]`) directly into `self`,
     /// matching `native/src/buffer.zig#drawGrayscaleBuffer`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawGrayscaleBuffer [status=implemented hash=0bffdfd35dba]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBuffer [status=implemented hash=81de4e03a916]
     func drawGrayscaleBuffer(
         posX: Int,
         posY: Int,
@@ -1277,6 +1349,7 @@ public extension OptimizedBuffer {
     /// Draws a 2×2 supersampled grayscale intensity map into `self`,
     /// matching `native/src/buffer.zig#drawGrayscaleBufferSupersampled`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawGrayscaleBufferSupersampled [status=implemented hash=6921d84e6558]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBufferSupersampled [status=implemented hash=52ca05abac38]
     func drawGrayscaleBufferSupersampled(
         posX: Int,
         posY: Int,
@@ -1295,6 +1368,35 @@ public extension OptimizedBuffer {
             fg: fg,
             bg: bg,
             supersampled: true
+        )
+    }
+
+    /// Validates dimensions and color inputs before drawing a grayscale intensity buffer (`drawGrayscaleBufferChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGrayscaleBufferChecked [status=implemented hash=95bf0e8b300d]
+    func drawGrayscaleBufferChecked(
+        posX: Int,
+        posY: Int,
+        intensities: [Float],
+        srcWidth: Int,
+        srcHeight: Int,
+        fg: RGBA? = nil,
+        bg: RGBA? = nil,
+        supersampled: Bool = false
+    ) throws(BufferError) {
+        guard !isDestroyed, srcWidth >= 0, srcHeight >= 0 else { throw .invalidDimensions }
+        if let fg, (try? NativeBufferBridge.validateColor(fg)) == nil { throw .invalidDimensions }
+        if let bg, (try? NativeBufferBridge.validateColor(bg)) == nil { throw .invalidDimensions }
+        let expected = srcWidth * srcHeight
+        guard intensities.count >= expected else { throw .bufferTooSmall }
+        drawGrayscaleBufferCore(
+            posX: posX,
+            posY: posY,
+            intensities: intensities,
+            srcWidth: srcWidth,
+            srcHeight: srcHeight,
+            fg: fg,
+            bg: bg,
+            supersampled: supersampled
         )
     }
 
@@ -1389,6 +1491,7 @@ public extension OptimizedBuffer {
     /// Draws a complete border grid with intersections, horizontal rules, and vertical rules
     /// matching `native/src/buffer.zig#drawGrid`.
     // parity: core/src/buffer.ts#OptimizedBuffer.drawGrid [status=implemented hash=7ac9e126cf46]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGrid [status=implemented hash=c95158f29d25]
     func drawGrid(_ options: NativeBufferGrid) {
         guard !isDestroyed else { return }
         guard options.borderChars.count >= 11 else { return }

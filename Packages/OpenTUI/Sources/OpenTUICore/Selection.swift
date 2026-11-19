@@ -103,12 +103,12 @@ public final class Selection {
         set { _isStart = newValue }
     }
 
-    // parity: core/src/lib/selection.ts#Selection.anchor [status=implemented hash=b71e2e525342]
+    // parity: core/src/lib/selection.ts#Selection.anchor [status=implemented hash=ee9cc7dcc49b]
     public var anchor: SelectionPoint {
         SelectionPoint(x: _anchor.x, y: _anchor.y)
     }
 
-    // parity: core/src/lib/selection.ts#Selection.focus [status=implemented hash=e6dc8c1da417]
+    // parity: core/src/lib/selection.ts#Selection.focus [status=implemented hash=2733f4274016]
     public var focus: SelectionPoint {
         get { _focus }
         set { _focus = newValue }

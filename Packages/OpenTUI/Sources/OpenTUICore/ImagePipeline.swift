@@ -93,7 +93,7 @@ public final class ImageLoadError: Error, Sendable, CustomStringConvertible {
 }
 
 /// Status error codes returned by native image operations.
-// parity: core/src/image.ts#ImageErrorCode [status=implemented hash=ae43fe9b3bd5]
+// parity: core/src/image.ts#ImageErrorCode [status=implemented hash=dc0a7a2be47f]
 public enum ImageErrorCode: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case invalidHandle = "invalid-handle"
     case unsupportedFormat = "unsupported-format"
@@ -696,7 +696,7 @@ private func nextPNMToken(_ bytes: [UInt8], cursor: inout Int) -> String? {
 }
 
 /// Probes encoded image bytes (`PNG`, `BMP`, `PPM`/`PGM`, `JPEG`, `GIF`, `WebP`) without full decoding.
-// parity: core/src/image.ts#imageInfo [status=implemented hash=ed26a32e2efe]
+// parity: core/src/image.ts#imageInfo [status=implemented hash=8d2ba1808192]
 public func imageInfo(_ data: [UInt8], options: ImageCreateOptions = ImageCreateOptions()) throws(ImageError) -> ImageInfo {
     guard !data.isEmpty else {
         throw ImageError(code: .invalidArgument, message: "image data must not be empty")
@@ -1297,7 +1297,7 @@ private func cubicWeight(_ t: Double, b: Double, c: Double) -> Double {
 
 /// Pure-Swift RGBA8888 image handle supporting decoding, pixel import/export, resizing, cropping,
 /// padding, rotation, flipping, Porter-Duff compositing, PNG/BMP/PPM encoding, and explicit disposal.
-// parity: core/src/image.ts#NativeImage [status=implemented hash=817af4f6fa2b]
+// parity: core/src/image.ts#NativeImage [status=implemented hash=35855d569bed]
 public final class NativeImage: @unchecked Sendable {
     private static let handleCounterLock = HandleCounter()
 
@@ -1324,13 +1324,13 @@ public final class NativeImage: @unchecked Sendable {
 
     // MARK: - Constructors & Loaders
 
-    // parity: core/src/image.ts#NativeImage.decode [status=implemented hash=3785d046b76d]
+    // parity: core/src/image.ts#NativeImage.decode [status=implemented hash=a5e0e0391aad]
     public static func decode(_ data: [UInt8], options: ImageCreateOptions = ImageCreateOptions()) throws(ImageError) -> NativeImage {
         let decoded = try PureImageCodec.decode(data)
         return NativeImage(pixels: decoded.pixels, info: decoded.info)
     }
 
-    // parity: core/src/image.ts#NativeImage.load [status=implemented hash=65b4d7d590b5]
+    // parity: core/src/image.ts#NativeImage.load [status=implemented hash=27355192921a]
     public static func load(_ source: ImageSource, options: ImageLoadOptions = ImageLoadOptions()) async throws -> NativeImage {
         switch source {
         case .bytes(let data):
@@ -1381,7 +1381,7 @@ public final class NativeImage: @unchecked Sendable {
         }
     }
 
-    // parity: core/src/image.ts#NativeImage.fromRgba [status=implemented hash=573524079fae]
+    // parity: core/src/image.ts#NativeImage.fromRgba [status=implemented hash=2d515fc6db1f]
     public static func fromRgba(
         _ pixels: [UInt8],
         width: Int,
@@ -1397,7 +1397,7 @@ public final class NativeImage: @unchecked Sendable {
         )
     }
 
-    // parity: core/src/image.ts#NativeImage.fromPixels [status=implemented hash=ada8466799ff]
+    // parity: core/src/image.ts#NativeImage.fromPixels [status=implemented hash=79c3fb96e0f2]
     public static func fromPixels(
         _ pixels: [UInt8],
         width: Int,
@@ -1792,7 +1792,7 @@ public final class NativeImage: @unchecked Sendable {
         return NativeImage(pixels: out, info: newInfo)
     }
 
-    // parity: core/src/image.ts#NativeImage.extend [status=implemented hash=f11daba3c6eb]
+    // parity: core/src/image.ts#NativeImage.extend [status=implemented hash=94fa86956353]
     public func extend(_ options: ExtendOptions = ExtendOptions()) throws(ImageError) -> NativeImage {
         _ = try guardHandle()
         guard options.top >= 0 && options.right >= 0 && options.bottom >= 0 && options.left >= 0 else {
@@ -1922,7 +1922,7 @@ public final class NativeImage: @unchecked Sendable {
         return NativeImage(pixels: out, info: imageInfo)
     }
 
-    // parity: core/src/image.ts#NativeImage.composite [status=implemented hash=94e6cf6d77cf]
+    // parity: core/src/image.ts#NativeImage.composite [status=implemented hash=c4ea3ccb0650]
     public func composite(_ overlay: NativeImage, options: CompositeOptions = CompositeOptions()) throws(ImageError) -> NativeImage {
         _ = try guardHandle()
         _ = try overlay.guardHandle()
@@ -2067,7 +2067,7 @@ public final class NativeImage: @unchecked Sendable {
         return owned
     }
 
-    // parity: core/src/image.ts#NativeImage.copyTo [status=implemented hash=84bf958445eb]
+    // parity: core/src/image.ts#NativeImage.copyTo [status=implemented hash=002f17814763]
     public func copyTo(_ destination: inout [UInt8], stride: Int? = nil, format: PixelFormat = .rgba8) throws(ImageError) {
         _ = try guardHandle()
         let targetStride = stride ?? (imageInfo.width * 4)
@@ -2150,7 +2150,7 @@ public final class NativeImagePool: @unchecked Sendable {
         try publishPixels(pixels, options: PixelImportOptions(ownerId: ownerId, stride: stride ?? width * 4))
     }
 
-    // parity: core/src/image.ts#NativeImagePool.publishPixels [status=implemented hash=6ab52d8cb31a]
+    // parity: core/src/image.ts#NativeImagePool.publishPixels [status=implemented hash=70eda410250c]
     public func publishPixels(_ pixels: [UInt8], options: PixelImportOptions = PixelImportOptions()) throws(ImageError) -> NativeImage? {
         guard !disposed else {
             throw ImageError(code: .invalidHandle, message: "NativeImagePool is disposed")

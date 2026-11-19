@@ -160,7 +160,7 @@ public enum KeepOutsideDirection: Int, Sendable {
 }
 
 /// Returns the document display-cell offset at the end of `text` as an `EditBuffer` lays it out.
-// parity: core/src/edit-buffer.ts#measureEditText [status=implemented hash=d5639988443a]
+// parity: core/src/edit-buffer.ts#measureEditText [status=implemented hash=3e81d1c00f35]
 public func measureEditText(
     _ text: String,
     widthMethod: TextWidthMethod = .unicode,
@@ -175,7 +175,7 @@ public func measureEditText(
 
 /// Pure-Swift editable text buffer with balanced `Rope` snapshots, grapheme/word/line cursor motion,
 /// undo/redo history, highlights, and native extmark tracking.
-// parity: core/src/edit-buffer.ts#EditBuffer [status=implemented hash=467bc30f1c65]
+// parity: core/src/edit-buffer.ts#EditBuffer [status=implemented hash=eab3f6a60ba5]
 public final class EditBuffer {
     public let textBuffer: TextBuffer
     public let id: UInt32
@@ -987,7 +987,7 @@ public final class EditBuffer {
         return LogicalCursor(row: _cursor.row, col: width, offset: offset)
     }
 
-    // parity: core/src/edit-buffer.ts#EditBuffer.offsetToPosition [status=implemented hash=638a296c949f]
+    // parity: core/src/edit-buffer.ts#EditBuffer.offsetToPosition [status=implemented hash=668541d1b163]
     public func offsetToPosition(_ offset: Int) -> (row: Int, col: Int)? {
         assertAlive()
         return textBuffer.offsetToPosition(offset)
@@ -1197,7 +1197,7 @@ public final class EditBuffer {
 // MARK: - EditorView
 
 /// Pure-Swift editor viewport, wrapped visual navigation, selection, placeholder, and extmarks host.
-// parity: core/src/editor-view.ts#EditorView [status=implemented hash=f836e89d187b]
+// parity: core/src/editor-view.ts#EditorView [status=implemented hash=b405254c06d4]
 public final class EditorView {
     public let editBuffer: EditBuffer
     public let textBufferView: TextBufferView
@@ -1370,7 +1370,7 @@ public final class EditorView {
         textBufferView.resetSelection()
     }
 
-    // parity: core/src/editor-view.ts#EditorView.getSelection [status=implemented hash=f0518e9fd89f]
+    // parity: core/src/editor-view.ts#EditorView.getSelection [status=implemented hash=3433e127f42e]
     public func getSelection() -> TextSelectionRange? {
         assertAlive()
         return textBufferView.getSelection()
@@ -1509,7 +1509,7 @@ public final class EditorView {
 
     // MARK: - Cursor & Visual Navigation
 
-    // parity: core/src/editor-view.ts#EditorView.getCursor [status=implemented hash=4829ed2b7369]
+    // parity: core/src/editor-view.ts#EditorView.getCursor [status=implemented hash=6beb017deb1a]
     public func getCursor() -> (row: Int, col: Int) {
         assertAlive()
         let pos = editBuffer.getCursorPosition()
@@ -1697,7 +1697,7 @@ public final class EditorView {
         return controller
     }
 
-    // parity: core/src/editor-view.ts#EditorView.setPlaceholderStyledText [status=implemented hash=160f997eaad5]
+    // parity: core/src/editor-view.ts#EditorView.setPlaceholderStyledText [status=implemented hash=d655389c4327]
     public func setPlaceholderStyledText(_ chunks: [TextChunk]) {
         assertAlive()
         _placeholderChunks = chunks
@@ -1720,7 +1720,7 @@ public final class EditorView {
         textBufferView.setTabIndicatorColor(color)
     }
 
-    // parity: core/src/editor-view.ts#EditorView.measureForDimensions [status=implemented hash=ac0149220251]
+    // parity: core/src/editor-view.ts#EditorView.measureForDimensions [status=implemented hash=65f9e4ce4e17]
     public func measureForDimensions(width: Int, height: Int) -> MeasureResult? {
         assertAlive()
         return textBufferView.measureForDimensions(width: width, height: height)

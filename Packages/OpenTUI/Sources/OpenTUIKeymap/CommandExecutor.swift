@@ -395,7 +395,7 @@ private func applyBindingEventEffects<Target: Hashable & Sendable, Event: Keymap
     event.stopPropagation()
 }
 
-// parity: keymap/src/services/command-executor.ts#createCommandExecutorService [status=implemented hash=5abe82e30dd3]
+// parity: keymap/src/services/command-executor.ts#createCommandExecutorService [status=implemented hash=bd0338961453]
 public func createCommandExecutorService<Target: Hashable & Sendable, Event: KeymapEvent>(
     notify: KeymapNotifier,
     runtime: any RuntimeService,

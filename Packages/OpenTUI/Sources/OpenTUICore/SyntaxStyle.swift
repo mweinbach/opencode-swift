@@ -182,7 +182,7 @@ public func convertThemeToStyles(_ theme: [ThemeTokenStyle]) -> [String: StyleDe
 /// Hierarchical syntax style table supporting dotted scope fallback
 /// (`keyword.control.flow` -> `keyword.control` -> `keyword`), cached `mergeStyles`,
 /// and `LinkStyleResolving` integration with `detectLinks`.
-// parity: core/src/syntax-style.ts#SyntaxStyle [status=implemented hash=912dde32dddf]
+// parity: core/src/syntax-style.ts#SyntaxStyle [status=implemented hash=3cc8d85db367]
 public final class SyntaxStyle: LinkStyleResolving, @unchecked Sendable {
     private static let idLimit: UInt32 = 0x8000_0000
 
@@ -270,7 +270,7 @@ public final class SyntaxStyle: LinkStyleResolving, @unchecked Sendable {
 
     /// Resolves a scope name with hierarchical dotted-prefix fallback:
     /// `"keyword.control.flow"` -> `"keyword.control"` -> `"keyword"`.
-    // parity: core/src/syntax-style.ts#SyntaxStyle.getStyleId [status=implemented hash=8c43dcac2c6a]
+    // parity: core/src/syntax-style.ts#SyntaxStyle.getStyleId [status=implemented hash=9297a3e25979]
     public func getStyleId(_ name: String) -> UInt32? {
         precondition(!isDestroyed, "SyntaxStyle is destroyed")
         if let exact = resolveStyleId(name) {
@@ -307,7 +307,7 @@ public final class SyntaxStyle: LinkStyleResolving, @unchecked Sendable {
     /// Resolves the `StyleDefinition` for `name` using hierarchical dotted-scope fallback
     /// (`"a.b.c"` -> `"a.b"` -> `"a"`), applying OpenTUI's default strikethrough behavior
     /// for `"markup.strikethrough"`.
-    // parity: core/src/syntax-style.ts#SyntaxStyle.getStyle [status=implemented hash=e2b968f912cd]
+    // parity: core/src/syntax-style.ts#SyntaxStyle.getStyle [status=implemented hash=f499bc4e1981]
     public func getStyle(_ name: String) -> StyleDefinition? {
         precondition(!isDestroyed, "SyntaxStyle is destroyed")
 

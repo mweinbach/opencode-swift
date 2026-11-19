@@ -20,7 +20,7 @@ public enum BindingLookupError: Error, Equatable, Sendable, KeymapDescribedError
     }
 }
 
-// parity: keymap/src/extras/binding-lookup.ts#BindingConfigItem [status=implemented hash=3b370c979440]
+// parity: keymap/src/extras/binding-lookup.ts#BindingConfigItem [status=implemented hash=92d1e31d1f3a]
 public enum BindingConfigItem<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable,
     ExpressibleByStringLiteral
 {
@@ -36,7 +36,7 @@ public enum BindingConfigItem<Target: Hashable & Sendable, Event: KeymapEvent>: 
     }
 }
 
-// parity: keymap/src/extras/binding-lookup.ts#BindingValue [status=implemented hash=b575a8f05cc3]
+// parity: keymap/src/extras/binding-lookup.ts#BindingValue [status=implemented hash=04864009d396]
 public enum BindingValue<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable,
     ExpressibleByStringLiteral, ExpressibleByBooleanLiteral, ExpressibleByArrayLiteral
 {
@@ -64,7 +64,7 @@ public enum BindingValue<Target: Hashable & Sendable, Event: KeymapEvent>: Senda
     public static var none: Self { .disabled }
 }
 
-// parity: keymap/src/extras/binding-lookup.ts#BindingConfig [status=implemented hash=8da46a6c5863]
+// parity: keymap/src/extras/binding-lookup.ts#BindingConfig [status=implemented hash=1f6eccf582af]
 public typealias BindingConfig<Target: Hashable & Sendable, Event: KeymapEvent> =
     [String: BindingValue<Target, Event>]
 
@@ -455,7 +455,7 @@ public struct KeySequenceFormatPart: Equatable, Hashable, Sendable {
     }
 }
 
-// parity: keymap/src/extras/formatting.ts#TokenDisplayResolver [status=implemented hash=5aed5a348b13]
+// parity: keymap/src/extras/formatting.ts#TokenDisplayResolver [status=implemented hash=672767d447b8]
 public enum TokenDisplayResolver: Sendable {
     case map([String: String])
     case resolver(@Sendable (String, KeySequenceFormatPart) -> String?)
@@ -468,7 +468,7 @@ public enum TokenDisplayResolver: Sendable {
     }
 }
 
-// parity: keymap/src/extras/formatting.ts#PatternDisplayResolver [status=implemented hash=cdc96573d21c]
+// parity: keymap/src/extras/formatting.ts#PatternDisplayResolver [status=implemented hash=e49386c18e82]
 public enum PatternDisplayResolver: Sendable {
     case map([String: String])
     case resolver(@Sendable (String, KeySequenceFormatPart) -> String?)
@@ -672,7 +672,7 @@ private func formatSingleStroke(_ part: KeySequenceFormatPart, options: FormatKe
     return formatted
 }
 
-// parity: keymap/src/extras/formatting.ts#formatKeySequence [status=implemented hash=8f6783d0bfb5]
+// parity: keymap/src/extras/formatting.ts#formatKeySequence [status=implemented hash=550b9a88fc1e]
 public func formatKeySequence(
     _ parts: [KeySequenceFormatPart]?,
     options: FormatKeySequenceOptions = FormatKeySequenceOptions()
@@ -695,7 +695,7 @@ public func formatKeySequence(
     formatKeySequence(parts?.map(KeySequenceFormatPart.init), options: options)
 }
 
-// parity: keymap/src/extras/formatting.ts#formatCommandBindings [status=implemented hash=22eeba790a36]
+// parity: keymap/src/extras/formatting.ts#formatCommandBindings [status=implemented hash=6487df0dabb9]
 public func formatCommandBindings<B: SequenceBindingLike>(
     _ bindings: [B]?,
     options: FormatCommandBindingsOptions = FormatCommandBindingsOptions()
@@ -739,7 +739,7 @@ public struct GraphSnapshotOptions<Target: Hashable & Sendable>: Sendable {
     }
 }
 
-// parity: keymap/src/extras/lib/graph-types.ts#GraphInactiveReason [status=implemented hash=b33b2d05324c]
+// parity: keymap/src/extras/lib/graph-types.ts#GraphInactiveReason [status=implemented hash=4b6fb1b5064b]
 public enum GraphInactiveReason: String, Equatable, Hashable, Sendable, Codable {
     case focus
     case targetDestroyed = "target-destroyed"
@@ -887,7 +887,7 @@ private struct GraphBindingMeta<Target: Hashable & Sendable, Event: KeymapEvent>
     let inactiveReasons: [GraphInactiveReason]
 }
 
-// parity: keymap/src/extras/lib/graph-snapshot.ts#createGraphSnapshot [status=implemented hash=4d142ee5817e]
+// parity: keymap/src/extras/lib/graph-snapshot.ts#createGraphSnapshot [status=implemented hash=3f848a47b1ae]
 public func createGraphSnapshot<Host: KeymapHost>(
     state: LayerStackState<Host.Target, Host.Event>,
     host: Host,

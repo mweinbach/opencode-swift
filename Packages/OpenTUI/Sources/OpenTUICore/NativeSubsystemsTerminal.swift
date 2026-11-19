@@ -517,7 +517,7 @@ public enum NativeANSI: Sendable {
         (UInt32(red(rgba)) << 16) | (UInt32(green(rgba)) << 8) | UInt32(blue(rgba))
     }
 
-    // parity: native/src/ansi.zig#ANSI [status=implemented hash=cd842a7167fb]
+    // parity: native/src/ansi.zig#ANSI [status=implemented hash=c166a87b94af]
     public enum ANSI: Sendable {
         public static let reset = OpenTUICore.ANSI.reset
         public static let clear = OpenTUICore.ANSI.clearScreen
@@ -648,6 +648,7 @@ public enum NativeANSI: Sendable {
             "\u{1B}[>\(flags)u"
         }
 
+        // parity: native/src/ansi.zig#ANSI.moveToOutput [status=implemented hash=839f5d33992f]
         public static func moveToOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             x: UInt32,
@@ -656,6 +657,7 @@ public enum NativeANSI: Sendable {
             try writer.writeString(OpenTUICore.ANSI.moveCursor(row: Int(y), col: Int(x)))
         }
 
+        // parity: native/src/ansi.zig#ANSI.fgColorOutput [status=implemented hash=3e1962dbd676]
         public static func fgColorOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             r: UInt8,
@@ -665,6 +667,7 @@ public enum NativeANSI: Sendable {
             try writer.writeString("\u{1B}[38;2;\(r);\(g);\(b)m")
         }
 
+        // parity: native/src/ansi.zig#ANSI.fgIndexedColorOutput [status=implemented hash=ac02e26a32e9]
         public static func fgIndexedColorOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             index: UInt8
@@ -672,10 +675,12 @@ public enum NativeANSI: Sendable {
             try writer.writeString("\u{1B}[38;5;\(index)m")
         }
 
+        // parity: native/src/ansi.zig#ANSI.fgDefaultOutput [status=implemented hash=6f8dc5534049]
         public static func fgDefaultOutput<S: NativeTerminalByteSink>(_ writer: inout S) throws(AnsiError) {
             try writer.writeString("\u{1B}[39m")
         }
 
+        // parity: native/src/ansi.zig#ANSI.bgColorOutput [status=implemented hash=798093a47171]
         public static func bgColorOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             r: UInt8,
@@ -685,6 +690,7 @@ public enum NativeANSI: Sendable {
             try writer.writeString(OpenTUICore.ANSI.setRgbBackground(r: Int(r), g: Int(g), b: Int(b)))
         }
 
+        // parity: native/src/ansi.zig#ANSI.bgIndexedColorOutput [status=implemented hash=83cfc79abc1c]
         public static func bgIndexedColorOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             index: UInt8
@@ -692,10 +698,12 @@ public enum NativeANSI: Sendable {
             try writer.writeString("\u{1B}[48;5;\(index)m")
         }
 
+        // parity: native/src/ansi.zig#ANSI.bgDefaultOutput [status=implemented hash=8e7f2b87091c]
         public static func bgDefaultOutput<S: NativeTerminalByteSink>(_ writer: inout S) throws(AnsiError) {
             try writer.writeString(OpenTUICore.ANSI.resetBackground)
         }
 
+        // parity: native/src/ansi.zig#ANSI.cursorColorOutputWriter [status=implemented hash=7ec7a60690b0]
         public static func cursorColorOutputWriter<S: NativeTerminalByteSink>(
             _ writer: inout S,
             r: UInt8,
@@ -706,6 +714,7 @@ public enum NativeANSI: Sendable {
         }
 
         /// OSC 66 takes w up to 7; trailing spaces fill widths beyond 7.
+        // parity: native/src/ansi.zig#ANSI.explicitWidthOutput [status=implemented hash=b91d386acb34]
         public static func explicitWidthOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             width: UInt32,
@@ -730,6 +739,7 @@ public enum NativeANSI: Sendable {
             try explicitWidthOutput(&writer, width: width, text: Array(text.utf8))
         }
 
+        // parity: native/src/ansi.zig#ANSI.setTerminalBgColorOutput [status=implemented hash=0c49e10dc311]
         public static func setTerminalBgColorOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             r: UInt8,
@@ -739,6 +749,7 @@ public enum NativeANSI: Sendable {
             try writer.writeString("\u{1B}]11;rgb:\(nativeHex2Lower(r))/\(nativeHex2Lower(g))/\(nativeHex2Lower(b))\u{07}")
         }
 
+        // parity: native/src/ansi.zig#ANSI.setMousePointerOutput [status=implemented hash=98440b2ade1c]
         public static func setMousePointerOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             shape: String
@@ -746,6 +757,7 @@ public enum NativeANSI: Sendable {
             try writer.writeString("\u{1B}]22;\(shape)\u{1B}\\")
         }
 
+        // parity: native/src/ansi.zig#ANSI.setTerminalTitleOutput [status=implemented hash=30e26b403dce]
         public static func setTerminalTitleOutput<S: NativeTerminalByteSink>(
             _ writer: inout S,
             title: String
@@ -771,26 +783,31 @@ public enum NativeANSI: Sendable {
         public static let LINK_ID_PAYLOAD_MASK: UInt32 = OpenTUICore.TextAttributes.linkMask
         public static let LINK_ID_MASK: UInt32 = LINK_ID_PAYLOAD_MASK << LINK_ID_SHIFT
 
+        // parity: native/src/ansi.zig#TextAttributes.getBaseAttributes [status=implemented hash=c55ec7e9d476]
         @inline(__always)
         public static func getBaseAttributes(_ attr: UInt32) -> UInt8 {
             UInt8(truncatingIfNeeded: OpenTUICore.getBaseAttributes(attr))
         }
 
+        // parity: native/src/ansi.zig#TextAttributes.getLinkId [status=implemented hash=7cd4745a7f76]
         @inline(__always)
         public static func getLinkId(_ attr: UInt32) -> UInt32 {
             OpenTUICore.getLinkId(attr)
         }
 
+        // parity: native/src/ansi.zig#TextAttributes.setLinkId [status=implemented hash=88b98d89927a]
         @inline(__always)
         public static func setLinkId(_ attr: UInt32, linkId: UInt32) -> UInt32 {
             OpenTUICore.attributesWithLink(attr, linkId: linkId)
         }
 
+        // parity: native/src/ansi.zig#TextAttributes.hasLink [status=implemented hash=8b62d445bd34]
         @inline(__always)
         public static func hasLink(_ attr: UInt32) -> Bool {
             getLinkId(attr) != 0
         }
 
+        // parity: native/src/ansi.zig#TextAttributes.applyAttributesOutputWriter [status=implemented hash=aea0cd8fb483]
         public static func applyAttributesOutputWriter<S: NativeTerminalByteSink>(
             _ writer: inout S,
             attributes: UInt32
@@ -1099,6 +1116,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         case zoomIn = 34
         case zoomOut = 35
 
+        // parity: native/src/terminal.zig#MousePointerStyle.toName [status=implemented hash=d28d12a8910a]
         public func toName() -> String {
             switch self {
             case .auto: return "auto"
@@ -1141,7 +1159,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         }
     }
 
-    // parity: native/src/terminal.zig#Options [status=implemented hash=6c75275a5edd]
+    // parity: native/src/terminal.zig#Options [status=implemented hash=3eec256c2b53]
     public struct Options: Equatable, Hashable, Sendable {
         public var kittyKeyboardFlags: UInt8
         public var remoteMode: RemoteMode
@@ -1382,7 +1400,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         state.altScreen = false
     }
 
-    // parity: native/src/terminal.zig#queryTerminalSend [status=implemented hash=4f81530365fe]
+    // parity: native/src/terminal.zig#queryTerminalSend [status=implemented hash=e3abb1c0b376]
     public func queryTerminalSend<S: NativeTerminalByteSink>(into tty: inout S) throws(NativeANSI.AnsiError) {
         checkEnvironmentOverrides()
         startupCursorQueryPending = true
@@ -1663,7 +1681,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         }
     }
 
-    // parity: native/src/terminal.zig#checkEnvironmentOverrides [status=implemented hash=00f5275fdf68]
+    // parity: native/src/terminal.zig#checkEnvironmentOverrides [status=implemented hash=33de96a31d3b]
     public func checkEnvironmentOverrides() {
         defer {
             caps.ansi256 = caps.ansi256 || caps.rgb
@@ -1966,7 +1984,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         state.focusTracking = enable
     }
 
-    // parity: native/src/terminal.zig#setKittyKeyboard [status=implemented hash=cae762944b16]
+    // parity: native/src/terminal.zig#setKittyKeyboard [status=implemented hash=58ca0b7aead3]
     public func setKittyKeyboard<S: NativeTerminalByteSink>(
         into tty: inout S,
         enable: Bool,
@@ -2339,7 +2357,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         return identity == .ghostty ? .unicodeWide : .unicode
     }
 
-    // parity: native/src/terminal.zig#processCapabilityResponse [status=implemented hash=2de3eee832a7]
+    // parity: native/src/terminal.zig#processCapabilityResponse [status=implemented hash=151d78ac60d4]
     public func processCapabilityResponse(_ response: String) {
         processCapabilityResponse(Array(response.utf8))
     }
@@ -2604,7 +2622,7 @@ public final class NativeTerminalState: @unchecked Sendable {
         return envMap["WT_SESSION"] != nil && (term.isEmpty || term.hasPrefix("xterm"))
     }
 
-    // parity: native/src/terminal.zig#synchronizedOutput [status=implemented hash=6c0ee6fdb73c]
+    // parity: native/src/terminal.zig#synchronizedOutput [status=implemented hash=8e3aff4e0b5c]
     public func synchronizedOutput() -> Bool {
         switch synchronizedOutputMode {
         case .always: return true
@@ -2650,12 +2668,12 @@ public final class NativeTerminalState: @unchecked Sendable {
         state.cursor.color = color
     }
 
-    // parity: native/src/terminal.zig#getCursorPosition [status=implemented hash=579fd0b27f49]
+    // parity: native/src/terminal.zig#getCursorPosition [status=implemented hash=6a71845fd8a7]
     public func getCursorPosition() -> CursorPosition {
         CursorPosition(x: state.cursor.x, y: state.cursor.y, visible: state.cursor.visible)
     }
 
-    // parity: native/src/terminal.zig#getCursorStyle [status=implemented hash=18ef4dc70c1d]
+    // parity: native/src/terminal.zig#getCursorStyle [status=implemented hash=8f00f3b4c666]
     public func getCursorStyle() -> CursorStyleState {
         CursorStyleState(style: state.cursor.style, blinking: state.cursor.blinking)
     }
@@ -2694,45 +2712,84 @@ public final class NativeTerminalState: @unchecked Sendable {
         return out
     }
 
+    /// Streaming DCS passthrough encoder for tmux and GNU Screen matching `terminal.zig#PassthroughWriter`.
+    public struct PassthroughWriter<S: NativeTerminalByteSink> {
+        public var sink: S
+        public let multiplexer: Multiplexer
+        private var buffer: [UInt8] = []
+
+        public init(sink: S, multiplexer: Multiplexer) throws(NativeANSI.AnsiError) {
+            var writer = sink
+            if multiplexer == .tmux {
+                try writer.writeString(NativeANSI.ANSI.tmuxDcsStart)
+            }
+            self.sink = writer
+            self.multiplexer = multiplexer
+            if multiplexer == .screen {
+                self.buffer.reserveCapacity(SCREEN_PASSTHROUGH_CHUNK_SIZE)
+            }
+        }
+
+        // parity: native/src/terminal.zig#PassthroughWriter.writeAll [status=implemented hash=71a51de28103]
+        public mutating func writeAll(_ bytes: [UInt8]) throws(NativeANSI.AnsiError) {
+            switch multiplexer {
+            case .tmux:
+                var start = 0
+                for idx in 0..<bytes.count where bytes[idx] == 0x1B {
+                    if idx > start {
+                        try sink.writeBytes(Array(bytes[start..<idx]))
+                    }
+                    try sink.writeBytes([0x1B, 0x1B])
+                    start = idx + 1
+                }
+                if start < bytes.count {
+                    try sink.writeBytes(Array(bytes[start..<bytes.count]))
+                }
+            case .screen:
+                for byte in bytes {
+                    if buffer.count == SCREEN_PASSTHROUGH_CHUNK_SIZE {
+                        let endsWithEsc = buffer.last == 0x1B
+                        if endsWithEsc { buffer.removeLast() }
+                        try flush()
+                        if endsWithEsc { buffer.append(0x1B) }
+                    }
+                    buffer.append(byte)
+                }
+            default:
+                try sink.writeBytes(bytes)
+            }
+        }
+
+        // parity: native/src/terminal.zig#PassthroughWriter.writeByte [status=implemented hash=4f09d620932d]
+        public mutating func writeByte(_ byte: UInt8) throws(NativeANSI.AnsiError) {
+            try writeAll([byte])
+        }
+
+        public mutating func finish() throws(NativeANSI.AnsiError) {
+            if multiplexer == .tmux {
+                try sink.writeString(NativeANSI.ANSI.tmuxDcsEnd)
+            }
+            try flush()
+        }
+
+        public mutating func flush() throws(NativeANSI.AnsiError) {
+            guard !buffer.isEmpty else { return }
+            try sink.writeString(NativeANSI.ANSI.screenDcsStart)
+            try sink.writeBytes(buffer)
+            try sink.writeString(NativeANSI.ANSI.screenDcsEnd)
+            buffer.removeAll(keepingCapacity: true)
+        }
+    }
+
     private static func writePassthrough<S: NativeTerminalByteSink>(
         _ payload: [UInt8],
         multiplexer: Multiplexer,
         into tty: inout S
     ) throws(NativeANSI.AnsiError) {
-        switch multiplexer {
-        case .tmux:
-            try tty.writeString(NativeANSI.ANSI.tmuxDcsStart)
-            for byte in payload {
-                if byte == 0x1B {
-                    try tty.writeBytes([0x1B, 0x1B])
-                } else {
-                    try tty.writeByte(byte)
-                }
-            }
-            try tty.writeString(NativeANSI.ANSI.tmuxDcsEnd)
-        case .screen:
-            var chunk: [UInt8] = []
-            chunk.reserveCapacity(SCREEN_PASSTHROUGH_CHUNK_SIZE)
-            func flushChunk() throws(NativeANSI.AnsiError) {
-                guard !chunk.isEmpty else { return }
-                try tty.writeString(NativeANSI.ANSI.screenDcsStart)
-                try tty.writeBytes(chunk)
-                try tty.writeString(NativeANSI.ANSI.screenDcsEnd)
-                chunk.removeAll(keepingCapacity: true)
-            }
-            for byte in payload {
-                if chunk.count == SCREEN_PASSTHROUGH_CHUNK_SIZE {
-                    let endsWithEsc = chunk.last == 0x1B
-                    if endsWithEsc { chunk.removeLast() }
-                    try flushChunk()
-                    if endsWithEsc { chunk.append(0x1B) }
-                }
-                chunk.append(byte)
-            }
-            try flushChunk()
-        default:
-            try tty.writeBytes(payload)
-        }
+        var writer = try PassthroughWriter(sink: tty, multiplexer: multiplexer)
+        try writer.writeAll(payload)
+        try writer.finish()
+        tty = writer.sink
     }
 
     // parity: native/src/terminal.zig#writeNotification [status=implemented hash=c48759168549]
@@ -2963,6 +3020,7 @@ public final class NativeTerminalState: @unchecked Sendable {
 /// Pure-Swift parity bridge for `packages/native/src/buffer.zig`, bridging directly
 /// to `OpenTUICore.OptimizedBuffer`, `OpenTUICore.GraphemePool`, and `OpenTUICore.LinkPool`.
 public enum NativeBufferBridge: Sendable {
+    // parity: native/src/buffer.zig#text_bytes_max [status=implemented hash=61d3ea1ca136]
     public static let textBytesMax: Int = Int(NativeABI.OT_BUFFER_TEXT_BYTES_MAX)
     public static let maxUnicodeCodepoint: UInt32 = 0x10_FFFF
 
@@ -3039,7 +3097,7 @@ public enum NativeBufferBridge: Sendable {
         case trackerLimit
     }
 
-    // parity: native/src/buffer.zig#validateColor [status=implemented hash=23b0671aad03]
+    // parity: native/src/buffer.zig#validateColor [status=implemented hash=fd5c85378c7a]
     public static func validateColor(_ color: RGBA) throws(ColorValidationError) {
         let colorIntent = NativeANSI.intent(color)
         let expectedSlot: UInt8 = colorIntent == .indexed ? NativeANSI.slot(color) : 0
@@ -3048,7 +3106,7 @@ public enum NativeBufferBridge: Sendable {
         }
     }
 
-    // parity: native/src/buffer.zig#validateTextInput [status=implemented hash=dd5152006a35]
+    // parity: native/src/buffer.zig#validateTextInput [status=implemented hash=7d1a1fe4a725]
     public static func validateTextInput(_ text: [UInt8]) throws(TextValidationError) {
         if text.count > textBytesMax {
             throw .textLimit
@@ -3136,6 +3194,7 @@ public enum NativeBufferBridge: Sendable {
             self.pool = pool
         }
 
+        // parity: native/src/buffer.zig#BufferSnapshot.getRealCharSize [status=implemented hash=93e101d9eb0d]
         public func getRealCharSize(addLineBreaks: Bool) throws(BufferError) -> UInt32 {
             var emptyOut: [UInt8] = []
             var emptyLengths: [UInt8] = []
@@ -3148,6 +3207,7 @@ public enum NativeBufferBridge: Sendable {
             )
         }
 
+        // parity: native/src/buffer.zig#BufferSnapshot.writeResolvedChars [status=implemented hash=fe95df0e9b86]
         public func writeResolvedChars(
             into output: inout [UInt8],
             addLineBreaks: Bool
@@ -3162,6 +3222,7 @@ public enum NativeBufferBridge: Sendable {
             )
         }
 
+        // parity: native/src/buffer.zig#BufferSnapshot.writeResolvedCells [status=implemented hash=50b71a218f19]
         public func writeResolvedCells(
             into output: inout [UInt8],
             addLineBreaks: Bool,
@@ -3246,7 +3307,7 @@ public enum NativeBufferBridge: Sendable {
         }
     }
 
-    // parity: native/src/buffer.zig#BufferStorage [status=implemented hash=0f5fe9f150ba]
+    // parity: native/src/buffer.zig#BufferStorage [status=implemented hash=80b6e7f2a95b]
     public final class BufferStorage: @unchecked Sendable {
         public static let cellBytes: UInt64 = UInt64(2 * MemoryLayout<UInt32>.size + 2 * MemoryLayout<RGBA>.size)
 
@@ -3367,6 +3428,7 @@ public enum NativeBufferBridge: Sendable {
             generation = nextGen
         }
 
+        // parity: native/src/buffer.zig#BufferStorage.ensureTrackerCapacity [status=implemented hash=2f7f06ed3b50]
         public func ensureTrackerCapacity(graphemes: UInt64, links: UInt64) throws(LeaseError) {
             let entriesMax: UInt64 = (((UInt64(1) << 31) - 1) * 80) / 100
             if graphemes > entriesMax || links > entriesMax {
@@ -3375,7 +3437,7 @@ public enum NativeBufferBridge: Sendable {
         }
     }
 
-    // parity: native/src/buffer.zig#BufferLease [status=implemented hash=f423af9d0c1e]
+    // parity: native/src/buffer.zig#BufferLease [status=implemented hash=26c12b9d4b56]
     public struct BufferLease: @unchecked Sendable {
         public static let countMaxDefault: UInt32 = 4096
         public static let bytesMaxDefault: UInt64 = 64 * 1024 * 1024
@@ -3386,6 +3448,7 @@ public enum NativeBufferBridge: Sendable {
             self.storage = storage
         }
 
+        // parity: native/src/buffer.zig#BufferLease.acquireChecked [status=implemented hash=a51ccfae78dd]
         public static func acquireChecked(
             target: OptimizedBuffer,
             count: inout UInt32,
@@ -3431,6 +3494,7 @@ public enum NativeBufferBridge: Sendable {
             return lease
         }
 
+        // parity: native/src/buffer.zig#BufferLease.releaseChecked [status=implemented hash=6c98953aa5de]
         public mutating func releaseChecked(count: inout UInt32, bytes: inout UInt64) {
             guard let storage else { return }
             self.storage = nil
@@ -3447,17 +3511,20 @@ public enum NativeBufferBridge: Sendable {
             storage.release()
         }
 
+        // parity: native/src/buffer.zig#BufferLease.isCurrent [status=implemented hash=e4e453b6713d]
         public func isCurrent() -> Bool {
             guard let storage else { return false }
             return !storage.retired
         }
 
+        // parity: native/src/buffer.zig#BufferLease.snapshot [status=implemented hash=3d722a87f192]
         public func snapshot() throws(LeaseError) -> BufferSnapshot {
             guard let storage else { throw .leaseReleased }
             if storage.retired { throw .staleLease }
             return storage.snapshot()
         }
 
+        // parity: native/src/buffer.zig#BufferLease.release [status=implemented hash=d63035068ab4]
         public mutating func release() {
             guard let storage else { return }
             self.storage = nil
@@ -3502,17 +3569,95 @@ public enum NativeBufferBridge: Sendable {
         }
     }
 
-    // parity: native/src/buffer.zig#OptimizedBuffer [status=implemented hash=c92c317be241]
+    // parity: native/src/buffer.zig#OptimizedBuffer [status=implemented hash=178e13c4613b]
     public final class OptimizedBuffer: @unchecked Sendable {
+        public struct ImagePlacement: @unchecked Sendable {
+            public var placementId: UInt32
+            public var image: NativeZigImage.Image
+            public var x: Int32
+            public var y: Int32
+            public var width: UInt32
+            public var height: UInt32
+            public var sourceX: UInt32
+            public var sourceY: UInt32
+            public var sourceWidth: UInt32
+            public var sourceHeight: UInt32
+            public var opacity: UInt8
+
+            public init(
+                placementId: UInt32,
+                image: NativeZigImage.Image,
+                x: Int32,
+                y: Int32,
+                width: UInt32,
+                height: UInt32,
+                sourceX: UInt32 = 0,
+                sourceY: UInt32 = 0,
+                sourceWidth: UInt32? = nil,
+                sourceHeight: UInt32? = nil,
+                opacity: UInt8 = 255
+            ) {
+                self.placementId = placementId
+                self.image = image
+                self.x = x
+                self.y = y
+                self.width = width
+                self.height = height
+                self.sourceX = sourceX
+                self.sourceY = sourceY
+                self.sourceWidth = sourceWidth ?? image.width
+                self.sourceHeight = sourceHeight ?? image.height
+                self.opacity = opacity
+            }
+        }
+
+        /// Owns an unpublished replacement `BufferStorage` for transactional two-phase resize.
+        public struct PreparedResize: @unchecked Sendable {
+            public let target: OptimizedBuffer
+            public private(set) var storage: BufferStorage?
+
+            public init(target: OptimizedBuffer, storage: BufferStorage?) {
+                self.target = target
+                self.storage = storage
+            }
+
+            // parity: native/src/buffer.zig#OptimizedBuffer.PreparedResize.deinit [status=implemented hash=c113c77d9401]
+            public mutating func deinitResize() {
+                guard let pending = storage else { return }
+                storage = nil
+                pending.retire()
+            }
+
+            // parity: native/src/buffer.zig#OptimizedBuffer.PreparedResize.commit [status=implemented hash=1dc6f64b5dd0]
+            public mutating func commit() {
+                guard let pending = storage else { return }
+                let previous = target.storage
+                precondition(pending.generation &- 1 == previous.generation)
+                storage = nil
+                try? target.core.resize(width: Int(pending.width), height: Int(pending.height))
+                target.storage = pending
+                target.clear(bg: NativeANSI.rgbColor(0, 0, 0, 255), char: defaultSpaceChar)
+                previous.retire()
+            }
+        }
+
+        public enum RetainError: Error, Equatable, Hashable, Sendable {
+            case objectLimit
+            case unsupportedResource
+        }
+
         public let core: OpenTUICore.OptimizedBuffer
         public private(set) var storage: BufferStorage
         public var ownerContextId: UInt64 = 0
         public var cellsMax: UInt32 = UInt32.max
+        public private(set) var refCount: UInt32 = 1
+        public var imagePlacements: [ImagePlacement] = []
 
         public var width: UInt32 { UInt32(max(0, core.width)) }
         public var height: UInt32 { UInt32(max(0, core.height)) }
         public var generation: UInt64 { storage.generation }
 
+        // parity: native/src/buffer.zig#OptimizedBuffer.init [status=implemented hash=9413e3e70b7d]
         public init(
             width: UInt32,
             height: UInt32,
@@ -3560,10 +3705,57 @@ public enum NativeBufferBridge: Sendable {
             self.storage = initialStorage
         }
 
+        // parity: native/src/buffer.zig#OptimizedBuffer.acquireLease [status=implemented hash=dfb68ee645ca]
         public func acquireLease() throws(LeaseError) -> BufferLease {
             storage.sync(from: core)
             guard storage.retain() else { throw .leaseLimit }
             return BufferLease(storage: storage)
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.getCharPtr [status=adapted hash=6d75fe12c5b5]
+        public func getCharPtr() -> [UInt32] {
+            core.chars
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.getFgPtr [status=adapted hash=422f899b18db]
+        public func getFgPtr() -> [RGBA] {
+            core.fg
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.getBgPtr [status=adapted hash=e5331e768fba]
+        public func getBgPtr() -> [RGBA] {
+            core.bg
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.getAttributesPtr [status=adapted hash=fe56a4237918]
+        public func getAttributesPtr() -> [UInt32] {
+            core.attributes
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.retain [status=implemented hash=277c92c2b953]
+        public func retain() throws(RetainError) {
+            guard refCount < UInt32.max else { throw .objectLimit }
+            refCount += 1
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.prepareResize [status=implemented hash=5a6c4fddd6e5]
+        public func prepareResize(width newWidth: UInt32, height newHeight: UInt32) throws(BufferError) -> PreparedResize {
+            if newWidth == width && newHeight == height {
+                return PreparedResize(target: self, storage: nil)
+            }
+            guard newWidth > 0 && newHeight > 0 else { throw .invalidDimensions }
+            let (size, ov) = newWidth.multipliedReportingOverflow(by: newHeight)
+            guard !ov && size <= cellsMax else { throw .invalidDimensions }
+            let (nextGen, genOv) = storage.generation.addingReportingOverflow(1)
+            guard !genOv else { throw .generationExhausted }
+            let replacement = try BufferStorage(
+                width: newWidth,
+                height: newHeight,
+                generation: nextGen,
+                pool: core.graphemePool,
+                linkPool: core.linkPool
+            )
+            return PreparedResize(target: self, storage: replacement)
         }
 
         public func snapshot() -> BufferSnapshot {
@@ -3571,31 +3763,143 @@ public enum NativeBufferBridge: Sendable {
             return storage.snapshot()
         }
 
+        // parity: native/src/buffer.zig#OptimizedBuffer.resize [status=implemented hash=2a0dac821502]
         public func resize(width newWidth: UInt32, height newHeight: UInt32) throws(BufferError) {
             guard newWidth > 0 && newHeight > 0 else { throw .invalidDimensions }
             let (size, ov) = newWidth.multipliedReportingOverflow(by: newHeight)
             guard !ov && size <= cellsMax else { throw .invalidDimensions }
+            if storage.refCount != 1 || storage.leaseBudget != nil {
+                var prepared = try prepareResize(width: newWidth, height: newHeight)
+                prepared.commit()
+                return
+            }
             try core.resize(width: Int(newWidth), height: Int(newHeight))
-            if storage.refCount == 1 && storage.leaseBudget == nil {
-                try storage.resizeExclusive(width: newWidth, height: newHeight, cellsMax: cellsMax)
-            } else {
-                let (nextGen, genOv) = storage.generation.addingReportingOverflow(1)
-                guard !genOv else { throw .generationExhausted }
-                let replacement = try BufferStorage(
-                    width: newWidth,
-                    height: newHeight,
-                    generation: nextGen,
-                    pool: core.graphemePool,
-                    linkPool: core.linkPool
-                )
-                storage.retire()
-                storage = replacement
+            try storage.resizeExclusive(width: newWidth, height: newHeight, cellsMax: cellsMax)
+            imagePlacements.removeAll(keepingCapacity: false)
+            storage.sync(from: core)
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.syncImagePlacements [status=implemented hash=c13947c0f429]
+        public func syncImagePlacements(from source: OptimizedBuffer) throws(LeaseError) {
+            try storage.ensureTrackerCapacity(graphemes: UInt64(source.imagePlacements.count), links: 0)
+            imagePlacements = source.imagePlacements
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.materializeImageFallback [status=implemented hash=730024831030]
+        public func materializeImageFallback(placementId: UInt32) throws(ImageError) {
+            guard placementId > 0 && Int(placementId) <= imagePlacements.count else { return }
+            let placement = imagePlacements[Int(placementId) - 1]
+            let imagePixels = try placement.image.ensurePixels()
+            let imgW = Int(placement.image.width)
+            let pW = max(1, Int(placement.width))
+            let pH = max(1, Int(placement.height))
+            for cellY in 0..<pH {
+                let destY = Int(placement.y) + cellY
+                for cellX in 0..<pW {
+                    let destX = Int(placement.x) + cellX
+                    guard let current = core.cell(atX: destX, y: destY),
+                          isImageChar(current.scalar),
+                          imageIdFromChar(current.scalar) >= placementId
+                    else { continue }
+                    let currentPlacementId = imageIdFromChar(current.scalar)
+                    var quadrants: [RGBA] = []
+                    quadrants.reserveCapacity(4)
+                    for q in 0..<4 {
+                        let sampleX = cellX * 2 + (q & 1)
+                        let sampleY = cellY * 2 + (q >> 1)
+                        let sx = Int(placement.sourceX) + min(
+                            max(0, Int(placement.sourceWidth) - 1),
+                            (sampleX * Int(placement.sourceWidth)) / (pW * 2)
+                        )
+                        let sy = Int(placement.sourceY) + min(
+                            max(0, Int(placement.sourceHeight) - 1),
+                            (sampleY * Int(placement.sourceHeight)) / (pH * 2)
+                        )
+                        let off = (sy * imgW + sx) * 4
+                        if off + 3 < imagePixels.count {
+                            quadrants.append(NativeANSI.rgbColor(
+                                imagePixels[off],
+                                imagePixels[off + 1],
+                                imagePixels[off + 2],
+                                imagePixels[off + 3]
+                            ))
+                        } else {
+                            quadrants.append(NativeANSI.rgbColor(0, 0, 0, 0))
+                        }
+                    }
+                    let rendered = QuadrantResult.renderQuadrantBlock(quadrants)
+                    let qIdx = UInt8(NativeBufferBridge.quadrantChars.firstIndex(of: rendered.char) ?? 0)
+                    let cellChar = currentPlacementId == placementId
+                        ? packImageCell(id: placementId, fallback: qIdx)
+                        : current.scalar
+                    let cellAttrs = currentPlacementId == placementId ? OpenTUICore.TextAttributes.none : current.attributes
+                    let fallbackCell = TerminalCell(
+                        scalar: cellChar,
+                        foreground: rendered.fg,
+                        background: rendered.bg,
+                        attributes: cellAttrs
+                    )
+                    let fgHasAlpha = NativeANSI.alpha(fallbackCell.foreground) < 255
+                    let bgHasAlpha = NativeANSI.alpha(fallbackCell.background) < 255
+                    if placement.opacity == 255 && !fgHasAlpha && !bgHasAlpha {
+                        core.setCellRaw(x: destX, y: destY, cell: fallbackCell)
+                    } else {
+                        let scaleColor: (RGBA) -> RGBA = { color in
+                            if placement.opacity == 255 { return color }
+                            let a = UInt8((UInt32(NativeANSI.alpha(color)) * UInt32(placement.opacity) + 127) / 255)
+                            return NativeANSI.rgbColor(NativeANSI.red(color), NativeANSI.green(color), NativeANSI.blue(color), a)
+                        }
+                        let effective = TerminalCell(
+                            scalar: fallbackCell.scalar,
+                            foreground: scaleColor(fallbackCell.foreground),
+                            background: scaleColor(fallbackCell.background),
+                            attributes: fallbackCell.attributes
+                        )
+                        core.setCellRaw(x: destX, y: destY, cell: core.blendCells(overlay: effective, dest: current))
+                    }
+                }
             }
             storage.sync(from: core)
         }
 
+        // parity: native/src/buffer.zig#OptimizedBuffer.materializeImageFallbacks [status=implemented hash=efb95f47c9fc]
+        public func materializeImageFallbacks() throws(ImageError) {
+            guard !imagePlacements.isEmpty else { return }
+            for placementId in 1...UInt32(imagePlacements.count) {
+                try materializeImageFallback(placementId: placementId)
+            }
+            for y in 0..<core.height {
+                for x in 0..<core.width {
+                    guard let cell = core.cell(atX: x, y: y), isImageChar(cell.scalar) else { continue }
+                    let qChar = NativeBufferBridge.quadrantChars[Int(imageFallbackFromChar(cell.scalar))]
+                    core.setCellRaw(
+                        x: x,
+                        y: y,
+                        cell: TerminalCell(
+                            scalar: qChar,
+                            foreground: cell.foreground,
+                            background: cell.background,
+                            attributes: cell.attributes
+                        )
+                    )
+                }
+            }
+            imagePlacements.removeAll(keepingCapacity: false)
+            storage.sync(from: core)
+        }
+
+        // parity: native/src/buffer.zig#OptimizedBuffer.checkImageResources [status=implemented hash=6018b61946e6]
+        public func checkImageResources() throws(RetainError) {
+            for placement in imagePlacements {
+                if ownerContextId == 0 || placement.image.ownerContextId != ownerContextId {
+                    throw .unsupportedResource
+                }
+            }
+        }
+
         public func clear(bg: RGBA = NativeANSI.rgbColor(0, 0, 0, 255), char: UInt32 = defaultSpaceChar) {
             core.clear(bg: bg, char: char)
+            imagePlacements.removeAll(keepingCapacity: true)
             storage.sync(from: core)
         }
 
@@ -3620,7 +3924,14 @@ public enum NativeBufferBridge: Sendable {
             storage.sync(from: core)
         }
 
+        // parity: native/src/buffer.zig#OptimizedBuffer.deinit [status=implemented hash=cd1f9581d0ef]
         public func retire() {
+            if refCount > 1 {
+                refCount -= 1
+                return
+            }
+            refCount = 0
+            imagePlacements.removeAll(keepingCapacity: false)
             storage.retire()
             core.destroy()
         }
@@ -3824,6 +4135,7 @@ public enum NativeRendererOutput: Sendable {
 
         /// Creates a pure-Swift `StdoutOutput` backed by injectable byte/UTF-16 writers
         /// (defaults to in-memory capture when no custom handlers are supplied).
+        // parity: native/src/renderer-output.zig#StdoutOutput.initWithIo [status=adapted hash=ffb08666a75a]
         public init(
             windowsConsole: Bool = false,
             directWriteSupported: Bool = true,
@@ -3836,6 +4148,7 @@ public enum NativeRendererOutput: Sendable {
             self.writeUtf16Handler = writeUtf16
         }
 
+        // parity: native/src/renderer-output.zig#StdoutOutput.writeSome [status=adapted hash=d60057d5c3d5]
         public func writeSome(_ data: [UInt8]) throws(OutputError) -> Int {
             guard !data.isEmpty else { return 0 }
             if windowsConsole {
@@ -3865,12 +4178,53 @@ public enum NativeRendererOutput: Sendable {
             try writeSome(Array(text.utf8))
         }
 
+        // parity: native/src/renderer-output.zig#StdoutOutput.supportsDirectWrite [status=implemented hash=eef226cd8eca]
         public func supportsDirectWrite() -> Bool {
             directWriteSupported
         }
     }
 
-    // parity: native/src/renderer-output.zig#FeedBackend [status=implemented hash=1d51e183009a]
+    /// Buffered frame writer targeting a `FeedBackend` (`renderer-output.zig#BackendWriter`).
+    public struct BackendWriter: Sendable {
+        public let backend: FeedBackend
+        private var staged: [UInt8] = []
+
+        public init(backend: FeedBackend) {
+            self.backend = backend
+        }
+
+        // parity: native/src/renderer-output.zig#BackendWriter.write [status=implemented hash=37b6a6896a5c]
+        @discardableResult
+        public func write(_ data: [UInt8]) throws(OutputError) -> Int {
+            try backend.frameWrite(data)
+            return data.count
+        }
+
+        // parity: native/src/renderer-output.zig#BackendWriter.writeAll [status=implemented hash=893a45842fcd]
+        public func writeAll(_ data: [UInt8]) throws(OutputError) {
+            try backend.frameWrite(data)
+        }
+
+        // parity: native/src/renderer-output.zig#BackendWriter.writeByte [status=implemented hash=a45f2811e026]
+        public func writeByte(_ byte: UInt8) throws(OutputError) {
+            try backend.frameWrite([byte])
+        }
+
+        // parity: native/src/renderer-output.zig#BackendWriter.print [status=adapted hash=2bf234c03006]
+        public func print(_ formatted: String) throws(OutputError) {
+            try backend.frameWrite(Array(formatted.utf8))
+        }
+
+        // parity: native/src/renderer-output.zig#BackendWriter.flush [status=implemented hash=3cf0bd5a2512]
+        public mutating func flush() throws(OutputError) {
+            guard !staged.isEmpty else { return }
+            let pending = staged
+            staged.removeAll(keepingCapacity: true)
+            try backend.frameWrite(pending)
+        }
+    }
+
+    // parity: native/src/renderer-output.zig#FeedBackend [status=implemented hash=3214131a072c]
     public final class FeedBackend: @unchecked Sendable {
         public enum UploadState: UInt8, Equatable, Hashable, Sendable, Codable {
             case kept = 0
@@ -3913,10 +4267,12 @@ public enum NativeRendererOutput: Sendable {
         public var uploadsAlone: Bool = false
         public private(set) var lastWriteTimeUs: Double? = nil
 
+        // parity: native/src/renderer-output.zig#FeedBackend.createWithIo [status=adapted hash=29b9fc48ab7c]
         public init(feed: NativeSpanFeed) {
             self.feed = feed
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.deinit [status=implemented hash=dcc9c7525ab3]
         public func deinitBackend() {
             frameBytes.removeAll()
             uploads.removeAll()
@@ -3937,16 +4293,19 @@ public enum NativeRendererOutput: Sendable {
             return UInt64(feed.options.chunkSize)
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.uploadLimit [status=implemented hash=6c763079d287]
         public func uploadLimit() -> UInt64 {
             isFeedBounded ? atomicByteLimit : UInt64.max
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.shouldSkipFrame [status=implemented hash=48d997aa7834]
         public func shouldSkipFrame() -> Bool {
             let stats = feed.stats
             let cap = feed.options.spanQueueCapacity
             return frameActive || (cap > 0 && stats.outstandingSpans >= cap) || feed.isClosed
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.prepareFrame [status=implemented hash=00605e3b6220]
         public func prepareFrame() -> WriteStatus {
             if frameActive { return .skipped }
             frameStatus = .ok
@@ -3954,6 +4313,12 @@ public enum NativeRendererOutput: Sendable {
             return .ok
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.writer [status=implemented hash=e19bae1fadf3]
+        public func writer() -> BackendWriter {
+            BackendWriter(backend: self)
+        }
+
+        // parity: native/src/renderer-output.zig#FeedBackend.beginFrame [status=implemented hash=fd4551e03e82]
         public func beginFrame() {
             frameWriteCount = 0
             frameStatus = .ok
@@ -4012,11 +4377,13 @@ public enum NativeRendererOutput: Sendable {
             frameBytes.append(contentsOf: data)
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.beginUpload [status=implemented hash=25f62368a97f]
         public func beginUpload(waited: Bool) {
             precondition(frameActive && activeUpload == nil)
             activeUpload = ActiveUpload(start: frameBytes.count, waited: waited)
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.endUpload [status=implemented hash=09b24b637987]
         public func endUpload(placementId: UInt32) {
             guard let upload = activeUpload else { return }
             activeUpload = nil
@@ -4043,12 +4410,14 @@ public enum NativeRendererOutput: Sendable {
             }
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.deferUpload [status=implemented hash=27bb37687b90]
         public func deferUpload(placementId: UInt32) {
             if frameStatus != .ok { return }
             let end = frameBytes.count
             uploads.append(Upload(start: end, end: end, placementId: placementId, waited: false, state: .deferred))
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.lastUploadWaits [status=implemented hash=85ca586e9dce]
         public func lastUploadWaits() -> Bool {
             guard let last = uploads.last else { return false }
             return last.state != .kept
@@ -4071,12 +4440,14 @@ public enum NativeRendererOutput: Sendable {
             }
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.failFrame [status=implemented hash=7d1137ebe0ae]
         public func failFrame() {
             if frameStatus == .ok { frameStatus = .failed }
             keptUploadBytes = 0
             frameBytes.removeAll(keepingCapacity: true)
         }
 
+        // parity: native/src/renderer-output.zig#FeedBackend.endFrame [status=implemented hash=0472afae1cea]
         @discardableResult
         public func endFrame() -> WriteStatus {
             var status = frameStatus
@@ -4105,6 +4476,7 @@ public enum NativeRendererOutput: Sendable {
         }
 
         /// Publishes a control sequence between frames atomically; rejected writes publish nothing.
+        // parity: native/src/renderer-output.zig#FeedBackend.writeOut [status=implemented hash=30ca840eaf4a]
         public func writeOut(_ data: [UInt8]) {
             precondition(!frameActive)
             guard !data.isEmpty else { return }

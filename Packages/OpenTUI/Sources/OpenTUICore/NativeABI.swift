@@ -1764,16 +1764,16 @@ public enum NativeABI {
     // parity: core/src/native-abi.generated.ts#OT_CLIPBOARD_SHUTDOWN_INVALID_HANDLE [status=implemented hash=b2b9a782cccc]
     public static let OT_CLIPBOARD_SHUTDOWN_INVALID_HANDLE: Int64 = 2
 
-    // parity: core/src/native-abi.generated.ts#nativeSymbols [status=implemented hash=a882592743a7]
+    // parity: core/src/native-abi.generated.ts#nativeSymbols [status=implemented hash=118bdcaed89a]
     public static let nativeSymbols: [String: ABISymbolSignature] = buildNativeSymbols()
 
     // parity: core/src/native-abi.generated.ts#nativeCallbacks [status=implemented hash=ae42c62ccadb]
     public static let nativeCallbacks: [String: ABISymbolSignature] = buildNativeCallbacks()
 
-    // parity: core/src/native-abi.generated.ts#nativeLayouts [status=implemented hash=37f5ea68d90e]
+    // parity: core/src/native-abi.generated.ts#nativeLayouts [status=implemented hash=4a30664cb7ea]
     public static let nativeLayouts: [String: ABIStructLayout] = buildNativeLayouts()
 
-    // parity: core/src/native-abi.generated.ts#nativeConstants [status=implemented hash=704193546182]
+    // parity: core/src/native-abi.generated.ts#nativeConstants [status=implemented hash=7d868fb9e642]
     public static let nativeConstants: [String: Int64] = buildNativeConstants()
 
     private static func buildNativeCallbacks() -> [String: ABISymbolSignature] {
@@ -4792,7 +4792,7 @@ public struct ReserveInfo: ZigPackableStruct, Hashable, Codable {
     }
 }
 
-// parity: core/src/zig-structs.ts#NativeSpanFeedOptionsStruct [status=implemented hash=3fd53deb7e63]
+// parity: core/src/zig-structs.ts#NativeSpanFeedOptionsStruct [status=implemented hash=71c3ad8183f0]
 public let NativeSpanFeedOptionsStruct = ZigStructCodec<ZigNativeSpanFeedOptions>(
     fieldNames: [
         "chunkSize",
@@ -4804,7 +4804,7 @@ public let NativeSpanFeedOptionsStruct = ZigStructCodec<ZigNativeSpanFeedOptions
     ]
 )
 
-// parity: core/src/zig-structs.ts#NativeSpanFeedStatsStruct [status=implemented hash=affdd18fde20]
+// parity: core/src/zig-structs.ts#NativeSpanFeedStatsStruct [status=implemented hash=2462f3465897]
 public let NativeSpanFeedStatsStruct = ZigStructCodec<ZigNativeSpanFeedStats>(
     fieldNames: [
         "bytesWritten",
@@ -4817,12 +4817,12 @@ public let NativeSpanFeedStatsStruct = ZigStructCodec<ZigNativeSpanFeedStats>(
     ]
 )
 
-// parity: core/src/zig-structs.ts#SpanInfoStruct [status=implemented hash=59b0946653dc]
+// parity: core/src/zig-structs.ts#SpanInfoStruct [status=implemented hash=19bb7c1f8e1a]
 public let SpanInfoStruct = ZigStructCodec<ZigSpanInfo>(
     fieldNames: ["chunkPtr", "offset", "len", "chunkIndex", "slotIndex", "releaseId"]
 )
 
-// parity: core/src/zig-structs.ts#ReserveInfoStruct [status=implemented hash=d5db49c14f6a]
+// parity: core/src/zig-structs.ts#ReserveInfoStruct [status=implemented hash=1ecf6248be66]
 public let ReserveInfoStruct = ZigStructCodec<ReserveInfo>(
     fieldNames: ["ptr", "len", "reserved"]
 )
@@ -5167,7 +5167,7 @@ public enum NativeAudioStreamState: UInt32, Equatable, Hashable, Sendable, Codab
     case reconnecting = 6
 }
 
-// parity: core/src/zig-structs.ts#NativeAudioStreamStateNames [status=implemented hash=809a07ce2945]
+// parity: core/src/zig-structs.ts#NativeAudioStreamStateNames [status=implemented hash=eed1f6f4c1eb]
 public let NativeAudioStreamStateNames: [String] = [
     "initializing",
     "buffering",
@@ -5321,12 +5321,12 @@ public struct NativeAudioCaptureStats: ZigPackableStruct, Hashable, Codable {
     }
 }
 
-// parity: core/src/zig-structs.ts#AudioCreateOptionsStruct [status=implemented hash=41233f08cc97]
+// parity: core/src/zig-structs.ts#AudioCreateOptionsStruct [status=implemented hash=d5668c633849]
 public let AudioCreateOptionsStruct = ZigStructCodec<AudioCreateOptions>(
     fieldNames: ["sampleRate", "playbackChannels"]
 )
 
-// parity: core/src/zig-structs.ts#AudioStartOptionsStruct [status=implemented hash=9a27f8f9e369]
+// parity: core/src/zig-structs.ts#AudioStartOptionsStruct [status=implemented hash=949f2ec0b9cc]
 public let AudioStartOptionsStruct = ZigStructCodec<ZigAudioStartOptions>(
     fieldNames: [
         "periodSizeInFrames",
@@ -5347,12 +5347,12 @@ public let AudioStartOptionsStruct = ZigStructCodec<ZigAudioStartOptions>(
     ]
 )
 
-// parity: core/src/zig-structs.ts#AudioVoiceOptionsStruct [status=implemented hash=dc3add80e3db]
+// parity: core/src/zig-structs.ts#AudioVoiceOptionsStruct [status=implemented hash=5968b37f97cf]
 public let AudioVoiceOptionsStruct = ZigStructCodec<AudioVoiceOptions>(
     fieldNames: ["volume", "pan", "loop", "groupId"]
 )
 
-// parity: core/src/zig-structs.ts#AudioStreamCreateOptionsStruct [status=implemented hash=689cf8068e57]
+// parity: core/src/zig-structs.ts#AudioStreamCreateOptionsStruct [status=implemented hash=f5cb66526271]
 public let AudioStreamCreateOptionsStruct = ZigStructCodec<AudioStreamCreateOptions>(
     fieldNames: [
         "capacityMs",

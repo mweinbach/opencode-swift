@@ -487,7 +487,7 @@ private final class WeakActivationBox<Host: KeymapHost>: @unchecked Sendable {
 /// Alias matching runtime-oriented naming while preserving upstream `Keymap`.
 public typealias KeymapRuntime<Host: KeymapHost> = Keymap<Host>
 
-// parity: keymap/src/keymap.ts#Keymap [status=implemented hash=b3b2f20c0c16]
+// parity: keymap/src/keymap.ts#Keymap [status=implemented hash=19debf506811]
 public final class Keymap<Host: KeymapHost>: @unchecked Sendable {
     public typealias Target = Host.Target
     public typealias Event = Host.Event
@@ -875,7 +875,7 @@ public final class Keymap<Host: KeymapHost>: @unchecked Sendable {
         executor.dispatchCommand(cmd, options: options)
     }
 
-    // parity: keymap/src/keymap.ts#Keymap.on [status=implemented hash=f1acc8cdb38c]
+    // parity: keymap/src/keymap.ts#Keymap.on [status=implemented hash=5ec65512ef09]
     @discardableResult
     public func on(_ subscription: KeymapEventSubscription<Target, Event>) -> @Sendable () -> Void {
         switch subscription {
@@ -892,7 +892,7 @@ public final class Keymap<Host: KeymapHost>: @unchecked Sendable {
         }
     }
 
-    // parity: keymap/src/keymap.ts#Keymap.intercept [status=implemented hash=0f6ec2b2a001]
+    // parity: keymap/src/keymap.ts#Keymap.intercept [status=implemented hash=0517977b20be]
     @discardableResult
     public func intercept(_ subscription: KeymapInterceptSubscription<Target, Event>) -> @Sendable () -> Void {
         switch subscription {

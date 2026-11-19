@@ -107,7 +107,7 @@ private extension String {
 // MARK: - Demuxer Protocol & Outputs
 
 /// Unit emitted by an `AudioStreamDemuxer` as incoming bytes are pushed or flushed.
-// parity: core/src/audio-stream/demuxer.ts#AudioStreamDemuxOutput [status=implemented hash=d564e0ecfc57]
+// parity: core/src/audio-stream/demuxer.ts#AudioStreamDemuxOutput [status=implemented hash=a02e479a034c]
 public enum AudioStreamDemuxOutput<M: Sendable>: Sendable {
     case audio([UInt8])
     case metadata(M?)
@@ -346,7 +346,7 @@ public func createIcyStreamDemuxer(
 
 /// Inspects HTTP response headers and creates an `IcyStreamDemuxer` when `icy-*` headers
 /// or `icy-metaint` are present, or returns `nil` for plain non-ICY streams.
-// parity: core/src/audio-stream/demuxer.ts#selectAudioStreamDemuxer [status=implemented hash=f8969892d746]
+// parity: core/src/audio-stream/demuxer.ts#selectAudioStreamDemuxer [status=implemented hash=00b0f425447f]
 public func selectAudioStreamDemuxer(
     headers: [String: String],
     metadataEncoding: String = "iso-8859-1"

@@ -1315,7 +1315,7 @@ public final class DefaultCompilerService<Target: Hashable & Sendable, Event: Ke
     }
 }
 
-// parity: keymap/src/services/compiler.ts#createCompilerService [status=implemented hash=96fd485cbd50]
+// parity: keymap/src/services/compiler.ts#createCompilerService [status=implemented hash=76d515a5c112]
 public func createCompilerService<Target: Hashable & Sendable, Event: KeymapEvent>(
     environment: CompilerEnvironment<Target, Event>,
     notify: KeymapNotifier,

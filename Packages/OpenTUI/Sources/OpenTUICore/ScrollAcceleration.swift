@@ -87,7 +87,7 @@ public struct MacOSScrollAccel: ScrollAcceleration, Equatable, Sendable {
         self.options = MacOSScrollAccelOptions(A: A, tau: tau, maxMultiplier: maxMultiplier)
     }
 
-    // parity: core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.tick [status=implemented hash=de481bbfa863]
+    // parity: core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.tick [status=implemented hash=42d9c05efe20]
     public mutating func tick(now: Double) -> Double {
         let A = options.A
         let tau = options.tau
@@ -175,7 +175,7 @@ public final class ScrollChainToken {
 }
 
 /// The axis direction of a wheel step: Shift turns vertical steps sideways and sideways steps vertical.
-// parity: core/src/lib/scroll-chain.ts#wheelDirection [status=implemented hash=90e4f5a1eaef]
+// parity: core/src/lib/scroll-chain.ts#wheelDirection [status=implemented hash=632220ead8f1]
 public func wheelDirection(direction: WheelDirection?, shift: Bool = false) -> WheelDirection? {
     guard let direction else { return nil }
     guard shift else { return direction }

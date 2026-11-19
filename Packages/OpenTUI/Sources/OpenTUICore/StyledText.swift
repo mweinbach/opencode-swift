@@ -285,163 +285,163 @@ public struct StyleTransform: Sendable {
 
 // MARK: - Foreground Color Functions
 
-// parity: core/src/lib/styled-text.ts#black [status=implemented hash=452d68cefd2f]
+// parity: core/src/lib/styled-text.ts#black [status=implemented hash=27063f87a9b4]
 public func black<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "black"))
 }
 
-// parity: core/src/lib/styled-text.ts#red [status=implemented hash=94e988ce3673]
+// parity: core/src/lib/styled-text.ts#red [status=implemented hash=37e0d9662b7c]
 public func red<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "red"))
 }
 
-// parity: core/src/lib/styled-text.ts#green [status=implemented hash=088548615426]
+// parity: core/src/lib/styled-text.ts#green [status=implemented hash=67d14d49f2d7]
 public func green<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "green"))
 }
 
-// parity: core/src/lib/styled-text.ts#yellow [status=implemented hash=2f79fc7ecf42]
+// parity: core/src/lib/styled-text.ts#yellow [status=implemented hash=84b27774fefe]
 public func yellow<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "yellow"))
 }
 
-// parity: core/src/lib/styled-text.ts#blue [status=implemented hash=874c39db0746]
+// parity: core/src/lib/styled-text.ts#blue [status=implemented hash=22f7214f30eb]
 public func blue<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "blue"))
 }
 
-// parity: core/src/lib/styled-text.ts#magenta [status=implemented hash=a2cdc38088fc]
+// parity: core/src/lib/styled-text.ts#magenta [status=implemented hash=c28fb5ad062a]
 public func magenta<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "magenta"))
 }
 
-// parity: core/src/lib/styled-text.ts#cyan [status=implemented hash=393cab7928a6]
+// parity: core/src/lib/styled-text.ts#cyan [status=implemented hash=aee57bd92259]
 public func cyan<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "cyan"))
 }
 
-// parity: core/src/lib/styled-text.ts#white [status=implemented hash=50ba3056d855]
+// parity: core/src/lib/styled-text.ts#white [status=implemented hash=c22e30dffe4f]
 public func white<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "white"))
 }
 
 // MARK: - Bright Foreground Color Functions
 
-// parity: core/src/lib/styled-text.ts#brightBlack [status=implemented hash=95caf9a4e350]
+// parity: core/src/lib/styled-text.ts#brightBlack [status=implemented hash=237439d4d8cf]
 public func brightBlack<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightBlack"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightRed [status=implemented hash=65a89aa20c2d]
+// parity: core/src/lib/styled-text.ts#brightRed [status=implemented hash=f769961a0380]
 public func brightRed<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightRed"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightGreen [status=implemented hash=9f7a2b26617b]
+// parity: core/src/lib/styled-text.ts#brightGreen [status=implemented hash=0e68a0ff734d]
 public func brightGreen<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightGreen"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightYellow [status=implemented hash=5c63eb97486a]
+// parity: core/src/lib/styled-text.ts#brightYellow [status=implemented hash=31ad48cda620]
 public func brightYellow<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightYellow"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightBlue [status=implemented hash=34cb225101ae]
+// parity: core/src/lib/styled-text.ts#brightBlue [status=implemented hash=e4e58f353f1d]
 public func brightBlue<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightBlue"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightMagenta [status=implemented hash=ee9a1252f0b8]
+// parity: core/src/lib/styled-text.ts#brightMagenta [status=implemented hash=71f74aa11f8b]
 public func brightMagenta<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightMagenta"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightCyan [status=implemented hash=ff3ac86d9386]
+// parity: core/src/lib/styled-text.ts#brightCyan [status=implemented hash=6e30a7a99d83]
 public func brightCyan<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightCyan"))
 }
 
-// parity: core/src/lib/styled-text.ts#brightWhite [status=implemented hash=08413f124f3e]
+// parity: core/src/lib/styled-text.ts#brightWhite [status=implemented hash=82e9b71704c9]
 public func brightWhite<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(fg: "brightWhite"))
 }
 
 // MARK: - Background Color Functions
 
-// parity: core/src/lib/styled-text.ts#bgBlack [status=implemented hash=35c98d606792]
+// parity: core/src/lib/styled-text.ts#bgBlack [status=implemented hash=f557df882b2f]
 public func bgBlack<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "black"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgRed [status=implemented hash=91e3da7ef528]
+// parity: core/src/lib/styled-text.ts#bgRed [status=implemented hash=2f35455f8f85]
 public func bgRed<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "red"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgGreen [status=implemented hash=537cd49e97be]
+// parity: core/src/lib/styled-text.ts#bgGreen [status=implemented hash=09921d92f9b8]
 public func bgGreen<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "green"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgYellow [status=implemented hash=5bf272881e45]
+// parity: core/src/lib/styled-text.ts#bgYellow [status=implemented hash=35bd0ac79868]
 public func bgYellow<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "yellow"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgBlue [status=implemented hash=e6f23b8b7a81]
+// parity: core/src/lib/styled-text.ts#bgBlue [status=implemented hash=3373b74930b5]
 public func bgBlue<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "blue"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgMagenta [status=implemented hash=dc25ef64c68a]
+// parity: core/src/lib/styled-text.ts#bgMagenta [status=implemented hash=3c50e41467e4]
 public func bgMagenta<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "magenta"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgCyan [status=implemented hash=9e3591207b73]
+// parity: core/src/lib/styled-text.ts#bgCyan [status=implemented hash=f9171c1a5fe1]
 public func bgCyan<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "cyan"))
 }
 
-// parity: core/src/lib/styled-text.ts#bgWhite [status=implemented hash=7aa35395fd07]
+// parity: core/src/lib/styled-text.ts#bgWhite [status=implemented hash=9838f50be246]
 public func bgWhite<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bg: "white"))
 }
 
 // MARK: - Attribute Style Functions
 
-// parity: core/src/lib/styled-text.ts#bold [status=implemented hash=05510efc8e49]
+// parity: core/src/lib/styled-text.ts#bold [status=implemented hash=739671e84c24]
 public func bold<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(bold: true))
 }
 
-// parity: core/src/lib/styled-text.ts#italic [status=implemented hash=7ad8abd3b450]
+// parity: core/src/lib/styled-text.ts#italic [status=implemented hash=a80e6db5bdc3]
 public func italic<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(italic: true))
 }
 
-// parity: core/src/lib/styled-text.ts#underline [status=implemented hash=15b1bbbbf331]
+// parity: core/src/lib/styled-text.ts#underline [status=implemented hash=ad5ec0acec77]
 public func underline<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(underline: true))
 }
 
-// parity: core/src/lib/styled-text.ts#strikethrough [status=implemented hash=050f179ca712]
+// parity: core/src/lib/styled-text.ts#strikethrough [status=implemented hash=ab1de3ac6171]
 public func strikethrough<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(strikethrough: true))
 }
 
-// parity: core/src/lib/styled-text.ts#dim [status=implemented hash=0314fd01c918]
+// parity: core/src/lib/styled-text.ts#dim [status=implemented hash=56c7359eca79]
 public func dim<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(dim: true))
 }
 
-// parity: core/src/lib/styled-text.ts#reverse [status=implemented hash=7344f85a030d]
+// parity: core/src/lib/styled-text.ts#reverse [status=implemented hash=d54009cc6697]
 public func reverse<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(reverse: true))
 }
 
-// parity: core/src/lib/styled-text.ts#blink [status=implemented hash=68b10fcf0aa1]
+// parity: core/src/lib/styled-text.ts#blink [status=implemented hash=7bd0d9d248ac]
 public func blink<T: StylableInputConvertible>(_ input: T) -> TextChunk {
     applyStyle(input, StyleAttrs(blink: true))
 }
@@ -458,7 +458,7 @@ public func hidden<T: StylableInputConvertible>(_ input: T) -> TextChunk {
 
 // MARK: - Custom Color & Link Functions
 
-// parity: core/src/lib/styled-text.ts#fg [status=implemented hash=170d63c84069]
+// parity: core/src/lib/styled-text.ts#fg [status=implemented hash=8b3b863f95a6]
 public func fg<C: ColorConvertible>(_ color: C) -> StyleTransform {
     let resolved = color.asColor()
     return StyleTransform { input in
@@ -466,7 +466,7 @@ public func fg<C: ColorConvertible>(_ color: C) -> StyleTransform {
     }
 }
 
-// parity: core/src/lib/styled-text.ts#bg [status=implemented hash=102351504885]
+// parity: core/src/lib/styled-text.ts#bg [status=implemented hash=dcca98de8678]
 public func bg<C: ColorConvertible>(_ color: C) -> StyleTransform {
     let resolved = color.asColor()
     return StyleTransform { input in

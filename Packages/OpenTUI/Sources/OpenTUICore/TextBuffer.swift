@@ -151,7 +151,7 @@ public func alignmentPadCols(alignment: TextAlign, viewportWidth: Int, lineWidth
 
 /// Pure-Swift text storage with balanced `Rope` backing, styled `TextChunk` metadata,
 /// per-line highlights, and display-cell offset coordinate mapping.
-// parity: core/src/text-buffer.ts#TextBuffer [status=implemented hash=c50d503e2c9a]
+// parity: core/src/text-buffer.ts#TextBuffer [status=implemented hash=8bac2449569d]
 public final class TextBuffer {
     internal var _rope: Rope
     private var _chunks: [TextChunk]
@@ -626,7 +626,7 @@ public final class TextBuffer {
 // MARK: - TextBufferView
 
 /// Pure-Swift layout, wrapping, viewport windowing, and local/global selection engine for `TextBuffer`.
-// parity: core/src/text-buffer-view.ts#TextBufferView [status=implemented hash=bbf6e0f36648]
+// parity: core/src/text-buffer-view.ts#TextBufferView [status=implemented hash=98e8adbe6035]
 public final class TextBufferView: LineInfoProvider {
     public let textBuffer: TextBuffer
 
@@ -996,7 +996,7 @@ public final class TextBufferView: LineInfoProvider {
         _selectionFocus = nil
     }
 
-    // parity: core/src/text-buffer-view.ts#TextBufferView.getSelection [status=implemented hash=f0518e9fd89f]
+    // parity: core/src/text-buffer-view.ts#TextBufferView.getSelection [status=implemented hash=bdae3319204d]
     public func getSelection() -> TextSelectionRange? {
         assertAlive()
         return _selection

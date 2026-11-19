@@ -155,10 +155,10 @@ private func parseEnvNumber(_ raw: String) -> Double? {
 // MARK: - EnvRegistry
 
 /// Pure, injectable environment variable registry with typed parsing, value caching, and doc generation.
-// parity: core/src/lib/env.ts#envRegistry [status=implemented hash=61f26db12b8e]
+// parity: core/src/lib/env.ts#envRegistry [status=implemented hash=7497fb56181f]
 public final class EnvRegistry: @unchecked Sendable {
     /// Default process-wide registry (starts with an empty injectable environment map).
-    // parity: core/src/lib/env.ts#env [status=implemented hash=7943c7d42eec]
+    // parity: core/src/lib/env.ts#env [status=implemented hash=e963c7f59903]
     public static let shared = EnvRegistry()
 
     private var environment: [String: String]

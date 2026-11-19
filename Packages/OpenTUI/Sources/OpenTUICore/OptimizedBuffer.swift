@@ -4,6 +4,7 @@
 
 // MARK: - Supporting Buffer Types
 
+// parity: native/src/buffer.zig#DEFAULT_SPACE_CHAR [status=implemented hash=2f636c391c74]
 public let defaultSpaceChar: UInt32 = 0x20
 
 // parity: native/src/buffer.zig#BufferError [status=implemented hash=b1e3e969c538]
@@ -269,7 +270,7 @@ public func blendColors(src: RGBA, dst dst0: RGBA, backdrop: RGBA? = nil) -> RGB
 /// Pure-Swift cell framebuffer supporting grapheme clusters, OSC 8 hyperlinks, Porter-Duff
 /// alpha compositing, scissor clipping, opacity stacking, box/text/styled-text drawing,
 /// framebuffer composition, and hit-grid tracking.
-// parity: core/src/buffer.ts#OptimizedBuffer [status=implemented hash=ab16c376bb9b]
+// parity: core/src/buffer.ts#OptimizedBuffer [status=implemented hash=8b7b6d7be068]
 public final class OptimizedBuffer: @unchecked Sendable {
     public let id: String
     // parity: core/src/buffer.ts#OptimizedBuffer.width [status=implemented hash=3a82f1e10187]
@@ -329,7 +330,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
         self.hitGrid = Array(repeating: 0, count: count)
     }
 
-    // parity: core/src/buffer.ts#OptimizedBuffer.create [status=implemented hash=a916e3c49664]
+    // parity: core/src/buffer.ts#OptimizedBuffer.create [status=implemented hash=b706aff0d61e]
     public static func create(
         width: Int,
         height: Int,
@@ -373,8 +374,39 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.setRespectAlpha [status=implemented hash=eb26c8ffcf96]
+    // parity: native/src/buffer.zig#OptimizedBuffer.setRespectAlpha [status=implemented hash=e54df433a3d8]
     public func setRespectAlpha(_ respectAlpha: Bool) {
         self.respectAlpha = respectAlpha
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getRespectAlpha [status=implemented hash=59d0b3b5c6c1]
+    public func getRespectAlpha() -> Bool {
+        respectAlpha
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.setBlendBackdropColor [status=implemented hash=f3c9374c3e0e]
+    public func setBlendBackdropColor(_ color: RGBA?) {
+        self.blendBackdropColor = color
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getBlendBackdropColor [status=implemented hash=f6eb7901951f]
+    public func getBlendBackdropColor() -> RGBA? {
+        blendBackdropColor
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getWidth [status=implemented hash=5d4968e74396]
+    public func getWidth() -> UInt32 {
+        UInt32(max(0, width))
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getHeight [status=implemented hash=b1dda57a819e]
+    public func getHeight() -> UInt32 {
+        UInt32(max(0, height))
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getId [status=implemented hash=ecf2e04f2d7e]
+    public func getId() -> String {
+        id
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.resize [status=implemented hash=b672045dfaae]
@@ -398,6 +430,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     /// Replaces all cells, trackers, and hit-grid IDs from a same-sized buffer sharing pools.
+    // parity: native/src/buffer.zig#OptimizedBuffer.copyFrom [status=implemented hash=179bbd263610]
     public func copyFrom(_ source: OptimizedBuffer) throws(BufferError) {
         guard width == source.width && height == source.height else {
             throw .invalidDimensions
@@ -414,10 +447,12 @@ public final class OptimizedBuffer: @unchecked Sendable {
 
     // MARK: - Scissor Clip Rect Stack
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.getCurrentScissorRect [status=implemented hash=49b7a51af0f2]
     public var currentScissorRect: ClipRect? {
         scissorStack.last
     }
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.isPointInScissor [status=implemented hash=21fba59d453f]
     public func isPointInScissor(x: Int, y: Int) -> Bool {
         guard let scissor = scissorStack.last else { return true }
         return x >= scissor.x
@@ -426,6 +461,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
             && y < scissor.y + scissor.height
     }
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.isRectInScissor [status=implemented hash=4c10e1b66f6b]
     public func isRectInScissor(x: Int, y: Int, width: Int, height: Int) -> Bool {
         guard let scissor = scissorStack.last else { return true }
         let rectEndX = x + width
@@ -435,6 +471,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
         return !(x >= scissorEndX || rectEndX <= scissor.x || y >= scissorEndY || rectEndY <= scissor.y)
     }
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.clipRectToScissor [status=implemented hash=58aa5683dce7]
     public func clipRectToScissor(x: Int, y: Int, width: Int, height: Int) -> ClipRect? {
         guard let scissor = scissorStack.last else {
             return ClipRect(x: x, y: y, width: width, height: height)
@@ -448,6 +485,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.pushScissorRect [status=implemented hash=7ec25d94b558]
+    // parity: native/src/buffer.zig#OptimizedBuffer.pushScissorRect [status=implemented hash=d201c1e32d27]
     public func pushScissorRect(x: Int, y: Int, width: Int, height: Int) {
         let clampedWidth = max(0, width)
         let clampedHeight = max(0, height)
@@ -463,11 +501,13 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.popScissorRect [status=implemented hash=c5dc5f932bdf]
+    // parity: native/src/buffer.zig#OptimizedBuffer.popScissorRect [status=implemented hash=ba8ad5c9981d]
     public func popScissorRect() {
         _ = scissorStack.popLast()
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.clearScissorRects [status=implemented hash=becd413a066d]
+    // parity: native/src/buffer.zig#OptimizedBuffer.clearScissorRects [status=implemented hash=1177242975f2]
     public func clearScissorRects() {
         scissorStack.removeAll(keepingCapacity: true)
     }
@@ -475,6 +515,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     // MARK: - Opacity Stack
 
     // parity: core/src/buffer.ts#OptimizedBuffer.getCurrentOpacity [status=implemented hash=f698ede988cd]
+    // parity: native/src/buffer.zig#OptimizedBuffer.getCurrentOpacity [status=implemented hash=cb07a5a18685]
     public func getCurrentOpacity() -> Double {
         opacityStack.last ?? 1.0
     }
@@ -484,6 +525,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.pushOpacity [status=implemented hash=cc6e8cffdca8]
+    // parity: native/src/buffer.zig#OptimizedBuffer.pushOpacity [status=implemented hash=96eac55868ce]
     public func pushOpacity(_ opacity: Double) {
         let clamped = opacity.isFinite ? max(0.0, min(1.0, opacity)) : 0.0
         let effective = getCurrentOpacity() * clamped
@@ -491,11 +533,13 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.popOpacity [status=implemented hash=e2aaf12f5044]
+    // parity: native/src/buffer.zig#OptimizedBuffer.popOpacity [status=implemented hash=8f32a440eb86]
     public func popOpacity() {
         _ = opacityStack.popLast()
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.clearOpacity [status=implemented hash=d1a5f4fb9375]
+    // parity: native/src/buffer.zig#OptimizedBuffer.clearOpacity [status=implemented hash=8575111be834]
     public func clearOpacity() {
         opacityStack.removeAll(keepingCapacity: true)
     }
@@ -561,6 +605,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
         return y * width + x
     }
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.get [status=implemented hash=093db2e3bc4d]
     public func cell(atX x: Int, y: Int) -> TerminalCell? {
         guard x >= 0 && x < width && y >= 0 && y < height else { return nil }
         let idx = y * width + x
@@ -573,6 +618,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.clear [status=implemented hash=bb074fa310b5]
+    // parity: native/src/buffer.zig#OptimizedBuffer.clear [status=implemented hash=ad7df40e81ee]
     public func clear(bg clearBg: RGBA = RGBA.fromValues(0, 0, 0, 1), char clearChar: UInt32 = defaultSpaceChar) {
         linkTracker.clear()
         graphemeTracker.clear()
@@ -587,6 +633,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     /// Clears rows in `[top, bottom)` releasing grapheme and link references held by those cells.
+    // parity: native/src/buffer.zig#OptimizedBuffer.clearRows [status=implemented hash=0f65df1eb2a9]
     public func clearRows(top: Int, bottom: Int, bg clearBg: RGBA, char clearChar: UInt32 = defaultSpaceChar) {
         let lo = max(0, min(top, height))
         let hi = max(lo, min(bottom, height))
@@ -630,17 +677,20 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     /// Writes a single cell and updates link refs, without grapheme span cleanup.
+    // parity: native/src/buffer.zig#OptimizedBuffer.setRaw [status=implemented hash=3dabbac60296]
     public func setCellRaw(x: Int, y: Int, cell: TerminalCell) {
         guard let idx = validIndexInScissor(x: x, y: y) else { return }
         writeCellAndLinks(index: idx, cell: cell)
     }
 
     /// Syncs a cell from an authoritative source buffer (used by diff renderer without span cleanup).
+    // parity: native/src/buffer.zig#OptimizedBuffer.syncCell [status=implemented hash=977411b3d743]
     public func syncCell(x: Int, y: Int, cell: TerminalCell) {
         setCellInternal(spanCleanup: false, x: x, y: y, cell: cell)
     }
 
     /// Writes a cell with full grapheme span cleanup, continuation writing, and tracker maintenance.
+    // parity: native/src/buffer.zig#OptimizedBuffer.set [status=implemented hash=6963f5bf5d85]
     public func setCell(x: Int, y: Int, cell: TerminalCell) {
         setCellInternal(spanCleanup: true, x: x, y: y, cell: cell)
     }
@@ -802,6 +852,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     /// Blends `overlayCell` over `destCell` using Porter-Duff source-over compositing.
+    // parity: native/src/buffer.zig#OptimizedBuffer.blendCells [status=implemented hash=7c4355d0f856]
     public func blendCells(overlay overlayCell: TerminalCell, dest destCell: TerminalCell) -> TerminalCell {
         let hasBgAlpha = isRGBAWithAlpha(overlayCell.background)
         let hasFgAlpha = isRGBAWithAlpha(overlayCell.foreground)
@@ -843,6 +894,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
         return overlayCell
     }
 
+    // parity: native/src/buffer.zig#OptimizedBuffer.setCellWithAlphaBlending [status=implemented hash=453dac89b89c]
     public func setCellWithAlphaBlending(x: Int, y: Int, cell: TerminalCell) {
         guard x >= 0 && x < width && y >= 0 && y < height else { return }
         guard isPointInScissor(x: x, y: y) else { return }
@@ -872,6 +924,33 @@ public final class OptimizedBuffer: @unchecked Sendable {
         }
     }
 
+    /// Alpha-blends a single cell directly without grapheme span cleanup (`setCellWithAlphaBlendingRaw`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.setCellWithAlphaBlendingRaw [status=implemented hash=6bf08eed32c5]
+    public func setCellWithAlphaBlendingRaw(x: Int, y: Int, cell: TerminalCell) {
+        guard x >= 0 && x < width && y >= 0 && y < height else { return }
+        guard isPointInScissor(x: x, y: y) else { return }
+        let opacity = getCurrentOpacity()
+        if isFullyTransparent(opacity: opacity, fg: cell.foreground, bg: cell.background) {
+            return
+        }
+        if isFullyOpaque(opacity: opacity, fg: cell.foreground, bg: cell.background) {
+            setCellRaw(x: x, y: y, cell: cell)
+            return
+        }
+        let opacityByte = opacityToU8(opacity)
+        let effectiveCell = TerminalCell(
+            scalar: cell.scalar,
+            foreground: applyOpacity(cell.foreground, opacity: opacityByte),
+            background: applyOpacity(cell.background, opacity: opacityByte),
+            attributes: cell.attributes
+        )
+        if let dest = self.cell(atX: x, y: y) {
+            setCellRaw(x: x, y: y, cell: blendCells(overlay: effectiveCell, dest: dest))
+        } else {
+            setCellRaw(x: x, y: y, cell: effectiveCell)
+        }
+    }
+
     // parity: core/src/buffer.ts#OptimizedBuffer.setCellWithAlphaBlending [status=implemented hash=bfe1c708ab6d]
     public func setCellWithAlphaBlending(
         x: Int,
@@ -891,6 +970,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.drawChar [status=implemented hash=852263c0bf46]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawChar [status=implemented hash=6f0e48d24e64]
     public func drawChar(
         _ char: UInt32,
         x: Int,
@@ -909,6 +989,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     // MARK: - Fill Rect
 
     // parity: core/src/buffer.ts#OptimizedBuffer.fillRect [status=implemented hash=384eeb7fd767]
+    // parity: native/src/buffer.zig#OptimizedBuffer.fillRect [status=implemented hash=1a38bcf0934e]
     public func fillRect(x: Int, y: Int, width rectWidth: Int, height rectHeight: Int, bg fillBg: RGBA) {
         guard width > 0 && height > 0 && rectWidth > 0 && rectHeight > 0 else { return }
         let startX = max(0, x)
@@ -1120,7 +1201,8 @@ public final class OptimizedBuffer: @unchecked Sendable {
         }
     }
 
-    // parity: core/src/buffer.ts#OptimizedBuffer.drawText [status=implemented hash=c0ab798b1760]
+    // parity: core/src/buffer.ts#OptimizedBuffer.drawText [status=implemented hash=246cc71c401f]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawText [status=implemented hash=677a30f86530]
     public func drawText(
         _ text: String,
         x: Int,
@@ -1169,7 +1251,108 @@ public final class OptimizedBuffer: @unchecked Sendable {
         }
     }
 
+    /// Fills a rectangle clipped against buffer bounds and the active scissor rect (`fillRectClipped`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.fillRectClipped [status=implemented hash=a57badffc09d]
+    public func fillRectClipped(x: Int, y: Int, width rectWidth: Int, height rectHeight: Int, bg fillBg: RGBA) {
+        fillRect(x: x, y: y, width: rectWidth, height: rectHeight, bg: fillBg)
+    }
+
+    /// Draws text clipped to buffer bounds and the active scissor rect (`drawTextClipped`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawTextClipped [status=implemented hash=6926de93d152]
+    public func drawTextClipped(
+        _ text: String,
+        x: Int,
+        y: Int,
+        fg: RGBA,
+        bg: RGBA? = nil,
+        attributes: UInt32 = TextAttributes.none
+    ) {
+        drawText(text, x: x, y: y, fg: fg, bg: bg, attributes: attributes)
+    }
+
+    /// Validates UTF-8 length and color metadata before drawing text (`drawTextChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawTextChecked [status=implemented hash=7ac5a3f740b3]
+    public func drawTextChecked(
+        _ bytes: [UInt8],
+        x: Int,
+        y: Int,
+        fg: RGBA,
+        bg: RGBA? = nil,
+        attributes: UInt32 = TextAttributes.none
+    ) throws(NativeBufferBridge.TextValidationError) {
+        try NativeBufferBridge.validateTextInput(bytes)
+        drawText(String(decoding: bytes, as: UTF8.self), x: x, y: y, fg: fg, bg: bg, attributes: attributes)
+    }
+
+    /// Draws one already-segmented grapheme with an authoritative cell width (`drawGrapheme`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGrapheme [status=implemented hash=37fe54de525a]
+    public func drawGrapheme(
+        _ graphemeBytes: [UInt8],
+        cellWidth: UInt8,
+        x: Int,
+        y: Int,
+        fg: RGBA,
+        bg: RGBA,
+        attributes: UInt32 = TextAttributes.none
+    ) throws(BufferError) {
+        let w = Int(cellWidth)
+        guard !graphemeBytes.isEmpty, w > 0, x >= 0, y >= 0, x < width, y < height else { return }
+        guard x + w <= width, UInt32(w) <= glyphWidthMax else { return }
+        for offset in 0..<w {
+            guard isPointInScissor(x: x + offset, y: y) else { return }
+        }
+        var retainedGid: UInt32? = nil
+        defer { if let gid = retainedGid { try? graphemePool.decref(gid) } }
+        let encodedChar: UInt32
+        if graphemeBytes.count == 1 && w == 1 && graphemeBytes[0] >= 32 {
+            encodedChar = UInt32(graphemeBytes[0])
+        } else {
+            do {
+                let gid = try graphemePool.acquire(graphemeBytes)
+                retainedGid = gid
+                encodedChar = packGraphemeStart(gid: gid & graphemeIdMask, totalWidth: UInt32(w))
+            } catch {
+                throw .outOfMemory
+            }
+        }
+        setCell(x: x, y: y, cell: TerminalCell(scalar: encodedChar, foreground: fg, background: bg, attributes: attributes))
+    }
+
+    /// Validates attributes, colors, UTF-8, and printability before drawing a grapheme (`drawGraphemeChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawGraphemeChecked [status=implemented hash=3425a5839d54]
+    public func drawGraphemeChecked(
+        _ graphemeBytes: [UInt8],
+        cellWidth: UInt8,
+        x: Int,
+        y: Int,
+        fg: RGBA,
+        bg: RGBA,
+        attributes: UInt32 = TextAttributes.none
+    ) throws(BufferError) {
+        guard (attributes & ~TextAttributes.baseMask) == 0 else { throw .invalidDimensions }
+        guard (try? NativeBufferBridge.validateColor(fg)) != nil,
+              (try? NativeBufferBridge.validateColor(bg)) != nil
+        else {
+            throw .invalidDimensions
+        }
+        let w = Int(cellWidth)
+        guard !graphemeBytes.isEmpty, w > 0, x >= 0, y >= 0, x < width, y < height else { return }
+        guard w <= width - x else { return }
+        for offset in 0..<w {
+            guard isPointInScissor(x: x + offset, y: y) else { return }
+        }
+        guard isValidUtf8(graphemeBytes) else { throw .invalidUnicode }
+        if !isPrintableGlyph(graphemeBytes, width: UInt32(w)) {
+            for offset in 0..<w {
+                setCell(x: x + offset, y: y, cell: TerminalCell(scalar: defaultSpaceChar, foreground: fg, background: bg, attributes: attributes))
+            }
+            return
+        }
+        try drawGrapheme(graphemeBytes, cellWidth: cellWidth, x: x, y: y, fg: fg, bg: bg, attributes: attributes)
+    }
+
     // parity: core/src/buffer.ts#OptimizedBuffer.drawTextFit [status=implemented hash=143010e39579]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawTextFitted [status=implemented hash=ed850278acec]
     public func drawTextFit(
         _ text: String,
         x: Int,
@@ -1297,7 +1480,8 @@ public final class OptimizedBuffer: @unchecked Sendable {
         return BoxTitleLayout(shouldDraw: true, startX: titleX, endX: titleX + titleLength - 1)
     }
 
-    // parity: core/src/buffer.ts#OptimizedBuffer.drawBox [status=implemented hash=0ef616e0d0f7]
+    // parity: core/src/buffer.ts#OptimizedBuffer.drawBox [status=implemented hash=af351aaa68c5]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawBox [status=implemented hash=621452ed302d]
     public func drawBox(_ options: BoxDrawOptions) {
         drawBox(
             x: options.x,
@@ -1316,6 +1500,20 @@ public final class OptimizedBuffer: @unchecked Sendable {
             bottomTitle: options.bottomTitle,
             bottomTitleAlignment: options.bottomTitleAlignment
         )
+    }
+
+    /// Validates colors and title UTF-8 before drawing a box (`drawBoxChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawBoxChecked [status=implemented hash=7c9f20baf756]
+    public func drawBoxChecked(_ options: BoxDrawOptions) throws(BufferError) {
+        guard (try? NativeBufferBridge.validateColor(options.borderColor)) != nil,
+              (try? NativeBufferBridge.validateColor(options.backgroundColor)) != nil
+        else {
+            throw .invalidDimensions
+        }
+        if let tc = options.titleColor, (try? NativeBufferBridge.validateColor(tc)) == nil {
+            throw .invalidDimensions
+        }
+        drawBox(options)
     }
 
     public func drawBox(
@@ -1511,6 +1709,7 @@ public final class OptimizedBuffer: @unchecked Sendable {
     // MARK: - Framebuffer Compositing
 
     // parity: core/src/buffer.ts#OptimizedBuffer.drawFrameBuffer [status=implemented hash=77853d2ec43d]
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawFrameBuffer [status=implemented hash=3b839e7cc6e6]
     public func drawFrameBuffer(
         destX: Int,
         destY: Int,
@@ -1670,6 +1869,44 @@ public final class OptimizedBuffer: @unchecked Sendable {
             return String(scalar)
         }
         return " "
+    }
+
+    /// Validates dimensions before compositing another framebuffer (`drawFrameBufferChecked`).
+    // parity: native/src/buffer.zig#OptimizedBuffer.drawFrameBufferChecked [status=implemented hash=7af0e0dc8dac]
+    public func drawFrameBufferChecked(
+        destX: Int,
+        destY: Int,
+        frameBuffer: OptimizedBuffer,
+        sourceX: Int? = nil,
+        sourceY: Int? = nil,
+        sourceWidth: Int? = nil,
+        sourceHeight: Int? = nil
+    ) throws(BufferError) {
+        guard !isDestroyed && !frameBuffer.isDestroyed else { throw .invalidDimensions }
+        drawFrameBuffer(
+            destX: destX,
+            destY: destY,
+            frameBuffer: frameBuffer,
+            sourceX: sourceX,
+            sourceY: sourceY,
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight
+        )
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.getRealCharSize [status=implemented hash=1e9df1416607]
+    public func getRealCharSize(addLineBreaks: Bool = false) -> UInt32 {
+        UInt32(clamping: getRealCharBytes(addLineBreaks: addLineBreaks).count)
+    }
+
+    // parity: native/src/buffer.zig#OptimizedBuffer.writeResolvedChars [status=implemented hash=1d2f6ab87bb0]
+    public func writeResolvedChars(into output: inout [UInt8], addLineBreaks: Bool = false) throws(BufferError) -> UInt32 {
+        let resolved = getRealCharBytes(addLineBreaks: addLineBreaks)
+        guard resolved.count <= output.count else { throw .bufferTooSmall }
+        for i in 0..<resolved.count {
+            output[i] = resolved[i]
+        }
+        return UInt32(resolved.count)
     }
 
     // parity: core/src/buffer.ts#OptimizedBuffer.getRealCharBytes [status=implemented hash=98cd7168b005]

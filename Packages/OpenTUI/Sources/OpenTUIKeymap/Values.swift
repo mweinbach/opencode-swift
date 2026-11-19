@@ -278,7 +278,7 @@ public func isPromiseLike(_ value: Any?) -> Bool {
     value is any PromiseLike
 }
 
-// parity: keymap/src/services/values.ts#snapshotDataValue [status=implemented hash=60a7c6a90adf]
+// parity: keymap/src/services/values.ts#snapshotDataValue [status=implemented hash=6ba433834726]
 public func snapshotDataValue(
     _ value: KeymapValue,
     options: SnapshotDataOptions = SnapshotDataOptions()

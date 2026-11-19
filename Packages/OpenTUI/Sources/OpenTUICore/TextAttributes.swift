@@ -21,7 +21,7 @@ public func getBaseAttributes(_ attr: UInt32) -> UInt32 {
     attr & TextAttributes.baseMask
 }
 
-// parity: core/src/utils.ts#createTextAttributes [status=implemented hash=90f14a365137]
+// parity: core/src/utils.ts#createTextAttributes [status=implemented hash=9ae5fcfa148d]
 public func createTextAttributes(
     bold: Bool = false,
     italic: Bool = false,

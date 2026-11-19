@@ -106,12 +106,12 @@ public extension KeyDisambiguationContext {
     var hasContinuations: Bool { !continuations.isEmpty }
 }
 
-// parity: keymap/src/types.ts#KeyDeferredDisambiguationContext [status=implemented hash=a6b124d9f733]
+// parity: keymap/src/types.ts#KeyDeferredDisambiguationContext [status=implemented hash=45c628bf6c0e]
 public extension KeyDeferredDisambiguationContext {
     var isAborted: Bool { signal.isAborted }
 }
 
-// parity: keymap/src/types.ts#KeyDeferredDisambiguationHandler [status=implemented hash=de0245923670]
+// parity: keymap/src/types.ts#KeyDeferredDisambiguationHandler [status=implemented hash=e0645aae6921]
 public typealias KeymapDeferredDisambiguationHandler = KeyDeferredDisambiguationHandler
 
 // parity: keymap/src/types.ts#KeyDisambiguationResolver [status=implemented hash=0fe77f2eb4a8]
@@ -134,7 +134,7 @@ public extension StringifyOptions {
     static let displayPreferred = StringifyOptions(preferDisplay: true)
 }
 
-// parity: keymap/src/types.ts#KeyStringifyInput [status=implemented hash=86622f8d6e39]
+// parity: keymap/src/types.ts#KeyStringifyInput [status=implemented hash=aee7fc979db3]
 public extension KeyStringifyInput {
     func stringified(options: StringifyOptions? = nil) throws(KeymapError) -> String {
         try stringifyKeyStroke(self, options: options)
@@ -154,7 +154,7 @@ public extension KeyLike {
     }
 }
 
-// parity: keymap/src/types.ts#Command [status=implemented hash=184a194565ac]
+// parity: keymap/src/types.ts#Command [status=implemented hash=a0aee7e3c866]
 public extension Command {
     var descriptionField: String? {
         if case .string(let s) = fields["desc"] { return s }
@@ -162,12 +162,12 @@ public extension Command {
     }
 }
 
-// parity: keymap/src/types.ts#CommandQueryValue [status=implemented hash=25a998478b9a]
+// parity: keymap/src/types.ts#CommandQueryValue [status=implemented hash=200d3e607637]
 public extension CommandQueryValue {
     static func string(_ value: String) -> Self { .exact(.string(value)) }
 }
 
-// parity: keymap/src/types.ts#CommandFilter [status=implemented hash=48848aa23178]
+// parity: keymap/src/types.ts#CommandFilter [status=implemented hash=16765b1bb3ff]
 public extension CommandFilter {
     static func field(_ key: String, equals value: KeymapValue) -> Self {
         .fields([key: .exact(value)])
@@ -191,18 +191,18 @@ public extension RunCommandOptions {
     static var withCommand: Self { RunCommandOptions(includeCommand: true) }
 }
 
-// parity: keymap/src/types.ts#RunCommandResult [status=implemented hash=2ac518e3be88]
+// parity: keymap/src/types.ts#RunCommandResult [status=implemented hash=1d9e8b3b8d48]
 public extension RunCommandResult {
     var isFailure: Bool { !ok }
 }
 
-// parity: keymap/src/types.ts#CommandContext [status=implemented hash=a02d3bfe3112]
+// parity: keymap/src/types.ts#CommandContext [status=implemented hash=27e9553968cb]
 public extension CommandContext {
     var hasPayload: Bool { payload != nil && payload != .undefined }
 }
 
 /// Result returned by a command handler: handled boolean, void, or structured `RunCommandResult`.
-// parity: keymap/src/types.ts#CommandResult [status=implemented hash=7044b076358a]
+// parity: keymap/src/types.ts#CommandResult [status=implemented hash=0700175419c2]
 public enum CommandResult<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable {
     case handled(Bool)
     case void
@@ -236,10 +236,10 @@ public extension CommandResolutionStatus {
     var isResolved: Bool { self == .resolved }
 }
 
-// parity: keymap/src/types.ts#CommandHandler [status=implemented hash=d143827c1e67]
+// parity: keymap/src/types.ts#CommandHandler [status=implemented hash=86ef77b401aa]
 public typealias KeymapCommandHandler<Target: Hashable & Sendable, Event: KeymapEvent> = CommandHandler<Target, Event>
 
-// parity: keymap/src/types.ts#BindingCommand [status=implemented hash=a2ffc90fb418]
+// parity: keymap/src/types.ts#BindingCommand [status=implemented hash=d37479279c24]
 public extension BindingCommand {
     var isNamed: Bool { commandName != nil }
 }
@@ -254,7 +254,7 @@ public extension Binding {
     var resolvedEvent: BindingEvent { event ?? .press }
 }
 
-// parity: keymap/src/types.ts#Bindings [status=implemented hash=fb877368d985]
+// parity: keymap/src/types.ts#Bindings [status=implemented hash=9a1787f00f3b]
 public typealias Bindings<Target: Hashable & Sendable, Event: KeymapEvent> = [Binding<Target, Event>]
 
 // parity: keymap/src/types.ts#TargetMode [status=implemented hash=a80b14178eb1]
@@ -322,7 +322,7 @@ public extension DispatchLayer {
     var isGlobal: Bool { target == nil }
 }
 
-// parity: keymap/src/types.ts#DispatchBinding [status=implemented hash=16b5a1c96208]
+// parity: keymap/src/types.ts#DispatchBinding [status=implemented hash=970518cb3bf8]
 public extension DispatchBinding {
     var asActiveBinding: ActiveBinding<Target, Event> {
         ActiveBinding(
@@ -337,7 +337,7 @@ public extension DispatchBinding {
     }
 }
 
-// parity: keymap/src/types.ts#DispatchPhase [status=implemented hash=8370f6c28d30]
+// parity: keymap/src/types.ts#DispatchPhase [status=implemented hash=b8cccfe13da3]
 public extension DispatchPhase {
     var isSequencePhase: Bool {
         switch self {
@@ -352,7 +352,7 @@ public extension DispatchEvent {
     var isBindingExecution: Bool { phase == .bindingExecute }
 }
 
-// parity: keymap/src/types.ts#KeyAfterReason [status=implemented hash=a58d91371cf6]
+// parity: keymap/src/types.ts#KeyAfterReason [status=implemented hash=d573d83c96bf]
 public extension KeyAfterReason {
     var wasHandled: Bool {
         self != .noMatch && self != .sequenceMiss && self != .bindingRejected
@@ -451,7 +451,7 @@ public extension BindingTransformerContext {
 public typealias KeymapBindingTransformer<Target: Hashable & Sendable, Event: KeymapEvent> =
     BindingTransformer<Target, Event>
 
-// parity: keymap/src/types.ts#BindingsValidationResult [status=implemented hash=3e979c9f7cc2]
+// parity: keymap/src/types.ts#BindingsValidationResult [status=implemented hash=c83683c38a30]
 public extension BindingsValidationResult {
     var failureReason: String? {
         if case .invalid(let reason) = self { return reason }
@@ -459,7 +459,7 @@ public extension BindingsValidationResult {
     }
 }
 
-// parity: keymap/src/types.ts#LayerBindingsTransformerContext [status=implemented hash=0edf4c1ea4ad]
+// parity: keymap/src/types.ts#LayerBindingsTransformerContext [status=implemented hash=ea7a45776dd2]
 public extension LayerBindingsTransformerContext {
     var isGlobalLayer: Bool { layer.target == nil }
 }
@@ -541,7 +541,7 @@ public struct ErrorEvent: Equatable, Sendable {
 }
 
 /// Complete union of events exposed by `Keymap.on(...)`.
-// parity: keymap/src/types.ts#Events [status=implemented hash=011273410c5c]
+// parity: keymap/src/types.ts#Events [status=implemented hash=b30fee9693a8]
 public enum Events<Target: Hashable & Sendable, Event: KeymapEvent>: Sendable {
     case state
     case pendingSequence([KeySequencePart])
@@ -662,7 +662,7 @@ public final class KeymapActiveKeyState<Target: Hashable & Sendable, Event: Keym
     }
 }
 
-// parity: keymap/src/types.ts#CommandState [status=implemented hash=447e81547fd3]
+// parity: keymap/src/types.ts#CommandState [status=implemented hash=11d09ddc81f5]
 public extension CommandState {
     var name: String { command.name }
 }

@@ -407,7 +407,7 @@ public protocol LayerDiagnostics<Target, Event>: AnyObject, Sendable {
     func analyzeLayer(_ options: AnalyzeLayerOptions<Target, Event>)
 }
 
-// parity: keymap/src/services/layer-diagnostics.ts#LayerDiagnosticsCore [status=implemented hash=9d345375fbb8]
+// parity: keymap/src/services/layer-diagnostics.ts#LayerDiagnosticsCore [status=implemented hash=49603e14d557]
 public protocol LayerDiagnosticsCore<Target, Event>: LayerDiagnostics {
     @discardableResult
     func prependLayerAnalyzer(_ analyzer: @escaping LayerAnalyzer<Target, Event>) -> @Sendable () -> Void
@@ -1303,7 +1303,7 @@ private func layerBlocksActiveCommandViewCache<Target: Hashable & Sendable, Even
     return false
 }
 
-// parity: keymap/src/services/layers.ts#createLayerService [status=implemented hash=ea5f1cade54c]
+// parity: keymap/src/services/layers.ts#createLayerService [status=implemented hash=a7d9d0d55397]
 public func createLayerService<Host: KeymapHost, Compiler: CompilerService>(
     state: LayerStackState<Host.Target, Host.Event>,
     notify: KeymapNotifier,

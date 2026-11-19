@@ -250,7 +250,7 @@ public final class RendererThemeMode: @unchecked Sendable {
         }
     }
 
-    // parity: core/src/renderer-theme-mode.ts#RendererThemeMode.handleSequence [status=implemented hash=ce4b12c8951b]
+    // parity: core/src/renderer-theme-mode.ts#RendererThemeMode.handleSequence [status=implemented hash=c7f448d44625]
     public func handleSequence(_ sequence: String) -> ThemeModeSequenceResult {
         if sequence == "\u{1B}[?997;1n" || sequence == "\u{1B}[?997;2n" {
             requestThemeOscColors()

@@ -8,24 +8,39 @@
 /// - `01`: image cell with reservation ID and fallback quadrant
 /// - `10`: grapheme start cell with extent (bits 29..26) and 26-bit pool ID
 /// - `11`: continuation cell with left extent (bits 29..26) and 26-bit pool ID
+// parity: native/src/grapheme.zig#CHAR_TYPE_MASK [status=implemented hash=8fec4bac3d6c]
 public let cellCharTypeMask: UInt32 = 0xC000_0000
+// parity: native/src/grapheme.zig#CHAR_FLAG_IMAGE [status=implemented hash=34352bbe54da]
 public let cellCharFlagImage: UInt32 = 0x4000_0000
+// parity: native/src/grapheme.zig#CHAR_FLAG_GRAPHEME [status=implemented hash=2a448f09dedd]
 public let cellCharFlagGrapheme: UInt32 = 0x8000_0000
+// parity: native/src/grapheme.zig#CHAR_FLAG_CONTINUATION [status=implemented hash=41fbc5e37c07]
 public let cellCharFlagContinuation: UInt32 = 0xC000_0000
 
+// parity: native/src/grapheme.zig#IMAGE_ID_MASK [status=implemented hash=8f69da1e4dde]
 public let cellImageIdMask: UInt32 = 0x03FF_FFFF
+// parity: native/src/grapheme.zig#CHAR_EXT_SHIFT [status=implemented hash=09d805b694f1]
 public let cellCharExtShift: UInt32 = 26
+// parity: native/src/grapheme.zig#CHAR_EXT_MASK [status=implemented hash=671ec51ab326]
 public let cellCharExtMask: UInt32 = 0xF
 /// Maximum display cells one glyph can span (16).
+// parity: native/src/grapheme.zig#glyph_width_max [status=implemented hash=590fc5f531c1]
 public let glyphWidthMax: UInt32 = cellCharExtMask + 1
 
 /// 26-bit grapheme pool ID payload: `[ class (3 bits) | generation (7 bits) | slot_index (16 bits) ]`.
+// parity: native/src/grapheme.zig#GRAPHEME_ID_MASK [status=implemented hash=180b2965d8c8]
 public let graphemeIdMask: UInt32 = 0x03FF_FFFF
+// parity: native/src/grapheme.zig#CLASS_BITS [status=implemented hash=bd1ba0d877f6]
 public let graphemeClassBits: UInt32 = 3
+// parity: native/src/grapheme.zig#GENERATION_BITS [status=implemented hash=0122e7c97a61]
 public let graphemeGenerationBits: UInt32 = 7
+// parity: native/src/grapheme.zig#SLOT_BITS [status=implemented hash=3aed9389eacc]
 public let graphemeSlotBits: UInt32 = 16
+// parity: native/src/grapheme.zig#CLASS_MASK [status=implemented hash=2f7a20544900]
 public let graphemeClassMask: UInt32 = (1 << graphemeClassBits) - 1
+// parity: native/src/grapheme.zig#GENERATION_MASK [status=implemented hash=7c0e699aebac]
 public let graphemeGenerationMask: UInt32 = (1 << graphemeGenerationBits) - 1
+// parity: native/src/grapheme.zig#SLOT_MASK [status=implemented hash=834380253261]
 public let graphemeSlotMask: UInt32 = (1 << graphemeSlotBits) - 1
 
 /// Maximum UTF-8 bytes stored per grapheme cluster in `GraphemePool`.
@@ -140,11 +155,20 @@ public func encodedCharWidth(_ c: UInt32) -> UInt32 {
 
 /// Reference-counted, interned storage for multi-codepoint and wide grapheme clusters.
 /// IDs are 26-bit payloads: `[ class (3 bits) | generation (7 bits) | slot_index (16 bits) ]`.
-// parity: native/src/grapheme.zig#GraphemePool [status=implemented hash=c9cb0e2bf79c]
+// parity: native/src/grapheme.zig#GraphemePool [status=implemented hash=b160994b7d64]
 public final class GraphemePool: @unchecked Sendable {
     public typealias IdPayload = UInt32
 
+    public struct InitOptions: Equatable, Hashable, Sendable {
+        public var slotsPerPage: [Int]?
+
+        public init(slotsPerPage: [Int]? = nil) {
+            self.slotsPerPage = slotsPerPage
+        }
+    }
+
     private static let classSizes: [Int] = [8, 16, 32, 64, 128]
+    private static let defaultSlotsPerPage: [Int] = [256, 128, 64, 32, 16]
     private static let maxClasses: UInt32 = 5
 
     private struct Slot {
@@ -156,13 +180,23 @@ public final class GraphemePool: @unchecked Sendable {
 
     private struct ClassPool {
         let slotCapacity: Int
+        let slotsPerPage: Int
         var slots: [Slot] = []
         var freeList: [UInt32] = []
 
-        init(slotCapacity: Int) {
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.init [status=implemented hash=990087ea7820]
+        init(slotCapacity: Int, slotsPerPage: Int = 256) {
             self.slotCapacity = slotCapacity
+            self.slotsPerPage = slotsPerPage
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.deinit [status=implemented hash=4dfd75323a8d]
+        mutating func deinitClassPool() {
+            slots.removeAll(keepingCapacity: false)
+            freeList.removeAll(keepingCapacity: false)
+        }
+
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.allocInternal [status=implemented hash=2c87553bc3a0]
         mutating func allocSlot(_ bytes: [UInt8]) throws(GraphemePoolError) -> (slotIndex: UInt32, generation: UInt32) {
             if bytes.count > slotCapacity {
                 throw .graphemeTooLong
@@ -188,6 +222,13 @@ public final class GraphemePool: @unchecked Sendable {
             return (slotIndex, newGeneration)
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.getGeneration [status=implemented hash=1c78072a68ee]
+        func getGeneration(slotIndex: UInt32) -> UInt32 {
+            let idx = Int(slotIndex)
+            precondition(idx < slots.count)
+            return slots[idx].generation
+        }
+
         func validate(slotIndex: UInt32, generation: UInt32) throws(GraphemePoolError) -> Int {
             let idx = Int(slotIndex)
             guard idx < slots.count else { throw .invalidId }
@@ -198,6 +239,7 @@ public final class GraphemePool: @unchecked Sendable {
             return idx
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.incref [status=implemented hash=60b37055d593]
         mutating func incref(slotIndex: UInt32, generation: UInt32) throws(GraphemePoolError) {
             let idx = try validate(slotIndex: slotIndex, generation: generation)
             guard slots[idx].refcount > 0 else { throw .invalidId }
@@ -205,6 +247,7 @@ public final class GraphemePool: @unchecked Sendable {
             slots[idx].refcount += 1
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.decref [status=implemented hash=eb61a5812ce3]
         mutating func decref(slotIndex: UInt32, generation: UInt32) throws(GraphemePoolError) -> [UInt8]? {
             let idx = try validate(slotIndex: slotIndex, generation: generation)
             guard slots[idx].refcount > 0 else { throw .invalidId }
@@ -219,11 +262,13 @@ public final class GraphemePool: @unchecked Sendable {
             return nil
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.get [status=implemented hash=3f1e055cb0d6]
         func get(slotIndex: UInt32, generation: UInt32) throws(GraphemePoolError) -> [UInt8] {
             let idx = try validate(slotIndex: slotIndex, generation: generation)
             return slots[idx].bytes
         }
 
+        // parity: native/src/grapheme.zig#GraphemePool.ClassPool.getRefcount [status=implemented hash=96521cee1250]
         func getRefcount(slotIndex: UInt32, generation: UInt32) throws(GraphemePoolError) -> UInt32 {
             let idx = try validate(slotIndex: slotIndex, generation: generation)
             return slots[idx].refcount
@@ -233,8 +278,30 @@ public final class GraphemePool: @unchecked Sendable {
     private var classes: [ClassPool]
     private var internedLiveIds: [[UInt8]: IdPayload] = [:]
 
-    public init() {
-        self.classes = Self.classSizes.map { ClassPool(slotCapacity: $0) }
+    // parity: native/src/grapheme.zig#GraphemePool.init [status=implemented hash=03b3c6d8a5ad]
+    public convenience init() {
+        self.init(options: InitOptions())
+    }
+
+    // parity: native/src/grapheme.zig#GraphemePool.initWithOptions [status=implemented hash=4571baae65a0]
+    public init(options: InitOptions) {
+        let perPage = options.slotsPerPage ?? Self.defaultSlotsPerPage
+        precondition(perPage.count == Int(Self.maxClasses), "GraphemePool: slotsPerPage must have 5 entries")
+        var built: [ClassPool] = []
+        built.reserveCapacity(Int(Self.maxClasses))
+        for i in 0..<Int(Self.maxClasses) {
+            precondition(perPage[i] > 0, "GraphemePool: slotsPerPage must be non-zero")
+            built.append(ClassPool(slotCapacity: Self.classSizes[i], slotsPerPage: perPage[i]))
+        }
+        self.classes = built
+    }
+
+    // parity: native/src/grapheme.zig#GraphemePool.deinit [status=implemented hash=1578515515be]
+    deinit {
+        internedLiveIds.removeAll(keepingCapacity: false)
+        for i in 0..<classes.count {
+            classes[i].deinitClassPool()
+        }
     }
 
     @inline(__always)
@@ -263,6 +330,7 @@ public final class GraphemePool: @unchecked Sendable {
     }
 
     /// Acquires one owned live reference to `bytes`, interning identical live clusters.
+    // parity: native/src/grapheme.zig#GraphemePool.acquire [status=implemented hash=4f573ea6430c]
     public func acquire(_ bytes: [UInt8]) throws(GraphemePoolError) -> IdPayload {
         guard bytes.count <= graphemeBytesMax else {
             throw .graphemeTooLong
@@ -284,6 +352,7 @@ public final class GraphemePool: @unchecked Sendable {
     }
 
     /// Retains an already-live grapheme ID.
+    // parity: native/src/grapheme.zig#GraphemePool.incref [status=implemented hash=9a1e3230a1ad]
     public func incref(_ id: IdPayload) throws(GraphemePoolError) {
         let (classId, generation, slotIndex) = Self.unpackId(id)
         guard classId < Self.maxClasses else { throw .invalidId }
@@ -291,6 +360,7 @@ public final class GraphemePool: @unchecked Sendable {
     }
 
     /// Releases one reference to `id`, recycling the slot and removing interned identity at refcount 0.
+    // parity: native/src/grapheme.zig#GraphemePool.decref [status=implemented hash=b8107179b514]
     public func decref(_ id: IdPayload) throws(GraphemePoolError) {
         let (classId, generation, slotIndex) = Self.unpackId(id)
         guard classId < Self.maxClasses else { throw .invalidId }
@@ -300,6 +370,7 @@ public final class GraphemePool: @unchecked Sendable {
     }
 
     /// Returns the stored UTF-8 bytes for a live grapheme ID.
+    // parity: native/src/grapheme.zig#GraphemePool.get [status=implemented hash=1b06a5d277ca]
     public func get(_ id: IdPayload) throws(GraphemePoolError) -> [UInt8] {
         let (classId, generation, slotIndex) = Self.unpackId(id)
         guard classId < Self.maxClasses else { throw .invalidId }
@@ -313,6 +384,7 @@ public final class GraphemePool: @unchecked Sendable {
     }
 
     /// Returns the current reference count of a live grapheme ID.
+    // parity: native/src/grapheme.zig#GraphemePool.getRefcount [status=implemented hash=d4ffd10a7f11]
     public func getRefcount(_ id: IdPayload) throws(GraphemePoolError) -> UInt32 {
         let (classId, generation, slotIndex) = Self.unpackId(id)
         guard classId < Self.maxClasses else { throw .invalidId }
@@ -329,19 +401,22 @@ public final class GraphemePool: @unchecked Sendable {
 
 /// Tracks per-buffer grapheme ID usage, holding one `GraphemePool` reference per distinct
 /// live grapheme ID present in the owning buffer.
-// parity: native/src/grapheme.zig#GraphemeTracker [status=implemented hash=c130357725f5]
+// parity: native/src/grapheme.zig#GraphemeTracker [status=implemented hash=8ea647d63adf]
 public final class GraphemeTracker: @unchecked Sendable {
     public let pool: GraphemePool
     public private(set) var usedIds: [UInt32: UInt32] = [:]
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.init [status=implemented hash=bc57103850b1]
     public init(pool: GraphemePool) {
         self.pool = pool
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.deinit [status=implemented hash=2cc03cf37834]
     deinit {
         clear()
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.clear [status=implemented hash=e85a716a7d3c]
     public func clear() {
         for id in usedIds.keys {
             try? pool.decref(id)
@@ -349,6 +424,7 @@ public final class GraphemeTracker: @unchecked Sendable {
         usedIds.removeAll(keepingCapacity: true)
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.add [status=implemented hash=ad0a99dad76a]
     public func add(_ id: UInt32) {
         if let existing = usedIds[id] {
             usedIds[id] = existing + 1
@@ -362,6 +438,7 @@ public final class GraphemeTracker: @unchecked Sendable {
         }
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.remove [status=implemented hash=8abfe00b6129]
     public func remove(_ id: UInt32) {
         guard let count = usedIds[id] else { return }
         if count > 1 {
@@ -372,6 +449,7 @@ public final class GraphemeTracker: @unchecked Sendable {
         try? pool.decref(id)
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.replace [status=implemented hash=f59f17016abc]
     public func replace(oldId: UInt32?, newId: UInt32?) {
         if let oldId, let newId, oldId == newId { return }
         if let newId { add(newId) }
@@ -388,18 +466,22 @@ public final class GraphemeTracker: @unchecked Sendable {
         }
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.contains [status=implemented hash=d3525c02d1b6]
     public func contains(_ id: UInt32) -> Bool {
         usedIds[id] != nil
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.hasAny [status=implemented hash=39b4053129ce]
     public var hasAny: Bool {
         !usedIds.isEmpty
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.getGraphemeCount [status=implemented hash=cda1965363a1]
     public var graphemeCount: UInt32 {
         UInt32(usedIds.count)
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.getGraphemeCellCount [status=implemented hash=c03f80bc2b3f]
     public var graphemeCellCount: UInt32 {
         var total: UInt32 = 0
         for count in usedIds.values {
@@ -408,6 +490,7 @@ public final class GraphemeTracker: @unchecked Sendable {
         return total
     }
 
+    // parity: native/src/grapheme.zig#GraphemeTracker.getTotalGraphemeBytes [status=implemented hash=1c586ac1261f]
     public var totalGraphemeBytes: UInt32 {
         var total: UInt32 = 0
         for (id, count) in usedIds {

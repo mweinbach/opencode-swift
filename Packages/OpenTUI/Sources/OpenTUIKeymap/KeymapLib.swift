@@ -291,7 +291,7 @@ public func createRuntimeOrderedRegistry<Value: Sendable>(
     OrderedRegistry(initial)
 }
 
-// parity: keymap/src/lib/runtime-utils.ts#createRuntimePriorityRegistry [status=implemented hash=5031a636d0f2]
+// parity: keymap/src/lib/runtime-utils.ts#createRuntimePriorityRegistry [status=implemented hash=7d54a4892e3c]
 public func createRuntimePriorityRegistry<Listener: Sendable, Meta: Sendable>() -> PriorityRegistry<Listener, Meta> {
     PriorityRegistry()
 }

@@ -44,7 +44,7 @@ extension KeyBinding: Sendable where Action: Sendable {}
 extension KeyBinding: Codable where Action: Codable {}
 
 /// Key-chord lookup query optionally carrying Kitty's base-layout Unicode code point.
-// parity: core/src/lib/keybinding.internal.ts#KeyBindingLookup [status=implemented hash=501b3c9d25f0]
+// parity: core/src/lib/keybinding.internal.ts#KeyBindingLookup [status=implemented hash=b53082328215]
 public struct KeyBindingLookup: KeyBindingLike, Equatable, Hashable, Sendable, Codable {
     public var name: String
     public var ctrl: Bool

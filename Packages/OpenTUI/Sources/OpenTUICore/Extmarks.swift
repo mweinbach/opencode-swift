@@ -94,7 +94,7 @@ private func isU32Int(_ value: Int) -> Bool {
 ///
 /// Extmarks live inside the backing `EditBuffer`, shift automatically with edits, and restore
 /// on undo/redo. Mark IDs are monotonically increasing and never reused.
-// parity: core/src/lib/extmarks.ts#ExtmarksController [status=implemented hash=966884a1a4f8]
+// parity: core/src/lib/extmarks.ts#ExtmarksController [status=implemented hash=a53696bda180]
 public final class ExtmarksController {
     private let editBuffer: EditBuffer
     private let editorView: EditorView

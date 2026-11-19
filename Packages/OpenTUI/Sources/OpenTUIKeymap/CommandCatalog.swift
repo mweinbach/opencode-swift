@@ -1507,7 +1507,7 @@ private func valueMatchesExact(_ value: KeymapValue, expected: KeymapValue) -> B
     return objectIs(value, expected)
 }
 
-// parity: keymap/src/services/command-catalog.ts#createCommandCatalogService [status=implemented hash=b75a1bbd0562]
+// parity: keymap/src/services/command-catalog.ts#createCommandCatalogService [status=implemented hash=db1d0bd885d8]
 public func createCommandCatalogService<Host: KeymapHost>(
     state: LayerStackState<Host.Target, Host.Event>,
     host: Host,

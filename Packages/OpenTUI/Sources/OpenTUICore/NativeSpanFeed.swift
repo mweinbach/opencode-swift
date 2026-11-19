@@ -185,7 +185,7 @@ public typealias AsyncDataHandler = @Sendable ([UInt8]) async -> Void
 // MARK: - NativeSpanFeed
 
 /// Pure-Swift chunked span-feed stream matching `core/src/NativeSpanFeed.ts`.
-// parity: core/src/NativeSpanFeed.ts#NativeSpanFeed [status=adapted hash=b8e2166adf21]
+// parity: core/src/NativeSpanFeed.ts#NativeSpanFeed [status=adapted hash=cf71f84e4355]
 public final class NativeSpanFeed: @unchecked Sendable {
     private struct DataSubscription {
         let id: UInt64

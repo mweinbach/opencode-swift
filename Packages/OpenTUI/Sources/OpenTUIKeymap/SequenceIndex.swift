@@ -244,7 +244,7 @@ public func getNodeSequence<Target: Hashable & Sendable, Event: KeymapEvent>(
     return parts
 }
 
-// parity: keymap/src/services/sequence-index.ts#getNodePresentation [status=implemented hash=9a7f79f02127]
+// parity: keymap/src/services/sequence-index.ts#getNodePresentation [status=implemented hash=e9469a351c2f]
 public func getNodePresentation<Target: Hashable & Sendable, Event: KeymapEvent>(
     _ node: SequenceNode<Target, Event>
 ) -> SequenceNodePresentation {

@@ -341,7 +341,7 @@ private func utf16IndexOf(_ haystack: [UInt16], needle: [UInt16], fromIndex: Int
 }
 
 /// Unescapes backslash-escaped ASCII punctuation in a Markdown inline link destination.
-// parity: core/src/lib/detect-links.ts#normalizeMarkdownLinkTarget [status=implemented hash=991d9947ed52]
+// parity: core/src/lib/detect-links.ts#normalizeMarkdownLinkTarget [status=implemented hash=8b0eb365a119]
 public func normalizeMarkdownLinkTarget(_ destination: String) -> String {
     let units = Array(destination.utf16)
     guard !units.isEmpty else { return destination }
@@ -370,7 +370,7 @@ public func normalizeMarkdownLinkTarget(_ destination: String) -> String {
 ///
 /// All highlight offsets and `sourceRanges` are interpreted as UTF-16 code-unit offsets
 /// matching JavaScript string indices.
-// parity: core/src/lib/detect-links.ts#detectLinks [status=implemented hash=3c77b6254638]
+// parity: core/src/lib/detect-links.ts#detectLinks [status=implemented hash=8a38eab16c27]
 public func detectLinks(_ chunks: [TextChunk], context: DetectLinksContext) -> [TextChunk] {
     let utf16 = Array(context.content.utf16)
     let highlights = context.highlights

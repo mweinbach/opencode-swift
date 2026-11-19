@@ -783,7 +783,7 @@ private func evaluateTimelineSync(_ item: TimelineSubTimelineItem, timelineTime:
 
 // MARK: - Timeline
 
-// parity: core/src/animation/Timeline.ts#Timeline [status=implemented hash=9f9ce7d81911]
+// parity: core/src/animation/Timeline.ts#Timeline [status=implemented hash=8ee3088983b3]
 public final class Timeline: @unchecked Sendable {
     private var entries: [TimelineEntry] = []
     private var subTimelines: [TimelineSubTimelineItem] = []
@@ -873,7 +873,7 @@ public final class Timeline: @unchecked Sendable {
         }
     }
 
-    // parity: core/src/animation/Timeline.ts#Timeline.add [status=implemented hash=c854a01611b7]
+    // parity: core/src/animation/Timeline.ts#Timeline.add [status=implemented hash=aefa6e7f8eb1]
     @discardableResult
     public func add(
         _ targets: [any AnimationTarget],
@@ -1283,7 +1283,7 @@ public func destroyTimelineEngine(_ renderer: any TimelineRendererHost) {
     }
 }
 
-// parity: core/src/animation/Timeline.ts#createTimeline [status=implemented hash=b888a2912eec]
+// parity: core/src/animation/Timeline.ts#createTimeline [status=implemented hash=abb110a50b10]
 public func createTimeline(
     options: TimelineOptions = TimelineOptions(),
     renderer: (any TimelineRendererHost)? = nil

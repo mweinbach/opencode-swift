@@ -162,7 +162,7 @@ public struct ConsoleSelection: Equatable, Hashable, Sendable {
     }
 }
 
-// parity: core/src/console.ts#ConsoleAction [status=implemented hash=1ca11ae5b350]
+// parity: core/src/console.ts#ConsoleAction [status=implemented hash=4084330a5e5d]
 public enum ConsoleAction: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
     case scrollUp = "scroll-up"
     case scrollDown = "scroll-down"
@@ -583,7 +583,7 @@ private func consoleBaseCodeKeyName(name: String, baseCode: UInt32?) -> String? 
 
 // MARK: - TerminalConsole
 
-// parity: core/src/console.ts#TerminalConsole [status=implemented hash=0676372a0af8]
+// parity: core/src/console.ts#TerminalConsole [status=implemented hash=0c0b8855e79e]
 public final class TerminalConsole: @unchecked Sendable {
     private var _isVisible: Bool = false
     private var _isFocused: Bool = false
@@ -702,7 +702,7 @@ public final class TerminalConsole: @unchecked Sendable {
         _allLogEntries.count + cache.cachedLogs.count
     }
 
-    // parity: core/src/console.ts#TerminalConsole.bounds [status=implemented hash=00de73881129]
+    // parity: core/src/console.ts#TerminalConsole.bounds [status=implemented hash=db37574cdad7]
     public var bounds: ConsoleBounds {
         ConsoleBounds(x: consoleX, y: consoleY, width: consoleWidth, height: consoleHeight)
     }

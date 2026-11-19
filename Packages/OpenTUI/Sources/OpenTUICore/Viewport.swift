@@ -45,7 +45,7 @@ public enum ViewportDirection: String, Equatable, Hashable, Sendable, Codable {
 
 /// Binary-search viewport culling with 50-item gap lookbehind and stable zIndex sort,
 /// matching `packages/core/src/lib/objects-in-viewport.ts`.
-// parity: core/src/lib/objects-in-viewport.ts#getObjectsInViewport [status=implemented hash=404fbef54525]
+// parity: core/src/lib/objects-in-viewport.ts#getObjectsInViewport [status=implemented hash=cbaec86466b8]
 public func getObjectsInViewport<T: ViewportObject>(
     viewport: ViewportBounds,
     objects: [T],

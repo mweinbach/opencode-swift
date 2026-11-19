@@ -1241,7 +1241,7 @@ public struct AudioStreamUrlOptions: Sendable {
     }
 }
 
-// parity: core/src/audio.ts#AudioStreamState [status=implemented hash=1a1bf9e36546]
+// parity: core/src/audio.ts#AudioStreamState [status=implemented hash=9bb2b8eb16ad]
 public enum AudioStreamState: String, Equatable, Hashable, Sendable, CaseIterable {
     case initializing
     case buffering
@@ -1314,7 +1314,7 @@ public struct AudioStreamMetadata: Equatable, Hashable, Sendable, Codable {
     public var streamUrl: String? { fields["StreamUrl"] }
 }
 
-// parity: core/src/audio.ts#AudioStreamAction [status=implemented hash=b9f1b0f91163]
+// parity: core/src/audio.ts#AudioStreamAction [status=implemented hash=71d05c7c363d]
 public enum AudioStreamAction: String, Equatable, Hashable, Sendable {
     case fetch
     case response
@@ -1567,7 +1567,7 @@ public enum AudioRecorderState: String, Equatable, Hashable, Sendable, CaseItera
     case disposed
 }
 
-// parity: core/src/audio.ts#AudioRecorderAction [status=implemented hash=95966183fadf]
+// parity: core/src/audio.ts#AudioRecorderAction [status=implemented hash=46d93a656bce]
 public enum AudioRecorderAction: String, Equatable, Hashable, Sendable {
     case open
     case start
@@ -1636,7 +1636,7 @@ public struct AudioRecorderStats: Equatable, Sendable {
     }
 }
 
-// parity: core/src/audio.ts#AudioAction [status=implemented hash=871e54fc2732]
+// parity: core/src/audio.ts#AudioAction [status=implemented hash=88269ecec51b]
 public enum AudioAction: String, Equatable, Hashable, Sendable {
     case createAudioEngine
     case start
@@ -1887,7 +1887,7 @@ private struct MixerVoice: Sendable {
 
 /// Streaming audio playback handle supporting PCM f32le ingestion, ICY metadata demuxing,
 /// live gain/pan/group controls, stats reporting, and lifecycle disposal.
-// parity: core/src/audio.ts#AudioStream [status=implemented hash=7823e0cef91a]
+// parity: core/src/audio.ts#AudioStream [status=implemented hash=78b7b35752a3]
 public final class AudioStream<M: Sendable>: @unchecked Sendable {
     public let format: AudioStreamFormat
     public var events: AudioStreamEvents<M> = AudioStreamEvents()
@@ -2041,7 +2041,7 @@ public final class AudioStream<M: Sendable>: @unchecked Sendable {
 // MARK: - AudioCaptureStream
 
 /// Capture ring stream handle exposing deterministic chunk reads, stats, and lifecycle control.
-// parity: core/src/audio.ts#AudioCaptureStream [status=implemented hash=45bac83195b1]
+// parity: core/src/audio.ts#AudioCaptureStream [status=implemented hash=c918439b938e]
 public final class AudioCaptureStream: @unchecked Sendable {
     public let sampleRate: Int
     public let channels: Int
@@ -2134,7 +2134,7 @@ public final class AudioCaptureStream: @unchecked Sendable {
 
 /// Pure-Swift WAV audio recorder consuming captured PCM frames into an encoded RIFF WAVE byte buffer
 /// (and optional custom publish sink, keeping `OpenTUICore` free of OS filesystem imports).
-// parity: core/src/audio.ts#AudioRecorder [status=implemented hash=7ba6ab6a74ca]
+// parity: core/src/audio.ts#AudioRecorder [status=implemented hash=de1d102a264b]
 public final class AudioRecorder: @unchecked Sendable {
     public let filePath: String
     public let format: String = "wav"
@@ -2243,7 +2243,7 @@ public typealias AudioEngine = Audio
 
 /// Pure-Swift cross-platform PCM audio engine, voice/group mixer, synthesizer host,
 /// tap monitor, capture ring buffer, and streaming playback controller.
-// parity: core/src/audio.ts#Audio [status=implemented hash=26854a427a4f]
+// parity: core/src/audio.ts#Audio [status=implemented hash=21c762be297b]
 public final class Audio: @unchecked Sendable {
     public static let defaultSampleRate: Int = 48_000
 
@@ -2292,7 +2292,7 @@ public final class Audio: @unchecked Sendable {
     private var lastPeakLevel: Float = 0
     private var lastRmsLevel: Float = 0
 
-    // parity: core/src/audio.ts#Audio.create [status=implemented hash=4bd4c3138f18]
+    // parity: core/src/audio.ts#Audio.create [status=implemented hash=c6bd0dec5ce3]
     public static func create(_ options: AudioSetupOptions = AudioSetupOptions()) throws(AudioInitializationError) -> Audio {
         if let sr = options.sampleRate, sr < 0 {
             throw AudioInitializationError(action: .createAudioEngine, message: "sampleRate must be non-negative")
@@ -2890,7 +2890,7 @@ public final class Audio: @unchecked Sendable {
         return true
     }
 
-    // parity: core/src/audio.ts#Audio.readTapFrames [status=implemented hash=96d7e569d604]
+    // parity: core/src/audio.ts#Audio.readTapFrames [status=implemented hash=13429a8f5a3e]
     public func readTapFrames(_ frameCount: Int, channels: Int = 2) -> AudioCaptureReadResult? {
         guard !isDisposed else {
             emitError(.readTapFrames, message: "Audio engine unavailable during readTapFrames")
@@ -2907,7 +2907,7 @@ public final class Audio: @unchecked Sendable {
 
     // MARK: - Streaming Playback
 
-    // parity: core/src/audio.ts#Audio.playStream [status=implemented hash=9d5e0745a574]
+    // parity: core/src/audio.ts#Audio.playStream [status=implemented hash=6490b7a1f9f4]
     public func playStream<M: Sendable>(
         _ source: AudioStreamBody,
         options: AudioStreamBodyOptions<M> = AudioStreamBodyOptions()
@@ -2922,7 +2922,7 @@ public final class Audio: @unchecked Sendable {
         return stream
     }
 
-    // parity: core/src/audio.ts#Audio.playStreamUrl [status=implemented hash=334cd2b05ca6]
+    // parity: core/src/audio.ts#Audio.playStreamUrl [status=implemented hash=688a67fe64e6]
     public func playStreamUrl(
         _ url: String,
         options: AudioStreamUrlOptions = AudioStreamUrlOptions()
@@ -3005,7 +3005,7 @@ public final class Audio: @unchecked Sendable {
         return stream
     }
 
-    // parity: core/src/audio.ts#Audio.playStreamSource [status=implemented hash=5115a6f82b36]
+    // parity: core/src/audio.ts#Audio.playStreamSource [status=implemented hash=bb503a1762bc]
     public func playStreamSource<C: AudioStreamConnector, M: Sendable>(
         _ connector: C,
         options: AudioStreamSourceOptions<C.Info, M> = AudioStreamSourceOptions()
@@ -3212,7 +3212,7 @@ public final class Audio: @unchecked Sendable {
         selectedCaptureDeviceIndex = nil
     }
 
-    // parity: core/src/audio.ts#Audio.startCapture [status=implemented hash=ebbe33dfd64c]
+    // parity: core/src/audio.ts#Audio.startCapture [status=implemented hash=a48bd6dab8e9]
     @discardableResult
     public func startCapture(_ options: AudioCaptureOptions = AudioCaptureOptions()) -> Bool {
         guard !isDisposed else {
@@ -3325,7 +3325,7 @@ public final class Audio: @unchecked Sendable {
         return true
     }
 
-    // parity: core/src/audio.ts#Audio.openCapture [status=implemented hash=b7235e985bf7]
+    // parity: core/src/audio.ts#Audio.openCapture [status=implemented hash=25d023f85892]
     public func openCapture(_ options: AudioCaptureStreamOptions = AudioCaptureStreamOptions()) throws(AudioCaptureStreamError) -> AudioCaptureStream {
         guard !isDisposed else {
             throw AudioCaptureStreamError(
@@ -3363,7 +3363,7 @@ public final class Audio: @unchecked Sendable {
         return stream
     }
 
-    // parity: core/src/audio.ts#Audio.recordToFile [status=implemented hash=d53568902f7a]
+    // parity: core/src/audio.ts#Audio.recordToFile [status=implemented hash=9681e84b06ec]
     public func recordToFile(
         _ filePath: String,
         options: AudioRecordToFileOptions = AudioRecordToFileOptions(),
@@ -3459,7 +3459,7 @@ public final class Audio: @unchecked Sendable {
 }
 
 /// Convenience factory matching `core/src/audio.ts#setupAudio`.
-// parity: core/src/audio.ts#setupAudio [status=implemented hash=bd9bad457186]
+// parity: core/src/audio.ts#setupAudio [status=implemented hash=a73a39ef7928]
 public func setupAudio(_ options: AudioSetupOptions = AudioSetupOptions()) throws(AudioInitializationError) -> Audio {
     try Audio.create(options)
 }

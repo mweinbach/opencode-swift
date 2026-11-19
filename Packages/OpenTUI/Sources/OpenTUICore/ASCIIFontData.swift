@@ -288,7 +288,7 @@ private func fallbackSpaceWidth(in fontDef: ParsedASCIIFontDefinition) -> Int {
 // MARK: - Measurement, Positions, Hit-Testing & Rendering
 
 /// Measures the cell width and height of `text` rendered in `font`.
-// parity: core/src/lib/ascii.font.ts#measureText [status=implemented hash=9e2eb8274717]
+// parity: core/src/lib/ascii.font.ts#measureText [status=implemented hash=e70e32196889]
 public func measureAsciiText(_ text: String, font: ASCIIFontName = .tiny) -> ASCIIFontMeasurement {
     let fontDef = parsedASCIIFont(font)
     let units = Array(text.utf16)
@@ -373,7 +373,7 @@ public func coordinateToCharacterIndex(_ x: Int, text: String, font: ASCIIFontNa
 
 /// Renders an ASCII banner font directly into `buffer` with `<c1>`/`<c2>` multi-color support,
 /// optional horizontal alignment, and alpha blending.
-// parity: core/src/lib/ascii.font.ts#renderFontToFrameBuffer [status=implemented hash=724f026224e8]
+// parity: core/src/lib/ascii.font.ts#renderFontToFrameBuffer [status=implemented hash=6c7f1aa7f5d2]
 @discardableResult
 public func renderFontToFrameBuffer(
     _ buffer: OptimizedBuffer,

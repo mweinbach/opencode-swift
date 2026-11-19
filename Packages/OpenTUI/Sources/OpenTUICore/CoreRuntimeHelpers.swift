@@ -1125,7 +1125,7 @@ public func writeFile(
 }
 
 /// Resolves a bundled asset key through `OTUI_ASSET_ROOT`, optional loader closure, or fallback path.
-// parity: core/src/platform/runtime.ts#resolveBundledFilePath [status=adapted hash=19e98c5479bf]
+// parity: core/src/platform/runtime.ts#resolveBundledFilePath [status=adapted hash=2d8244785077]
 public func resolveBundledFilePath(
     key: String,
     loadBundledFile: (@Sendable () async throws -> String)? = nil,
@@ -1479,8 +1479,29 @@ public struct PlatformExpectation<T> {
         }
     }
 
+    public func toBeNull<Wrapped>() throws where T == Wrapped? {
+        guard received == nil else {
+            throw PlatformAssertionError("Expected nil, received \(String(describing: received))")
+        }
+    }
+
     public func toEqual(_ expected: T) throws where T: Equatable {
         try toBe(expected)
+    }
+
+    public func toThrow(_ expectedSubstring: String? = nil) throws where T == () throws -> Void {
+        do {
+            try received()
+        } catch {
+            if let expectedSubstring {
+                let desc = String(describing: error)
+                guard desc.contains(expectedSubstring) else {
+                    throw PlatformAssertionError("Expected error containing '\(expectedSubstring)', received '\(desc)'")
+                }
+            }
+            return
+        }
+        throw PlatformAssertionError("Expected function to throw an error, but it succeeded")
     }
 }
 
@@ -1489,4 +1510,230 @@ public struct PlatformExpectation<T> {
 // parity: core/src/platform/test.ts#expect [status=adapted hash=bfab65837556]
 public func platformExpect<T>(_ received: T) -> PlatformExpectation<T> {
     PlatformExpectation(received)
+}
+
+/// Result summary returned when executing a registered `PlatformTestSuite`.
+public struct PlatformTestRunReport: Equatable, Sendable {
+    public var passed: [String]
+    public var failed: [(name: String, message: String)]
+
+    public init(passed: [String] = [], failed: [(name: String, message: String)] = []) {
+        self.passed = passed
+        self.failed = failed
+    }
+
+    public static func == (lhs: PlatformTestRunReport, rhs: PlatformTestRunReport) -> Bool {
+        guard lhs.passed == rhs.passed, lhs.failed.count == rhs.failed.count else { return false }
+        for (a, b) in zip(lhs.failed, rhs.failed) {
+            if a.name != b.name || a.message != b.message { return false }
+        }
+        return true
+    }
+}
+
+/// Portable in-memory test suite & lifecycle hook registry backing `core/src/platform/test.ts`.
+public final class PlatformTestHarness: @unchecked Sendable {
+    public static let shared = PlatformTestHarness()
+
+    private struct SuiteState {
+        var name: String
+        var beforeHooks: [@Sendable () throws -> Void] = []
+        var afterHooks: [@Sendable () throws -> Void] = []
+        var beforeEachHooks: [@Sendable () throws -> Void] = []
+        var afterEachHooks: [@Sendable () throws -> Void] = []
+        var cases: [(name: String, body: @Sendable () throws -> Void)] = []
+    }
+
+    private struct State {
+        var suiteStack: [SuiteState] = []
+        var rootCases: [(name: String, body: @Sendable () throws -> Void)] = []
+        var rootBefore: [@Sendable () throws -> Void] = []
+        var rootAfter: [@Sendable () throws -> Void] = []
+        var rootBeforeEach: [@Sendable () throws -> Void] = []
+        var rootAfterEach: [@Sendable () throws -> Void] = []
+    }
+
+    private let state = Mutex(State())
+
+    public init() {}
+
+    public func reset() {
+        state.withLock { $0 = State() }
+    }
+
+    @discardableResult
+    public func describe(_ name: String, _ define: () -> Void) -> PlatformTestRunReport {
+        state.withLock { $0.suiteStack.append(SuiteState(name: name)) }
+        define()
+        let suite = state.withLock { $0.suiteStack.removeLast() }
+        return runSuite(suite)
+    }
+
+    public func addBefore(_ hook: @escaping @Sendable () throws -> Void) {
+        state.withLock { s in
+            if !s.suiteStack.isEmpty {
+                s.suiteStack[s.suiteStack.count - 1].beforeHooks.append(hook)
+            } else {
+                s.rootBefore.append(hook)
+            }
+        }
+    }
+
+    public func addAfter(_ hook: @escaping @Sendable () throws -> Void) {
+        state.withLock { s in
+            if !s.suiteStack.isEmpty {
+                s.suiteStack[s.suiteStack.count - 1].afterHooks.append(hook)
+            } else {
+                s.rootAfter.append(hook)
+            }
+        }
+    }
+
+    public func addBeforeEach(_ hook: @escaping @Sendable () throws -> Void) {
+        state.withLock { s in
+            if !s.suiteStack.isEmpty {
+                s.suiteStack[s.suiteStack.count - 1].beforeEachHooks.append(hook)
+            } else {
+                s.rootBeforeEach.append(hook)
+            }
+        }
+    }
+
+    public func addAfterEach(_ hook: @escaping @Sendable () throws -> Void) {
+        state.withLock { s in
+            if !s.suiteStack.isEmpty {
+                s.suiteStack[s.suiteStack.count - 1].afterEachHooks.append(hook)
+            } else {
+                s.rootAfterEach.append(hook)
+            }
+        }
+    }
+
+    public func addTest(_ name: String, _ body: @escaping @Sendable () throws -> Void) {
+        state.withLock { s in
+            if !s.suiteStack.isEmpty {
+                s.suiteStack[s.suiteStack.count - 1].cases.append((name, body))
+            } else {
+                s.rootCases.append((name, body))
+            }
+        }
+    }
+
+    @discardableResult
+    public func runRootCases() -> PlatformTestRunReport {
+        let suite = state.withLock { s -> SuiteState in
+            let captured = SuiteState(
+                name: "",
+                beforeHooks: s.rootBefore,
+                afterHooks: s.rootAfter,
+                beforeEachHooks: s.rootBeforeEach,
+                afterEachHooks: s.rootAfterEach,
+                cases: s.rootCases
+            )
+            s.rootBefore.removeAll()
+            s.rootAfter.removeAll()
+            s.rootBeforeEach.removeAll()
+            s.rootAfterEach.removeAll()
+            s.rootCases.removeAll()
+            return captured
+        }
+        return runSuite(suite)
+    }
+
+    private func runSuite(_ suite: SuiteState) -> PlatformTestRunReport {
+        var report = PlatformTestRunReport()
+        do {
+            for hook in suite.beforeHooks { try hook() }
+        } catch {
+            report.failed.append((suite.name.isEmpty ? "<before>" : "\(suite.name) <before>", String(describing: error)))
+            return report
+        }
+        for testCase in suite.cases {
+            let fullName = suite.name.isEmpty ? testCase.name : "\(suite.name) > \(testCase.name)"
+            do {
+                for hook in suite.beforeEachHooks { try hook() }
+                try testCase.body()
+                for hook in suite.afterEachHooks { try hook() }
+                report.passed.append(fullName)
+            } catch {
+                for hook in suite.afterEachHooks { try? hook() }
+                report.failed.append((fullName, String(describing: error)))
+            }
+        }
+        for hook in suite.afterHooks {
+            do {
+                try hook()
+            } catch {
+                report.failed.append((suite.name.isEmpty ? "<after>" : "\(suite.name) <after>", String(describing: error)))
+            }
+        }
+        return report
+    }
+}
+
+/// Defines and runs a portable test suite matching `core/src/platform/test.ts#describe`.
+// parity: core/src/platform/test.ts#describe [status=adapted hash=ea7c89590169]
+@discardableResult
+public func platformDescribe(
+    _ name: String,
+    harness: PlatformTestHarness = .shared,
+    _ define: () -> Void
+) -> PlatformTestRunReport {
+    harness.describe(name, define)
+}
+
+/// Registers a test case matching `core/src/platform/test.ts#it`.
+// parity: core/src/platform/test.ts#it [status=adapted hash=ea7c89590169]
+public func platformIt(
+    _ name: String,
+    harness: PlatformTestHarness = .shared,
+    _ body: @escaping @Sendable () throws -> Void
+) {
+    harness.addTest(name, body)
+}
+
+/// Registers a test case matching `core/src/platform/test.ts#test`.
+// parity: core/src/platform/test.ts#test [status=adapted hash=ea7c89590169]
+public func platformTest(
+    _ name: String,
+    harness: PlatformTestHarness = .shared,
+    _ body: @escaping @Sendable () throws -> Void
+) {
+    harness.addTest(name, body)
+}
+
+/// Registers a suite setup hook matching `core/src/platform/test.ts#before`.
+// parity: core/src/platform/test.ts#before [status=adapted hash=ea7c89590169]
+public func platformBefore(
+    harness: PlatformTestHarness = .shared,
+    _ hook: @escaping @Sendable () throws -> Void
+) {
+    harness.addBefore(hook)
+}
+
+/// Registers a suite teardown hook matching `core/src/platform/test.ts#after`.
+// parity: core/src/platform/test.ts#after [status=adapted hash=ea7c89590169]
+public func platformAfter(
+    harness: PlatformTestHarness = .shared,
+    _ hook: @escaping @Sendable () throws -> Void
+) {
+    harness.addAfter(hook)
+}
+
+/// Registers a per-test setup hook matching `core/src/platform/test.ts#beforeEach`.
+// parity: core/src/platform/test.ts#beforeEach [status=adapted hash=ea7c89590169]
+public func platformBeforeEach(
+    harness: PlatformTestHarness = .shared,
+    _ hook: @escaping @Sendable () throws -> Void
+) {
+    harness.addBeforeEach(hook)
+}
+
+/// Registers a per-test teardown hook matching `core/src/platform/test.ts#afterEach`.
+// parity: core/src/platform/test.ts#afterEach [status=adapted hash=ea7c89590169]
+public func platformAfterEach(
+    harness: PlatformTestHarness = .shared,
+    _ hook: @escaping @Sendable () throws -> Void
+) {
+    harness.addAfterEach(hook)
 }

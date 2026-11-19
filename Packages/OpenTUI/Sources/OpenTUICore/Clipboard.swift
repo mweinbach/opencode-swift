@@ -87,6 +87,7 @@ public enum ClipboardTarget: UInt8, Equatable, Hashable, Sendable, Codable {
     }
 
     /// ASCII byte corresponding to `code`.
+    // parity: native/src/terminal.zig#ClipboardTarget.toChar [status=implemented hash=dd0a51671a59]
     public var asciiByte: UInt8 {
         switch self {
         case .clipboard: return UInt8(ascii: "c")

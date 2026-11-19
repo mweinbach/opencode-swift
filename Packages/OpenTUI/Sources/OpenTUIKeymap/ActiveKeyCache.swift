@@ -137,13 +137,13 @@ public final class ActiveKeysCaches<Target: Hashable & Sendable, Event: KeymapEv
     }
 }
 
-// parity: keymap/src/services/active-key-cache.ts#createActiveKeysCache [status=implemented hash=8bf3c5d4c6ce]
+// parity: keymap/src/services/active-key-cache.ts#createActiveKeysCache [status=implemented hash=23214169e09a]
 public func createActiveKeysCache<Target: Hashable & Sendable, Event: KeymapEvent>() -> ActiveKeysCache<Target, Event>
 {
     ActiveKeysCache()
 }
 
-// parity: keymap/src/services/active-key-cache.ts#createActiveKeysCaches [status=implemented hash=27a899162d1a]
+// parity: keymap/src/services/active-key-cache.ts#createActiveKeysCaches [status=implemented hash=f923f1386729]
 public func createActiveKeysCaches<Target: Hashable & Sendable, Event: KeymapEvent>() -> ActiveKeysCaches<
     Target, Event
 > {
@@ -169,7 +169,7 @@ public func getActiveKeysCache<Target: Hashable & Sendable, Event: KeymapEvent>(
     return options.includeMetadata ? caches.metadata : caches.plain
 }
 
-// parity: keymap/src/services/active-key-cache.ts#getFocusedActiveKeysCache [status=implemented hash=f6fa20e0cba4]
+// parity: keymap/src/services/active-key-cache.ts#getFocusedActiveKeysCache [status=implemented hash=3e521efe17fe]
 public func getFocusedActiveKeysCache<Target: Hashable & Sendable, Event: KeymapEvent>(
     _ cache: ActiveKeysCache<Target, Event>,
     cacheVersion: Int,
@@ -1066,7 +1066,7 @@ public final class DefaultActivationService<Host: KeymapHost>: ActivationService
     }
 }
 
-// parity: keymap/src/services/activation.ts#createActivationService [status=implemented hash=02fb1eb288b6]
+// parity: keymap/src/services/activation.ts#createActivationService [status=implemented hash=8ae68a7f8643]
 public func createActivationService<Host: KeymapHost>(
     state: LayerStackState<Host.Target, Host.Event>,
     host: Host,

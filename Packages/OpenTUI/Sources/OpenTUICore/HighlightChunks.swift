@@ -131,7 +131,7 @@ private func hasAnyStyleField(_ style: StyleDefinition) -> Bool {
 
 /// Converts source text and tree-sitter `SimpleHighlight` ranges into styled `TextChunk` segments,
 /// handling nested specificity cascading, injection container suppression, and concealment predicates.
-// parity: core/src/lib/tree-sitter-styled-text.ts#treeSitterToTextChunks [status=implemented hash=c43734ce4a9f]
+// parity: core/src/lib/tree-sitter-styled-text.ts#treeSitterToTextChunks [status=implemented hash=27232c48b26b]
 public func treeSitterToTextChunks(
     content: String,
     highlights: [SimpleHighlight],
