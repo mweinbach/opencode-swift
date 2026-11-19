@@ -136,12 +136,12 @@ public enum CLIServices {
     public enum RemoteTunnel {
         public struct Connection: Sendable {
             public let hostname: String
-            public let waitForClose: @Sendable () async -> Void
+            public let waitForClose: @Sendable () async throws -> Void
             public let close: @Sendable () async -> Void
 
             public init(
                 hostname: String,
-                waitForClose: @escaping @Sendable () async -> Void = {},
+                waitForClose: @escaping @Sendable () async throws -> Void = {},
                 close: @escaping @Sendable () async -> Void = {}
             ) {
                 self.hostname = hostname
@@ -169,96 +169,47 @@ public enum CLIServices {
             }
         }
 
+        /// Backwards-compatible default storage backend delegating to `OpenTunnelClientBackend`.
         public struct DefaultStorageBackend: Backend, Sendable {
-            private let fileSystem: any OpenCodeFileSystem
-            private let environment: any EnvironmentProviding
+            private let inner: OpenTunnelClientBackend
 
             public init(
                 fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
                 environment: any EnvironmentProviding = SystemEnvironment.shared
             ) {
-                self.fileSystem = fileSystem
-                self.environment = environment
+                let ctx = CLIContext(environment: environment, fileSystem: fileSystem)
+                self.inner = OpenTunnelClientBackend.make(context: ctx)
             }
 
             public func getTunnelHostname() async throws -> String? {
-                await loadStoredHostname()
+                try await inner.getTunnelHostname()
             }
 
             public func ensureTunnel() async throws -> String {
-                if let existing = await loadStoredHostname() {
-                    return existing
-                }
-                throw CLIError("OpenTunnel client is not configured in this build")
+                try await inner.ensureTunnel()
             }
 
             public func connect(route: String, target: String) async throws -> Connection {
-                _ = (route, target)
-                throw CLIError("OpenTunnel client is not configured in this build")
+                try await inner.connect(route: route, target: target)
             }
 
             public func loadStoredHostname() async -> String? {
-                let roots = GlobalPaths.roots(app: "opentunnel", environment: environment)
-                let candidates = [
-                    CLIPath.join(roots.state, "default.json"),
-                    CLIPath.join(roots.config, "default.json"),
-                    CLIPath.join(roots.data, "default.json"),
-                ]
-                for file in candidates {
-                    guard let bytes = try? await fileSystem.readFile(at: file),
-                          let json = try? JSONDecoder().decode(JSONValue.self, from: Data(bytes)),
-                          case .object(let obj) = json,
-                          case .string(let host) = obj["hostname"],
-                          !host.isEmpty
-                    else { continue }
-                    return host
-                }
-                return nil
+                await inner.loadStoredHostname()
             }
         }
 
-        private static func resolvedBackend(for context: CLIContext) -> any Backend {
-            context.remoteTunnelBackend ?? DefaultStorageBackend(fileSystem: context.fileSystem, environment: context.environment)
-        }
-
-        private static func isFatalTunnelError(_ error: any Error) -> Bool {
-            let msg = CLIUtil.errorMessage(error)
-            return msg.hasPrefix("Certificate issuance failed")
-                || msg.contains("unsupported proxy scheme")
-                || msg.contains("not a valid proxy URL")
-                || msg.contains("not configured in this build")
+        internal static func resolvedBackend(for context: CLIContext) -> any Backend {
+            context.remoteTunnelBackend ?? OpenTunnelClientBackend.make(context: context)
         }
 
         // parity: cli/src/services/remote-tunnel.ts#run [status=adapted hash=4d91011149c3]
         public static let run: @Sendable (RunInput, CLIContext) async -> Void = { input, context in
-            let backend = resolvedBackend(for: context)
-            var delayMs: UInt64 = 1_000
-            while !Task.isCancelled {
-                do {
-                    let conn = try await backend.connect(route: input.route, target: input.target)
-                    input.onURL("https://\(input.route).\(conn.hostname)")
-                    await conn.waitForClose()
-                    input.onURL(nil)
-                    delayMs = 1_000
-                } catch {
-                    input.onURL(nil)
-                    if isFatalTunnelError(error) || Task.isCancelled {
-                        return
-                    }
-                    try? await Task.sleep(for: .milliseconds(delayMs))
-                    delayMs = min(30_000, delayMs * 2)
-                }
-            }
-            input.onURL(nil)
+            await runWithPolicy(input: input, context: context, policy: .default)
         }
 
         // parity: cli/src/services/remote-tunnel.ts#ensure [status=adapted hash=6cb9479829b9]
         public static let ensure: @Sendable (CLIContext) async throws -> String = { context in
-            let backend = resolvedBackend(for: context)
-            if try await backend.getTunnelHostname() == nil {
-                context.io.writeStderr("Setting up remote access; this can take a minute...\(context.io.eol)")
-            }
-            return try await backend.ensureTunnel()
+            try await ensureWithTimeout(context: context, timeout: Policy.defaultEnsureTimeout)
         }
 
         // parity: cli/src/services/remote-tunnel.ts#hostname [status=adapted hash=f50b09bc4aea]
@@ -2511,7 +2462,11 @@ public enum CLIServices {
             }
 
             let dbPath = CLIUtil.databasePath(global.data, channel: context.channel, environment: context.environment)
-            let starter = context.serverStarter ?? defaultLoopbackStarter(context: context)
+            let remoteURLsBox = Mutex<[String]>([])
+            let starter = context.serverStarter ?? defaultLoopbackStarter(
+                context: context,
+                remoteURLs: { remoteURLsBox.withLock { $0 } }
+            )
             let started: StartedServer
             do {
                 started = try await starter(
@@ -2563,7 +2518,13 @@ public enum CLIServices {
                 let target = "\(targetHost):\(started.port)"
                 tunnelTask = Task.detached {
                     await RemoteTunnel.run(
-                        RemoteTunnel.RunInput(route: remoteRoute, target: target, onURL: { _ in }),
+                        RemoteTunnel.RunInput(
+                            route: remoteRoute,
+                            target: target,
+                            onURL: { url in
+                                remoteURLsBox.withLock { $0 = url.map { [$0] } ?? [] }
+                            }
+                        ),
                         context
                     )
                 }
@@ -2590,7 +2551,10 @@ public enum CLIServices {
         }
 
         /// Boots the full native `OpenCodeServer.ServerProcess` (all 173 protocol endpoints, SQLite, SSE, auth, CORS).
-        internal static func defaultLoopbackStarter(context: CLIContext) -> Starter {
+        internal static func defaultLoopbackStarter(
+            context: CLIContext,
+            remoteURLs: (@Sendable () -> [String])? = nil
+        ) -> Starter {
             { request in
                 #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
                 let running = try await OpenCodeServer.ServerProcess.start(
@@ -2606,6 +2570,7 @@ public enum CLIServices {
                         cors: request.cors,
                         database: CoreDatabaseStore.Options(path: request.databasePath)
                     ),
+                    remoteURLs: remoteURLs,
                     fileSystem: context.fileSystem,
                     httpTransport: context.transport,
                     environment: context.environment,
