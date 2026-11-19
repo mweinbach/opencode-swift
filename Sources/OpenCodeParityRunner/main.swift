@@ -1161,7 +1161,7 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
             installedVersion: try requireString(args, 2)
         ))
 
-    case "cli/src/node/target.ts#nodeTarget":
+        case "cli/src/node/target.ts#nodeTarget":
         let t = try CLIUtil.Node.nodeTarget(platform: try requireString(args, 0), arch: try requireString(args, 1))
         return .object([
             "platform": .string(t.platform),
@@ -1176,6 +1176,85 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
             "fffFfiAsset": .string(t.fffFfiAsset),
             "opencodePtyAsset": .string(t.opencodePtyAsset),
         ])
+
+    // MARK: - packages/latex
+    case "latex/src/render.ts#renderLatexToString":
+        let latexSrc = try requireString(args, 0)
+        var latexOpts = RenderLatexOptions()
+        if args.count > 1, let o = args[1].objectValue {
+            if let dm = o["displayMode"]?.boolValue { latexOpts.displayMode = dm }
+            if let st = o["strict"]?.boolValue { latexOpts.strict = st }
+        }
+        return .string(try renderLatexToString(latexSrc, options: latexOpts))
+
+    case "latex/src/parser.ts#expandLatexMacros":
+        let macroSrc = try requireString(args, 0)
+        let macros = try decodeStringMap(args[1])
+        return .string(try expandLatexMacros(macroSrc, options: ParseOptions(macros: macros)))
+
+    // MARK: - packages/merman
+    case "merman/src/detect.ts#detectMermaidDiagram":
+        return Merman.detectMermaidDiagram(try requireString(args, 0)).map { .string($0.rawValue) } ?? .null
+
+    case "merman/src/flowchart/render.ts#renderFlowchartDiagram":
+        return .string(try Merman.renderFlowchartDiagram(try requireString(args, 0)))
+
+    case "merman/src/sequence/diagram.ts#renderSequenceDiagram":
+        return .string(try Merman.renderSequenceDiagram(try requireString(args, 0)))
+
+    case "merman/src/state/diagram.ts#renderStateDiagram":
+        return .string(try Merman.renderStateDiagram(try requireString(args, 0)))
+
+    case "merman/src/timeline/diagram.ts#renderTimelineDiagram":
+        return .string(try Merman.renderTimelineDiagram(try requireString(args, 0)))
+
+    case "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram":
+        return .string(try Merman.renderGitGraphDiagram(try requireString(args, 0)))
+
+    case "merman/src/gantt/diagram.ts#renderGanttDiagram":
+        return .string(try Merman.renderGanttDiagram(try requireString(args, 0)))
+
+    // MARK: - packages/core/src/shell/scan.ts
+    case "core/src/shell/scan.ts#scan":
+        let cmd = try requireString(args, 0)
+        let dialect: CoreShell.Scan.Dialect
+        if let dStr = optionalString(args, 1), let d = CoreShell.Scan.Dialect(rawValue: dStr) {
+            dialect = d
+        } else {
+            dialect = .posix
+        }
+        switch CoreShell.Scan.scan(cmd, dialect: dialect) {
+        case .opaque(let reason):
+            return .object(["kind": .string("opaque"), "reason": .string(reason.rawValue)])
+        case .scanned(let commands):
+            return .object([
+                "kind": .string("scanned"),
+                "commands": .array(commands.map { c in
+                    .object([
+                        "resource": .string(c.resource),
+                        "words": .array(c.words.map { .string($0) }),
+                        "rawWords": .array(c.rawWords.map { .string($0) }),
+                    ])
+                }),
+            ])
+        }
+
+    case "core/src/shell/scan.ts#scanPowerShell":
+        switch CoreShell.Scan.scanPowerShell(try requireString(args, 0)) {
+        case .opaque(let reason):
+            return .object(["kind": .string("opaque"), "reason": .string(reason.rawValue)])
+        case .scanned(let commands):
+            return .object([
+                "kind": .string("scanned"),
+                "commands": .array(commands.map { c in
+                    .object([
+                        "resource": .string(c.resource),
+                        "words": .array(c.words.map { .string($0) }),
+                        "rawWords": .array(c.rawWords.map { .string($0) }),
+                    ])
+                }),
+            ])
+        }
 
     default:
         throw DispatchError.unknownFunction(req.fn)

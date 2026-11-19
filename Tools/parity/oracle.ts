@@ -602,6 +602,22 @@ const cliUpdaterActionMod = await import(path.join(UPSTREAM_DIR, "packages/cli/s
 const cliServiceConfigMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/services/service-config.ts"))
 const cliNodeTargetMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/node/target.ts"))
 
+// packages/latex
+const latexRenderMod = await import(path.join(UPSTREAM_DIR, "packages/latex/src/render.ts"))
+const latexParserMod = await import(path.join(UPSTREAM_DIR, "packages/latex/src/parser.ts"))
+
+// packages/merman
+const mermanDetectMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/detect.ts"))
+const mermanFlowMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/flowchart/render.ts"))
+const mermanSeqMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/sequence/diagram.ts"))
+const mermanStateMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/state/diagram.ts"))
+const mermanTimelineMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/timeline/diagram.ts"))
+const mermanGitMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/gitgraph/diagram.ts"))
+const mermanGanttMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src/gantt/diagram.ts"))
+
+// packages/core/src/shell/scan.ts
+const coreShellScanMod = await import(path.join(UPSTREAM_DIR, "packages/core/src/shell/scan.ts"))
+
 function normalizeUndefinedToNull(value: unknown): unknown {
   if (value === undefined) return null
   if (value instanceof Uint8Array) return Array.from(value)
@@ -1226,6 +1242,62 @@ function invoke(fn: string, args: unknown[]): unknown {
       )
     case "cli/src/node/target.ts#nodeTarget":
       return cliNodeTargetMod.nodeTarget(args[0] as string, args[1] as string)
+
+    // MARK: - packages/latex
+    case "latex/src/render.ts#renderLatexToString":
+      return latexRenderMod.renderLatexToString(
+        args[0] as string,
+        (args[1] ?? undefined) as { displayMode?: boolean; strict?: boolean } | undefined,
+      )
+    case "latex/src/parser.ts#expandLatexMacros":
+      return latexParserMod.expandLatexMacros(
+        args[0] as string,
+        { macros: args[1] as Record<string, string> },
+      )
+
+    // MARK: - packages/merman
+    case "merman/src/detect.ts#detectMermaidDiagram":
+      return mermanDetectMod.detectMermaidDiagram(args[0] as string) ?? null
+    case "merman/src/flowchart/render.ts#renderFlowchartDiagram":
+      return mermanFlowMod.renderFlowchartDiagram(args[0] as string)
+    case "merman/src/sequence/diagram.ts#renderSequenceDiagram":
+      return mermanSeqMod.renderSequenceDiagram(args[0] as string)
+    case "merman/src/state/diagram.ts#renderStateDiagram":
+      return mermanStateMod.renderStateDiagram(args[0] as string)
+    case "merman/src/timeline/diagram.ts#renderTimelineDiagram":
+      return mermanTimelineMod.renderTimelineDiagram(args[0] as string)
+    case "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram":
+      return mermanGitMod.renderGitGraphDiagram(args[0] as string)
+    case "merman/src/gantt/diagram.ts#renderGanttDiagram":
+      return mermanGanttMod.renderGanttDiagram(args[0] as string)
+
+    // MARK: - packages/core/src/shell/scan.ts
+    case "core/src/shell/scan.ts#scan": {
+      const res = args.length > 1
+        ? coreShellScanMod.scan(args[0] as string, { dialect: args[1] as "bash" | "zsh" | "posix" })
+        : coreShellScanMod.scan(args[0] as string)
+      if (res.kind === "opaque") return { kind: "opaque", reason: res.reason }
+      return {
+        kind: "scanned",
+        commands: res.commands.map((c: { resource: string; words: string[]; rawWords: string[] }) => ({
+          resource: c.resource,
+          words: c.words,
+          rawWords: c.rawWords,
+        })),
+      }
+    }
+    case "core/src/shell/scan.ts#scanPowerShell": {
+      const res = coreShellScanMod.scanPowerShell(args[0] as string)
+      if (res.kind === "opaque") return { kind: "opaque", reason: res.reason }
+      return {
+        kind: "scanned",
+        commands: res.commands.map((c: { resource: string; words: string[]; rawWords: string[] }) => ({
+          resource: c.resource,
+          words: c.words,
+          rawWords: c.rawWords,
+        })),
+      }
+    }
 
     default:
       throw new Error(`Unknown oracle function: ${fn}`)

@@ -1,0 +1,28 @@
+[
+  {
+    "fn": "core/src/shell/scan.ts#scan",
+    "cases": [
+      { "name": "simple command", "args": ["git status --short"] },
+      { "name": "pipeline two commands", "args": ["git status | grep modified"] },
+      { "name": "and-or list", "args": ["npm test && echo ok || echo fail"] },
+      { "name": "quoted args with spaces", "args": ["echo \"hello world\" 'foo bar'"] },
+      { "name": "env prefix assignment", "args": ["FOO=1 BAR=two node index.js"] },
+      { "name": "command substitution is opaque", "args": ["echo $(whoami)"] },
+      { "name": "eval is opaque dynamic execution", "args": ["eval \"rm -rf /\""] },
+      { "name": "heredoc is opaque", "args": ["cat <<EOF\nhello\nEOF"] },
+      { "name": "unterminated single quote is opaque", "args": ["echo 'unterminated"] },
+      { "name": "bash dialect ansi c quote", "args": ["printf $'a\\nb'", "bash"] },
+      { "name": "zsh dialect simple pipeline", "args": ["ls -la | head -n 5", "zsh"] }
+    ]
+  },
+  {
+    "fn": "core/src/shell/scan.ts#scanPowerShell",
+    "cases": [
+      { "name": "cmdlet pipeline", "args": ["Get-ChildItem | Select-Object Name"] },
+      { "name": "quoted string argument", "args": ["Write-Output \"hello world\""] },
+      { "name": "call operator dynamic execution", "args": ["& $cmd arg1"] },
+      { "name": "subexpression opaque", "args": ["Write-Output $(Get-Date)"] },
+      { "name": "unterminated string opaque", "args": ["Write-Output 'oops"] }
+    ]
+  }
+]

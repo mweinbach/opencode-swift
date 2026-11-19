@@ -108,7 +108,11 @@ struct ParitySnapshotTests {
         }
     }
 
-    private static func evaluate(_ fn: String, args: [SnapshotJSON]) throws -> SnapshotJSON {
+    private static func evaluate(
+        _ fn: String,
+        args: [SnapshotJSON],
+        idGenerator: inout Identifier.Generator
+    ) throws -> SnapshotJSON {
         switch fn {
         // MARK: - packages/util & schema/identifier
         case "util/src/activity-calendar.ts#activityCalendar":
@@ -320,11 +324,11 @@ struct ParitySnapshotTests {
         case "util/src/uuid.ts#uuid":
             return .string(uuid())
         case "schema/src/identifier.ts#create":
-            return .string(Identifier.create(descending: args[0].bool!, timestamp: args[1].int64!))
+            return .string(idGenerator.create(descending: args[0].bool!, timestamp: args[1].int64!))
         case "schema/src/identifier.ts#ascending":
-            return .string(Identifier.ascending())
+            return .string(idGenerator.create(descending: false))
         case "schema/src/identifier.ts#descending":
-            return .string(Identifier.descending())
+            return .string(idGenerator.create(descending: true))
 
         // MARK: - packages/theme & packages/tui color
         case "theme/src/tui/color.ts#oklchToHex":
@@ -620,6 +624,68 @@ struct ParitySnapshotTests {
                 "opencodePtyAsset": .string(t.opencodePtyAsset),
             ])
 
+        // MARK: - packages/latex
+        case "latex/src/render.ts#renderLatexToString":
+            var latexOpts = RenderLatexOptions()
+            if args.count > 1, let o = args[1].obj {
+                if let dm = o["displayMode"]?.bool { latexOpts.displayMode = dm }
+                if let st = o["strict"]?.bool { latexOpts.strict = st }
+            }
+            return .string(try renderLatexToString(args[0].str!, options: latexOpts))
+        case "latex/src/parser.ts#expandLatexMacros":
+            return .string(try expandLatexMacros(args[0].str!, options: ParseOptions(macros: decodeStringMap(args[1]))))
+
+        // MARK: - packages/merman
+        case "merman/src/detect.ts#detectMermaidDiagram":
+            return Merman.detectMermaidDiagram(args[0].str!).map { .string($0.rawValue) } ?? .null
+        case "merman/src/flowchart/render.ts#renderFlowchartDiagram":
+            return .string(try Merman.renderFlowchartDiagram(args[0].str!))
+        case "merman/src/sequence/diagram.ts#renderSequenceDiagram":
+            return .string(try Merman.renderSequenceDiagram(args[0].str!))
+        case "merman/src/state/diagram.ts#renderStateDiagram":
+            return .string(try Merman.renderStateDiagram(args[0].str!))
+        case "merman/src/timeline/diagram.ts#renderTimelineDiagram":
+            return .string(try Merman.renderTimelineDiagram(args[0].str!))
+        case "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram":
+            return .string(try Merman.renderGitGraphDiagram(args[0].str!))
+        case "merman/src/gantt/diagram.ts#renderGanttDiagram":
+            return .string(try Merman.renderGanttDiagram(args[0].str!))
+
+        // MARK: - packages/core/src/shell/scan.ts
+        case "core/src/shell/scan.ts#scan":
+            let dialect: CoreShell.Scan.Dialect = (args.count > 1 ? args[1].str.flatMap(CoreShell.Scan.Dialect.init(rawValue:)) : nil) ?? .posix
+            switch CoreShell.Scan.scan(args[0].str!, dialect: dialect) {
+            case .opaque(let reason):
+                return .object(["kind": .string("opaque"), "reason": .string(reason.rawValue)])
+            case .scanned(let commands):
+                return .object([
+                    "kind": .string("scanned"),
+                    "commands": .array(commands.map { c in
+                        .object([
+                            "resource": .string(c.resource),
+                            "words": .array(c.words.map { .string($0) }),
+                            "rawWords": .array(c.rawWords.map { .string($0) }),
+                        ])
+                    }),
+                ])
+            }
+        case "core/src/shell/scan.ts#scanPowerShell":
+            switch CoreShell.Scan.scanPowerShell(args[0].str!) {
+            case .opaque(let reason):
+                return .object(["kind": .string("opaque"), "reason": .string(reason.rawValue)])
+            case .scanned(let commands):
+                return .object([
+                    "kind": .string("scanned"),
+                    "commands": .array(commands.map { c in
+                        .object([
+                            "resource": .string(c.resource),
+                            "words": .array(c.words.map { .string($0) }),
+                            "rawWords": .array(c.rawWords.map { .string($0) }),
+                        ])
+                    }),
+                ])
+            }
+
         default:
             throw SnapshotError.unknownFunction(fn)
         }
@@ -631,16 +697,17 @@ struct ParitySnapshotTests {
         #expect(snapshots.cases.count == snapshots.vectorCount)
         #expect(!snapshots.cases.isEmpty)
 
+        var idGenerator = Identifier.Generator()
         for tc in snapshots.cases {
             if tc.compare == "expect_error" {
                 #expect(!tc.expectedOk)
                 #expect(throws: (any Error).self, "Expected error for [\(tc.fn)] \(tc.name)") {
-                    _ = try Self.evaluate(tc.fn, args: tc.args)
+                    _ = try Self.evaluate(tc.fn, args: tc.args, idGenerator: &idGenerator)
                 }
                 continue
             }
 
-            let actual = try Self.evaluate(tc.fn, args: tc.args)
+            let actual = try Self.evaluate(tc.fn, args: tc.args, idGenerator: &idGenerator)
             switch tc.compare {
             case "exact":
                 #expect(actual == tc.expectedValue, "Mismatch for [\(tc.fn)] \(tc.name)")

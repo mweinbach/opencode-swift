@@ -1,0 +1,57 @@
+[
+  {
+    "fn": "merman/src/detect.ts#detectMermaidDiagram",
+    "cases": [
+      { "name": "flowchart LR", "args": ["flowchart LR\nA --> B"] },
+      { "name": "graph TD with comment", "args": ["%% comment\ngraph TD\nA --> B"] },
+      { "name": "sequenceDiagram", "args": ["sequenceDiagram\nAlice->>Bob: Hi"] },
+      { "name": "stateDiagram-v2", "args": ["stateDiagram-v2\n[*] --> Idle"] },
+      { "name": "timeline", "args": ["timeline\n2024 : Launch"] },
+      { "name": "gitGraph", "args": ["gitGraph\ncommit"] },
+      { "name": "gantt", "args": ["gantt\nsection A\nT :a1, 2024-01-01, 2d"] },
+      { "name": "unknown returns null", "args": ["plain text not mermaid"] }
+    ]
+  },
+  {
+    "fn": "merman/src/flowchart/render.ts#renderFlowchartDiagram",
+    "cases": [
+      { "name": "simple LR two nodes", "args": ["graph LR\nA --> B"] },
+      { "name": "TD decision diamond with labels", "args": ["flowchart TD\nA[Start] --> B{Valid?}\nB -->|Yes| C[Run]\nB -->|No| D[Stop]"] },
+      { "name": "subgraph with edges", "args": ["flowchart LR\nsubgraph API\n  A[Client] --> B[Server]\nend\nB --> C[(DB)]"] }
+    ]
+  },
+  {
+    "fn": "merman/src/sequence/diagram.ts#renderSequenceDiagram",
+    "cases": [
+      { "name": "request and dashed response", "args": ["sequenceDiagram\nAlice->>Bob: Hello\nBob-->>Alice: World"] },
+      { "name": "autonumber with note", "args": ["sequenceDiagram\nautonumber\nClient->>API: POST /run\nNote right of API: Validate\nAPI-->>Client: 200 OK"] }
+    ]
+  },
+  {
+    "fn": "merman/src/state/diagram.ts#renderStateDiagram",
+    "cases": [
+      { "name": "start to idle to running to end", "args": ["stateDiagram-v2\n[*] --> Idle\nIdle --> Running : start\nRunning --> [*]"] },
+      { "name": "composite state", "args": ["stateDiagram-v2\nstate Active {\n  [*] --> Ready\n  Ready --> Busy\n}"] }
+    ]
+  },
+  {
+    "fn": "merman/src/timeline/diagram.ts#renderTimelineDiagram",
+    "cases": [
+      { "name": "two periods", "args": ["timeline\n2024 : Alpha\n2025 : Beta"] },
+      { "name": "sections with multiple events", "args": ["timeline\nsection Phase 1\nQ1 : Design : Spec\nQ2 : Build"] }
+    ]
+  },
+  {
+    "fn": "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram",
+    "cases": [
+      { "name": "linear commits", "args": ["gitGraph\ncommit id: \"c1\"\ncommit id: \"c2\""] },
+      { "name": "branch and merge", "args": ["gitGraph\ncommit id: \"init\"\nbranch feat\ncheckout feat\ncommit id: \"work\"\ncheckout main\nmerge feat"] }
+    ]
+  },
+  {
+    "fn": "merman/src/gantt/diagram.ts#renderGanttDiagram",
+    "cases": [
+      { "name": "single section two tasks", "args": ["gantt\nsection Build\nCompile :a1, 2024-01-01, 2d\nTest :after a1, 1d"] }
+    ]
+  }
+]

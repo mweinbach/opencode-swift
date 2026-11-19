@@ -1321,6 +1321,8 @@ extension ProcessDaemon {
                 _ = close(masterFD)
                 throw DaemonError("open(\(slavePath)) failed with errno \(err)")
             }
+            _ = fcntl(masterFD, F_SETFD, FD_CLOEXEC)
+            _ = fcntl(slaveFD, F_SETFD, FD_CLOEXEC)
 
             var ws = winsize(ws_row: request.rows, ws_col: request.cols, ws_xpixel: 0, ws_ypixel: 0)
             _ = ioctl(masterFD, UInt(TIOCSWINSZ), &ws)
@@ -1352,7 +1354,6 @@ extension ProcessDaemon {
                 _ = close(masterFD)
                 throw DaemonError("failed to spawn \(request.program): \(error)")
             }
-            _ = close(slaveFD)
 
             let childPid = UInt32(max(0, process.processIdentifier))
             let info = ProcessInfo(
@@ -1385,6 +1386,15 @@ extension ProcessDaemon {
             )
 
             let masterBox = Mutex<Int32>(masterFD)
+            let slaveBox = Mutex<Int32>(slaveFD)
+            let closeSlaveOnce: @Sendable () -> Void = {
+                let fd = slaveBox.withLock { cur -> Int32 in
+                    let old = cur
+                    cur = -1
+                    return old
+                }
+                if fd >= 0 { _ = close(fd) }
+            }
             actor.writeHandler = { bytes in
                 guard !bytes.isEmpty else { return }
                 let fd = masterBox.withLock { $0 }
@@ -1412,6 +1422,7 @@ extension ProcessDaemon {
                     _ = DarwinOrPosixKill.send(process.processIdentifier, SIGKILL)
                     process.terminate()
                 }
+                closeSlaveOnce()
                 let fd = masterBox.withLock { cur -> Int32 in
                     let old = cur
                     cur = -1
@@ -1420,7 +1431,8 @@ extension ProcessDaemon {
                 if fd >= 0 { _ = close(fd) }
             }
 
-            // Reader thread draining PTY master output
+            // Reader thread draining PTY master output (kept alive until slave closes after child exit
+            // so short-lived macOS PTY commands never lose buffered output before the first read()).
             Thread.detachNewThread {
                 var buf = [UInt8](repeating: 0, count: 8192)
                 while true {
@@ -1450,9 +1462,13 @@ extension ProcessDaemon {
                 }
             }
 
-            // Child exit waiter thread
+            // Child exit waiter thread: keep slaveFD open until child finishes so Darwin XNU does not
+            // tear down the PTY output queue before the reader thread drains it.
             Thread.detachNewThread {
                 process.waitUntilExit()
+                // Brief yield so reader thread drains any already-written bytes before slave EOF
+                Thread.sleep(forTimeInterval: 0.01)
+                closeSlaveOnce()
                 if process.terminationReason == .uncaughtSignal {
                     actor.emitChildExit(exitCode: nil, signal: "SIG\(process.terminationStatus)")
                 } else {

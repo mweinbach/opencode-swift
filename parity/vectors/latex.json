@@ -1,0 +1,28 @@
+[
+  {
+    "fn": "latex/src/render.ts#renderLatexToString",
+    "cases": [
+      { "name": "simple fraction", "args": ["\\frac{a+b}{c}"] },
+      { "name": "quadratic formula", "args": ["x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"] },
+      { "name": "euler identity", "args": ["e^{i\\pi} + 1 = 0"] },
+      { "name": "summation display mode", "args": ["\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}", { "displayMode": true }] },
+      { "name": "summation inline mode", "args": ["\\sum_{i=1}^{n} x_i", { "displayMode": false }] },
+      { "name": "2x2 pmatrix", "args": ["\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"] },
+      { "name": "2x2 bmatrix", "args": ["\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}"] },
+      { "name": "binomial coefficient", "args": ["\\binom{n}{k}"] },
+      { "name": "nth root", "args": ["\\sqrt[3]{x + y}"] },
+      { "name": "greek and relations", "args": ["\\alpha \\leq \\beta < \\gamma \\neq \\delta \\approx \\infty"] },
+      { "name": "math blackboard bold", "args": ["\\mathbb{R}^n \\to \\mathbb{C}"] },
+      { "name": "strict rejects unmatched brace", "args": ["\\frac{a", { "strict": true }], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "latex/src/parser.ts#expandLatexMacros",
+    "cases": [
+      { "name": "expands bare macro", "args": ["\\R^2", { "R": "\\mathbb{R}" }] },
+      { "name": "expands prefixed macro", "args": ["\\N \\subset \\Z", { "\\N": "\\mathbb{N}", "\\Z": "\\mathbb{Z}" }] },
+      { "name": "chains macros safely", "args": ["\\A", { "A": "\\B + 1", "B": "x" }] },
+      { "name": "leaves unknown command untouched", "args": ["\\alpha + \\R", { "R": "\\mathbb{R}" }] }
+    ]
+  }
+]

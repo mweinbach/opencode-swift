@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
-  "generatedAt": "2026-11-19T18:37:16.535Z",
-  "vectorCount": 1050,
+  "generatedAt": "2026-11-19T20:37:06.230Z",
+  "vectorCount": 1102,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -10003,7 +10003,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001yP7o2247xOlNM1"
+      "expectedValue": "bcfe5680000145x6tSPoBDd95C"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10014,7 +10014,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002Ws16VEH7QIKFE2"
+      "expectedValue": "bcfe568000024vs4vFfjkI1Wuo"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10025,7 +10025,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeKDj4AbHxQKE4SB"
+      "expectedValue": "4301a97feffeK83Ohw9wK38uUY"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10036,7 +10036,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffd4JxP1C6PbWKrkg"
+      "expectedValue": "4301a97feffdZSromkRLiQZXLJ"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10044,7 +10044,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1f51941ba0014tg0Rr16iUdHWM"
+      "expectedValue": "1f586f60d001otPA65VQS8an2b"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10052,7 +10052,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e0ae6be45ffdm7CLIf9OCdmi3s"
+      "expectedValue": "e0a7909f2ffd0omA6KInWzs4qQ"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10060,7 +10060,390 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "c03f0346-dbda-476b-9aab-9ca52a50d3e9"
+      "expectedValue": "8d46a97d-b031-4d86-a836-91833474f63d"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "simple fraction",
+      "args": [
+        "\\frac{a+b}{c}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": " a + b\n───────\n   c"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "quadratic formula",
+      "args": [
+        "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "           ╭────────\n     -b ± ╰╯b² - 4ac\nx = ─────────────────\n           2a"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "euler identity",
+      "args": [
+        "e^{i\\pi} + 1 = 0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": " iπ\ne   + 1 = 0"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "summation display mode",
+      "args": [
+        "\\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}",
+        {
+          "displayMode": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "  n         n(n + 1)(2n + 1)\n  ∑   i² = ──────────────────\ni = 1              6"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "summation inline mode",
+      "args": [
+        "\\sum_{i=1}^{n} x_i",
+        {
+          "displayMode": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "∑ⁿᵢ₌₁ xᵢ"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "2x2 pmatrix",
+      "args": [
+        "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "⎛a b⎞\n⎜   ⎟\n⎝c d⎠"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "2x2 bmatrix",
+      "args": [
+        "\\begin{bmatrix} 1 & 0 \\\\ 0 & 1 \\end{bmatrix}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "⎡1 0⎤\n⎢   ⎥\n⎣0 1⎦"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "binomial coefficient",
+      "args": [
+        "\\binom{n}{k}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "⎛ n ⎞\n⎜   ⎟\n⎝ k ⎠"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "nth root",
+      "args": [
+        "\\sqrt[3]{x + y}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "3╭─────\n╰╯x + y"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "greek and relations",
+      "args": [
+        "\\alpha \\leq \\beta < \\gamma \\neq \\delta \\approx \\infty"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "α ≤ β < γ ≠ δ ≈ ∞"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "math blackboard bold",
+      "args": [
+        "\\mathbb{R}^n \\to \\mathbb{C}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ℝⁿ → ℂ"
+    },
+    {
+      "fn": "latex/src/render.ts#renderLatexToString",
+      "name": "strict rejects unmatched brace",
+      "args": [
+        "\\frac{a",
+        {
+          "strict": true
+        }
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "latex/src/parser.ts#expandLatexMacros",
+      "name": "expands bare macro",
+      "args": [
+        "\\R^2",
+        {
+          "R": "\\mathbb{R}"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "\\mathbb{R}^2"
+    },
+    {
+      "fn": "latex/src/parser.ts#expandLatexMacros",
+      "name": "expands prefixed macro",
+      "args": [
+        "\\N \\subset \\Z",
+        {
+          "\\N": "\\mathbb{N}",
+          "\\Z": "\\mathbb{Z}"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "\\mathbb{N} \\subset \\mathbb{Z}"
+    },
+    {
+      "fn": "latex/src/parser.ts#expandLatexMacros",
+      "name": "chains macros safely",
+      "args": [
+        "\\A",
+        {
+          "A": "\\B + 1",
+          "B": "x"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "x + 1"
+    },
+    {
+      "fn": "latex/src/parser.ts#expandLatexMacros",
+      "name": "leaves unknown command untouched",
+      "args": [
+        "\\alpha + \\R",
+        {
+          "R": "\\mathbb{R}"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "\\alpha + \\mathbb{R}"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "flowchart LR",
+      "args": [
+        "flowchart LR\nA --> B"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "flowchart"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "graph TD with comment",
+      "args": [
+        "%% comment\ngraph TD\nA --> B"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "flowchart"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "sequenceDiagram",
+      "args": [
+        "sequenceDiagram\nAlice->>Bob: Hi"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "sequence"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "stateDiagram-v2",
+      "args": [
+        "stateDiagram-v2\n[*] --> Idle"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "state"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "timeline",
+      "args": [
+        "timeline\n2024 : Launch"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "timeline"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "gitGraph",
+      "args": [
+        "gitGraph\ncommit"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "gitGraph"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "gantt",
+      "args": [
+        "gantt\nsection A\nT :a1, 2024-01-01, 2d"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "gantt"
+    },
+    {
+      "fn": "merman/src/detect.ts#detectMermaidDiagram",
+      "name": "unknown returns null",
+      "args": [
+        "plain text not mermaid"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "merman/src/flowchart/render.ts#renderFlowchartDiagram",
+      "name": "simple LR two nodes",
+      "args": [
+        "graph LR\nA --> B"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "╭───╮       ╭───╮\n│ A ├──────▶│ B │\n╰───╯       ╰───╯"
+    },
+    {
+      "fn": "merman/src/flowchart/render.ts#renderFlowchartDiagram",
+      "name": "TD decision diamond with labels",
+      "args": [
+        "flowchart TD\nA[Start] --> B{Valid?}\nB -->|Yes| C[Run]\nB -->|No| D[Stop]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "         ╭───────╮\n         │ Start │\n         ╰───┬───╯\n             │\n             │\n             │\n             ▼\n         ╭───────╮\n       ╭─╯       ╰─╮\n       │  Valid?   │\n       ╰─╮       ╭─╯\n         ╰───┬───╯\n             │\n   ╭── Yes ──┴─── No ───╮\n   │                    │\n   ▼                    ▼\n╭─────╮             ╭──────╮\n│ Run │             │ Stop │\n╰─────╯             ╰──────╯"
+    },
+    {
+      "fn": "merman/src/flowchart/render.ts#renderFlowchartDiagram",
+      "name": "subgraph with edges",
+      "args": [
+        "flowchart LR\nsubgraph API\n  A[Client] --> B[Server]\nend\nB --> C[(DB)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "╭─ API ───────────────────────╮     ╭────╮\n│ ╭────────╮       ╭────────╮ │     ├────┤\n│ │ Client ├──────▶│ Server ├──────▶│ DB │\n│ ╰────────╯       ╰────────╯ │     ├────┤\n╰─────────────────────────────╯     ╰────╯"
+    },
+    {
+      "fn": "merman/src/sequence/diagram.ts#renderSequenceDiagram",
+      "name": "request and dashed response",
+      "args": [
+        "sequenceDiagram\nAlice->>Bob: Hello\nBob-->>Alice: World"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Alice              Bob\n──┬──              ─┬─\n  │                 │\n  │ Hello           │\n  ├─────────────────►\n  │                 │\n  │ World           │\n  ◄─────────────────┤\n  │                 │"
+    },
+    {
+      "fn": "merman/src/sequence/diagram.ts#renderSequenceDiagram",
+      "name": "autonumber with note",
+      "args": [
+        "sequenceDiagram\nautonumber\nClient->>API: POST /run\nNote right of API: Validate\nAPI-->>Client: 200 OK"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Client              API\n───┬──              ─┬─\n   │                 │\n   │ 1. POST /run    │\n   ├─────────────────►\n   │                 │\n   │                 │\n   │                 │   Validate\n   │                 │\n   │ 2. 200 OK       │\n   ◄─────────────────┤\n   │                 │"
+    },
+    {
+      "fn": "merman/src/state/diagram.ts#renderStateDiagram",
+      "name": "start to idle to running to end",
+      "args": [
+        "stateDiagram-v2\n[*] --> Idle\nIdle --> Running : start\nRunning --> [*]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "              ╭──────╮   start     ╭─────────╮\n●────────────▶│ Idle ├────────────▶│ Running ├────────────▶◎\n              ╰──────╯             ╰─────────╯"
+    },
+    {
+      "fn": "merman/src/state/diagram.ts#renderStateDiagram",
+      "name": "composite state",
+      "args": [
+        "stateDiagram-v2\nstate Active {\n  [*] --> Ready\n  Ready --> Busy\n}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "╭─ Active ─────────────────────────────────────╮\n│                                              │\n│               ╭───────╮             ╭──────╮ │\n│ ─────────────▶│ Ready ├────────────▶│ Busy │ │\n│               ╰───────╯             ╰──────╯ │\n│                                              │\n╰──────────────────────────────────────────────╯"
+    },
+    {
+      "fn": "merman/src/timeline/diagram.ts#renderTimelineDiagram",
+      "name": "two periods",
+      "args": [
+        "timeline\n2024 : Alpha\n2025 : Beta"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "2024 ───●  Alpha\n        │\n2025 ───●  Beta\n        │"
+    },
+    {
+      "fn": "merman/src/timeline/diagram.ts#renderTimelineDiagram",
+      "name": "sections with multiple events",
+      "args": [
+        "timeline\nsection Phase 1\nQ1 : Design : Spec\nQ2 : Build"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Phase 1 ───┐\n           │\n     Q1 ───●  Design\n           │  Spec\n           │\n     Q2 ───●  Build\n           │"
+    },
+    {
+      "fn": "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram",
+      "name": "linear commits",
+      "args": [
+        "gitGraph\ncommit id: \"c1\"\ncommit id: \"c2\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "●  c1\n●  c2  [main]"
+    },
+    {
+      "fn": "merman/src/gitgraph/diagram.ts#renderGitGraphDiagram",
+      "name": "branch and merge",
+      "args": [
+        "gitGraph\ncommit id: \"init\"\nbranch feat\ncheckout feat\ncommit id: \"work\"\ncheckout main\nmerge feat"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "●    init\n├─╮\n│ ●  work  [feat]\n◎─╯  commit-1  [main]"
+    },
+    {
+      "fn": "merman/src/gantt/diagram.ts#renderGanttDiagram",
+      "name": "single section two tasks",
+      "args": [
+        "gantt\nsection Build\nCompile :a1, 2024-01-01, 2d\nTest :after a1, 1d"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "         2024-01-01      2024-01-02           2024-01-03       2024-01-04\n         ┬────────────────────┬────────────────────┬────────────────────┬\nBuild\nCompile  ────────────────────────────────────────────────────────────────\nTest     ────────────────────────────────────────────────────────────────"
     },
     {
       "fn": "util/src/npm.ts#sanitize",
@@ -26971,6 +27354,459 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": 20
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "simple command",
+      "args": [
+        "git status --short"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "git",
+              "status",
+              "--short"
+            ],
+            "resource": "git status --short",
+            "words": [
+              "git",
+              "status",
+              "--short"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "pipeline two commands",
+      "args": [
+        "git status | grep modified"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "git",
+              "status"
+            ],
+            "resource": "git status",
+            "words": [
+              "git",
+              "status"
+            ]
+          },
+          {
+            "rawWords": [
+              "grep",
+              "modified"
+            ],
+            "resource": "grep modified",
+            "words": [
+              "grep",
+              "modified"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "and-or list",
+      "args": [
+        "npm test && echo ok || echo fail"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "npm",
+              "test"
+            ],
+            "resource": "npm test",
+            "words": [
+              "npm",
+              "test"
+            ]
+          },
+          {
+            "rawWords": [
+              "echo",
+              "ok"
+            ],
+            "resource": "echo ok",
+            "words": [
+              "echo",
+              "ok"
+            ]
+          },
+          {
+            "rawWords": [
+              "echo",
+              "fail"
+            ],
+            "resource": "echo fail",
+            "words": [
+              "echo",
+              "fail"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "quoted args with spaces",
+      "args": [
+        "echo \"hello world\" 'foo bar'"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "echo",
+              "\"hello world\"",
+              "'foo bar'"
+            ],
+            "resource": "echo \"hello world\" 'foo bar'",
+            "words": [
+              "echo",
+              "hello world",
+              "foo bar"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "env prefix assignment",
+      "args": [
+        "FOO=1 BAR=two node index.js"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "node",
+              "index.js"
+            ],
+            "resource": "FOO=1 BAR=two node index.js",
+            "words": [
+              "node",
+              "index.js"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "command substitution is opaque",
+      "args": [
+        "echo $(whoami)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "echo",
+              "$(whoami)"
+            ],
+            "resource": "echo $(whoami)",
+            "words": [
+              "echo",
+              "$(whoami)"
+            ]
+          },
+          {
+            "rawWords": [
+              "whoami"
+            ],
+            "resource": "whoami",
+            "words": [
+              "whoami"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "eval is opaque dynamic execution",
+      "args": [
+        "eval \"rm -rf /\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "eval",
+              "\"rm -rf /\""
+            ],
+            "resource": "eval \"rm -rf /\"",
+            "words": [
+              "eval",
+              "rm -rf /"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "heredoc is opaque",
+      "args": [
+        "cat <<EOF\nhello\nEOF"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "cat"
+            ],
+            "resource": "cat <<EOF\nhello\nEOF",
+            "words": [
+              "cat"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "unterminated single quote is opaque",
+      "args": [
+        "echo 'unterminated"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "kind": "opaque",
+        "reason": "unterminated-quote"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "bash dialect ansi c quote",
+      "args": [
+        "printf $'a\\nb'",
+        "bash"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "printf",
+              "$'a\\nb'"
+            ],
+            "resource": "printf $'a\\nb'",
+            "words": [
+              "printf",
+              "a\nb"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scan",
+      "name": "zsh dialect simple pipeline",
+      "args": [
+        "ls -la | head -n 5",
+        "zsh"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "ls",
+              "-la"
+            ],
+            "resource": "ls -la",
+            "words": [
+              "ls",
+              "-la"
+            ]
+          },
+          {
+            "rawWords": [
+              "head",
+              "-n",
+              "5"
+            ],
+            "resource": "head -n 5",
+            "words": [
+              "head",
+              "-n",
+              "5"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scanPowerShell",
+      "name": "cmdlet pipeline",
+      "args": [
+        "Get-ChildItem | Select-Object Name"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "Get-ChildItem"
+            ],
+            "resource": "Get-ChildItem",
+            "words": [
+              "Get-ChildItem"
+            ]
+          },
+          {
+            "rawWords": [
+              "Select-Object",
+              "Name"
+            ],
+            "resource": "Select-Object Name",
+            "words": [
+              "Select-Object",
+              "Name"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scanPowerShell",
+      "name": "quoted string argument",
+      "args": [
+        "Write-Output \"hello world\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "Write-Output",
+              "\"hello world\""
+            ],
+            "resource": "Write-Output \"hello world\"",
+            "words": [
+              "Write-Output",
+              "hello world"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scanPowerShell",
+      "name": "call operator dynamic execution",
+      "args": [
+        "& $cmd arg1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "$cmd",
+              "arg1"
+            ],
+            "resource": "& $cmd arg1",
+            "words": [
+              "$cmd",
+              "arg1"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scanPowerShell",
+      "name": "subexpression opaque",
+      "args": [
+        "Write-Output $(Get-Date)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "commands": [
+          {
+            "rawWords": [
+              "Write-Output",
+              "$(Get-Date)"
+            ],
+            "resource": "Write-Output $(Get-Date)",
+            "words": [
+              "Write-Output",
+              "$(Get-Date)"
+            ]
+          },
+          {
+            "rawWords": [
+              "Get-Date"
+            ],
+            "resource": "Get-Date",
+            "words": [
+              "Get-Date"
+            ]
+          }
+        ],
+        "kind": "scanned"
+      }
+    },
+    {
+      "fn": "core/src/shell/scan.ts#scanPowerShell",
+      "name": "unterminated string opaque",
+      "args": [
+        "Write-Output 'oops"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "kind": "opaque",
+        "reason": "unterminated-quote"
+      }
     },
     {
       "fn": "util/src/text-boundary.ts#head",
