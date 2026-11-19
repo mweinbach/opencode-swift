@@ -312,7 +312,7 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/credential.ts#Interface [status=implemented hash=41dedf758f32]
+        // parity: core/src/credential.ts#Interface [status=implemented hash=85560a5f7c2d]
         public protocol Interface: Sendable {
             func all() async throws -> [Info]
             func list(_ integrationID: IntegrationID) async throws -> [Info]
@@ -1092,10 +1092,17 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/aisdk.ts#locationLayer [status=implemented hash=ca1ce48458cd]
+        // parity: core/src/aisdk.ts#locationLayer [status=implemented hash=4d2e179515a2]
         public static let locationLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             LayerNode.Output([Service.serviceKey: Service()])
         }
+
+        // parity: core/src/aisdk.ts#node [status=adapted hash=3231454d6c02]
+        public static let node: LayerNode.Provider = AppNode.makeLocationNode(
+            Service.serviceKey,
+            locationLayer,
+            []
+        )
     }
 
     // MARK: - core/src/provider.ts
@@ -2186,7 +2193,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-retry.ts#policy [status=implemented hash=03a13cd21f8d]
+        // parity: core/src/model-retry.ts#policy [status=implemented hash=82338bc34ebe]
         public static func policy(
             clock: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
             jitter: @escaping @Sendable () -> Double = { Double.random(in: 0.8...1.2) }
@@ -2276,6 +2283,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.variant = variant
             }
 
+            // parity: core/src/model-resolver.ts#VariantUnavailableError.message [status=implemented hash=f1332e6907af]
             public var message: String { "Variant unavailable for \(providerID.rawValue)/\(modelID.rawValue): \(variant.rawValue)" }
             public var description: String { message }
         }
@@ -2291,6 +2299,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.package = package
             }
 
+            // parity: core/src/model-resolver.ts#UnsupportedPackageError.message [status=implemented hash=babeff35a9c4]
             public var message: String { "Unsupported package for \(providerID.rawValue)/\(modelID.rawValue): \(package)" }
             public var description: String { message }
         }
@@ -2312,6 +2321,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.package = package; self.detail = detail
             }
 
+            // parity: core/src/model-resolver.ts#ModelConfigurationError.message [status=implemented hash=8fa7eedb07c5]
             public var message: String { "Cannot initialize \(providerID.rawValue)/\(modelID.rawValue): \(detail)" }
             public var description: String { message }
         }
@@ -2329,6 +2339,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.package = package; self.phase = phase; self.detail = detail
             }
 
+            // parity: core/src/model-resolver.ts#ModelInitializationError.message [status=implemented hash=8fa7eedb07c5]
             public var message: String { "Cannot initialize \(providerID.rawValue)/\(modelID.rawValue): \(detail)" }
             public var description: String { message }
         }
@@ -2344,6 +2355,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.variables = variables
             }
 
+            // parity: core/src/model-resolver.ts#UnresolvedProviderVariablesError.message [status=implemented hash=8fa7eedb07c5]
             public var message: String {
                 let verb = variables.count == 1 ? "is" : "are"
                 return "Cannot initialize \(providerID.rawValue)/\(modelID.rawValue): \(variables.joined(separator: ", ")) \(verb) required to resolve the provider endpoint"
@@ -2363,6 +2375,7 @@ public enum CoreModel {
                 self.providerID = providerID; self.modelID = modelID; self.route = route
             }
 
+            // parity: core/src/model-resolver.ts#UnsupportedCompactionError.message [status=implemented hash=9513faef6aa3]
             public var message: String { "Provider compaction is not supported by \(providerID.rawValue)/\(modelID.rawValue) (\(route))" }
             public var description: String { message }
         }
@@ -2484,7 +2497,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-resolver.ts#withVariant [status=implemented hash=55e47521b362]
+        // parity: core/src/model-resolver.ts#withVariant [status=implemented hash=cc7a8984e83a]
         public static func withVariant(
             _ model: ModelSchema.Info,
             variantID: ModelSchema.VariantID?
@@ -2765,7 +2778,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-resolver.ts#layer [status=implemented hash=49efdcbaf5c1]
+        // parity: core/src/model-resolver.ts#layer [status=implemented hash=9a12d882bc0e]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let providers = deps.get(CoreProvider.Provider.Service.serviceKey, as: CoreProvider.Provider.Service.self)
                 ?? CoreProvider.Provider.Service()
@@ -3626,7 +3639,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#layer [status=implemented hash=eb1de6460b85]
+        // parity: core/src/models-dev.ts#layer [status=implemented hash=4ca434b56360]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)

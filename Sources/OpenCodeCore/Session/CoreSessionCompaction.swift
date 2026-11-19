@@ -49,7 +49,7 @@ public enum CoreSessionRecentText {
         }.joined(separator: "\n")
     }
 
-    // parity: core/src/session/recent-text.ts#messageToText [status=implemented hash=c0d5385c3ada]
+    // parity: core/src/session/recent-text.ts#messageToText [status=implemented hash=0ac125b8c026]
     public static func messageToText(_ message: SessionMessageSchema.Info) -> String {
         switch message {
         case .compaction, .system, .agentSelected, .modelSelected, .idle:
@@ -178,7 +178,7 @@ public enum CoreSessionCompaction {
         case percent(String)
     }
 
-    // parity: core/src/session/compaction.ts#Settings [status=implemented hash=0fd4641b7cf2]
+    // parity: core/src/session/compaction.ts#Settings [status=implemented hash=5708ce0a36e7]
     public struct Settings: Equatable, Hashable, Sendable {
         public var auto: Bool
         public var buffer: BufferSpec?
@@ -645,7 +645,7 @@ public enum CoreSessionCompaction {
         }
     }
 
-    // parity: core/src/session/compaction.ts#layer [status=adapted hash=0a40983029d7]
+    // parity: core/src/session/compaction.ts#layer [status=adapted hash=24853f49bbf7]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         guard let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self),
               let llm = deps.get(AIRoute.LLMClientService.serviceID, as: (any AIRoute.Interface).self)
@@ -846,7 +846,7 @@ public enum CoreSessionTitle {
         }
     }
 
-    // parity: core/src/session/title.ts#layer [status=adapted hash=0ee6672882e9]
+    // parity: core/src/session/title.ts#layer [status=adapted hash=6da4cbba6234]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         guard let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db,
               let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self),

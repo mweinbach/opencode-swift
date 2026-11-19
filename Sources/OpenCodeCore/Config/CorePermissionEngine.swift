@@ -377,6 +377,7 @@ public enum CorePermission {
     // parity: core/src/permission.ts#Reply [status=implemented hash=b673796c2734]
     public typealias Reply = PermissionSchema.Reply
 
+    // parity: core/src/permission.ts#Effect [status=implemented hash=9944d7771bf4]
     public typealias Effect = PermissionSchema.Effect
     public typealias Rule = PermissionSchema.Rule
     public typealias Ruleset = PermissionSchema.Ruleset
@@ -488,6 +489,7 @@ public enum CorePermission {
             self.feedback = feedback
         }
 
+        // parity: core/src/permission.ts#CorrectedError.message [status=implemented hash=f702bc1c76ae]
         public var message: String { feedback }
         public var description: String { feedback }
     }
@@ -507,6 +509,7 @@ public enum CorePermission {
             self.reason = reason
         }
 
+        // parity: core/src/permission.ts#BlockedError.message [status=implemented hash=d5dfbdf0eb22]
         public var message: String { reason ?? "Permission denied: \(permission)" }
         public var description: String { message }
     }
@@ -629,7 +632,7 @@ public enum CorePermission {
         }
     }
 
-    // parity: core/src/permission.ts#Interface [status=adapted hash=4dea3ffd390f]
+    // parity: core/src/permission.ts#Interface [status=adapted hash=6531e7a1e7f6]
     public protocol Interface: Sendable {
         func close() async
         func ask(_ input: AssertInput) async throws -> AskResult

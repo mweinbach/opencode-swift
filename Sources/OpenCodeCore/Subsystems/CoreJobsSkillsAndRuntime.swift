@@ -14,6 +14,33 @@ import OpenCodeUtil
 public enum CoreSubsystems {
     // MARK: - core/src/schema.ts
 
+    // parity: core/src/schema.ts#AbsolutePath [status=implemented hash=7437397606f1]
+    public typealias AbsolutePath = SchemaPrimitive.AbsolutePath
+
+    // parity: core/src/schema.ts#DateTimeUtcFromMillis [status=implemented hash=7437397606f1]
+    public typealias DateTimeUtcFromMillis = SchemaPrimitive.DateTimeUtcFromMillis
+
+    // parity: core/src/schema.ts#NonNegativeInt [status=implemented hash=7437397606f1]
+    public typealias NonNegativeInt = SchemaPrimitive.NonNegativeInt
+
+    // parity: core/src/schema.ts#PositiveInt [status=implemented hash=7437397606f1]
+    public typealias PositiveInt = SchemaPrimitive.PositiveInt
+
+    // parity: core/src/schema.ts#RelativePath [status=implemented hash=7437397606f1]
+    public typealias RelativePath = SchemaPrimitive.RelativePath
+
+    // parity: core/src/schema.ts#optional [status=adapted hash=7437397606f1]
+    public static func optional<T: Sendable>(_ value: T?) -> T? {
+        SchemaPrimitive.optional(value)
+    }
+
+    // parity: core/src/schema.ts#statics [status=adapted hash=7437397606f1]
+    public static func statics<Schema: Sendable, Statics: Sendable>(
+        _ build: @escaping @Sendable (Schema) -> Statics
+    ) -> @Sendable (Schema) -> SchemaPrimitive.StaticAttachment<Schema, Statics> {
+        SchemaPrimitive.statics(build)
+    }
+
     /// Swift value-type marker mirroring TypeScript's `DeepMutable<T>` utility type.
     // parity: core/src/schema.ts#DeepMutable [status=adapted hash=3cf9bc2f1b62]
     public typealias DeepMutable<T> = T
@@ -500,7 +527,7 @@ public enum CoreSubsystems {
         }
 
         public enum ClientTlsNode {
-            // parity: core/src/effect/client-tls/client-tls.node.ts#sender [status=adapted hash=225fe4c9c054]
+            // parity: core/src/effect/client-tls/client-tls.node.ts#sender [status=adapted hash=ce5ee5032782]
             public static func sender(_ tls: Tls, transport: any HTTPTransport) -> Sender? {
                 Sender(transport: transport, tls: tls, runtime: "node")
             }
@@ -1819,6 +1846,7 @@ public enum CoreInstruction {
                 self.keys = keys
             }
 
+            // parity: core/src/instructions/index.ts#InitializationBlocked.message [status=implemented hash=f3905f737825]
             public var message: String {
                 "Instruction initialization blocked by unavailable sources: \(keys.map(\.rawValue).joined(separator: ", "))"
             }
@@ -1835,6 +1863,7 @@ public enum CoreInstruction {
                 self.key = key
             }
 
+            // parity: core/src/instructions/index.ts#DuplicateKeyError.message [status=implemented hash=21f9a8363606]
             public var message: String {
                 "Duplicate instruction key: \(key.rawValue)"
             }
@@ -3319,6 +3348,9 @@ public enum CoreJob {
 
     // MARK: - core/src/job.ts
 
+    // parity: core/src/job.ts#Recovery [status=implemented hash=2087d0e2eb90]
+    public typealias Recovery = RecoveryModels.Recovery
+
     // parity: core/src/job.ts#BlockingParent [status=implemented hash=1c95e1aeb543]
     @TaskLocal public static var blockingParent: String? = nil
 
@@ -4134,7 +4166,7 @@ public enum CoreJob {
         }
     }
 
-    // parity: core/src/job.ts#make [status=implemented hash=a1b1908afef4]
+    // parity: core/src/job.ts#make [status=implemented hash=4e572fec1cd8]
     public static func make(database: any SQLiteDatabase) throws -> Service {
         try Service(database: database)
     }
@@ -4435,7 +4467,7 @@ public enum CoreAutomation {
             return .success(calls)
         }
 
-        // parity: core/src/automation/code.ts#authorize [status=adapted hash=c3147fc570fa]
+        // parity: core/src/automation/code.ts#authorize [status=adapted hash=8a76147e7ee4]
         public static func authorize(
             ownerSessionID: SessionID,
             agent: AgentSchema.Info?,
@@ -4455,7 +4487,7 @@ public enum CoreAutomation {
             return paths
         }
 
-        // parity: core/src/automation/code.ts#run [status=adapted hash=ba45a744e8a5]
+        // parity: core/src/automation/code.ts#run [status=adapted hash=e673fb773fc8]
         public static func run(
             action: AutomationSchema.CodeAction,
             input: RunInput,
@@ -4488,6 +4520,27 @@ public enum CoreAutomation {
 
     // MARK: - core/src/automation.ts
 
+    // parity: core/src/automation.ts#Action [status=implemented hash=e86021f7e760]
+    public typealias Action = AutomationSchema.Action
+    // parity: core/src/automation.ts#ActionInput [status=implemented hash=e86021f7e760]
+    public typealias ActionInput = AutomationSchema.ActionInput
+    // parity: core/src/automation.ts#CreateInput [status=implemented hash=e86021f7e760]
+    public typealias CreateInput = AutomationSchema.CreateInput
+    // parity: core/src/automation.ts#ID [status=implemented hash=e86021f7e760]
+    public typealias ID = AutomationSchema.ID
+    // parity: core/src/automation.ts#Info [status=implemented hash=e86021f7e760]
+    public typealias Info = AutomationSchema.Info
+    // parity: core/src/automation.ts#Outcome [status=implemented hash=e86021f7e760]
+    public typealias Outcome = AutomationSchema.Outcome
+    // parity: core/src/automation.ts#Request [status=implemented hash=e86021f7e760]
+    public typealias Request = AutomationSchema.Request
+    // parity: core/src/automation.ts#Status [status=implemented hash=e86021f7e760]
+    public typealias Status = AutomationSchema.Status
+    // parity: core/src/automation.ts#Target [status=implemented hash=e86021f7e760]
+    public typealias Target = AutomationSchema.Target
+    // parity: core/src/automation.ts#Trigger [status=implemented hash=e86021f7e760]
+    public typealias Trigger = AutomationSchema.Trigger
+
     // parity: core/src/automation.ts#NotFoundError [status=implemented hash=eb0137878974]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Automation.NotFoundError"
@@ -4497,6 +4550,7 @@ public enum CoreAutomation {
             self.automationID = automationID
         }
 
+        // parity: core/src/automation.ts#NotFoundError.message [status=implemented hash=dcc634237cb3]
         public var message: String { "Automation not found: \(automationID.rawValue)" }
         public var description: String { message }
     }
@@ -4510,6 +4564,7 @@ public enum CoreAutomation {
             self.reason = reason
         }
 
+        // parity: core/src/automation.ts#InvalidError.message [status=implemented hash=8eadea097e1c]
         public var message: String { reason }
         public var description: String { message }
     }
@@ -4520,6 +4575,7 @@ public enum CoreAutomation {
 
         public init() {}
 
+        // parity: core/src/automation.ts#DisabledError.message [status=implemented hash=2723ae33bd57]
         public var message: String { "Automations are disabled; set experimental.automations in config" }
         public var description: String { message }
     }

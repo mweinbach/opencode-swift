@@ -719,7 +719,7 @@ public enum CoreTool {
             }
         }
 
-        // parity: core/src/tool/mcp.ts#layer [status=adapted hash=3c823506e2c6]
+        // parity: core/src/tool/mcp.ts#layer [status=adapted hash=724c7f3de16c]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let tools = deps.get(CoreTool.Service.serviceKey, as: (any CoreTool.Interface).self) ?? CoreTool.Service()
             let perm = deps.get(CorePermission.Service.serviceKey, as: (any CorePermission.Interface).self) ?? CorePermission.Service()

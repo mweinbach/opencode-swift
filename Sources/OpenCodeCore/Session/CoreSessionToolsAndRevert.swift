@@ -1035,6 +1035,43 @@ public enum CoreSessionSkill {
 ///   from `CoreSessionExecution.wake` (skipped when `resume: false`).
 /// - Interruption of a known idle Session is a no-op; unknown Sessions throw `NotFoundError`.
 public enum CoreSession {
+    // parity: core/src/session.ts#ListAnchor [status=implemented hash=05707e21b66c]
+    public typealias ListAnchor = SessionSchema.ListAnchor
+    // parity: core/src/session.ts#ListCursor [status=implemented hash=05707e21b66c]
+    public typealias ListCursor = SessionSchema.ListCursor
+    // parity: core/src/session.ts#AttachmentError [status=implemented hash=49705c12715d]
+    public typealias AttachmentError = CoreSessionErrors.AttachmentError
+    // parity: core/src/session.ts#BusyError [status=implemented hash=49705c12715d]
+    public typealias BusyError = CoreSessionErrors.BusyError
+    // parity: core/src/session.ts#CompactionConflictError [status=implemented hash=49705c12715d]
+    public typealias CompactionConflictError = CoreSessionErrors.CompactionConflictError
+    // parity: core/src/session.ts#ForkEmptyError [status=implemented hash=49705c12715d]
+    public typealias ForkEmptyError = CoreSessionErrors.ForkEmptyError
+    // parity: core/src/session.ts#InboxConflictError [status=implemented hash=49705c12715d]
+    public typealias InboxConflictError = CoreSessionErrors.InboxConflictError
+    // parity: core/src/session.ts#InvalidListCursorError [status=implemented hash=49705c12715d]
+    public typealias InvalidListCursorError = CoreSessionErrors.InvalidListCursorError
+    // parity: core/src/session.ts#MessageDecodeError [status=implemented hash=49705c12715d]
+    public typealias MessageDecodeError = CoreSessionErrors.MessageDecodeError
+    // parity: core/src/session.ts#MessageNotFoundError [status=implemented hash=49705c12715d]
+    public typealias MessageNotFoundError = CoreSessionErrors.MessageNotFoundError
+    // parity: core/src/session.ts#NotFoundError [status=implemented hash=49705c12715d]
+    public typealias NotFoundError = CoreSessionErrors.NotFoundError
+    // parity: core/src/session.ts#PromptConflictError [status=implemented hash=49705c12715d]
+    public typealias PromptConflictError = CoreSessionErrors.PromptConflictError
+    // parity: core/src/session.ts#SkillNotFoundError [status=implemented hash=49705c12715d]
+    public typealias SkillNotFoundError = CoreSessionErrors.SkillNotFoundError
+    // parity: core/src/session.ts#SyntheticConflictError [status=implemented hash=49705c12715d]
+    public typealias SyntheticConflictError = CoreSessionErrors.SyntheticConflictError
+    // parity: core/src/session.ts#DestinationNotFoundError [status=implemented hash=a26d3f866573]
+    public typealias DestinationNotFoundError = CoreSessionMove.DestinationNotFoundError
+    // parity: core/src/session.ts#DestinationNotDirectoryError [status=implemented hash=a26d3f866573]
+    public typealias DestinationNotDirectoryError = CoreSessionMove.DestinationNotDirectoryError
+    // parity: core/src/session.ts#DestinationUnavailableError [status=implemented hash=a26d3f866573]
+    public typealias DestinationUnavailableError = CoreSessionMove.DestinationUnavailableError
+    // parity: core/src/session.ts#TurnRangeError [status=implemented hash=3bf5f23b1fad]
+    public typealias TurnRangeError = CoreSessionDiff.TurnRangeError
+
     // parity: core/src/session.ts#ListInput [status=implemented hash=ddbc8f6acca9]
     public typealias ListInput = CoreSessionStore.ListInput
 
@@ -1168,12 +1205,12 @@ public enum CoreSession {
         }
     }
 
-    // parity: core/src/session/session.ts#make [status=implemented hash=75687f0a429b]
+    // parity: core/src/session/session.ts#make [status=implemented hash=1304cd7c7971]
     public static func make(id: SessionID, service: Service) -> Handle {
         Handle(id: id, service: service)
     }
 
-    // parity: core/src/session.ts#Interface [status=implemented hash=2d5930480347]
+    // parity: core/src/session.ts#Interface [status=implemented hash=27e1b2a02d7a]
     public protocol Interface: Sendable {
         func list(_ input: ListInput) throws -> ListPage
         func create(_ input: CreateInput) async throws -> SessionSchema.Info

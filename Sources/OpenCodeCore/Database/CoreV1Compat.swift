@@ -31,8 +31,52 @@ public enum CoreV1Config {
             }
         }
 
-        /// Ordered key-value entries preserving author-written permission rule order (last-match-wins).
+        /// Codec returned by `entriesCodec(_:)` matching upstream `Entries(value)` schema factory.
+        public struct EntriesCodec<Value: Equatable & Hashable & Sendable & Codable>: Sendable {
+            public init() {}
+
+            public func decode(_ data: Data) throws -> Entries<Value> {
+                let trimmed = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard trimmed.hasPrefix("{") else {
+                    throw DecodingError.typeMismatch(
+                        Entries<Value>.self,
+                        DecodingError.Context(codingPath: [], debugDescription: "Expected a JSON object, not an array or scalar")
+                    )
+                }
+                return try JSONDecoder().decode(Entries<Value>.self, from: data)
+            }
+
+            public func decode(jsonString: String) throws -> Entries<Value> {
+                try decode(Data(jsonString.utf8))
+            }
+
+            public func decode(entries pairs: [(String, Value)]) -> Entries<Value> {
+                Entries(pairs.map { Entry(key: $0.0, value: $0.1) })
+            }
+
+            public func encode(_ value: Entries<Value>) throws -> Data {
+                try JSONEncoder().encode(value)
+            }
+
+            public func toDictionary(_ value: Entries<Value>) -> [String: Value] {
+                var out: [String: Value] = [:]
+                for entry in value.entries {
+                    out[entry.key] = entry.value
+                }
+                return out
+            }
+        }
+
+        /// Factory mirroring upstream `Entries(value)` schema codec constructor (rejects arrays, preserves entry order).
         // parity: core/src/v1/config/permission.ts#Entries [status=implemented hash=78a83edee0c6]
+        public static func entriesCodec<Value: Equatable & Hashable & Sendable & Codable>(
+            _ valueType: Value.Type
+        ) -> EntriesCodec<Value> {
+            _ = valueType
+            return EntriesCodec<Value>()
+        }
+
+        /// Ordered key-value entries preserving author-written permission rule order (last-match-wins).
         public struct Entries<Value: Equatable & Hashable & Sendable & Codable>: Equatable, Hashable, Sendable, Codable {
             public let entries: [Entry<Value>]
 

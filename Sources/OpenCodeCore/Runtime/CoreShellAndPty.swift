@@ -29,16 +29,33 @@ public enum CoreShell {
         }
 
         public struct Command: Equatable, Hashable, Sendable {
-            public let resource: String
-            public let words: [String]
-            public let rawWords: [String]
-            public let declaration: Bool
+            public var resource: String
+            public var words: [String]
+            public var rawWords: [String]
+            public var wordEnds: [Int]?
+            public var statementHead: Bool
+            public var declaration: Bool
+            public var redirectWordCount: Int?
+            public var redirectPrefixEnd: Int?
 
-            public init(resource: String, words: [String], rawWords: [String], declaration: Bool = false) {
+            public init(
+                resource: String,
+                words: [String],
+                rawWords: [String],
+                wordEnds: [Int]? = nil,
+                statementHead: Bool = false,
+                declaration: Bool = false,
+                redirectWordCount: Int? = nil,
+                redirectPrefixEnd: Int? = nil
+            ) {
                 self.resource = resource
                 self.words = words
                 self.rawWords = rawWords
+                self.wordEnds = wordEnds
+                self.statementHead = statementHead
                 self.declaration = declaration
+                self.redirectWordCount = redirectWordCount
+                self.redirectPrefixEnd = redirectPrefixEnd
             }
         }
 
@@ -48,141 +65,26 @@ public enum CoreShell {
             case opaque(reason: OpaqueReason)
         }
 
-        private static let declarations: Set<String> = [
-            "declare", "typeset", "export", "readonly", "local", "unset", "unsetenv",
-        ]
+        /// Shell dialect used by `scan(_:dialect:)`: Bash, Zsh, or conservative POSIX (covering sh/dash/bash/zsh).
+        // parity: core/src/shell/scan.ts#Dialect [status=implemented hash=b3eff87132be]
+        public enum Dialect: String, Equatable, Hashable, Sendable, Codable {
+            case bash
+            case zsh
+            case posix
+        }
 
-        /// Portable shell scanner tokenizing pipelines/lists (`&&`, `||`, `;`, `|`, `\n`), quotes, and escapes.
-        public static func scan(_ command: String) -> Result {
-            if command.count > 64 * 1024 {
-                return .opaque(reason: .invalidStructure)
-            }
-            var commands: [Command] = []
-            var words: [String] = []
-            var rawWords: [String] = []
-            var current = ""
-            var currentRaw = ""
-            var hasToken = false
+        /// Full POSIX/Bash/Zsh AST/lexical shell scanner with compound-command, redirection, heredoc,
+        /// arithmetic/subscript sink analysis, and opaque-reason detection.
+        // parity: core/src/shell/scan.ts#scan [status=implemented hash=39136d1fcc70]
+        public static func scan(_ command: String, dialect: Dialect = .posix) -> Result {
+            CoreShellScanEngine.scan(command, dialect: dialect)
+        }
 
-            let chars = Array(command)
-            var i = 0
-
-            func flushWord() {
-                if hasToken {
-                    words.append(current)
-                    rawWords.append(currentRaw)
-                    current = ""
-                    currentRaw = ""
-                    hasToken = false
-                }
-            }
-
-            func flushCommand() {
-                flushWord()
-                guard !words.isEmpty else { return }
-                let resource = rawWords.joined(separator: " ")
-                let isDecl = declarations.contains(words[0])
-                commands.append(Command(resource: resource, words: words, rawWords: rawWords, declaration: isDecl))
-                words.removeAll(keepingCapacity: true)
-                rawWords.removeAll(keepingCapacity: true)
-            }
-
-            while i < chars.count {
-                let c = chars[i]
-                if c == " " || c == "\t" {
-                    flushWord()
-                    i += 1
-                    continue
-                }
-                if c == "#" && !hasToken {
-                    while i < chars.count && chars[i] != "\n" { i += 1 }
-                    continue
-                }
-                if c == "\n" || c == ";" {
-                    flushCommand()
-                    i += 1
-                    continue
-                }
-                if c == "|" || c == "&" {
-                    flushCommand()
-                    if i + 1 < chars.count && (chars[i + 1] == c || (c == "|" && chars[i + 1] == "&")) {
-                        i += 2
-                    } else {
-                        i += 1
-                    }
-                    continue
-                }
-                if c == "'" {
-                    hasToken = true
-                    currentRaw.append(c)
-                    i += 1
-                    var closed = false
-                    while i < chars.count {
-                        let q = chars[i]
-                        currentRaw.append(q)
-                        i += 1
-                        if q == "'" {
-                            closed = true
-                            break
-                        }
-                        current.append(q)
-                    }
-                    if !closed { return .opaque(reason: .unterminatedQuote) }
-                    continue
-                }
-                if c == "\"" {
-                    hasToken = true
-                    currentRaw.append(c)
-                    i += 1
-                    var closed = false
-                    while i < chars.count {
-                        let q = chars[i]
-                        currentRaw.append(q)
-                        i += 1
-                        if q == "\\" && i < chars.count {
-                            let next = chars[i]
-                            currentRaw.append(next)
-                            current.append(next)
-                            i += 1
-                            continue
-                        }
-                        if q == "\"" {
-                            closed = true
-                            break
-                        }
-                        current.append(q)
-                    }
-                    if !closed { return .opaque(reason: .unterminatedQuote) }
-                    continue
-                }
-                if c == "\\" {
-                    guard i + 1 < chars.count else {
-                        return .opaque(reason: .unterminatedEscape)
-                    }
-                    hasToken = true
-                    let next = chars[i + 1]
-                    currentRaw.append(c)
-                    currentRaw.append(next)
-                    if next != "\n" { current.append(next) }
-                    i += 2
-                    continue
-                }
-                if c == "`" {
-                    return .opaque(reason: .commandSubstitution)
-                }
-                if c == "$" && i + 1 < chars.count && chars[i + 1] == "(" {
-                    return .opaque(reason: .commandSubstitution)
-                }
-                if c == "<" && i + 1 < chars.count && chars[i + 1] == "<" {
-                    return .opaque(reason: .heredoc)
-                }
-                hasToken = true
-                current.append(c)
-                currentRaw.append(c)
-                i += 1
-            }
-            flushCommand()
-            return .scanned(commands: commands)
+        /// Full PowerShell lexical/structural command scanner handling quotes, backtick escapes,
+        /// here-strings, stop-parsing (`--%`), member-call chains, redirections, and opaque-reason detection.
+        // parity: core/src/shell/scan.ts#scanPowerShell [status=implemented hash=f81a97923fdd]
+        public static func scanPowerShell(_ command: String) -> Result {
+            CoreShellScanEngine.scanPowerShell(command)
         }
     }
 
@@ -215,18 +117,51 @@ public enum CoreShell {
             "grep": 1, "kill": 1, "killall": 1, "ln": 1, "ls": 1, "mkdir": 1, "mv": 1, "ps": 1,
             "pwd": 1, "rm": 1, "rmdir": 1, "sleep": 1, "source": 1, "tail": 1, "touch": 1, "unset": 1, "which": 1,
             "aws": 3, "az": 3, "bazel": 2, "brew": 2, "bun": 2, "bun run": 3, "bun x": 3,
-            "cargo": 2, "cargo add": 3, "cargo run": 3, "docker": 2, "docker compose": 3,
-            "gh": 3, "git": 2, "git config": 3, "git remote": 3, "git stash": 3,
-            "go": 2, "kubectl": 2, "make": 2, "npm": 2, "npm run": 3, "npx": 2,
-            "pnpm": 2, "pnpm run": 3, "python": 2, "swift": 2, "terraform": 2, "yarn": 2, "yarn run": 3,
+            "cargo": 2, "cargo add": 3, "cargo run": 3, "cdk": 2, "cf": 2, "cmake": 2, "composer": 2,
+            "consul": 2, "consul kv": 3, "crictl": 2, "deno": 2, "deno task": 3, "doctl": 3,
+            "docker": 2, "docker builder": 3, "docker compose": 3, "docker container": 3,
+            "docker image": 3, "docker network": 3, "docker volume": 3,
+            "eksctl": 2, "eksctl create": 3, "firebase": 2, "flyctl": 2, "gcloud": 3, "gh": 3,
+            "git": 2, "git config": 3, "git remote": 3, "git stash": 3,
+            "go": 2, "gradle": 2, "helm": 2, "heroku": 2, "hugo": 2,
+            "ip": 2, "ip addr": 3, "ip link": 3, "ip netns": 3, "ip route": 3,
+            "kind": 2, "kind create": 3, "kubectl": 2, "kubectl kustomize": 3, "kubectl rollout": 3,
+            "kustomize": 2, "make": 2, "mc": 2, "mc admin": 3, "minikube": 2, "mongosh": 2, "mysql": 2,
+            "mvn": 2, "ng": 2, "npm": 2, "npm exec": 3, "npm init": 3, "npm run": 3, "npm view": 3,
+            "npx": 2, "nvm": 2, "nx": 2, "openssl": 2, "openssl req": 3, "openssl x509": 3,
+            "pip": 2, "pipenv": 2, "pnpm": 2, "pnpm dlx": 3, "pnpm exec": 3, "pnpm run": 3,
+            "poetry": 2, "podman": 2, "podman container": 3, "podman image": 3,
+            "psql": 2, "pulumi": 2, "pulumi stack": 3, "python": 2, "pyenv": 2,
+            "rake": 2, "rbenv": 2, "redis-cli": 2, "rustup": 2, "serverless": 2, "sfdx": 3,
+            "skaffold": 2, "sls": 2, "sst": 2, "swift": 2, "systemctl": 2,
+            "terraform": 2, "terraform workspace": 3, "tmux": 2, "turbo": 2, "ufw": 2,
+            "vault": 2, "vault auth": 3, "vault kv": 3, "vercel": 2, "volta": 2, "wp": 2,
+            "yarn": 2, "yarn dlx": 3, "yarn run": 3,
         ]
         private static let cwdBuiltins: Set<String> = ["cd", "chdir", "popd", "pushd", "push-location", "set-location"]
 
         /// Scans a shell command into permission resources, save patterns, and directory operands (`cd ...`).
-        // parity: core/src/shell/parse.ts#scan [status=implemented hash=287327e35c22]
+        // parity: core/src/shell/parse.ts#scan [status=adapted hash=3f4fc0d1ec4e]
         public static func scan(command: String, shell: String, cwd: String) throws -> Result {
-            _ = shell
-            let scanned = Scan.scan(command)
+            let powershell = Select.ps(shell)
+            let shellName = Select.name(shell)
+            let scanned: Scan.Result
+            let sawSubstitution: Bool
+            if powershell {
+                scanned = Scan.scanPowerShell(command)
+                sawSubstitution = false
+            } else {
+                let dialect: Scan.Dialect = shellName == "bash" ? .bash : (shellName == "zsh" ? .zsh : .posix)
+                let detailed = CoreShellScanEngine.scanDetailed(command, dialect: dialect)
+                scanned = detailed.result
+                sawSubstitution = detailed.sawCommandSubstitution
+            }
+            if sawSubstitution {
+                throw AppProcess.AppProcessError(
+                    command: command,
+                    causeMessage: "Portable shell scanner cannot analyze command: \(Scan.OpaqueReason.commandSubstitution.rawValue)"
+                )
+            }
             switch scanned {
             case .opaque(let reason):
                 throw AppProcess.AppProcessError(
@@ -237,23 +172,106 @@ public enum CoreShell {
                 var commands: [CommandPermission] = []
                 var directories: [String] = []
                 for item in items where !item.declaration {
-                    guard !item.words.isEmpty else { continue }
-                    let head = item.words[0]
-                    if cwdBuiltins.contains(head.lowercased()), item.words.count >= 2 {
-                        let arg = item.words[1]
-                        if !arg.isEmpty && arg != "-" {
-                            directories.append(CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: arg))
+                    if let redirectPrefixEnd = item.redirectPrefixEnd {
+                        let units = Array(item.resource.utf16)
+                        let clamped = max(0, min(redirectPrefixEnd, units.count))
+                        let head = String(decoding: units[0..<clamped], as: UTF16.self)
+                        let nextUnit = clamped < units.count ? units[clamped] : 0
+                        let sep = (nextUnit == 0x09 || nextUnit == 0x0A)
+                            ? String(decoding: [nextUnit], as: UTF16.self) : " "
+                        commands.append(CommandPermission(resource: item.resource, save: "\(head)\(sep)*"))
+                        continue
+                    }
+                    let effectiveWords = item.redirectWordCount.map { Array(item.words.prefix($0)) } ?? item.words
+                    let effectiveRawWords = item.redirectWordCount.map { Array(item.rawWords.prefix($0)) } ?? item.rawWords
+                    guard !effectiveWords.isEmpty else { continue }
+                    if powershell && item.statementHead {
+                        let headLower = effectiveRawWords[0].lowercased()
+                        if (headLower == "foreach" || headLower.hasPrefix("foreach-")),
+                           effectiveRawWords.count > 1,
+                           effectiveRawWords.dropFirst().allSatisfy({ $0.hasPrefix("{") })
+                        {
+                            continue
                         }
                     }
-                    let prefixLen = prefixArity(for: item.words)
-                    let prefixTokens = Array(item.words.prefix(prefixLen))
-                    let save = item.words.count > prefixLen
+                    let unwrapped = unwrapDirectoryWords(effectiveWords, powershell: powershell)
+                    if let dirWords = unwrapped, dirWords.count >= 2 {
+                        let headLower = dirWords[0].lowercased()
+                        if headLower != "popd" && headLower != "pop-location" {
+                            for arg in extractDirectoryOperands(Array(dirWords.dropFirst()), powershell: powershell) {
+                                if !arg.isEmpty && arg != "-" && !arg.contains("$") && !arg.contains("`") {
+                                    directories.append(CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: arg))
+                                }
+                            }
+                        }
+                    }
+                    let prefixLen = prefixArity(for: effectiveWords)
+                    let prefixTokens = Array(effectiveWords.prefix(prefixLen))
+                    let save = effectiveWords.count > prefixLen
                         ? "\(prefixTokens.joined(separator: " ")) *"
                         : item.resource
                     commands.append(CommandPermission(resource: item.resource, save: save))
                 }
                 return Result(commands: commands, directories: directories)
             }
+        }
+
+        private static func unwrapDirectoryWords(_ words: [String], powershell: Bool) -> [String]? {
+            guard let first = words.first else { return nil }
+            let head = powershell ? first.lowercased() : first
+            if cwdBuiltins.contains(head) { return words }
+            if powershell { return nil }
+            var idx = 0
+            while idx < words.count && (words[idx] == "builtin" || words[idx] == "command") {
+                let wrapper = words[idx]
+                idx += 1
+                while idx < words.count && words[idx].hasPrefix("-") {
+                    let flag = words[idx]
+                    idx += 1
+                    if flag == "--" { break }
+                    if wrapper == "command" && (flag.contains("v") || flag.contains("V")) { return nil }
+                }
+            }
+            guard idx > 0, idx < words.count, cwdBuiltins.contains(words[idx]) else { return nil }
+            return Array(words[idx...])
+        }
+
+        private static func extractDirectoryOperands(_ args: [String], powershell: Bool) -> [String] {
+            var operands: [String] = []
+            var endOfOptions = false
+            var expectPath = false
+            for arg in args {
+                if !endOfOptions && arg == "--" {
+                    endOfOptions = true
+                    continue
+                }
+                if powershell {
+                    if expectPath {
+                        operands.append(arg)
+                        expectPath = false
+                        continue
+                    }
+                    if !endOfOptions && arg.hasPrefix("-") {
+                        let lower = arg.lowercased()
+                        if lower.hasPrefix("-stack") || lower == "-st" { return operands }
+                        if lower.hasPrefix("-p") || lower.hasPrefix("-l") {
+                            if let colon = arg.firstIndex(of: ":") {
+                                let tail = String(arg[arg.index(after: colon)...])
+                                if !tail.isEmpty { operands.append(tail) }
+                            } else {
+                                expectPath = true
+                            }
+                        }
+                        continue
+                    }
+                    operands.append(arg)
+                } else {
+                    if endOfOptions || arg == "-" || !arg.hasPrefix("-") {
+                        operands.append(arg)
+                    }
+                }
+            }
+            return operands
         }
 
         private static func prefixArity(for words: [String]) -> Int {
@@ -839,7 +857,7 @@ public enum CoreShell {
         }
     }
 
-    // parity: core/src/shell.ts#DaemonInterface [status=adapted hash=26b0a3d0c586]
+    // parity: core/src/shell.ts#DaemonInterface [status=adapted hash=73fc9b9b26d7]
     public protocol DaemonInterface: Sendable {
         func watch(_ task: @escaping @Sendable () async -> Void) async
         func handoffPrepared() -> Bool
@@ -866,7 +884,7 @@ public enum CoreShell {
         }
     }
 
-    // parity: core/src/shell.ts#Interface [status=adapted hash=e5f19acb76f0]
+    // parity: core/src/shell.ts#Interface [status=adapted hash=6adb418fc8aa]
     public protocol Interface: Sendable {
         func create(
             _ input: CreateRequest,
@@ -1346,6 +1364,185 @@ public enum CorePty {
         // parity: core/src/pty/pty.workerd.ts#spawn [status=adapted hash=f2ed2b55bbc6]
         public static func spawn() throws -> any Runtime.Proc {
             throw UnsupportedError()
+        }
+    }
+
+    /// Native `Runtime.Proc` backed by `ProcessDaemon.TerminalService`, powering both `BunRuntime.spawn` and `NodeRuntime.spawn`.
+    public final class NativePtyProc: Runtime.Proc, @unchecked Sendable {
+        private struct ListenerState {
+            var nextID: Int = 1
+            var dataListeners: [Int: @Sendable (String) -> Void] = [:]
+            var exitListeners: [Int: @Sendable (Runtime.Exit) -> Void] = [:]
+            var exited: Runtime.Exit?
+            var pumpTask: Task<Void, Never>?
+        }
+
+        public let pid: Int
+        private let terminalService: ProcessDaemon.TerminalService
+        private let terminalID: ProcessDaemon.TerminalId
+        private let attachment: ProcessDaemon.TerminalAttachment?
+        private let state = Mutex(ListenerState())
+
+        public init(
+            file: String,
+            args: [String],
+            opts: Runtime.Opts,
+            backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
+        ) throws {
+            let service = ProcessDaemon.TerminalService.new(backend: backend)
+            var env = opts.env ?? [:]
+            if env["TERM"] == nil { env["TERM"] = opts.name }
+            let cols = UInt16(clamping: opts.cols ?? 80)
+            let rows = UInt16(clamping: opts.rows ?? 24)
+            let info = try service.create_pty(ProcessDaemon.CreatePty(
+                program: file,
+                args: args,
+                cwd: opts.cwd ?? "/",
+                env: env,
+                groupId: "pty-proc-\(uuid())",
+                title: file,
+                cols: cols,
+                rows: rows
+            ))
+            self.terminalService = service
+            self.terminalID = info.id
+            self.pid = Int(info.pid ?? 0)
+            self.attachment = try? service.attach(
+                id: info.id,
+                offset: 0,
+                attachmentId: "pty-proc-listener-\(info.id)",
+                role: .observer,
+                takeover: false
+            )
+            if let attachment {
+                if !attachment.replay.bytes.isEmpty {
+                    let initialText = String(decoding: attachment.replay.bytes, as: UTF8.self)
+                    let listeners = state.withLock { Array($0.dataListeners.values) }
+                    for cb in listeners { cb(initialText) }
+                }
+                let task = Task { [weak self] in
+                    while !Task.isCancelled {
+                        guard let self else { break }
+                        let done = self.drainAttachment()
+                        if done { break }
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                }
+                state.withLock { $0.pumpTask = task }
+            }
+        }
+
+        deinit {
+            let task = state.withLock { s -> Task<Void, Never>? in
+                let t = s.pumpTask
+                s.pumpTask = nil
+                return t
+            }
+            task?.cancel()
+            attachment?.detach()
+            terminalService.shutdown()
+        }
+
+        @discardableResult
+        private func drainAttachment() -> Bool {
+            guard let attachment else { return true }
+            var exited: Runtime.Exit?
+            var chunks: [String] = []
+            for event in attachment.drainEvents() {
+                switch event {
+                case .output(_, _, let bytes):
+                    if !bytes.isEmpty {
+                        chunks.append(String(decoding: bytes, as: UTF8.self))
+                    }
+                case .exited(let exit):
+                    exited = Runtime.Exit(exitCode: Int(exit.exitCode ?? 0), signal: exit.signal)
+                default:
+                    break
+                }
+            }
+            if !chunks.isEmpty {
+                let listeners = state.withLock { Array($0.dataListeners.values) }
+                for chunk in chunks {
+                    for cb in listeners { cb(chunk) }
+                }
+            }
+            if let exited {
+                let listeners = state.withLock { s -> [@Sendable (Runtime.Exit) -> Void] in
+                    if s.exited != nil { return [] }
+                    s.exited = exited
+                    return Array(s.exitListeners.values)
+                }
+                for cb in listeners { cb(exited) }
+                return true
+            }
+            return attachment.isClosed
+        }
+
+        public func onData(_ listener: @escaping @Sendable (String) -> Void) -> Runtime.Disp {
+            let id = state.withLock { s -> Int in
+                let id = s.nextID
+                s.nextID += 1
+                s.dataListeners[id] = listener
+                return id
+            }
+            return Runtime.Disp { [weak self] in
+                _ = self?.state.withLock { $0.dataListeners.removeValue(forKey: id) }
+            }
+        }
+
+        public func onExit(_ listener: @escaping @Sendable (Runtime.Exit) -> Void) -> Runtime.Disp {
+            let (id, alreadyExited) = state.withLock { s -> (Int, Runtime.Exit?) in
+                let id = s.nextID
+                s.nextID += 1
+                s.exitListeners[id] = listener
+                return (id, s.exited)
+            }
+            if let alreadyExited {
+                listener(alreadyExited)
+            }
+            return Runtime.Disp { [weak self] in
+                _ = self?.state.withLock { $0.exitListeners.removeValue(forKey: id) }
+            }
+        }
+
+        public func write(_ data: String) {
+            try? terminalService.write(id: terminalID, bytes: Array(data.utf8))
+        }
+
+        public func resize(cols: Int, rows: Int) {
+            try? terminalService.resize(id: terminalID, cols: UInt16(clamping: cols), rows: UInt16(clamping: rows))
+        }
+
+        public func kill(signal: String?) {
+            _ = signal
+            try? terminalService.terminate(terminalID)
+            _ = drainAttachment()
+        }
+    }
+
+    public enum BunRuntime {
+        /// Spawns a PTY process via the native `ProcessDaemon.TerminalService` backend (`core/src/pty/pty.bun.ts#spawn`).
+        // parity: core/src/pty/pty.bun.ts#spawn [status=adapted hash=a714f0c7f598]
+        public static func spawn(
+            _ file: String,
+            args: [String] = [],
+            opts: Runtime.Opts = Runtime.Opts(name: "xterm-256color"),
+            backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
+        ) throws -> any Runtime.Proc {
+            try NativePtyProc(file: file, args: args, opts: opts, backend: backend)
+        }
+    }
+
+    public enum NodeRuntime {
+        /// Spawns a PTY process via the native `ProcessDaemon.TerminalService` backend (`core/src/pty/pty.node.ts#spawn`).
+        // parity: core/src/pty/pty.node.ts#spawn [status=adapted hash=71f09db46060]
+        public static func spawn(
+            _ file: String,
+            args: [String] = [],
+            opts: Runtime.Opts = Runtime.Opts(name: "xterm-256color"),
+            backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
+        ) throws -> any Runtime.Proc {
+            try NativePtyProc(file: file, args: args, opts: opts, backend: backend)
         }
     }
 
@@ -2028,9 +2225,23 @@ public enum CorePty {
         }
     }
 
-    // MARK: - Persistent PTY Daemon Transport (`core/src/persistent-pty/daemon.ts`)
+    // MARK: - Persistent PTY Daemon Transport (`core/src/persistent-pty/daemon.ts` & `pty-binding.ts`)
 
     public enum PersistentDaemon {
+        public enum PtyBindingDescriptor: Equatable, Hashable, Sendable, Codable {
+            case path(String)
+            case package(path: String, version: String, sha256: String)
+        }
+
+        /// Default native PTY daemon binary binding (`core/src/persistent-pty/pty-binding.ts#default`).
+        // parity: core/src/persistent-pty/pty-binding.ts#default [status=adapted hash=7c9e106c63ba]
+        public static let ptyBinding: PtyBindingDescriptor? = {
+            if let override = SystemEnvironment.shared.variable("OPENCODE_PTY_BIN"), !override.isEmpty {
+                return .path(override)
+            }
+            return nil
+        }()
+
         // parity: core/src/persistent-pty/daemon.ts#Metadata [status=implemented hash=1a80e9f0220c]
         public typealias Metadata = [String: JSONValue]
 
@@ -2241,7 +2452,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/daemon.ts#makeDaemonTransport [status=adapted hash=499f69b971bb]
+        // parity: core/src/persistent-pty/daemon.ts#makeDaemonTransport [status=adapted hash=6861993f1804]
         public static func makeDaemonTransport(
             root: String,
             backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
@@ -2476,7 +2687,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/index.ts#Interface [status=adapted hash=0a27f78cb157]
+        // parity: core/src/persistent-pty/index.ts#Interface [status=adapted hash=8665db9a6103]
         public protocol Interface: Sendable {
             func list(sessionID: SessionID?) async throws -> [Info]
             func get(_ id: PtySchema.ID) async throws -> Info

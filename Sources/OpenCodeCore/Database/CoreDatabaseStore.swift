@@ -321,6 +321,27 @@ public enum CoreDatabaseWorkerdSQLite {
 public enum CoreDatabaseDrizzle {
     // MARK: drizzle/internal/drizzle-utils.ts
 
+    // parity: core/src/database/drizzle/internal/drizzle-utils.ts#JoinNullability [status=adapted hash=1c6da4c0833c]
+    public enum JoinNullability: String, Equatable, Hashable, Sendable, Codable {
+        case nullable
+        case notNull = "not-null"
+    }
+
+    public struct CompiledQuery: Equatable, Sendable {
+        public let sql: String
+        public let params: [SQLiteValue]
+
+        public init(sql: String, params: [SQLiteValue] = []) {
+            self.sql = sql
+            self.params = params
+        }
+    }
+
+    public struct TransactionRollbackError: Error, Equatable, Sendable, CustomStringConvertible {
+        public let description = "SQLite transaction rolled back"
+        public init() {}
+    }
+
     public struct SelectedField: Equatable, Sendable {
         public let path: [String]
         public let column: String
@@ -458,29 +479,82 @@ public enum CoreDatabaseDrizzle {
     public final class SQLiteEffectPreparedQuery: Sendable {
         public let sql: String
         public let parameters: [SQLiteValue]
+        public let fields: [SelectedField]?
         private let client: any SQLiteDatabase
 
-        public init(client: any SQLiteDatabase, sql: String, parameters: [SQLiteValue] = []) {
+        public init(
+            client: any SQLiteDatabase,
+            sql: String,
+            parameters: [SQLiteValue] = [],
+            fields: [SelectedField]? = nil
+        ) {
             self.client = client
             self.sql = sql
             self.parameters = parameters
+            self.fields = fields
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.run [status=adapted hash=8ebb8b329026]
         @discardableResult
         public func run() throws -> EffectSQLiteRunResult {
             try client.execute(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.all [status=adapted hash=9149ae8b1285]
         public func all() throws -> [SQLiteRow] {
             try client.query(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.get [status=adapted hash=8cd5c99d8035]
         public func get() throws -> SQLiteRow? {
             try client.queryOne(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.values [status=adapted hash=a2aa2cab56af]
         public func values() throws -> [[SQLiteValue]] {
             try client.query(sql, parameters: parameters).map(\.values)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.execute [status=adapted hash=420bfe7e1b03]
+        public func execute() throws -> [SQLiteRow] {
+            try all()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.mapRunResult [status=adapted hash=ad78f32ec64e]
+        public func mapRunResult(_ result: EffectSQLiteRunResult, isFromBatch: Bool = false) -> EffectSQLiteRunResult {
+            _ = isFromBatch
+            return result
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.mapAllResult [status=adapted hash=ac886774255f]
+        public func mapAllResult(_ rows: [SQLiteRow], isFromBatch: Bool = false) -> [[String: SQLiteValue]] {
+            _ = isFromBatch
+            if let fields {
+                return rows.map { CoreDatabaseDrizzle.mapResultRow(columns: fields, row: $0) }
+            }
+            return rows.map { row in
+                var dict: [String: SQLiteValue] = [:]
+                for (name, value) in zip(row.columns, row.values) {
+                    dict[name] = value
+                }
+                return dict
+            }
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.mapGetResult [status=adapted hash=9d6d7de3503f]
+        public func mapGetResult(_ row: SQLiteRow?, isFromBatch: Bool = false) -> [String: SQLiteValue]? {
+            guard let row else { return nil }
+            return mapAllResult([row], isFromBatch: isFromBatch).first
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.getQuery [status=adapted hash=c5ccb8dd32e7]
+        public func getQuery() -> CompiledQuery {
+            CompiledQuery(sql: sql, params: parameters)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery.mapResult [status=adapted hash=f2f496e5d03e]
+        public func mapResult(_ rows: [SQLiteRow], isFromBatch: Bool = false) -> [[String: SQLiteValue]] {
+            mapAllResult(rows, isFromBatch: isFromBatch)
         }
     }
 
@@ -492,31 +566,53 @@ public enum CoreDatabaseDrizzle {
             self.client = client
         }
 
-        public func prepareQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareQuery [status=adapted hash=a178014d467e]
+        open func prepareQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
             SQLiteEffectPreparedQuery(client: client, sql: sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareOneTimeQuery [status=adapted hash=7952bb9ba650]
+        open func prepareOneTimeQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+            prepareQuery(sql, parameters: parameters)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareRelationalQuery [status=adapted hash=28bd7069a94a]
+        open func prepareRelationalQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+            prepareQuery(sql, parameters: parameters)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareOneTimeRelationalQuery [status=adapted hash=b3234647bce9]
+        open func prepareOneTimeRelationalQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+            prepareRelationalQuery(sql, parameters: parameters)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.run [status=adapted hash=e91fbe9a78a7]
         @discardableResult
         public func run(_ sql: String, parameters: [SQLiteValue] = []) throws -> EffectSQLiteRunResult {
             try prepareQuery(sql, parameters: parameters).run()
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.all [status=adapted hash=54dc614912ae]
         public func all(_ sql: String, parameters: [SQLiteValue] = []) throws -> [SQLiteRow] {
             try prepareQuery(sql, parameters: parameters).all()
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.get [status=adapted hash=67fc48529bbf]
         public func get(_ sql: String, parameters: [SQLiteValue] = []) throws -> SQLiteRow? {
             try prepareQuery(sql, parameters: parameters).get()
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.values [status=adapted hash=891e7707b2ed]
         public func values(_ sql: String, parameters: [SQLiteValue] = []) throws -> [[SQLiteValue]] {
             try prepareQuery(sql, parameters: parameters).values()
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.count [status=adapted hash=f6f05a776a65]
         public func count(_ sql: String, parameters: [SQLiteValue] = []) throws -> Int {
             Int(try client.queryScalar(sql, parameters: parameters)?.int64Value ?? 0)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.transaction [status=adapted hash=8b612386a581]
         open func transaction<T>(_ body: (SQLiteEffectTransaction) throws -> T) throws -> T {
             try client.transaction {
                 try body(SQLiteEffectTransaction(session: self))
@@ -529,6 +625,11 @@ public enum CoreDatabaseDrizzle {
         public override init(session: SQLiteEffectSession) {
             super.init(session: session)
         }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectTransaction.rollback [status=adapted hash=fd53c2307aea]
+        public func rollback() throws -> Never {
+            throw TransactionRollbackError()
+        }
     }
 
     // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession [status=adapted hash=6e0235039fba]
@@ -538,6 +639,23 @@ public enum CoreDatabaseDrizzle {
         public init(client: any SQLiteDatabase, options: EffectSQLiteSessionOptions = EffectSQLiteSessionOptions()) {
             self.options = options
             super.init(client: client)
+        }
+
+        // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession.prepareQuery [status=adapted hash=3babc29a2f04]
+        public override func prepareQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+            SQLiteEffectPreparedQuery(client: client, sql: sql, parameters: parameters)
+        }
+
+        // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession.prepareRelationalQuery [status=adapted hash=f3cbb4efd4bf]
+        public override func prepareRelationalQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
+            SQLiteEffectPreparedQuery(client: client, sql: sql, parameters: parameters)
+        }
+
+        // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession.transaction [status=adapted hash=c6a60e235198]
+        public override func transaction<T>(_ body: (SQLiteEffectTransaction) throws -> T) throws -> T {
+            try client.transaction {
+                try body(EffectSQLiteTransaction(session: self))
+            }
         }
 
         public func effectTransaction<T>(_ body: (EffectSQLiteTransaction) throws -> T) throws -> T {
@@ -563,10 +681,29 @@ public enum CoreDatabaseDrizzle {
     }
 
     public struct RawQuery<ResultType: Sendable>: SQLiteEffectRaw {
+        public let query: CompiledQuery
+        public let method: String
         private let runBlock: @Sendable () throws -> ResultType
 
-        public init(_ run: @escaping @Sendable () throws -> ResultType) {
+        public init(
+            query: CompiledQuery = CompiledQuery(sql: ""),
+            method: String = "all",
+            _ run: @escaping @Sendable () throws -> ResultType
+        ) {
+            self.query = query
+            self.method = method
             self.runBlock = run
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/raw.ts#SQLiteEffectRaw.getQuery [status=adapted hash=9450d7755574]
+        public func getQuery() -> CompiledQuery {
+            query
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/raw.ts#SQLiteEffectRaw.mapResult [status=adapted hash=79d2dc05b4b5]
+        public func mapResult(_ result: ResultType, isFromBatch: Bool = false) -> ResultType {
+            _ = isFromBatch
+            return result
         }
 
         public func execute() throws -> ResultType {
@@ -599,6 +736,7 @@ public enum CoreDatabaseDrizzle {
             self.parameters = parameters
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/count.ts#SQLiteEffectCountBuilder.execute [status=adapted hash=85d0481894f9]
         public func execute() throws -> Int {
             let suffix = whereClause.map { " WHERE \($0)" } ?? ""
             return try session.count("SELECT count(*) FROM `\(table.name)`\(suffix)", parameters: parameters)
@@ -629,16 +767,25 @@ public enum CoreDatabaseDrizzle {
         private let session: SQLiteEffectSession
         private let columns: [String]
         private let distinct: Bool
+        private let ctes: [String]
         private var tableName: String?
         private var whereClause: String?
         private var orderByClause: String?
         private var limitCount: Int?
         private var parameters: [SQLiteValue] = []
+        public private(set) var cacheTag: String?
+        public private(set) var cacheEnabled: Bool = false
 
-        public init(session: SQLiteEffectSession, columns: [String] = ["*"], distinct: Bool = false) {
+        public init(
+            session: SQLiteEffectSession,
+            columns: [String] = ["*"],
+            distinct: Bool = false,
+            ctes: [String] = []
+        ) {
             self.session = session
             self.columns = columns
             self.distinct = distinct
+            self.ctes = ctes
         }
 
         public func from(_ table: CoreDatabaseSchema.TableDescriptor) -> Self {
@@ -662,14 +809,29 @@ public enum CoreDatabaseDrizzle {
             return self
         }
 
-        public func prepare() -> SQLiteEffectSelectPrepare {
+        // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBase.getSQL [status=adapted hash=01f5823336e1]
+        public func getSQL() -> CompiledQuery {
+            let ctePrefix = ctes.isEmpty ? "" : "WITH \(ctes.joined(separator: ", ")) "
             let distinctSQL = distinct ? "DISTINCT " : ""
             let colsSQL = columns.joined(separator: ", ")
-            var sql = "SELECT \(distinctSQL)\(colsSQL) FROM `\(tableName ?? "")`"
+            var sql = "\(ctePrefix)SELECT \(distinctSQL)\(colsSQL) FROM `\(tableName ?? "")`"
             if let whereClause { sql += " WHERE \(whereClause)" }
             if let orderByClause { sql += " ORDER BY \(orderByClause)" }
             if let limitCount { sql += " LIMIT \(limitCount)" }
-            return session.prepareQuery(sql, parameters: parameters)
+            return CompiledQuery(sql: sql, params: parameters)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBase.$withCache [status=adapted hash=4e42e90ab8ab]
+        public func withCache(enabled: Bool = true, tag: String? = nil) -> Self {
+            self.cacheEnabled = enabled
+            self.cacheTag = tag
+            return self
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBase.prepare [status=adapted hash=24a69472aa1e]
+        public func prepare() -> SQLiteEffectSelectPrepare {
+            let compiled = getSQL()
+            return session.prepareQuery(compiled.sql, parameters: compiled.params)
         }
 
         public func all() throws -> [SQLiteRow] { try prepare().all() }
@@ -719,25 +881,39 @@ public enum CoreDatabaseDrizzle {
         private let table: CoreDatabaseSchema.TableDescriptor
         private var columns: [String] = []
         private var valuesList: [[SQLiteValue]] = []
+        private var selectQuery: CompiledQuery?
         private var conflictClause: String?
+        private var returningColumns: [String]?
 
         public init(session: SQLiteEffectSession, table: CoreDatabaseSchema.TableDescriptor) {
             self.session = session
             self.table = table
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBuilder.values [status=adapted hash=4a6782084762]
         public func values(_ row: [String: SQLiteValue]) -> Self {
             let cols = row.keys.sorted()
             self.columns = cols
             self.valuesList = [cols.map { row[$0]! }]
+            self.selectQuery = nil
             return self
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBuilder.select [status=adapted hash=554f7af294b3]
+        public func select(_ query: SQLiteEffectSelectBuilder, columns: [String]? = nil) -> Self {
+            self.columns = columns ?? table.columns
+            self.selectQuery = query.getSQL()
+            self.valuesList = []
+            return self
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.onConflictDoNothing [status=adapted hash=563c0fd6d354]
         public func onConflictDoNothing() -> Self {
             self.conflictClause = "ON CONFLICT DO NOTHING"
             return self
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.onConflictDoUpdate [status=adapted hash=c3e271441235]
         public func onConflictDoUpdate(_ config: SQLiteEffectInsertOnConflictDoUpdateConfig) -> Self {
             let targets = config.target.map { "`\($0)`" }.joined(separator: ", ")
             self.conflictClause = "ON CONFLICT (\(targets)) DO UPDATE SET \(config.setClause)"
@@ -746,12 +922,45 @@ public enum CoreDatabaseDrizzle {
 
         private func buildSQL(returning: Bool) -> (String, [SQLiteValue]) {
             let colsSQL = columns.map { "`\($0)`" }.joined(separator: ", ")
-            let tuple = "(" + Array(repeating: "?", count: columns.count).joined(separator: ", ") + ")"
-            let tuples = Array(repeating: tuple, count: valuesList.count).joined(separator: ", ")
-            var sql = "INSERT INTO `\(table.name)` (\(colsSQL)) VALUES \(tuples)"
+            var sql: String
+            var params: [SQLiteValue]
+            if let selectQuery {
+                sql = "INSERT INTO `\(table.name)` (\(colsSQL)) \(selectQuery.sql)"
+                params = selectQuery.params
+            } else {
+                let tuple = "(" + Array(repeating: "?", count: columns.count).joined(separator: ", ") + ")"
+                let tuples = Array(repeating: tuple, count: valuesList.count).joined(separator: ", ")
+                sql = "INSERT INTO `\(table.name)` (\(colsSQL)) VALUES \(tuples)"
+                params = valuesList.flatMap { $0 }
+            }
             if let conflictClause { sql += " \(conflictClause)" }
-            if returning { sql += " RETURNING *" }
-            return (sql, valuesList.flatMap { $0 })
+            if returning || returningColumns != nil {
+                let retCols = returningColumns?.joined(separator: ", ") ?? "*"
+                sql += " RETURNING \(retCols)"
+            }
+            return (sql, params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.getSQL [status=adapted hash=7a50df6f035e]
+        public func getSQL() -> CompiledQuery {
+            let (sql, params) = buildSQL(returning: false)
+            return CompiledQuery(sql: sql, params: params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.toSQL [status=adapted hash=004314b775c8]
+        public func toSQL() -> CompiledQuery {
+            getSQL()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.prepare [status=adapted hash=b9ddd80cc223]
+        public func prepare() -> SQLiteEffectInsertPrepare {
+            let compiled = toSQL()
+            return session.prepareQuery(compiled.sql, parameters: compiled.params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.$dynamic [status=adapted hash=76b7c7754c09]
+        public func dynamic() -> Self {
+            self
         }
 
         @discardableResult
@@ -760,6 +969,7 @@ public enum CoreDatabaseDrizzle {
             return try session.run(sql, parameters: params)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase.returning [status=adapted hash=1abf3f4f6403]
         public func returning() throws -> [SQLiteRow] {
             let (sql, params) = buildSQL(returning: true)
             return try session.all(sql, parameters: params)
@@ -803,20 +1013,36 @@ public enum CoreDatabaseDrizzle {
         private var setPairs: [(column: String, value: SQLiteValue)] = []
         private var whereClause: String?
         private var whereParams: [SQLiteValue] = []
+        private var orderByClause: String?
+        private var limitCount: Int?
 
         public init(session: SQLiteEffectSession, table: CoreDatabaseSchema.TableDescriptor) {
             self.session = session
             self.table = table
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBuilder.set [status=adapted hash=f752d4f880e9]
         public func set(_ values: [String: SQLiteValue]) throws -> Self {
             self.setPairs = try mapUpdateSet(table, values: values)
             return self
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.where [status=adapted hash=ddc36dd664a5]
         public func `where`(_ clause: String, parameters: [SQLiteValue] = []) -> Self {
             self.whereClause = clause
             self.whereParams = parameters
+            return self
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.orderBy [status=adapted hash=51970b8d88b5]
+        public func orderBy(_ clause: String) -> Self {
+            self.orderByClause = clause
+            return self
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.limit [status=adapted hash=0ed7d1b30c48]
+        public func limit(_ count: Int) -> Self {
+            self.limitCount = count
             return self
         }
 
@@ -824,8 +1050,32 @@ public enum CoreDatabaseDrizzle {
             let assignments = setPairs.map { "`\($0.column)` = ?" }.joined(separator: ", ")
             var sql = "UPDATE `\(table.name)` SET \(assignments)"
             if let whereClause { sql += " WHERE \(whereClause)" }
+            if let orderByClause { sql += " ORDER BY \(orderByClause)" }
+            if let limitCount { sql += " LIMIT \(limitCount)" }
             if returning { sql += " RETURNING *" }
             return (sql, setPairs.map(\.value) + whereParams)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.getSQL [status=adapted hash=960ef3298d7a]
+        public func getSQL() -> CompiledQuery {
+            let (sql, params) = buildSQL(returning: false)
+            return CompiledQuery(sql: sql, params: params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.toSQL [status=adapted hash=004314b775c8]
+        public func toSQL() -> CompiledQuery {
+            getSQL()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.prepare [status=adapted hash=c2a89e0be037]
+        public func prepare() -> SQLiteEffectUpdatePrepare {
+            let compiled = toSQL()
+            return session.prepareQuery(compiled.sql, parameters: compiled.params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.$dynamic [status=adapted hash=55cef5509165]
+        public func dynamic() -> Self {
+            self
         }
 
         @discardableResult
@@ -834,6 +1084,7 @@ public enum CoreDatabaseDrizzle {
             return try session.run(sql, parameters: params)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase.returning [status=adapted hash=5802e49279c2]
         public func returning() throws -> [SQLiteRow] {
             let (sql, params) = buildSQL(returning: true)
             return try session.all(sql, parameters: params)
@@ -854,23 +1105,62 @@ public enum CoreDatabaseDrizzle {
         private let table: CoreDatabaseSchema.TableDescriptor
         private var whereClause: String?
         private var whereParams: [SQLiteValue] = []
+        private var orderByClause: String?
+        private var limitCount: Int?
 
         public init(session: SQLiteEffectSession, table: CoreDatabaseSchema.TableDescriptor) {
             self.session = session
             self.table = table
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.where [status=adapted hash=5215f5925933]
         public func `where`(_ clause: String, parameters: [SQLiteValue] = []) -> Self {
             self.whereClause = clause
             self.whereParams = parameters
             return self
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.orderBy [status=adapted hash=bbcedde02a36]
+        public func orderBy(_ clause: String) -> Self {
+            self.orderByClause = clause
+            return self
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.limit [status=adapted hash=2f78d8da2c4d]
+        public func limit(_ count: Int) -> Self {
+            self.limitCount = count
+            return self
+        }
+
         private func buildSQL(returning: Bool) -> (String, [SQLiteValue]) {
             var sql = "DELETE FROM `\(table.name)`"
             if let whereClause { sql += " WHERE \(whereClause)" }
+            if let orderByClause { sql += " ORDER BY \(orderByClause)" }
+            if let limitCount { sql += " LIMIT \(limitCount)" }
             if returning { sql += " RETURNING *" }
             return (sql, whereParams)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.getSQL [status=adapted hash=7cdd0f3003db]
+        public func getSQL() -> CompiledQuery {
+            let (sql, params) = buildSQL(returning: false)
+            return CompiledQuery(sql: sql, params: params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.toSQL [status=adapted hash=004314b775c8]
+        public func toSQL() -> CompiledQuery {
+            getSQL()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.prepare [status=adapted hash=1964a7491017]
+        public func prepare() -> SQLiteEffectDeletePrepare {
+            let compiled = toSQL()
+            return session.prepareQuery(compiled.sql, parameters: compiled.params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.$dynamic [status=adapted hash=ec96e447e1cb]
+        public func dynamic() -> Self {
+            self
         }
 
         @discardableResult
@@ -879,6 +1169,7 @@ public enum CoreDatabaseDrizzle {
             return try session.run(sql, parameters: params)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase.returning [status=adapted hash=1adfa97b8cad]
         public func returning() throws -> [SQLiteRow] {
             let (sql, params) = buildSQL(returning: true)
             return try session.all(sql, parameters: params)
@@ -909,6 +1200,52 @@ public enum CoreDatabaseDrizzle {
         func execute() throws -> [SQLiteRow]
     }
 
+    public struct RelationalQuery: SQLiteEffectRelationalQuery {
+        private let session: SQLiteEffectSession
+        public let table: CoreDatabaseSchema.TableDescriptor
+        public let whereClause: String?
+        public let parameters: [SQLiteValue]
+        public let limitCount: Int?
+
+        public init(
+            session: SQLiteEffectSession,
+            table: CoreDatabaseSchema.TableDescriptor,
+            whereClause: String? = nil,
+            parameters: [SQLiteValue] = [],
+            limitCount: Int? = nil
+        ) {
+            self.session = session
+            self.table = table
+            self.whereClause = whereClause
+            self.parameters = parameters
+            self.limitCount = limitCount
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery.getSQL [status=adapted hash=56ee4760a39b]
+        public func getSQL() -> CompiledQuery {
+            let builder = SQLiteEffectSelectBuilder(session: session).from(table)
+            if let whereClause { _ = builder.where(whereClause, parameters: parameters) }
+            if let limitCount { _ = builder.limit(limitCount) }
+            return builder.getSQL()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery.prepare [status=adapted hash=074def884b2c]
+        public func prepare() -> SQLiteEffectPreparedQuery {
+            let compiled = getSQL()
+            return session.prepareRelationalQuery(compiled.sql, parameters: compiled.params)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery.toSQL [status=adapted hash=104976ed4569]
+        public func toSQL() -> CompiledQuery {
+            getSQL()
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery.execute [status=adapted hash=ac67937efa9b]
+        public func execute() throws -> [SQLiteRow] {
+            try prepare().all()
+        }
+    }
+
     // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQueryBuilder [status=adapted hash=40e26170a4ee]
     public final class SQLiteEffectRelationalQueryBuilder: SQLiteEffectRelationalQuery, Sendable {
         private let session: SQLiteEffectSession
@@ -919,13 +1256,18 @@ public enum CoreDatabaseDrizzle {
             self.table = table
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQueryBuilder.findMany [status=adapted hash=148d4ae504ff]
         public func findMany(whereClause: String? = nil, parameters: [SQLiteValue] = [], limit: Int? = nil) throws -> [SQLiteRow] {
-            let builder = SQLiteEffectSelectBuilder(session: session).from(table)
-            if let whereClause { _ = builder.where(whereClause, parameters: parameters) }
-            if let limit { _ = builder.limit(limit) }
-            return try builder.all()
+            try RelationalQuery(
+                session: session,
+                table: table,
+                whereClause: whereClause,
+                parameters: parameters,
+                limitCount: limit
+            ).execute()
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQueryBuilder.findFirst [status=adapted hash=c4453e9ea73b]
         public func findFirst(whereClause: String? = nil, parameters: [SQLiteValue] = []) throws -> SQLiteRow? {
             try findMany(whereClause: whereClause, parameters: parameters, limit: 1).first
         }
@@ -937,6 +1279,24 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/db.ts
 
+    public struct WithBuilder: Sendable {
+        private let session: SQLiteEffectSession
+        private let ctes: [String]
+
+        public init(session: SQLiteEffectSession, ctes: [String]) {
+            self.session = session
+            self.ctes = ctes
+        }
+
+        public func select(_ columns: [String] = ["*"]) -> SQLiteEffectSelectBuilder {
+            SQLiteEffectSelectBuilder(session: session, columns: columns, ctes: ctes)
+        }
+
+        public func selectDistinct(_ columns: [String] = ["*"]) -> SQLiteEffectSelectBuilder {
+            SQLiteEffectSelectBuilder(session: session, columns: columns, distinct: true, ctes: ctes)
+        }
+    }
+
     // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase [status=adapted hash=5b56c111346c]
     open class SQLiteEffectDatabase: @unchecked Sendable {
         public let session: SQLiteEffectSession
@@ -946,18 +1306,27 @@ public enum CoreDatabaseDrizzle {
             self.session = session
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.with [status=adapted hash=6e06a0ac860d]
+        public func with(_ ctes: String...) -> WithBuilder {
+            WithBuilder(session: session, ctes: ctes)
+        }
+
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.select [status=adapted hash=4ae3e67a3ed6]
         public func select(_ columns: [String] = ["*"]) -> SQLiteEffectSelectBuilder {
             SQLiteEffectSelectBuilder(session: session, columns: columns)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.selectDistinct [status=adapted hash=a53a3064c75d]
         public func selectDistinct(_ columns: [String] = ["*"]) -> SQLiteEffectSelectBuilder {
             SQLiteEffectSelectBuilder(session: session, columns: columns, distinct: true)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.insert [status=adapted hash=19ee966d9a6f]
         public func insert(into table: CoreDatabaseSchema.TableDescriptor) -> SQLiteEffectInsertBuilder {
             SQLiteEffectInsertBuilder(session: session, table: table)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.update [status=adapted hash=3cf66b9b669e]
         public func update(_ table: CoreDatabaseSchema.TableDescriptor) -> SQLiteEffectUpdateBuilder {
             SQLiteEffectUpdateBuilder(session: session, table: table)
         }
@@ -966,6 +1335,7 @@ public enum CoreDatabaseDrizzle {
             DeleteBuilder(session: session, table: table)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.$count [status=adapted hash=a1e0d24d9237]
         public func count(
             _ table: CoreDatabaseSchema.TableDescriptor,
             whereClause: String? = nil,
@@ -974,19 +1344,23 @@ public enum CoreDatabaseDrizzle {
             CountBuilder(session: session, table: table, whereClause: whereClause, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.run [status=adapted hash=b5e2b2672eb9]
         @discardableResult
         public func run(_ sql: String, parameters: [SQLiteValue] = []) throws -> EffectSQLiteRunResult {
             try session.run(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.all [status=adapted hash=980c0e641cb2]
         public func all(_ sql: String, parameters: [SQLiteValue] = []) throws -> [SQLiteRow] {
             try session.all(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.get [status=adapted hash=456332a5dc1a]
         public func get(_ sql: String, parameters: [SQLiteValue] = []) throws -> SQLiteRow? {
             try session.get(sql, parameters: parameters)
         }
 
+        // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase.values [status=adapted hash=8ba0807f5ee8]
         public func values(_ sql: String, parameters: [SQLiteValue] = []) throws -> [[SQLiteValue]] {
             try session.values(sql, parameters: parameters)
         }

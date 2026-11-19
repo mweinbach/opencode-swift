@@ -246,7 +246,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=cb36622a95c9]
+        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=6310df65001f]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.read") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -489,7 +489,7 @@ extension CoreTool {
             "required": .array([.string("path"), .string("oldString"), .string("newString")]),
         ]
 
-        // parity: core/src/tool/plugin/edit.ts#Plugin [status=adapted hash=77a61c0401e6]
+        // parity: core/src/tool/plugin/edit.ts#Plugin [status=adapted hash=20fa8b1dc786]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.edit") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -752,7 +752,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=8c0f5b576a4b]
+        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=69fa2a5988e2]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.patch") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -1145,7 +1145,7 @@ extension CoreTool {
             return lines.joined(separator: "\n")
         }
 
-        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=2114fad83c79]
+        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=84a3990d8b04]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.grep") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -1302,7 +1302,7 @@ extension CoreTool {
             )
         }
 
-        // parity: core/src/tool/plugin/shell.ts#reattach [status=adapted hash=4d0d0698c62d]
+        // parity: core/src/tool/plugin/shell.ts#reattach [status=adapted hash=8e073f756597]
         public static func reattach(
             shell: any CoreShell.Interface,
             info: ShellSchema.Info,
@@ -1320,7 +1320,7 @@ extension CoreTool {
             await onCompleted(payload)
         }
 
-        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=3029422f1af6]
+        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=353a34748e7b]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.shell") { editor, env in
             editor.add(RegisteredTool(
                 name: name,

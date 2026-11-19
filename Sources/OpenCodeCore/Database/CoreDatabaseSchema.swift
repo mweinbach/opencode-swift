@@ -636,6 +636,14 @@ public enum CoreDatabaseSchema {
         "CREATE INDEX `session_v2_parent_idx` ON `session_v2` (`parent_id`);",
         "CREATE INDEX `session_v2_time_suspended_idx` ON `session_v2` (`time_suspended`) WHERE \"session_v2\".\"time_suspended\" is not null;",
     ]
+
+    /// Fresh-database schema bootstrap migration executing all canonical DDL statements (`core/src/database/schema.gen.ts#default`).
+    // parity: core/src/database/schema.gen.ts#default [status=implemented hash=617ccef3d64a]
+    public static let schemaBootstrap = CoreDatabaseMigration.Migration(id: "schema.gen") { tx, _ in
+        for statement in bootstrapStatements {
+            _ = try tx.execute(statement)
+        }
+    }
 }
 
 // MARK: - database/storage-failure.ts

@@ -152,7 +152,7 @@ public enum CoreRipgrep {
     }
 
     /// Ripgrep binary resolver and pinned SHA-256 release verifier (`core/src/ripgrep/binary.ts`).
-    // parity: core/src/ripgrep/binary.ts#RipgrepBinary [status=implemented hash=fe7c3027dd73]
+    // parity: core/src/ripgrep/binary.ts#RipgrepBinary [status=implemented hash=093bd5f0aee8]
     public enum Binary {
         public static let version = "15.1.0"
 

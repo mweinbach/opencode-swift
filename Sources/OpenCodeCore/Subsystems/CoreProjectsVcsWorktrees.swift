@@ -112,7 +112,7 @@ public enum CoreLocation {
                 }
             }
 
-            // parity: core/src/environment/files.ts#FilesImpl [status=implemented hash=b571d7afdaa6]
+            // parity: core/src/environment/files.ts#FilesImpl [status=implemented hash=6f96e664e47d]
             public protocol FilesImpl: Sendable {
                 func read(_ path: String, range: ReadRange?) async throws -> ReadResult
                 func write(_ path: String, bytes: [UInt8]) async throws
@@ -700,7 +700,7 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/environment/memory.ts#makeMemoryDriver [status=implemented hash=adc2e84a4eb1]
+        // parity: core/src/environment/memory.ts#makeMemoryDriver [status=implemented hash=402f34589438]
         public static func makeMemoryDriver() -> MemoryDriver {
             MemoryDriver()
         }
@@ -744,6 +744,20 @@ public enum CoreLocation {
     // MARK: - core/src/location.ts
 
     public enum Location {
+        // parity: core/src/location.ts#Info [status=implemented hash=af4dc07668a1]
+        public typealias Info = LocationSchema.Info
+
+        // parity: core/src/location.ts#Ref [status=implemented hash=af4dc07668a1]
+        public typealias Ref = LocationSchema.Ref
+
+        // parity: core/src/location.ts#response [status=implemented hash=af4dc07668a1]
+        public static func response<Data: Equatable & Hashable & Sendable & Codable>(
+            location: LocationSchema.PublicRef,
+            data: Data
+        ) -> LocationSchema.ResponseEnvelope<Data> {
+            LocationSchema.response(location: location, data: data)
+        }
+
         // parity: core/src/location.ts#Interface [status=implemented hash=d2b2bcff5b1f]
         public protocol Interface: Sendable {
             var info: LocationSchema.Info { get }
@@ -947,6 +961,7 @@ public enum CoreLocation {
                 self.builder = builder
             }
 
+            // parity: core/src/location-service-map.ts#Service.get [status=implemented hash=bb135092fa1d]
             public func get(_ ref: LocationSchema.Ref) async throws -> LayerNode.Output {
                 let key = ServiceMap.canonical(ref)
                 if let cached = entries.withLock({ $0[key]?.services }) {
@@ -1036,7 +1051,7 @@ public enum CoreLocation {
         // parity: core/src/location-services.ts#LocationServices [status=implemented hash=08f42d7f8b48]
         public typealias LocationServices = Instance.Services
 
-        // parity: core/src/location-services.ts#buildLocationServiceMap [status=implemented hash=628b4436e13f]
+        // parity: core/src/location-services.ts#buildLocationServiceMap [status=implemented hash=c274f81c5663]
         public static func buildLocationServiceMap(
             replacements: [LayerNode.Replacement] = []
         ) -> LayerNode.Provider {
@@ -1222,7 +1237,7 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/instance.ts#Options [status=implemented hash=4edd8f1c0783]
+        // parity: core/src/instance.ts#Options [status=implemented hash=2c70bcebdf58]
         public struct Options: Sendable {
             public let discovery: Bool
             public let replacements: [LayerNode.Replacement]
@@ -1585,7 +1600,7 @@ public enum CoreVcs {
             public var description: String { "Git worktree \(operation.rawValue) failed: \(message)" }
         }
 
-        // parity: core/src/git.ts#Interface [status=implemented hash=ef940a53429f]
+        // parity: core/src/git.ts#Interface [status=implemented hash=db35fd6205d1]
         public protocol Interface: Sendable {
             func discover(_ input: SchemaPrimitive.AbsolutePath) async -> Repository?
             func fingerprint(_ dotGit: SchemaPrimitive.AbsolutePath) async -> String?
@@ -2312,6 +2327,19 @@ public enum CoreVcs {
     // MARK: - core/src/vcs.ts
 
     public enum Vcs {
+        // parity: core/src/vcs.ts#Base [status=implemented hash=ed8666a3d18d]
+        public typealias Base = VcsSchema.Base
+        // parity: core/src/vcs.ts#BranchList [status=implemented hash=ed8666a3d18d]
+        public typealias BranchList = VcsSchema.BranchList
+        // parity: core/src/vcs.ts#FileStatus [status=implemented hash=ed8666a3d18d]
+        public typealias FileStatus = VcsSchema.FileStatus
+        // parity: core/src/vcs.ts#Info [status=implemented hash=ed8666a3d18d]
+        public typealias Info = VcsSchema.Info
+        // parity: core/src/vcs.ts#Mode [status=implemented hash=ed8666a3d18d]
+        public typealias Mode = VcsSchema.Mode
+        // parity: core/src/vcs.ts#Untracked [status=implemented hash=ed8666a3d18d]
+        public typealias Untracked = VcsSchema.Untracked
+
         // parity: core/src/vcs.ts#DiffError [status=implemented hash=a180a7e59f15]
         public struct DiffError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Vcs.DiffError"
@@ -2835,7 +2863,7 @@ public enum CoreProject {
             public var description: String { "Project not found: \(projectID.rawValue)" }
         }
 
-        // parity: core/src/project.ts#Resolved [status=implemented hash=88c450f3c550]
+        // parity: core/src/project.ts#Resolved [status=implemented hash=e36fd6ae770d]
         public struct Resolved: Equatable, Hashable, Sendable {
             public let previous: ID?
             public let id: ID

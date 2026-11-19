@@ -333,7 +333,7 @@ public enum CoreConfigIntegration {
     }
 
     /// A config document delivered by an integration connection (e.g. OpenCode Console).
-    // parity: core/src/config/integration.ts#Document [status=implemented hash=c14af458164d]
+    // parity: core/src/config/integration.ts#Document [status=implemented hash=23055650cc41]
     public struct Document: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath?
         public let info: ConfigSchema.Info
@@ -547,7 +547,7 @@ public enum CoreConfigMarkdown {
     }
 
     /// Parses YAML frontmatter (`--- ... ---`) and markdown body, retrying after `sanitize` on parse error.
-    // parity: core/src/config/markdown.ts#parse [status=implemented hash=571ff6df33bd]
+    // parity: core/src/config/markdown.ts#parse [status=implemented hash=939fe3b434fa]
     public static func parse(_ content: String) throws -> Parsed {
         do {
             return try parseStrict(content)
@@ -888,7 +888,7 @@ public enum CoreConfigVariable {
     }
 
     /// Applies `{env:VAR}` and `{file:path}` substitutions to config text.
-    // parity: core/src/config/variable.ts#substitute [status=implemented hash=e60d97b3a63a]
+    // parity: core/src/config/variable.ts#substitute [status=implemented hash=74f62ff8cd1a]
     public static func substitute(
         _ input: SubstituteInput,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
@@ -1067,7 +1067,7 @@ public enum CoreConfigNormalize {
 
     /// Normalizes raw parsed JSON/JSONC configuration, migrating V1 keys into canonical V2 shape
     /// and collecting conflict/invalid/unsupported diagnostics.
-    // parity: core/src/config/normalize.ts#normalize [status=implemented hash=305c8f2dc1ec]
+    // parity: core/src/config/normalize.ts#normalize [status=implemented hash=0627772edd35]
     public static func normalize(_ input: JSONValue) -> Result {
         guard case .object(let obj) = input else {
             return .rejected(diagnostics: [
@@ -1539,7 +1539,7 @@ public enum CoreConfigDiscovery {
     }
 
     /// Discovers all eligible config sources across system, global, explicit, and ancestor project directories.
-    // parity: core/src/config/discovery.ts#discover [status=implemented hash=c47ea0a67c7b]
+    // parity: core/src/config/discovery.ts#discover [status=implemented hash=045b5231dcc0]
     public static func discover(
         directory: String,
         options: CoreConfig.Options? = nil,
@@ -2367,7 +2367,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#layer [status=adapted hash=60994479a7b5]
+    // parity: core/src/config.ts#layer [status=adapted hash=edd155b1c42a]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)

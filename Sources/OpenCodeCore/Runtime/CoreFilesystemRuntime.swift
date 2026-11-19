@@ -22,7 +22,7 @@ public enum CoreFilesystem {
         }
 
         /// Detects known image, PDF, audio, and video container MIME types from magic byte headers.
-        // parity: core/src/mime.ts#detectMedia [status=implemented hash=69a9c45af22e]
+        // parity: core/src/mime.ts#detectMedia [status=implemented hash=3d1a95434e68]
         public static func detectMedia(_ bytes: [UInt8]) -> String? {
             if startsWith(bytes, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return "image/png" }
             if startsWith(bytes, [0xFF, 0xD8, 0xFF]) { return "image/jpeg" }
@@ -1228,7 +1228,33 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/watcher.ts#testLayer [status=adapted hash=68c7d4822de3]
+        /// Resolves the platform-specific watcher binding package/path (`core/src/filesystem/watcher-binding.ts#default`).
+        // parity: core/src/filesystem/watcher-binding.ts#default [status=adapted hash=4dbf51bfe931]
+        public static func loadWatcherBinding(
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) -> String {
+            if let override = environment.variable("OPENCODE_PARCEL_WATCHER_PATH"), !override.isEmpty {
+                return override
+            }
+            let platformName: String
+            switch Platform.current {
+            case .macOS: platformName = "darwin"
+            case .linux: platformName = "linux"
+            case .windows: platformName = "win32"
+            default: platformName = Platform.current.rawValue
+            }
+            #if arch(arm64)
+            let archName = "arm64"
+            #elseif arch(x86_64)
+            let archName = "x64"
+            #else
+            let archName = "unknown"
+            #endif
+            let linuxSuffix = platformName == "linux" ? "-glibc" : ""
+            return "@parcel/watcher-\(platformName)-\(archName)\(linuxSuffix)"
+        }
+
+        // parity: core/src/filesystem/watcher.ts#testLayer [status=adapted hash=50dd48cc9d16]
         public static let testLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             let test = Test()
             return LayerNode.Output([
@@ -1421,6 +1447,7 @@ public enum CoreFilesystem {
 
             public init() {}
 
+            // parity: core/src/filesystem/file-watch.ts#DisabledError.message [status=implemented hash=c2a9bbd80cef]
             public var message: String { "File watching is disabled" }
             public var description: String { message }
         }
@@ -1523,7 +1550,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/file-watch.ts#layer [status=adapted hash=c4bac739a746]
+        // parity: core/src/filesystem/file-watch.ts#layer [status=adapted hash=1241a79b4ec7]
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { _, _ in
                 LayerNode.Output([Service.serviceKey: Service(enabled: options?.enabled ?? true) as any Interface])
@@ -1624,7 +1651,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/search.ts#makeFffLayer [status=adapted hash=284cc6ec870e]
+        // parity: core/src/filesystem/search.ts#makeFffLayer [status=adapted hash=1c9d9a256787]
         public static func makeFffLayer(
             _ create: @escaping @Sendable (Fff.Init) -> Fff.Result<any Fff.Picker>
         ) -> LayerNode.ExecutableLayer {
@@ -1704,6 +1731,12 @@ public enum CoreFilesystem {
 
     // MARK: - Core Location FileSystem (`core/src/filesystem.ts`)
 
+    // parity: core/src/filesystem.ts#FindInput [status=implemented hash=a9fab1734951]
+    public typealias FindInput = FileSystemSchema.FindInput
+
+    // parity: core/src/filesystem.ts#Write [status=implemented hash=a9fab1734951]
+    public typealias Write = FileSystemSchema.Write
+
     // parity: core/src/filesystem.ts#ReadInput [status=implemented hash=bc8bdeb1983d]
     public struct ReadInput: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.RelativePath
@@ -1747,6 +1780,7 @@ public enum CoreFilesystem {
             self.detail = detail
         }
 
+        // parity: core/src/filesystem.ts#DirectoryNotFoundError.message [status=implemented hash=49c31c1ea453]
         public var message: String { "Directory not found: \(directory.rawValue)" }
         public var description: String { message }
     }
@@ -1762,6 +1796,7 @@ public enum CoreFilesystem {
             self.detail = detail
         }
 
+        // parity: core/src/filesystem.ts#DirectoryAccessDeniedError.message [status=implemented hash=4c76341acd0c]
         public var message: String { "Access denied to directory: \(directory.rawValue)" }
         public var description: String { message }
     }

@@ -15,6 +15,11 @@ extension CoreTool {
     // MARK: - WebFetchTool (`core/src/tool/plugin/webfetch.ts`)
 
     public enum WebFetchTool {
+        // parity: core/src/tool/plugin/webfetch.ts#convertHTMLToMarkdown [status=implemented hash=04571e154c5a]
+        public static func convertHTMLToMarkdown(_ html: String) -> String {
+            CoreToolOutput.HTMLMarkdown.convertHTMLToMarkdown(html)
+        }
+
         // parity: core/src/tool/plugin/webfetch.ts#name [status=implemented hash=fb26aab7c546]
         public static let name: String = "webfetch"
 
@@ -308,7 +313,7 @@ extension CoreTool {
             }.joined(separator: "\n\n")
         }
 
-        // parity: core/src/tool/plugin/websearch.ts#Plugin [status=adapted hash=13d54bbaf104]
+        // parity: core/src/tool/plugin/websearch.ts#Plugin [status=adapted hash=3117cf643194]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.websearch") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -577,6 +582,7 @@ extension CoreTool {
         public struct CancelledError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "QuestionTool.CancelledError"
             public init() {}
+            // parity: core/src/tool/plugin/question.ts#CancelledError.message [status=implemented hash=7eebb160f569]
             public var message: String { "The user dismissed this question" }
             public var description: String { message }
         }
@@ -764,7 +770,7 @@ extension CoreTool {
             "required": .array([.string("agent"), .string("description"), .string("prompt")]),
         ]
 
-        // parity: core/src/tool/plugin/subagent.ts#Plugin [status=adapted hash=7559ef06c65c]
+        // parity: core/src/tool/plugin/subagent.ts#Plugin [status=adapted hash=c93500a36de4]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.subagent") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -1358,7 +1364,7 @@ extension CoreTool {
             return info
         }
 
-        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=75c960c7d3b0]
+        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=d7c6fac31ebf]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.automation") { editor, env in
             editor.add(RegisteredTool(
                 name: "automation_create",
@@ -1666,7 +1672,7 @@ extension CoreTool {
             )
         }
 
-        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=77015179ca91]
+        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=40bafaa46136]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.image-generate") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -1899,7 +1905,7 @@ extension CoreTool {
     // MARK: - McpResourceTools (`core/src/tool/plugin/mcp-resource.ts`)
 
     public enum McpResourceTools {
-        // parity: core/src/tool/plugin/mcp-resource.ts#Plugin [status=adapted hash=26e06fe5b527]
+        // parity: core/src/tool/plugin/mcp-resource.ts#Plugin [status=adapted hash=a396cee19b09]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools.mcp-resources") { editor, env in
             editor.add(RegisteredTool(
                 name: "list_mcp_resources",
@@ -2108,7 +2114,7 @@ extension CoreTool {
             return "Unable to remove worktree \(directory): \(error)"
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=ad007d5890c8]
+        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=7dfd06cf6e02]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools") { editor, env in
             editor.namespace(ToolSchema.Namespace(
                 name: "opencode",

@@ -314,7 +314,7 @@ public enum CoreToolOutput {
 
         /// Converts HTML into clean Markdown (stripping scripts/styles, rendering headings, links, images,
         /// code blocks, lists, quotes, and tables, bounded to `MAX_MARKDOWN_BYTES`).
-        // parity: core/src/tool/html-markdown.ts#convertHTMLToMarkdown [status=implemented hash=b716e701ba75]
+        // parity: core/src/tool/html-markdown.ts#convertHTMLToMarkdown [status=implemented hash=44b23bbffe82]
         public static func convertHTMLToMarkdown(_ html: String) -> String {
             var out = ""
             var skipDepth = 0
@@ -681,6 +681,7 @@ public enum CoreToolOutput {
             public static let tag = "ReadTool.BinaryFileError"
             public let resource: String
             public init(resource: String) { self.resource = resource }
+            // parity: core/src/tool/read-filesystem.ts#BinaryFileError.message [status=implemented hash=e0d1a71aa1e3]
             public var message: String { "Cannot read binary file: \(resource)" }
             public var description: String { message }
         }
@@ -694,6 +695,7 @@ public enum CoreToolOutput {
                 self.resource = resource
                 self.maximumBytes = maximumBytes
             }
+            // parity: core/src/tool/read-filesystem.ts#MediaIngestLimitError.message [status=implemented hash=384923168980]
             public var message: String { "Media exceeds \(maximumBytes) byte ingestion limit: \(resource)" }
             public var description: String { message }
         }
@@ -712,6 +714,7 @@ public enum CoreToolOutput {
                 self.resource = resource
                 self.expected = expected
             }
+            // parity: core/src/tool/read-filesystem.ts#PathKindError.message [status=implemented hash=8c3f7feace48]
             public var message: String { "Path is not \(expected.rawValue): \(resource)" }
             public var description: String { message }
         }
@@ -721,6 +724,7 @@ public enum CoreToolOutput {
             public static let tag = "ReadTool.DirectoryOffsetError"
             public let resource: String
             public init(resource: String) { self.resource = resource }
+            // parity: core/src/tool/read-filesystem.ts#DirectoryOffsetError.message [status=implemented hash=c8510c160d06]
             public var message: String { "A negative offset only works for files, and \(resource) is a directory" }
             public var description: String { message }
         }

@@ -223,7 +223,7 @@ public enum CoreManagedPolicy {
     }
 
     /// Every policy statement across config entries, reversed so earliest-loaded policy comes last and wins.
-    // parity: core/src/managed-policy.ts#statements [status=implemented hash=ae9f828f8f07]
+    // parity: core/src/managed-policy.ts#statements [status=implemented hash=6d2e5a14ad41]
     public static func statements(_ entries: [CoreConfigEntry]) -> [Statement] {
         var result: [Statement] = []
         for entry in entries.reversed() {

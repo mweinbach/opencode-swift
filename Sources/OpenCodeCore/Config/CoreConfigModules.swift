@@ -294,7 +294,7 @@ public enum CoreConfigPlugin {
             func changes() -> AsyncStream<Void> { AsyncStream { $0.finish() } }
         }
 
-        // parity: core/src/config/plugin/source.ts#layer [status=adapted hash=21fbae8854f7]
+        // parity: core/src/config/plugin/source.ts#layer [status=adapted hash=a8627ac69589]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let cfg = deps.get(CoreConfig.Service.serviceKey, as: (any CoreConfig.Interface).self) ?? CoreConfig.Test()
             let dir = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
@@ -324,7 +324,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Command {
-        // parity: core/src/config/plugin/command.ts#Plugin [status=adapted hash=daa431df78ae]
+        // parity: core/src/config/plugin/command.ts#Plugin [status=adapted hash=beafa962f559]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.command")
     }
 
@@ -407,7 +407,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Instruction {
-        // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=fd91fb153feb]
+        // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=06aae93cb63f]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.instruction")
     }
 
@@ -493,7 +493,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Policy {
-        // parity: core/src/config/plugin/policy.ts#Plugin [status=adapted hash=b8e08bdd54d9]
+        // parity: core/src/config/plugin/policy.ts#Plugin [status=adapted hash=4daf8714d740]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.policy")
 
         /// Evaluates `tool.use` managed policies on a permission hook event (`action:resource`).
@@ -524,11 +524,11 @@ public enum CoreConfigPlugin {
     }
 
     public enum Provider {
-        // parity: core/src/config/plugin/provider.ts#Plugin [status=adapted hash=9b48dd71a361]
+        // parity: core/src/config/plugin/provider.ts#Plugin [status=adapted hash=71fcbae8f784]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.provider")
 
         /// Extracts configured providers from an integration document, keyed by provider ID.
-        // parity: core/src/config/plugin/provider.ts#integrate [status=adapted hash=3f5d471846b9]
+        // parity: core/src/config/plugin/provider.ts#integrate [status=adapted hash=0b7b38cbf747]
         public static func integrate(
             document: CoreConfigIntegration.Document
         ) -> [String: ConfigProviderSchema.Info] {
@@ -558,7 +558,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Skill {
-        // parity: core/src/config/plugin/skill.ts#Plugin [status=adapted hash=e4df0113a40c]
+        // parity: core/src/config/plugin/skill.ts#Plugin [status=adapted hash=8d738b631551]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.skill")
     }
 

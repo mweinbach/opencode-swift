@@ -195,6 +195,9 @@ public enum CoreSessionJobTypes {
 /// Queries outstanding and unconsumed background work across a Session and its descendants
 /// (`packages/core/src/session/background.ts`).
 public enum CoreSessionBackground {
+    // parity: core/src/session/background.ts#OutstandingItem [status=implemented hash=dbed1c4865ac]
+    public typealias OutstandingItem = CoreSessionJobTypes.OutstandingItem
+
     // parity: core/src/session/background.ts#Lookup [status=implemented hash=8eaf63dfa4a0]
     public protocol Lookup: Sendable {
         func get(_ sessionID: SessionID) throws -> SessionSchema.Info?
@@ -684,7 +687,7 @@ public enum CoreSessionSubagentReport {
         }
     }
 
-    // parity: core/src/session/execution/subagent-report.ts#make [status=implemented hash=c4d8d849f358]
+    // parity: core/src/session/execution/subagent-report.ts#make [status=implemented hash=3ab05a2596d3]
     public static func make(_ deps: Deps) -> Coordinator {
         Coordinator(deps: deps)
     }
@@ -704,7 +707,7 @@ public enum CoreSessionRunCoordinator {
         case interrupted
     }
 
-    // parity: core/src/session/run-coordinator.ts#Coordinator [status=implemented hash=432742bddfc0]
+    // parity: core/src/session/run-coordinator.ts#Coordinator [status=implemented hash=4d61362eae70]
     public protocol Coordinator<Key, Reason>: Sendable {
         associatedtype Key: Hashable & Sendable
         associatedtype Reason: Sendable
@@ -1148,7 +1151,7 @@ public enum CoreSessionExecution {
         public func awaitIdle(_ sessionID: SessionID) async {}
     }
 
-    // parity: core/src/session/execution.ts#layer [status=adapted hash=e4b41c344493]
+    // parity: core/src/session/execution.ts#layer [status=adapted hash=ec15004c70b5]
     public static func layer(
         runnerForLocation: @escaping @Sendable (SessionSchema.Info) async throws -> any CoreSessionRunner.Interface
     ) -> LayerNode.ExecutableLayer {
@@ -1197,7 +1200,7 @@ public enum CoreSessionSubagentJob {
         func start(_ recovery: CoreSessionJobTypes.SubagentRecovery) async throws -> CoreSessionJobTypes.BackgroundJobInfo
     }
 
-    // parity: core/src/session/subagent-job.ts#start [status=implemented hash=665607f0f19c]
+    // parity: core/src/session/subagent-job.ts#start [status=implemented hash=bf2e51011b41]
     public static func start(
         jobs: any CoreSessionJobTypes.JobBridge,
         execution: any CoreSessionExecution.Interface,
@@ -1401,7 +1404,7 @@ public enum CoreSessionRestart {
         }
     }
 
-    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=499b37f465d1]
+    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=98da2029011a]
     public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             guard let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db,

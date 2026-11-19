@@ -163,14 +163,24 @@ public enum CoreBlobStore {
 // MARK: - CoreArtifact (`core/src/artifact.ts`)
 
 public enum CoreArtifact {
+    // parity: core/src/artifact.ts#ID [status=implemented hash=6e85ce3fc596]
     public typealias ID = ArtifactSchema.ID
+    // parity: core/src/artifact.ts#ProviderID [status=implemented hash=6e85ce3fc596]
     public typealias ProviderID = ArtifactSchema.ProviderID
+    // parity: core/src/artifact.ts#Capability [status=implemented hash=6e85ce3fc596]
     public typealias Capability = ArtifactSchema.Capability
+    // parity: core/src/artifact.ts#Provider [status=implemented hash=6e85ce3fc596]
     public typealias Provider = ArtifactSchema.Provider
+    // parity: core/src/artifact.ts#Info [status=implemented hash=6e85ce3fc596]
     public typealias Info = ArtifactSchema.Info
+    // parity: core/src/artifact.ts#Content [status=implemented hash=6e85ce3fc596]
     public typealias Content = ArtifactSchema.Content
+    // parity: core/src/artifact.ts#CreateInput [status=implemented hash=6e85ce3fc596]
     public typealias CreateInput = ArtifactSchema.CreateInput
+    // parity: core/src/artifact.ts#UpdateInput [status=implemented hash=6e85ce3fc596]
     public typealias UpdateInput = ArtifactSchema.UpdateInput
+    // parity: core/src/artifact.ts#Event [status=implemented hash=6e85ce3fc596]
+    public typealias Event = ArtifactSchema.Event
 
     // parity: core/src/artifact.ts#LocalProviderID [status=implemented hash=5cb10f76854f]
     public static let LocalProviderID = ProviderID(rawValue: "local")!
@@ -312,6 +322,7 @@ public enum CoreArtifact {
     public struct DisabledError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.DisabledError"
         public init() {}
+        // parity: core/src/artifact.ts#DisabledError.message [status=implemented hash=c3bf102abe8f]
         public var message: String { "Artifacts are disabled; set experimental.artifacts in config" }
         public var description: String { message }
     }
@@ -321,6 +332,7 @@ public enum CoreArtifact {
         public static let tag = "Artifact.NotFoundError"
         public let artifactID: ID
         public init(artifactID: ID) { self.artifactID = artifactID }
+        // parity: core/src/artifact.ts#NotFoundError.message [status=implemented hash=bf60bb4c1903]
         public var message: String { "Artifact not found: \(artifactID.rawValue)" }
         public var description: String { message }
     }
@@ -331,6 +343,7 @@ public enum CoreArtifact {
         public let artifactID: ID
         public let path: String
         public init(artifactID: ID, path: String) { self.artifactID = artifactID; self.path = path }
+        // parity: core/src/artifact.ts#FileMissingError.message [status=implemented hash=788927af2063]
         public var message: String { "Artifact file not found: \(path)" }
         public var description: String { message }
     }
@@ -340,6 +353,7 @@ public enum CoreArtifact {
         public static let tag = "Artifact.ProviderNotFoundError"
         public let providerID: ProviderID
         public init(providerID: ProviderID) { self.providerID = providerID }
+        // parity: core/src/artifact.ts#ProviderNotFoundError.message [status=implemented hash=5a728922330d]
         public var message: String { "Artifact provider not found: \(providerID.rawValue)" }
         public var description: String { message }
     }
@@ -350,6 +364,7 @@ public enum CoreArtifact {
         public let reason: String
         public let field: String?
         public init(reason: String, field: String? = nil) { self.reason = reason; self.field = field }
+        // parity: core/src/artifact.ts#InvalidError.message [status=implemented hash=8eadea097e1c]
         public var message: String { reason }
         public var description: String { reason }
     }
@@ -360,6 +375,7 @@ public enum CoreArtifact {
         public let providerID: ProviderID
         public let detail: String?
         public init(providerID: ProviderID, detail: String? = nil) { self.providerID = providerID; self.detail = detail }
+        // parity: core/src/artifact.ts#ProviderError.message [status=implemented hash=14eea9aa1692]
         public var message: String {
             if let detail, !detail.isEmpty { return "Artifact provider \(providerID.rawValue) failed: \(detail)" }
             return "Artifact provider \(providerID.rawValue) failed"
@@ -940,6 +956,7 @@ public enum CoreArtifact {
 // MARK: - CoreSnapshot (`core/src/snapshot.ts`)
 
 public enum CoreSnapshot {
+    // parity: core/src/snapshot.ts#ID [status=implemented hash=e49acddfac38]
     public typealias ID = SnapshotSchema.ID
 
     // parity: core/src/snapshot.ts#Error [status=implemented hash=c4ee1c7eb04d]

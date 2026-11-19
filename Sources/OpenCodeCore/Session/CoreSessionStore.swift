@@ -39,6 +39,7 @@ public enum CoreSessionErrors {
     public struct InvalidListCursorError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.InvalidListCursorError"
         public init() {}
+        // parity: core/src/session/error.ts#InvalidListCursorError.message [status=implemented hash=ec81fbc0e4ae]
         public var message: String { "Invalid cursor" }
         public var description: String { message }
     }
@@ -66,6 +67,7 @@ public enum CoreSessionErrors {
             self.sessionID = sessionID
         }
 
+        // parity: core/src/session/error.ts#ForkEmptyError.message [status=implemented hash=a11f2df8db08]
         public var message: String { "Cannot fork empty session: \(sessionID.rawValue)" }
         public var description: String { message }
     }
@@ -81,6 +83,7 @@ public enum CoreSessionErrors {
             self.messageID = messageID
         }
 
+        // parity: core/src/session/error.ts#MessageDecodeError.message [status=implemented hash=16c47716f660]
         public var message: String { "Failed to decode message \(messageID.rawValue) in session \(sessionID.rawValue)" }
         public var description: String { message }
     }
@@ -96,6 +99,7 @@ public enum CoreSessionErrors {
             self.agent = agent
         }
 
+        // parity: core/src/session/error.ts#AgentNotFoundError.message [status=implemented hash=cf3a1725228f]
         public var message: String { "Agent not found: \"\(agent)\"" }
         public var description: String { message }
     }
@@ -109,6 +113,7 @@ public enum CoreSessionErrors {
             self.error = error
         }
 
+        // parity: core/src/session/error.ts#StepFailedError.message [status=implemented hash=4f27fe67572e]
         public var message: String { error.message }
         public var description: String { message }
     }
@@ -1641,7 +1646,7 @@ public enum CoreSessionStore {
         }
     }
 
-    // parity: core/src/session/store.ts#Interface [status=implemented hash=79cca43b9477]
+    // parity: core/src/session/store.ts#Interface [status=implemented hash=d9eb80d50537]
     public protocol Interface: Sendable {
         func get(_ sessionID: SessionID) throws -> SessionSchema.Info?
         func list(_ input: ListInput) throws -> [SessionSchema.Info]
@@ -1974,7 +1979,7 @@ public enum CoreSessionMessageUpdater {
     }
 
     /// Folds one durable session event onto projected messages through `adapter`.
-    // parity: core/src/session/message-updater.ts#update [status=implemented hash=0c9d4f386fe1]
+    // parity: core/src/session/message-updater.ts#update [status=implemented hash=a0c5f4ce11bb]
     public static func update(adapter: any Adapter, event: SessionEventSchema.DurableEvent, created: Int64, metadata: [String: JSONValue]?) throws {
         func updateOwnedAssistant(
             _ messageID: SessionMessageSchema.ID,

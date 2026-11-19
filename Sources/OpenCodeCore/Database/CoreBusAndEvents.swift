@@ -169,7 +169,7 @@ public enum CoreBus {
     public typealias SubscribePayload = AnyEvent
 
     /// Subscription factory interface (`Bus.Subscribe`).
-    // parity: core/src/bus.ts#Subscribe [status=implemented hash=a4af82eccd45]
+    // parity: core/src/bus.ts#Subscribe [status=implemented hash=3782d35d4192]
     public protocol Subscribe: Sendable {
         func subscribe(location: OpenCodeLocation?) -> AsyncStream<SubscribePayload>
         func subscribe(types: Set<String>, location: OpenCodeLocation?) -> AsyncStream<SubscribePayload>
@@ -1183,7 +1183,7 @@ public enum CoreBus {
         }
     }
 
-    // parity: core/src/bus.ts#configured [status=adapted hash=0b481bd29635]
+    // parity: core/src/bus.ts#configured [status=adapted hash=e7fe36aa0956]
     public static func configured(options: Options = Options()) -> LayerNode.Provider {
         let impl = LayerNode.ExecutableLayer { deps, _ in
             let dbService = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)

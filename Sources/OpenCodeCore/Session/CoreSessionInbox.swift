@@ -65,6 +65,35 @@ internal final class CoreAsyncKeyedMutex<Key: Hashable & Sendable>: @unchecked S
 /// Durable pending-only session inbox admission, idempotency reconciliation, delivery ordering,
 /// and transactional projections (`packages/core/src/session/inbox.ts`).
 public enum CoreSessionInbox {
+    // parity: core/src/session/inbox.ts#Compaction [status=implemented hash=1d5c9b36c232]
+    public typealias Compaction = SessionInboxSchema.Compaction
+    // parity: core/src/session/inbox.ts#CompactionPayload [status=implemented hash=1d5c9b36c232]
+    public typealias CompactionPayload = SessionInboxSchema.CompactionPayload
+    // parity: core/src/session/inbox.ts#Delivery [status=implemented hash=1d5c9b36c232]
+    public typealias Delivery = SessionInboxSchema.Delivery
+    // parity: core/src/session/inbox.ts#Info [status=implemented hash=1d5c9b36c232]
+    public typealias Info = SessionInboxSchema.Info
+    // parity: core/src/session/inbox.ts#Item [status=implemented hash=1d5c9b36c232]
+    public typealias Item = SessionInboxSchema.Item
+    // parity: core/src/session/inbox.ts#MediaInfo [status=implemented hash=1d5c9b36c232]
+    public typealias MediaInfo = SessionInboxSchema.MediaInfo
+    // parity: core/src/session/inbox.ts#MediaUser [status=implemented hash=1d5c9b36c232]
+    public typealias MediaUser = SessionInboxSchema.MediaUser
+    // parity: core/src/session/inbox.ts#MediaUserPayload [status=implemented hash=1d5c9b36c232]
+    public typealias MediaUserPayload = SessionInboxSchema.MediaUserPayload
+    // parity: core/src/session/inbox.ts#Move [status=implemented hash=1d5c9b36c232]
+    public typealias Move = SessionInboxSchema.Move
+    // parity: core/src/session/inbox.ts#MovePayload [status=implemented hash=1d5c9b36c232]
+    public typealias MovePayload = SessionInboxSchema.MovePayload
+    // parity: core/src/session/inbox.ts#Synthetic [status=implemented hash=1d5c9b36c232]
+    public typealias Synthetic = SessionInboxSchema.Synthetic
+    // parity: core/src/session/inbox.ts#SyntheticPayload [status=implemented hash=1d5c9b36c232]
+    public typealias SyntheticPayload = SessionInboxSchema.SyntheticPayload
+    // parity: core/src/session/inbox.ts#User [status=implemented hash=1d5c9b36c232]
+    public typealias User = SessionInboxSchema.User
+    // parity: core/src/session/inbox.ts#UserPayload [status=implemented hash=1d5c9b36c232]
+    public typealias UserPayload = SessionInboxSchema.UserPayload
+
     /// Which pending input `promote` may consume:
     /// - `.steer`: promotes steers only (step boundary mid-work)
     /// - `.input`: promotes steers first, else one queued item (idle boundary)
@@ -308,7 +337,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#make [status=implemented hash=8df52d263cc4]
+    // parity: core/src/session/inbox.ts#make [status=implemented hash=57ba7cba8505]
     public static func make(db: any SQLiteDatabase, bus: CoreBus.Service) -> Service {
         Service(db: db, bus: bus)
     }

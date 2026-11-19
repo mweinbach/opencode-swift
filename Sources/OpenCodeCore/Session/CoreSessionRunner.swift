@@ -210,7 +210,7 @@ public enum CoreSessionUsage {
         }
     }
 
-    // parity: core/src/session/usage.ts#record [status=implemented hash=c3c44ee17590]
+    // parity: core/src/session/usage.ts#record [status=implemented hash=7c848d5bdac1]
     public static func record(_ usage: AISchema.Usage?, costs: [ModelSchema.Cost]) -> Recorded {
         let normalized = tokens(usage)
         let cost = usage?.cost ?? calculateCost(costs, usage: normalized)
@@ -761,7 +761,7 @@ public enum CoreSessionModelTransport {
         }
     }
 
-    // parity: core/src/session/model-transport.ts#makeLayer [status=adapted hash=7f9733234156]
+    // parity: core/src/session/model-transport.ts#makeLayer [status=adapted hash=c4a002e6bd56]
     public static func makeLayer(connector: AITransport.WebSocketConnector? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { _, _ in
             LayerNode.Output([Service.serviceKey: Service(connector: connector)])
@@ -792,6 +792,7 @@ public enum CoreSessionRunnerModel {
             self.sessionID = sessionID
         }
 
+        // parity: core/src/session/runner/model.ts#ModelNotSelectedError.message [status=implemented hash=7f64b5e82ad4]
         public var message: String { "No model is available for session \(sessionID.rawValue)" }
         public var description: String { message }
     }
@@ -807,6 +808,7 @@ public enum CoreSessionRunnerModel {
             self.modelID = modelID
         }
 
+        // parity: core/src/session/runner/model.ts#ModelUnavailableError.message [status=implemented hash=08faee17908f]
         public var message: String {
             if providerID == "azure-cognitive-services" {
                 return "Model unavailable: \(providerID)/\(modelID). This provider has been deprecated; use azure/\(modelID) instead."
@@ -1228,7 +1230,7 @@ public enum CoreSessionModelRequest {
         }
     }
 
-    // parity: core/src/session/model-request.ts#boundImages [status=implemented hash=6a371a2d1b2f]
+    // parity: core/src/session/model-request.ts#boundImages [status=implemented hash=6a6383febe9f]
     public static func boundImages(_ messages: [AISchema.Message]) -> [AISchema.Message] {
         let isImage: (String) -> Bool = { $0.lowercased().hasPrefix("image/") }
         var sizes: [Int] = []
@@ -1341,7 +1343,7 @@ public enum CoreSessionModelRequest {
         }
     }
 
-    // parity: core/src/session/model-request.ts#layer [status=adapted hash=3e5e2069f35e]
+    // parity: core/src/session/model-request.ts#layer [status=adapted hash=851f1901873a]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let transport = deps.get(CoreSessionModelTransport.Service.serviceKey, as: (any CoreSessionModelTransport.Interface).self)
             ?? CoreSessionModelTransport.Service()
@@ -1547,7 +1549,7 @@ public enum CoreSessionContext {
 /// Persists one logical LLM step's streaming events onto `CoreBus` without executing tools
 /// (`packages/core/src/session/runner/publish-llm-event.ts`).
 public enum CoreSessionLLMEventPublisher {
-    // parity: core/src/session/runner/publish-llm-event.ts#StepRecord [status=implemented hash=07574d4c776b]
+    // parity: core/src/session/runner/publish-llm-event.ts#StepRecord [status=implemented hash=0d6881824bb0]
     public struct StepRecord: Equatable, Sendable {
         public struct FinishInfo: Equatable, Sendable {
             public let finish: SessionMessageSchema.FinishReason
@@ -2229,7 +2231,7 @@ public enum CoreSessionLLMEventPublisher {
         }
     }
 
-    // parity: core/src/session/runner/publish-llm-event.ts#createLLMEventPublisher [status=implemented hash=dcf119f3658f]
+    // parity: core/src/session/runner/publish-llm-event.ts#createLLMEventPublisher [status=implemented hash=ecf0127a20cd]
     public static func createLLMEventPublisher(
         bus: CoreBus.Service,
         input: Input
@@ -2242,6 +2244,11 @@ public enum CoreSessionLLMEventPublisher {
 
 /// Retry decision policy and durable retry scheduling (`packages/core/src/session/runner/retry.ts`).
 public enum CoreSessionRunnerRetry {
+    // parity: core/src/session/runner/retry.ts#isRetryable [status=implemented hash=a0f2c8a75e63]
+    public static func isRetryable(_ error: AISchema.AIError) -> Bool {
+        error.isRetryable
+    }
+
     // parity: core/src/session/runner/retry.ts#Decision [status=implemented hash=148b80756260]
     public struct Decision: Equatable, Hashable, Sendable {
         public let attempt: Int
@@ -2567,7 +2574,7 @@ public enum CoreSessionStep {
         }
     }
 
-    // parity: core/src/session/runner/step.ts#make [status=implemented hash=95071f7a5eb3]
+    // parity: core/src/session/runner/step.ts#make [status=implemented hash=31e0161c4471]
     public static func make(bus: CoreBus.Service, llm: any AIRoute.Interface) -> Runner {
         Runner(bus: bus, llm: llm)
     }
