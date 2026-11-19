@@ -984,7 +984,7 @@ public enum CoreFilesystem {
     }
 
     public enum FffBun {
-        private static let adapter = Fff.bind(nil, unavailable: "fff unavailable in Swift native runtime (bun)")
+        private static let adapter = Fff.nativeAdapter()
 
         // parity: core/src/filesystem/fff.bun.ts#available [status=adapted hash=0280b1b290a7]
         public static func available() -> Bool { adapter.available() }
@@ -994,7 +994,7 @@ public enum CoreFilesystem {
     }
 
     public enum FffNode {
-        private static let adapter = Fff.bind(nil, unavailable: "fff unavailable on node runtime")
+        private static let adapter = Fff.nativeAdapter()
 
         // parity: core/src/filesystem/fff.node.ts#available [status=adapted hash=0280b1b290a7]
         public static func available() -> Bool { adapter.available() }
@@ -1816,7 +1816,7 @@ public enum CoreFilesystem {
                 : LayerNode.ExecutableLayer { deps, _ in
                     let directory = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
                     let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
-                    let service = Service(directory: directory, fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared)
+                    let service = FuzzyIndexedService(directory: directory, fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared)
                     return LayerNode.Output([Service.serviceKey: service as any Interface])
                 }
             return AppNode.makeLocationNode(Service.serviceKey, layer, [FSUtil.node])
