@@ -333,6 +333,7 @@ public enum TUIInteractiveLoop {
                 let dtMs = max(0.0, Double(elapsed.components.seconds) * 1000.0 + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000.0)
                 if dtMs > 0 {
                     clock.advance(by: dtMs)
+                    liveRenderer.flushInputTimeout()
                 }
 
                 // Handle external `$EDITOR` request cleanly by temporarily leaving raw/alt-screen

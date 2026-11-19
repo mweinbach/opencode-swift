@@ -245,9 +245,7 @@ final class P4InteractiveHarness: @unchecked Sendable {
             client: client,
             store: store,
             directory: state.directory,
-            markDirty: {
-                rootBox.invalidate()
-            }
+            markDirty: {}
         )
         self.viewRoot = TUIInteractiveLoop.mountInteractiveView(
             on: testRenderer.renderer,

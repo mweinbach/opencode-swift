@@ -1000,8 +1000,16 @@ public struct TUIInteractiveState: Equatable, Sendable {
         let needle = promptText.lowercased()
         let pool = allSlashCommands
         if needle == "/" { return pool }
-        return pool.filter {
-            $0.name.lowercased().hasPrefix(needle) || $0.description.lowercased().contains(needle.dropFirst())
+        let query = String(needle.dropFirst())
+        let matched = pool.filter {
+            $0.name.lowercased().hasPrefix(needle) || $0.description.lowercased().contains(query)
+        }
+        return matched.sorted { lhs, rhs in
+            let lName = lhs.name.lowercased()
+            let rName = rhs.name.lowercased()
+            let lRank = (lName == needle) ? 0 : (lName.hasPrefix(needle) ? 1 : 2)
+            let rRank = (rName == needle) ? 0 : (rName.hasPrefix(needle) ? 1 : 2)
+            return lRank < rRank
         }
     }
 
