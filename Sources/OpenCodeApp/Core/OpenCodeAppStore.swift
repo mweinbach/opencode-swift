@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OpenCodeClient
 import OpenCodeCore
+import OpenCodeGUIPlugins
 import OpenCodePlatform
 import OpenCodeProtocol
 import OpenCodeSchema
@@ -75,6 +76,17 @@ public final class OpenCodeAppStore {
     public private(set) var activeSessionTokens: Int = 0
 
     // MARK: - Live Catalogs & Workspace Data
+
+    /// Built-in GUI plugin descriptors & non-DOM state machines from `OpenCodeGUIPlugins`.
+    public let guiPluginRegistry: GUIPluginRegistry = .default
+    public var reviewComments: ReviewCommentStore = ReviewCommentStore()
+    public var pairingCopyState: PairingCopyMachine.State = .idle(attempt: 0)
+    public var windowUpdaterState: WindowUpdaterMachine.State = .idle(issued: 0)
+
+    /// Built-in GUI plugins eligible for the current host OS.
+    public var activeGUIPlugins: [GUIPluginDescriptor] {
+        guiPluginRegistry.plugins.filter { $0.runsOn(.current) }
+    }
 
     public private(set) var agents: [AppAgentItem] = AppAgentItem.defaults
     public private(set) var selectedAgentID: String = "build"

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T20:37:07.835Z",
+  "generatedAt": "2026-11-19T21:43:09.070Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opentui.git",
     "branch": "main",
@@ -7,7 +7,7 @@
     "commitDate": "2026-11-18T14:10:12+01:00",
     "commitSubject": "native: keep the Windows static library's CRT copies private (#2157)"
   },
-  "swiftFiles": 143,
+  "swiftFiles": 144,
   "parityAnnotations": 7223,
   "differentialParity": {
     "verifiedFunctions": 91,

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OPENTUI_DIR="${ROOT_DIR}/Packages/OpenTUI"
+OPENTUNNEL_DIR="${ROOT_DIR}/Packages/OpenTunnel"
 CMD="${1:-all}"
 shift || true
 
@@ -42,6 +43,7 @@ case "${CMD}" in
   test)
     "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" "$@"
     "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" "$@"
+    "${ROOT_DIR}/scripts/test.sh" "${OPENTUNNEL_DIR}" "$@"
     ;;
   check)
     require_bun
@@ -51,6 +53,7 @@ case "${CMD}" in
     bun "${OPENTUI_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict --no-write
     "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" -Xswiftc -warnings-as-errors
     "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" -Xswiftc -warnings-as-errors
+    "${ROOT_DIR}/scripts/test.sh" "${OPENTUNNEL_DIR}" -Xswiftc -warnings-as-errors
     ;;
   all)
     require_bun
@@ -62,6 +65,7 @@ case "${CMD}" in
     bun "${OPENTUI_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict
     "${ROOT_DIR}/scripts/test.sh" "${ROOT_DIR}" -Xswiftc -warnings-as-errors
     "${ROOT_DIR}/scripts/test.sh" "${OPENTUI_DIR}" -Xswiftc -warnings-as-errors
+    "${ROOT_DIR}/scripts/test.sh" "${OPENTUNNEL_DIR}" -Xswiftc -warnings-as-errors
     ;;
   *)
     cat <<EOF

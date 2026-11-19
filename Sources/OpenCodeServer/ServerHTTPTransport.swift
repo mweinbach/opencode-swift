@@ -737,6 +737,16 @@ public final class POSIXHTTPServer: Sendable {
         }
 
         await writeHTTPResponse(fd: fd, method: request.method, response: response)
+        // Perform graceful TCP half-close (FIN) before close(fd) so macOS/Linux URLSession
+        // never sees a premature TCP RST (-1005 NSURLErrorNetworkConnectionLost) while reading.
+        #if canImport(Darwin)
+        _ = Darwin.shutdown(fd, SHUT_WR)
+        #elseif canImport(Glibc)
+        _ = Glibc.shutdown(fd, Int32(SHUT_WR))
+        #elseif canImport(Musl)
+        _ = Musl.shutdown(fd, Int32(SHUT_WR))
+        #endif
+        _ = await Self.readChunk(fd: fd, maxBytes: 1024, timeoutMs: 25)
     }
 
     private struct ParsedRawHTTP {

@@ -692,6 +692,12 @@ struct OpenCodeAppStoreLiveTests {
         try await store.connectProviderAPIKey(integrationID: "anthropic", apiKey: "sk-ant-test-key-123", label: "Test Key")
         #expect(store.toast?.message.contains("anthropic") == true)
 
+        // OpenCodeGUIPlugins registry & state machines wired onto OpenCodeAppStore
+        #expect(store.guiPluginRegistry.plugins.count == 15)
+        #expect(store.activeGUIPlugins.contains { $0.id == "ssh" })
+        #expect(store.activeGUIPlugins.contains { $0.id == "review" })
+        #expect(store.activeGUIPlugins.contains { $0.id == "pairing" })
+
         await store.disconnect()
     }
 }
