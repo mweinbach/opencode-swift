@@ -1560,6 +1560,15 @@ public enum CorePty {
         func attach(_ id: ID, input: AttachInput) async throws -> Attachment
     }
 
+    /// Default PTY backend: real native POSIX PTY on macOS and Linux, simulated fallback on restricted targets.
+    public static var defaultBackend: ProcessDaemon.BackendMode {
+        #if os(macOS) || os(Linux)
+        return .native
+        #else
+        return .simulated(onWrite: nil)
+        #endif
+    }
+
     /// Location-scoped PTY manager integrated directly with `OpenCodePlatform.ProcessDaemon.TerminalService`.
     // parity: core/src/pty.ts#Service [status=adapted hash=e21f3642d991]
     public final class Service: Interface, Sendable {
@@ -1586,6 +1595,9 @@ public enum CorePty {
             var info: Info
             var buffer: String = ""
             var cursor: Int = 0
+            var daemonOffset: UInt64 = 0
+            var observer: ProcessDaemon.TerminalAttachment?
+            var pumpTask: Task<Void, Never>?
             var subscribers: [UInt64: Subscriber] = [:]
             var nextSubID: UInt64 = 1
 
@@ -1602,7 +1614,7 @@ public enum CorePty {
 
         public init(
             directory: String = "/",
-            backend: ProcessDaemon.BackendMode = .simulated(onWrite: nil),
+            backend: ProcessDaemon.BackendMode = CorePty.defaultBackend,
             shellSelect: any CoreShell.Select.Interface = CoreShell.Select.Service()
         ) {
             self.directory = directory
@@ -1610,15 +1622,42 @@ public enum CorePty {
             self.shellSelect = shellSelect
         }
 
+        deinit {
+            let sessions = state.withLock { map -> [Session] in
+                let all = Array(map.values)
+                map.removeAll()
+                return all
+            }
+            for session in sessions {
+                session.pumpTask?.cancel()
+                session.observer?.detach()
+            }
+            terminalService.shutdown()
+        }
+
         public func list() async -> [Info] {
-            state.withLock { Array($0.values.map(\.info)) }
+            let ids = state.withLock { Array($0.keys) }
+            for id in ids {
+                _ = drainObserver(id: id)
+            }
+            return state.withLock { Array($0.values.map(\.info)) }
         }
 
         public func get(_ id: ID) async throws -> Info {
+            _ = drainObserver(id: id)
             guard let info = state.withLock({ $0[id]?.info }) else {
                 throw NotFoundError(ptyID: id)
             }
             return info
+        }
+
+        /// Returns the retained output buffer for `id`, including after the process has exited.
+        public func replay(_ id: ID) async throws -> String {
+            _ = drainObserver(id: id)
+            return try state.withLock { map in
+                guard let session = map[id] else { throw NotFoundError(ptyID: id) }
+                return session.buffer
+            }
         }
 
         public func create(_ input: CreateInput = CreateInput()) async throws -> Info {
@@ -1659,7 +1698,36 @@ public enum CorePty {
                 exitCode: nil
             )
             let session = Session(daemonID: procInfo.id, info: info)
+            let observer = try? terminalService.attach(
+                id: procInfo.id,
+                offset: 0,
+                attachmentId: "core-pty-observer-\(id.rawValue)",
+                role: .observer,
+                takeover: false
+            )
+            session.observer = observer
             state.withLock { $0[id] = session }
+
+            if let observer, !observer.replay.bytes.isEmpty {
+                ingestBytes(
+                    id: id,
+                    start: observer.replay.availableOffset,
+                    end: observer.replay.endOffset,
+                    bytes: observer.replay.bytes
+                )
+            }
+            let stillRunning = drainObserver(id: id)
+            if stillRunning && observer != nil {
+                let pump = Task { [weak self] in
+                    while !Task.isCancelled {
+                        guard let self else { break }
+                        let keepGoing = self.drainObserver(id: id)
+                        if !keepGoing { break }
+                        try? await Task.sleep(for: .milliseconds(10))
+                    }
+                }
+                state.withLock { $0[id]?.pumpTask = pump }
+            }
             return info
         }
 
@@ -1690,12 +1758,23 @@ public enum CorePty {
         }
 
         public func remove(_ id: ID) async throws {
-            let (daemonID, subs): (ProcessDaemon.TerminalId, [Subscriber]) = try state.withLock { map in
+            let (daemonID, subs, observer, pumpTask): (
+                ProcessDaemon.TerminalId,
+                [Subscriber],
+                ProcessDaemon.TerminalAttachment?,
+                Task<Void, Never>?
+            ) = try state.withLock { map in
                 guard let session = map.removeValue(forKey: id) else { throw NotFoundError(ptyID: id) }
                 let s = Array(session.subscribers.values)
                 session.subscribers.removeAll()
-                return (session.daemonID, s)
+                let obs = session.observer
+                session.observer = nil
+                let task = session.pumpTask
+                session.pumpTask = nil
+                return (session.daemonID, s, obs, task)
             }
+            pumpTask?.cancel()
+            observer?.detach()
             try? terminalService.terminate(daemonID)
             for sub in subs {
                 if sub.active && !sub.detached { sub.onEnd(nil) }
@@ -1713,6 +1792,7 @@ public enum CorePty {
         }
 
         public func attach(_ id: ID, input: AttachInput) async throws -> Attachment {
+            _ = drainObserver(id: id)
             let (daemonID, replay, endCursor, subID): (ProcessDaemon.TerminalId, String, Int, UInt64) = try state.withLock { map in
                 guard let session = map[id] else { throw NotFoundError(ptyID: id) }
                 if session.info.status != .running { throw ExitedError(ptyID: id) }
@@ -1748,6 +1828,7 @@ public enum CorePty {
                 },
                 activate: { [weak self] in
                     guard let self else { return }
+                    _ = self.drainObserver(id: id)
                     let (pending, endCode): ([String], Int??) = self.state.withLock { map in
                         guard let session = map[id], let sub = session.subscribers[subID] else { return ([], nil) }
                         if sub.active || sub.detached { return ([], nil) }
@@ -1755,6 +1836,9 @@ public enum CorePty {
                         let p = sub.pending
                         sub.pending.removeAll()
                         let e = sub.endExitCode
+                        if e != nil {
+                            session.subscribers.removeValue(forKey: subID)
+                        }
                         return (p, e)
                     }
                     for chunk in pending { input.onData(chunk) }
@@ -1772,16 +1856,61 @@ public enum CorePty {
         }
 
         private func syncBufferFromDaemon(id: ID, daemonID: ProcessDaemon.TerminalId) {
-            let currentCursor = state.withLock { $0[id]?.cursor ?? 0 }
-            guard let rep = try? terminalService.replay(id: daemonID, offset: UInt64(currentCursor)),
+            let currentOffset = state.withLock { $0[id]?.daemonOffset ?? 0 }
+            guard let rep = try? terminalService.replay(id: daemonID, offset: currentOffset),
                   !rep.bytes.isEmpty
             else {
                 return
             }
-            let chunk = String(decoding: rep.bytes, as: UTF8.self)
-            let activeSubs: [Subscriber] = state.withLock { map in
-                guard let session = map[id] else { return [] }
-                session.cursor = Int(rep.endOffset)
+            ingestBytes(id: id, start: rep.availableOffset, end: rep.endOffset, bytes: rep.bytes)
+        }
+
+        @discardableResult
+        private func drainObserver(id: ID) -> Bool {
+            let (observer, alreadyExited): (ProcessDaemon.TerminalAttachment?, Bool) = state.withLock { map in
+                guard let session = map[id] else { return (nil, true) }
+                return (session.observer, session.info.status != .running)
+            }
+            guard let observer, !alreadyExited else { return false }
+            let events = observer.drainEvents()
+            var exited = false
+            for event in events {
+                switch event {
+                case .output(let start, let end, let bytes):
+                    ingestBytes(id: id, start: start, end: end, bytes: bytes)
+                case .exited(let exit):
+                    exited = true
+                    handleExit(id: id, exit: exit)
+                default:
+                    break
+                }
+            }
+            if exited || observer.isClosed {
+                return false
+            }
+            return true
+        }
+
+        private func ingestBytes(id: ID, start: UInt64, end: UInt64, bytes: [UInt8]) {
+            guard !bytes.isEmpty else { return }
+            let delivered: (chunk: String, subs: [Subscriber])? = state.withLock { map in
+                guard let session = map[id] else { return nil }
+                if end <= session.daemonOffset { return nil }
+                let sliceBytes: [UInt8]
+                if start < session.daemonOffset {
+                    let skip = Int(session.daemonOffset - start)
+                    guard skip < bytes.count else {
+                        session.daemonOffset = end
+                        return nil
+                    }
+                    sliceBytes = Array(bytes[skip...])
+                } else {
+                    sliceBytes = bytes
+                }
+                session.daemonOffset = end
+                let chunk = String(decoding: sliceBytes, as: UTF8.self)
+                guard !chunk.isEmpty else { return nil }
+                session.cursor += chunk.utf16.count
                 session.buffer += chunk
                 if session.buffer.count > Self.bufferLimit {
                     session.buffer = String(session.buffer.suffix(Self.bufferLimit))
@@ -1795,10 +1924,49 @@ public enum CorePty {
                         sub.pending.append(chunk)
                     }
                 }
-                return active
+                return (chunk, active)
             }
+            if let delivered {
+                for sub in delivered.subs {
+                    sub.onData(delivered.chunk)
+                }
+            }
+        }
+
+        private func handleExit(id: ID, exit: ProcessDaemon.ProcessExit) {
+            let exitCodeInt: Int? = exit.exitCode.map { Int($0) }
+            let (activeSubs, observer): ([Subscriber], ProcessDaemon.TerminalAttachment?) = state.withLock { map in
+                guard let session = map[id] else { return ([], nil) }
+                if session.info.status == .exited { return ([], nil) }
+                session.info = Info(
+                    id: session.info.id,
+                    title: session.info.title,
+                    command: session.info.command,
+                    args: session.info.args,
+                    cwd: session.info.cwd,
+                    status: .exited,
+                    pid: session.info.pid,
+                    exitCode: exitCodeInt.flatMap { SchemaPrimitive.NonNegativeInt(rawValue: $0) }
+                )
+                let obs = session.observer
+                session.observer = nil
+                var active: [Subscriber] = []
+                var kept: [UInt64: Subscriber] = [:]
+                for (token, sub) in session.subscribers {
+                    if sub.detached { continue }
+                    if sub.active {
+                        active.append(sub)
+                    } else {
+                        sub.endExitCode = .some(exitCodeInt)
+                        kept[token] = sub
+                    }
+                }
+                session.subscribers = kept
+                return (active, obs)
+            }
+            observer?.detach()
             for sub in activeSubs {
-                sub.onData(chunk)
+                sub.onEnd(exitCodeInt)
             }
         }
     }
@@ -1810,7 +1978,7 @@ public enum CorePty {
             let dir = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
             let select = deps.get(CoreShell.Select.Service.serviceKey, as: (any CoreShell.Select.Interface).self)
                 ?? CoreShell.Select.Service()
-            let svc = Service(directory: dir, shellSelect: select)
+            let svc = Service(directory: dir, backend: CorePty.defaultBackend, shellSelect: select)
             return LayerNode.Output([Service.serviceKey: svc as any Interface])
         },
         [CoreShell.Select.node]
@@ -1976,7 +2144,7 @@ public enum CorePty {
 
             public init(
                 directory: String,
-                backend: ProcessDaemon.BackendMode = .simulated(onWrite: nil)
+                backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
             ) {
                 self.directory = directory
                 self.service = ProcessDaemon.TerminalService.new(backend: backend)
@@ -2012,19 +2180,62 @@ public enum CorePty {
                 } catch {
                     throw DaemonError(kind: .request, message: String(describing: error))
                 }
+                final class PumpState: @unchecked Sendable {
+                    let lock = Mutex<(activated: Bool, detached: Bool, task: Task<Void, Never>?)>((false, false, nil))
+                }
+                let pumpState = PumpState()
                 return DaemonAttachment(
                     terminal: attachment.process,
                     role: attachment.role,
                     generation: attachment.generation,
                     replay: attachment.replay,
                     activate: {
+                        let shouldStart = pumpState.lock.withLock { s -> Bool in
+                            if s.activated || s.detached { return false }
+                            s.activated = true
+                            return true
+                        }
+                        guard shouldStart else { return }
+                        var sawExit = false
                         for ev in attachment.drainEvents() {
                             input.onEvent(ev)
+                            if case .exited = ev { sawExit = true }
+                        }
+                        guard !sawExit && !attachment.isClosed else { return }
+                        let task = Task {
+                            while !Task.isCancelled {
+                                let isDetached = pumpState.lock.withLock { $0.detached }
+                                if isDetached { break }
+                                var done = false
+                                for ev in attachment.drainEvents() {
+                                    input.onEvent(ev)
+                                    if case .exited = ev { done = true }
+                                }
+                                if done || attachment.isClosed { break }
+                                try? await Task.sleep(for: .milliseconds(10))
+                            }
+                        }
+                        pumpState.lock.withLock { s in
+                            if s.detached {
+                                task.cancel()
+                            } else {
+                                s.task = task
+                            }
                         }
                     },
                     detach: {
+                        let (shouldEnd, task) = pumpState.lock.withLock { s -> (Bool, Task<Void, Never>?) in
+                            if s.detached { return (false, nil) }
+                            s.detached = true
+                            let t = s.task
+                            s.task = nil
+                            return (true, t)
+                        }
+                        task?.cancel()
                         attachment.detach()
-                        input.onEnd()
+                        if shouldEnd {
+                            input.onEnd()
+                        }
                     }
                 )
             }
@@ -2033,7 +2244,7 @@ public enum CorePty {
         // parity: core/src/persistent-pty/daemon.ts#makeDaemonTransport [status=adapted hash=499f69b971bb]
         public static func makeDaemonTransport(
             root: String,
-            backend: ProcessDaemon.BackendMode = .simulated(onWrite: nil)
+            backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
         ) -> any DaemonTransport {
             InProcessDaemonTransport(directory: root, backend: backend)
         }
@@ -2305,7 +2516,7 @@ public enum CorePty {
 
             public init(
                 options: Options? = nil,
-                backend: ProcessDaemon.BackendMode = .simulated(onWrite: nil)
+                backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
             ) {
                 let root = options?.root ?? CoreConfigDiscovery.joinPath(Global.Path.state, "pty")
                 self.transport = PersistentDaemon.makeDaemonTransport(root: root, backend: backend)
@@ -2727,7 +2938,7 @@ public enum CorePty {
         // parity: core/src/persistent-pty/index.ts#layerWith [status=adapted hash=92c656d51c05]
         public static func layerWith(_ options: Options) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { _, _ in
-                LayerNode.Output([Service.serviceKey: Service(options: options) as any Interface])
+                LayerNode.Output([Service.serviceKey: Service(options: options, backend: CorePty.defaultBackend) as any Interface])
             }
         }
 

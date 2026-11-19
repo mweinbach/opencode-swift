@@ -300,8 +300,11 @@ extension CoreTool {
             if response.results.isEmpty { return NO_RESULTS }
             return response.results.map { hit in
                 let title = hit.title ?? hit.url
+                let published = hit.time.published.map {
+                    "\nPublished: \(CoreTool.formatToolISO8601UTC(epochMillis: Int64($0)))"
+                } ?? ""
                 let body = hit.content.map { "\n\n\($0)" } ?? ""
-                return "## [\(title)](\(hit.url))\(body)"
+                return "## [\(title)](\(hit.url))\(published)\(body)"
             }.joined(separator: "\n\n")
         }
 
@@ -325,7 +328,112 @@ extension CoreTool {
                     metadata: ["query": .string(input.query)],
                     source: inv.source
                 ))
-                return ToolSchema.Result(output: .array([]), content: .text(NO_RESULTS))
+
+                guard let webSearch = env.webSearch else {
+                    throw AISchema.ToolFailure(message: "Web search service is not configured")
+                }
+
+                let response: WebSearchSchema.Response
+                do {
+                    response = try await webSearch.query(
+                        WebSearchSchema.Input(query: input.query),
+                        sessionID: context.sessionID
+                    )
+                } catch is CoreIntegration.WebSearch.ProviderRequiredError {
+                    guard let form = env.form else {
+                        throw AISchema.ToolFailure(message: "Unable to search the web for \(input.query): no web search provider is configured")
+                    }
+                    let providers = await webSearch.providers()
+                    guard !providers.isEmpty else {
+                        throw AISchema.ToolFailure(message: "Unable to search the web for \(input.query): no web search provider is available")
+                    }
+                    let choiceFields = FormSchema.Fields(first: .string(FormSchema.StringField(
+                        key: "choice",
+                        description: "Allow OpenCode to search the web for up-to-date information?",
+                        required: true,
+                        options: [
+                            FormSchema.Option(
+                                value: "allow",
+                                label: "Allow search via \(providers.map(\.name).joined(separator: ", "))"
+                            ),
+                            FormSchema.Option(value: "choose", label: "Choose another provider"),
+                            FormSchema.Option(value: "disable", label: "Disable web search"),
+                        ],
+                        custom: false
+                    )))
+                    let decision = try await form.ask(CoreIntegration.Form.CreateInput(
+                        sessionID: context.sessionID.rawValue,
+                        title: "Web Search",
+                        metadata: ["kind": .string("websearch.provider")],
+                        fields: choiceFields
+                    ))
+                    guard case .answered(let answer) = decision, case .string(let choice) = answer["choice"] else {
+                        throw AISchema.ToolFailure(message: "Web search cancelled")
+                    }
+                    if choice == "disable" {
+                        try? await webSearch.select(.disabled)
+                        throw AISchema.ToolFailure(message: "Web search is disabled")
+                    }
+                    var selectedID: WebSearchSchema.ID? = nil
+                    if choice == "choose" {
+                        let providerFields = FormSchema.Fields(first: .string(FormSchema.StringField(
+                            key: "provider",
+                            description: "Choose a provider for web search.",
+                            required: true,
+                            options: providers.map { FormSchema.Option(value: $0.id.rawValue, label: $0.name) },
+                            custom: false
+                        )))
+                        let pick = try await form.ask(CoreIntegration.Form.CreateInput(
+                            sessionID: context.sessionID.rawValue,
+                            title: "Choose a web search provider",
+                            metadata: ["kind": .string("websearch.provider")],
+                            fields: providerFields
+                        ))
+                        guard case .answered(let pickAns) = pick, case .string(let picked) = pickAns["provider"],
+                              let matched = providers.first(where: { $0.id.rawValue == picked })
+                        else {
+                            throw AISchema.ToolFailure(message: "Web search cancelled")
+                        }
+                        try await webSearch.select(.provider(matched.id))
+                        selectedID = matched.id
+                    } else {
+                        try await webSearch.select(.random)
+                    }
+                    do {
+                        response = try await webSearch.query(
+                            WebSearchSchema.Input(query: input.query, providerID: selectedID),
+                            sessionID: context.sessionID
+                        )
+                    } catch let err as CoreIntegration.WebSearch.RequestError {
+                        throw AISchema.ToolFailure(message: err.description)
+                    } catch {
+                        throw AISchema.ToolFailure(message: "Unable to search the web for \(input.query): \(error)")
+                    }
+                } catch is CoreIntegration.WebSearch.DisabledError {
+                    throw AISchema.ToolFailure(message: "Web search is disabled")
+                } catch let err as CoreIntegration.WebSearch.RequestError {
+                    throw AISchema.ToolFailure(message: err.description)
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to search the web for \(input.query): \(error)")
+                }
+
+                await context.progress(["provider": .string(response.providerID.rawValue)])
+                let outputItems: [JSONValue] = response.results.map { hit in
+                    var obj: [String: JSONValue] = ["url": .string(hit.url)]
+                    if let title = hit.title { obj["title"] = .string(title) }
+                    if let content = hit.content { obj["content"] = .string(content) }
+                    if let published = hit.time.published { obj["published"] = .double(published) }
+                    return .object(obj)
+                }
+                return ToolSchema.Result(
+                    output: .array(outputItems),
+                    content: .text(formatResults(response)),
+                    metadata: ["provider": .string(response.providerID.rawValue)]
+                )
             })
         }
     }
@@ -505,23 +613,90 @@ extension CoreTool {
                 options: ToolSchema.Options(codemode: false)
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
-                let inv = CorePermission.invocation(context)
-                try await env.permission.assert(CorePermission.AssertInput(
-                    sessionID: inv.sessionID,
-                    agent: inv.agent,
-                    action: name,
-                    resources: ["*"],
-                    source: inv.source
-                ))
-                let answers: [QuestionSchema.Answer] = input.questions.map { q in
-                    q.options.first.map { [$0.label] } ?? []
+                guard !input.questions.isEmpty else {
+                    throw AISchema.ToolFailure(message: "At least one question is required")
                 }
-                let out = Output(answers: answers)
-                let encoded = (try? JSONEncoder().encode(out)).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .object([:])
-                return ToolSchema.Result(
-                    output: encoded,
-                    content: .text(toModelContent(questions: input.questions, answers: answers))
-                )
+                let inv = CorePermission.invocation(context)
+                do {
+                    try await env.permission.assert(CorePermission.AssertInput(
+                        sessionID: inv.sessionID,
+                        agent: inv.agent,
+                        action: name,
+                        resources: ["*"],
+                        source: inv.source
+                    ))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Permission denied: question")
+                }
+
+                guard let form = env.form else {
+                    throw AISchema.ToolFailure(message: "Form service is not configured")
+                }
+
+                let fieldsArray: [FormSchema.Field] = input.questions.enumerated().map { idx, q in
+                    let opts = q.options.map {
+                        FormSchema.Option(value: $0.label, label: $0.label, description: $0.description)
+                    }
+                    if q.multiple == true {
+                        return .multiselect(FormSchema.MultiselectField(
+                            key: "q\(idx)",
+                            title: q.header,
+                            description: q.question,
+                            options: opts,
+                            custom: true
+                        ))
+                    } else {
+                        return .string(FormSchema.StringField(
+                            key: "q\(idx)",
+                            title: q.header,
+                            description: q.question,
+                            options: opts,
+                            custom: true
+                        ))
+                    }
+                }
+                guard let formFields = FormSchema.Fields(fieldsArray) else {
+                    throw AISchema.ToolFailure(message: "At least one question is required")
+                }
+
+                let terminal = try await form.ask(CoreIntegration.Form.CreateInput(
+                    sessionID: context.sessionID.rawValue,
+                    title: "Questions",
+                    metadata: [
+                        "kind": .string("question"),
+                        "tool": .object([
+                            "messageID": .string(context.messageID),
+                            "id": .string(context.id.rawValue),
+                        ]),
+                    ],
+                    fields: formFields
+                ))
+
+                switch terminal {
+                case .cancelled(let message):
+                    if let message {
+                        throw AISchema.ToolFailure(message: message)
+                    }
+                    throw CancelledError()
+                case .answered(let answerMap):
+                    let answers: [QuestionSchema.Answer] = input.questions.indices.map { idx in
+                        guard let value = answerMap["q\(idx)"] else { return [] }
+                        switch value {
+                        case .string(let s): return [s]
+                        case .strings(let arr): return arr
+                        case .number(let n): return [String(n)]
+                        case .bool(let b): return [b ? "true" : "false"]
+                        }
+                    }
+                    let out = Output(answers: answers)
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(out),
+                        content: .text(toModelContent(questions: input.questions, answers: answers)),
+                        metadata: ["answers": encodeToolJSON(answers, fallback: .array([]))]
+                    )
+                }
             })
         }
     }
@@ -599,23 +774,160 @@ extension CoreTool {
                 options: ToolSchema.Options(codemode: false)
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
+                guard let sessionService = env.session else {
+                    throw AISchema.ToolFailure(message: "Session service is not configured")
+                }
+
+                let parent: SessionSchema.Info
+                do {
+                    parent = try sessionService.get(context.sessionID)
+                } catch {
+                    throw AISchema.ToolFailure(message: "Parent session not found: \(context.sessionID.rawValue)")
+                }
+
+                let resolvedAgentID: String
+                var agentDefaultModel: SessionSchema.ModelRef? = nil
+                if let agentService = env.agent {
+                    guard let agentInfo = await agentService.resolve(input.agent) else {
+                        throw AISchema.ToolFailure(message: "Unknown agent: \(input.agent)")
+                    }
+                    if agentInfo.mode == .primary {
+                        throw AISchema.ToolFailure(message: "Agent \(input.agent) cannot run as a subagent")
+                    }
+                    resolvedAgentID = agentInfo.id.rawValue
+                    if let m = agentInfo.model {
+                        agentDefaultModel = SessionSchema.ModelRef(
+                            id: m.id.rawValue,
+                            providerID: m.providerID.rawValue,
+                            variant: m.variant?.rawValue
+                        )
+                    }
+                } else {
+                    resolvedAgentID = input.agent
+                }
+
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
                     sessionID: inv.sessionID,
                     agent: inv.agent,
                     action: name,
-                    resources: [input.agent],
-                    save: [input.agent],
+                    resources: [resolvedAgentID],
+                    save: [resolvedAgentID],
                     source: inv.source
                 ))
-                let childID = input.sessionID ?? SessionID.create()
-                let msg = "The subagent is working in the background (sessionID: \(childID.rawValue))."
-                let out = Output(sessionID: childID, status: "running", output: msg)
-                let encoded = (try? JSONEncoder().encode(out)).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .object([:])
+
+                let existing: SessionSchema.Info?
+                if let requestedID = input.sessionID {
+                    let found: SessionSchema.Info
+                    do {
+                        found = try sessionService.get(requestedID)
+                    } catch {
+                        throw AISchema.ToolFailure(message: "Subagent session not found: \(requestedID.rawValue)")
+                    }
+                    guard found.parentID == context.sessionID else {
+                        throw AISchema.ToolFailure(message: "Session \(found.id.rawValue) is not a child of the current session")
+                    }
+                    existing = found
+                } else {
+                    existing = nil
+                }
+
+                var modelOverride: SessionSchema.ModelRef? = nil
+                if let modelStr = input.model, !modelStr.isEmpty {
+                    let ref: ModelSchema.Ref
+                    do {
+                        ref = try ModelSchema.Ref.parse(modelStr)
+                    } catch {
+                        throw AISchema.ToolFailure(
+                            message: "Invalid model \"\(modelStr)\". Use \"providerID/modelID\" or \"providerID/modelID#variant\"."
+                        )
+                    }
+                    if let modelService = env.model {
+                        let availableChat = (try? await modelService.available(types: nil)) ?? []
+                        guard let matched = availableChat.first(where: { $0.providerID == ref.providerID && $0.id == ref.id }) else {
+                            let other = ((try? await modelService.available(types: [.image, .decision])) ?? [])
+                                .first(where: { $0.providerID == ref.providerID && $0.id == ref.id })
+                            if let other {
+                                let kind = other.type == .image ? "an image" : "a decision"
+                                throw AISchema.ToolFailure(
+                                    message: "Model \"\(ref.providerID.rawValue)/\(ref.id.rawValue)\" is \(kind) model; subagents need a chat model. Use the models tool to find one."
+                                )
+                            }
+                            throw AISchema.ToolFailure(
+                                message: "Model \"\(ref.providerID.rawValue)/\(ref.id.rawValue)\" is not available. Use the models tool to see what is available."
+                            )
+                        }
+                        if let variant = ref.variant, !matched.variants.contains(where: { $0.id == variant }) {
+                            if matched.variants.isEmpty {
+                                throw AISchema.ToolFailure(
+                                    message: "Model \"\(ref.providerID.rawValue)/\(ref.id.rawValue)\" has no variants. Omit the variant."
+                                )
+                            }
+                            throw AISchema.ToolFailure(
+                                message: "Variant \"\(variant.rawValue)\" is not available for \"\(ref.providerID.rawValue)/\(ref.id.rawValue)\". Available: \(matched.variants.map(\.id.rawValue).joined(separator: ", "))."
+                            )
+                        }
+                    }
+                    modelOverride = SessionSchema.ModelRef(
+                        id: ref.id.rawValue,
+                        providerID: ref.providerID.rawValue,
+                        variant: ref.variant?.rawValue
+                    )
+                }
+
+                let child: SessionSchema.Info
+                if let existing {
+                    let switched = existing.agent != resolvedAgentID
+                    let nextModel = modelOverride ?? (switched ? agentDefaultModel : nil)
+                    do {
+                        if switched {
+                            try await sessionService.selectAgent(sessionID: existing.id, agent: resolvedAgentID)
+                        }
+                        if let nextModel {
+                            try await sessionService.selectModel(sessionID: existing.id, model: nextModel)
+                        }
+                    } catch {
+                        throw AISchema.ToolFailure(message: "Failed to switch subagent session: \(existing.id.rawValue)")
+                    }
+                    child = (try? sessionService.get(existing.id)) ?? existing
+                } else {
+                    do {
+                        child = try await sessionService.create(CoreSession.CreateInput(
+                            parentID: context.sessionID,
+                            title: input.description,
+                            agent: resolvedAgentID,
+                            model: modelOverride ?? agentDefaultModel ?? parent.model
+                        ))
+                    } catch {
+                        throw AISchema.ToolFailure(message: "Failed to create subagent session: \(error)")
+                    }
+                }
+
+                await context.progress(["sessionID": .string(child.id.rawValue), "status": .string("running")])
+
+                let promptText = existing == nil
+                    ? "You are a subagent spawned by another session.\n\(input.prompt)"
+                    : input.prompt
+                do {
+                    _ = try await sessionService.prompt(CoreSession.PromptRequest(
+                        sessionID: child.id,
+                        input: CoreSessionPrompt.Input(text: promptText)
+                    ))
+                } catch {
+                    throw AISchema.ToolFailure(message: "Failed to prompt subagent: \(child.id.rawValue): \(error)")
+                }
+
+                let msg = [
+                    "The subagent is working in the background (sessionID: \(child.id.rawValue)). You will receive a <subagent> message when it goes idle, and again after each later round of work.",
+                    "DO NOT sleep, poll, proactively check on its progress, or duplicate this subagent's work.",
+                    "Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.",
+                    "To send it follow-ups or change its instructions while it runs, call subagent again with this sessionID.",
+                ].joined(separator: "\n")
+                let out = Output(sessionID: child.id, status: "running", output: msg)
                 return ToolSchema.Result(
-                    output: encoded,
+                    output: encodeToolJSON(out),
                     content: .text(msg),
-                    metadata: ["sessionID": .string(childID.rawValue), "status": .string("running")]
+                    metadata: ["sessionID": .string(child.id.rawValue), "status": .string("running")]
                 )
             })
         }
@@ -691,16 +1003,40 @@ extension CoreTool {
                 options: ToolSchema.Options(codemode: false)
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
+                guard let skillService = env.skill else {
+                    throw AISchema.ToolFailure(message: "Skill service is not configured")
+                }
+                guard let skill = await skillService.get(input.id) else {
+                    throw AISchema.ToolFailure(message: "Unable to load skill \(input.id.rawValue)")
+                }
                 let inv = CorePermission.invocation(context)
-                try await env.permission.assert(CorePermission.AssertInput(
-                    sessionID: inv.sessionID,
-                    agent: inv.agent,
-                    action: name,
-                    resources: [input.id.rawValue],
-                    save: [input.id.rawValue],
-                    source: inv.source
-                ))
-                throw AISchema.ToolFailure(message: "Unable to load skill \(input.id.rawValue)")
+                do {
+                    try await env.permission.assert(CorePermission.AssertInput(
+                        sessionID: inv.sessionID,
+                        agent: inv.agent,
+                        action: name,
+                        resources: [skill.id.rawValue],
+                        save: [skill.id.rawValue],
+                        source: inv.source
+                    ))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to load skill \(input.id.rawValue)")
+                }
+
+                let virtualFiles = await skillService.files(skill.id)
+                let fsUtil = FSUtil.Service(fileSystem: env.fileSystem)
+                let prepared = await CoreSkill.prepare(fs: fsUtil, skill: skill, virtualFiles: virtualFiles)
+                let out = Output(directory: prepared.directory, content: prepared.output)
+                return ToolSchema.Result(
+                    output: encodeToolJSON(out),
+                    content: .text(prepared.output),
+                    metadata: [
+                        "name": .string(skill.name.rawValue),
+                        "directory": .string(prepared.directory),
+                    ]
+                )
             })
         }
     }
@@ -931,25 +1267,266 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=75c960c7d3b0]
-        public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.automation") { editor, _ in
-            for (toolName, desc) in [
-                ("automation_create", "Run a prompt or Code Mode action on a timer or a connected MCP server's push event."),
-                ("automation_list", "List this project's automations with their status and next run, and the current time."),
-                ("automation_pause", "Pause an automation. It keeps its settings and does not run until resumed."),
-                ("automation_resume", "Resume a paused automation."),
-                ("automation_delete", "Delete an automation for good."),
-            ] {
-                editor.add(RegisteredTool(
-                    name: toolName,
-                    description: desc,
-                    inputSchema: ["type": .string("object"), "properties": .object([:])],
-                    outputSchema: ["type": .string("object")],
-                    options: ToolSchema.Options(namespace: "opencode", codemode: true)
-                ) { _, _ in
-                    ToolSchema.Result(output: .object(["automations": .array([])]))
-                })
+        private static func toView(_ info: AutomationSchema.Info) -> View {
+            View(
+                id: info.id,
+                name: info.name,
+                trigger: info.trigger,
+                tz: info.tz,
+                action: info.action,
+                status: info.status,
+                nextDueAt: info.nextDueAt.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
+                expires: info.expires.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
+                runCount: info.runCount.rawValue,
+                lastRunAt: info.lastRunAt.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
+                lastOutcome: info.lastOutcome,
+                lastOutput: info.lastOutput,
+                state: info.state
+            )
+        }
+
+        private static func clip(_ text: String) -> String {
+            text.count > 80 ? "\(text.prefix(79))…" : text
+        }
+
+        private static func summary(_ view: View) -> String {
+            let triggerStr: String
+            switch view.trigger {
+            case .at(let a): triggerStr = "at \(a.at)"
+            case .every(let e): triggerStr = "every \(e.every)"
+            case .cron(let c): triggerStr = "cron \"\(c.cron)\""
+            case .event(let ev): triggerStr = "on \(ev.server) \(ev.event)"
             }
+            let actionStr: String
+            switch view.action {
+            case .prompt(let p):
+                let targetDesc: String
+                switch p.to {
+                case .session(let sid): targetDesc = sid.rawValue
+                case .subagent(let agent): targetDesc = "subagent \(agent.rawValue)"
+                }
+                actionStr = "prompt \(targetDesc): \"\(CoreConfigJSONC.encodeJSONStringContents(clip(p.prompt)))\""
+            case .code(let c):
+                let firstLine = c.code.split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .first(where: { !$0.isEmpty }) ?? ""
+                actionStr = "code: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(firstLine)))\""
+            }
+            var parts = ["\(view.id.rawValue) \"\(view.name)\": \(triggerStr) (\(view.tz))", view.status.rawValue]
+            if let next = view.nextDueAt { parts.append("next \(next)") }
+            if let exp = view.expires { parts.append("expires \(exp)") }
+            parts.append(actionStr)
+            if let out = view.lastOutput {
+                parts.append("output: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(out)))\"")
+            }
+            return parts.joined(separator: ", ")
+        }
+
+        private static func resolveCaller(
+            env: BuiltinEnvironment,
+            automations: any CoreAutomation.Interface,
+            context: ToolSchema.Context
+        ) async throws -> (projectID: ProjectID, directory: String) {
+            let projectID: ProjectID
+            let directory: String
+            if let session = try? env.session?.get(context.sessionID) {
+                projectID = session.projectID
+                directory = session.location.directory
+            } else if let session = try? env.sessionStore?.get(context.sessionID) {
+                projectID = session.projectID
+                directory = session.location.directory
+            } else {
+                projectID = env.projectID
+                directory = env.directory
+            }
+            let enabled = await automations.enabled(directory: directory)
+            guard enabled else {
+                throw AISchema.ToolFailure(message: CoreAutomation.DisabledError().message)
+            }
+            return (projectID, directory)
+        }
+
+        private static func requireOwned(
+            id: AutomationSchema.ID,
+            automations: any CoreAutomation.Interface,
+            projectID: ProjectID
+        ) async throws -> AutomationSchema.Info {
+            let info = try await automations.get(id)
+            guard info.projectID == projectID else {
+                throw CoreAutomation.NotFoundError(automationID: id)
+            }
+            return info
+        }
+
+        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=75c960c7d3b0]
+        public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.automation") { editor, env in
+            editor.add(RegisteredTool(
+                name: "automation_create",
+                description: "Run a prompt or Code Mode action on a timer or a connected MCP server's push event.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object([
+                        "name": .object(["type": .string("string")]),
+                        "trigger": .object(["type": .string("object")]),
+                        "action": .object(["type": .string("object")]),
+                        "expires": .object(["type": .string("string")]),
+                    ]),
+                    "required": .array([.string("name"), .string("trigger"), .string("action")]),
+                ],
+                outputSchema: ["type": .string("object")],
+                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+            ) { rawInput, context in
+                guard let automations = env.automation else {
+                    throw AISchema.ToolFailure(message: "Automation service is not configured")
+                }
+                let req = try decodeToolJSON(AutomationSchema.Request.self, from: rawInput, toolName: "automation_create")
+                let caller = try await resolveCaller(env: env, automations: automations, context: context)
+                do {
+                    let info = try await automations.create(
+                        AutomationSchema.CreateInput(
+                            sessionID: context.sessionID,
+                            directory: caller.directory,
+                            name: req.name,
+                            trigger: req.trigger,
+                            action: req.action,
+                            expires: req.expires
+                        ),
+                        projectID: caller.projectID,
+                        directory: caller.directory,
+                        invocation: CoreAutomation.Author.Invocation(sessionID: context.sessionID, agent: context.agent)
+                    )
+                    let view = toView(info)
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(view),
+                        content: .text("Created: \(summary(view))")
+                    )
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
+            })
+
+            editor.add(RegisteredTool(
+                name: "automation_list",
+                description: "List this project's automations with their status and next run, and the current time.",
+                inputSchema: ["type": .string("object"), "properties": .object([:])],
+                outputSchema: ["type": .string("object")],
+                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+            ) { _, context in
+                guard let automations = env.automation else {
+                    throw AISchema.ToolFailure(message: "Automation service is not configured")
+                }
+                let caller = try await resolveCaller(env: env, automations: automations, context: context)
+                do {
+                    let now = CoreTool.formatToolISO8601UTC(epochMillis: Flock.currentEpochMs())
+                    let views = try await automations.list(CoreAutomation.ListInput(projectID: caller.projectID)).map(toView)
+                    let lines = ["Now: \(now)"] + (views.isEmpty ? ["No automations."] : views.map(summary))
+                    return ToolSchema.Result(
+                        output: .object([
+                            "now": .string(now),
+                            "automations": encodeToolJSON(views, fallback: .array([])),
+                        ]),
+                        content: .text(lines.joined(separator: "\n"))
+                    )
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
+            })
+
+            editor.add(RegisteredTool(
+                name: "automation_pause",
+                description: "Pause an automation. It keeps its settings and does not run until resumed.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "required": .array([.string("id")]),
+                ],
+                outputSchema: ["type": .string("object")],
+                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+            ) { rawInput, context in
+                guard let automations = env.automation else {
+                    throw AISchema.ToolFailure(message: "Automation service is not configured")
+                }
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_pause")
+                let caller = try await resolveCaller(env: env, automations: automations, context: context)
+                do {
+                    _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
+                    let info = try await automations.pause(input.id)
+                    let view = toView(info)
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(view),
+                        content: .text("Paused: \(summary(view))")
+                    )
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
+            })
+
+            editor.add(RegisteredTool(
+                name: "automation_resume",
+                description: "Resume a paused automation.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "required": .array([.string("id")]),
+                ],
+                outputSchema: ["type": .string("object")],
+                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+            ) { rawInput, context in
+                guard let automations = env.automation else {
+                    throw AISchema.ToolFailure(message: "Automation service is not configured")
+                }
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_resume")
+                let caller = try await resolveCaller(env: env, automations: automations, context: context)
+                do {
+                    _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
+                    let info = try await automations.resume(input.id)
+                    let view = toView(info)
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(view),
+                        content: .text("Resumed: \(summary(view))")
+                    )
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
+            })
+
+            editor.add(RegisteredTool(
+                name: "automation_delete",
+                description: "Delete an automation for good.",
+                inputSchema: [
+                    "type": .string("object"),
+                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "required": .array([.string("id")]),
+                ],
+                outputSchema: ["type": .string("object")],
+                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+            ) { rawInput, context in
+                guard let automations = env.automation else {
+                    throw AISchema.ToolFailure(message: "Automation service is not configured")
+                }
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_delete")
+                let caller = try await resolveCaller(env: env, automations: automations, context: context)
+                do {
+                    _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
+                    try await automations.remove(input.id)
+                    return ToolSchema.Result(
+                        output: .object(["id": .string(input.id.rawValue), "removed": .bool(true)]),
+                        content: .text("Deleted automation \(input.id.rawValue).")
+                    )
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
+            })
         }
     }
 
@@ -1016,6 +1593,79 @@ extension CoreTool {
             return candidates.first
         }
 
+        private static let acceptedInputMimes: Set<String> = [
+            "image/png", "image/jpeg", "image/webp", "image/gif",
+        ]
+
+        private static let mimeExtensions: [String: String] = [
+            "image/png": ".png",
+            "image/jpeg": ".jpg",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+        ]
+
+        private static func stripExtension(_ absolutePath: String) -> String {
+            let base = CoreConfigDiscovery.basename(absolutePath)
+            guard let dot = base.lastIndex(of: "."), dot != base.startIndex else {
+                return absolutePath
+            }
+            let extLen = base.distance(from: dot, to: base.endIndex)
+            return String(absolutePath.dropLast(extLen))
+        }
+
+        private static func readInputImage(
+            source: String,
+            env: BuiltinEnvironment,
+            context: ToolSchema.Context
+        ) async throws -> GenerateSchema.File {
+            let bytes: [UInt8]
+            let lower = source.lowercased()
+            if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
+                let inv = CorePermission.invocation(context)
+                try await env.permission.assert(CorePermission.AssertInput(
+                    sessionID: inv.sessionID,
+                    agent: inv.agent,
+                    action: WebFetchTool.name,
+                    resources: [source],
+                    save: ["*"],
+                    metadata: ["url": .string(source)],
+                    source: inv.source
+                ))
+                guard let transport = env.httpTransport else {
+                    throw AISchema.ToolFailure(message: "Unable to download \(source): HTTP transport is unavailable")
+                }
+                let resp = try await transport.send(HTTPRequest(method: "GET", url: source, headers: [:]))
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw AISchema.ToolFailure(message: "Unable to download \(source): HTTP \(resp.head.statusCode)")
+                }
+                bytes = try CoreToolOutput.HTTPBody.collectBoundedResponseBody(
+                    response: resp,
+                    maximumBytes: MAX_INPUT_BYTES,
+                    tooLarge: { AISchema.ToolFailure(message: "\(source) is larger than 20 MiB.") }
+                )
+            } else {
+                let target = try await env.fileAccess.authorizeRead(source, context: context, options: nil)
+                let stat: FileStat
+                do {
+                    stat = try await env.fileSystem.stat(at: target.absolute.rawValue)
+                } catch {
+                    throw AISchema.ToolFailure(message: "File not found: \(source)")
+                }
+                if stat.size > Int64(MAX_INPUT_BYTES) {
+                    throw AISchema.ToolFailure(message: "\(source) is larger than 20 MiB.")
+                }
+                bytes = try await env.fileSystem.readFile(at: target.absolute.rawValue)
+            }
+            guard let mime = CoreFilesystem.Mime.detectMedia(bytes), acceptedInputMimes.contains(mime) else {
+                throw AISchema.ToolFailure(message: "\(source) is not a PNG, JPEG, WebP or GIF image.")
+            }
+            return GenerateSchema.File(
+                data: bytesToBase64(bytes),
+                mime: mime,
+                name: CoreConfigDiscovery.basename(source)
+            )
+        }
+
         // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=77015179ca91]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.image-generate") { editor, env in
             editor.add(RegisteredTool(
@@ -1035,21 +1685,155 @@ extension CoreTool {
                 options: ToolSchema.Options(codemode: false)
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
+                guard !input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw AISchema.ToolFailure(message: "Prompt must not be empty")
+                }
+                guard let generateService = env.generate else {
+                    throw AISchema.ToolFailure(message: "Image generation service is not configured")
+                }
+
+                let hasImages = !(input.images?.isEmpty ?? true)
+                let resolvedRef: ModelSchema.Ref
+                if let explicit = input.model, !explicit.isEmpty {
+                    let parsed: ModelSchema.Ref
+                    do {
+                        parsed = try ModelSchema.Ref.parse(explicit)
+                    } catch {
+                        throw AISchema.ToolFailure(
+                            message: "Invalid model \"\(explicit)\". Use \"providerID/modelID\" or \"providerID/modelID#variant\"."
+                        )
+                    }
+                    if let modelService = env.model {
+                        let available = (try? await modelService.available(types: [.image])) ?? []
+                        guard let matched = available.first(where: { $0.providerID == parsed.providerID && $0.id == parsed.id }) else {
+                            throw AISchema.ToolFailure(
+                                message: "Model \"\(parsed.providerID.rawValue)/\(parsed.id.rawValue)\" is not an available image model. Use the models tool with type: \"image\" to see what is available."
+                            )
+                        }
+                        if let variant = parsed.variant, !matched.variants.contains(where: { $0.id == variant }) {
+                            if matched.variants.isEmpty {
+                                throw AISchema.ToolFailure(
+                                    message: "Model \"\(parsed.providerID.rawValue)/\(parsed.id.rawValue)\" has no variants. Omit the variant."
+                                )
+                            }
+                            throw AISchema.ToolFailure(
+                                message: "Variant \"\(variant.rawValue)\" is not available for \"\(parsed.providerID.rawValue)/\(parsed.id.rawValue)\". Available: \(matched.variants.map(\.id.rawValue).joined(separator: ", "))."
+                            )
+                        }
+                        if hasImages && !matched.capabilities.input.contains(where: { $0.hasPrefix("image") }) {
+                            throw AISchema.ToolFailure(
+                                message: "Model \"\(parsed.providerID.rawValue)/\(parsed.id.rawValue)\" does not accept input images."
+                            )
+                        }
+                    }
+                    resolvedRef = parsed
+                } else {
+                    guard let modelService = env.model else {
+                        throw AISchema.ToolFailure(message: "No image model is available.")
+                    }
+                    let available = (try? await modelService.available(types: [.image])) ?? []
+                    let sessionProvider: ProviderSchema.ID? = {
+                        if let s = try? env.session?.get(context.sessionID), let pid = s.model?.providerID {
+                            return ProviderSchema.ID(rawValue: pid)
+                        }
+                        if let s = try? env.sessionStore?.get(context.sessionID), let pid = s.model?.providerID {
+                            return ProviderSchema.ID(rawValue: pid)
+                        }
+                        return nil
+                    }()
+                    guard let chosen = defaultModel(available: available, providerID: sessionProvider, images: hasImages) else {
+                        throw AISchema.ToolFailure(
+                            message: hasImages
+                                ? "None of the available image models accept input images."
+                                : "No image model is available."
+                        )
+                    }
+                    resolvedRef = ModelSchema.Ref(id: chosen.id, providerID: chosen.providerID)
+                }
+
+                let refString = "\(resolvedRef.providerID.rawValue)/\(resolvedRef.id.rawValue)\(resolvedRef.variant.map { "#\($0.rawValue)" } ?? "")"
+                let jobID = "image_\(Identifier.ascending())"
+                let target: CoreFilesystem.FileAccess.Target?
+                let stem: String
+                if let requestedPath = input.path {
+                    let t = try await env.fileAccess.resolve(
+                        CoreFilesystem.FileAccess.ResolveInput(path: requestedPath, kind: .file)
+                    )
+                    target = t
+                    stem = stripExtension(t.absolute.rawValue)
+                } else {
+                    target = nil
+                    stem = CoreConfigDiscovery.joinPath(
+                        env.globalPaths.tmp,
+                        "images/\(context.sessionID.rawValue)/\(jobID)"
+                    )
+                }
+
                 let inv = CorePermission.invocation(context)
-                let modelRef = input.model ?? "default/image"
                 try await env.permission.assert(CorePermission.AssertInput(
                     sessionID: inv.sessionID,
                     agent: inv.agent,
                     action: name,
-                    resources: [modelRef],
+                    resources: [refString],
                     save: ["*"],
+                    metadata: ["prompt": .string(input.prompt), "model": .string(refString)],
                     source: inv.source
                 ))
-                let jobID = "image_\(Identifier.ascending())"
-                let stem = input.path ?? "/tmp/images/\(context.sessionID.rawValue)/\(jobID)"
-                let out = Output(id: jobID, path: stem, model: modelRef)
-                let encoded = (try? JSONEncoder().encode(out)).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .object([:])
-                return ToolSchema.Result(output: encoded, content: .text("Image job \(jobID) started in the background with \(modelRef)."))
+                if let target {
+                    try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
+                    try await env.permission.assert(CorePermission.AssertInput(
+                        sessionID: inv.sessionID,
+                        agent: inv.agent,
+                        action: "edit",
+                        resources: [target.resource],
+                        save: ["*"],
+                        source: inv.source
+                    ))
+                }
+
+                var loadedImages: [GenerateSchema.File]? = nil
+                if let paths = input.images, !paths.isEmpty {
+                    var loaded: [GenerateSchema.File] = []
+                    for src in paths {
+                        loaded.append(try await readInputImage(source: src, env: env, context: context))
+                    }
+                    loadedImages = loaded
+                }
+
+                let generated: GenerateSchema.ImageResult
+                do {
+                    generated = try await generateService.image(GenerateSchema.ImageRequest(
+                        model: resolvedRef,
+                        prompt: input.prompt,
+                        images: loadedImages,
+                        n: SchemaPrimitive.PositiveInt(rawValue: 1)
+                    ))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to generate image: \(error)")
+                }
+
+                guard let firstImage = generated.images.first else {
+                    throw AISchema.ToolFailure(message: "\(refString) returned no image.")
+                }
+                guard let rawData = Data(base64Encoded: firstImage.data) else {
+                    throw AISchema.ToolFailure(message: "\(refString) returned invalid base64 image data.")
+                }
+                let bytes = Array(rawData)
+                let detectedMime = CoreFilesystem.Mime.detectMedia(bytes) ?? firstImage.mime
+                let ext = mimeExtensions[detectedMime] ?? ".png"
+                let finalFile = stem + ext
+                try await env.fileSystem.writeFile(bytes, to: finalFile, createDirectories: true)
+
+                let out = Output(id: jobID, path: finalFile, model: refString)
+                return ToolSchema.Result(
+                    output: encodeToolJSON(out),
+                    content: .text("Image request finished. Saved image: \(finalFile) (\(refString)).\nUse the read tool on this path to view the image."),
+                    metadata: ["path": .string(finalFile), "model": .string(refString), "jobID": .string(jobID)]
+                )
             })
         }
     }
@@ -1082,7 +1866,32 @@ extension CoreTool {
                     save: [server],
                     source: inv.source
                 ))
-                return ToolSchema.Result(output: .object(["events": .array([])]))
+                guard let mcp = env.mcp else {
+                    throw AISchema.ToolFailure(message: "MCP registry service is not configured")
+                }
+                do {
+                    guard let events = try await mcp.events(server: server) else {
+                        throw AISchema.ToolFailure(message: "MCP server \"\(server)\" is not connected or sends no events")
+                    }
+                    let types = try await events.list().filter { $0.delivery?.contains("push") == true }
+                    let encodedEvents: [JSONValue] = types.map { type in
+                        var entry: [String: JSONValue] = [
+                            "server": .string(server),
+                            "event": .string(type.name),
+                        ]
+                        if let desc = type.description { entry["description"] = .string(desc) }
+                        if let args = type.inputSchema { entry["args"] = .object(args) }
+                        if let data = type.payloadSchema { entry["data"] = .object(data) }
+                        return .object(entry)
+                    }
+                    return ToolSchema.Result(output: .object(["events": .array(encodedEvents)]))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
             })
         }
     }
@@ -1104,16 +1913,39 @@ extension CoreTool {
             ) { rawInput, context in
                 let server: String?
                 if case .object(let obj) = rawInput, case .string(let s) = obj["server"] { server = s } else { server = nil }
+                guard let mcp = env.mcp else {
+                    throw AISchema.ToolFailure(message: "MCP registry service is not configured")
+                }
+                let serverNames: [String]
+                if let server {
+                    serverNames = [server]
+                } else {
+                    serverNames = await mcp.servers().map(\.name)
+                }
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
                     sessionID: inv.sessionID,
                     agent: inv.agent,
                     action: "opencode_list_mcp_resources",
-                    resources: server.map { [$0] } ?? [],
-                    save: server.map { [$0] } ?? [],
+                    resources: serverNames,
+                    save: serverNames,
                     source: inv.source
                 ))
-                return ToolSchema.Result(output: .object(["resources": .array([]), "templates": .array([])]))
+                do {
+                    let catalog: CoreMCP.Registry.ResourceCatalog
+                    if let server {
+                        catalog = try await mcp.resources(server: server)
+                    } else {
+                        catalog = await mcp.resourceCatalog()
+                    }
+                    return ToolSchema.Result(output: encodeToolJSON(catalog))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: String(describing: error))
+                }
             })
 
             editor.add(RegisteredTool(
@@ -1146,7 +1978,30 @@ extension CoreTool {
                     metadata: ["server": .string(server), "uri": .string(uri)],
                     source: inv.source
                 ))
-                throw AISchema.ToolFailure(message: "MCP server \"\(server)\" is not connected or does not expose resources")
+                guard let mcp = env.mcp else {
+                    throw AISchema.ToolFailure(message: "MCP registry service is not configured")
+                }
+                do {
+                    guard let resource = try await mcp.readResource(server: server, uri: uri) else {
+                        throw AISchema.ToolFailure(message: "MCP server \"\(server)\" is not connected or does not expose resources")
+                    }
+                    let mediaParts: [ToolSchema.Content] = resource.contents.compactMap { part in
+                        guard case .blob(_, let blob, let mime?) = part,
+                              CoreToolOutput.ReadFilesystem.MEDIA_MIMES.contains(mime)
+                        else { return nil }
+                        return .file(ToolSchema.FileContent(uri: "data:\(mime);base64,\(blob)", mime: mime))
+                    }
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(resource),
+                        content: mediaParts.isEmpty ? nil : .parts(mediaParts)
+                    )
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to read MCP resource \(server):\(uri): \(error)")
+                }
             })
         }
     }
@@ -1227,6 +2082,32 @@ extension CoreTool {
             }
         }
 
+        private static func resolveProjectID(env: BuiltinEnvironment, context: ToolSchema.Context) -> ProjectID {
+            if let s = try? env.session?.get(context.sessionID) {
+                return s.projectID
+            }
+            if let s = try? env.sessionStore?.get(context.sessionID) {
+                return s.projectID
+            }
+            return env.projectID
+        }
+
+        private static func removeFailureMessage(directory: String, error: any Error) -> String {
+            if error is CoreWorktree.Directory.DirectoryUnavailableError {
+                return "Unable to remove worktree \(directory): the directory does not exist or is not a directory."
+            }
+            if error is CoreWorktree.InvalidDirectoryError {
+                return "Unable to remove \(directory): it is not a worktree of this project. Use worktree_list to see the project's worktrees."
+            }
+            if let stratErr = error as? CoreWorktree.StrategyUnavailableError {
+                return "Unable to remove worktree \(directory): its worktree strategy \(stratErr.strategy.rawValue) is not available."
+            }
+            if let opErr = error as? WorktreeSchema.OperationError, opErr.forceRequired == true {
+                return "Unable to remove worktree \(directory): it has modified or untracked files."
+            }
+            return "Unable to remove worktree \(directory): \(error)"
+        }
+
         // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=ad007d5890c8]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools") { editor, env in
             editor.namespace(ToolSchema.Namespace(
@@ -1254,6 +2135,14 @@ extension CoreTool {
                 guard !title.isEmpty else {
                     throw AISchema.ToolFailure(message: "Session title must not be empty")
                 }
+                guard let sessionService = env.session else {
+                    throw AISchema.ToolFailure(message: "Session service is not configured")
+                }
+                do {
+                    try await sessionService.rename(sessionID: sid, title: title)
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to rename session \(sid.rawValue): \(error)")
+                }
                 return ToolSchema.Result(
                     output: .object(["sessionID": .string(sid.rawValue), "title": .string(title)]),
                     content: .text("Renamed session \(sid.rawValue) to \(title).")
@@ -1276,10 +2165,61 @@ extension CoreTool {
             ) { rawInput, context in
                 let input = try decodeToolJSON(MoveInput.self, from: rawInput, toolName: "session_move")
                 let sid = input.sessionID ?? context.sessionID
-                let target = try await env.fileAccess.resolve(
-                    CoreFilesystem.FileAccess.ResolveInput(path: input.directory.rawValue, kind: .directory)
+                guard let sessionMove = env.sessionMove else {
+                    throw AISchema.ToolFailure(message: "Session move service is not configured")
+                }
+                let existingSession: SessionSchema.Info
+                do {
+                    if let sessionService = env.session {
+                        existingSession = try sessionService.get(sid)
+                    } else if let store = env.sessionStore, let found = try store.get(sid) {
+                        existingSession = found
+                    } else if let found = try sessionMove.store.get(sid) {
+                        existingSession = found
+                    } else {
+                        throw CoreSessionErrors.NotFoundError(sessionID: sid)
+                    }
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to move session to \(input.directory.rawValue): \(error)")
+                }
+
+                let trimmedDir = input.directory.rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let expandedDir: String
+                if trimmedDir == "~" {
+                    expandedDir = env.globalPaths.home
+                } else if trimmedDir.hasPrefix("~/") {
+                    expandedDir = CoreConfigDiscovery.joinPath(env.globalPaths.home, String(trimmedDir.dropFirst(2)))
+                } else {
+                    expandedDir = trimmedDir
+                }
+                let resolvedPath = CoreFilesystem.FileAccess.resolvePath(
+                    directory: existingSession.location.directory,
+                    input: expandedDir
                 )
-                try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
+                let target = try await env.fileAccess.resolve(
+                    CoreFilesystem.FileAccess.ResolveInput(path: resolvedPath, kind: .directory)
+                )
+                var isProjectWorktree = false
+                if target.externalDirectory != nil, let worktreeService = env.worktree {
+                    let worktrees = (try? await worktreeService.list(projectID: existingSession.projectID)) ?? []
+                    isProjectWorktree = worktrees.contains {
+                        FSPathUtil.contains(parent: $0.directory.rawValue, child: target.absolute.rawValue)
+                    }
+                }
+                if !isProjectWorktree {
+                    try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
+                }
+
+                do {
+                    try await sessionMove.move(CoreSessionMove.MoveInput(
+                        sessionID: sid,
+                        directory: target.absolute.rawValue
+                    ))
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to move session to \(input.directory.rawValue): \(error)")
+                }
                 return ToolSchema.Result(
                     output: .object(["sessionID": .string(sid.rawValue), "directory": .string(target.absolute.rawValue)]),
                     content: .text("Moved session \(sid.rawValue) to \(target.absolute.rawValue).")
@@ -1296,13 +2236,28 @@ extension CoreTool {
                 ],
                 outputSchema: ["type": .string("object")],
                 options: ToolSchema.Options(namespace: "opencode", codemode: true, pinned: true)
-            ) { rawInput, _ in
+            ) { rawInput, context in
                 let input = try decodeToolJSON(WorktreeCreateInput.self, from: rawInput, toolName: "worktree_create")
-                let dir = CoreConfigDiscovery.joinPath(env.directory, ".worktrees/\(input.name)")
-                return ToolSchema.Result(
-                    output: .object(["directory": .string(dir)]),
-                    content: .text("Created worktree in \(dir).")
-                )
+                let trimmedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedName.isEmpty else {
+                    throw AISchema.ToolFailure(message: "Worktree name must not be empty")
+                }
+                guard let worktreeService = env.worktree else {
+                    throw AISchema.ToolFailure(message: "Worktree service is not configured")
+                }
+                let projectID = resolveProjectID(env: env, context: context)
+                do {
+                    let info = try await worktreeService.create(
+                        WorktreeSchema.CreateInput(projectID: projectID, name: trimmedName),
+                        strategies: env.worktreeStrategies
+                    )
+                    return ToolSchema.Result(
+                        output: encodeToolJSON(info),
+                        content: .text("Created worktree in \(info.directory.rawValue).")
+                    )
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to create worktree \(trimmedName): \(error)")
+                }
             })
 
             editor.add(RegisteredTool(
@@ -1311,8 +2266,19 @@ extension CoreTool {
                 inputSchema: ["type": .string("object"), "properties": .object([:])],
                 outputSchema: ["type": .string("object")],
                 options: ToolSchema.Options(namespace: "opencode", codemode: true, pinned: true)
-            ) { _, _ in
-                ToolSchema.Result(output: .object(["worktrees": .array([])]))
+            ) { _, context in
+                guard let worktreeService = env.worktree else {
+                    throw AISchema.ToolFailure(message: "Worktree service is not configured")
+                }
+                let projectID = resolveProjectID(env: env, context: context)
+                do {
+                    let worktrees = try await worktreeService.list(projectID: projectID)
+                    return ToolSchema.Result(
+                        output: .object(["worktrees": encodeToolJSON(worktrees, fallback: .array([]))])
+                    )
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to list worktrees: \(error)")
+                }
             })
 
             editor.add(RegisteredTool(
@@ -1342,6 +2308,24 @@ extension CoreTool {
                     save: ["*"],
                     source: inv.source
                 ))
+                guard let worktreeService = env.worktree else {
+                    throw AISchema.ToolFailure(message: "Worktree service is not configured")
+                }
+                let projectID = resolveProjectID(env: env, context: context)
+                do {
+                    try await worktreeService.remove(
+                        WorktreeSchema.RemoveInput(
+                            projectID: projectID,
+                            directory: target.absolute,
+                            force: input.force ?? false
+                        ),
+                        strategies: env.worktreeStrategies
+                    )
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch {
+                    throw AISchema.ToolFailure(message: removeFailureMessage(directory: target.absolute.rawValue, error: error))
+                }
                 return ToolSchema.Result(
                     output: .object(["directory": .string(target.absolute.rawValue), "removed": .bool(true)]),
                     content: .text("Removed worktree \(target.absolute.rawValue).")
@@ -1364,11 +2348,111 @@ extension CoreTool {
                 ],
                 outputSchema: ["type": .string("object")],
                 options: ToolSchema.Options(namespace: "opencode", codemode: true)
-            ) { _, _ in
-                ToolSchema.Result(output: .object([
-                    "providers": .array([]),
-                    "total": .int(0),
-                    "next": .null,
+            ) { rawInput, context in
+                let input = try decodeToolJSON(ModelsInput.self, from: rawInput, toolName: "models")
+                guard let modelService = env.model else {
+                    throw AISchema.ToolFailure(message: "Model service is not configured")
+                }
+                let offset = max(0, input.offset ?? 0)
+                let limit = min(100, max(1, input.limit ?? 20))
+                let ownProviderID: String? = {
+                    if let s = try? env.session?.get(context.sessionID) { return s.model?.providerID }
+                    if let s = try? env.sessionStore?.get(context.sessionID) { return s.model?.providerID }
+                    return nil
+                }()
+                let terms = input.query?
+                    .lowercased()
+                    .split(whereSeparator: \.isWhitespace)
+                    .map(String.init) ?? []
+
+                var providerNames: [ProviderSchema.ID: String] = [:]
+                if let providerService = env.provider {
+                    let allProviders = await providerService.all()
+                    for p in allProviders { providerNames[p.id] = p.name }
+                    if let availProviders = try? await providerService.available() {
+                        for p in availProviders { providerNames[p.id] = p.name }
+                    }
+                }
+
+                let providerFilter = input.provider?.lowercased()
+                let requestedType: ModelSchema.ModelType = (input.type == .image) ? .image : .chat
+
+                let rawModels: [ModelSchema.Info]
+                do {
+                    rawModels = try await modelService.available(types: [requestedType])
+                } catch {
+                    throw AISchema.ToolFailure(message: "Unable to list models: \(error)")
+                }
+
+                let filtered = rawModels
+                    .filter { model in
+                        guard let providerFilter else { return true }
+                        return model.providerID.rawValue.lowercased() == providerFilter ||
+                            providerNames[model.providerID]?.lowercased() == providerFilter
+                    }
+                    .filter { model in
+                        guard !terms.isEmpty else { return true }
+                        let haystack = "\(model.providerID.rawValue)/\(model.id.rawValue) \(model.name)".lowercased()
+                        return terms.allSatisfy { haystack.contains($0) }
+                    }
+                    .sorted { lhs, rhs in
+                        let lOwn = lhs.providerID.rawValue == ownProviderID
+                        let rOwn = rhs.providerID.rawValue == ownProviderID
+                        if lOwn != rOwn { return lOwn }
+                        if lhs.providerID.rawValue != rhs.providerID.rawValue {
+                            return lhs.providerID.rawValue < rhs.providerID.rawValue
+                        }
+                        if lhs.time.released != rhs.time.released {
+                            return lhs.time.released > rhs.time.released
+                        }
+                        return lhs.id.rawValue < rhs.id.rawValue
+                    }
+
+                let matching: [ModelSchema.Info]
+                if input.all == true {
+                    matching = filtered
+                } else {
+                    var seenFamilies: Set<String> = []
+                    matching = filtered.filter { model in
+                        guard let family = model.family else { return true }
+                        let key = "\(model.providerID.rawValue)::\(family.rawValue)"
+                        return seenFamilies.insert(key).inserted
+                    }
+                }
+
+                let page: [ModelSchema.Info] = offset < matching.count
+                    ? Array(matching[offset..<min(matching.count, offset + limit)])
+                    : []
+
+                var orderedProviderIDs: [ProviderSchema.ID] = []
+                var seenProviders: Set<ProviderSchema.ID> = []
+                for m in page where seenProviders.insert(m.providerID).inserted {
+                    orderedProviderIDs.append(m.providerID)
+                }
+
+                let providerEntries: [JSONValue] = orderedProviderIDs.map { pid in
+                    let modelsForProvider = page.filter { $0.providerID == pid }.map { m -> JSONValue in
+                        .object([
+                            "id": .string("\(m.providerID.rawValue)/\(m.id.rawValue)"),
+                            "name": .string(m.name),
+                            "released": .double(m.time.released),
+                            "variants": .array(m.variants.map { .string($0.id.rawValue) }),
+                            "cost": encodeToolJSON(m.cost, fallback: .array([])),
+                            "status": .string(m.status.rawValue),
+                        ])
+                    }
+                    return .object([
+                        "id": .string(pid.rawValue),
+                        "name": .string(providerNames[pid] ?? pid.rawValue),
+                        "models": .array(modelsForProvider),
+                    ])
+                }
+
+                let nextOffset: JSONValue = (offset + limit < matching.count) ? .int(Int64(offset + limit)) : .null
+                return ToolSchema.Result(output: .object([
+                    "providers": .array(providerEntries),
+                    "total": .int(Int64(matching.count)),
+                    "next": nextOffset,
                 ]))
             })
         }

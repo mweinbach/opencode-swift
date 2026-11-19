@@ -14,6 +14,8 @@ extension CoreTool {
     /// Dependencies container wiring built-in tools to injectable cross-platform services.
     public struct BuiltinEnvironment: Sendable {
         public let directory: String
+        public let projectID: ProjectID
+        public let globalPaths: Global.Interface
         public let fileSystem: any OpenCodeFileSystem
         public let fileAccess: any CoreFilesystem.FileAccess.Interface
         public let fileMutation: any CoreFilesystem.FileMutation.Interface
@@ -28,6 +30,20 @@ extension CoreTool {
         public let httpTransport: (any HTTPTransport)?
         public let artifact: (any CoreArtifact.Interface)?
         public let flags: any CoreFlag.Interface
+        public let webSearch: (any CoreIntegration.WebSearch.Interface)?
+        public let form: (any CoreIntegration.Form.Interface)?
+        public let session: CoreSession.Service?
+        public let sessionMove: CoreSessionMove.Service?
+        public let sessionStore: CoreSessionStore.Service?
+        public let skill: (any CoreSkill.Interface)?
+        public let automation: (any CoreAutomation.Interface)?
+        public let mcp: (any CoreMCP.Registry.Interface)?
+        public let worktree: (any CoreWorktree.Interface)?
+        public let worktreeStrategies: (any CoreWorktree.Strategies.Interface)?
+        public let model: (any CoreModel.Model.Interface)?
+        public let provider: (any CoreProvider.Provider.Interface)?
+        public let agent: (any CoreAgent.Agent.Interface)?
+        public let generate: (any CoreIntegration.Generate.Interface)?
 
         public init(
             directory: String = "/",
@@ -42,11 +58,26 @@ extension CoreTool {
             shell: (any CoreShell.Interface)? = nil,
             shellSelect: any CoreShell.Select.Interface = CoreShell.Select.Service(),
             toolOutput: (any CoreToolOutput.Interface)? = nil,
-            httpTransport: (any HTTPTransport)? = nil,
+            httpTransport: (any HTTPTransport)? = URLSessionHTTPTransport.shared,
             artifact: (any CoreArtifact.Interface)? = nil,
             flags: any CoreFlag.Interface = CoreFlag.Service(config: CoreConfig.Test()),
             globalPaths: Global.Interface = Global.make(),
-            processes: any AppProcess.Interface = AppProcess.Service()
+            processes: any AppProcess.Interface = AppProcess.Service(),
+            projectID: ProjectID = .global,
+            webSearch: (any CoreIntegration.WebSearch.Interface)? = nil,
+            form: (any CoreIntegration.Form.Interface)? = nil,
+            session: CoreSession.Service? = nil,
+            sessionMove: CoreSessionMove.Service? = nil,
+            sessionStore: CoreSessionStore.Service? = nil,
+            skill: (any CoreSkill.Interface)? = nil,
+            automation: (any CoreAutomation.Interface)? = nil,
+            mcp: (any CoreMCP.Registry.Interface)? = nil,
+            worktree: (any CoreWorktree.Interface)? = nil,
+            worktreeStrategies: (any CoreWorktree.Strategies.Interface)? = nil,
+            model: (any CoreModel.Model.Interface)? = nil,
+            provider: (any CoreProvider.Provider.Interface)? = nil,
+            agent: (any CoreAgent.Agent.Interface)? = nil,
+            generate: (any CoreIntegration.Generate.Interface)? = nil
         ) {
             let normDir = CoreConfigDiscovery.resolvePath(base: "/", relative: directory)
             let resolvedAccess = fileAccess ?? CoreFilesystem.FileAccess.Service(
@@ -68,6 +99,7 @@ extension CoreTool {
             let resolvedRipgrep = ripgrep ?? CoreRipgrep.Service(fileSystem: fileSystem)
             let resolvedShell = shell ?? CoreShell.Service(
                 directory: normDir,
+                projectID: projectID,
                 globalPaths: globalPaths,
                 fileSystem: fileSystem,
                 processes: processes,
@@ -76,6 +108,8 @@ extension CoreTool {
             let resolvedOutput = toolOutput ?? CoreToolOutput.Service(globalPaths: globalPaths, fileSystem: fileSystem)
 
             self.directory = normDir
+            self.projectID = projectID
+            self.globalPaths = globalPaths
             self.fileSystem = fileSystem
             self.fileAccess = resolvedAccess
             self.fileMutation = resolvedMutation
@@ -90,6 +124,20 @@ extension CoreTool {
             self.httpTransport = httpTransport
             self.artifact = artifact
             self.flags = flags
+            self.webSearch = webSearch
+            self.form = form
+            self.session = session
+            self.sessionMove = sessionMove
+            self.sessionStore = sessionStore
+            self.skill = skill
+            self.automation = automation
+            self.mcp = mcp
+            self.worktree = worktree
+            self.worktreeStrategies = worktreeStrategies
+            self.model = model
+            self.provider = provider
+            self.agent = agent
+            self.generate = generate
         }
     }
 
@@ -1377,6 +1425,41 @@ extension CoreTool {
         } catch {
             throw AISchema.ToolFailure(message: "Invalid arguments for tool \"\(toolName)\": \(error)")
         }
+    }
+
+    internal static func encodeToolJSON<T: Encodable>(_ value: T, fallback: JSONValue = .object([:])) -> JSONValue {
+        (try? JSONEncoder().encode(value)).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? fallback
+    }
+
+    /// Formats Unix epoch milliseconds as UTC ISO-8601 (`YYYY-MM-DDTHH:MM:SS.sssZ`) using pure arithmetic.
+    internal static func formatToolISO8601UTC(epochMillis: Int64) -> String {
+        let totalSeconds = epochMillis >= 0 ? epochMillis / 1_000 : ((epochMillis - 999) / 1_000)
+        let millis = Int(epochMillis - totalSeconds * 1_000)
+        let days = totalSeconds >= 0 ? totalSeconds / 86_400 : ((totalSeconds - 86_399) / 86_400)
+        let daySeconds = Int(totalSeconds - days * 86_400)
+        let hour = daySeconds / 3_600
+        let minute = (daySeconds % 3_600) / 60
+        let second = daySeconds % 60
+
+        // Howard Hinnant civil-from-days algorithm
+        let z = days + 719_468
+        let era = (z >= 0 ? z : z - 146_096) / 146_097
+        let doe = z - era * 146_097
+        let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365
+        let y = yoe + era * 400
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+        let mp = (5 * doy + 2) / 153
+        let day = Int(doy - (153 * mp + 2) / 5 + 1)
+        let month = Int(mp + (mp < 10 ? 3 : -9))
+        let year = Int(y + (month <= 2 ? 1 : 0))
+
+        func pad2(_ n: Int) -> String { n < 10 ? "0\(n)" : "\(n)" }
+        func pad3(_ n: Int) -> String { n < 10 ? "00\(n)" : (n < 100 ? "0\(n)" : "\(n)") }
+        func pad4(_ n: Int) -> String {
+            let s = "\(n)"
+            return s.count >= 4 ? s : String(repeating: "0", count: 4 - s.count) + s
+        }
+        return "\(pad4(year))-\(pad2(month))-\(pad2(day))T\(pad2(hour)):\(pad2(minute)):\(pad2(second)).\(pad3(millis))Z"
     }
 }
 

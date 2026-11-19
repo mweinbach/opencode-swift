@@ -23,6 +23,61 @@ public struct CoreSessionNoopSnapshotBridge: CoreSessionSnapshotBridge, Sendable
     public func diff(from: String, to: String, paths: [String]?) async throws -> [SessionSchema.FileDiffInfo] { [] }
 }
 
+/// Concrete `CoreSessionSnapshotBridge` wired directly to a real `CoreSnapshot.Service` (or any `CoreSnapshot.Interface`).
+public struct CoreSessionLiveSnapshotBridge: CoreSessionSnapshotBridge, Sendable {
+    public let service: any CoreSnapshot.Interface
+
+    public init(service: any CoreSnapshot.Interface) {
+        self.service = service
+    }
+
+    public init(
+        directory: String,
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        enabled: Bool = true
+    ) {
+        self.service = CoreSnapshot.Service(directory: directory, fileSystem: fileSystem, enabled: enabled)
+    }
+
+    public func capture() async throws -> String? {
+        await service.capture()?.rawValue
+    }
+
+    public func restore(files: [String: String]) async throws {
+        var mapped: [SchemaPrimitive.RelativePath: CoreSnapshot.ID] = [:]
+        mapped.reserveCapacity(files.count)
+        for (path, snapshotID) in files {
+            mapped[SchemaPrimitive.RelativePath(rawValue: path)] = CoreSnapshot.ID(rawValue: snapshotID)
+        }
+        try await service.restore(CoreSnapshot.RestoreInput(files: mapped))
+    }
+
+    public func diff(from: String, to: String, paths: [String]?) async throws -> [SessionSchema.FileDiffInfo] {
+        let relPaths = paths?.map { SchemaPrimitive.RelativePath(rawValue: $0) }
+        let entries = try await service.diff(CoreSnapshot.DiffInput(
+            from: CoreSnapshot.ID(rawValue: from),
+            to: CoreSnapshot.ID(rawValue: to),
+            paths: relPaths
+        ))
+        return entries.map { entry in
+            let mappedStatus: SessionSchema.FileDiffInfo.Status
+            switch entry.status {
+            case .added: mappedStatus = .added
+            case .deleted: mappedStatus = .deleted
+            case .modified: mappedStatus = .modified
+            }
+            return SessionSchema.FileDiffInfo(
+                file: entry.file,
+                patch: entry.patch,
+                additions: entry.additions.rawValue,
+                deletions: entry.deletions.rawValue,
+                status: mappedStatus,
+                more: entry.more
+            )
+        }
+    }
+}
+
 // MARK: - session/revert.ts
 
 /// Stages, clears, and commits session history + workspace reverts (`packages/core/src/session/revert.ts`).
