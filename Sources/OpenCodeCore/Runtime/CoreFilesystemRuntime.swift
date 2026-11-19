@@ -1018,11 +1018,7 @@ public enum CoreFilesystem {
     public enum Watcher {
         // parity: core/src/filesystem/watcher.ts#hasNativeBinding [status=adapted hash=d01c2b419c2f]
         public static func hasNativeBinding() -> Bool {
-            #if os(macOS) || os(Linux) || os(Windows)
-            return true
-            #else
-            return false
-            #endif
+            NativeFileWatcher.isNativelySupported
         }
 
         // parity: core/src/filesystem/watcher.ts#Update [status=implemented hash=7227f75ead81]
@@ -1102,10 +1098,15 @@ public enum CoreFilesystem {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Watcher"
 
+            private struct SubscriptionSlot: Sendable {
+                var subscription: NativeSubscription?
+                var terminated: Bool = false
+            }
+
             private let enabled: Bool
             private let native: any NativeInterface
 
-            public init(enabled: Bool = true, native: any NativeInterface) {
+            public init(enabled: Bool = true, native: any NativeInterface = Watcher.defaultNative()) {
                 self.enabled = enabled
                 self.native = native
             }
@@ -1119,18 +1120,41 @@ public enum CoreFilesystem {
                 }
                 let native = self.native
                 return AsyncStream { continuation in
+                    let slot = Mutex(SubscriptionSlot())
                     let task = Task {
                         let sub = await native.subscribe(input) { update in
                             continuation.yield(update)
                         }
-                        if sub == nil {
+                        guard let sub else {
                             continuation.finish()
+                            return
+                        }
+                        let alreadyTerminated = slot.withLock { s -> Bool in
+                            if s.terminated {
+                                return true
+                            }
+                            s.subscription = sub
+                            return false
+                        }
+                        if alreadyTerminated {
+                            await sub.unsubscribe()
                             return
                         }
                         await onReady?()
                     }
                     continuation.onTermination = { _ in
                         task.cancel()
+                        let activeSub = slot.withLock { s -> NativeSubscription? in
+                            s.terminated = true
+                            let current = s.subscription
+                            s.subscription = nil
+                            return current
+                        }
+                        if let activeSub {
+                            Task {
+                                await activeSub.unsubscribe()
+                            }
+                        }
                     }
                 }
             }
@@ -1210,11 +1234,84 @@ public enum CoreFilesystem {
             }
         }
 
+        /// Creates the default live native watcher backend powered by ``NativeFileWatcher``.
+        public static func defaultNative() -> Native {
+            Native { input, publish in
+                guard NativeFileWatcher.isNativelySupported else {
+                    return nil
+                }
+
+                let backendName = NativeFileWatcher.backend.rawValue
+                let watcher: NativeFileWatcher
+                let handler: @Sendable (NativeFileEvent) -> Void
+
+                switch input {
+                case .file(let rawFilePath):
+                    let directory = CoreConfigDiscovery.dirname(rawFilePath)
+                    let targetName = CoreConfigDiscovery.basename(rawFilePath)
+                    watcher = NativeFileWatcher(
+                        path: directory,
+                        recursive: false,
+                        ignore: [],
+                        includeDefaultIgnores: false
+                    )
+                    handler = { event in
+                        guard CoreConfigDiscovery.basename(event.path) == targetName else { return }
+                        publish(Update(path: event.path, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
+                    }
+
+                case .entries(let rawDirPath, let names):
+                    let allowed = Set(names)
+                    watcher = NativeFileWatcher(
+                        path: rawDirPath,
+                        recursive: false,
+                        ignore: [],
+                        includeDefaultIgnores: false
+                    )
+                    handler = { event in
+                        guard allowed.contains(CoreConfigDiscovery.basename(event.path)) else { return }
+                        publish(Update(path: event.path, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
+                    }
+
+                case .directory(let rawDirPath, let ignore):
+                    watcher = NativeFileWatcher(
+                        path: rawDirPath,
+                        recursive: true,
+                        ignore: ignore,
+                        includeDefaultIgnores: true
+                    )
+                    handler = { event in
+                        publish(Update(path: event.path, type: mapNativeEventKind(event.kind, renamedAsUpdate: false)))
+                    }
+                }
+
+                do {
+                    try watcher.start(onEvent: handler)
+                } catch {
+                    return nil
+                }
+
+                return NativeSubscription(backend: backendName) {
+                    watcher.stop()
+                }
+            }
+        }
+
+        private static func mapNativeEventKind(
+            _ kind: NativeFileEventKind,
+            renamedAsUpdate: Bool
+        ) -> Update.Kind {
+            switch kind {
+            case .created: return .create
+            case .modified: return .update
+            case .deleted: return .delete
+            case .renamed: return renamedAsUpdate ? .update : .create
+            }
+        }
+
         // parity: core/src/filesystem/watcher.ts#nativeLayer [status=adapted hash=80db1d636949]
         public static let nativeLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
-            let native = Native { _, _ in
-                NativeSubscription(backend: Platform.current.rawValue, unsubscribe: {})
-            }
+            let native = defaultNative()
             return LayerNode.Output([Native.serviceKey: native as any NativeInterface])
         }
 
@@ -1222,7 +1319,7 @@ public enum CoreFilesystem {
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let native = deps.get(Native.serviceKey, as: (any NativeInterface).self)
-                    ?? Native { _, _ in NativeSubscription(backend: "noop", unsubscribe: {}) }
+                    ?? defaultNative()
                 let svc = Service(enabled: options?.enabled ?? true, native: native)
                 return LayerNode.Output([Service.serviceKey: svc as any Interface])
             }
