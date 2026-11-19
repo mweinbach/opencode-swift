@@ -256,7 +256,7 @@ public struct ServerArtifactHandlers: Sendable {
 }
 
 /// Builds `artifacts.*` route handlers for the `server.experimental` group.
-// parity: server/src/handlers/artifact.ts#makeArtifact [status=implemented hash=e99808f21550]
+// parity: server/src/handlers/artifact.ts#makeArtifact [status=implemented hash=fada42393a1e]
 public let makeArtifact: @Sendable () -> ServerArtifactHandlers = {
     @Sendable func explicitDirectory(request: ServerHTTPRequest) -> String? {
         if let q = request.query("location[directory]"), !q.isEmpty { return q }
@@ -896,7 +896,7 @@ private func formatCredentialEntries(_ credentials: [CoreProvider.Credential.Inf
 // MARK: - 9. Debug Handler (server/src/handlers/debug.ts)
 
 /// Handlers for `server.debug` (`POST /api/debug/heap-dump`, `GET /api/debug/location`, `DELETE /api/debug/location`).
-// parity: server/src/handlers/debug.ts#DebugHandler [status=implemented hash=8012e7a1ab79]
+// parity: server/src/handlers/debug.ts#DebugHandler [status=implemented hash=7433c3f7acf0]
 public let DebugHandler = ServerHandlerGroup(
     groupIdentifier: "server.debug",
     routes: [
@@ -1422,7 +1422,7 @@ public let requireConnectable: @Sendable (IntegrationID, LocationServices) async
 }
 
 /// Handlers for `server.integration` (list, get, wellknown.add, connect.key, connect.external, oauth.*, command.*).
-// parity: server/src/handlers/integration.ts#IntegrationHandler [status=implemented hash=84dd809ce107]
+// parity: server/src/handlers/integration.ts#IntegrationHandler [status=implemented hash=f8b999017d78]
 public let IntegrationHandler = ServerHandlerGroup(
     groupIdentifier: "server.integration",
     routes: [
@@ -1854,7 +1854,7 @@ public let LocationHandler = ServerHandlerGroup(
 // MARK: - 17. MCP Handler (server/src/handlers/mcp.ts)
 
 /// Handlers for `server.mcp` (list, add, remove, connect, disconnect, resource.catalog, clientToken, client WebSocket).
-// parity: server/src/handlers/mcp.ts#McpHandler [status=implemented hash=560d0affcb8e]
+// parity: server/src/handlers/mcp.ts#McpHandler [status=implemented hash=8fa1bf8c2773]
 public let McpHandler = ServerHandlerGroup(
     groupIdentifier: "server.mcp",
     routes: [

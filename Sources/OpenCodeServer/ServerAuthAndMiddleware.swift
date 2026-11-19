@@ -51,6 +51,7 @@ public enum ServerAuth {
             self.info = info
         }
 
+        // parity: server/src/auth.ts#Config.configLayer [status=implemented hash=fb793742f54f]
         public static func configLayer(password: String?) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer.succeed(
                 key: serviceKey,
@@ -58,6 +59,7 @@ public enum ServerAuth {
             )
         }
 
+        // parity: server/src/auth.ts#Config.layer [status=implemented hash=513783ff224f]
         public static var layer: LayerNode.ExecutableLayer {
             configLayer(password: nil)
         }
@@ -478,7 +480,7 @@ public let withoutParentSpan: @Sendable (@escaping @Sendable () async throws -> 
 // MARK: - 8. Server Options (server/src/options.ts)
 
 /// Configuration surface for `OpenCodeServer` matching `packages/server/src/options.ts`.
-// parity: server/src/options.ts#ServerOptions [status=implemented hash=0bca84ffd7f7]
+// parity: server/src/options.ts#ServerOptions [status=implemented hash=f9b84e3cccaa]
 public struct ServerOptions: Sendable {
     public struct AppOptions: Equatable, Hashable, Sendable, Codable {
         public let name: String?
@@ -996,7 +998,7 @@ public let authorizationLayer: @Sendable (
 
 /// Replaces unexpected unhandled server failures with a structured `500 UnknownError` carrying a log reference
 /// (and a human-readable message for SQLite storage failures).
-// parity: server/src/middleware/defect-response.ts#defectResponseLayer [status=implemented hash=24412dbc524c]
+// parity: server/src/middleware/defect-response.ts#defectResponseLayer [status=implemented hash=b419e766aa0b]
 public let defectResponseLayer: @Sendable (any Error, ServerHTTPRequest) -> ServerHTTPResponse = { error, _ in
     if let encoded = ServerErrorResponse.encode(error) {
         return encoded
@@ -1008,7 +1010,7 @@ public let defectResponseLayer: @Sendable (any Error, ServerHTTPRequest) -> Serv
 }
 
 /// Transforms request schema decoding failures into `400 InvalidRequestError` and response encoding failures into `500 UnknownError`.
-// parity: server/src/middleware/schema-error.ts#schemaErrorLayer [status=implemented hash=45c2bf205752]
+// parity: server/src/middleware/schema-error.ts#schemaErrorLayer [status=implemented hash=cb2379ad7528]
 public let schemaErrorLayer: @Sendable (String, String) -> ServerHTTPResponse = { kind, rawReason in
     let limit = 1024
     let reason: String
@@ -1351,7 +1353,7 @@ public enum ServerProcess {
     }
 
     /// Starts the real HTTP/1.1 + SSE + WebSocket TCP server process with startup/ready/stopping lifecycle dispatch.
-    // parity: server/src/process.ts#start [status=adapted hash=06a6046e831d]
+    // parity: server/src/process.ts#start [status=adapted hash=55e935f9a28c]
     public static func start(
         options: ServerOptions,
         lifecycle: (any Lifecycle)? = nil,
@@ -1527,7 +1529,7 @@ public enum ServerWorkerd {
         }
     }
 
-    // parity: server/src/workerd.ts#Options [status=implemented hash=c795512a8140]
+    // parity: server/src/workerd.ts#Options [status=implemented hash=a05f7cdcbdb9]
     public struct Options: Sendable {
         public let storage: any CoreDatabaseWorkerdSQLite.DurableObjectStorage
         public let app: ServerOptions.AppOptions?
@@ -1585,7 +1587,7 @@ public enum ServerWorkerd {
     }
 
     /// Returns the workerd replacement graph swapping local-only services with workerd-safe stubs.
-    // parity: server/src/workerd.ts#replacements [status=adapted hash=dedb1a6766c0]
+    // parity: server/src/workerd.ts#replacements [status=adapted hash=bb3e569f9423]
     public static func replacements(_ options: Options) -> [LayerNode.Replacement] {
         var result: [LayerNode.Replacement] = []
         if let dbRep = try? CoreDatabaseStore.node.replace(

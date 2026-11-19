@@ -762,7 +762,7 @@ public final class ClientConnection: Sendable {
 }
 
 /// Creates and starts an observable `ClientConnection` mirroring `packages/client/src/solid/connection.ts`.
-// parity: client/src/solid/connection.ts#createClientConnection [status=implemented hash=357ce8b9f246]
+// parity: client/src/solid/connection.ts#createClientConnection [status=implemented hash=de25cd0f6164]
 public func createClientConnection(
     _ initialApi: OpenCodeClient,
     options: ClientConnectionOptions
@@ -2541,7 +2541,7 @@ public final class ClientDataStore: Sendable {
 public typealias ClientData = ClientDataStore
 
 /// Creates an observable `ClientDataStore` wired to `config.event` and `config.api`.
-// parity: client/src/solid/data.ts#createData [status=implemented hash=aa16b4130e6a]
+// parity: client/src/solid/data.ts#createData [status=implemented hash=0958a1c45278]
 public func createData(_ config: CreateDataInput) -> ClientDataStore {
     ClientDataStore(config: config)
 }

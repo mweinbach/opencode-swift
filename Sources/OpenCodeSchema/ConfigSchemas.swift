@@ -585,7 +585,7 @@ public enum ConfigProviderSchema {
 
 public enum ConfigAgentSchema {
     /// Hex color string matching `^#[0-9a-fA-F]{6}$`.
-    // parity: schema/src/config/agent.ts#Color [status=implemented hash=913e092417ed]
+    // parity: schema/src/config/agent.ts#Color [status=implemented hash=0b295df1bde7]
     public struct Color: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1635,7 +1635,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Info [status=implemented hash=02db1aeec4be]
+    // parity: schema/src/config.ts#Info [status=implemented hash=7066d2a4ea13]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let schema: String?
         public let shell: String?

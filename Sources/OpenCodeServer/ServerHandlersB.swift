@@ -96,7 +96,7 @@ public let ModelHandler = ServerHandlerGroup(
 // MARK: - 3. Permission Handler (server/src/handlers/permission.ts)
 
 /// Handlers for `server.permission` (location pending requests, session permissions, and saved permissions).
-// parity: server/src/handlers/permission.ts#PermissionHandler [status=implemented hash=e7926ddce73a]
+// parity: server/src/handlers/permission.ts#PermissionHandler [status=implemented hash=179da1ff6a70]
 public let PermissionHandler = ServerHandlerGroup(
     groupIdentifier: "server.permission",
     routes: [
@@ -356,7 +356,7 @@ public let holdLocation: @Sendable (
 // MARK: - 5. Experimental & Persistent PTY Group Handler (server/src/handlers/persistent-pty.ts)
 
 /// Handlers for `server.experimental` composing media, blob, job, artifacts, automation, and persistentPty routes.
-// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=0edecc69a80a]
+// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=09378bf9fe0b]
 public let PersistentPtyHandler: ServerHandlerGroup = {
     let artifact = makeArtifact()
     let job = makeJob()
@@ -959,7 +959,7 @@ public let ProviderHandler = ServerHandlerGroup(
 // MARK: - 9. PTY Handler (server/src/handlers/pty.ts)
 
 /// Handlers for `server.pty` (list, create, get, update, remove, connectToken, connect WebSocket).
-// parity: server/src/handlers/pty.ts#PtyHandler [status=implemented hash=a8218127b5b0]
+// parity: server/src/handlers/pty.ts#PtyHandler [status=implemented hash=978b39617e0f]
 public let PtyHandler = ServerHandlerGroup(
     groupIdentifier: "server.pty",
     routes: [
@@ -1300,7 +1300,7 @@ public let ServerHandler = ServerHandlerGroup(
 // MARK: - 13. Session Handler (server/src/handlers/session.ts)
 
 /// Handlers for `server.session` (all 35 session, inbox, revert, transfer, instructions, form, and log routes).
-// parity: server/src/handlers/session.ts#SessionHandler [status=implemented hash=f70776e38aa2]
+// parity: server/src/handlers/session.ts#SessionHandler [status=implemented hash=f79bc896c01d]
 public let SessionHandler = ServerHandlerGroup(
     groupIdentifier: "server.session",
     routes: [

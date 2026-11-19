@@ -19,6 +19,7 @@ public enum NpmSpec {
             self.causeStderr = causeStderr
         }
 
+        // parity: util/src/npm.ts#InstallFailedError.message [status=implemented hash=781871e22d70]
         public var message: String {
             let target = (add?.isEmpty == false) ? add!.joined(separator: ", ") : dir
             let summary = "Failed to install \(target)"

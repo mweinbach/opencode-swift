@@ -70,7 +70,7 @@ public enum PromptSchema {
     }
 
     /// Validated standard RFC 4648 base64 string (`Prompt.Base64`).
-    // parity: schema/src/prompt.ts#Base64 [status=implemented hash=db2191acfa18]
+    // parity: schema/src/prompt.ts#Base64 [status=implemented hash=8f5990fcdf8d]
     public struct Base64: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -169,7 +169,7 @@ public enum PromptSchema {
     }
 
     /// `media:` followed by a 64-character lowercase hex SHA-256 digest (`Prompt.MediaRef`).
-    // parity: schema/src/prompt.ts#MediaRef [status=implemented hash=397d9641d521]
+    // parity: schema/src/prompt.ts#MediaRef [status=implemented hash=c46defebcb02]
     public struct MediaRef: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 

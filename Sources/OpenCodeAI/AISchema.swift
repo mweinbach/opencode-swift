@@ -751,13 +751,16 @@ public enum AISchema {
             self.partial = partial
         }
 
+        // parity: ai/src/schema/errors.ts#AIError.message [status=implemented hash=a024d8270e86]
         public var message: String { reason.message }
         public var description: String { reason.message }
 
         /// HTTP status of the failed response, when the failure came from one.
+        // parity: ai/src/schema/errors.ts#AIError.status [status=implemented hash=b0fb7f40b6e4]
         public var status: Int? { reason.http?.status }
 
         /// The provider's error code from the response body or `x-amzn-errortype`, or the transport's system error code.
+        // parity: ai/src/schema/errors.ts#AIError.code [status=implemented hash=a08c3b90470c]
         public var code: String? {
             if case .transport(let transport) = reason, let code = transport.code {
                 return code
@@ -773,6 +776,7 @@ public enum AISchema {
         }
 
         /// Delay the provider asked for before retrying, from `retry-after` style headers.
+        // parity: ai/src/schema/errors.ts#AIError.retryAfterMs [status=implemented hash=ad188bbe044e]
         public var retryAfterMs: Int? {
             switch reason {
             case .rateLimit(let e):
@@ -787,6 +791,7 @@ public enum AISchema {
         }
 
         /// Whether a failed call may succeed when sent again.
+        // parity: ai/src/schema/errors.ts#AIError.isRetryable [status=implemented hash=8ba2441e3070]
         public var isRetryable: Bool {
             if let override = reason.http?.headers["x-should-retry"] {
                 if override == "true" { return true }
@@ -1021,7 +1026,7 @@ public enum AISchema {
     }
 
     /// Transport settings shared by requests, models and routes.
-    // parity: ai/src/schema/options.ts#TransportOptions [status=implemented hash=a44ae8389ef7]
+    // parity: ai/src/schema/options.ts#TransportOptions [status=implemented hash=ffd61c820d00]
     public struct TransportOptions: Equatable, Hashable, Sendable, Codable {
         public let headers: [String: String]?
         public let timeout: RequestTimeout?
@@ -1043,7 +1048,7 @@ public enum AISchema {
     }
 
     /// The fields every request shares, whatever its modality.
-    // parity: ai/src/schema/options.ts#BaseRequest [status=adapted hash=83359c51b288]
+    // parity: ai/src/schema/options.ts#BaseRequest [status=adapted hash=894d8877b31a]
     public protocol BaseRequest: Sendable {
         associatedtype Model: Sendable
         var model: Model { get }
@@ -1355,7 +1360,7 @@ public enum AISchema {
         case alibaba
     }
 
-    // parity: ai/src/schema/options.ts#LanguageModelCompatibility [status=implemented hash=148818b86f10]
+    // parity: ai/src/schema/options.ts#LanguageModelCompatibility [status=implemented hash=59d71cdeb2af]
     public struct LanguageModelCompatibility: Equatable, Hashable, Sendable, Codable {
         // parity: ai/src/schema/options.ts#LanguageModelCompatibility.Input [status=implemented hash=0b5db6ff2fe3]
         public typealias Input = LanguageModelCompatibility
@@ -1768,6 +1773,7 @@ public enum AISchema {
             self.compatibility = input.compatibility
         }
 
+        // parity: ai/src/schema/options.ts#LanguageModel.make [status=implemented hash=e9c0c0b35e4d]
         public static func make(_ input: Input) -> LanguageModel {
             LanguageModel(ConstructorInput(
                 id: ModelID.make(input.id),
@@ -1779,6 +1785,7 @@ public enum AISchema {
             ))
         }
 
+        // parity: ai/src/schema/options.ts#LanguageModel.input [status=implemented hash=2fe5e1872bc2]
         public static func input(_ model: LanguageModel) -> ConstructorInput {
             ConstructorInput(
                 id: model.id,
@@ -1790,6 +1797,7 @@ public enum AISchema {
             )
         }
 
+        // parity: ai/src/schema/options.ts#LanguageModel.update [status=implemented hash=6366a64d8a73]
         public static func update(
             _ model: LanguageModel,
             id: String? = nil,
@@ -3713,6 +3721,7 @@ public enum AISchema {
         }
 
         /// Non-reasoning output tokens, clamped to zero.
+        // parity: ai/src/schema/events.ts#Usage.visibleOutputTokens [status=implemented hash=84009c6dddcb]
         public var visibleOutputTokens: Double {
             max(0, (outputTokens ?? 0) - (reasoningTokens ?? 0))
         }
@@ -4594,16 +4603,19 @@ public enum AISchema {
         }
 
         /// Concatenated assistant text; each fragment's `text-end` value replaces its accumulated deltas when present.
+        // parity: ai/src/schema/events.ts#LLMResponse.prototype.text [status=implemented hash=d15c68f7aaf9]
         public var text: String {
             Self.joinText(events)
         }
 
         /// Concatenated reasoning text; each fragment's `reasoning-end` value replaces its accumulated deltas when present.
+        // parity: ai/src/schema/events.ts#LLMResponse.prototype.reasoning [status=implemented hash=3f47318ae5af]
         public var reasoning: String {
             Self.joinReasoning(events)
         }
 
         /// Completed tool calls emitted by the provider.
+        // parity: ai/src/schema/events.ts#LLMResponse.prototype.toolCalls [status=implemented hash=5bf3ad9d23c4]
         public var toolCalls: [ToolCall] {
             events.compactMap { if case .toolCall(let tc) = $0 { return tc } else { return nil } }
         }

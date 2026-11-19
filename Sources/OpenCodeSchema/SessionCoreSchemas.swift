@@ -477,6 +477,10 @@ public enum SessionSchema {
     // parity: schema/src/session.ts#Event [status=implemented hash=88a0baca52c2]
     public typealias Event = SessionEventSchema
 
+    /// Session revert record alias.
+    // parity: schema/src/session.ts#Revert [status=implemented hash=8a9ab5ac8611]
+    public typealias Revert = SessionRevertSchema.Revert
+
     /// Session fork boundary alias.
     // parity: schema/src/session.ts#ForkBoundary [status=implemented hash=362d7e4f44e8]
     public typealias ForkBoundary = SessionForkSchema.Boundary
@@ -1193,7 +1197,7 @@ public enum SessionLegacySchema {
     ]
 
     /// Upgrades a durable event payload by event type.
-    // parity: schema/src/session-legacy.ts#event [status=implemented hash=4a0fcaf5dbbe]
+    // parity: schema/src/session-legacy.ts#event [status=implemented hash=e2b57173f36e]
     public static func event(type: String, data: JSONValue) -> JSONValue {
         guard case .object(let dict) = data else { return data }
         if type == "session.message.content.updated" {
@@ -1233,7 +1237,7 @@ public enum SessionLegacySchema {
     }
 
     /// Upgrades an assistant content part written before v2.1.
-    // parity: schema/src/session-legacy.ts#part [status=implemented hash=74351fa946a5]
+    // parity: schema/src/session-legacy.ts#part [status=implemented hash=aff8e6d63667]
     public static func part(_ value: JSONValue) -> JSONValue {
         guard case .object(let dict) = value else { return value }
         if dict["type"] == .string("text") || dict["type"] == .string("reasoning") {

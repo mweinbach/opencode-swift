@@ -923,7 +923,7 @@ public enum FileDiffSchema {
 
 public enum BlobStoreSchema {
     /// Strict stored blob identifier matching `^blob_[0-9a-f]{12}[0-9A-Za-z]{14}$`.
-    // parity: schema/src/blob-store.ts#ID [status=implemented hash=bfbf4d673a11]
+    // parity: schema/src/blob-store.ts#ID [status=implemented hash=012b94ddb5e4]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 

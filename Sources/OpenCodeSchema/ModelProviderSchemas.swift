@@ -641,6 +641,18 @@ public enum ModelSchema {
         }
     }
 
+    // parity: schema/src/model.ts#Compatibility [status=implemented hash=4214a352d397]
+    public typealias Compatibility = ModelCompatibilitySchema.Compatibility
+
+    // parity: schema/src/model.ts#MaxTokensField [status=implemented hash=4214a352d397]
+    public typealias MaxTokensField = ModelCompatibilitySchema.MaxTokensField
+
+    // parity: schema/src/model.ts#MediaInput [status=implemented hash=4214a352d397]
+    public typealias MediaInput = ModelCompatibilitySchema.MediaInput
+
+    // parity: schema/src/model.ts#ReasoningField [status=implemented hash=4214a352d397]
+    public typealias ReasoningField = ModelCompatibilitySchema.ReasoningField
+
     // parity: schema/src/model.ts#Family [status=implemented hash=f91815729a56]
     public struct Family: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
@@ -690,7 +702,7 @@ public enum ModelSchema {
     }
 
     /// Flat `StructWithRest` model settings (`compaction`, `cache`, `encoding`, plus arbitrary provider keys).
-    // parity: schema/src/model.ts#Settings [status=implemented hash=2915897d5438]
+    // parity: schema/src/model.ts#Settings [status=implemented hash=8d8e675a43b4]
     public struct Settings: Equatable, Hashable, Sendable, Codable {
         public let compaction: ProviderSchema.Compaction?
         public let cache: ProviderSchema.Cache?
@@ -1907,7 +1919,7 @@ public enum GenerateSchema {
     // MARK: Video
 
     /// Strict video job identifier matching `^video_[0-9a-f]{12}[0-9A-Za-z]{14}$`.
-    // parity: schema/src/generate.ts#VideoID [status=implemented hash=44f8d7b6c360]
+    // parity: schema/src/generate.ts#VideoID [status=implemented hash=e37f3a4f9d99]
     public struct VideoID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 

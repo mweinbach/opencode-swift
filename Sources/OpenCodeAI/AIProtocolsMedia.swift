@@ -2569,11 +2569,45 @@ extension AIProtocols {
 
             public var defaultBaseURL: String {
                 switch self {
-                case .volcengine: return SeedanceVideo.VOLCENGINE_BASE_URL
-                case .byteplus: return SeedanceVideo.BYTEPLUS_BASE_URL
+                case .volcengine: return AIProtocols.SeedanceVideo.VOLCENGINE_BASE_URL
+                case .byteplus: return AIProtocols.SeedanceVideo.BYTEPLUS_BASE_URL
                 }
             }
         }
+
+        public struct ProviderEndpoint: Sendable {
+            public let provider: Provider
+            public let protocolID: String
+            public let baseURL: String
+            public let path: String
+
+            public init(provider: Provider) {
+                self.provider = provider
+                self.protocolID = "seedance-video"
+                self.baseURL = provider.defaultBaseURL
+                self.path = AIProtocols.SeedanceVideo.PATH
+            }
+
+            public func model(_ input: MediaModelInput) -> MediaModelHandle {
+                AIProtocols.SeedanceVideo.model(input, provider: provider)
+            }
+        }
+
+        public struct ProviderRegistry: Sendable {
+            public let volcengine: ProviderEndpoint
+            public let byteplus: ProviderEndpoint
+
+            public init(volcengine: ProviderEndpoint, byteplus: ProviderEndpoint) {
+                self.volcengine = volcengine
+                self.byteplus = byteplus
+            }
+        }
+
+        // parity: ai/src/protocols/seedance-video.ts#SeedanceVideo [status=implemented hash=b4447b203695]
+        public static let SeedanceVideo = ProviderRegistry(
+            volcengine: ProviderEndpoint(provider: .volcengine),
+            byteplus: ProviderEndpoint(provider: .byteplus)
+        )
 
         public static func model(_ input: MediaModelInput, provider: Provider = .volcengine) -> MediaModelHandle {
             MediaModelHandle(

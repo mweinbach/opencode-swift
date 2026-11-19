@@ -13,7 +13,7 @@ import Musl
 import OpenCodeUtil
 
 /// Cross-platform filesystem utility service matching `packages/util/src/fs-util.ts`.
-// parity: util/src/fs-util.ts#FSUtil [status=implemented hash=bdd4e2da882e]
+// parity: util/src/fs-util.ts#FSUtil [status=implemented hash=61971a01513d]
 public enum FSUtil {
     // parity: util/src/fs-util.ts#FSUtil.Error [status=implemented hash=cbb8b70433d4]
     public enum FSError: Error, Equatable, Sendable, CustomStringConvertible {
@@ -231,7 +231,7 @@ public enum FSUtil {
         }
     }
 
-    // parity: util/src/fs-util.ts#FSUtil.layer [status=implemented hash=b96489c5edca]
+    // parity: util/src/fs-util.ts#FSUtil.layer [status=implemented hash=b6e589b996ad]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let fs = deps.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) ?? LocalFileSystem.shared
         return LayerNode.Output([Service.serviceKey: Service(fileSystem: fs)])

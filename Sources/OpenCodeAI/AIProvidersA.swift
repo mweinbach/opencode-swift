@@ -532,11 +532,7 @@ public enum AIProviders {
         // parity: ai/src/providers/alibaba.ts#routes [status=implemented hash=7ee10d607c52]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute, messagesRoute, responsesRoute]
 
-        // parity: ai/src/providers/alibaba.ts#configure [status=implemented hash=1bd585326b25]
-        public static func configure(
-            _ input: Config = Config(region: "ap-southeast-1"),
-            environment: any EnvironmentProviding = SystemEnvironment.shared
-        ) throws(ProviderConfigurationError) -> ConfiguredProvider {
+        private static func resolveHost(_ input: Config) throws(ProviderConfigurationError) -> String? {
             let host: String?
             if let region = input.region {
                 host = input.workspaceID.map { "\($0).\(region).maas.aliyuncs.com" } ?? regionHosts[region]
@@ -551,6 +547,15 @@ public enum AIProviders {
                     throw ProviderConfigurationError(provider: id, message: "Alibaba region \(region) requires workspaceID or baseURL")
                 }
             }
+            return host
+        }
+
+        // parity: ai/src/providers/alibaba.ts#configure [status=implemented hash=1bd585326b25]
+        public static func configure(
+            _ input: Config = Config(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredProvider {
+            let host = try resolveHost(input)
             let resolvedBase = input.baseURL ?? "https://\(host!)/compatible-mode/v1"
             let auth = resolveBearerAuth(config: input, envVars: ["DASHSCOPE_API_KEY", "ALIBABA_API_KEY"], environment: environment)
             return ConfiguredProvider(
@@ -564,6 +569,132 @@ public enum AIProviders {
                 defaultCompatibility: AIProtocols.AlibabaChat.compatibility,
                 defaultCapabilities: AIProtocols.AlibabaChat.capabilities
             )
+        }
+
+        // parity: ai/src/providers/alibaba.ts#provider [status=implemented hash=2a83695cb527]
+        public static let provider = (id: id, routes: routes)
+
+        // parity: ai/src/providers/alibaba.ts#model [status=implemented hash=c50d7a0bdd31]
+        public static func model(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            try configure(settings, environment: environment).model(
+                modelID,
+                route: chatRoute,
+                compatibility: AIProtocols.AlibabaChat.compatibility,
+                capabilities: AIProtocols.AlibabaChat.capabilities
+            )
+        }
+
+        // parity: ai/src/providers/alibaba.ts#messagesModel [status=implemented hash=114a9e9a9f26]
+        public static func messagesModel(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            let host = try resolveHost(settings)
+            var adjusted = settings
+            adjusted.baseURL = settings.baseURL ?? "https://\(host!)/apps/anthropic/v1"
+            return try configure(adjusted, environment: environment).model(
+                modelID,
+                route: messagesRoute,
+                compatibility: .init(requireSignature: false)
+            )
+        }
+
+        // parity: ai/src/providers/alibaba.ts#responsesModel [status=implemented hash=98e6de3d3c0a]
+        public static func responsesModel(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            try configure(settings, environment: environment).model(modelID, route: responsesRoute)
+        }
+
+        // parity: ai/src/providers/alibaba.ts#chat [status=implemented hash=84c2da6223da]
+        public static func chat(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            try model(modelID, settings: settings, environment: environment)
+        }
+
+        // parity: ai/src/providers/alibaba.ts#messages [status=implemented hash=c38213249e6c]
+        public static func messages(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            try messagesModel(modelID, settings: settings, environment: environment)
+        }
+
+        // parity: ai/src/providers/alibaba.ts#responses [status=implemented hash=804ee5dbd404]
+        public static func responses(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1"),
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            try responsesModel(modelID, settings: settings, environment: environment)
+        }
+
+        // parity: ai/src/providers/alibaba.ts#imageModel [status=implemented hash=fb07b785259e]
+        public static func imageModel(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1")
+        ) throws(ProviderConfigurationError) -> AIProtocols.MediaModelHandle {
+            let host = try resolveHost(settings)
+            let mediaBase = settings.baseURL ?? "https://\(host!)/api/v1"
+            return AIProtocols.AlibabaImages.model(.init(
+                id: modelID,
+                provider: id,
+                baseURL: mediaBase,
+                providerOptions: settings.providerOptions
+            ))
+        }
+
+        // parity: ai/src/providers/alibaba.ts#embeddingModel [status=implemented hash=92058c6a5ffe]
+        public static func embeddingModel(
+            _ modelID: String,
+            settings: Settings = Settings(region: "ap-southeast-1")
+        ) throws(ProviderConfigurationError) -> AIProtocols.MediaModelHandle {
+            let host = try resolveHost(settings)
+            let embeddingBase = settings.baseURL ?? "https://\(host!)/compatible-mode/v1"
+            return AIProtocols.MediaModelHandle(
+                id: modelID,
+                provider: id,
+                protocolID: "openai-embeddings",
+                baseURL: embeddingBase,
+                path: AIProtocols.OpenAIEmbeddings.PATH,
+                mode: .inline,
+                providerOptions: settings.providerOptions
+            )
+        }
+
+        private static func hostedTool(_ type: String, description: String) -> AIProtocolUtils.ToolDefinition {
+            AIProtocolUtils.ToolDefinition(
+                name: type,
+                description: description,
+                inputSchema: ["type": .string("object"), "properties": .object([:])],
+                native: ["alibaba": .object(["type": .string(type)])]
+            )
+        }
+
+        // parity: ai/src/providers/alibaba.ts#webSearch [status=implemented hash=cbe947429f2a]
+        public static func webSearch() -> AIProtocolUtils.ToolDefinition {
+            hostedTool("web_search", description: "Search the web with Alibaba's hosted search tool.")
+        }
+
+        // parity: ai/src/providers/alibaba.ts#webExtractor [status=implemented hash=fcac96311b71]
+        public static func webExtractor() -> AIProtocolUtils.ToolDefinition {
+            hostedTool("web_extractor", description: "Extract web page content with Alibaba's hosted tool.")
+        }
+
+        // parity: ai/src/providers/alibaba.ts#codeInterpreter [status=implemented hash=a413e284ceba]
+        public static func codeInterpreter() -> AIProtocolUtils.ToolDefinition {
+            hostedTool("code_interpreter", description: "Execute code with Alibaba's hosted interpreter.")
         }
 
         public enum Messages {
@@ -1158,6 +1289,50 @@ public enum AIProviders {
         // parity: ai/src/providers/cloudflare-ai-gateway.ts#routes [status=implemented hash=29169c79c1b7]
         public static let routes: [AIProtocols.ChatRouteSpec] = [responsesRoute, messagesRoute, route]
 
+        private static func resolvedGatewayId(_ input: Config) -> String {
+            let trimmed = input.gatewayId?.trimmingASCIIWhitespace() ?? ""
+            return trimmed.isEmpty ? "default" : trimmed
+        }
+
+        private static func gatewayHeaders(_ input: Config) -> [String: String] {
+            var hdrs: [String: String] = [:]
+            if let opts = input.providerOptions {
+                if let metadata = opts["metadata"] {
+                    hdrs["cf-aig-metadata"] = AIProtocolUtils.JSONCodec.encode(metadata)
+                }
+                if let ttl = opts["cacheTtl"] {
+                    if case .int(let n) = ttl { hdrs["cf-aig-cache-ttl"] = String(n) }
+                    else if case .double(let d) = ttl { hdrs["cf-aig-cache-ttl"] = String(d) }
+                }
+                if case .string(let key) = opts["cacheKey"] { hdrs["cf-aig-cache-key"] = key }
+                if case .bool(let skip) = opts["skipCache"] { hdrs["cf-aig-skip-cache"] = String(skip) }
+                if case .bool(let log) = opts["collectLog"] { hdrs["cf-aig-collect-log"] = String(log) }
+            }
+            for (k, v) in input.headers ?? [:] { hdrs[k] = v }
+            return hdrs
+        }
+
+        private static func passthroughURL(_ input: Config, providerSegment: String) throws(ProviderConfigurationError) -> String {
+            let account = try CloudflareShared.requireAccountId(input, provider: id, name: "CloudflareAIGateway")
+            let encAccount = AIProtocolUtils.JSONCodec.percentEncodePathComponent(account)
+            let encGateway = AIProtocolUtils.JSONCodec.percentEncodePathComponent(resolvedGatewayId(input))
+            return "https://gateway.ai.cloudflare.com/v1/\(encAccount)/\(encGateway)/\(providerSegment)"
+        }
+
+        private static func passthroughAuth(
+            _ input: Config,
+            environment: any EnvironmentProviding
+        ) -> AIProtocolUtils.AuthStrategy {
+            if let custom = input.auth { return custom }
+            var adjusted = input
+            if let gwKey = input.gatewayApiKey { adjusted.apiKey = .explicit(gwKey) }
+            let bearer = resolveBearerAuth(config: adjusted, envVars: authEnvVars, environment: environment)
+            if case .bearer(let token) = bearer {
+                return .header(name: "cf-aig-authorization", value: "Bearer \(token)")
+            }
+            return bearer
+        }
+
         // parity: ai/src/providers/cloudflare-ai-gateway.ts#configure [status=implemented hash=c7ab99d1770a]
         public static func configure(
             _ input: Config,
@@ -1167,9 +1342,105 @@ public enum AIProviders {
             var adjusted = input
             if let gwKey = input.gatewayApiKey { adjusted.apiKey = .explicit(gwKey) }
             let auth = resolveBearerAuth(config: adjusted, envVars: authEnvVars, environment: environment)
-            var hdrs = input.headers ?? [:]
-            hdrs["cf-aig-gateway-id"] = input.gatewayId?.trimmingASCIIWhitespace().isEmpty == false ? input.gatewayId!.trimmingASCIIWhitespace() : "default"
+            var hdrs = gatewayHeaders(input)
+            hdrs["cf-aig-gateway-id"] = resolvedGatewayId(input)
             return ConfiguredProvider(id: id, baseURL: resolvedBase, auth: auth, headers: hdrs, routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
+        }
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#provider [status=implemented hash=2a83695cb527]
+        public static let provider = (id: id, routes: routes)
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#chat [status=implemented hash=bfac22307c8f]
+        public static func chat(
+            _ modelID: String,
+            settings: Settings,
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            let normalized = modelID.hasPrefix("workers-ai/") ? String(modelID.dropFirst("workers-ai/".count)) : modelID
+            return try configure(settings, environment: environment).model(normalized, route: route)
+        }
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#responses [status=implemented hash=78d92cc5bbfe]
+        public static func responses(
+            _ modelID: String,
+            settings: Settings,
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            let native = settings.baseURL == nil || settings.baseURL?.isEmpty == true
+            if native {
+                let targetBase = try passthroughURL(settings, providerSegment: "openai")
+                let auth = passthroughAuth(settings, environment: environment)
+                let configured = ConfiguredProvider(
+                    id: id,
+                    baseURL: targetBase,
+                    auth: auth,
+                    headers: gatewayHeaders(settings),
+                    routes: routes,
+                    defaultRoute: responsesRoute,
+                    defaultProviderOptions: settings.providerOptions ?? [:]
+                )
+                let normalized = modelID.hasPrefix("openai/") ? String(modelID.dropFirst("openai/".count)) : modelID
+                return configured.model(normalized, route: responsesRoute)
+            }
+            return try configure(settings, environment: environment).model(modelID, route: responsesRoute)
+        }
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#messages [status=implemented hash=db1f90e187d2]
+        public static func messages(
+            _ modelID: String,
+            settings: Settings,
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            let native = settings.baseURL == nil || settings.baseURL?.isEmpty == true
+            if native {
+                let targetBase = try passthroughURL(settings, providerSegment: "anthropic/v1")
+                let auth = passthroughAuth(settings, environment: environment)
+                let configured = ConfiguredProvider(
+                    id: id,
+                    baseURL: targetBase,
+                    auth: auth,
+                    headers: gatewayHeaders(settings),
+                    routes: routes,
+                    defaultRoute: messagesRoute,
+                    defaultProviderOptions: settings.providerOptions ?? [:]
+                )
+                let stripped = modelID.hasPrefix("anthropic/") ? String(modelID.dropFirst("anthropic/".count)) : modelID
+                let normalized = stripped.replacing(".", with: "-")
+                return configured.model(normalized, route: messagesRoute)
+            }
+            return try configure(settings, environment: environment).model(modelID, route: messagesRoute)
+        }
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#model [status=implemented hash=61635358c550]
+        public static func model(
+            _ modelID: String,
+            settings: Settings,
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) throws(ProviderConfigurationError) -> ConfiguredModel {
+            if modelID.hasPrefix("openai/") {
+                return try responses(modelID, settings: settings, environment: environment)
+            }
+            if modelID.hasPrefix("anthropic/") {
+                return try messages(modelID, settings: settings, environment: environment)
+            }
+            return try chat(modelID, settings: settings, environment: environment)
+        }
+
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#decisionModel [status=implemented hash=88cf044213fb]
+        public static func decisionModel(
+            _ modelID: String,
+            settings: Settings
+        ) throws(ProviderConfigurationError) -> AIProtocols.MediaModelHandle {
+            let runBase = try runBaseURL(settings)
+            return AIProtocols.MediaModelHandle(
+                id: modelID,
+                provider: id,
+                protocolID: "cloudflare-run-decisions",
+                baseURL: runBase,
+                path: "/\(modelID)",
+                mode: .inline,
+                providerOptions: settings.providerOptions
+            )
         }
     }
 

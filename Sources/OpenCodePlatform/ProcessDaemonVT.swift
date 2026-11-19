@@ -437,7 +437,7 @@ extension ProcessDaemon {
 
         // MARK: - Effects Callback Bridge (`src/ghostty/effects.rs`)
 
-        // parity: process-daemon/src/ghostty/effects.rs#Effects [status=adapted hash=c0721c5eb3e1]
+        // parity: process-daemon/src/ghostty/effects.rs#Effects [status=adapted hash=861f3a336ef0]
         public final class Effects: Sendable {
             private struct State: Sendable {
                 var writes: [[UInt8]] = []
@@ -486,19 +486,35 @@ extension ProcessDaemon {
 
             public func recordWrite(_ bytes: [UInt8]) {
                 guard !bytes.isEmpty else { return }
-                state.withLock { $0.writes.append(bytes) }
+                state.withLock { s in
+                    guard s.panicMessage == nil else { return }
+                    s.writes.append(bytes)
+                }
             }
 
             public func markTitleChanged() {
                 state.withLock { $0.titleChanged = true }
             }
 
-            public static let writePtyCallback: @Sendable (GhosttyTerminal, Effects?, [UInt8]) -> Void = { _, effects, bytes in
-                effects?.recordWrite(bytes)
+            // parity: process-daemon/src/ghostty/effects.rs#write_pty [status=adapted hash=d6750b14a161]
+            public static func write_pty(_ terminal: GhosttyTerminal, userdata: Effects?, data: [UInt8]) {
+                _ = terminal
+                guard let userdata, !data.isEmpty else { return }
+                userdata.recordWrite(data)
             }
 
-            public static let titleChangedCallback: @Sendable (GhosttyTerminal, Effects?) -> Void = { _, effects in
-                effects?.markTitleChanged()
+            // parity: process-daemon/src/ghostty/effects.rs#title_changed [status=adapted hash=ea2e161e5d18]
+            public static func title_changed(_ terminal: GhosttyTerminal, userdata: Effects?) {
+                _ = terminal
+                userdata?.markTitleChanged()
+            }
+
+            public static let writePtyCallback: @Sendable (GhosttyTerminal, Effects?, [UInt8]) -> Void = { terminal, effects, bytes in
+                Effects.write_pty(terminal, userdata: effects, data: bytes)
+            }
+
+            public static let titleChangedCallback: @Sendable (GhosttyTerminal, Effects?) -> Void = { terminal, effects in
+                Effects.title_changed(terminal, userdata: effects)
             }
         }
 
@@ -1733,7 +1749,7 @@ extension ProcessDaemon {
                 ghostty_terminal_free(&raw)
             }
 
-            // parity: process-daemon/src/ghostty/mod.rs#new [status=implemented hash=b47fdf30e197]
+            // parity: process-daemon/src/ghostty/mod.rs#new [status=implemented hash=55759a70d115]
             public static func new(_ options: TerminalOptions) throws -> Terminal {
                 guard options.cols > 0 && options.rows > 0 else {
                     throw DaemonError("terminal dimensions must be positive")

@@ -10,6 +10,7 @@ public enum FSPathUtil {
             self.detail = detail
         }
 
+        // parity: util/src/fs-util.ts#FSUtil.FileSystemError.message [status=implemented hash=58091ebe789f]
         public var message: String {
             if let detail, !detail.isEmpty {
                 return "Filesystem operation failed: \(method): \(detail)"

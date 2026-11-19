@@ -726,7 +726,7 @@ public enum SdkInstances {
     }
 
     /// Session-selected instance selector and lazy factory.
-    // parity: sdk/src/internal/instances.ts#Options [status=adapted hash=0274a2ddfb4b]
+    // parity: sdk/src/internal/instances.ts#Options [status=adapted hash=a33c61f9e6dc]
     public struct Options: Sendable {
         /// Select a sharing key within the Session's current Location. Must not initialize plugins.
         public let key: @Sendable (SessionSchema.Info) throws -> String

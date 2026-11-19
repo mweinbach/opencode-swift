@@ -967,7 +967,7 @@ public enum AIProtocols {
     // MARK: - OpenAIFreeform (packages/ai/src/protocols/openai-freeform.ts — 6 symbols)
 
     public enum OpenAIFreeform {
-        // parity: ai/src/protocols/openai-freeform.ts#Custom [status=implemented hash=f2134852dbaa]
+        // parity: ai/src/protocols/openai-freeform.ts#Custom [status=implemented hash=2bd792a3b4f9]
         public struct Custom: Equatable, Hashable, Sendable {
             public let field: String
             public let format: AIProtocolUtils.FreeformFormat
@@ -1039,20 +1039,24 @@ public enum AIProtocols {
             AIProtocolUtils.JSONCodec.encodeObject([fieldName(custom): .string(raw)])
         }
 
+        // parity: ai/src/protocols/openai-freeform.ts#streamDelta [status=implemented hash=dcb068547a2a]
         public static func streamDelta(_ raw: String) -> String {
             let encoded = AIProtocolUtils.JSONCodec.encode(.string(raw))
             guard encoded.count >= 2 else { return "" }
             return String(encoded.dropFirst().dropLast())
         }
 
+        // parity: ai/src/protocols/openai-freeform.ts#streamStart [status=implemented hash=cfbcb13fd985]
         public static func streamStart(_ custom: Custom?, raw: String = "") -> String {
             "{\(AIProtocolUtils.JSONCodec.encode(.string(fieldName(custom)))):\"\(streamDelta(raw))"
         }
 
+        // parity: ai/src/protocols/openai-freeform.ts#metadata [status=implemented hash=40dea1c5523e]
         public static func metadata(itemId: String, custom: Bool) -> [String: JSONValue] {
             custom ? ["itemId": .string(itemId), "custom": .bool(true)] : ["itemId": .string(itemId)]
         }
 
+        // parity: ai/src/protocols/openai-freeform.ts#keepsItemID [status=implemented hash=091ac9278404]
         public static func keepsItemID(
             providerMetadata: AIProtocolUtils.ProviderMetadata?,
             key: String,
@@ -1062,6 +1066,7 @@ public enum AIProtocols {
             return wasCustom == custom
         }
 
+        // parity: ai/src/protocols/openai-freeform.ts#close [status=implemented hash=216386f0ae53]
         public static func close<K: Hashable & Sendable>(
             tools: AIProtocolUtils.ToolStream.State<K>,
             keys: [K],
@@ -2439,7 +2444,7 @@ public enum AIProtocols {
             return .file(OpenResponsesInputFile(filename: part.filename ?? defaultName, detail: detail, file_data: location))
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerMessages [status=implemented hash=009e66afe579]
+        // parity: ai/src/protocols/open-responses.ts#lowerMessages [status=implemented hash=33c2f9334b2e]
         public static func lowerMessages(
             _ request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter = .base
@@ -3685,7 +3690,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-chat.ts#OpenAIChatToolCallDelta [status=implemented hash=bccb983975d2]
         public typealias OpenAIChatToolCallDelta = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatDelta [status=implemented hash=b84788d44728]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatDelta [status=implemented hash=93ce348fc67e]
         public typealias OpenAIChatDelta = [String: JSONValue]
 
         // parity: ai/src/protocols/openai-chat.ts#OpenAIChatChoice [status=implemented hash=98ea4a62e2d8]
@@ -4886,7 +4891,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/gemini.ts#transport [status=adapted hash=5b365d47af8f]
+        // parity: ai/src/protocols/gemini.ts#transport [status=adapted hash=045e6aedc22c]
         public static let transport: FramingKind = .sse
 
         // parity: ai/src/protocols/gemini.ts#protocol [status=implemented hash=2ccad21c91af]
@@ -4899,7 +4904,7 @@ public enum AIProtocols {
             makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/protocols/gemini.ts#route [status=implemented hash=6ae466a802e1]
+        // parity: ai/src/protocols/gemini.ts#route [status=implemented hash=10a1b59b7a41]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "google",
@@ -5394,7 +5399,7 @@ public enum AIProtocols {
             makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/protocols/bedrock-converse.ts#route [status=implemented hash=46ac3a52f1d5]
+        // parity: ai/src/protocols/bedrock-converse.ts#route [status=implemented hash=f94a87960297]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "bedrock",
@@ -5981,7 +5986,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/alibaba-messages.ts#protocol [status=implemented hash=13a9956b2d04]
+        // parity: ai/src/protocols/alibaba-messages.ts#protocol [status=implemented hash=5ae63050ec40]
         public static let `protocol` = ChatProtocolSpec(
             id: "alibaba-messages",
             framing: AnthropicMessages.framing,

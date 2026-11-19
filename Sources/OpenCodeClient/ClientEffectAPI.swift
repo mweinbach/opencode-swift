@@ -457,6 +457,12 @@ public enum EffectClient {
         // parity: client/src/effect/service.ts#Info [status=implemented hash=a64c8fb3a1eb]
         public typealias Info = ServiceInfo
 
+        /// Create HTTP authentication headers for a service endpoint (re-exported from `service-probe.ts`).
+        // parity: client/src/effect/service.ts#headers [status=implemented hash=74ec8bd923db]
+        public static func headers(for endpoint: ServiceEndpoint) -> [String: String]? {
+            serviceProbeHeaders(for: endpoint)
+        }
+
         /// Discover a healthy, compatible local service without starting one.
         // parity: client/src/effect/service.ts#discover [status=implemented hash=f895b29d90fa]
         public static func discover(

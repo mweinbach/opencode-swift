@@ -897,7 +897,7 @@ extension ProcessDaemon {
                     #endif
                 }
 
-                // parity: process-daemon/src/transport/unix.rs#accept [status=implemented hash=c152b0ff1b00]
+                // parity: process-daemon/src/transport/unix.rs#accept [status=implemented hash=3a1cba1790af]
                 public func accept() throws -> Connection? {
                     if let memoryListener {
                         return memoryListener.accept().map(Connection.init(memory:))
@@ -940,7 +940,7 @@ extension ProcessDaemon {
                     #endif
                 }
 
-                // parity: process-daemon/src/transport/unix.rs#wait [status=implemented hash=6f6b66a5c303]
+                // parity: process-daemon/src/transport/unix.rs#wait [status=implemented hash=f419c0490089]
                 public func wait(wake: Wake, listen: Bool, timeoutMs: UInt64) throws -> Readiness {
                     if let memoryListener {
                         let r = memoryListener.wait(wake: wake.memoryWake, listen: listen, timeoutMs: timeoutMs)
@@ -1356,7 +1356,7 @@ extension ProcessDaemon {
             joinPath(directory, ProcessDaemon.REGISTRATION_FILE)
         }
 
-        // parity: process-daemon/src/daemon.rs#read_registration [status=implemented hash=0542dfeb6780]
+        // parity: process-daemon/src/daemon.rs#read_registration [status=implemented hash=82cea8a4bcdf]
         public static func read_registration(_ directory: String) throws -> Registration {
             #if os(Windows)
             return try WindowsRuntime.read_registration(directory)
@@ -1728,7 +1728,7 @@ extension ProcessDaemon {
                 #endif
             }
 
-            // parity: process-daemon/src/daemon/unix.rs#remove_stale_endpoint [status=implemented hash=48c1448a4034]
+            // parity: process-daemon/src/daemon/unix.rs#remove_stale_endpoint [status=implemented hash=3811df799975]
             public static func remove_stale_endpoint(
                 canonicalDirectory: String,
                 registration: Registration?
@@ -1740,6 +1740,11 @@ extension ProcessDaemon {
                 guard fm.fileExists(atPath: socket) else { return }
                 let attrs = try fm.attributesOfItem(atPath: socket)
                 if (attrs[.type] as? FileAttributeType) == .typeSocket {
+                    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                    if let ownerID = attrs[.ownerAccountID] as? NSNumber, ownerID.uint32Value != geteuid() {
+                        return
+                    }
+                    #endif
                     try fm.removeItem(atPath: socket)
                 }
                 #endif
@@ -1842,7 +1847,7 @@ extension ProcessDaemon {
                     self.cleanup = cleanup
                 }
 
-                // parity: process-daemon/src/daemon/windows.rs#bind [status=adapted hash=2cca8fcd5858]
+                // parity: process-daemon/src/daemon/windows.rs#bind [status=adapted hash=fc116fa71b29]
                 public static func bind(_ directory: String) throws -> (Runtime, Transport.Windows.Listener) {
                     guard isAbsolutePath(directory) else {
                         throw DaemonError("PTY runtime directory must be an absolute path")
@@ -1876,7 +1881,7 @@ extension ProcessDaemon {
                 }
             }
 
-            // parity: process-daemon/src/daemon/windows.rs#process_exists [status=adapted hash=23ea44d475c7]
+            // parity: process-daemon/src/daemon/windows.rs#process_exists [status=adapted hash=9afe7f8a2791]
             public static func process_exists(_ pid: UInt32) -> Bool {
                 UnixRuntime.process_exists(pid)
             }

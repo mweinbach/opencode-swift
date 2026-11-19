@@ -17,7 +17,7 @@ public struct FlockGlobal: Equatable, Hashable, Sendable, Codable {
 
 /// Cross-platform atomic lock-directory mutex with stale-lock breaker & heartbeat
 /// matching `packages/util/src/flock.ts`.
-// parity: util/src/flock.ts#Flock [status=implemented hash=86a4b324e350]
+// parity: util/src/flock.ts#Flock [status=implemented hash=2a891a8a2fc7]
 public enum Flock {
     // parity: util/src/flock.ts#Flock.WaitEvent [status=implemented hash=74ccb8545e32]
     public struct WaitEvent: Equatable, Hashable, Sendable {
@@ -306,7 +306,7 @@ public enum Flock {
 }
 
 /// Service-injected flock abstraction matching `packages/util/src/effect-flock.ts`.
-// parity: util/src/effect-flock.ts#EffectFlock [status=implemented hash=e89d4c8a9682]
+// parity: util/src/effect-flock.ts#EffectFlock [status=implemented hash=10da3a02061c]
 public enum EffectFlock {
     // parity: util/src/effect-flock.ts#EffectFlock.LockTimeoutError [status=implemented hash=99a198d0e976]
     public struct LockTimeoutError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {

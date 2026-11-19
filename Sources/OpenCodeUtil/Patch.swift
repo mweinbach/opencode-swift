@@ -12,6 +12,7 @@ public enum Patch {
             self.boundary = boundary
         }
 
+        // parity: util/src/patch.ts#BoundaryError.message [status=implemented hash=742e8bda16aa]
         public var message: String {
             "The \(boundary.rawValue) line of the patch must be '\(boundary == .first ? "*** Begin Patch" : "*** End Patch")'"
         }
@@ -31,6 +32,7 @@ public enum Patch {
             self.reason = reason
         }
 
+        // parity: util/src/patch.ts#InvalidHunkError.message [status=implemented hash=2d444a1b2abb]
         public var message: String {
             if let reason, !reason.isEmpty {
                 return "Invalid hunk at line \(lineNumber): \(reason)"

@@ -1643,7 +1643,7 @@ public func makeMcpGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGr
 // MARK: - 18. media.ts
 
 /// Validated 64-character lowercase hexadecimal SHA-256 media blob hash (`^[0-9a-f]{64}$`).
-// parity: protocol/src/groups/media.ts#MediaHash [status=implemented hash=dac6b0bf973e]
+// parity: protocol/src/groups/media.ts#MediaHash [status=implemented hash=32ff324b56ac]
 public struct MediaHash: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
     public static let pattern = "^[0-9a-f]{64}$"
 

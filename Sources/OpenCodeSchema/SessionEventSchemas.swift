@@ -1170,6 +1170,7 @@ public enum SessionEventSchema {
 
     // parity: schema/src/session-event.ts#Tool [status=implemented hash=16f59f2f1499]
     public enum Tool {
+        // parity: schema/src/session-event.ts#Tool.Input [status=implemented hash=79671cd89e5e]
         public enum Input {
             public struct StartedData: Equatable, Hashable, Sendable, Codable {
                 public let sessionID: SessionID
@@ -1228,6 +1229,7 @@ public enum SessionEventSchema {
                 }
             }
 
+            // parity: schema/src/session-event.ts#Tool.Input.Started [status=implemented hash=aaccce5ac51e]
             public static let Started = EventSchema.durable(
                 type: "session.tool.input.started",
                 aggregate: "sessionID",
@@ -1235,11 +1237,13 @@ public enum SessionEventSchema {
                 data: StartedData.self
             )
 
+            // parity: schema/src/session-event.ts#Tool.Input.Delta [status=implemented hash=316510f04fb3]
             public static let Delta = EventSchema.ephemeral(
                 type: "session.tool.input.delta",
                 data: DeltaData.self
             )
 
+            // parity: schema/src/session-event.ts#Tool.Input.Ended [status=implemented hash=be79c0e3d39b]
             public static let Ended = EventSchema.durable(
                 type: "session.tool.input.ended",
                 aggregate: "sessionID",

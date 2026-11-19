@@ -72,7 +72,7 @@ public enum AIUtils {
     }
 
     /// Sniff a media type from leading magic bytes.
-    // parity: ai/src/utils/media-type.ts#detectMediaType [status=implemented hash=5bbcf9b1fbfa]
+    // parity: ai/src/utils/media-type.ts#detectMediaType [status=implemented hash=eabb9a1163bf]
     public static func detectMediaType(_ bytes: [UInt8]) -> String? {
         if startsWith(bytes, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return "image/png" }
         if startsWith(bytes, [0xFF, 0xD8, 0xFF]) { return "image/jpeg" }
@@ -1677,6 +1677,9 @@ public enum AITool {
         tools.map(\.definition)
     }
 
+    // parity: ai/src/tool.ts#ToolFailure [status=implemented hash=1b68ef9033cf]
+    public typealias ToolFailure = AISchema.ToolFailure
+
     // MARK: - src/tool-runtime.ts
 
     // parity: ai/src/tool-runtime.ts#ToolSettlement [status=implemented hash=777ddcaf9a0d]
@@ -2540,6 +2543,11 @@ public enum AILLM {
         let normalized = try request(input)
         return try await AIRoute.compactRequest(normalized, options: options, client: client)
     }
+
+    // parity: ai/src/llm.ts#canCompact [status=implemented hash=9f9cb58e7cb3]
+    public static func canCompact(_ model: AISchema.LanguageModel, mechanism: String? = nil) -> Bool {
+        AIRoute.canCompact(model, mechanism: mechanism)
+    }
 }
 
 /// Portable media asset representation, lazy byte/base64 caching, data-URL parsing,
@@ -2774,9 +2782,9 @@ public enum AIMedia {
         }
     }
 
-    // parity: ai/src/media.ts#Asset [status=implemented hash=951bb72e15f3]
+    // parity: ai/src/media.ts#Asset [status=implemented hash=56da82d57ad7]
     public final class Asset: Equatable, Sendable, Codable {
-        // parity: ai/src/media.ts#Asset.Input [status=implemented hash=88b7a8fd1370]
+        // parity: ai/src/media.ts#Asset.Input [status=implemented hash=fae93843f5dd]
         public struct Input: Sendable {
             public let source: Source
             public let info: Info?
@@ -2840,6 +2848,7 @@ public enum AIMedia {
             lhs.source == rhs.source && lhs.info == rhs.info && lhs.providerMetadata == rhs.providerMetadata
         }
 
+        // parity: ai/src/media.ts#Asset.inline [status=implemented hash=b32262c3a138]
         public func inline() -> Inline? {
             switch source {
             case .bytes(let data, _):
@@ -2859,6 +2868,7 @@ public enum AIMedia {
             }
         }
 
+        // parity: ai/src/media.ts#Asset.bytes [status=implemented hash=3177656db23d]
         public func bytes(executor: AIRequestExecutor.RequestExecutorService? = nil) async throws -> [UInt8] {
             switch source {
             case .bytes(let data, _):
@@ -2890,6 +2900,7 @@ public enum AIMedia {
             }
         }
 
+        // parity: ai/src/media.ts#Asset.stream [status=implemented hash=73d01b1f6cdc]
         public func stream(executor: AIRequestExecutor.RequestExecutorService? = nil) -> AsyncThrowingStream<[UInt8], Error> {
             if case .url(let rawUrl, _, _) = source, cache.withLock({ $0.bytes }) == nil {
                 return AsyncThrowingStream { continuation in
@@ -2927,6 +2938,7 @@ public enum AIMedia {
             }
         }
 
+        // parity: ai/src/media.ts#Asset.base64 [status=implemented hash=a6b22df54ce5]
         public func base64(executor: AIRequestExecutor.RequestExecutorService? = nil) async throws -> String {
             if case .base64(let b64, _) = source { return b64 }
             if let cached = cache.withLock({ $0.base64 }) { return cached }
@@ -2936,6 +2948,7 @@ public enum AIMedia {
             return encoded
         }
 
+        // parity: ai/src/media.ts#Asset.dataUrl [status=implemented hash=1a77a00ab2ee]
         public func dataUrl(executor: AIRequestExecutor.RequestExecutorService? = nil) async throws -> String {
             let b64 = try await base64(executor: executor)
             return "data:\(mediaType);base64,\(b64)"
@@ -2945,6 +2958,12 @@ public enum AIMedia {
             AssetEncoded(source: source, info: info, providerMetadata: providerMetadata)
         }
 
+        // parity: ai/src/media.ts#Asset.toJSON [status=implemented hash=bb79a80949e2]
+        public func toJSON() -> AssetEncoded {
+            toEncoded()
+        }
+
+        // parity: ai/src/media.ts#Asset.materialize [status=implemented hash=34a1626d5fc6]
         public func materialize(executor: AIRequestExecutor.RequestExecutorService? = nil) async throws -> Asset {
             switch source {
             case .bytes, .base64:
@@ -3217,7 +3236,7 @@ public enum AIMedia {
 
     // MARK: - src/media-model.ts
 
-    // parity: ai/src/media-model.ts#MediaModel [status=implemented hash=d7674a429170]
+    // parity: ai/src/media-model.ts#MediaModel [status=implemented hash=ed6dea17617d]
     public struct MediaModel<Route: Sendable>: Sendable {
         // parity: ai/src/media-model.ts#MediaModel.Options [status=implemented hash=329c4ad82ab8]
         public typealias Options = AISchema.ProviderOptions
@@ -3689,23 +3708,28 @@ public enum AIGeneration {
             self.progress = snapshot.progress
         }
 
+        // parity: ai/src/generation.ts#Generation.snapshot [status=implemented hash=a8aaee5acd2e]
         public var snapshot: Snapshot {
             Snapshot(id: id, status: status, reason: reason, progress: progress)
         }
 
+        // parity: ai/src/generation.ts#Generation.terminal [status=implemented hash=25fda1dc02ef]
         public var terminal: Bool {
             AIGeneration.isTerminal(status)
         }
 
+        // parity: ai/src/generation.ts#Generation.refresh [status=implemented hash=ccbbefd26431]
         public func refresh() async throws -> Generation<Response> {
             let next = try await route.status()
             return Generation(route: route, token: token, snapshot: next)
         }
 
+        // parity: ai/src/generation.ts#Generation.result [status=implemented hash=cfc2e23d2f5c]
         public func result() async throws -> Response {
             try await route.result()
         }
 
+        // parity: ai/src/generation.ts#Generation.cancel [status=implemented hash=b0b065309532]
         public func cancel() async throws {
             if let cancelOp = route.cancel {
                 try await cancelOp()
@@ -3734,6 +3758,7 @@ public enum AIGeneration {
             return try await current.result()
         }
 
+        // parity: ai/src/generation.ts#Generation.events [status=implemented hash=0db39cd44631]
         public func events(_ options: AwaitOptions? = nil) -> AsyncThrowingStream<Event, Error> {
             let gen = self
             return AsyncThrowingStream { continuation in
@@ -4268,7 +4293,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionModelCompatibility [status=implemented hash=efcc87514a76]
+    // parity: ai/src/decision.ts#DecisionModelCompatibility [status=implemented hash=358931442db6]
     public struct DecisionModelCompatibility: Equatable, Hashable, Sendable, Codable {
         public enum MediaInput: String, Equatable, Hashable, Sendable, Codable {
             case assets
@@ -4356,6 +4381,7 @@ public enum AIDecision {
             self.providerOptions = input.providerOptions
         }
 
+        // parity: ai/src/decision.ts#DecisionModel.make [status=implemented hash=994daeab9d02]
         public static func make(_ input: MakeInput) -> DecisionModel {
             DecisionModel(Input(
                 id: AISchema.ModelID.make(input.id),
@@ -4754,6 +4780,7 @@ public enum AIEmbedding {
             self.providerOptions = input.providerOptions
         }
 
+        // parity: ai/src/embedding.ts#EmbeddingModel.make [status=implemented hash=b5002586b6f1]
         public static func make(_ input: MakeInput) -> EmbeddingModel {
             EmbeddingModel(Input(
                 id: AISchema.ModelID.make(input.id),
@@ -5037,6 +5064,7 @@ public enum AIImage {
             )
         }
 
+        // parity: ai/src/image.ts#ImageModel.fromRoute [status=implemented hash=e4e5966bb476]
         public static func fromRoute<Frame: Sendable, State: Sendable>(
             _ routeInput: AIMedia.MediaModel<Void>.AnyRouteInput<ImageRequest, ImageEvent, ImageResponse, Frame, State, String>,
             input: AIRoute.MediaRoute.ModelInput
@@ -5147,7 +5175,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageJob [status=implemented hash=234d5c847b45]
+    // parity: ai/src/image.ts#ImageJob [status=implemented hash=76cab5cd3d59]
     public struct ImageJob: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public init(id: String) { self.id = id }
@@ -5599,6 +5627,7 @@ public enum AISpeech {
             )
         }
 
+        // parity: ai/src/speech.ts#SpeechModel.fromRoute [status=implemented hash=761484c5327b]
         public static func fromRoute<Frame: Sendable, State: Sendable, Token: Codable & Sendable>(
             _ routeInput: AIMedia.MediaModel<Void>.AnyRouteInput<SpeechRequest, SpeechEvent, SpeechResponse, Frame, State, Token>,
             input: AIRoute.MediaRoute.ModelInput
@@ -5954,6 +5983,7 @@ public enum AITranscription {
             )
         }
 
+        // parity: ai/src/transcription.ts#TranscriptionModel.fromRoute [status=implemented hash=4db1be295b8b]
         public static func fromRoute<Frame: Sendable, State: Sendable, Token: Codable & Sendable>(
             _ routeInput: AIMedia.MediaModel<Void>.AnyRouteInput<TranscriptionRequest, TranscriptionEvent, TranscriptionResponse, Frame, State, Token>,
             input: AIRoute.MediaRoute.ModelInput
@@ -6358,6 +6388,7 @@ public enum AIVideo {
             )
         }
 
+        // parity: ai/src/video.ts#VideoModel.fromRoute [status=implemented hash=fd41fd90fc75]
         public static func fromRoute(
             _ routeInput: AIMedia.MediaModel<Void>.QueuedRouteInput<VideoRequest, VideoResponse, String>,
             input: AIRoute.MediaRoute.ModelInput
@@ -6480,7 +6511,7 @@ public enum AIVideo {
         }
     }
 
-    // parity: ai/src/video.ts#VideoJob [status=implemented hash=818531ad935c]
+    // parity: ai/src/video.ts#VideoJob [status=implemented hash=9ed09c1c11fb]
     public struct VideoJob: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public init(id: String) { self.id = id }
@@ -6503,6 +6534,7 @@ public enum AIVideo {
         public let videos: [AIMedia.Asset]
         public let usage: AISchema.MediaUsage?
         public let providerMetadata: AISchema.ProviderMetadata?
+        // parity: ai/src/video.ts#VideoResponse.video [status=implemented hash=72935c16fbc0]
         public var video: AIMedia.Asset? { videos.first }
         public init(videos: [AIMedia.Asset], usage: AISchema.MediaUsage? = nil, providerMetadata: AISchema.ProviderMetadata? = nil) {
             self.videos = videos

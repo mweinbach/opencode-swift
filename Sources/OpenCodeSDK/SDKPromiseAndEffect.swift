@@ -27,7 +27,7 @@ public enum PromiseSdk {
     }
 
     /// Session-selected instance selector and async factory (`packages/sdk/src/promise.ts#InstanceOptions`).
-    // parity: sdk/src/promise.ts#InstanceOptions [status=implemented hash=ed11850751a7]
+    // parity: sdk/src/promise.ts#InstanceOptions [status=implemented hash=dcff7de49f92]
     public struct InstanceOptions: Sendable {
         /// Select a sharing key within the Session's current Location. Must not initialize plugins.
         public let key: @Sendable (SessionSchema.Info) throws -> String
@@ -641,6 +641,7 @@ public enum OpenCodeEffect {
 
     /// Service tag identifying `OpenCodeEffect.Interface` in a `LayerNode.Output` service graph
     /// (`@opencode/sdk/OpenCode`).
+    // parity: sdk/src/effect/opencode.ts#Service [status=adapted hash=482d168e9bd0]
     public enum Service {
         public static let serviceKey = "@opencode/sdk/OpenCode"
     }
@@ -685,6 +686,7 @@ public enum OpenCodeEffect {
 
     /// Builds a `LayerNode.ExecutableLayer` providing `OpenCodeEffect.Interface` under `Service.serviceKey`,
     /// forwarding upstream `deps` into `options.services` for `SdkInstances.provide`.
+    // parity: sdk/src/effect/opencode.ts#layer [status=adapted hash=bb54dcf55ee4]
     public static func layer(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbedOptions = EmbedOptions()

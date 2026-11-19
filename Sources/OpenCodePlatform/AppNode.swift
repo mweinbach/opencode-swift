@@ -46,7 +46,7 @@ public enum LayerNodePlatform {
         []
     )
 
-    // parity: util/src/effect/app-node-platform.ts#fetchLayer [status=implemented hash=4e703ea54607]
+    // parity: util/src/effect/app-node-platform.ts#fetchLayer [status=implemented hash=4ed814261f43]
     public static func fetchLayer(_ fetch: Fetch? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             if let fetch {

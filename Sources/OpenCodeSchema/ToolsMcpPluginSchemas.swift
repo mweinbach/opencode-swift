@@ -1408,7 +1408,7 @@ public enum InstructionSchema {
     }
 
     /// Lowercase SHA-256 hex digest matching `^[a-f0-9]{64}$`.
-    // parity: schema/src/instruction.ts#Hash [status=implemented hash=3fbc5a55186f]
+    // parity: schema/src/instruction.ts#Hash [status=implemented hash=03877f60fa2e]
     public struct Hash: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 

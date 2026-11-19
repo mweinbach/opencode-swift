@@ -1313,5 +1313,6 @@ public enum EventManifestSchema {
     public static let Latest: [String: EventSchema.Definition] = try! EventSchema.latest(Definitions)
 
     /// Re-export of the durable event registry (`DurableEventManifestSchema.Durable`).
+    // parity: schema/src/event-manifest.ts#Durable [status=implemented hash=b9ce60f52c19]
     public static let Durable: [String: EventSchema.Definition] = DurableEventManifestSchema.Durable
 }

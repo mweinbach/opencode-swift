@@ -145,7 +145,7 @@ extension ProcessDaemon {
         }
     }
 
-    // parity: process-daemon/src/service.rs#CreatePipe [status=implemented hash=8bd7a634cc5a]
+    // parity: process-daemon/src/service.rs#CreatePipe [status=implemented hash=4d9a8e907790]
     public struct CreatePipe: Equatable, Sendable {
         public var program: String
         public var args: [String]
@@ -358,7 +358,7 @@ extension ProcessDaemon {
         }
     }
 
-    // parity: process-daemon/src/service.rs#ProcessWait [status=implemented hash=1d91414a25d6]
+    // parity: process-daemon/src/service.rs#ProcessWait [status=implemented hash=451b7dd3ae77]
     public final class ProcessWait: @unchecked Sendable {
         public enum PollResult: Equatable, Sendable {
             case exited(ProcessExit)
@@ -508,7 +508,7 @@ extension ProcessDaemon {
             }
         }
 
-        // parity: process-daemon/src/service/pipe/unix.rs#spawn_pipe [status=implemented hash=1f078f620050]
+        // parity: process-daemon/src/service/pipe/unix.rs#spawn_pipe [status=implemented hash=58594bc2fcba]
         public static func spawn_pipe(
             id: TerminalId,
             order: UInt64,
@@ -565,7 +565,7 @@ extension ProcessDaemon {
             }
         }
 
-        // parity: process-daemon/src/service/pipe/windows.rs#spawn_pipe [status=adapted hash=14801e6f0399]
+        // parity: process-daemon/src/service/pipe/windows.rs#spawn_pipe [status=adapted hash=59e94da59ab7]
         public static func spawn_pipe(
             id: TerminalId,
             order: UInt64,
@@ -577,7 +577,7 @@ extension ProcessDaemon {
     }
 
     public enum WindowsPty {
-        // parity: process-daemon/src/service/windows.rs#wait_and_close [status=adapted hash=8a7dbea7ff4c]
+        // parity: process-daemon/src/service/windows.rs#wait_and_close [status=adapted hash=76824f08f0d2]
         public static func wait_and_close(
             waitForExit: @Sendable () -> Result<UInt32?, DaemonError>,
             onExit: @Sendable (Result<UInt32?, DaemonError>) -> Void,
@@ -1987,7 +1987,7 @@ extension ProcessDaemon {
         }
 
         /// Starts a daemon server for `directory` (in-memory or Unix socket) and claims ownership.
-        // parity: process-daemon/src/client.rs#start [status=adapted hash=1ab4969adba8]
+        // parity: process-daemon/src/client.rs#start [status=adapted hash=3281286e811e]
         public static func start(
             _ directory: String,
             useInMemoryEndpoint: Bool = false,
@@ -2017,6 +2017,13 @@ extension ProcessDaemon {
                 throw DaemonError("unexpected opencode-pty response: \(response)")
             }
             return TerminalClient(registration: reg, ownerStream: stream, ownedServer: server)
+        }
+
+        /// Non-Unix fallback matching `#[cfg(not(unix))] impl TerminalClient { pub fn start(...) }`.
+        // parity: process-daemon/src/client.rs#TerminalClient.start [status=implemented hash=c380f4851956]
+        public static func startNonUnix(_ directory: String) throws -> TerminalClient {
+            _ = directory
+            throw DaemonError("opencode-pty client transport is not implemented on this platform")
         }
 
         // parity: process-daemon/src/client.rs#discover [status=implemented hash=0825a7b0e8d4]
@@ -2399,6 +2406,52 @@ extension ProcessDaemon {
             default:
                 throw DaemonError("unknown command \"\(command)\"; use `opencode-pty help`")
             }
+        }
+    }
+
+    // MARK: - Musl Syscall Compatibility (`src/musl.rs`)
+
+    public enum MuslCompat {
+        #if canImport(Darwin)
+        public static let atFdcwd: Int32 = Darwin.AT_FDCWD
+        #elseif canImport(Glibc)
+        public static let atFdcwd: Int32 = Glibc.AT_FDCWD
+        #elseif canImport(Musl)
+        public static let atFdcwd: Int32 = Musl.AT_FDCWD
+        #else
+        public static let atFdcwd: Int32 = -100
+        #endif
+
+        /// Cross-platform `statx(2)` compatibility shim matching `process-daemon/src/musl.rs`.
+        /// On POSIX hosts this delegates to `fstatat(2)` (returning `0` on success or `-1` with `errno`);
+        /// on non-POSIX hosts it returns `-1`.
+        // parity: process-daemon/src/musl.rs#statx [status=adapted hash=7193afc52c7f]
+        public static func statx(
+            dirfd: Int32 = atFdcwd,
+            path: String,
+            flags: Int32 = 0,
+            mask: UInt32 = 0x7ff
+        ) -> Int32 {
+            _ = mask
+            #if canImport(Darwin)
+            var st = Darwin.stat()
+            return path.withCString { cPath in
+                Darwin.fstatat(dirfd, cPath, &st, flags)
+            }
+            #elseif canImport(Glibc)
+            var st = Glibc.stat()
+            return path.withCString { cPath in
+                Glibc.fstatat(dirfd, cPath, &st, flags)
+            }
+            #elseif canImport(Musl)
+            var st = Musl.stat()
+            return path.withCString { cPath in
+                Musl.fstatat(dirfd, cPath, &st, flags)
+            }
+            #else
+            _ = (dirfd, path, flags)
+            return -1
+            #endif
         }
     }
 }

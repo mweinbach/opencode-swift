@@ -1579,7 +1579,7 @@ public enum AIRequestExecutor {
     }
 
     /// Build a `RequestExecutorService` over any portable `OpenCodePlatform.HTTPTransport`.
-    // parity: ai/src/route/executor.ts#layer [status=adapted hash=703cc6fa2e54]
+    // parity: ai/src/route/executor.ts#layer [status=adapted hash=637489defc0f]
     public static func layer(transport: any HTTPTransport) -> RequestExecutorService {
         RequestExecutorService { request, nextMiddleware in
             let composed = composeMiddleware(CurrentMiddleware, nextMiddleware)
@@ -1960,7 +1960,7 @@ public enum AIRequestExecutor {
     }
 
     /// Wraps an executor so `fn` runs around every request before status classification.
-    // parity: ai/src/route/executor.ts#middleware [status=implemented hash=7f4de1f34676]
+    // parity: ai/src/route/executor.ts#middleware [status=implemented hash=bb39ce2ddd3f]
     public static func middleware(
         _ fn: @escaping HttpMiddleware,
         executor: RequestExecutorService
@@ -2505,7 +2505,7 @@ public enum AITransport {
         try await connector.open(input)
     }
 
-    // parity: ai/src/route/transport/websocket.ts#fromWebSocket [status=adapted hash=963ae8f73d35]
+    // parity: ai/src/route/transport/websocket.ts#fromWebSocket [status=adapted hash=1a1c16091eca]
     public static func fromWebSocket(
         _ connection: WebSocketConnection,
         input: WebSocketRequest
@@ -2770,7 +2770,7 @@ public enum AIRoute {
         }
     }
 
-    // parity: ai/src/route/protocol.ts#Protocol [status=implemented hash=9b2202738ce9]
+    // parity: ai/src/route/protocol.ts#Protocol [status=implemented hash=94e74aeb0da5]
     public struct WireProtocol<Body: Sendable, Frame: Sendable, Event: Sendable, State: Sendable>: Sendable {
         public let id: AISchema.ProtocolID
         public let body: ProtocolBody<Body>
@@ -3965,7 +3965,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#PollContext [status=implemented hash=c5f8ad76a99d]
+        // parity: ai/src/route/media-protocol.ts#PollContext [status=implemented hash=86fdd132554c]
         public struct PollContext<Token: Sendable>: Sendable {
             public let token: Token
             public let credentials: @Sendable (String) async throws -> DownloadCredentials
@@ -4372,7 +4372,7 @@ public enum AIRoute {
             var fetch: (any HTTPTransport)? { get }
         }
 
-        // parity: ai/src/route/media.ts#ModelInput [status=implemented hash=4f3a212be102]
+        // parity: ai/src/route/media.ts#ModelInput [status=implemented hash=c4ea6ac5e550]
         public struct ModelInput: Sendable {
             public let id: String
             public let auth: AIAuth.Definition
@@ -4436,7 +4436,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#QueuedRoute [status=implemented hash=ffe128e0da59]
+        // parity: ai/src/route/media.ts#QueuedRoute [status=implemented hash=0d3cfe6754f2]
         public struct QueuedRoute<Request: MediaRequest, Response: Sendable>: Sendable {
             public let id: String
             public let provider: AISchema.ProviderID
@@ -4516,7 +4516,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#Composition [status=implemented hash=1d6bc942a6ac]
+        // parity: ai/src/route/media.ts#Composition [status=implemented hash=d7854acd323e]
         public struct Composition<Request: Sendable>: Sendable {
             public let endpoint: AIEndpoint.Definition<MediaProtocol.Body, Request>
             public let auth: AIAuth.Definition
@@ -4712,7 +4712,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#queued [status=implemented hash=f80e334c36c7]
+        // parity: ai/src/route/media.ts#queued [status=implemented hash=c87f17c0c9e8]
         public static func queued<Request: MediaRequest, Response: Sendable, Token: Codable & Sendable>(
             _ input: QueuedInput<Request, Response, Token>
         ) -> QueuedRoute<Request, Response> {
@@ -4901,7 +4901,7 @@ public enum AIRoute {
             )
         }
 
-        // parity: ai/src/route/media.ts#stream [status=implemented hash=9645187335bb]
+        // parity: ai/src/route/media.ts#stream [status=implemented hash=427f618d74bd]
         public static func stream<Request: MediaRequest, Event: Sendable, Response: Sendable, Frame: Sendable, State: Sendable>(
             _ input: StreamInput<Request, Event, Response, Frame, State>
         ) -> StreamRoute<Request, Event, Response> {

@@ -391,6 +391,7 @@ public enum AppProcess {
             self.causeMessage = causeMessage
         }
 
+        // parity: util/src/process.ts#AppProcessError.message [status=implemented hash=e05a55cbbc95]
         public var message: String {
             let trimmedStderr = stderr?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let detail = !trimmedStderr.isEmpty ? trimmedStderr : (causeMessage ?? "")

@@ -390,6 +390,14 @@ public func headers(for endpoint: ServiceEndpoint) -> [String: String]? {
     ]
 }
 
+internal func serviceProbeFallback(environment: any EnvironmentProviding) -> String {
+    fallback(environment: environment)
+}
+
+internal func serviceProbeHeaders(for endpoint: ServiceEndpoint) -> [String: String]? {
+    headers(for: endpoint)
+}
+
 /// Ask a registered owner for its health and classify the answer via `HTTPTransport`.
 // parity: client/src/service-probe.ts#probeResult [status=implemented hash=55161d51e500]
 public func probeResult(
@@ -1054,7 +1062,7 @@ public enum RpcRuntime {
     }
 
     /// Decodes a published `rpc.*` server event into a typed `RpcDecodedEvent`.
-    // parity: client/src/rpc-runtime.ts#event [status=implemented hash=516fb4461193]
+    // parity: client/src/rpc-runtime.ts#event [status=implemented hash=42f9ea1fbe5f]
     public static func event(
         definition: RpcSchema.Definition,
         name: String,

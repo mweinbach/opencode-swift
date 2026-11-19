@@ -1287,6 +1287,24 @@ public enum AIProtocolUtils {
             public init(_ name: String) { self.name = name }
         }
 
+        // parity: ai/src/protocols/shared.ts#Json [status=implemented hash=dc95134c3b7b]
+        public typealias Json = AIUtils.Json
+
+        // parity: ai/src/protocols/shared.ts#decodeJson [status=implemented hash=dc95134c3b7b]
+        public static func decodeJson(_ text: String) throws -> JSONValue {
+            try AIUtils.decodeJson(text)
+        }
+
+        // parity: ai/src/protocols/shared.ts#encodeJson [status=implemented hash=dc95134c3b7b]
+        public static func encodeJson(_ value: JSONValue) throws -> String {
+            try AIUtils.encodeJson(value)
+        }
+
+        // parity: ai/src/protocols/shared.ts#isRecord [status=implemented hash=dc95134c3b7b]
+        public static func isRecord(_ value: JSONValue?) -> Bool {
+            AIUtils.isRecord(value)
+        }
+
         // parity: ai/src/protocols/shared.ts#JsonObject [status=implemented hash=f1fd80b88596]
         public typealias JsonObject = [String: JSONValue]
 
@@ -3438,7 +3456,7 @@ public enum AIProtocolUtils {
     // MARK: - MistralToolID (packages/ai/src/protocols/utils/mistral-tool-id.ts — 3 symbols)
 
     public enum MistralToolID {
-        // parity: ai/src/protocols/utils/mistral-tool-id.ts#valid [status=implemented hash=36bb0323ab0d]
+        // parity: ai/src/protocols/utils/mistral-tool-id.ts#valid [status=implemented hash=e1e33ff32c76]
         public static func valid(_ value: String) -> Bool {
             let bytes = Array(value.utf8)
             guard bytes.count == 9 else { return false }
@@ -3514,6 +3532,12 @@ public enum AIProtocolUtils {
     // MARK: - OpenResponsesOptions (packages/ai/src/protocols/utils/open-responses-options.ts — 17 symbols)
 
     public enum OpenResponsesOptions {
+        // parity: ai/src/protocols/utils/open-responses-options.ts#ReasoningEffort [status=implemented hash=c67b1b57bf74]
+        public typealias ReasoningEffort = AISchema.ReasoningEffort
+
+        // parity: ai/src/protocols/utils/open-responses-options.ts#ReasoningEfforts [status=implemented hash=c67b1b57bf74]
+        public static let ReasoningEfforts: [String] = AISchema.ReasoningEfforts
+
         // parity: ai/src/protocols/utils/open-responses-options.ts#TextVerbosities [status=implemented hash=0eb20fbe2334]
         public static let TextVerbosities: [String] = ["low", "medium", "high"]
 
@@ -3712,18 +3736,80 @@ public enum AIProtocolUtils {
         public static let NUM = 0b000000010
         // parity: ai/src/protocols/utils/partial-json-options.ts#ARR [status=implemented hash=347bfd6f8c6d]
         public static let ARR = 0b000000100
-
+        // parity: ai/src/protocols/utils/partial-json-options.ts#OBJ [status=implemented hash=5837fa52b179]
         public static let OBJ = 0b000001000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#NULL [status=implemented hash=f2128941d24e]
         public static let NULL = 0b000010000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#BOOL [status=implemented hash=d9c71c8452b4]
         public static let BOOL = 0b000100000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#NAN [status=implemented hash=4f5f1f9d3242]
         public static let NAN = 0b001000000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#INFINITY [status=implemented hash=34657046c1c7]
         public static let INFINITY = 0b010000000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#_INFINITY [status=implemented hash=980498db451a]
         public static let _INFINITY = 0b100000000
+        // parity: ai/src/protocols/utils/partial-json-options.ts#INF [status=implemented hash=5e5826bccacb]
         public static let INF = INFINITY | _INFINITY
+        // parity: ai/src/protocols/utils/partial-json-options.ts#SPECIAL [status=implemented hash=54c3850d93cb]
         public static let SPECIAL = NULL | BOOL | INF | NAN
+        // parity: ai/src/protocols/utils/partial-json-options.ts#ATOM [status=implemented hash=d16d52b8a834]
         public static let ATOM = STR | NUM | SPECIAL
+        // parity: ai/src/protocols/utils/partial-json-options.ts#COLLECTION [status=implemented hash=9f2eec2d6299]
         public static let COLLECTION = ARR | OBJ
+        // parity: ai/src/protocols/utils/partial-json-options.ts#ALL [status=implemented hash=0357a381c34d]
         public static let ALL = ATOM | COLLECTION
+
+        public struct AllowFlags: Equatable, Hashable, Sendable {
+            public let STR: Int
+            public let NUM: Int
+            public let ARR: Int
+            public let OBJ: Int
+            public let NULL: Int
+            public let BOOL: Int
+            public let NAN: Int
+            public let INFINITY: Int
+            public let _INFINITY: Int
+            public let INF: Int
+            public let SPECIAL: Int
+            public let ATOM: Int
+            public let COLLECTION: Int
+            public let ALL: Int
+
+            public init(
+                STR: Int = PartialJSONOptions.STR,
+                NUM: Int = PartialJSONOptions.NUM,
+                ARR: Int = PartialJSONOptions.ARR,
+                OBJ: Int = PartialJSONOptions.OBJ,
+                NULL: Int = PartialJSONOptions.NULL,
+                BOOL: Int = PartialJSONOptions.BOOL,
+                NAN: Int = PartialJSONOptions.NAN,
+                INFINITY: Int = PartialJSONOptions.INFINITY,
+                _INFINITY: Int = PartialJSONOptions._INFINITY,
+                INF: Int = PartialJSONOptions.INF,
+                SPECIAL: Int = PartialJSONOptions.SPECIAL,
+                ATOM: Int = PartialJSONOptions.ATOM,
+                COLLECTION: Int = PartialJSONOptions.COLLECTION,
+                ALL: Int = PartialJSONOptions.ALL
+            ) {
+                self.STR = STR
+                self.NUM = NUM
+                self.ARR = ARR
+                self.OBJ = OBJ
+                self.NULL = NULL
+                self.BOOL = BOOL
+                self.NAN = NAN
+                self.INFINITY = INFINITY
+                self._INFINITY = _INFINITY
+                self.INF = INF
+                self.SPECIAL = SPECIAL
+                self.ATOM = ATOM
+                self.COLLECTION = COLLECTION
+                self.ALL = ALL
+            }
+        }
+
+        // parity: ai/src/protocols/utils/partial-json-options.ts#Allow [status=implemented hash=f4e960c339d3]
+        public static let Allow = AllowFlags()
     }
 
     // MARK: - PartialJSONParser (packages/ai/src/protocols/utils/partial-json.ts — 4 symbols)
@@ -4249,7 +4335,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/responses-compaction.ts#make [status=adapted hash=7b4b7a4e672c]
+        // parity: ai/src/protocols/utils/responses-compaction.ts#make [status=adapted hash=06f072baca16]
         public static func make(
             providerName: String,
             buildBody: @escaping @Sendable (LLMRequest) throws(ProtocolError) -> [String: JSONValue]

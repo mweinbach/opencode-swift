@@ -278,6 +278,17 @@ public func makePermissionGroup(
 
 // MARK: - 23. persistent-pty.ts
 
+public enum PersistentPtyConnect {
+    // parity: protocol/src/groups/persistent-pty.ts#PTY_CONNECT_TICKET_QUERY [status=implemented hash=308b56d361aa]
+    public static let PTY_CONNECT_TICKET_QUERY: String = OpenCodeProtocol.PTY_CONNECT_TICKET_QUERY
+
+    // parity: protocol/src/groups/persistent-pty.ts#PTY_CONNECT_TOKEN_HEADER [status=implemented hash=308b56d361aa]
+    public static let PTY_CONNECT_TOKEN_HEADER: String = OpenCodeProtocol.PTY_CONNECT_TOKEN_HEADER
+
+    // parity: protocol/src/groups/persistent-pty.ts#PTY_CONNECT_TOKEN_HEADER_VALUE [status=implemented hash=308b56d361aa]
+    public static let PTY_CONNECT_TOKEN_HEADER_VALUE: String = OpenCodeProtocol.PTY_CONNECT_TOKEN_HEADER_VALUE
+}
+
 // parity: protocol/src/groups/persistent-pty.ts#PERSISTENT_PTY_CONNECT_PATH [status=implemented hash=690d792af4d6]
 public let PERSISTENT_PTY_CONNECT_PATH = "/api/experimental/persistent-pty/:ptyID/connect"
 
@@ -892,7 +903,7 @@ public let RpcGroup = EndpointGroupDescriptor(
 
 // MARK: - 30. server.ts
 
-// parity: protocol/src/groups/server.ts#ServerInfo [status=implemented hash=23926263d3f0]
+// parity: protocol/src/groups/server.ts#ServerInfo [status=implemented hash=68f7d47f4be4]
 public struct ServerInfo: Equatable, Hashable, Sendable, Codable {
     public struct Paths: Equatable, Hashable, Sendable, Codable {
         public let tmp: String

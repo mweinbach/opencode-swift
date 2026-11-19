@@ -1059,7 +1059,7 @@ public enum Handshake {
 
 // MARK: - Frontend Namespace
 
-// parity: protocol/src/simulation.ts#Frontend [status=implemented hash=1780972c23e7]
+// parity: protocol/src/simulation.ts#Frontend [status=implemented hash=6a86ca978b78]
 public enum Frontend {
     // parity: protocol/src/simulation.ts#Frontend.Capabilities [status=implemented hash=da86c1bed891]
     public static let Capabilities: [Handshake.Capability] = [
@@ -2045,7 +2045,7 @@ public enum Frontend {
 
 // MARK: - Backend Namespace
 
-// parity: protocol/src/simulation.ts#Backend [status=implemented hash=145cdbc9a471]
+// parity: protocol/src/simulation.ts#Backend [status=implemented hash=dddf89ebdb29]
 public enum Backend {
     // parity: protocol/src/simulation.ts#Backend.Capabilities [status=implemented hash=da86c1bed891]
     public static let Capabilities: [Handshake.Capability] = [

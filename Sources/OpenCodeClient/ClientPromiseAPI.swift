@@ -3118,7 +3118,7 @@ public typealias SessionMessageGetInput = PromiseInputTypes.SessionMessageGetInp
 // parity: client/src/promise/generated/types.ts#SessionFormListInput [status=implemented hash=e2664af3ece0]
 public typealias SessionFormListInput = PromiseInputTypes.SessionFormListInput
 
-// parity: client/src/promise/generated/types.ts#SessionFormCreateInput [status=implemented hash=adeec1378c64]
+// parity: client/src/promise/generated/types.ts#SessionFormCreateInput [status=implemented hash=091ecdd56109]
 public typealias SessionFormCreateInput = PromiseInputTypes.SessionFormCreateInput
 
 // parity: client/src/promise/generated/types.ts#SessionFormGetInput [status=implemented hash=d5f5cdc30450]
@@ -4722,7 +4722,7 @@ public enum PromiseWire {
     public typealias SessionCreated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#SessionPermissions [status=implemented hash=dbb835113dd0]
     public typealias SessionPermissions = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=dfd2ab57e643]
+    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=8402a3f01239]
     public typealias ConfigEntry = ConfigSchema.Entry
     // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=d3beed292bfa]
     public typealias AutomationAction = AutomationSchema.Action
@@ -6201,7 +6201,7 @@ public struct GeneratedOpenCodeClient: Sendable {
 
 public enum GeneratedOpenCode {
     /// Constructs a raw generated Promise client backed by `OpenCodePlatform.HTTPTransport`.
-    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=bac6c975f6c8]
+    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=90a1061f7003]
     public static func make(_ options: ClientOptions) -> GeneratedOpenCodeClient {
         GeneratedOpenCodeClient(options: options)
     }
@@ -6616,6 +6616,18 @@ public typealias WorktreeApi = WorktreeClientAPI
 
 /// Promise-based local service lifecycle operations mirroring `packages/client/src/promise/service.ts`.
 public enum PromiseService {
+    /// The default registration file (`$XDG_STATE_HOME/opencode/service.json` or `~/.local/state/opencode/service.json`).
+    // parity: client/src/promise/service.ts#fallback [status=implemented hash=17d8a31e4fa3]
+    public static func fallback(environment: any EnvironmentProviding = SystemEnvironment.shared) -> String {
+        serviceProbeFallback(environment: environment)
+    }
+
+    /// Create HTTP authentication headers for a service endpoint (re-exported from `service-probe.ts`).
+    // parity: client/src/promise/service.ts#headers [status=implemented hash=17d8a31e4fa3]
+    public static func headers(for endpoint: ServiceEndpoint) -> [String: String]? {
+        serviceProbeHeaders(for: endpoint)
+    }
+
     /// Discover a healthy, compatible local service without starting one.
     // parity: client/src/promise/service.ts#discover [status=implemented hash=02b22845f895]
     public static func discover(
