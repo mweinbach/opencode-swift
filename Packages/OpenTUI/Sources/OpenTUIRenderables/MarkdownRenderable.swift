@@ -95,7 +95,7 @@ public struct MarkdownInlineSpan: Equatable, Hashable, Sendable {
 }
 
 /// Context provided to `MarkdownInlineHook` when transforming a prose block or table cell.
-// parity: core/src/renderables/Markdown.ts#MarkdownInlineContext [status=implemented hash=3bd3f62603d3]
+// parity: core/src/renderables/Markdown.ts#MarkdownInlineContext [status=implemented hash=d4910e16d3b2]
 public struct MarkdownInlineContext: Sendable {
     public var source: String
     public var conceal: Bool
@@ -232,7 +232,7 @@ public typealias MarkdownCodeBlockRenderer = (
 ) -> Renderable?
 
 /// Dictionary mapping canonical language names to custom code-block renderers.
-// parity: core/src/renderables/Markdown.ts#MarkdownCodeBlockRendererMap [status=implemented hash=df48a120d251]
+// parity: core/src/renderables/Markdown.ts#MarkdownCodeBlockRendererMap [status=implemented hash=24a1ea3dac4a]
 public typealias MarkdownCodeBlockRendererMap = [String: MarkdownCodeBlockRenderer]
 
 /// Block renderer callback accepted by `MarkdownOptions.renderNode` / `renderBlock`.
@@ -516,7 +516,7 @@ private func isDescendant(_ inner: Renderable, of outer: Renderable) -> Bool {
 /// and `MarkdownParser`. Composes `TextRenderable`, `BoxRenderable`, `CodeRenderable`, and
 /// `TextTableRenderable` with incremental streaming block reuse, inline concealment,
 /// OSC 8 hyperlinks, syntax-highlighted code fences, and custom `renderNode` overrides.
-// parity: core/src/renderables/Markdown.ts#MarkdownRenderable [status=implemented hash=0abdc5fd9dcc]
+// parity: core/src/renderables/Markdown.ts#MarkdownRenderable [status=implemented hash=64663ead6a3e]
 open class MarkdownRenderable: Renderable, @unchecked Sendable {
     /// Entry returned by `MarkdownRenderable.blocks` summarizing each mounted top-level block.
     public struct RenderedBlockEntry {
@@ -769,7 +769,7 @@ open class MarkdownRenderable: Renderable, @unchecked Sendable {
     // MARK: - Public Methods
 
     /// Re-runs `inlineHook` on mounted prose blocks and tables whose source satisfies `select`.
-    // parity: core/src/renderables/Markdown.ts#MarkdownRenderable.rerunInlineHook [status=implemented hash=08b295c246f0]
+    // parity: core/src/renderables/Markdown.ts#MarkdownRenderable.rerunInlineHook [status=implemented hash=014b88ff1a00]
     public func rerunInlineHook(_ select: (String) -> Bool) {
         guard _inlineHook != nil else { return }
         for i in _slots.indices {

@@ -58,7 +58,7 @@ public extension TextTableColumnFitter {}
 public typealias TextTableColumnAlignment = TextAlign
 
 /// Configuration options for `TextTableRenderable`.
-// parity: core/src/renderables/TextTable.ts#TextTableOptions [status=implemented hash=d564d96df226]
+// parity: core/src/renderables/TextTable.ts#TextTableOptions [status=implemented hash=100c17efdbe9]
 public struct TextTableOptions {
     public var base: RenderableOptions
     public var content: TextTableContent?
@@ -327,7 +327,7 @@ private func drawTableGrid(
 
 /// Full-featured terminal table renderable with proportional/balanced column width fitting,
 /// wrapped multi-line styled cells, box-drawing grid borders & junctions, and cross-cell selection.
-// parity: core/src/renderables/TextTable.ts#TextTableRenderable [status=implemented hash=91d382843385]
+// parity: core/src/renderables/TextTable.ts#TextTableRenderable [status=implemented hash=426e7ae9321a]
 open class TextTableRenderable: Renderable, @unchecked Sendable {
     private static let defaultBorderColor = parseColor("#FFFFFF")
     private static let defaultFgColor = parseColor("#FFFFFF")
@@ -644,7 +644,7 @@ open class TextTableRenderable: Renderable, @unchecked Sendable {
         return false
     }
 
-    // parity: core/src/renderables/TextTable.ts#TextTableRenderable.getSelection [status=implemented hash=f0518e9fd89f]
+    // parity: core/src/renderables/TextTable.ts#TextTableRenderable.getSelection [status=implemented hash=c57818fbdab7]
     public func getSelection() -> TextSelectionRange? {
         for row in _cells {
             for cell in row {

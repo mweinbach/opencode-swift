@@ -616,7 +616,7 @@ private enum ReedSolomon {
 }
 
 /// A single mode-tagged data segment in a QR Code payload.
-// parity: qrcode/src/lib/qrcode.ts#QrSegment [status=implemented hash=34638f4e36f8]
+// parity: qrcode/src/lib/qrcode.ts#QrSegment [status=implemented hash=f2cc25a8e5ac]
 public struct QrSegment: Equatable, Hashable, Sendable {
     private static let alphanumericCharset: [UInt8] = Array(
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:".utf8
@@ -801,7 +801,7 @@ public struct QrSegment: Equatable, Hashable, Sendable {
         return QrSegment(mode: .fnc1Second, numChars: 0, data: bb)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeSegments [status=implemented hash=42d265c36ad3]
+    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeSegments [status=implemented hash=5a2bfd7e99e7]
     public static func makeSegments(
         _ text: String,
         options: EncodeOptions = EncodeOptions()
@@ -815,7 +815,7 @@ public struct QrSegment: Equatable, Hashable, Sendable {
         return try addEciIfNeeded(segments, encoding: encoding, options: options)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeOptimizedSegments [status=implemented hash=25200bf7e34c]
+    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeOptimizedSegments [status=implemented hash=78e501b44876]
     public static func makeOptimizedSegments(
         _ text: String,
         version: Int,
@@ -825,7 +825,7 @@ public struct QrSegment: Equatable, Hashable, Sendable {
         return try makeOptimizedSegmentsInternal(text, version: version, options: options)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeEciSegmentsFromEscapedText [status=implemented hash=71ba0857f046]
+    // parity: qrcode/src/lib/qrcode.ts#QrSegment.makeEciSegmentsFromEscapedText [status=implemented hash=61e8e02faabe]
     public static func makeEciSegmentsFromEscapedText(
         _ escapedText: String,
         defaultEncoding: ByteEncoding = .iso8859_1
@@ -1078,7 +1078,7 @@ public struct QrSegment: Equatable, Hashable, Sendable {
 // MARK: - QRCode Model 2 Encoder
 
 /// ISO/IEC 18004:2024 QR Code Model 2 encoder (versions 1..40, ECC levels L/M/Q/H).
-// parity: qrcode/src/lib/qrcode.ts#QRCode [status=implemented hash=83f671a341ce]
+// parity: qrcode/src/lib/qrcode.ts#QRCode [status=implemented hash=b214c125cd00]
 public struct QRCode: Equatable, Hashable, Sendable {
     public static let minVersion = 1
     public static let maxVersion = 40
@@ -1166,7 +1166,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         drawVersionBits()
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeText [status=implemented hash=598bbf1a2967]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeText [status=implemented hash=686b49ae71f1]
     public static func encodeText(
         _ text: String,
         ecl: ErrorCorrectionLevel = .M,
@@ -1209,7 +1209,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         throw .dataTooLong
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeBytes [status=implemented hash=2bbb92c41246]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeBytes [status=implemented hash=8938caa9bf81]
     public static func encodeBytes(
         _ bytes: [UInt8],
         ecl: ErrorCorrectionLevel = .M,
@@ -1218,7 +1218,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         try encodeSegments([try QrSegment.makeBytes(bytes)], ecl: ecl, options: options)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeEciText [status=implemented hash=56a6a21f8158]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeEciText [status=implemented hash=6396e580190f]
     public static func encodeEciText(
         _ escapedText: String,
         ecl: ErrorCorrectionLevel = .M,
@@ -1228,7 +1228,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         return try encodeSegments(segs, ecl: ecl, options: options)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeGs1Text [status=implemented hash=49758d80d9c9]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeGs1Text [status=implemented hash=de50818a1e97]
     public static func encodeGs1Text(
         _ gs1Data: String,
         ecl: ErrorCorrectionLevel = .M,
@@ -1256,7 +1256,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         return try encodeGs1Text(payload, ecl: ecl, options: options)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeStructuredAppend [status=implemented hash=0bf0344aecf3]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeStructuredAppend [status=implemented hash=c0cea15663b7]
     public static func encodeStructuredAppend(
         _ parts: [[QrSegment]],
         ecl: ErrorCorrectionLevel = .M,
@@ -1287,7 +1287,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
         return Int(result)
     }
 
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeSegments [status=implemented hash=2d41d6c2e846]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.encodeSegments [status=implemented hash=58d6209e20ba]
     public static func encodeSegments(
         _ inputSegments: [QrSegment],
         ecl inputEcl: ErrorCorrectionLevel = .M,
@@ -1383,7 +1383,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
     }
 
     /// Renders this QR Code as an SVG document.
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.toSvgString [status=implemented hash=964c8ecc5c52]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.toSvgString [status=implemented hash=3879582a796a]
     public func toSvgString(
         border: Int = 4,
         moduleSize: Int = 1,
@@ -1401,7 +1401,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
     }
 
     /// Renders this QR Code as full-block (`██`/`  `) terminal text.
-    // parity: qrcode/src/lib/qrcode.ts#QRCode.toTerminalString [status=implemented hash=168393936817]
+    // parity: qrcode/src/lib/qrcode.ts#QRCode.toTerminalString [status=implemented hash=2d1c3eda1bc8]
     public func toTerminalString(options: TerminalRenderOptions = TerminalRenderOptions()) throws(QRCodeError) -> String {
         let normalized = try normalizeTerminalOptions(options, defaultBorder: 4, minimumBorder: 4)
         return matrixToTerminal(modules, options: normalized)
@@ -1834,7 +1834,7 @@ public struct QRCode: Equatable, Hashable, Sendable {
 }
 
 /// Convenience helper encoding `text` directly to an SVG QR Code string.
-// parity: qrcode/src/lib/qrcode.ts#createQrSvg [status=implemented hash=c019a180cafb]
+// parity: qrcode/src/lib/qrcode.ts#createQrSvg [status=implemented hash=b87ebc4655c3]
 public func createQrSvg(
     _ text: String,
     ecl: ErrorCorrectionLevel = .M,

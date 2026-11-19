@@ -354,7 +354,7 @@ public struct TextBufferOptions {
 
 /// Base renderable wrapping `TextBuffer` and `TextBufferView` with wrapping, scrolling,
 /// intrinsic flexbox measurement, and local/global text selection.
-// parity: core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable [status=implemented hash=22b9851d6ee0]
+// parity: core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable [status=implemented hash=9d878106f0df]
 open class TextBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendable {
     private static let defaultFgColor = RGBA.fromValues(1, 1, 1, 1)
     private static let defaultBgColor = RGBA.fromValues(0, 0, 0, 0)
@@ -861,7 +861,7 @@ open class TextBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return textBufferView.hasSelection()
     }
 
-    // parity: core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getSelection [status=implemented hash=35496c0888a5]
+    // parity: core/src/renderables/TextBufferRenderable.ts#TextBufferRenderable.getSelection [status=implemented hash=863eb7ec0ae2]
     open func getSelection() -> TextSelectionRange? {
         guard !isDestroyed && !textBufferView.isDestroyed else { return nil }
         return textBufferView.getSelection()

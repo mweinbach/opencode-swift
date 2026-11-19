@@ -313,7 +313,7 @@ private func emptyVisualCursor() -> VisualCursor {
 /// Base editable text renderable wrapping `EditBuffer` and `EditorView`,
 /// providing intrinsic Flexbox measurement, cursor reporting, mouse/keyboard selection,
 /// scroll wheel & auto-scroll, syntax highlights, extmarks, placeholder, and cell rendering.
-// parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable [status=implemented hash=254f9b1f78cd]
+// parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable [status=implemented hash=dfdfc8926ae6]
 open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendable {
     public static let defaultTextColor = RGBA.fromValues(1, 1, 1, 1)
     public static let defaultBackgroundColor = RGBA.fromValues(0, 0, 0, 0)
@@ -1056,7 +1056,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         editorView.hasSelection()
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getSelection [status=implemented hash=35496c0888a5]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.getSelection [status=implemented hash=b83799385fb0]
     public func getSelection() -> TextSelectionRange? {
         editorView.getSelection()
     }
@@ -1216,7 +1216,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorLeft [status=implemented hash=49e4033f4c22]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorLeft [status=implemented hash=f8a89477a110]
     @discardableResult
     open func moveCursorLeft(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.start) { return true }
@@ -1228,7 +1228,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorRight [status=implemented hash=9306858b7b38]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorRight [status=implemented hash=ea8acab5f5ef]
     @discardableResult
     open func moveCursorRight(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.end) { return true }
@@ -1240,7 +1240,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorUp [status=implemented hash=0e5fcae01262]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorUp [status=implemented hash=f66813dd03f2]
     @discardableResult
     open func moveCursorUp(select: Bool = false) -> Bool {
         updateSelectionForMovement(shiftPressed: select, isBeforeMovement: true)
@@ -1251,7 +1251,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorDown [status=implemented hash=38d01119edbc]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveCursorDown [status=implemented hash=8dbd5b753110]
     @discardableResult
     open func moveCursorDown(select: Bool = false) -> Bool {
         updateSelectionForMovement(shiftPressed: select, isBeforeMovement: true)
@@ -1281,7 +1281,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         setCursor(row: eol.row, col: eol.col)
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineHome [status=implemented hash=463d6e898c26]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineHome [status=implemented hash=40b70ecfa9e0]
     @discardableResult
     open func gotoLineHome(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.start) { return true }
@@ -1300,7 +1300,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineEnd [status=implemented hash=cdf0325ec58b]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoLineEnd [status=implemented hash=ffe9cd553f7a]
     @discardableResult
     open func gotoLineEnd(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.end) { return true }
@@ -1319,7 +1319,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineHome [status=implemented hash=97ae2cac3465]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineHome [status=implemented hash=2e9743234a26]
     @discardableResult
     open func gotoVisualLineHome(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.start) { return true }
@@ -1332,7 +1332,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineEnd [status=implemented hash=25ee21859481]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoVisualLineEnd [status=implemented hash=549f931a60eb]
     @discardableResult
     open func gotoVisualLineEnd(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.end) { return true }
@@ -1344,7 +1344,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferHome [status=implemented hash=d678b232b958]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferHome [status=implemented hash=b37f77079ea5]
     @discardableResult
     open func gotoBufferHome(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.start) { return true }
@@ -1356,7 +1356,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferEnd [status=implemented hash=912849933656]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.gotoBufferEnd [status=implemented hash=32951c9589bd]
     @discardableResult
     open func gotoBufferEnd(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.end) { return true }
@@ -1436,7 +1436,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordForward [status=implemented hash=b8e6742425fb]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordForward [status=implemented hash=d6ebe2a0e817]
     @discardableResult
     open func moveWordForward(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.end) { return true }
@@ -1449,7 +1449,7 @@ open class EditBufferRenderable: Renderable, LineInfoProvider, @unchecked Sendab
         return true
     }
 
-    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordBackward [status=implemented hash=fe461b30384a]
+    // parity: core/src/renderables/EditBufferRenderable.ts#EditBufferRenderable.moveWordBackward [status=implemented hash=b57f33528617]
     @discardableResult
     open func moveWordBackward(select: Bool = false) -> Bool {
         if !select && collapseSelectionToEdge(.start) { return true }

@@ -125,7 +125,7 @@ public enum NativeContextHandleTable: Sendable {
     }
 
     /// Generational slot allocator with O(1) free-list reuse, generation bumping, kind validation, and two-phase destroy.
-    // parity: native/src/context-handles.zig#Table [status=implemented hash=bc79217882f8]
+    // parity: native/src/context-handles.zig#Table [status=implemented hash=b308dcbbb53a]
     public final class Table: @unchecked Sendable {
         private struct SlotRecord {
             var kind: Kind = .empty
@@ -144,6 +144,7 @@ public enum NativeContextHandleTable: Sendable {
         public let contextId: UInt64
         private let state: Mutex<Storage>
 
+        // parity: native/src/context-handles.zig#Table.init [status=implemented hash=a86e65cb3622]
         public init(contextId: UInt64, capacity: Int = 65_536) {
             let clamped = max(1, min(capacity, Int(NativeContextHandleTable.slotCountMaxDefault)))
             self.contextId = contextId
@@ -170,6 +171,16 @@ public enum NativeContextHandleTable: Sendable {
             state.withLock { $0.freeList.count }
         }
 
+        // parity: native/src/context-handles.zig#Table.checkCapacity [status=implemented hash=294b8607abab]
+        public func checkCapacity() throws(TableError) {
+            try state.withLock { storage throws(TableError) in
+                if storage.freeList.isEmpty && storage.activeCount >= storage.capacity {
+                    throw .objectLimit
+                }
+            }
+        }
+
+        // parity: native/src/context-handles.zig#Table.insert [status=implemented hash=abc4d25411c6]
         public func allocate(kind: Kind) throws(TableError) -> Handle {
             guard kind != .empty else { throw .invalidArgument }
             return try state.withLock { storage throws(TableError) in
@@ -193,6 +204,7 @@ public enum NativeContextHandleTable: Sendable {
             }
         }
 
+        // parity: native/src/context-handles.zig#Table.get [status=implemented hash=bf9cb3d0df95]
         public func lookup(_ handle: Handle, expectedKind: Kind? = nil) throws(TableError) -> Kind {
             guard handle.contextId == contextId else {
                 throw .wrongContext
@@ -216,6 +228,12 @@ public enum NativeContextHandleTable: Sendable {
             }
         }
 
+        // parity: native/src/context-handles.zig#Table.getKind [status=implemented hash=05d3e3b9f9c2]
+        public func getKind(_ handle: Handle) throws(TableError) -> Kind {
+            try lookup(handle, expectedKind: nil)
+        }
+
+        // parity: native/src/context-handles.zig#Table.beginDestroy [status=implemented hash=55319139b787]
         public func beginDestroy(_ handle: Handle, expectedKind: Kind? = nil) throws(TableError) -> DestroyToken {
             guard handle.contextId == contextId else {
                 throw .wrongContext
@@ -241,6 +259,7 @@ public enum NativeContextHandleTable: Sendable {
             }
         }
 
+        // parity: native/src/context-handles.zig#Table.finishDestroy [status=implemented hash=76e368200720]
         public func finishDestroy(_ token: DestroyToken) {
             guard token.contextId == contextId, token.slot > 0 else { return }
             state.withLock { storage in
@@ -256,6 +275,23 @@ public enum NativeContextHandleTable: Sendable {
                 storage.slots[idx] = rec
                 storage.activeCount = max(0, storage.activeCount - 1)
                 storage.freeList.append(token.slot)
+            }
+        }
+
+        // parity: native/src/context-handles.zig#Table.next [status=implemented hash=e78ecf11632f]
+        public func next(kind: Kind, cursor: inout Int) -> Handle? {
+            state.withLock { storage in
+                var i = max(1, cursor)
+                while i < storage.slots.count {
+                    let rec = storage.slots[i]
+                    i += 1
+                    if rec.active && !rec.destroying && rec.kind == kind {
+                        cursor = i
+                        return Handle(contextId: contextId, slot: UInt32(i - 1), generation: rec.generation)
+                    }
+                }
+                cursor = i
+                return nil
             }
         }
 
@@ -298,6 +334,7 @@ public enum NativeContextHandleTable: Sendable {
             }
         }
 
+        // parity: native/src/context-handles.zig#Table.deinit [status=implemented hash=217bf23f6611]
         public func resetAll() {
             state.withLock { storage in
                 for idx in 1..<storage.slots.count {
@@ -320,6 +357,9 @@ public enum NativeContextHandleTable: Sendable {
 
 /// Pure-Swift context runtime and domain types matching `native/src/context.zig`.
 public enum NativeContextEngine: Sendable {
+    // parity: native/src/context.zig#terminal_input_bytes_max [status=implemented hash=1272ec62538f]
+    public static let terminalInputBytesMax: UInt32 = UInt32(NativeABI.OT_EMBEDDED_TERMINAL_INPUT_BYTES_MAX)
+
     // parity: native/src/context.zig#embedded_terminal [status=implemented hash=b469c4057d8f]
     public typealias EmbeddedTerminal = EmbeddedTerminalRenderable
 
@@ -456,7 +496,7 @@ public enum NativeContextEngine: Sendable {
     // parity: native/src/context.zig#BufferDraw [status=implemented hash=3862318183bd]
     public typealias BufferDraw = NativeBufferDraw
 
-    // parity: native/src/context.zig#BufferStack [status=implemented hash=e453e9bcf481]
+    // parity: native/src/context.zig#BufferStack [status=implemented hash=21d154f82eae]
     public typealias BufferStack = NativeBufferStack
 
     // parity: native/src/context.zig#EditEvent [status=implemented hash=062804057830]
@@ -517,13 +557,13 @@ public enum NativeContextEngine: Sendable {
         }
     }
 
-    // parity: native/src/context.zig#MarkdownOptions [status=implemented hash=57337b1a8952]
+    // parity: native/src/context.zig#MarkdownOptions [status=implemented hash=18e400e6e0a8]
     public typealias MarkdownOptions = NativeMarkdownOptions
 
     // parity: native/src/context.zig#MarkdownResult [status=implemented hash=0ec7a2690dc3]
     public typealias MarkdownResult = NativeMarkdownResult
 
-    // parity: native/src/context.zig#MarkdownDoc [status=implemented hash=1416678e1399]
+    // parity: native/src/context.zig#MarkdownDoc [status=implemented hash=fc22d23c62d6]
     public struct MarkdownDoc: Equatable, Hashable, Sendable {
         public var handle: Handle
         public var libHandle: ContextMarkdownHandle
@@ -680,7 +720,7 @@ public enum NativeContextEngine: Sendable {
     // parity: native/src/context.zig#Options [status=implemented hash=ea825616a4e5]
     public typealias Options = NativeContextOptions
 
-    // parity: native/src/context.zig#Text [status=implemented hash=f1a2c8868b55]
+    // parity: native/src/context.zig#Text [status=implemented hash=5c05b9ff4a8b]
     public struct Text: Equatable, Hashable, Sendable {
         public var bytes: [UInt8]
         public var text: String { String(decoding: bytes, as: UTF8.self) }
@@ -700,7 +740,7 @@ public enum NativeContextEngine: Sendable {
     /// Pure-Swift owning context matching `native/src/context.zig#Context`.
     /// Owns a generational `NativeContextHandleTable.Table`, delegates domain operations to `SwiftRenderLib`
     /// and pure-Swift engine types, and maintains per-context diagnostics, last-error, callbacks, and leases.
-    // parity: native/src/context.zig#Context [status=implemented hash=6998e0adf6a8]
+    // parity: native/src/context.zig#Context [status=implemented hash=0f2955a343fc]
     public final class Context: @unchecked Sendable {
         private struct State {
             var destroyed: Bool = false
@@ -742,6 +782,7 @@ public enum NativeContextEngine: Sendable {
 
         public var id: UInt64 { libContext.contextId }
 
+        // parity: native/src/context.zig#Context.init [status=implemented hash=bc5501d4db58]
         public init(
             options: Options = Options(),
             renderLib: SwiftRenderLib = SwiftRenderLib()
@@ -757,6 +798,7 @@ public enum NativeContextEngine: Sendable {
             state.withLock { $0.destroyed }
         }
 
+        // parity: native/src/context.zig#Context.beginMutation [status=implemented hash=dc81b809a715]
         public func enterCall() throws(ContextError) {
             try state.withLock { s throws(ContextError) in
                 guard !s.destroyed else {
@@ -806,6 +848,7 @@ public enum NativeContextEngine: Sendable {
             return drained
         }
 
+        // parity: native/src/context.zig#Context.setEditEventCallback [status=implemented hash=49fc7aa4a158]
         public func setEditEventCallback(_ callback: EditEventCallback?) throws {
             let oldUnsub: (@Sendable () -> Void)? = state.withLock { s in
                 let prev = s.editEventUnsubscribe
@@ -827,6 +870,7 @@ public enum NativeContextEngine: Sendable {
             }
         }
 
+        // parity: native/src/context.zig#Context.deinit [status=implemented hash=b8983b352119]
         public func destroy() {
             let snapshot: (
                 alreadyDestroyed: Bool,
@@ -1151,6 +1195,7 @@ public enum NativeContextEngine: Sendable {
             state.withLock { $0.pendingSessionFrames[sessionSlot] }
         }
 
+        // parity: native/src/context.zig#Context.destroy [status=implemented hash=9d76e1f6b791]
         internal func destroyObject(_ handle: Handle, expectedKind: NativeContextHandleTable.Kind) throws {
             let token = try table.beginDestroy(handle, expectedKind: expectedKind)
             switch expectedKind {
@@ -1414,7 +1459,7 @@ public enum NativeContextABI: Sendable {
         }
     }
 
-    // parity: native/src/context-abi.zig#followSessionWidth [status=implemented hash=1a0d880e72e2]
+    // parity: native/src/context-abi.zig#followSessionWidth [status=implemented hash=bc4942a7818d]
     public static func followSessionWidth(_ options: NativeContextEditBufferOptions) throws(NativeContextEngine.ContextError) -> Bool {
         options.followSessionWidth
     }
@@ -1764,7 +1809,7 @@ public enum NativeContextABI: Sendable {
         }
     }
 
-    // parity: native/src/context-abi.zig#widthMethodFromC [status=implemented hash=801c2a81f5f4]
+    // parity: native/src/context-abi.zig#widthMethodFromC [status=implemented hash=31298e6117e0]
     public static func widthMethodFromC(_ value: UInt32) throws(NativeContextEngine.ContextError) -> WidthMethod {
         switch Int64(value) {
         case NativeABI.OT_WIDTH_METHOD_WCWIDTH: return .wcwidth
@@ -2451,7 +2496,7 @@ public enum NativeContextABI: Sendable {
         }
     }
 
-    // parity: native/src/context-abi.zig#ot_session_control [status=implemented hash=a83382bee840]
+    // parity: native/src/context-abi.zig#ot_session_control [status=implemented hash=3dfb9da5e29a]
     public static func ot_session_control(
         _ context: ContextHandle?,
         session: Handle,
@@ -3398,7 +3443,7 @@ public enum NativeContextABI: Sendable {
         }
     }
 
-    // parity: native/src/context-abi.zig#createTestContext [status=implemented hash=fd8dbaa43b01]
+    // parity: native/src/context-abi.zig#createTestContext [status=implemented hash=b7db0fdacb09]
     public static func createTestContext(
         objectCapacity: UInt32 = 4_096,
         renderCellsMax: UInt32 = 250_000
@@ -4101,7 +4146,7 @@ public extension NativeContextABI {
         return NativeContextEngine.TextHighlight(operation: op, lineOrRef: Int(argument), highlight: highlight)
     }
 
-    // parity: native/src/context-editor-abi.zig#ot_edit_buffer_get_highlights [status=implemented hash=b00a161425cc]
+    // parity: native/src/context-editor-abi.zig#ot_edit_buffer_get_highlights [status=implemented hash=457dd493ce3c]
     static func ot_edit_buffer_get_highlights(
         _ context: ContextHandle?,
         editBuffer: Handle,
@@ -6161,6 +6206,31 @@ public extension NativeContextABI {
     typealias LogCallback = @Sendable (UInt8, String) -> Void
 
     private static let logCallbackLock = Mutex<LogCallback?>(nil)
+
+    // parity: native/src/runtime-abi.zig#std_options [status=adapted hash=b05c12da06c9]
+    static let stdOptions = Lib.StdOptions(logLevel: .debug)
+
+    /// Checked output writer wrapper matching `native/src/context-abi.zig#OutputWriter`.
+    struct OutputWriter: Sendable {
+        public enum WriteError: Error, Equatable, Hashable, Sendable {
+            case writeFailed
+        }
+
+        public let callback: @Sendable ([UInt8]) -> Int64
+
+        public init(callback: @escaping @Sendable ([UInt8]) -> Int64) {
+            self.callback = callback
+        }
+
+        // parity: native/src/context-abi.zig#OutputWriter.write [status=implemented hash=569c23a1020e]
+        public func write(_ bytes: [UInt8]) throws(WriteError) -> Int {
+            let count = callback(bytes)
+            guard count >= 0 && count <= Int64(bytes.count) else {
+                throw .writeFailed
+            }
+            return Int(count)
+        }
+    }
 
     // parity: native/src/runtime-abi.zig#ExternalBuildOptions [status=implemented hash=bfe26837a0e5]
     typealias ExternalBuildOptions = BuildOptions

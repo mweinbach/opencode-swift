@@ -217,7 +217,7 @@ public struct BoxOptions {
 
 /// Layout container with optional borders, titles, background fill, and focus-aware border styling,
 /// matching `core/src/renderables/Box.ts#BoxRenderable`.
-// parity: core/src/renderables/Box.ts#BoxRenderable [status=implemented hash=0730700635bd]
+// parity: core/src/renderables/Box.ts#BoxRenderable [status=implemented hash=90a25abe76b8]
 open class BoxRenderable: Renderable, @unchecked Sendable {
     public static let defaultBackgroundColor: RGBA = RGBA.fromValues(0, 0, 0, 0)
     public static let defaultBorderStyle: BorderStyle = .single

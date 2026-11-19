@@ -87,8 +87,8 @@ open class ScrollBoxPart: @unchecked Sendable {
     public var y: Int { rect().y }
     public var screenX: Int { rect().x }
     public var screenY: Int { rect().y }
-    public var width: Int { rect().width }
-    public var height: Int { rect().height }
+    open var width: Int { rect().width }
+    open var height: Int { rect().height }
 
     @discardableResult
     public func on(_ event: String, _ listener: @escaping () -> Void) -> ScrollBoxListenerToken {
@@ -265,7 +265,7 @@ public final class ScrollBoxViewport: ScrollBoxSizedPart, @unchecked Sendable {
 
 /// Scrollable content container facade forwarding children and layout styles to `ScrollBoxRenderable`'s
 /// internal `contentLayoutNode`, matching `core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent`.
-// parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent [status=implemented hash=cb0895841f6f]
+// parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxContent [status=implemented hash=571403b6c751]
 public final class ScrollBoxContent: ScrollBoxSizedPart, @unchecked Sendable {
     internal override func rect() -> LayoutRect {
         box.contentScreenRect
@@ -492,7 +492,7 @@ private let scrollBoxDefaultArrowBg = RGBA.fromValues(0, 0, 0, 0)
 
 /// Scrollbar facade managed natively by `ScrollBoxRenderable`,
 /// matching `core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar`.
-// parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar [status=implemented hash=b04a00caa68b]
+// parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar [status=implemented hash=89f6bdb072e3]
 public final class ScrollBoxBar: ScrollBoxPart, ScrollUnitMetrics, @unchecked Sendable {
     public let orientation: SliderOrientation
     internal let axis: Int // 0 = horizontal, 1 = vertical
@@ -592,7 +592,7 @@ public final class ScrollBoxBar: ScrollBoxPart, ScrollUnitMetrics, @unchecked Se
         }
     }
 
-    // parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.trackOptions [status=implemented hash=be33458e609c]
+    // parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.trackOptions [status=implemented hash=7763a8d0b9fb]
     public var trackOptions: ScrollBarTrackStyleOptions {
         get {
             ScrollBarTrackStyleOptions(
@@ -609,6 +609,26 @@ public final class ScrollBoxBar: ScrollBoxPart, ScrollUnitMetrics, @unchecked Se
                 trackBackground = bg.resolved()
             }
             box.requestRender()
+        }
+    }
+
+    // parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.width [status=implemented hash=181640690890]
+    public override var width: Int {
+        get { super.width }
+        set {
+            if axis == 1 {
+                setThickness(newValue)
+            }
+        }
+    }
+
+    // parity: core/src/renderables/ScrollBoxParts.ts#ScrollBoxBar.height [status=implemented hash=7486a4bfab9e]
+    public override var height: Int {
+        get { super.height }
+        set {
+            if axis == 0 {
+                setThickness(newValue)
+            }
         }
     }
 
@@ -921,7 +941,7 @@ public struct ScrollBoxOptions {
 /// sticky-edge auto-follow, scroll acceleration, scroll-chain wheel bubbling, keyboard
 /// navigation, interactive scrollbars, and drag-selection auto-scroll,
 /// matching `core/src/renderables/ScrollBox.ts#ScrollBoxRenderable`.
-// parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable [status=implemented hash=a38d96e7e918]
+// parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable [status=implemented hash=7c076832ac48]
 open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
     private enum BarPressState {
         case thumb(axis: Int, offset: Double, lastPointer: Double)
@@ -1229,6 +1249,17 @@ open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
         }
     }
 
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.primaryAxis [status=implemented hash=2ea37f7efc37]
+    open override var primaryAxis: ViewportDirection {
+        (content.flexDirection == .row || content.flexDirection == .rowReverse) ? .row : .column
+    }
+
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.overflow [status=implemented hash=beee8edc4669]
+    open override var overflow: Overflow {
+        get { .hidden }
+        set { _ = newValue }
+    }
+
     // MARK: - Sub-Options Setters
 
     // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.rootOptions [status=implemented hash=5964a0ba4897]
@@ -1349,7 +1380,7 @@ open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
 
     // MARK: - Scroll Navigation API
 
-    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollTo [status=implemented hash=2f9e6b830126]
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollTo [status=implemented hash=3c651fbe0d3f]
     public func scrollTo(_ position: Double) {
         scrollAxis(1, to: position, relative: false, reapply: true)
     }
@@ -1360,7 +1391,7 @@ open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
         scrollAxis(0, to: position.x, relative: false, reapply: true)
     }
 
-    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollBy [status=implemented hash=f956a33d6c46]
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollBy [status=implemented hash=a0953482269e]
     public func scrollBy(_ delta: Double, unit: ScrollUnit = .absolute) {
         verticalScrollBar.scrollBy(delta, unit: unit)
     }
@@ -1371,7 +1402,7 @@ open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
         horizontalScrollBar.scrollBy(delta.x, unit: unit)
     }
 
-    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollChildIntoView [status=implemented hash=958f94cd6264]
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.scrollChildIntoView [status=implemented hash=1866756b07ae]
     public func scrollChildIntoView(_ child: Renderable, options: ScrollIntoViewOptions = ScrollIntoViewOptions()) {
         guard !_isDestroyed else { return }
         pendingTargetX = nil
@@ -2303,7 +2334,7 @@ open class ScrollBoxRenderable: BoxRenderable, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.updateAutoScroll [status=implemented hash=2fa59dba7753]
+    // parity: core/src/renderables/ScrollBox.ts#ScrollBoxRenderable.updateAutoScroll [status=implemented hash=a11b367a2aa7]
     public func updateAutoScroll(mouseX: Int, mouseY: Int) {
         autoScrollMouseX = mouseX
         autoScrollMouseY = mouseY

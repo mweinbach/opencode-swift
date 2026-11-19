@@ -765,7 +765,7 @@ public extension NativeSplitSnapshot {
     var hasRows: Bool { rowColumns > 0 }
 }
 
-// parity: core/src/zig.ts#NativeSessionSplitControl [status=implemented hash=e3676924822a]
+// parity: core/src/zig.ts#NativeSessionSplitControl [status=implemented hash=50cf99602d23]
 public enum NativeSessionSplitControl: Equatable, Hashable, Sendable {
     case reset(seedRows: Int, pinnedRenderOffset: Int)
     case sync(pinnedRenderOffset: Int)
@@ -827,7 +827,7 @@ public enum NativeBufferStack: Equatable, Hashable, Sendable {
     case clearOpacity
 }
 
-// parity: core/src/zig.ts#NativeDrawingTarget [status=implemented hash=46b019e81c78]
+// parity: core/src/zig.ts#NativeDrawingTarget [status=implemented hash=7bf98327304c]
 public enum NativeDrawingTarget: Equatable, Sendable {
     case buffer(context: NativeContextHandle, target: ContextBufferHandle)
     case frame(context: NativeContextHandle, target: SessionHandle, frame: NativeSceneFrameRequest)
@@ -840,7 +840,7 @@ public enum NativeDrawingTarget: Equatable, Sendable {
     }
 }
 
-// parity: core/src/zig.ts#NativeBufferDraw [status=implemented hash=6fcf5d0908f9]
+// parity: core/src/zig.ts#NativeBufferDraw [status=implemented hash=9612dd13f1b8]
 public enum NativeBufferDraw: Equatable, Sendable {
     case clear(background: RGBA?)
     case fill(x: Int, y: Int, width: Int, height: Int, background: RGBA)
@@ -1116,7 +1116,7 @@ public extension NativeSessionRenderStatus {
     var didPresent: Bool { self == .presented }
 }
 
-// parity: core/src/zig.ts#NativeSessionRendererState [status=implemented hash=3a36e19ec7fc]
+// parity: core/src/zig.ts#NativeSessionRendererState [status=implemented hash=366f7cc6da26]
 public extension NativeSessionRendererState {
     static var emptyState: NativeSessionRendererState { NativeSessionRendererState() }
 }
@@ -1173,7 +1173,7 @@ public struct NativeInputDrain: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: core/src/zig.ts#NativeSessionControl [status=implemented hash=f26a7eb1cf7b]
+// parity: core/src/zig.ts#NativeSessionControl [status=implemented hash=26244f06b568]
 public extension NativeSessionControl {
     var isModeRestore: Bool {
         if case .restoreModes = self { return true }
@@ -1548,7 +1548,7 @@ public enum SceneStagingMutation: Equatable, Sendable {
     case paint(node: SceneNodeHandle, update: NativeScenePaintUpdate)
 }
 
-// parity: core/src/zig.ts#SceneStaging [status=implemented hash=5cf3c96bc27c]
+// parity: core/src/zig.ts#SceneStaging [status=implemented hash=0a3601dac44c]
 public final class SceneStaging: @unchecked Sendable {
     public static let limit: Int = NATIVE_SCENE_MUTATIONS_MAX
 
@@ -1635,7 +1635,7 @@ public final class SceneStaging: @unchecked Sendable {
         return true
     }
 
-    // parity: core/src/zig.ts#SceneStaging.stageBackground [status=implemented hash=39d8af642354]
+    // parity: core/src/zig.ts#SceneStaging.stageBackground [status=implemented hash=1e52ff5a0ab9]
     @discardableResult
     public func stageBackground(context: NativeContextHandle, node: SceneNodeHandle, color: RGBA) throws -> Bool {
         try checkContext(context)
@@ -1645,7 +1645,7 @@ public final class SceneStaging: @unchecked Sendable {
         return true
     }
 
-    // parity: core/src/zig.ts#SceneStaging.stagePaint [status=implemented hash=81e806e6da04]
+    // parity: core/src/zig.ts#SceneStaging.stagePaint [status=implemented hash=7adec49413d7]
     @discardableResult
     public func stagePaint(
         context: NativeContextHandle,
@@ -1712,7 +1712,7 @@ public enum RecordedPaintCommand: Equatable, Sendable {
     case unicode(handle: ContextUnicodeHandle, x: Int, y: Int, fg: RGBA, bg: RGBA?, attributes: UInt32)
 }
 
-// parity: core/src/zig.ts#NativePaintRecorder [status=implemented hash=99b5a325057b]
+// parity: core/src/zig.ts#NativePaintRecorder [status=implemented hash=46838fa71203]
 public final class NativePaintRecorder: @unchecked Sendable {
     private var active: Bool = false
     private var opacityStack: [Double] = [1.0]
@@ -2115,7 +2115,7 @@ private final class SpanFeedRecord {
 
 // MARK: - Protocols: AudioEngineLib & RenderLib
 
-// parity: core/src/zig.ts#AudioEngineLib [status=implemented hash=9519c30c72f1]
+// parity: core/src/zig.ts#AudioEngineLib [status=implemented hash=a941b86a6f4d]
 public protocol AudioEngineLib: AnyObject, Sendable {
     func createAudioEngine(_ options: AudioCreateOptions) -> AudioEngineHandle
     func destroyAudioEngine(_ engine: AudioEngineHandle)
@@ -2153,7 +2153,7 @@ public protocol RenderLib: AudioEngineLib {
 
 // MARK: - SwiftRenderLib (`core/src/zig.ts#FFIRenderLib`, 395 methods)
 
-// parity: core/src/zig.ts#FFIRenderLib [status=implemented hash=81bbe65ecfdf]
+// parity: core/src/zig.ts#FFIRenderLib [status=implemented hash=f6456a66d8ab]
 public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
     private final class Store {
         var disposed: Bool = false
@@ -2304,7 +2304,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextBufferDrawUnicode [status=implemented hash=f2ed6a7bf966]
+    // parity: core/src/zig.ts#FFIRenderLib.contextBufferDrawUnicode [status=implemented hash=cd5d8cafb2af]
     public func contextBufferDrawUnicode(
         _ target: NativeDrawingTarget,
         unicode: ContextUnicodeHandle,
@@ -2387,7 +2387,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawBuffer [status=implemented hash=a2bf6ef5b8cb]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawBuffer [status=implemented hash=044f2e35e42c]
     public func contextDrawBuffer(_ target: NativeDrawingTarget, draw: NativeBufferDraw) throws {
         try lock.withLock { store in
             let (ctx, buffer) = try resolveTargetBuffer(store, target, op: "ot_buffer_draw")
@@ -2456,7 +2456,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextBufferStack [status=implemented hash=fd10db44770c]
+    // parity: core/src/zig.ts#FFIRenderLib.contextBufferStack [status=implemented hash=44af7af87a73]
     @discardableResult
     public func contextBufferStack(_ target: NativeDrawingTarget, op: NativeBufferStack) throws -> Double {
         try lock.withLock { store in
@@ -2486,7 +2486,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawGrid [status=implemented hash=0abc429ba017]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawGrid [status=implemented hash=716935e58622]
     public func contextDrawGrid(_ target: NativeDrawingTarget, grid: NativeBufferGrid) throws {
         try lock.withLock { store in
             let (_, buffer) = try resolveTargetBuffer(store, target, op: "ot_buffer_draw_grid")
@@ -2514,7 +2514,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawPackedBuffer [status=implemented hash=7de4d01f1ec0]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawPackedBuffer [status=implemented hash=66e2f62447c0]
     public func contextDrawPackedBuffer(
         _ target: NativeDrawingTarget,
         bytes: [UInt8],
@@ -2539,7 +2539,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawSuperSampleBuffer [status=implemented hash=eade1536550c]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawSuperSampleBuffer [status=implemented hash=f9df6c0201e6]
     public func contextDrawSuperSampleBuffer(
         _ target: NativeDrawingTarget,
         bytes: [UInt8],
@@ -2551,7 +2551,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         try contextDrawPackedBuffer(target, bytes: bytes, width: width, height: height, x: x, y: y)
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawGrayscaleBuffer [status=implemented hash=32d304aeacaf]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawGrayscaleBuffer [status=implemented hash=fd57064f8129]
     public func contextDrawGrayscaleBuffer(
         _ target: NativeDrawingTarget,
         x: Int,
@@ -2593,7 +2593,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextColorMatrixBuffer [status=implemented hash=3eb0aa30495d]
+    // parity: core/src/zig.ts#FFIRenderLib.contextColorMatrixBuffer [status=implemented hash=92d35fe6700d]
     public func contextColorMatrixBuffer(
         _ target: NativeDrawingTarget,
         matrix: [Float],
@@ -2723,7 +2723,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawTextBufferView [status=implemented hash=70bba5bb692c]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawTextBufferView [status=implemented hash=cc8ce896ff76]
     public func contextDrawTextBufferView(
         _ target: NativeDrawingTarget,
         view: ContextTextBufferViewHandle,
@@ -2746,7 +2746,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawEditorView [status=implemented hash=457956d1e8a2]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawEditorView [status=implemented hash=f22f1ae470fb]
     public func contextDrawEditorView(
         _ target: NativeDrawingTarget,
         view: ContextEditorViewHandle,
@@ -2770,7 +2770,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawSceneBody [status=implemented hash=82e305d8cba1]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawSceneBody [status=implemented hash=5274fff34d3f]
     public func contextDrawSceneBody(
         _ target: NativeDrawingTarget,
         node: SceneNodeHandle,
@@ -2787,7 +2787,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextDrawImage [status=implemented hash=8a1bac171a79]
+    // parity: core/src/zig.ts#FFIRenderLib.contextDrawImage [status=implemented hash=488b54d01059]
     public func contextDrawImage(
         _ target: NativeDrawingTarget,
         image: ContextImageHandle,
@@ -2853,7 +2853,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
 
     // MARK: - Embedded Terminal (18 methods)
 
-    // parity: core/src/zig.ts#FFIRenderLib.createContextEmbeddedTerminal [status=implemented hash=25c132351b71]
+    // parity: core/src/zig.ts#FFIRenderLib.createContextEmbeddedTerminal [status=implemented hash=84892271ec48]
     public func createContextEmbeddedTerminal(
         _ context: NativeContextHandle,
         cols: Int = 80,
@@ -2977,7 +2977,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalSetSelection [status=implemented hash=8820edbcfef0]
+    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalSetSelection [status=implemented hash=a8403b7d9c91]
     public func contextEmbeddedTerminalSetSelection(
         _ context: NativeContextHandle,
         terminal: ContextEmbeddedTerminalHandle,
@@ -3009,7 +3009,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalCompose [status=implemented hash=4b951d0c40cf]
+    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalCompose [status=implemented hash=0743a0493aa9]
     public func contextEmbeddedTerminalCompose(
         _ target: NativeDrawingTarget,
         terminal: ContextEmbeddedTerminalHandle,
@@ -3052,7 +3052,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalScrollbar [status=implemented hash=fecc5f02a889]
+    // parity: core/src/zig.ts#FFIRenderLib.contextEmbeddedTerminalScrollbar [status=implemented hash=ade95854bee3]
     public func contextEmbeddedTerminalScrollbar(
         _ context: NativeContextHandle,
         terminal: ContextEmbeddedTerminalHandle
@@ -3168,7 +3168,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
 
     // MARK: - TextBuffer & TextBufferView (32 methods)
 
-    // parity: core/src/zig.ts#FFIRenderLib.createContextTextBuffer [status=implemented hash=d06090bcdb82]
+    // parity: core/src/zig.ts#FFIRenderLib.createContextTextBuffer [status=implemented hash=8d40952280f0]
     public func createContextTextBuffer(
         _ context: NativeContextHandle,
         options: NativeContextEditBufferOptions = NativeContextEditBufferOptions()
@@ -3335,7 +3335,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.contextTextBufferReplaceStyledBatch [status=implemented hash=15f0e7876754]
+    // parity: core/src/zig.ts#FFIRenderLib.contextTextBufferReplaceStyledBatch [status=implemented hash=0c2ae93e4823]
     public func contextTextBufferReplaceStyledBatch(
         _ context: NativeContextHandle,
         updates: [(textBuffer: ContextTextBufferHandle, chunks: [TextChunk])]
@@ -3753,7 +3753,7 @@ public final class SwiftRenderLib: RenderLib, @unchecked Sendable {
 // MARK: - EditBuffer, EditorView & SyntaxStyle (40 methods)
 
 extension SwiftRenderLib {
-    // parity: core/src/zig.ts#FFIRenderLib.createContextEditBuffer [status=implemented hash=85f2f1af9951]
+    // parity: core/src/zig.ts#FFIRenderLib.createContextEditBuffer [status=implemented hash=7e2331a6f8aa]
     public func createContextEditBuffer(
         _ context: NativeContextHandle,
         options: NativeContextEditBufferOptions = NativeContextEditBufferOptions()
@@ -4748,7 +4748,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sceneGetStyle [status=implemented hash=64fecf523f07]
+    // parity: core/src/zig.ts#FFIRenderLib.sceneGetStyle [status=implemented hash=f20929a0f8e3]
     public func sceneGetStyle(
         _ context: NativeContextHandle,
         node: SceneNodeHandle,
@@ -5005,7 +5005,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sceneGetSliderThumb [status=implemented hash=12011e6cdbbb]
+    // parity: core/src/zig.ts#FFIRenderLib.sceneGetSliderThumb [status=implemented hash=56f4519e09f8]
     public func sceneGetSliderThumb(_ context: NativeContextHandle, node: SceneNodeHandle) throws -> SliderThumb {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_scene_get_slider_thumb")
@@ -5132,7 +5132,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sceneGetTextSelection [status=implemented hash=4785e005c058]
+    // parity: core/src/zig.ts#FFIRenderLib.sceneGetTextSelection [status=implemented hash=a1c3725e4d45]
     public func sceneGetTextSelection(_ context: NativeContextHandle, node: SceneNodeHandle) throws -> TextSelectionRange? {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_scene_get_text_selection")
@@ -5243,7 +5243,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sceneFrameStep [status=implemented hash=87ac9c977627]
+    // parity: core/src/zig.ts#FFIRenderLib.sceneFrameStep [status=implemented hash=8b976a9da982]
     public func sceneFrameStep(
         _ context: NativeContextHandle,
         session: SessionHandle,
@@ -5763,7 +5763,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sessionSetupTerminal [status=implemented hash=8580fe6bd19e]
+    // parity: core/src/zig.ts#FFIRenderLib.sessionSetupTerminal [status=implemented hash=85ec2902ac1d]
     public func sessionSetupTerminal(
         _ context: NativeContextHandle,
         session: SessionHandle,
@@ -6030,7 +6030,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sessionPostStdout [status=implemented hash=f80bb644c3d3]
+    // parity: core/src/zig.ts#FFIRenderLib.sessionPostStdout [status=implemented hash=28eed6e79c03]
     public func sessionPostStdout(
         _ context: NativeContextHandle,
         session: SessionHandle,
@@ -6116,7 +6116,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.sessionRenderSplit [status=implemented hash=ae3f4d1acd2b]
+    // parity: core/src/zig.ts#FFIRenderLib.sessionRenderSplit [status=implemented hash=ad51ce0d97f7]
     public func sessionRenderSplit(
         _ context: NativeContextHandle,
         session: SessionHandle,
@@ -6539,7 +6539,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardReadOperationStart [status=implemented hash=4502697b7d2a]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardReadOperationStart [status=implemented hash=6d20a8f103b7]
     public func clipboardReadOperationStart(
         _ service: ClipboardServiceHandle
     ) -> (status: NativeClipboardStartStatus, operation: ClipboardOperationHandle?) {
@@ -6562,7 +6562,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardWriteOperationStart [status=implemented hash=2b066108925a]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardWriteOperationStart [status=implemented hash=89d295062ede]
     public func clipboardWriteOperationStart(
         _ service: ClipboardServiceHandle,
         mime: String = "text/plain",
@@ -6585,7 +6585,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardClearOperationStart [status=implemented hash=cee5f1f16727]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardClearOperationStart [status=implemented hash=2f98220b4a1d]
     public func clipboardClearOperationStart(
         _ service: ClipboardServiceHandle
     ) -> (status: NativeClipboardStartStatus, operation: ClipboardOperationHandle?) {
@@ -6630,7 +6630,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultMimeLength [status=implemented hash=3aae01154c1d]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultMimeLength [status=implemented hash=b007a2b85cf6]
     public func clipboardOperationResultMimeLength(_ operation: ClipboardOperationHandle) -> Int {
         lock.withLock { store in
             findClipboardOp(store, operation)?.mime.count ?? 0
@@ -6650,7 +6650,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultDataLength [status=implemented hash=3eddf2948b6d]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultDataLength [status=implemented hash=d511064a8912]
     public func clipboardOperationResultDataLength(_ operation: ClipboardOperationHandle) -> Int {
         lock.withLock { store in
             findClipboardOp(store, operation)?.data.count ?? 0
@@ -6670,14 +6670,14 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultErrorCode [status=implemented hash=27ad72b8f3fb]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultErrorCode [status=implemented hash=b9ed476a61b2]
     public func clipboardOperationResultErrorCode(_ operation: ClipboardOperationHandle) -> Int32 {
         lock.withLock { store in
             findClipboardOp(store, operation)?.errorCode ?? -1
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultDiagnosticLength [status=implemented hash=d826a8f0b4ab]
+    // parity: core/src/zig.ts#FFIRenderLib.clipboardOperationResultDiagnosticLength [status=implemented hash=eb58e95aaeb7]
     public func clipboardOperationResultDiagnosticLength(_ operation: ClipboardOperationHandle) -> Int {
         lock.withLock { store in
             findClipboardOp(store, operation)?.diagnostic.count ?? 0
@@ -7132,7 +7132,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.yogaNodes[node.address]?.unsetMeasureFunc() }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.yogaNodeHasMeasureFunc [status=implemented hash=9a0cbe0bbbba]
+    // parity: core/src/zig.ts#FFIRenderLib.yogaNodeHasMeasureFunc [status=implemented hash=46c12417a283]
     public func yogaNodeHasMeasureFunc(_ node: FFIPointer) -> Bool {
         lock.withLock { $0.yogaNodes[node.address]?.hasMeasureFunc() ?? false }
     }
@@ -7314,12 +7314,12 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.isCapturing() ?? false }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioReadCapture [status=implemented hash=3cbf0d114abf]
+    // parity: core/src/zig.ts#FFIRenderLib.audioReadCapture [status=implemented hash=a319852b6566]
     public func audioReadCapture(_ engine: AudioEngineHandle, frameCount: Int) -> AudioCaptureReadResult? {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.readCaptureFrames(frameCount) }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioGetCaptureStats [status=implemented hash=c88eda7713ca]
+    // parity: core/src/zig.ts#FFIRenderLib.audioGetCaptureStats [status=implemented hash=fe7ef2256353]
     public func audioGetCaptureStats(_ engine: AudioEngineHandle) -> NativeAudioCaptureStats? {
         lock.withLock { store in
             guard let stats = store.audioEngines[engine.rawValue]?.engine.getCaptureStats() else { return nil }
@@ -7345,7 +7345,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.stop() ?? false }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioCreateStream [status=implemented hash=29edf671c4b1]
+    // parity: core/src/zig.ts#FFIRenderLib.audioCreateStream [status=implemented hash=28c115967f4c]
     public func audioCreateStream(_ engine: AudioEngineHandle, options: AudioStreamCreateOptions) -> UInt32 {
         lock.withLock { store in
             guard let rec = store.audioEngines[engine.rawValue] else { return 0 }
@@ -7425,7 +7425,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.streams[streamId]?.stats }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioCloseStream [status=implemented hash=021ea84006de]
+    // parity: core/src/zig.ts#FFIRenderLib.audioCloseStream [status=implemented hash=b1427ee702b2]
     public func audioCloseStream(
         _ engine: AudioEngineHandle,
         streamId: UInt32,
@@ -7437,7 +7437,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioLoad [status=implemented hash=d9c2f8b7439c]
+    // parity: core/src/zig.ts#FFIRenderLib.audioLoad [status=implemented hash=8252de396e7e]
     public func audioLoad(_ engine: AudioEngineHandle, data: [UInt8]) -> UInt32 {
         lock.withLock { store in
             guard let sound = store.audioEngines[engine.rawValue]?.engine.loadSound(data) else { return 0 }
@@ -7450,7 +7450,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.unloadSound(soundId) ?? false }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioPlay [status=implemented hash=07b0c37766c9]
+    // parity: core/src/zig.ts#FFIRenderLib.audioPlay [status=implemented hash=6ea63053b9fd]
     public func audioPlay(
         _ engine: AudioEngineHandle,
         soundId: UInt32,
@@ -7477,7 +7477,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.setVoiceGroup(voiceId, group: groupId) ?? false }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioCreateGroup [status=implemented hash=194cc4904f08]
+    // parity: core/src/zig.ts#FFIRenderLib.audioCreateGroup [status=implemented hash=2143b7330179]
     public func audioCreateGroup(_ engine: AudioEngineHandle, name: String) -> UInt32 {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.group(name) ?? 0 }
     }
@@ -7502,7 +7502,7 @@ extension SwiftRenderLib {
         lock.withLock { $0.audioEngines[engine.rawValue]?.engine.enableTap(capacityFrames: capacityFrames) ?? false }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.audioReadTap [status=implemented hash=77284174d7f6]
+    // parity: core/src/zig.ts#FFIRenderLib.audioReadTap [status=implemented hash=d05133a400d6]
     public func audioReadTap(
         _ engine: AudioEngineHandle,
         frameCount: Int,
@@ -7615,7 +7615,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.streamReserve [status=implemented hash=8196ec5c7c40]
+    // parity: core/src/zig.ts#FFIRenderLib.streamReserve [status=implemented hash=619c44d7c28f]
     public func streamReserve(_ stream: FFIPointer, minLength: Int) throws -> ReserveInfo {
         try lock.withLock { store in
             guard let rec = store.spanFeeds[stream.address] else {
@@ -7664,13 +7664,13 @@ extension SwiftRenderLib {
         imageDestroy(context, image: image)
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageInfo [status=implemented hash=37cca0dbe98f]
+    // parity: core/src/zig.ts#FFIRenderLib.imageInfo [status=implemented hash=de53a3db73fc]
     public func imageInfo(_ data: [UInt8]) throws -> NativeImageInfo {
         let info = try OpenTUICore.imageInfo(data)
         return Self.mapImageInfo(info)
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageDecode [status=implemented hash=2ef08ee730a9]
+    // parity: core/src/zig.ts#FFIRenderLib.imageDecode [status=implemented hash=f3a9195ee6ff]
     public func imageDecode(_ context: NativeContextHandle, data: [UInt8]) throws -> ContextImageHandle {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_image_decode")
@@ -7681,7 +7681,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageCreateFromRgba [status=implemented hash=776adfd45863]
+    // parity: core/src/zig.ts#FFIRenderLib.imageCreateFromRgba [status=implemented hash=c7420608a060]
     public func imageCreateFromRgba(
         _ context: NativeContextHandle,
         pixels: [UInt8],
@@ -7698,7 +7698,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageCreateFromPixels [status=implemented hash=dc2a8c3d1112]
+    // parity: core/src/zig.ts#FFIRenderLib.imageCreateFromPixels [status=implemented hash=1f150507d864]
     public func imageCreateFromPixels(
         _ context: NativeContextHandle,
         pixels: [UInt8],
@@ -7752,7 +7752,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageRetain [status=implemented hash=9f24b00ed270]
+    // parity: core/src/zig.ts#FFIRenderLib.imageRetain [status=implemented hash=e53a74f93991]
     public func imageRetain(_ context: NativeContextHandle, image: ContextImageHandle) throws -> ContextImageHandle {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_image_retain")
@@ -7781,7 +7781,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageGetInfo [status=implemented hash=41b5e2a99cee]
+    // parity: core/src/zig.ts#FFIRenderLib.imageGetInfo [status=implemented hash=097307be8485]
     public func imageGetInfo(_ context: NativeContextHandle, image: ContextImageHandle) throws -> NativeImageInfo {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_image_get_info")
@@ -7804,7 +7804,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageCopyPng [status=implemented hash=bfccaef6e446]
+    // parity: core/src/zig.ts#FFIRenderLib.imageCopyPng [status=implemented hash=940b516928dc]
     public func imageCopyPng(_ context: NativeContextHandle, image: ContextImageHandle) throws -> [UInt8] {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_image_copy_png")
@@ -7815,7 +7815,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageTakePixels [status=implemented hash=8f1a22ea3032]
+    // parity: core/src/zig.ts#FFIRenderLib.imageTakePixels [status=implemented hash=ac39084c1cc3]
     public func imageTakePixels(
         _ context: NativeContextHandle,
         image: ContextImageHandle
@@ -7843,7 +7843,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageClone [status=implemented hash=cc010e2264a4]
+    // parity: core/src/zig.ts#FFIRenderLib.imageClone [status=implemented hash=72e21472bf73]
     public func imageClone(_ context: NativeContextHandle, image: ContextImageHandle) throws -> ContextImageHandle {
         try lock.withLock { store in
             let ctx = try requireContext(store, context, op: "ot_image_clone")
@@ -7872,7 +7872,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageResize [status=implemented hash=13ab4e87551c]
+    // parity: core/src/zig.ts#FFIRenderLib.imageResize [status=implemented hash=ae4e0bbb9474]
     public func imageResize(
         _ context: NativeContextHandle,
         image: ContextImageHandle,
@@ -7890,7 +7890,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageExtract [status=implemented hash=19930fb52658]
+    // parity: core/src/zig.ts#FFIRenderLib.imageExtract [status=implemented hash=e72eb7ec7115]
     public func imageExtract(
         _ context: NativeContextHandle,
         image: ContextImageHandle,
@@ -7908,7 +7908,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageExtend [status=implemented hash=ffe975437acf]
+    // parity: core/src/zig.ts#FFIRenderLib.imageExtend [status=implemented hash=b3abe01420b5]
     public func imageExtend(
         _ context: NativeContextHandle,
         image: ContextImageHandle,
@@ -7926,7 +7926,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageTransform [status=implemented hash=afe80d4a6049]
+    // parity: core/src/zig.ts#FFIRenderLib.imageTransform [status=implemented hash=7e7b9af782c3]
     public func imageTransform(
         _ context: NativeContextHandle,
         image: ContextImageHandle,
@@ -7952,7 +7952,7 @@ extension SwiftRenderLib {
         }
     }
 
-    // parity: core/src/zig.ts#FFIRenderLib.imageComposite [status=implemented hash=02a721fc74a4]
+    // parity: core/src/zig.ts#FFIRenderLib.imageComposite [status=implemented hash=72a4cc9ee498]
     public func imageComposite(
         _ context: NativeContextHandle,
         base: ContextImageHandle,

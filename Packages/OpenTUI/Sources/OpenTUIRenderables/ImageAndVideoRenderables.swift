@@ -456,7 +456,7 @@ public struct ImageRenderableOptions {
 
 /// Terminal image renderable backed by an RGBA `PixelImage` with half-block (`▀`/`▄`/`█`)
 /// true-color fallback rendering and Kitty Graphics Protocol encoding.
-// parity: core/src/renderables/Image.ts#ImageRenderable [status=implemented hash=799459b68d0b]
+// parity: core/src/renderables/Image.ts#ImageRenderable [status=implemented hash=256a294f0f63]
 open class ImageRenderable: Renderable, @unchecked Sendable {
     private var _source: ImageRenderableSource? = nil
     private var _image: PixelImage? = nil
@@ -609,7 +609,7 @@ open class ImageRenderable: Renderable, @unchecked Sendable {
         return ImageExtractOptions(left: 0, top: 0, width: img.width, height: img.height)
     }
 
-    // parity: core/src/renderables/Image.ts#ImageRenderable.getFittedSize [status=implemented hash=b8c314fb5435]
+    // parity: core/src/renderables/Image.ts#ImageRenderable.getFittedSize [status=implemented hash=4e4dd26a53d8]
     public func getFittedSize(
         targetWidth: Int,
         targetHeight: Int,
@@ -802,7 +802,7 @@ public struct VideoRenderableOptions {
 
 /// Frame-buffer backed video & animation presenter supporting `play`/`pause`/`seek`/`setFrame`,
 /// animation-clock playback advancement, loop/end callbacks, crop/fit, and half-block rendering.
-// parity: core/src/renderables/Video.ts#VideoRenderable [status=implemented hash=ead091cd06e9]
+// parity: core/src/renderables/Video.ts#VideoRenderable [status=implemented hash=ab792dceffd0]
 open class VideoRenderable: Renderable, @unchecked Sendable {
     private var _source: String? = nil
     private var _fit: ImageFit

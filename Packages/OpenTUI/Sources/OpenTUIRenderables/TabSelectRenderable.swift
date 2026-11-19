@@ -175,7 +175,7 @@ public typealias TabSelectOptions = TabSelectRenderableOptions
 
 /// Horizontal tab bar selection renderable with dynamic height, active underline,
 /// description row, horizontal scroll windowing, scroll arrows, keyboard navigation, and mouse click/wheel support.
-// parity: core/src/renderables/TabSelect.ts#TabSelectRenderable [status=implemented hash=41ba9327a3ea]
+// parity: core/src/renderables/TabSelect.ts#TabSelectRenderable [status=implemented hash=38902b658497]
 open class TabSelectRenderable: Renderable, @unchecked Sendable {
     public static let defaultBackgroundColor: Color = "transparent"
     public static let defaultTextColor: Color = "#FFFFFF"

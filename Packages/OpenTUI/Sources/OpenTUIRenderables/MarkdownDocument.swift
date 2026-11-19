@@ -4,7 +4,7 @@ import OpenTUILayout
 // MARK: - Markdown Block Kind & Incremental Block State
 
 /// Kind of block in a rendered Markdown document, matching `core/src/renderables/Markdown.ts#MarkdownBlockKind`.
-// parity: core/src/renderables/Markdown.ts#MarkdownBlockKind [status=implemented hash=0c493acfe009]
+// parity: core/src/renderables/Markdown.ts#MarkdownBlockKind [status=implemented hash=387074e8c778]
 public enum MarkdownBlockKind: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case paragraph
     case heading

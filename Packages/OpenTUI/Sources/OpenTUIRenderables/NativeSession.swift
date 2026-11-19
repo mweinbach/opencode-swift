@@ -765,7 +765,7 @@ public enum NativeSessionError: Error, Equatable, Hashable, Sendable, CustomStri
 // MARK: - NativeSession
 
 /// Pure-Swift terminal session coordinator matching `core/src/NativeSession.ts`.
-// parity: core/src/NativeSession.ts#NativeSession [status=adapted hash=f20328928d0c]
+// parity: core/src/NativeSession.ts#NativeSession [status=adapted hash=7ba9b726d167]
 public final class NativeSession: @unchecked Sendable {
     public let resourceContext: NativeResourceContext
     public let scheduler: any NativeSessionScheduler
@@ -1005,7 +1005,7 @@ public final class NativeSession: @unchecked Sendable {
         try setupTerminal(options)
     }
 
-    // parity: core/src/NativeSession.ts#NativeSession.setupTerminal [status=adapted hash=4e2c1c880445]
+    // parity: core/src/NativeSession.ts#NativeSession.setupTerminal [status=adapted hash=34a09d8a2a07]
     public func setupTerminal(_ options: NativeSessionTerminalOptions = NativeSessionTerminalOptions()) throws {
         try checkOpen()
         if terminalPhase == .active { return }
@@ -1138,7 +1138,7 @@ public final class NativeSession: @unchecked Sendable {
         }
     }
 
-    // parity: core/src/NativeSession.ts#NativeSession.renderSplit [status=adapted hash=f11c46f2bb9b]
+    // parity: core/src/NativeSession.ts#NativeSession.renderSplit [status=adapted hash=de2602f2bd92]
     @discardableResult
     public func renderSplit(
         frame: NativeSceneFrameRequest?,

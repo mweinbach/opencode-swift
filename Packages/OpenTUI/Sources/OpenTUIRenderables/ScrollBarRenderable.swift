@@ -20,7 +20,7 @@ public protocol ScrollUnitMetrics {
 }
 
 /// Cells per unit of a scrollbar's `scrollBy`, matching `core/src/renderables/ScrollBar.ts#scrollUnitSize`.
-// parity: core/src/renderables/ScrollBar.ts#scrollUnitSize [status=implemented hash=0d705355ee7b]
+// parity: core/src/renderables/ScrollBar.ts#scrollUnitSize [status=implemented hash=eb3263aaefc2]
 public func scrollUnitSize(_ bar: any ScrollUnitMetrics, unit: ScrollUnit) -> Double {
     switch unit {
     case .viewport: return bar.viewportSize
@@ -383,7 +383,7 @@ public struct ScrollBarOptions {
 
 /// Composite scrollbar pairing a `SliderRenderable` track with optional start/end `ArrowRenderable` buttons,
 /// matching `core/src/renderables/ScrollBar.ts#ScrollBarRenderable`.
-// parity: core/src/renderables/ScrollBar.ts#ScrollBarRenderable [status=implemented hash=14348f30fef7]
+// parity: core/src/renderables/ScrollBar.ts#ScrollBarRenderable [status=implemented hash=2b3895bd1005]
 open class ScrollBarRenderable: Renderable, ScrollUnitMetrics, @unchecked Sendable {
     private final class ArrowRepeatState {
         unowned let arrow: ArrowRenderable

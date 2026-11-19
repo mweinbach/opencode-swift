@@ -4,7 +4,7 @@ import OpenTUILayout
 // MARK: - FrameBufferOptions
 
 /// Options for constructing a `FrameBufferRenderable`, matching `core/src/renderables/FrameBuffer.ts#FrameBufferOptions`.
-// parity: core/src/renderables/FrameBuffer.ts#FrameBufferOptions [status=implemented hash=96b0cf75193f]
+// parity: core/src/renderables/FrameBuffer.ts#FrameBufferOptions [status=implemented hash=f1800681581a]
 public struct FrameBufferOptions {
     public var renderable: RenderableOptions
     public var width: Int

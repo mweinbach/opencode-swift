@@ -3,7 +3,7 @@
 // QR Code Kanji mode and Shift JIS byte encoding. Pure Swift, zero OS/Foundation imports.
 
 /// Complete non-ASCII Unicode-to-Shift JIS lookup table matching upstream `SHIFT_JIS_CODE_BY_CHAR`.
-// parity: qrcode/src/lib/qrcode.shift-jis.ts#SHIFT_JIS_CODE_BY_CHAR [status=implemented hash=5f2331290062]
+// parity: qrcode/src/lib/qrcode.shift-jis.ts#SHIFT_JIS_CODE_BY_CHAR [status=implemented hash=2a80b42560b0]
 public enum QRCodeShiftJIS {
     /// Total number of non-ASCII Unicode-to-Shift JIS entries in the embedded table.
     public static let entryCount: Int = 6944

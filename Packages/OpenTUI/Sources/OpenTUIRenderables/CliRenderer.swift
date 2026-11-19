@@ -220,7 +220,7 @@ public struct CliRendererStats: Equatable, Sendable {
 // MARK: - CliRendererConfig
 
 /// Configuration options for constructing a `CliRenderer`.
-// parity: core/src/renderer.ts#CliRendererConfig [status=adapted hash=7f83fac3b9b1]
+// parity: core/src/renderer.ts#CliRendererConfig [status=adapted hash=223b13c7f64c]
 public struct CliRendererConfig {
     public var width: Int
     public var height: Int
@@ -314,7 +314,7 @@ public struct CliRendererListenerToken: Equatable, Hashable, Sendable {
 /// Pure-Swift terminal UI renderer coordinating the `RootRenderable` scene graph, Flexbox layout,
 /// double-buffered `AnsiDiffRenderer`, hit-test grid, `StdinParser` input routing, mouse/hover/drag/selection,
 /// focus management, and theme-mode detection.
-// parity: core/src/renderer.ts#CliRenderer [status=adapted hash=ad9726ea50d0]
+// parity: core/src/renderer.ts#CliRenderer [status=adapted hash=81cb2c8321ec]
 public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscriptionSource, @unchecked Sendable {
     private static let clickRepeatIntervalMs: Double = 500
     private static let animationTimerSlackMs: Double = 1
@@ -744,7 +744,7 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         }
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.disableKittyKeyboard [status=implemented hash=b66933512fe4]
+    // parity: core/src/renderer.ts#CliRenderer.disableKittyKeyboard [status=implemented hash=b10dc2b54df8]
     public func disableKittyKeyboard() {
         kittyKeyboardFlags = 0
         _capabilities?.kittyKeyboard = false
@@ -753,7 +753,7 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         }
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.waitForThemeMode [status=implemented hash=3a9386de6924]
+    // parity: core/src/renderer.ts#CliRenderer.waitForThemeMode [status=implemented hash=024923693e16]
     public func waitForThemeMode(timeoutMs: Double = 1000) async -> ThemeMode? {
         await themeModeState.waitForThemeMode(timeoutMs: max(0, timeoutMs), isDestroyed: _isDestroyed)
     }
@@ -929,7 +929,7 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         paletteCache.removeAll()
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.getPalette [status=adapted hash=539e36afd2c5]
+    // parity: core/src/renderer.ts#CliRenderer.getPalette [status=adapted hash=0df0b66643d8]
     public func getPalette(options: GetPaletteOptions = GetPaletteOptions()) -> TerminalColors {
         let size = max(1, min(options.size, 256))
         if let cached = paletteCache[size] {
@@ -1002,7 +1002,7 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         }
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.onAnimationTick [status=implemented hash=44f2e4b06acb]
+    // parity: core/src/renderer.ts#CliRenderer.onAnimationTick [status=implemented hash=abedb9da4e85]
     @discardableResult
     public func onAnimationTick(
         fps: Double,
@@ -2027,7 +2027,7 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         }
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.updateSelection [status=implemented hash=0ddcb8ce5527]
+    // parity: core/src/renderer.ts#CliRenderer.updateSelection [status=implemented hash=a95ac9d857b7]
     public func updateSelection(
         _ currentRenderable: Renderable?,
         x: Int,

@@ -607,7 +607,7 @@ private enum StagedSceneMutation {
 // MARK: - NativeScene
 
 /// Pure-Swift retained-mode scene graph & coordinator matching `core/src/NativeScene.ts`.
-// parity: core/src/NativeScene.ts#NativeScene [status=adapted hash=19364ae62eb2]
+// parity: core/src/NativeScene.ts#NativeScene [status=adapted hash=a7137830a8a0]
 public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked Sendable {
     public let driver: NativeSession
     private weak var renderer: CliRenderer?
@@ -888,7 +888,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         if initialHeight > 0 { record.layout.height = Float(initialHeight) }
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.setStyle [status=implemented hash=978b3ee393cd]
+    // parity: core/src/NativeScene.ts#NativeScene.setStyle [status=implemented hash=f7d98d302e94]
     public func setStyle(
         node: AnyObject,
         group: YogaStyleGroup,
@@ -912,7 +912,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         yogaHost.stageScene(self)
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.getStyle [status=implemented hash=29b7241e9cac]
+    // parity: core/src/NativeScene.ts#NativeScene.getStyle [status=implemented hash=3f7ced88b780]
     public func getStyle(
         node: AnyObject,
         group: YogaStyleGroup,
@@ -925,7 +925,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         return readStyle(from: record, group: group, kind: kind, edge: edge)
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.setMeasureFunc [status=implemented hash=bf478775a0af]
+    // parity: core/src/NativeScene.ts#NativeScene.setMeasureFunc [status=implemented hash=4912f2f90738]
     public func setMeasureFunc(_ node: AnyObject, measure: FlexMeasureFunc?) throws {
         try flushStaged()
         let handle = try resolveHandle(node)
@@ -933,7 +933,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         record.flexNode.setMeasureFunc(measure)
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.hasMeasureFunc [status=implemented hash=d2bdc0bc737c]
+    // parity: core/src/NativeScene.ts#NativeScene.hasMeasureFunc [status=implemented hash=0cc877069bf0]
     public func hasMeasureFunc(_ node: AnyObject) throws -> Bool {
         try flushStaged()
         let handle = try resolveHandle(node)
@@ -941,28 +941,28 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         return record.flexNode.hasMeasureFunc
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.reachesHooks [status=implemented hash=11c01eb05aa7]
+    // parity: core/src/NativeScene.ts#NativeScene.reachesHooks [status=implemented hash=ecce10eb31d7]
     public func reachesHooks(_ node: AnyObject) throws -> Bool {
         try flushStaged()
         let handle = try resolveHandle(node)
         return subtreeHasHooks(handle)
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.painted [status=implemented hash=b5c77afc5ad5]
+    // parity: core/src/NativeScene.ts#NativeScene.painted [status=implemented hash=dce3ec8bc447]
     public func painted(_ node: AnyObject) throws -> Bool {
         try flushStaged()
         let handle = try resolveHandle(node)
         return records[handle]?.paintedInLastFrame ?? false
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.markDirty [status=implemented hash=bc315f09ab29]
+    // parity: core/src/NativeScene.ts#NativeScene.markDirty [status=implemented hash=1a15675a2f02]
     public func markDirty(_ node: AnyObject) throws {
         try flushStaged()
         let handle = try resolveHandle(node)
         records[handle]?.flexNode.markDirty()
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.setPositions [status=implemented hash=91b3465ce9d0]
+    // parity: core/src/NativeScene.ts#NativeScene.setPositions [status=implemented hash=97523b687cd7]
     public func setPositions(
         _ node: AnyObject,
         mask: Int,
@@ -1142,7 +1142,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         }
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.getTextSelection [status=implemented hash=76e5b6ac7b87]
+    // parity: core/src/NativeScene.ts#NativeScene.getTextSelection [status=implemented hash=b2b2f03e347d]
     public func getTextSelection(_ node: AnyObject) throws -> TextSelectionRange? {
         try flushStaged()
         let handle = try resolveHandle(node)
@@ -1234,7 +1234,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         records[handle]?.sliderOptions = options
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.getSliderThumb [status=implemented hash=df9d2cbf6925]
+    // parity: core/src/NativeScene.ts#NativeScene.getSliderThumb [status=implemented hash=f05e1566059f]
     public func getSliderThumb(_ node: AnyObject) throws -> SliderThumb {
         try flushStaged()
         let handle = try resolveHandle(node)
@@ -1292,7 +1292,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         records[handle]?.crop = crop
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.videoNode [status=adapted hash=415710d96fce]
+    // parity: core/src/NativeScene.ts#NativeScene.videoNode [status=adapted hash=114b6995d958]
     public func videoNode(_ node: AnyObject) throws -> (context: NativeContextHandle, node: SceneNodeHandle) {
         try flushStaged()
         return (driver.context, try resolveHandle(node))
@@ -1474,7 +1474,7 @@ public final class NativeScene: YogaSceneStyleBridge, YogaHostScene, @unchecked 
         changeLayout()
     }
 
-    // parity: core/src/NativeScene.ts#NativeScene.getLayout [status=implemented hash=e42d0b1675a9]
+    // parity: core/src/NativeScene.ts#NativeScene.getLayout [status=implemented hash=5fcfc1f24dd0]
     public func getLayout(
         _ node: AnyObject,
         kind: NativeSceneLayoutKind = .computed

@@ -24,7 +24,7 @@ public enum InputDeleteDirection: String, Equatable, Hashable, Sendable {
 
 // MARK: - InputOptions / InputRenderableOptions
 
-// parity: core/src/renderables/Input.ts#InputRenderableOptions [status=implemented hash=429656026645]
+// parity: core/src/renderables/Input.ts#InputRenderableOptions [status=implemented hash=24c40f219a00]
 public struct InputRenderableOptions {
     public var renderable: RenderableOptions
     /// Initial text value (newlines are stripped).
@@ -180,7 +180,7 @@ public typealias InputOptions = InputRenderableOptions
 /// - Newlines (`\n`, `\r`) are stripped before `maxLength` truncation.
 /// - `maxLength` and `minLength` count UTF-16 code units without ever splitting characters/surrogate pairs/clusters.
 /// - Enter/Return/Linefeed triggers `submit()` instead of inserting a newline.
-// parity: core/src/renderables/Input.ts#InputRenderable [status=implemented hash=10f30e92cf75]
+// parity: core/src/renderables/Input.ts#InputRenderable [status=implemented hash=18a657f1d73d]
 open class InputRenderable: TextareaRenderable, @unchecked Sendable {
     public static let defaultPlaceholder: String = ""
     public static let defaultMaxLength: Int = 1000
@@ -304,6 +304,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
 
     // MARK: - Single-Line Editing Overrides
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.newLine [status=implemented hash=06ed15c2912e]
     @discardableResult
     open override func newLine() -> Bool {
         false
@@ -313,6 +314,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         insertText(char)
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.insertText [status=implemented hash=0fc77d75da85]
     open override func insertText(_ text: String) {
         let sanitized = stripInputNewlines(text)
         guard !sanitized.isEmpty else { return }
@@ -371,11 +373,13 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
     }
 
     /// String-only placeholder accessor convenience (mirrors `placeholder`).
+    // parity: core/src/renderables/Input.ts#InputRenderable.placeholder [status=adapted hash=14bee42ad0cd]
     public var placeholderText: String {
         get { placeholder?.plainText ?? "" }
         set { placeholder = .text(newValue) }
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.initialValue [status=implemented hash=5f42ff148d1c]
     open override var initialValue: String {
         get { plainText }
         set { _ = newValue }
@@ -383,11 +387,13 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
 
     // MARK: - Focus, Submit & Deletions
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.focus [status=implemented hash=f66669eb6fe3]
     open override func focus() {
         super.focus()
         _lastCommittedValue = plainText
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.blur [status=implemented hash=84dbd53cb405]
     open override func blur() {
         if !isDestroyed {
             let currentValue = plainText
@@ -399,6 +405,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         super.blur()
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.submit [status=implemented hash=e3b3873c004f]
     @discardableResult
     open override func submit() -> Bool {
         let currentValue = plainText
@@ -416,6 +423,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return true
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteCharBackward [status=implemented hash=c1170085c661]
     @discardableResult
     open override func deleteCharBackward() -> Bool {
         let result = super.deleteCharBackward()
@@ -423,6 +431,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteChar [status=implemented hash=8043f082c14f]
     @discardableResult
     open override func deleteChar() -> Bool {
         let result = super.deleteChar()
@@ -430,6 +439,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteLine [status=implemented hash=6dda3b232c5f]
     @discardableResult
     open override func deleteLine() -> Bool {
         let result = super.deleteLine()
@@ -437,6 +447,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteWordBackward [status=implemented hash=536689468c4d]
     @discardableResult
     open override func deleteWordBackward() -> Bool {
         let result = super.deleteWordBackward()
@@ -444,6 +455,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteWordForward [status=implemented hash=ea59964830ec]
     @discardableResult
     open override func deleteWordForward() -> Bool {
         let result = super.deleteWordForward()
@@ -451,6 +463,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteToLineStart [status=implemented hash=d14cc1546622]
     @discardableResult
     open override func deleteToLineStart() -> Bool {
         let result = super.deleteToLineStart()
@@ -458,6 +471,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.deleteToLineEnd [status=implemented hash=3555ebf50aef]
     @discardableResult
     open override func deleteToLineEnd() -> Bool {
         let result = super.deleteToLineEnd()
@@ -465,6 +479,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.undo [status=implemented hash=aab9649f9164]
     @discardableResult
     open override func undo() -> Bool {
         let result = super.undo()
@@ -472,6 +487,7 @@ open class InputRenderable: TextareaRenderable, @unchecked Sendable {
         return result
     }
 
+    // parity: core/src/renderables/Input.ts#InputRenderable.redo [status=implemented hash=6504cb035e79]
     @discardableResult
     open override func redo() -> Bool {
         let result = super.redo()

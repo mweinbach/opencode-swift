@@ -39,7 +39,7 @@ public enum PluginErrorPhase: String, Equatable, Hashable, Sendable, Codable {
 }
 
 /// Origin of a reported plugin error (`"registry"`, `"core"`, or custom host string).
-// parity: core/src/plugins/types.ts#PluginErrorSource [status=implemented hash=6dbda2d19d2b]
+// parity: core/src/plugins/types.ts#PluginErrorSource [status=implemented hash=9de1af3404fa]
 public struct PluginErrorSource: RawRepresentable, Equatable, Hashable, Sendable, Codable, ExpressibleByStringLiteral {
     public let rawValue: String
 
@@ -223,7 +223,7 @@ internal struct CoreSlotContributionMeta {
 
 /// Ordered, error-contained plugin registry supporting registration, dynamic priority ordering,
 /// batched change notifications, and per-renderer teardown.
-// parity: core/src/plugins/registry.ts#SlotRegistry [status=implemented hash=f2d06cd8cbe3]
+// parity: core/src/plugins/registry.ts#SlotRegistry [status=implemented hash=2f35591654f6]
 public final class SlotRegistry<TNode, TSlotName: Hashable, TProps, TContext: PluginContext>: @unchecked Sendable {
     private final class RegisteredPlugin {
         let plugin: Plugin<TNode, TSlotName, TProps, TContext>
@@ -623,7 +623,7 @@ private func getSlotRegistryStore(for renderer: CliRenderer) -> RendererSlotRegi
 }
 
 /// Creates or retrieves a keyed `SlotRegistry` scoped to `renderer` that automatically clears on `renderer.destroy()`.
-// parity: core/src/plugins/registry.ts#createSlotRegistry [status=implemented hash=3eb243ca84e4]
+// parity: core/src/plugins/registry.ts#createSlotRegistry [status=implemented hash=7603cdefd1b2]
 public func createSlotRegistry<TNode, TSlotName: Hashable, TProps, TContext: PluginContext>(
     renderer: CliRenderer,
     key: String,
@@ -661,16 +661,16 @@ public func createSlotRegistry<TNode, TSlotName: Hashable, TProps, TContext: Plu
 public typealias CoreSlotMode = SlotMode
 
 /// Specialized `SlotRegistry` whose slot renderers produce `Renderable` nodes.
-// parity: core/src/plugins/core-slot.ts#CoreSlotRegistry [status=implemented hash=13ff57ed4270]
+// parity: core/src/plugins/core-slot.ts#CoreSlotRegistry [status=implemented hash=c69b49bf2cb0]
 public typealias CoreSlotRegistry<TSlotName: Hashable, TContext: PluginContext, TData> =
     SlotRegistry<Renderable, TSlotName, TData, TContext>
 
 /// Synchronous core slot renderer producing a `Renderable`.
-// parity: core/src/plugins/core-slot.ts#CoreSlotRenderer [status=implemented hash=fab01d915406]
+// parity: core/src/plugins/core-slot.ts#CoreSlotRenderer [status=implemented hash=1dec1aa18fa9]
 public typealias CoreSlotRenderer<TContext: PluginContext, TData> = (TContext, TData) throws -> Renderable
 
 /// Plugin-owned slot contribution with explicit activation, deactivation, and disposal lifecycle hooks.
-// parity: core/src/plugins/core-slot.ts#CoreManagedSlot [status=implemented hash=ea4519cc073e]
+// parity: core/src/plugins/core-slot.ts#CoreManagedSlot [status=implemented hash=dc3642b01dec]
 public struct CoreManagedSlot<TContext: PluginContext, TData> {
     public var render: CoreSlotRenderer<TContext, TData>
     public var onActivate: ((TContext) throws -> Void)?
@@ -691,14 +691,14 @@ public struct CoreManagedSlot<TContext: PluginContext, TData> {
 }
 
 /// Either a host-owned plain renderer closure or a plugin-owned `CoreManagedSlot`.
-// parity: core/src/plugins/core-slot.ts#CoreSlotContribution [status=implemented hash=d036177b4088]
+// parity: core/src/plugins/core-slot.ts#CoreSlotContribution [status=implemented hash=d7317e08f74e]
 public enum CoreSlotContribution<TContext: PluginContext, TData> {
     case renderer(CoreSlotRenderer<TContext, TData>)
     case managed(CoreManagedSlot<TContext, TData>)
 }
 
 /// Core plugin descriptor registering one or more `CoreSlotContribution`s.
-// parity: core/src/plugins/core-slot.ts#CorePlugin [status=implemented hash=f0b43fc1416d]
+// parity: core/src/plugins/core-slot.ts#CorePlugin [status=implemented hash=cdab8cfb2110]
 public struct CorePlugin<TSlotName: Hashable, TContext: PluginContext, TData> {
     public var id: String
     public var order: Int?
@@ -722,7 +722,7 @@ public struct CorePlugin<TSlotName: Hashable, TContext: PluginContext, TData> {
 }
 
 /// Resolved `(id, renderer)` entry returned by `resolveCoreSlot`.
-// parity: core/src/plugins/core-slot.ts#CoreResolvedSlotRenderer [status=implemented hash=9674294d38f8]
+// parity: core/src/plugins/core-slot.ts#CoreResolvedSlotRenderer [status=implemented hash=d01467d9b34e]
 public struct CoreResolvedSlotRenderer<TContext: PluginContext, TData> {
     public let id: String
     public let renderer: CoreSlotRenderer<TContext, TData>
@@ -739,7 +739,7 @@ public typealias CoreSlotFailurePlaceholder<TContext: PluginContext> =
     (PluginErrorEvent, TContext) throws -> [Renderable]
 
 /// Creates or retrieves the default `"core:slot-registry"` for `renderer`.
-// parity: core/src/plugins/core-slot.ts#createCoreSlotRegistry [status=implemented hash=b7f9995743a3]
+// parity: core/src/plugins/core-slot.ts#createCoreSlotRegistry [status=implemented hash=4620cdc72265]
 public func createCoreSlotRegistry<TSlotName: Hashable, TContext: PluginContext, TData>(
     renderer: CliRenderer,
     context: TContext,
@@ -754,7 +754,7 @@ public func createCoreSlotRegistry<TSlotName: Hashable, TContext: PluginContext,
 }
 
 /// Registers a `CorePlugin` (handling both host-owned renderers and plugin-owned `CoreManagedSlot`s).
-// parity: core/src/plugins/core-slot.ts#registerCorePlugin [status=implemented hash=16b8fa056f95]
+// parity: core/src/plugins/core-slot.ts#registerCorePlugin [status=implemented hash=f3718753aeab]
 @discardableResult
 public func registerCorePlugin<TSlotName: Hashable, TContext: PluginContext, TData>(
     in registry: CoreSlotRegistry<TSlotName, TContext, TData>,
@@ -795,7 +795,7 @@ public func registerCorePlugin<TSlotName: Hashable, TContext: PluginContext, TDa
 }
 
 /// Resolves all registered renderers for `slot` in deterministic priority order.
-// parity: core/src/plugins/core-slot.ts#resolveCoreSlot [status=implemented hash=011481ed12c8]
+// parity: core/src/plugins/core-slot.ts#resolveCoreSlot [status=implemented hash=83f3dafcc3e2]
 public func resolveCoreSlot<TSlotName: Hashable, TContext: PluginContext, TData>(
     in registry: CoreSlotRegistry<TSlotName, TContext, TData>,
     slot: TSlotName
@@ -808,7 +808,7 @@ public func resolveCoreSlot<TSlotName: Hashable, TContext: PluginContext, TData>
 // MARK: - SlotRenderable / CoreSlotRenderable
 
 /// Declarative options for constructing a `SlotRenderable` (`CoreSlotRenderable`).
-// parity: core/src/plugins/core-slot.ts#SlotRenderableOptions [status=implemented hash=88087ea39962]
+// parity: core/src/plugins/core-slot.ts#SlotRenderableOptions [status=implemented hash=b52c1f74dd9c]
 public struct SlotRenderableOptions<TSlotName: Hashable, TContext: PluginContext, TData> {
     public var renderable: RenderableOptions
     public var registry: CoreSlotRegistry<TSlotName, TContext, TData>
@@ -840,7 +840,7 @@ public struct SlotRenderableOptions<TSlotName: Hashable, TContext: PluginContext
 /// Scene-graph container `Renderable` that mounts plugin contributions for a named slot with
 /// `.append`, `.replace`, and `.singleWinner` (`.single`) composition modes, fallback nodes,
 /// managed slot lifecycle hooks, and per-plugin error boundaries.
-// parity: core/src/plugins/core-slot.ts#SlotRenderable [status=implemented hash=e3a7bb5d8b68]
+// parity: core/src/plugins/core-slot.ts#SlotRenderable [status=implemented hash=728856e6920a]
 public final class SlotRenderable<TSlotName: Hashable, TContext: PluginContext, TData>: Renderable, @unchecked Sendable {
     private struct ResolvedEntry {
         let id: String
@@ -1418,7 +1418,7 @@ public struct RuntimePluginDescriptor: Sendable {
 }
 
 /// Creates a `RuntimePluginDescriptor` mapping `@opentui/core`, `@opentui/core/testing`, and additional specifiers.
-// parity: core/src/runtime-plugin.ts#createRuntimePlugin [status=adapted hash=4b166f960afa]
+// parity: core/src/runtime-plugin.ts#createRuntimePlugin [status=adapted hash=8e8055cbc45a]
 public func createRuntimePlugin(_ options: CreateRuntimePluginOptions = CreateRuntimePluginOptions()) -> RuntimePluginDescriptor {
     var modules: [String: RuntimeModuleEntry] = [
         coreRuntimeSpecifier: options.core ?? .exports([:]),
@@ -1511,7 +1511,7 @@ public enum RuntimePluginSupport {
 
 /// Idempotently installs process-wide runtime plugin support, returning `true` on initial install
 /// or `false` when already installed with compatible options. Throws on incompatible re-configuration.
-// parity: core/src/runtime-plugin-support-configure.ts#ensureRuntimePluginSupport [status=adapted hash=cccda11e850d]
+// parity: core/src/runtime-plugin-support-configure.ts#ensureRuntimePluginSupport [status=adapted hash=21f67016a16b]
 @discardableResult
 public func ensureRuntimePluginSupport(
     _ options: CreateRuntimePluginOptions = CreateRuntimePluginOptions()
@@ -1520,6 +1520,7 @@ public func ensureRuntimePluginSupport(
 }
 
 /// Convenience alias for `ensureRuntimePluginSupport(_:)`.
+// parity: core/src/runtime-plugin-support.ts#ensureRuntimePluginSupport [status=adapted hash=7347886ead1e]
 @discardableResult
 public func configureRuntimePluginSupport(
     _ options: CreateRuntimePluginOptions = CreateRuntimePluginOptions()

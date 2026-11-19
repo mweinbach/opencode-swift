@@ -32,7 +32,7 @@ public final class ASCIIFontSelectionHelper {
         localSelection != nil
     }
 
-    // parity: core/src/lib/selection.ts#ASCIIFontSelectionHelper.getSelection [status=implemented hash=35496c0888a5]
+    // parity: core/src/lib/selection.ts#ASCIIFontSelectionHelper.getSelection [status=implemented hash=c1f5b1b8b94a]
     public func getSelection() -> ASCIIFontSelectionRange? {
         localSelection
     }
@@ -191,7 +191,7 @@ public struct ASCIIFontOptions {
 
 /// Selectable ASCII banner font renderable backed by a `FrameBufferRenderable`,
 /// matching `core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable`.
-// parity: core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable [status=implemented hash=e7ef03b2d33d]
+// parity: core/src/renderables/ASCIIFont.ts#ASCIIFontRenderable [status=implemented hash=7a9068caa3a0]
 open class ASCIIFontRenderable: FrameBufferRenderable, @unchecked Sendable {
     public static let defaultFont: ASCIIFontName = .tiny
     public static let defaultColor: RGBA = RGBA.fromHex("#FFFFFF")

@@ -214,7 +214,7 @@ public struct CodeOptions {
 /// Integrates `SyntaxStyle`, pluggable `SyntaxHighlighter` (defaulting to `BuiltInSyntaxHighlighter`),
 /// `treeSitterToTextChunks`, conceal line-source remapping, streaming preview retention,
 /// and both synchronous and asynchronous highlighting paths.
-// parity: core/src/renderables/Code.ts#CodeRenderable [status=implemented hash=b99372d616ce]
+// parity: core/src/renderables/Code.ts#CodeRenderable [status=implemented hash=a40e058e51f6]
 open class CodeRenderable: TextBufferRenderable, @unchecked Sendable {
     private static let previewVersion: Int = -2
 
@@ -351,7 +351,7 @@ open class CodeRenderable: TextBufferRenderable, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/renderables/Code.ts#CodeRenderable.initialStyledText [status=implemented hash=f50bff178e46]
+    // parity: core/src/renderables/Code.ts#CodeRenderable.initialStyledText [status=implemented hash=3d6706dbae3d]
     public var initialStyledText: StyledText? {
         get { _initialStyledText }
         set {
@@ -507,6 +507,7 @@ open class CodeRenderable: TextBufferRenderable, @unchecked Sendable {
 
     // MARK: - LineInfo & Conceal Remapping
 
+    // parity: core/src/renderables/Code.ts#CodeRenderable.lineInfo [status=implemented hash=3ae114014145]
     open override var lineInfo: LineInfo {
         guard let renderedLineSources = _renderedLineSources else {
             return super.lineInfo
@@ -529,6 +530,7 @@ open class CodeRenderable: TextBufferRenderable, @unchecked Sendable {
         return mapped
     }
 
+    // parity: core/src/renderables/Code.ts#CodeRenderable.getLineSources [status=implemented hash=c973bb5a59b7]
     open override func getLineSources(startLine: Int, lineCount: Int) -> [Int] {
         let sources = super.getLineSources(startLine: startLine, lineCount: lineCount)
         guard let renderedLineSources = _renderedLineSources else {
@@ -539,6 +541,7 @@ open class CodeRenderable: TextBufferRenderable, @unchecked Sendable {
         }
     }
 
+    // parity: core/src/renderables/Code.ts#CodeRenderable.wrapMode [status=implemented hash=a9d006256bd1]
     open override var wrapMode: TextWrapMode {
         get { super.wrapMode }
         set {

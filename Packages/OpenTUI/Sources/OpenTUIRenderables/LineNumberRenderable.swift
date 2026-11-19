@@ -52,7 +52,7 @@ public enum LineColorValue: Equatable, Hashable, Sendable, ExpressibleByStringLi
 }
 
 /// Horizontal spacing and minimum-width configuration for `GutterRenderable`.
-// parity: core/src/renderables/LineNumberRenderable.ts#GutterLayout [status=implemented hash=816154f60de6]
+// parity: core/src/renderables/LineNumberRenderable.ts#GutterLayout [status=implemented hash=6929c3b53fc4]
 public struct GutterLayout: Equatable, Hashable, Sendable {
     public var minWidth: Int
     /// Columns before the line numbers, painted in each line's gutter color. Defaults to 1.
@@ -485,7 +485,7 @@ public final class GutterRenderable: Renderable, @unchecked Sendable {
 
 /// Wrapper container rendering a line-number & sign gutter alongside any `Renderable & LineInfoProvider`,
 /// plus optional full-width per-line gutter and content background highlights.
-// parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable [status=implemented hash=ac3064920884]
+// parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable [status=implemented hash=7ebd8de21e08]
 open class LineNumberRenderable: Renderable, @unchecked Sendable {
     public private(set) var gutter: GutterRenderable? = nil
     public private(set) var target: (Renderable & LineInfoProvider)? = nil
@@ -589,6 +589,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
     }
 
     /// Intercepts child insertion and attaches the first `LineInfoProvider` as the target.
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.add [status=implemented hash=f1a16106a2cc]
     @discardableResult
     open override func add(_ child: Renderable, index: Int? = nil) -> Int {
         guard !isDestroyed else { return -1 }
@@ -598,6 +599,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         return -1
     }
 
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.remove [status=adapted hash=f7141dae06d8]
     open override func remove(_ child: Renderable) {
         if _isDestroying {
             super.remove(child)
@@ -644,12 +646,14 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         }
     }
 
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.destroy [status=implemented hash=3e0df50a22b4]
     open override func destroy() {
         guard !isDestroyed else { return }
         _isDestroying = true
         super.destroy()
     }
 
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.destroyRecursively [status=implemented hash=576b1fe4ed30]
     open override func destroyRecursively() {
         guard !isDestroyed else { return }
         _isDestroying = true
@@ -781,7 +785,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         gutter?.setLineColors(gutter: _lineColorsGutter, content: _lineColorsContent)
     }
 
-    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineColors [status=implemented hash=8a6359c9f6dd]
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.getLineColors [status=implemented hash=32dd448e6c32]
     public func getLineColors() -> (gutter: [Int: RGBA], content: [Int: RGBA]) {
         (gutter: _lineColorsGutter, content: _lineColorsContent)
     }
@@ -839,7 +843,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         gutter?.setLayout(layout)
     }
 
-    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineNumberOffset [status=implemented hash=32f8d026bac4]
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.lineNumberOffset [status=implemented hash=945638eeaa0c]
     public var lineNumberOffset: Int {
         get { _lineNumberOffset }
         set {
@@ -849,7 +853,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setHideLineNumbers [status=implemented hash=73455386bb1c]
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setHideLineNumbers [status=implemented hash=2149a6d5bfb6]
     public func setHideLineNumbers(_ hideLineNumbers: Set<Int>) {
         _hideLineNumbers = hideLineNumbers
         gutter?.setHideLineNumbers(hideLineNumbers)
@@ -866,7 +870,7 @@ open class LineNumberRenderable: Renderable, @unchecked Sendable {
         set { setHideLineNumbers(newValue) }
     }
 
-    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineNumbers [status=implemented hash=5410c9e3c32f]
+    // parity: core/src/renderables/LineNumberRenderable.ts#LineNumberRenderable.setLineNumbers [status=implemented hash=5bf3e8b9ea67]
     public func setLineNumbers(_ lineNumbers: [Int: Int]) {
         _lineNumbers = lineNumbers
         gutter?.setLineNumbers(lineNumbers)

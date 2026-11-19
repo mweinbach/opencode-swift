@@ -24,7 +24,7 @@ public enum CursorStyle: String, Equatable, Hashable, Sendable, Codable, CaseIte
 }
 
 /// Terminal mouse pointer cursor shape, matching `core/src/types.ts#MousePointerStyle`.
-// parity: core/src/types.ts#MousePointerStyle [status=implemented hash=2ed771e0d677]
+// parity: core/src/types.ts#MousePointerStyle [status=implemented hash=ff367afca416]
 public enum MousePointerStyle: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case auto
     case `default`
@@ -488,7 +488,7 @@ public struct LayoutOptions: Equatable, Hashable, Sendable {
 }
 
 /// Complete layout, visibility, rendering, and event-handler options for initializing a `Renderable`.
-// parity: core/src/Renderable.ts#RenderableOptions [status=implemented hash=43b41a67323e]
+// parity: core/src/Renderable.ts#RenderableOptions [status=implemented hash=c7716d789bb9]
 public struct RenderableOptions {
     public var id: String?
     public var width: FlexValue?
@@ -811,6 +811,58 @@ open class BaseRenderable: @unchecked Sendable {
         set { _visible = newValue }
     }
 
+    // parity: core/src/Renderable.ts#BaseRenderable.add [status=implemented hash=ee82ab482c01]
+    @discardableResult
+    open func add(_ obj: Any, index: Int? = nil) -> Int {
+        _ = obj
+        _ = index
+        return -1
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.remove [status=implemented hash=0f7c8a2cab40]
+    open func remove(_ child: BaseRenderable) {
+        _ = child
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.insertBefore [status=implemented hash=70763eba7369]
+    open func insertBefore(_ obj: Any, anchor: Any?) {
+        _ = obj
+        _ = anchor
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.getChildren [status=adapted hash=c200a538f8b3]
+    open func getBaseChildren() -> [BaseRenderable] {
+        []
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.getChildrenCount [status=implemented hash=69315b187469]
+    open func getChildrenCount() -> Int {
+        getBaseChildren().count
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.getRenderable [status=adapted hash=d2f3d0dc930b]
+    open func getBaseRenderable(_ id: String) -> BaseRenderable? {
+        getBaseChildren().first { $0.id == id }
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.requestRender [status=implemented hash=fb8e0191faa0]
+    open func requestRender() {
+        markDirty()
+    }
+
+    // parity: core/src/Renderable.ts#BaseRenderable.findDescendantById [status=adapted hash=31264de3b072]
+    open func findBaseDescendantById(_ id: String) -> BaseRenderable? {
+        for child in getBaseChildren() {
+            if child.id == id {
+                return child
+            }
+            if let found = child.findBaseDescendantById(id) {
+                return found
+            }
+        }
+        return nil
+    }
+
     // parity: core/src/Renderable.ts#BaseRenderable.destroy [status=implemented hash=7d17e161de2d]
     open func destroy() {}
 
@@ -883,7 +935,7 @@ open class BaseRenderable: @unchecked Sendable {
 // MARK: - Renderable
 
 /// Core layout-backed, event-handling, composable terminal UI node matching `core/src/Renderable.ts#Renderable`.
-// parity: core/src/Renderable.ts#Renderable [status=adapted hash=032dea1c9599]
+// parity: core/src/Renderable.ts#Renderable [status=adapted hash=f81cec58be12]
 open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, ScrollChainNode, @unchecked Sendable {
     /// Looks up a live `Renderable` by its hit-grid numeric ID.
     public static func renderable(forNumber num: UInt32) -> Renderable? {
@@ -1411,7 +1463,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
     }
 
     // parity: core/src/Renderable.ts#Renderable.overflow [status=implemented hash=12a05048d539]
-    public var overflow: Overflow {
+    open var overflow: Overflow {
         get { layoutNode.style.overflow }
         set {
             guard !_isDestroyed, layoutNode.style.overflow != newValue else { return }
@@ -1660,7 +1712,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
     }
 
     // parity: core/src/Renderable.ts#Renderable.primaryAxis [status=implemented hash=1c95f466cc84]
-    public var primaryAxis: ViewportDirection {
+    open var primaryAxis: ViewportDirection {
         if _layoutMode != .list && (flexDirection == .row || flexDirection == .rowReverse) {
             return .row
         }
@@ -2006,9 +2058,33 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
 
     open func onRemove() {}
 
+    open override func add(_ obj: Any, index: Int? = nil) -> Int {
+        guard let child = obj as? Renderable else { return -1 }
+        return add(child, index: index)
+    }
+
+    open override func remove(_ child: BaseRenderable) {
+        if let renderable = child as? Renderable {
+            remove(renderable)
+        }
+    }
+
+    open override func insertBefore(_ obj: Any, anchor: Any?) {
+        guard let child = obj as? Renderable else { return }
+        _ = insertBefore(child, anchor: anchor as? Renderable)
+    }
+
+    open override func getBaseChildren() -> [BaseRenderable] {
+        _childrenInLayoutOrder
+    }
+
     // parity: core/src/Renderable.ts#Renderable.getRenderable [status=implemented hash=92ecd34f967c]
     public func getRenderable(_ id: String) -> Renderable? {
         _childrenInLayoutOrder.first { $0.id == id }
+    }
+
+    open override func getBaseRenderable(_ id: String) -> BaseRenderable? {
+        getRenderable(id)
     }
 
     // parity: core/src/Renderable.ts#Renderable.getChildren [status=implemented hash=c79ea5ac6062]
@@ -2017,7 +2093,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
     }
 
     // parity: core/src/Renderable.ts#Renderable.getChildrenCount [status=implemented hash=46bbf595312a]
-    public func getChildrenCount() -> Int {
+    open override func getChildrenCount() -> Int {
         _childrenInLayoutOrder.count
     }
 
@@ -2032,6 +2108,10 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
             }
         }
         return nil
+    }
+
+    open override func findBaseDescendantById(_ id: String) -> BaseRenderable? {
+        findDescendantById(id)
     }
 
     // parity: core/src/Renderable.ts#Renderable.getChildrenSortedByPrimaryAxis [status=implemented hash=897794224d1f]
@@ -2052,7 +2132,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
     // MARK: - Layout & Rendering Pipeline
 
     // parity: core/src/Renderable.ts#Renderable.requestRender [status=implemented hash=bd8821f36d53]
-    open func requestRender() {
+    open override func requestRender() {
         markDirty()
         ctx.requestRender()
     }
@@ -2329,7 +2409,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
         destroySelf()
     }
 
-    // parity: core/src/Renderable.ts#Renderable.destroyRecursively [status=implemented hash=f9b6bd3ffe1b]
+    // parity: core/src/Renderable.ts#Renderable.destroyRecursively [status=implemented hash=c344bd597320]
     open override func destroyRecursively() {
         guard !_isDestroyed else { return }
         let childrenSnapshot = _childrenInLayoutOrder

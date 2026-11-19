@@ -248,7 +248,7 @@ public struct SliderOptions {
 // MARK: - SliderRenderable
 
 /// Interactive half-block precision slider/track renderable matching `core/src/renderables/Slider.ts#SliderRenderable`.
-// parity: core/src/renderables/Slider.ts#SliderRenderable [status=implemented hash=8377f92a8f33]
+// parity: core/src/renderables/Slider.ts#SliderRenderable [status=implemented hash=0c697987b977]
 open class SliderRenderable: Renderable, @unchecked Sendable {
     public static let defaultThumbBackgroundColor: RGBA = RGBA.fromHex("#9a9ea3")
     public static let defaultTrackBackgroundColor: RGBA = RGBA.fromHex("#252527")

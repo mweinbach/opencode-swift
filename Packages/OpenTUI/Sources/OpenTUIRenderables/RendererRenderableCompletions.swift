@@ -35,7 +35,7 @@ public extension ProgramStatusKind {
     var oscFieldValue: String { rawValue }
 }
 
-// parity: core/src/types.ts#ProgramStatus [status=implemented hash=b22154cfe8e4]
+// parity: core/src/types.ts#ProgramStatus [status=implemented hash=adc250b7d01d]
 public extension ProgramStatus {
     static func idle(id: String? = nil, app: String? = nil, title: String? = nil, message: String? = nil) -> ProgramStatus {
         ProgramStatus(state: .idle, id: id, app: app, title: title, message: message)
@@ -155,7 +155,7 @@ public struct NativeRenderableLifecycle: @unchecked Sendable {
 }
 
 /// Class-owned native scene integration metadata matching `core/src/Renderable.ts#NativeRenderableIntegration`.
-// parity: core/src/Renderable.ts#NativeRenderableIntegration [status=adapted hash=18c332053b6f]
+// parity: core/src/Renderable.ts#NativeRenderableIntegration [status=adapted hash=fb1eb00a5c1c]
 public struct NativeRenderableIntegration: @unchecked Sendable {
     public var kind: String
     public var body: NativeRenderableBodyMode
@@ -499,7 +499,7 @@ public struct CliRendererErrorEvent: @unchecked Sendable {
 }
 
 /// Event payload emitted when an encoded frame exceeds the per-frame output byte budget.
-// parity: core/src/renderer.ts#CliRendererFrameDroppedEvent [status=implemented hash=52425f5371bb]
+// parity: core/src/renderer.ts#CliRendererFrameDroppedEvent [status=implemented hash=85b5f6e20e12]
 public struct CliRendererFrameDroppedEvent: Equatable, Hashable, Sendable, Codable {
     public var bytes: Int
     public var limit: Int
@@ -942,7 +942,7 @@ private final class CliScrollbackSurface: ScrollbackSurface {
 // MARK: - Factory Function (`core/src/renderer.ts#createCliRenderer`)
 
 /// Creates a `CliRenderer` and runs its async `setupTerminal()` initialization.
-// parity: core/src/renderer.ts#createCliRenderer [status=adapted hash=39b4f67a1582]
+// parity: core/src/renderer.ts#createCliRenderer [status=adapted hash=1b13a3fa6ffe]
 public func createCliRenderer(config: CliRendererConfig = CliRendererConfig()) async -> CliRenderer {
     let renderer = CliRenderer(config: config)
     await renderer.setupTerminal()
@@ -1160,7 +1160,7 @@ public extension CliRenderer {
     }
 
     /// Creates an incremental offscreen scrollback surface for `split-footer` + `capture-stdout` mode.
-    // parity: core/src/renderer.ts#CliRenderer.createScrollbackSurface [status=adapted hash=75746783b8b3]
+    // parity: core/src/renderer.ts#CliRenderer.createScrollbackSurface [status=adapted hash=a033eab1fb51]
     func createScrollbackSurface(
         options: ScrollbackSurfaceOptions = ScrollbackSurfaceOptions()
     ) throws -> any ScrollbackSurface {
@@ -1234,7 +1234,7 @@ public extension CliRenderer {
     }
 
     /// Resets the terminal screen/scrollback region for split-footer replay.
-    // parity: core/src/renderer.ts#CliRenderer.resetSplitFooterForReplay [status=implemented hash=d4f1950d3c3d]
+    // parity: core/src/renderer.ts#CliRenderer.resetSplitFooterForReplay [status=implemented hash=1f51fb96081e]
     func resetSplitFooterForReplay(
         options: SplitFooterReplayResetOptions = SplitFooterReplayResetOptions()
     ) throws {
@@ -1327,7 +1327,7 @@ public extension CliRenderer {
     }
 
     /// Updates debug overlay visibility and corner placement, then schedules a render.
-    // parity: core/src/renderer.ts#CliRenderer.configureDebugOverlay [status=implemented hash=41a5b6119c3b]
+    // parity: core/src/renderer.ts#CliRenderer.configureDebugOverlay [status=implemented hash=f6409f02211e]
     func configureDebugOverlay(enabled: Bool? = nil, corner: DebugOverlayCorner? = nil) {
         let extra = CliRendererExtraStore.shared.state(for: self)
         if let enabled {

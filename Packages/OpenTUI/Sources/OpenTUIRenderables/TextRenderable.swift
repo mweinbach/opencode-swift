@@ -118,7 +118,7 @@ public struct TextOptions {
 
 /// Rich text renderable supporting plain strings, `StyledText`, and inline `TextNodeRenderable`
 /// children composed via `RootTextNodeRenderable` into the backing `TextBuffer`.
-// parity: core/src/renderables/Text.ts#TextRenderable [status=implemented hash=53b436ee991f]
+// parity: core/src/renderables/Text.ts#TextRenderable [status=implemented hash=60043aa2924b]
 open class TextRenderable: TextBufferRenderable, @unchecked Sendable {
     private var _text: TextContent = .string("")
     private var _hasManualStyledText: Bool = false
@@ -238,6 +238,7 @@ open class TextRenderable: TextBufferRenderable, @unchecked Sendable {
         super.renderSelf(buffer: buffer, deltaTime: deltaTime)
     }
 
+    // parity: core/src/renderables/Text.ts#TextRenderable.requestRender [status=implemented hash=8fd49ea875b5]
     open override func requestRender() {
         guard !isDestroyed else { return }
         if let root = rootTextNode, root.isDirty, !_hasManualStyledText {
@@ -248,6 +249,7 @@ open class TextRenderable: TextBufferRenderable, @unchecked Sendable {
 
     // MARK: - Inline Text Node Tree Forwarding
 
+    // parity: core/src/renderables/Text.ts#TextRenderable.add [status=implemented hash=69c9798a52af]
     @discardableResult
     public func add(_ node: TextNodeRenderable, index: Int? = nil) -> Int {
         _hasManualStyledText = false
@@ -271,6 +273,7 @@ open class TextRenderable: TextBufferRenderable, @unchecked Sendable {
         textNode.remove(child)
     }
 
+    // parity: core/src/renderables/Text.ts#TextRenderable.insertBefore [status=implemented hash=5093688403c8]
     @discardableResult
     public func insertBefore(_ node: TextNodeRenderable, anchor: TextNodeRenderable) -> Int {
         _hasManualStyledText = false

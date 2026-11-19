@@ -39,7 +39,7 @@ public enum PlaceholderValue: Equatable, Hashable, Sendable, ExpressibleByString
 }
 
 /// Editing and navigation actions supported by `TextareaRenderable` key bindings.
-// parity: core/src/renderables/Textarea.ts#TextareaAction [status=implemented hash=66e8fbc3184e]
+// parity: core/src/renderables/Textarea.ts#TextareaAction [status=implemented hash=e8b66015f437]
 public enum TextareaAction: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case moveLeft = "move-left"
     case moveRight = "move-right"
@@ -85,7 +85,7 @@ public typealias TextareaKeyBinding = KeyBinding<TextareaAction>
 // parity: core/src/renderables/Textarea.ts#TextareaKeyAliasMap [status=implemented hash=66292753ff6e]
 public typealias TextareaKeyAliasMap = KeyAliasMap
 
-// parity: core/src/renderables/Textarea.ts#defaultTextareaKeyBindings [status=implemented hash=1f04a2020f2b]
+// parity: core/src/renderables/Textarea.ts#defaultTextareaKeyBindings [status=implemented hash=004bf28b9c7c]
 public let defaultTextareaKeyBindings: [TextareaKeyBinding] = [
     KeyBinding(name: "left", action: .moveLeft),
     KeyBinding(name: "right", action: .moveRight),
@@ -330,7 +330,7 @@ private func containsUnsupportedKeyCharacters(_ sequence: String) -> Bool {
 
 /// Multi-line interactive text editor renderable with full keybinding dispatch,
 /// shift-selection, bracketed paste handling, undo/redo, placeholders, and extmarks.
-// parity: core/src/renderables/Textarea.ts#TextareaRenderable [status=implemented hash=f7bb7b236e0c]
+// parity: core/src/renderables/Textarea.ts#TextareaRenderable [status=implemented hash=956c7c20251d]
 open class TextareaRenderable: EditBufferRenderable, @unchecked Sendable {
     public static let defaultTextareaBackgroundColor: Color = "transparent"
     public static let defaultTextareaTextColor: Color = "#FFFFFF"
@@ -551,6 +551,7 @@ open class TextareaRenderable: EditBufferRenderable, @unchecked Sendable {
         placeholderColor = (color ?? Self.defaultPlaceholderColor).resolved()
     }
 
+    // parity: core/src/renderables/Textarea.ts#TextareaRenderable.backgroundColor [status=implemented hash=8423d86a4d5d]
     open override var backgroundColor: RGBA {
         get { RGBA.clone(_unfocusedBackgroundColor) }
         set {
@@ -559,6 +560,7 @@ open class TextareaRenderable: EditBufferRenderable, @unchecked Sendable {
         }
     }
 
+    // parity: core/src/renderables/Textarea.ts#TextareaRenderable.textColor [status=implemented hash=6b053d0ee316]
     open override var textColor: RGBA {
         get { RGBA.clone(_unfocusedTextColor) }
         set {

@@ -15,7 +15,7 @@ public enum DiffViewMode: String, Equatable, Hashable, Sendable, Codable {
 }
 
 /// Gutter layout configuration for diff line numbers and signs.
-// parity: core/src/renderables/Diff.ts#DiffGutterOptions [status=implemented hash=b6201690d626]
+// parity: core/src/renderables/Diff.ts#DiffGutterOptions [status=implemented hash=76e1a10f8a37]
 public struct DiffGutterOptions: Equatable, Hashable, Sendable, Codable {
     /// Columns before the line numbers, painted in each row's gutter color. Defaults to 1.
     public let paddingLeft: Int

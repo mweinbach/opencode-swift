@@ -179,7 +179,7 @@ public typealias SelectOptions = SelectRenderableOptions
 
 /// Scrollable vertical list selection renderable with keyboard navigation,
 /// mouse click and wheel support, optional descriptions, ASCII banner fonts, and scroll indicator.
-// parity: core/src/renderables/Select.ts#SelectRenderable [status=implemented hash=e567f77929db]
+// parity: core/src/renderables/Select.ts#SelectRenderable [status=implemented hash=bcdac35b6a75]
 open class SelectRenderable: Renderable, @unchecked Sendable {
     public static let defaultBackgroundColor: Color = "transparent"
     public static let defaultTextColor: Color = "#FFFFFF"

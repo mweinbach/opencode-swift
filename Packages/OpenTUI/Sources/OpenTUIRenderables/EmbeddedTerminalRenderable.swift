@@ -920,7 +920,7 @@ private final class EmbeddedTerminalEmulator {
 
 /// Embeds a virtual terminal screen/cell grid with ANSI/VT parsing, cursor rendering,
 /// scrollback, resize notifications, focus/key/paste forwarding, and text selection.
-// parity: core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable [status=implemented hash=9c18e1e3f7fa]
+// parity: core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable [status=implemented hash=8ef940486369]
 open class EmbeddedTerminalRenderable: Renderable, @unchecked Sendable {
     private let emulator: EmbeddedTerminalEmulator
     private var _onData: (([UInt8], EmbeddedTerminalDataSource) -> Void)?
@@ -1021,7 +1021,7 @@ open class EmbeddedTerminalRenderable: Renderable, @unchecked Sendable {
         emulator.screenSnapshot()
     }
 
-    // parity: core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.getScroll [status=implemented hash=68bf4f670022]
+    // parity: core/src/renderables/EmbeddedTerminal.ts#EmbeddedTerminalRenderable.getScroll [status=implemented hash=b1268e6f4029]
     public func getScroll() -> EmbeddedTerminalScrollState {
         emulator.scrollState()
     }

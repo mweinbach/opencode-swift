@@ -478,7 +478,7 @@ private func applyWordHighlightSpans(
 
 /// Unified and side-by-side split diff viewer renderable composing `LineNumberRenderable`
 /// and `CodeRenderable` over `parseUnifiedDiff` / `buildUnifiedDiffLines` / `buildSplitDiffLines`.
-// parity: core/src/renderables/Diff.ts#DiffRenderable [status=implemented hash=ac5236e6279d]
+// parity: core/src/renderables/Diff.ts#DiffRenderable [status=implemented hash=32bdca5fd45b]
 open class DiffRenderable: Renderable, @unchecked Sendable {
     private var _diff: String
     private var _syncScroll: Bool
@@ -1010,6 +1010,7 @@ open class DiffRenderable: Renderable, @unchecked Sendable {
         }
     }
 
+    // parity: core/src/renderables/Diff.ts#DiffRenderable.destroyRecursively [status=implemented hash=85206536239c]
     open override func destroyRecursively() {
         guard !isDestroyed else { return }
         detachLineInfoListeners()

@@ -93,7 +93,7 @@ private func styledTextToTextNodes(_ styledText: StyledText) -> [TextNodeRendera
 
 /// Inline styled text tree node supporting fg/bg/attributes/link inheritance, mixed string and
 /// child node children, and dirty propagation up to an owning `TextRenderable`.
-// parity: core/src/renderables/TextNode.ts#TextNodeRenderable [status=implemented hash=ae2062b545ef]
+// parity: core/src/renderables/TextNode.ts#TextNodeRenderable [status=implemented hash=41c211c55687]
 open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
     private var _fg: RGBA?
     private var _bg: RGBA?
@@ -135,7 +135,7 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
     }
 
     // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.requestRender [status=implemented hash=10f8f8443481]
-    open func requestRender() {
+    open override func requestRender() {
         markDirty()
         parent?.requestRender()
     }
@@ -273,7 +273,7 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
     }
 
     // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.remove [status=implemented hash=13abb5bb3480]
-    public func remove(_ child: BaseRenderable) {
+    open override func remove(_ child: BaseRenderable) {
         guard let node = child as? TextNodeRenderable else { return }
         guard let idx = _children.firstIndex(where: { $0.nodeValue === node }) else { return }
         _children.remove(at: idx)
@@ -292,7 +292,7 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
         requestRender()
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.mergeStyles [status=implemented hash=e4e7293f8c91]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.mergeStyles [status=implemented hash=9c2f0e348e18]
     public func mergeStyles(_ parentStyle: TextNodeStyle) -> TextNodeStyle {
         TextNodeStyle(
             fg: _fg ?? parentStyle.fg,
@@ -302,13 +302,13 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
         )
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.gatherWithInheritedStyle [status=implemented hash=53f9b76c43ae]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.gatherWithInheritedStyle [status=implemented hash=553062aed4b4]
     public func gatherWithInheritedStyle(_ parentStyle: TextNodeStyle = TextNodeStyle()) -> [TextChunk] {
         var ignored: [(TextNodeRenderable, UInt64)]? = nil
         return gatherChunks(parentStyle, revisions: &ignored)
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.prepareWithInheritedStyle [status=implemented hash=59783afad212]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.prepareWithInheritedStyle [status=implemented hash=2f4343971bbf]
     public func prepareWithInheritedStyle(
         _ parentStyle: TextNodeStyle
     ) -> (chunks: [TextChunk], acknowledge: () -> Void) {
@@ -360,14 +360,14 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
         return chunks
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.fromString [status=implemented hash=854ccafbc00e]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.fromString [status=implemented hash=3998f613b91f]
     public static func fromString(_ text: String, options: TextNodeOptions = TextNodeOptions()) -> TextNodeRenderable {
         let node = TextNodeRenderable(options: options)
         node.add(text)
         return node
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.fromNodes [status=implemented hash=119dbec36cea]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.fromNodes [status=implemented hash=05ce43ce591f]
     public static func fromNodes(
         _ nodes: [TextNodeRenderable],
         options: TextNodeOptions = TextNodeOptions()
@@ -379,9 +379,41 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
         return node
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.toChunks [status=implemented hash=2598faba73e9]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.toChunks [status=implemented hash=e8b2b47b6ead]
     public func toChunks(parentStyle: TextNodeStyle = TextNodeStyle()) -> [TextChunk] {
         gatherWithInheritedStyle(parentStyle)
+    }
+
+    open override func add(_ obj: Any, index: Int? = nil) -> Int {
+        if let node = obj as? TextNodeRenderable {
+            return add(node, index: index)
+        }
+        if let text = obj as? String {
+            return add(text, index: index)
+        }
+        if let styled = obj as? StyledText {
+            return add(styled, index: index)
+        }
+        return -1
+    }
+
+    open override func insertBefore(_ obj: Any, anchor: Any?) {
+        guard let anchorNode = anchor as? TextNodeRenderable else { return }
+        if let node = obj as? TextNodeRenderable {
+            _ = insertBefore(node, anchor: anchorNode)
+        } else if let text = obj as? String {
+            _ = insertBefore(text, anchor: anchorNode)
+        } else if let styled = obj as? StyledText {
+            _ = insertBefore(styled, anchor: anchorNode)
+        }
+    }
+
+    open override func getBaseChildren() -> [BaseRenderable] {
+        _children.compactMap(\.nodeValue)
+    }
+
+    open override func getBaseRenderable(_ id: String) -> BaseRenderable? {
+        getRenderable(id)
     }
 
     // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.getChildren [status=implemented hash=5b1b20c7ac3e]
@@ -390,7 +422,7 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
     }
 
     // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.getChildrenCount [status=implemented hash=8a7566b33e9b]
-    public func getChildrenCount() -> Int {
+    open override func getChildrenCount() -> Int {
         _children.count
     }
 
@@ -441,7 +473,7 @@ open class TextNodeRenderable: BaseRenderable, @unchecked Sendable {
         }
     }
 
-    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.link [status=implemented hash=c805b823a293]
+    // parity: core/src/renderables/TextNode.ts#TextNodeRenderable.link [status=implemented hash=771eda766bfa]
     public var link: TextChunkLink? {
         get { _link }
         set {
