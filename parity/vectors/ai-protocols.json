@@ -60,6 +60,8 @@
       { "name": "pixel dimensions rejected", "args": ["1024x1024"] },
       { "name": "bare k rejected", "args": ["k"] },
       { "name": "double dot rejected", "args": ["1.2.3K"] },
+      { "name": "trailing dot before k rejected", "args": ["1.K"] },
+      { "name": "leading dot before k rejected", "args": [".5K"] },
       { "name": "empty rejected", "args": [""] }
     ]
   },

@@ -51,7 +51,8 @@
       { "name": "beta uses service.json", "args": ["beta"] },
       { "name": "next uses service.json", "args": ["next"] },
       { "name": "local uses channel suffix", "args": ["local"] },
-      { "name": "custom channel with slashes and spaces sanitized", "args": ["feat/my branch@1"] }
+      { "name": "custom channel with slashes and spaces sanitized", "args": ["feat/my branch@1"] },
+      { "name": "custom channel with emoji surrogate pair uses utf16 units", "args": ["feat/🚀"] }
     ]
   },
   {
@@ -86,7 +87,8 @@
       { "name": "wrong channel false", "args": ["0.0.0-beta-123", "dev", "1.0.0"] },
       { "name": "non-numeric suffix false", "args": ["0.0.0-dev-abc", "dev", "1.0.0"] },
       { "name": "trailing dot false", "args": ["0.0.0-dev-123.", "dev", "1.0.0"] },
-      { "name": "two dots false", "args": ["0.0.0-dev-1.2.3", "dev", "1.0.0"] }
+      { "name": "two dots false", "args": ["0.0.0-dev-1.2.3", "dev", "1.0.0"] },
+      { "name": "non-ascii arabic-indic digits rejected", "args": ["0.0.0-dev-٢٣", "dev", "1.0.0"] }
     ]
   },
   {

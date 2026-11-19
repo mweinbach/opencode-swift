@@ -75,7 +75,9 @@
       { "name": "hex boundary 16", "args": [16] },
       { "name": "mid 127", "args": [127] },
       { "name": "mid 128", "args": [128] },
-      { "name": "max 255", "args": [255] }
+      { "name": "max 255", "args": [255] },
+      { "name": "overflow 256 unclamped hex", "args": [256] },
+      { "name": "negative -1 unclamped hex", "args": [-1] }
     ]
   },
   {

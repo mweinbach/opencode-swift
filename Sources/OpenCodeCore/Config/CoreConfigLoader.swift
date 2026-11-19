@@ -607,20 +607,28 @@ public enum CoreConfigMarkdown {
     }
 
     private static func extractFrontmatterBody(_ content: String) -> (String, Range<String.Index>)? {
-        guard content.hasPrefix("---\n") || content.hasPrefix("---\r\n") else { return nil }
-        let startOffset = content.hasPrefix("---\r\n") ? 5 : 4
-        let bodyStart = content.index(content.startIndex, offsetBy: startOffset)
+        let utf8 = content.utf8
+        let startByteOffset: Int
+        if content.hasPrefix("---\r\n") {
+            startByteOffset = 5
+        } else if content.hasPrefix("---\n") {
+            startByteOffset = 4
+        } else {
+            return nil
+        }
+        let bodyStart = utf8.index(utf8.startIndex, offsetBy: startByteOffset)
         var searchIdx = bodyStart
-        while searchIdx < content.endIndex {
-            let lineEnd = content[searchIdx...].firstIndex(of: "\n") ?? content.endIndex
-            let line = String(content[searchIdx..<lineEnd]).replacing("\r", with: "")
-            if line == "---" {
+        while searchIdx < utf8.endIndex {
+            let lineEnd = utf8[searchIdx...].firstIndex(of: 0x0A) ?? utf8.endIndex
+            let lineBytes = utf8[searchIdx..<lineEnd]
+            let trimmedCR = lineBytes.last == 0x0D ? lineBytes.dropLast() : lineBytes
+            if String(decoding: trimmedCR, as: UTF8.self) == "---" {
                 let fmEnd: String.Index
                 if searchIdx > bodyStart {
-                    let prev = content.index(before: searchIdx)
-                    if content[prev] == "\n" {
-                        let beforeLF = prev > bodyStart ? content.index(before: prev) : prev
-                        if beforeLF >= bodyStart && content[beforeLF] == "\r" {
+                    let prev = utf8.index(before: searchIdx)
+                    if utf8[prev] == 0x0A {
+                        let beforeLF = prev > bodyStart ? utf8.index(before: prev) : prev
+                        if beforeLF >= bodyStart && utf8[beforeLF] == 0x0D {
                             fmEnd = beforeLF
                         } else {
                             fmEnd = prev
@@ -633,28 +641,51 @@ public enum CoreConfigMarkdown {
                 }
                 return (String(content[bodyStart..<fmEnd]), bodyStart..<fmEnd)
             }
-            if lineEnd == content.endIndex { break }
-            searchIdx = content.index(after: lineEnd)
+            if lineEnd == utf8.endIndex { break }
+            searchIdx = utf8.index(after: lineEnd)
         }
         return nil
     }
 
     private static func extractFrontmatterAndBody(_ content: String) -> (String, String.Index)? {
-        guard content.hasPrefix("---\n") || content.hasPrefix("---\r\n") else { return nil }
-        let startOffset = content.hasPrefix("---\r\n") ? 5 : 4
-        let fmStart = content.index(content.startIndex, offsetBy: startOffset)
+        let utf8 = content.utf8
+        let startByteOffset: Int
+        if content.hasPrefix("---\r\n") {
+            startByteOffset = 5
+        } else if content.hasPrefix("---\n") {
+            startByteOffset = 4
+        } else {
+            return nil
+        }
+        let fmStart = utf8.index(utf8.startIndex, offsetBy: startByteOffset)
         var searchIdx = fmStart
-        while searchIdx < content.endIndex {
-            let lineEnd = content[searchIdx...].firstIndex(of: "\n") ?? content.endIndex
-            let line = String(content[searchIdx..<lineEnd]).replacing("\r", with: "")
-            if line == "---" {
-                let fmEnd = searchIdx > fmStart ? content.index(before: searchIdx) : fmStart
+        while searchIdx < utf8.endIndex {
+            let lineEnd = utf8[searchIdx...].firstIndex(of: 0x0A) ?? utf8.endIndex
+            let lineBytes = utf8[searchIdx..<lineEnd]
+            let trimmedCR = lineBytes.last == 0x0D ? lineBytes.dropLast() : lineBytes
+            if String(decoding: trimmedCR, as: UTF8.self) == "---" {
+                let fmEnd: String.Index
+                if searchIdx > fmStart {
+                    let prev = utf8.index(before: searchIdx)
+                    if utf8[prev] == 0x0A {
+                        let beforeLF = prev > fmStart ? utf8.index(before: prev) : prev
+                        if beforeLF >= fmStart && utf8[beforeLF] == 0x0D {
+                            fmEnd = beforeLF
+                        } else {
+                            fmEnd = prev
+                        }
+                    } else {
+                        fmEnd = searchIdx
+                    }
+                } else {
+                    fmEnd = fmStart
+                }
                 let cleanFm = String(content[fmStart..<fmEnd]).replacing("\r\n", with: "\n")
-                let afterFence = lineEnd < content.endIndex ? content.index(after: lineEnd) : content.endIndex
+                let afterFence = lineEnd < utf8.endIndex ? utf8.index(after: lineEnd) : utf8.endIndex
                 return (cleanFm, afterFence)
             }
-            if lineEnd == content.endIndex { break }
-            searchIdx = content.index(after: lineEnd)
+            if lineEnd == utf8.endIndex { break }
+            searchIdx = utf8.index(after: lineEnd)
         }
         return nil
     }

@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
-  "generatedAt": "2026-11-19T18:29:35.380Z",
-  "vectorCount": 1038,
+  "generatedAt": "2026-11-19T18:37:16.535Z",
+  "vectorCount": 1050,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -3626,6 +3626,26 @@
     },
     {
       "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "trailing dot before k rejected",
+      "args": [
+        "1.K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
+      "name": "leading dot before k rejected",
+      "args": [
+        ".5K"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "ai/src/protocols/utils/image-sizing.ts#tier",
       "name": "empty rejected",
       "args": [
         ""
@@ -7189,6 +7209,16 @@
       "expectedValue": "service-feat-my-branch-1.json"
     },
     {
+      "fn": "cli/src/services/service-config.ts#filename",
+      "name": "custom channel with emoji surrogate pair uses utf16 units",
+      "args": [
+        "feat/🚀"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "service-feat---.json"
+    },
+    {
       "fn": "cli/src/services/service-config.ts#defaultPort",
       "name": "latest on darwin",
       "args": [
@@ -7404,6 +7434,18 @@
       "name": "two dots false",
       "args": [
         "0.0.0-dev-1.2.3",
+        "dev",
+        "1.0.0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-config.ts#versionBelongsToChannel",
+      "name": "non-ascii arabic-indic digits rejected",
+      "args": [
+        "0.0.0-dev-٢٣",
         "dev",
         "1.0.0"
       ],
@@ -7809,6 +7851,19 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": "{\"Z\":5,\"a\":4,\"é\":3,\"Ω\":1,\"Я\":2}"
+    },
+    {
+      "fn": "core/src/util/canonical-json.ts#canonicalJson",
+      "name": "utf16 surrogate sorts before PUA U+E000",
+      "args": [
+        {
+          "": "pua",
+          "😀": "emoji"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "{\"😀\":\"emoji\",\"\":\"pua\"}"
     },
     {
       "fn": "core/src/util/token.ts#estimate",
@@ -8347,6 +8402,16 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": "---\ntitle: |-\n  🚀 Deploy: prod\ndescription: |-\n  [日本語] テスト\nsafe: plain\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "crlf frontmatter delimiters supported",
+      "args": [
+        "---\r\ntitle: A: B\r\n---\r\nBody\r\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\r\ntitle: |-\n  A: B\r\n---\r\nBody\r\n"
     },
     {
       "fn": "core/src/managed-policy.ts#decision",
@@ -9938,7 +10003,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001ez8MggFpPfYYnd"
+      "expectedValue": "bcfe56800001yP7o2247xOlNM1"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -9949,7 +10014,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002Iwrt3yKKvQDJW5"
+      "expectedValue": "bcfe56800002Ws16VEH7QIKFE2"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -9960,7 +10025,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeMeyA08gstCg3Zv"
+      "expectedValue": "4301a97feffeKDj4AbHxQKE4SB"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -9971,7 +10036,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdXKgwr9WcsM2lGj"
+      "expectedValue": "4301a97feffd4JxP1C6PbWKrkg"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -9979,7 +10044,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1f5123bfb001q65DpL7ViJEk8a"
+      "expectedValue": "1f51941ba0014tg0Rr16iUdHWM"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -9987,7 +10052,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e0aedc404ffdIaOYnnPSWJM06I"
+      "expectedValue": "e0ae6be45ffdm7CLIf9OCdmi3s"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -9995,7 +10060,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "4e559202-f51f-4b24-877a-fa54c73a4b02"
+      "expectedValue": "c03f0346-dbda-476b-9aab-9ca52a50d3e9"
     },
     {
       "fn": "util/src/npm.ts#sanitize",
@@ -24828,6 +24893,16 @@
       "expectedValue": "attachment; filename=\"r_sum_.txt\"; filename*=UTF-8''r%C3%A9sum%C3%A9.txt"
     },
     {
+      "fn": "server/src/content-headers.ts#disposition",
+      "name": "emoji surrogate pair yields two underscores in ascii fallback",
+      "args": [
+        "🚀.png"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "attachment; filename=\"__.png\"; filename*=UTF-8''%F0%9F%9A%80.png"
+    },
+    {
       "fn": "server/src/content-headers.ts#download",
       "name": "html neutralized to text/plain",
       "args": [
@@ -24860,6 +24935,42 @@
         "content-disposition": "attachment; filename=\"index.html\"; filename*=UTF-8''index.html",
         "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
         "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "html+extra neutralized via word boundary",
+      "args": [
+        {
+          "path": "a.txt",
+          "mime": "text/html+extra"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"a.txt\"; filename*=UTF-8''a.txt",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "fn": "server/src/content-headers.ts#download",
+      "name": "leading space html preserved due to start anchor",
+      "args": [
+        {
+          "path": "a.txt",
+          "mime": " text/html"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "content-disposition": "attachment; filename=\"a.txt\"; filename*=UTF-8''a.txt",
+        "content-security-policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
+        "content-type": " text/html",
         "x-content-type-options": "nosniff"
       }
     },
@@ -25120,6 +25231,17 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": true
+    },
+    {
+      "fn": "server/src/cors.ts#isAllowedRequestOrigin",
+      "name": "uppercase host rejected against normalized url host",
+      "args": [
+        "https://EXAMPLE.COM:8443",
+        "EXAMPLE.COM:8443"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
     },
     {
       "fn": "server/src/cors.ts#isAllowedRequestOrigin",
@@ -27699,6 +27821,26 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": "ff"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "overflow 256 unclamped hex",
+      "args": [
+        256
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "100"
+    },
+    {
+      "fn": "theme/src/tui/v1-migrate.ts#byte",
+      "name": "negative -1 unclamped hex",
+      "args": [
+        -1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "-1"
     },
     {
       "fn": "tui/src/theme/color.ts#ansiToRgba",

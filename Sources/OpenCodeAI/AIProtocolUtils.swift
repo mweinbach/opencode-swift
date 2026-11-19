@@ -2957,9 +2957,15 @@ public enum AIProtocolUtils {
             let lower = resolution.lowercased()
             guard lower.hasSuffix("k") else { return nil }
             let numStr = String(lower.dropLast())
-            guard !numStr.isEmpty else { return nil }
+            let bytes = Array(numStr.utf8)
+            guard let first = bytes.first, let last = bytes.last,
+                  first >= 0x30 && first <= 0x39,
+                  last >= 0x30 && last <= 0x39
+            else {
+                return nil
+            }
             var sawDot = false
-            for byte in numStr.utf8 {
+            for byte in bytes {
                 if byte == 0x2E {
                     if sawDot { return nil }
                     sawDot = true

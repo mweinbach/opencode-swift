@@ -141,14 +141,20 @@ public enum CLIUtil {
     }
 
     internal static func sanitizeChannelSegment(_ channel: String) -> String {
-        String(channel.unicodeScalars.map { scalar -> Character in
-            let v = scalar.value
-            let allowed = (v >= 0x30 && v <= 0x39) // 0-9
-                || (v >= 0x41 && v <= 0x5A) // A-Z
-                || (v >= 0x61 && v <= 0x7A) // a-z
-                || v == 0x2E || v == 0x5F || v == 0x2D // . _ -
-            return allowed ? Character(scalar) : "-"
-        })
+        var out = ""
+        out.reserveCapacity(channel.utf16.count)
+        for unit in channel.utf16 {
+            let allowed = (unit >= 0x30 && unit <= 0x39) // 0-9
+                || (unit >= 0x41 && unit <= 0x5A) // A-Z
+                || (unit >= 0x61 && unit <= 0x7A) // a-z
+                || unit == 0x2E || unit == 0x5F || unit == 0x2D // . _ -
+            if allowed, let scalar = UnicodeScalar(unit) {
+                out.unicodeScalars.append(scalar)
+            } else {
+                out.append("-")
+            }
+        }
+        return out
     }
 
     // MARK: Stdin I/O (`packages/cli/src/util/io.ts`)

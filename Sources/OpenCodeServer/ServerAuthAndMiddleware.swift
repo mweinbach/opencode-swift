@@ -160,12 +160,11 @@ public enum ContentHeaders {
     public static func disposition(_ name: String) -> String {
         if name.isEmpty { return "attachment" }
         var fallback = ""
-        fallback.reserveCapacity(name.count)
-        for scalar in name.unicodeScalars {
-            let v = scalar.value
-            if v < 0x20 || v > 0x7E || v == 0x22 || v == 0x5C || v == 0x25 {
+        fallback.reserveCapacity(name.utf16.count)
+        for unit in name.utf16 {
+            if unit < 0x20 || unit > 0x7E || unit == 0x22 || unit == 0x5C || unit == 0x25 {
                 fallback.append("_")
-            } else {
+            } else if let scalar = UnicodeScalar(unit) {
                 fallback.unicodeScalars.append(scalar)
             }
         }
@@ -173,17 +172,44 @@ public enum ContentHeaders {
         return "attachment; filename=\"\(fallback)\"; filename*=UTF-8''\(encoded)"
     }
 
+    private static func isWordByte(_ b: UInt8) -> Bool {
+        (b >= 0x30 && b <= 0x39)
+            || (b >= 0x41 && b <= 0x5A)
+            || (b >= 0x61 && b <= 0x7A)
+            || b == 0x5F
+    }
+
+    /// Matches upstream `/^(text\/html|text\/javascript|application\/(x-)?javascript)\b|[/+]xml\b/i`.
     private static func isActiveBrowserMime(_ mime: String) -> Bool {
-        let lower = mime.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let essence = lower.split(separator: ";", maxSplits: 1).first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? lower
-        if essence == "text/html"
-            || essence == "text/javascript"
-            || essence == "application/javascript"
-            || essence == "application/x-javascript" {
-            return true
+        let lowerBytes = Array(mime.lowercased().utf8)
+        let prefixes: [[UInt8]] = [
+            Array("text/html".utf8),
+            Array("text/javascript".utf8),
+            Array("application/javascript".utf8),
+            Array("application/x-javascript".utf8),
+        ]
+        for prefix in prefixes where lowerBytes.count >= prefix.count {
+            if lowerBytes.prefix(prefix.count).elementsEqual(prefix) {
+                if lowerBytes.count == prefix.count || !isWordByte(lowerBytes[prefix.count]) {
+                    return true
+                }
+            }
         }
-        if essence.hasSuffix("/xml") || essence.hasSuffix("+xml") {
-            return true
+        // Match `[/+]xml\b` anywhere in lowerBytes
+        if lowerBytes.count >= 4 {
+            for i in 0...(lowerBytes.count - 4) {
+                let sep = lowerBytes[i]
+                if (sep == 0x2F || sep == 0x2B)
+                    && lowerBytes[i + 1] == 0x78 // x
+                    && lowerBytes[i + 2] == 0x6D // m
+                    && lowerBytes[i + 3] == 0x6C // l
+                {
+                    let nextIdx = i + 4
+                    if nextIdx == lowerBytes.count || !isWordByte(lowerBytes[nextIdx]) {
+                        return true
+                    }
+                }
+            }
         }
         return false
     }
@@ -283,7 +309,7 @@ private func isOpencodeHTTPSOrigin(_ input: String) -> Bool {
 internal func sameOriginHost(origin: String, host: String) -> Bool {
     let parsed = ServerParsedURL(origin)
     guard parsed.scheme != nil, let originHost = parsed.host else { return false }
-    return originHost.lowercased() == host.lowercased()
+    return originHost.lowercased() == host
 }
 
 /// Applies CORS headers and handles `OPTIONS` preflight requests.

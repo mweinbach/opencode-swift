@@ -495,7 +495,7 @@ public enum CLIServices {
             guard !suffix.isEmpty else { return false }
             let parts = suffix.split(separator: ".", omittingEmptySubsequences: false)
             guard parts.count == 1 || parts.count == 2 else { return false }
-            return parts.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
+            return parts.allSatisfy { !$0.isEmpty && $0.utf8.allSatisfy { $0 >= 0x30 && $0 <= 0x39 } }
         }
 
         // parity: cli/src/services/service-config.ts#migrateRegistration [status=implemented hash=046fbf8478db]

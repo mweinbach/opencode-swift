@@ -11,9 +11,18 @@
 | Tracked upstream LOC | 169,364 |
 | Upstream exported symbols (implemented / total) | 5679 / 5679 (100.0%) |
 | Upstream functions/methods (implemented / total) | 3159 / 3159 (100.0%) |
+| Unmapped / stub / partial symbols | 0 / 0 / 0 |
 | Differential oracle-verified functions | 91 (383 test vectors) |
 | Upstream code drift alerts | 0 |
 | Dangling parity annotations | 0 |
+| Duplicate parity annotations | 0 |
+| Unpinned parity annotations (missing hash) | 0 |
+| Invalid parity status annotations | 0 |
+| Orphan parity annotations | 0 |
+| Untracked upstream packages | 0 |
+| Module dependency law violations | 0 |
+| Swift Testing / CLT cross-import violations | 0 |
+| Production stub hygiene violations | 0 |
 | Cross-platform purity violations | 0 |
 
 ## Package Parity Matrix

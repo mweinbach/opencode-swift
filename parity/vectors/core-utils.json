@@ -25,7 +25,8 @@
       { "name": "escapes quotes backslashes and control chars", "args": [{ "k": "a\"b\\c\nd\te\u0007" }] },
       { "name": "empty object and array", "args": [{ "arr": [], "obj": {} }] },
       { "name": "unicode keys sorted", "args": [{ "日本語": 1, "alpha": 2, "🚀": 3 }] },
-      { "name": "mixed bmp scripts sorted", "args": [{ "Ω": 1, "Я": 2, "é": 3, "a": 4, "Z": 5 }] }
+      { "name": "mixed bmp scripts sorted", "args": [{ "Ω": 1, "Я": 2, "é": 3, "a": 4, "Z": 5 }] },
+      { "name": "utf16 surrogate sorts before PUA U+E000", "args": [{ "\uE000": "pua", "😀": "emoji" }] }
     ]
   },
   {
@@ -91,7 +92,8 @@
       { "name": "already quoted value untouched", "args": ["---\ndescription: \"Already: quoted\"\n---\nBody\n"] },
       { "name": "comments and indented lines preserved", "args": ["---\n# comment: ignored\nname: simple\n  nested: keep:me\n---\nBody\n"] },
       { "name": "block scalar markers untouched", "args": ["---\ndescription: |\n  keep: this\n---\nBody\n"] },
-      { "name": "multiple keys with unicode and emoji colons", "args": ["---\ntitle: 🚀 Deploy: prod\ndescription: [日本語] テスト\nsafe: plain\n---\nBody\n"] }
+      { "name": "multiple keys with unicode and emoji colons", "args": ["---\ntitle: 🚀 Deploy: prod\ndescription: [日本語] テスト\nsafe: plain\n---\nBody\n"] },
+      { "name": "crlf frontmatter delimiters supported", "args": ["---\r\ntitle: A: B\r\n---\r\nBody\r\n"] }
     ]
   },
   {

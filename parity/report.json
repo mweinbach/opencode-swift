@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T17:28:23.603Z",
+  "generatedAt": "2026-11-19T18:37:30.878Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -13,8 +13,8 @@
     "parityAnnotations": 9404
   },
   "differentialParity": {
-    "verifiedFunctions": 57,
-    "verifiedVectors": 484
+    "verifiedFunctions": 126,
+    "verifiedVectors": 1050
   },
   "totals": {
     "files": 1708,
@@ -22,10 +22,38 @@
     "totalSymbols": 9404,
     "totalFunctions": 2443,
     "implementedSymbols": 9404,
-    "implementedFunctions": 2443
+    "implementedFunctions": 2443,
+    "partialSymbols": 0,
+    "stubSymbols": 0,
+    "excludedSymbols": 0,
+    "unmappedSymbols": 0
+  },
+  "guards": {
+    "driftAlerts": 0,
+    "danglingAnnotations": 0,
+    "duplicateAnnotations": 0,
+    "unpinnedAnnotations": 0,
+    "invalidStatusAnnotations": 0,
+    "orphanAnnotations": 0,
+    "untrackedUpstreamPackages": 0,
+    "dependencyLawViolations": 0,
+    "testImportViolations": 0,
+    "stubHygieneViolations": 0,
+    "purityViolations": 0,
+    "unmappedSymbols": 0,
+    "stubSymbols": 0,
+    "partialSymbols": 0
   },
   "danglingAnnotations": [],
   "driftedAnnotations": [],
+  "duplicateAnnotations": [],
+  "unpinnedAnnotations": [],
+  "invalidStatusAnnotations": [],
+  "orphanAnnotations": [],
+  "untrackedUpstreamPackages": [],
+  "dependencyLawViolations": [],
+  "testImportViolations": [],
+  "stubHygieneViolations": [],
   "purityViolations": [],
   "packages": [
     {
@@ -41,6 +69,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -56,6 +85,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -71,6 +101,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -86,6 +117,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -101,6 +133,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -116,6 +149,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -131,6 +165,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -146,6 +181,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -161,6 +197,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -176,6 +213,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -191,6 +229,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -206,6 +245,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -221,6 +261,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -236,6 +277,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -251,6 +293,7 @@
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     }
   ]

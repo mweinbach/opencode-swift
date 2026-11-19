@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T15:58:34.455Z",
+  "generatedAt": "2026-11-19T18:37:31.047Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opentui.git",
     "branch": "main",
@@ -19,10 +19,38 @@
     "totalSymbols": 5679,
     "totalFunctions": 3159,
     "implementedSymbols": 5679,
-    "implementedFunctions": 3159
+    "implementedFunctions": 3159,
+    "partialSymbols": 0,
+    "stubSymbols": 0,
+    "excludedSymbols": 0,
+    "unmappedSymbols": 0
+  },
+  "guards": {
+    "driftAlerts": 0,
+    "danglingAnnotations": 0,
+    "duplicateAnnotations": 0,
+    "unpinnedAnnotations": 0,
+    "invalidStatusAnnotations": 0,
+    "orphanAnnotations": 0,
+    "untrackedUpstreamPackages": 0,
+    "dependencyLawViolations": 0,
+    "testImportViolations": 0,
+    "stubHygieneViolations": 0,
+    "purityViolations": 0,
+    "unmappedSymbols": 0,
+    "stubSymbols": 0,
+    "partialSymbols": 0
   },
   "danglingAnnotations": [],
   "driftedAnnotations": [],
+  "duplicateAnnotations": [],
+  "unpinnedAnnotations": [],
+  "invalidStatusAnnotations": [],
+  "orphanAnnotations": [],
+  "untrackedUpstreamPackages": [],
+  "dependencyLawViolations": [],
+  "testImportViolations": [],
+  "stubHygieneViolations": [],
   "purityViolations": [],
   "packages": [
     {
@@ -36,6 +64,10 @@
       "totalFunctions": 2098,
       "implementedSymbols": 3777,
       "implementedFunctions": 2098,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -49,6 +81,10 @@
       "totalFunctions": 203,
       "implementedSymbols": 410,
       "implementedFunctions": 203,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -62,6 +98,10 @@
       "totalFunctions": 799,
       "implementedSymbols": 1372,
       "implementedFunctions": 799,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -75,6 +115,10 @@
       "totalFunctions": 42,
       "implementedSymbols": 57,
       "implementedFunctions": 42,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     },
     {
@@ -88,6 +132,10 @@
       "totalFunctions": 17,
       "implementedSymbols": 63,
       "implementedFunctions": 17,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 0,
       "driftedSymbols": 0
     }
   ]

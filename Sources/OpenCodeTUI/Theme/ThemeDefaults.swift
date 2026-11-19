@@ -904,11 +904,17 @@ private func hexInts(_ r: Int, _ g: Int, _ b: Int, _ a: Int) -> String {
 
 private let lowerHexDigits: [UInt8] = Array("0123456789abcdef".utf8)
 
-/// Formats a byte value (`0...255`) as two lowercase hexadecimal characters.
+/// Formats an integer value as lowercase hexadecimal padded to at least 2 characters (`value.toString(16).padStart(2, "0")`).
 // parity: theme/src/tui/v1-migrate.ts#byte [status=implemented hash=e096e963051b]
 public func byte(_ value: Int) -> String {
-    let clamped = max(0, min(255, value))
-    return String(decoding: [lowerHexDigits[clamped >> 4], lowerHexDigits[clamped & 0x0F]], as: UTF8.self)
+    if value >= 0 && value <= 255 {
+        return String(decoding: [lowerHexDigits[value >> 4], lowerHexDigits[value & 0x0F]], as: UTF8.self)
+    }
+    let hex = String(value, radix: 16, uppercase: false)
+    if hex.count < 2 {
+        return String(repeating: "0", count: 2 - hex.count) + hex
+    }
+    return hex
 }
 
 public func byte(_ value: UInt8) -> String {

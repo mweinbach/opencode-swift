@@ -114,7 +114,7 @@ public enum CoreSubsystems {
             case .array(let arr):
                 return "[" + arr.map { canonicalJson($0) }.joined(separator: ",") + "]"
             case .object(let obj):
-                let sortedKeys = obj.keys.sorted { $0 < $1 }
+                let sortedKeys = obj.keys.sorted { $0.utf16.lexicographicallyPrecedes($1.utf16) }
                 let entries = sortedKeys.map { key -> String in
                     let val = obj[key] ?? .null
                     return "\(encodeJSONString(key)):\(canonicalJson(val))"
