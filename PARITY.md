@@ -6,12 +6,12 @@
 
 | Metric | Count |
 | --- | ---: |
-| Tracked upstream packages | 18 |
-| Tracked upstream source files | 1792 |
-| Tracked upstream LOC | 312,293 |
-| Upstream exported symbols (implemented / total) | 10694 / 10694 (100.0%) |
-| Upstream functions (implemented / total) | 3079 / 3079 (100.0%) |
-| Unmapped / stub / partial symbols | 0 / 0 / 0 |
+| Tracked upstream packages | 20 |
+| Tracked upstream source files | 1819 |
+| Tracked upstream LOC | 316,114 |
+| Upstream exported symbols (implemented / total) | 10694 / 10830 (98.7%) |
+| Upstream functions (implemented / total) | 3079 / 3126 (98.5%) |
+| Unmapped / stub / partial symbols | 136 / 0 / 0 |
 | Differential oracle-verified functions | 137 (1102 test vectors) |
 | Upstream code drift alerts | 0 |
 | Dangling parity annotations | 0 |
@@ -50,6 +50,8 @@
 | `packages/plugin-browser` | `OpenCodeCore` | `tier4-extensions` | 11 | 2,627 | 27/27 (100.0%) | 87/87 (100.0%) | 0 |
 | `packages/process-daemon` | `OpenCodePlatform` | `tier4-extensions` | 26 | 12,484 | 186/186 (100.0%) | 360/360 (100.0%) | 0 |
 | `packages/codemode` | `OpenCodeCore` | `tier4-extensions` | 74 | 21,815 | 358/358 (100.0%) | 691/691 (100.0%) | 0 |
+| `packages/http-recorder` | `OpenCodeRecorder` | `tier4-extensions` | 14 | 1,614 | 0/19 (0.0%) | 0/81 (0.0%) | 0 |
+| `packages/simulation` | `OpenCodeSimulation` | `tier4-extensions` | 13 | 2,207 | 0/28 (0.0%) | 0/55 (0.0%) | 0 |
 
 ## Implemented Parity Mappings
 
@@ -7904,34 +7906,34 @@
 | `plugin/src/worktree.ts#WorktreeEntry` | `implemented` | `Sources/OpenCodeCore/Plugin/PluginContract.swift:148` | `6fbd92ae98fe` (synced) |
 | `plugin/src/worktree.ts#WorktreeRemoveInput` | `implemented` | `Sources/OpenCodeCore/Plugin/PluginContract.swift:126` | `f23e294a6894` (synced) |
 | `plugin/src/worktree.ts#WorktreeResult` | `implemented` | `Sources/OpenCodeCore/Plugin/PluginContract.swift:138` | `c6386a6cc867` (synced) |
-| `process-daemon/src/client.rs#control` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2192` | `4eb49d0c6a81` (synced) |
-| `process-daemon/src/client.rs#create_pipe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2118` | `379c2f466103` (synced) |
-| `process-daemon/src/client.rs#create_pty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2100` | `cc0717d5efde` (synced) |
-| `process-daemon/src/client.rs#discover` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2029` | `0825a7b0e8d4` (synced) |
-| `process-daemon/src/client.rs#get` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2144` | `61234247ec65` (synced) |
-| `process-daemon/src/client.rs#input` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2197` | `a7daed2f1c79` (synced) |
-| `process-daemon/src/client.rs#list` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2135` | `ff2fee1e4390` (synced) |
-| `process-daemon/src/client.rs#next_event` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1959` | `b883f056cd40` (synced) |
-| `process-daemon/src/client.rs#read_rows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2229` | `a84de534b747` (synced) |
-| `process-daemon/src/client.rs#RemoteReplay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1906` | `bcfed9b576c3` (synced) |
-| `process-daemon/src/client.rs#RemoteSnapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1889` | `e63f49a350d0` (synced) |
-| `process-daemon/src/client.rs#replay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2242` | `cd1dfb1fc2fb` (synced) |
-| `process-daemon/src/client.rs#resize` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2182` | `cba4b23acc68` (synced) |
-| `process-daemon/src/client.rs#resize_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2187` | `6ef147e9e72d` (synced) |
-| `process-daemon/src/client.rs#run_cli` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2349` | `c15693d4d59b` (synced) |
-| `process-daemon/src/client.rs#set_metadata` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2167` | `c6d6836116d0` (synced) |
-| `process-daemon/src/client.rs#shutdown` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2322` | `dd18ba1f09af` (synced) |
-| `process-daemon/src/client.rs#signal` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2162` | `0960dfca0ae0` (synced) |
-| `process-daemon/src/client.rs#snapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2208` | `89e8cd358ec3` (synced) |
-| `process-daemon/src/client.rs#start` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1990` | `3281286e811e` (synced) |
-| `process-daemon/src/client.rs#subscribe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2268` | `3438035e996a` (synced) |
-| `process-daemon/src/client.rs#TerminalClient` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1965` | `624e251a8311` (synced) |
-| `process-daemon/src/client.rs#TerminalClient.start` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2023` | `c380f4851956` (synced) |
-| `process-daemon/src/client.rs#TerminalSubscription` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1929` | `3f0e80fce854` (synced) |
-| `process-daemon/src/client.rs#terminate` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2263` | `5f3b11d6b60f` (synced) |
-| `process-daemon/src/client.rs#wait` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2153` | `69dfc7f2bb75` (synced) |
-| `process-daemon/src/client.rs#write` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2172` | `0a448b8efafb` (synced) |
-| `process-daemon/src/client.rs#write_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2177` | `b999d2015a0c` (synced) |
+| `process-daemon/src/client.rs#control` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2208` | `4eb49d0c6a81` (synced) |
+| `process-daemon/src/client.rs#create_pipe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2134` | `379c2f466103` (synced) |
+| `process-daemon/src/client.rs#create_pty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2116` | `cc0717d5efde` (synced) |
+| `process-daemon/src/client.rs#discover` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2045` | `0825a7b0e8d4` (synced) |
+| `process-daemon/src/client.rs#get` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2160` | `61234247ec65` (synced) |
+| `process-daemon/src/client.rs#input` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2213` | `a7daed2f1c79` (synced) |
+| `process-daemon/src/client.rs#list` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2151` | `ff2fee1e4390` (synced) |
+| `process-daemon/src/client.rs#next_event` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1975` | `b883f056cd40` (synced) |
+| `process-daemon/src/client.rs#read_rows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2245` | `a84de534b747` (synced) |
+| `process-daemon/src/client.rs#RemoteReplay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1922` | `bcfed9b576c3` (synced) |
+| `process-daemon/src/client.rs#RemoteSnapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1905` | `e63f49a350d0` (synced) |
+| `process-daemon/src/client.rs#replay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2258` | `cd1dfb1fc2fb` (synced) |
+| `process-daemon/src/client.rs#resize` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2198` | `cba4b23acc68` (synced) |
+| `process-daemon/src/client.rs#resize_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2203` | `6ef147e9e72d` (synced) |
+| `process-daemon/src/client.rs#run_cli` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2365` | `c15693d4d59b` (synced) |
+| `process-daemon/src/client.rs#set_metadata` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2183` | `c6d6836116d0` (synced) |
+| `process-daemon/src/client.rs#shutdown` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2338` | `dd18ba1f09af` (synced) |
+| `process-daemon/src/client.rs#signal` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2178` | `0960dfca0ae0` (synced) |
+| `process-daemon/src/client.rs#snapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2224` | `89e8cd358ec3` (synced) |
+| `process-daemon/src/client.rs#start` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2006` | `3281286e811e` (synced) |
+| `process-daemon/src/client.rs#subscribe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2284` | `3438035e996a` (synced) |
+| `process-daemon/src/client.rs#TerminalClient` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1981` | `624e251a8311` (synced) |
+| `process-daemon/src/client.rs#TerminalClient.start` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2039` | `c380f4851956` (synced) |
+| `process-daemon/src/client.rs#TerminalSubscription` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1945` | `3f0e80fce854` (synced) |
+| `process-daemon/src/client.rs#terminate` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2279` | `5f3b11d6b60f` (synced) |
+| `process-daemon/src/client.rs#wait` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2169` | `69dfc7f2bb75` (synced) |
+| `process-daemon/src/client.rs#write` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2188` | `0a448b8efafb` (synced) |
+| `process-daemon/src/client.rs#write_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2193` | `b999d2015a0c` (synced) |
 | `process-daemon/src/daemon.rs#default_runtime_root` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonServer.swift:1317` | `a04bc1c544c7` (synced) |
 | `process-daemon/src/daemon.rs#LOCK_FILE` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonServer.swift:1278` | `6bd71d0188a0` (synced) |
 | `process-daemon/src/daemon.rs#read_registration` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonServer.swift:1359` | `82cea8a4bcdf` (synced) |
@@ -8124,7 +8126,7 @@
 | `process-daemon/src/ghostty/mod.rs#total_rows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonVT.swift:1826` | `d687bb7d37b8` (synced) |
 | `process-daemon/src/ghostty/mod.rs#viewport_row` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonVT.swift:1891` | `8b05eb7b09c6` (synced) |
 | `process-daemon/src/ghostty/mod.rs#vt_write` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonVT.swift:1777` | `f936c23fd83b` (synced) |
-| `process-daemon/src/musl.rs#statx` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2428` | `7193afc52c7f` (synced) |
+| `process-daemon/src/musl.rs#statx` | `adapted` | `Sources/OpenCodePlatform/ProcessDaemon.swift:2444` | `7193afc52c7f` (synced) |
 | `process-daemon/src/ownership.rs#claim` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1266` | `5d11c7ca2390` (synced) |
 | `process-daemon/src/ownership.rs#deadline` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1322` | `bfc045d3e4de` (synced) |
 | `process-daemon/src/ownership.rs#disconnect` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1350` | `b26a0094ce20` (synced) |
@@ -8151,18 +8153,18 @@
 | `process-daemon/src/protocol.rs#SubscriptionEvent` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1003` | `79d64bcdc657` (synced) |
 | `process-daemon/src/protocol.rs#write_frame` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1039` | `306c41db41cf` (synced) |
 | `process-daemon/src/protocol.rs#write_output_frame` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:1054` | `1eec5f515836` (synced) |
-| `process-daemon/src/service.rs#attach` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1793` | `f8fe24689c85` (synced) |
-| `process-daemon/src/service.rs#control` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1756` | `9718f5ea3817` (synced) |
-| `process-daemon/src/service.rs#create_pipe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1666` | `a4f0a4df775d` (synced) |
-| `process-daemon/src/service.rs#create_pty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1651` | `34308b5d964c` (synced) |
+| `process-daemon/src/service.rs#attach` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1809` | `f8fe24689c85` (synced) |
+| `process-daemon/src/service.rs#control` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1772` | `9718f5ea3817` (synced) |
+| `process-daemon/src/service.rs#create_pipe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1682` | `a4f0a4df775d` (synced) |
+| `process-daemon/src/service.rs#create_pty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1667` | `34308b5d964c` (synced) |
 | `process-daemon/src/service.rs#CreatePipe` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:148` | `4d9a8e907790` (synced) |
 | `process-daemon/src/service.rs#CreatePty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:95` | `d8e5c801274e` (synced) |
-| `process-daemon/src/service.rs#get` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1710` | `9b07e699d08a` (synced) |
-| `process-daemon/src/service.rs#input` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1763` | `f58bec981c83` (synced) |
+| `process-daemon/src/service.rs#get` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1726` | `9b07e699d08a` (synced) |
+| `process-daemon/src/service.rs#input` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1779` | `f58bec981c83` (synced) |
 | `process-daemon/src/service.rs#is_pty` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:135` | `7a184312aad1` (synced) |
-| `process-daemon/src/service.rs#list` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1700` | `1e25ce8a5997` (synced) |
+| `process-daemon/src/service.rs#list` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1716` | `1e25ce8a5997` (synced) |
 | `process-daemon/src/service.rs#MAX_METADATA_BYTES` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:144` | `e4c53936c377` (synced) |
-| `process-daemon/src/service.rs#new` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1638` | `b7fa9567fadd` (synced) |
+| `process-daemon/src/service.rs#new` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1654` | `b7fa9567fadd` (synced) |
 | `process-daemon/src/service.rs#PipeInfo` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:247` | `0712350a7e1a` (synced) |
 | `process-daemon/src/service.rs#PipeMetadata` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:141` | `05f65f029881` (synced) |
 | `process-daemon/src/service.rs#ProcessExit` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:368` | `414a0c90ccc0` (synced) |
@@ -8172,28 +8174,28 @@
 | `process-daemon/src/service.rs#ProcessWait` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:361` | `451b7dd3ae77` (synced) |
 | `process-daemon/src/service.rs#PtyInfo` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:207` | `cc55773a887e` (synced) |
 | `process-daemon/src/service.rs#RawReplay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:62` | `4807bad53a9e` (synced) |
-| `process-daemon/src/service.rs#read_rows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1778` | `66550b6ae77a` (synced) |
+| `process-daemon/src/service.rs#read_rows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1794` | `66550b6ae77a` (synced) |
 | `process-daemon/src/service.rs#recv` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:406` | `50448fa369db` (synced) |
-| `process-daemon/src/service.rs#rename` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1783` | `1505ec1e1bb6` (synced) |
-| `process-daemon/src/service.rs#replay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1788` | `faaed38f6f72` (synced) |
-| `process-daemon/src/service.rs#resize` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1744` | `cba4b23acc68` (synced) |
-| `process-daemon/src/service.rs#resize_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1749` | `d8fac430bb33` (synced) |
-| `process-daemon/src/service.rs#set_metadata` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1725` | `37afad94c08d` (synced) |
+| `process-daemon/src/service.rs#rename` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1799` | `1505ec1e1bb6` (synced) |
+| `process-daemon/src/service.rs#replay` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1804` | `faaed38f6f72` (synced) |
+| `process-daemon/src/service.rs#resize` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1760` | `cba4b23acc68` (synced) |
+| `process-daemon/src/service.rs#resize_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1765` | `d8fac430bb33` (synced) |
+| `process-daemon/src/service.rs#set_metadata` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1741` | `37afad94c08d` (synced) |
 | `process-daemon/src/service.rs#shell` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:126` | `e92cf29c5333` (synced) |
-| `process-daemon/src/service.rs#shutdown` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1820` | `7184d3cae252` (synced) |
-| `process-daemon/src/service.rs#signal` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1720` | `66fa59ccc393` (synced) |
-| `process-daemon/src/service.rs#snapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1773` | `562e497b0477` (synced) |
+| `process-daemon/src/service.rs#shutdown` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1836` | `7184d3cae252` (synced) |
+| `process-daemon/src/service.rs#signal` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1736` | `66fa59ccc393` (synced) |
+| `process-daemon/src/service.rs#snapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1789` | `562e497b0477` (synced) |
 | `process-daemon/src/service.rs#StreamEvent` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:85` | `80188cc2c0a5` (synced) |
 | `process-daemon/src/service.rs#TerminalAttachment` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:306` | `199c99c2b95d` (synced) |
 | `process-daemon/src/service.rs#TerminalId` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:127` | `9ef8fcd2b06a` (synced) |
 | `process-daemon/src/service.rs#TerminalLifecycle` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemonProtocol.swift:154` | `3bd874e21671` (synced) |
 | `process-daemon/src/service.rs#TerminalRows` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:47` | `8025d6bba8e2` (synced) |
-| `process-daemon/src/service.rs#TerminalService` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1618` | `cf9858a40dfe` (synced) |
+| `process-daemon/src/service.rs#TerminalService` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1634` | `cf9858a40dfe` (synced) |
 | `process-daemon/src/service.rs#TerminalSnapshot` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:30` | `cb94280dfdeb` (synced) |
-| `process-daemon/src/service.rs#terminate` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1809` | `0542fc181732` (synced) |
-| `process-daemon/src/service.rs#wait` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1715` | `91468ed78cb6` (synced) |
-| `process-daemon/src/service.rs#write` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1731` | `04eb885fd4a0` (synced) |
-| `process-daemon/src/service.rs#write_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1736` | `f5e4f49fd3ad` (synced) |
+| `process-daemon/src/service.rs#terminate` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1825` | `0542fc181732` (synced) |
+| `process-daemon/src/service.rs#wait` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1731` | `91468ed78cb6` (synced) |
+| `process-daemon/src/service.rs#write` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1747` | `04eb885fd4a0` (synced) |
+| `process-daemon/src/service.rs#write_for` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:1752` | `f5e4f49fd3ad` (synced) |
 | `process-daemon/src/service/pipe/unix.rs#kill` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:458` | `effbcdc97244` (synced) |
 | `process-daemon/src/service/pipe/unix.rs#pid` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:453` | `460d52d29d7d` (synced) |
 | `process-daemon/src/service/pipe/unix.rs#Process` | `implemented` | `Sources/OpenCodePlatform/ProcessDaemon.swift:434` | `088fd0d3da20` (synced) |
@@ -10752,4 +10754,4 @@
 
 ## Out-of-Scope Web/Electron Packages
 
-Not targeted for the Swift native port (web/SolidJS/Electron GUI & build helpers): `app`, `desktop`, `gui-plugins`, `ui`, `session-ui`, `stories`, `nav-menus`, `http-recorder`, `httpapi-codegen`, `simulation`, `script`, `data`, `effect-drizzle-sqlite`, `identity`, `plugins`.
+Not targeted for the Swift native port (web/SolidJS/Electron GUI & build helpers): `app`, `desktop`, `gui-plugins`, `ui`, `session-ui`, `stories`, `nav-menus`, `httpapi-codegen`, `script`, `data`, `effect-drizzle-sqlite`, `identity`, `plugins`.

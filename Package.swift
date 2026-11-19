@@ -24,18 +24,24 @@ let package = Package(
         .library(name: "OpenCodeClient", targets: ["OpenCodeClient"]),
 
         // Runtime / Host libraries & Unified SDK
+        .library(name: "OpenCodeRecorder", targets: ["OpenCodeRecorder"]),
         .library(name: "OpenCodeCore", targets: ["OpenCodeCore"]),
         .library(name: "OpenCodeServer", targets: ["OpenCodeServer"]),
         .library(name: "OpenCodeSDK", targets: ["OpenCodeSDK"]),
         .library(name: "OpenCodeTUI", targets: ["OpenCodeTUI"]),
+        .library(name: "OpenCodeSimulation", targets: ["OpenCodeSimulation"]),
+        .library(name: "OpenCodeGUIPlugins", targets: ["OpenCodeGUIPlugins"]),
+        .library(name: "OpenCodeApp", targets: ["OpenCodeApp"]),
         .library(name: "OpenCodeCLIKit", targets: ["OpenCodeCLIKit"]),
 
         // Executables
         .executable(name: "opencode", targets: ["OpenCodeCLI"]),
+        .executable(name: "opencode-app", targets: ["OpenCodeAppMain"]),
         .executable(name: "opencode-parity-runner", targets: ["OpenCodeParityRunner"]),
     ],
     dependencies: [
         .package(path: "Packages/OpenTUI"),
+        .package(path: "Packages/OpenTunnel"),
     ],
     targets: [
         // MARK: - Tier 1: Pure Portable Foundation (No OS-specific runtime dependencies)
@@ -68,8 +74,13 @@ let package = Package(
             dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodePlatform"]
         ),
         .target(
+            name: "OpenCodeRecorder",
+            dependencies: ["OpenCodeUtil", "OpenCodePlatform"]
+        ),
+        .target(
             name: "OpenCodeCore",
-            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeAI", "OpenCodePlatform"]
+            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeAI", "OpenCodePlatform"],
+            resources: [.copy("Resources")]
         ),
 
         // MARK: - Tier 3: Server, SDK, TUI & CLI Surfaces
@@ -96,7 +107,56 @@ let package = Package(
                 .product(name: "OpenTUIRenderables", package: "OpenTUI"),
                 .product(name: "OpenTUITerminal", package: "OpenTUI"),
                 .product(name: "OpenTUIView", package: "OpenTUI"),
+            ],
+            resources: [.copy("Resources")]
+        ),
+        .target(
+            name: "OpenCodeSimulation",
+            dependencies: [
+                "OpenCodeUtil",
+                "OpenCodeSchema",
+                "OpenCodeProtocol",
+                "OpenCodePlatform",
+                "OpenCodeAI",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeServer",
+                "OpenCodeTUI",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+                .product(name: "OpenTUIRenderables", package: "OpenTUI"),
             ]
+        ),
+        .target(
+            name: "OpenCodeGUIPlugins",
+            dependencies: [
+                "OpenCodeUtil",
+                "OpenCodeSchema",
+                "OpenCodeProtocol",
+                "OpenCodePlatform",
+                "OpenCodeClient",
+                "OpenCodeCore",
+            ]
+        ),
+        .target(
+            name: "OpenCodeApp",
+            dependencies: [
+                "OpenCodeUtil",
+                "OpenCodeSchema",
+                "OpenCodeProtocol",
+                "OpenCodePlatform",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeServer",
+                "OpenCodeSDK",
+                "OpenCodeTUI",
+                "OpenCodeGUIPlugins",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+            ],
+            resources: [.copy("Resources")]
+        ),
+        .executableTarget(
+            name: "OpenCodeAppMain",
+            dependencies: ["OpenCodeApp"]
         ),
         .target(
             name: "OpenCodeCLIKit",
@@ -112,6 +172,7 @@ let package = Package(
                 "OpenCodeTUI",
                 .product(name: "OpenTUICore", package: "OpenTUI"),
                 .product(name: "OpenTUITerminal", package: "OpenTUI"),
+                .product(name: "OpenTunnelClient", package: "OpenTunnel"),
             ]
         ),
         .executableTarget(
@@ -198,6 +259,56 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "OpenCodeRecorderTests",
+            dependencies: ["OpenCodeRecorder", "OpenCodePlatform", "OpenCodeUtil"]
+        ),
+        .testTarget(
+            name: "OpenCodeSimulationTests",
+            dependencies: [
+                "OpenCodeSimulation",
+                "OpenCodeServer",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeAI",
+                "OpenCodeTUI",
+                "OpenCodeProtocol",
+                "OpenCodeSchema",
+                "OpenCodePlatform",
+                "OpenCodeUtil",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+                .product(name: "OpenTUIRenderables", package: "OpenTUI"),
+            ]
+        ),
+        .testTarget(
+            name: "OpenCodeGUIPluginsTests",
+            dependencies: [
+                "OpenCodeGUIPlugins",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeProtocol",
+                "OpenCodeSchema",
+                "OpenCodePlatform",
+                "OpenCodeUtil",
+            ]
+        ),
+        .testTarget(
+            name: "OpenCodeAppTests",
+            dependencies: [
+                "OpenCodeApp",
+                "OpenCodeGUIPlugins",
+                "OpenCodeSDK",
+                "OpenCodeServer",
+                "OpenCodeClient",
+                "OpenCodeCore",
+                "OpenCodeTUI",
+                "OpenCodeProtocol",
+                "OpenCodeSchema",
+                "OpenCodePlatform",
+                "OpenCodeUtil",
+                .product(name: "OpenTUICore", package: "OpenTUI"),
+            ]
+        ),
+        .testTarget(
             name: "OpenCodeCLITests",
             dependencies: [
                 "OpenCodeCLIKit",
@@ -210,6 +321,7 @@ let package = Package(
                 "OpenCodePlatform",
                 "OpenCodeTUI",
                 "OpenCodeUtil",
+                .product(name: "OpenTunnelClient", package: "OpenTunnel"),
             ]
         ),
         .testTarget(

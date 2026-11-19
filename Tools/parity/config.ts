@@ -142,6 +142,20 @@ export const TRACKED_PACKAGES: readonly PackageSpec[] = [
     language: "ts",
     description: "Sandboxed scripting runtime for tool composition",
   },
+  {
+    upstreamPackage: "http-recorder",
+    swiftTarget: "OpenCodeRecorder",
+    tier: "tier4-extensions",
+    language: "ts",
+    description: "Deterministic HTTP and WebSocket cassette recorder, replayer, and secret redactor",
+  },
+  {
+    upstreamPackage: "simulation",
+    swiftTarget: "OpenCodeSimulation",
+    tier: "tier4-extensions",
+    language: "ts",
+    description: "Deterministic frontend and backend simulation driver, control server, and recorder",
+  },
 ]
 
 export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
@@ -152,9 +166,7 @@ export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
   "session-ui",
   "stories",
   "nav-menus",
-  "http-recorder",
   "httpapi-codegen",
-  "simulation",
   "script",
   "data",
   "effect-drizzle-sqlite",
@@ -163,8 +175,7 @@ export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
 ]
 
 export const EXEMPT_RUNTIME_DEPS: Readonly<Record<string, string>> = {
-  "@opencode/simulation": "Dev/test dynamic simulation driver (not active in normal production runs)",
-  "@opencode/ui": "Static audio .mp3 asset paths only (@opencode/ui/audio/*.mp3); web UI components are out of scope",
+  "@opencode/ui": "Static audio .mp3 asset paths only (@opencode/ui/audio/*.mp3, bundled natively in OpenCodeTUI/Resources); web UI components are out of scope",
 }
 
 export type TargetPurity = "pure" | "portable" | "platform" | "host"
@@ -175,11 +186,16 @@ export const SWIFT_TARGET_PURITY: Record<string, TargetPurity> = {
   OpenCodeProtocol: "pure",
   OpenCodeAI: "portable",
   OpenCodeClient: "portable",
+  OpenCodeRecorder: "portable",
   OpenCodePlatform: "platform",
   OpenCodeCore: "host",
   OpenCodeServer: "host",
   OpenCodeSDK: "host",
   OpenCodeTUI: "host",
+  OpenCodeSimulation: "host",
+  OpenCodeGUIPlugins: "host",
+  OpenCodeApp: "host",
+  OpenCodeAppMain: "host",
   OpenCodeCLIKit: "host",
   OpenCodeCLI: "host",
 }

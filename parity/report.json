@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T20:37:07.460Z",
+  "generatedAt": "2026-11-19T20:58:39.669Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -8,8 +8,8 @@
     "commitSubject": "fix(core): reload config only when a config input changes (#62158)"
   },
   "swiftWorkspace": {
-    "swiftFiles": 199,
-    "publicSymbols": 32272,
+    "swiftFiles": 204,
+    "publicSymbols": 32282,
     "parityAnnotations": 10694
   },
   "differentialParity": {
@@ -17,16 +17,16 @@
     "verifiedVectors": 1102
   },
   "totals": {
-    "files": 1792,
-    "lines": 312293,
-    "totalSymbols": 10694,
-    "totalFunctions": 3079,
+    "files": 1819,
+    "lines": 316114,
+    "totalSymbols": 10830,
+    "totalFunctions": 3126,
     "implementedSymbols": 10694,
     "implementedFunctions": 3079,
     "partialSymbols": 0,
     "stubSymbols": 0,
     "excludedSymbols": 0,
-    "unmappedSymbols": 0
+    "unmappedSymbols": 136
   },
   "guards": {
     "driftAlerts": 0,
@@ -43,7 +43,7 @@
     "compilerExportErrors": 0,
     "workspaceDepErrors": 0,
     "substanceErrors": 0,
-    "unmappedSymbols": 0,
+    "unmappedSymbols": 136,
     "stubSymbols": 0,
     "partialSymbols": 0
   },
@@ -61,7 +61,1232 @@
   "compilerExportErrors": [],
   "workspaceDepErrors": [],
   "substanceErrors": [],
-  "unmappedSymbolsList": [],
+  "unmappedSymbolsList": [
+    {
+      "id": "http-recorder/src/api.ts#JsonValue",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "JsonValue",
+      "kind": "type",
+      "line": 2,
+      "bodyHash": "19bb7e359c5a"
+    },
+    {
+      "id": "http-recorder/src/api.ts#CassetteMetadata",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "CassetteMetadata",
+      "kind": "type",
+      "line": 11,
+      "bodyHash": "f76b9d15a2fe"
+    },
+    {
+      "id": "http-recorder/src/api.ts#RequestSnapshot",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "RequestSnapshot",
+      "kind": "interface",
+      "line": 14,
+      "bodyHash": "20645ee9543a"
+    },
+    {
+      "id": "http-recorder/src/api.ts#RequestMatcher",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "RequestMatcher",
+      "kind": "type",
+      "line": 22,
+      "bodyHash": "3d23e3163dcc"
+    },
+    {
+      "id": "http-recorder/src/api.ts#RedactOptions",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "RedactOptions",
+      "kind": "interface",
+      "line": 25,
+      "bodyHash": "4fcd250acb19"
+    },
+    {
+      "id": "http-recorder/src/api.ts#RecorderOptions",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "RecorderOptions",
+      "kind": "interface",
+      "line": 36,
+      "bodyHash": "44c6bbcf13b0"
+    },
+    {
+      "id": "http-recorder/src/api.ts#SocketRecorderOptions",
+      "package": "http-recorder",
+      "file": "src/api.ts",
+      "symbol": "SocketRecorderOptions",
+      "kind": "type",
+      "line": 44,
+      "bodyHash": "f63b90f9b3cd"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#CassetteMetadataSchema",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "CassetteMetadataSchema",
+      "kind": "const",
+      "line": 20,
+      "bodyHash": "57b14dd18ea8"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#InteractionSchema",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "InteractionSchema",
+      "kind": "const",
+      "line": 22,
+      "bodyHash": "87962b0ac3b6"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#Interaction",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "Interaction",
+      "kind": "type",
+      "line": 25,
+      "bodyHash": "a54409820407"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#isHttpInteraction",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "isHttpInteraction",
+      "kind": "const",
+      "line": 27,
+      "bodyHash": "1a5f2f1a1a3c"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#isWebSocketInteraction",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "isWebSocketInteraction",
+      "kind": "const",
+      "line": 28,
+      "bodyHash": "aae0f326bd07"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#httpInteractions",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "httpInteractions",
+      "kind": "arrow_function",
+      "line": 29,
+      "bodyHash": "dec705d687a8"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#webSocketInteractions",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "webSocketInteractions",
+      "kind": "arrow_function",
+      "line": 30,
+      "bodyHash": "379f1c1de42e"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#CassetteSchema",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "CassetteSchema",
+      "kind": "const",
+      "line": 33,
+      "bodyHash": "5e5983326c71"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#Cassette",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "Cassette",
+      "kind": "type",
+      "line": 38,
+      "bodyHash": "a28548d487a0"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#decodeCassette",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "decodeCassette",
+      "kind": "const",
+      "line": 40,
+      "bodyHash": "a9b028acbff7"
+    },
+    {
+      "id": "http-recorder/src/cassette/model.ts#encodeCassette",
+      "package": "http-recorder",
+      "file": "src/cassette/model.ts",
+      "symbol": "encodeCassette",
+      "kind": "const",
+      "line": 41,
+      "bodyHash": "b4e7396ac645"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#CassetteNotFoundError",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "CassetteNotFoundError",
+      "kind": "class",
+      "line": 9,
+      "bodyHash": "e3a04c9eda93"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#CassetteNotFoundError.message",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "CassetteNotFoundError.message",
+      "kind": "method",
+      "line": 12,
+      "bodyHash": "ff3a633ea3dc"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#InvalidCassetteError",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "InvalidCassetteError",
+      "kind": "class",
+      "line": 17,
+      "bodyHash": "e5e378480723"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#InvalidCassetteError.message",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "InvalidCassetteError.message",
+      "kind": "method",
+      "line": 21,
+      "bodyHash": "ff3a633ea3dc"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#UnsafeCassetteError",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "UnsafeCassetteError",
+      "kind": "class",
+      "line": 26,
+      "bodyHash": "1faea8cf9c1d"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#UnsafeCassetteError.message",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "UnsafeCassetteError.message",
+      "kind": "method",
+      "line": 30,
+      "bodyHash": "a24907177e5f"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#Interface",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "Interface",
+      "kind": "interface",
+      "line": 37,
+      "bodyHash": "9844f7a06af0"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#Service",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "Service",
+      "kind": "class",
+      "line": 50,
+      "bodyHash": "75893509fb7b"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#hasCassetteSync",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "hasCassetteSync",
+      "kind": "arrow_function",
+      "line": 63,
+      "bodyHash": "921bb20e3c69"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#removeCassetteSync",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "removeCassetteSync",
+      "kind": "arrow_function",
+      "line": 66,
+      "bodyHash": "526968487706"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#fileSystem",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "fileSystem",
+      "kind": "const",
+      "line": 88,
+      "bodyHash": "237e3d6eca7a"
+    },
+    {
+      "id": "http-recorder/src/cassette/store.ts#memory",
+      "package": "http-recorder",
+      "file": "src/cassette/store.ts",
+      "symbol": "memory",
+      "kind": "arrow_function",
+      "line": 166,
+      "bodyHash": "162cb34b4110"
+    },
+    {
+      "id": "http-recorder/src/http/matching.ts#canonicalSnapshot",
+      "package": "http-recorder",
+      "file": "src/http/matching.ts",
+      "symbol": "canonicalSnapshot",
+      "kind": "arrow_function",
+      "line": 8,
+      "bodyHash": "4be8f6f3e463"
+    },
+    {
+      "id": "http-recorder/src/http/matching.ts#defaultMatcher",
+      "package": "http-recorder",
+      "file": "src/http/matching.ts",
+      "symbol": "defaultMatcher",
+      "kind": "arrow_function",
+      "line": 15,
+      "bodyHash": "739c162bfe7e"
+    },
+    {
+      "id": "http-recorder/src/http/matching.ts#requestDiff",
+      "package": "http-recorder",
+      "file": "src/http/matching.ts",
+      "symbol": "requestDiff",
+      "kind": "arrow_function",
+      "line": 40,
+      "bodyHash": "8b5c7cc92fb0"
+    },
+    {
+      "id": "http-recorder/src/http/matching.ts#selectFirstMatching",
+      "package": "http-recorder",
+      "file": "src/http/matching.ts",
+      "symbol": "selectFirstMatching",
+      "kind": "const",
+      "line": 59,
+      "bodyHash": "f90532c3841e"
+    },
+    {
+      "id": "http-recorder/src/http/model.ts#RequestSnapshotSchema",
+      "package": "http-recorder",
+      "file": "src/http/model.ts",
+      "symbol": "RequestSnapshotSchema",
+      "kind": "const",
+      "line": 3,
+      "bodyHash": "8cf42492653a"
+    },
+    {
+      "id": "http-recorder/src/http/model.ts#ResponseSnapshotSchema",
+      "package": "http-recorder",
+      "file": "src/http/model.ts",
+      "symbol": "ResponseSnapshotSchema",
+      "kind": "const",
+      "line": 12,
+      "bodyHash": "359e2aa02c1b"
+    },
+    {
+      "id": "http-recorder/src/http/model.ts#ResponseSnapshot",
+      "package": "http-recorder",
+      "file": "src/http/model.ts",
+      "symbol": "ResponseSnapshot",
+      "kind": "interface",
+      "line": 19,
+      "bodyHash": "5fffb3c0069e"
+    },
+    {
+      "id": "http-recorder/src/http/model.ts#HttpInteractionSchema",
+      "package": "http-recorder",
+      "file": "src/http/model.ts",
+      "symbol": "HttpInteractionSchema",
+      "kind": "const",
+      "line": 21,
+      "bodyHash": "ce4c36ffee1d"
+    },
+    {
+      "id": "http-recorder/src/http/model.ts#HttpInteraction",
+      "package": "http-recorder",
+      "file": "src/http/model.ts",
+      "symbol": "HttpInteraction",
+      "kind": "interface",
+      "line": 27,
+      "bodyHash": "0ad3b0f65a1b"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#RecordReplayMode",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "RecordReplayMode",
+      "kind": "type",
+      "line": 13,
+      "bodyHash": "7c5a855afd2e"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#RecordReplayOptions",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "RecordReplayOptions",
+      "kind": "interface",
+      "line": 14,
+      "bodyHash": "e6afed12a070"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#redactedErrorRequest",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "redactedErrorRequest",
+      "kind": "const",
+      "line": 63,
+      "bodyHash": "58c585c835ef"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#recordingLayer",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "recordingLayer",
+      "kind": "const",
+      "line": 76,
+      "bodyHash": "ffccf670a71a"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#cassetteLayer",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "cassetteLayer",
+      "kind": "arrow_function",
+      "line": 158,
+      "bodyHash": "a79ea416110f"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#layer",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "layer",
+      "kind": "const",
+      "line": 165,
+      "bodyHash": "11e7f9437a03"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#layerFetch",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "layerFetch",
+      "kind": "arrow_function",
+      "line": 173,
+      "bodyHash": "b40298ded7f9"
+    },
+    {
+      "id": "http-recorder/src/http/recorder.ts#defaultMatcher",
+      "package": "http-recorder",
+      "file": "src/http/recorder.ts",
+      "symbol": "defaultMatcher",
+      "kind": "const",
+      "line": 12,
+      "bodyHash": "eb0658b90498"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder",
+      "kind": "const",
+      "line": 10,
+      "bodyHash": "2a8c107fb98b"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.JsonValue",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.JsonValue",
+      "kind": "type",
+      "line": 30,
+      "bodyHash": "2d0702c16ad2"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.CassetteMetadata",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.CassetteMetadata",
+      "kind": "type",
+      "line": 32,
+      "bodyHash": "af2442d0cd7d"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.RecorderOptions",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.RecorderOptions",
+      "kind": "type",
+      "line": 34,
+      "bodyHash": "45725c45230d"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.RedactOptions",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.RedactOptions",
+      "kind": "type",
+      "line": 36,
+      "bodyHash": "430c063bbc56"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.RequestMatcher",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.RequestMatcher",
+      "kind": "type",
+      "line": 38,
+      "bodyHash": "c5a1c9988d4b"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.RequestSnapshot",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.RequestSnapshot",
+      "kind": "type",
+      "line": 40,
+      "bodyHash": "8b7db488a783"
+    },
+    {
+      "id": "http-recorder/src/index.ts#HttpRecorder.SocketRecorderOptions",
+      "package": "http-recorder",
+      "file": "src/index.ts",
+      "symbol": "HttpRecorder.SocketRecorderOptions",
+      "kind": "type",
+      "line": 42,
+      "bodyHash": "06a544ba9874"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#REDACTED",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "REDACTED",
+      "kind": "const",
+      "line": 6,
+      "bodyHash": "c1486d8f010f"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#redactUrl",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "redactUrl",
+      "kind": "const",
+      "line": 35,
+      "bodyHash": "d949a850b720"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#redactHeaders",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "redactHeaders",
+      "kind": "const",
+      "line": 49,
+      "bodyHash": "db224324b59a"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#Redactor",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "Redactor",
+      "kind": "interface",
+      "line": 69,
+      "bodyHash": "420f006d6727"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#compose",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "compose",
+      "kind": "arrow_function",
+      "line": 74,
+      "bodyHash": "294335208cf6"
+    },
+    {
+      "id": "http-recorder/src/redaction/redactor.ts#make",
+      "package": "http-recorder",
+      "file": "src/redaction/redactor.ts",
+      "symbol": "make",
+      "kind": "arrow_function",
+      "line": 156,
+      "bodyHash": "073f7e9107c0"
+    },
+    {
+      "id": "http-recorder/src/redaction/secrets.ts#SecretFindingSchema",
+      "package": "http-recorder",
+      "file": "src/redaction/secrets.ts",
+      "symbol": "SecretFindingSchema",
+      "kind": "const",
+      "line": 33,
+      "bodyHash": "9ddfd750a554"
+    },
+    {
+      "id": "http-recorder/src/redaction/secrets.ts#SecretFinding",
+      "package": "http-recorder",
+      "file": "src/redaction/secrets.ts",
+      "symbol": "SecretFinding",
+      "kind": "type",
+      "line": 34,
+      "bodyHash": "9098f3fe1611"
+    },
+    {
+      "id": "http-recorder/src/redaction/secrets.ts#secretFindings",
+      "package": "http-recorder",
+      "file": "src/redaction/secrets.ts",
+      "symbol": "secretFindings",
+      "kind": "arrow_function",
+      "line": 36,
+      "bodyHash": "13416fee356a"
+    },
+    {
+      "id": "http-recorder/src/replay/comparison.ts#decodeJson",
+      "package": "http-recorder",
+      "file": "src/replay/comparison.ts",
+      "symbol": "decodeJson",
+      "kind": "const",
+      "line": 5,
+      "bodyHash": "ecbf02576bbf"
+    },
+    {
+      "id": "http-recorder/src/replay/comparison.ts#canonicalizeJson",
+      "package": "http-recorder",
+      "file": "src/replay/comparison.ts",
+      "symbol": "canonicalizeJson",
+      "kind": "arrow_function",
+      "line": 9,
+      "bodyHash": "50065834d9d4"
+    },
+    {
+      "id": "http-recorder/src/replay/comparison.ts#safeText",
+      "package": "http-recorder",
+      "file": "src/replay/comparison.ts",
+      "symbol": "safeText",
+      "kind": "arrow_function",
+      "line": 20,
+      "bodyHash": "e3751cb1ca76"
+    },
+    {
+      "id": "http-recorder/src/replay/comparison.ts#jsonBody",
+      "package": "http-recorder",
+      "file": "src/replay/comparison.ts",
+      "symbol": "jsonBody",
+      "kind": "arrow_function",
+      "line": 28,
+      "bodyHash": "8274b60b7de2"
+    },
+    {
+      "id": "http-recorder/src/replay/comparison.ts#isJsonRecord",
+      "package": "http-recorder",
+      "file": "src/replay/comparison.ts",
+      "symbol": "isJsonRecord",
+      "kind": "const",
+      "line": 29,
+      "bodyHash": "85541c6eaa43"
+    },
+    {
+      "id": "http-recorder/src/replay/state.ts#resolveAutoMode",
+      "package": "http-recorder",
+      "file": "src/replay/state.ts",
+      "symbol": "resolveAutoMode",
+      "kind": "const",
+      "line": 10,
+      "bodyHash": "378b074a9cad"
+    },
+    {
+      "id": "http-recorder/src/replay/state.ts#ReplayState",
+      "package": "http-recorder",
+      "file": "src/replay/state.ts",
+      "symbol": "ReplayState",
+      "kind": "interface",
+      "line": 19,
+      "bodyHash": "b9acc0b5e531"
+    },
+    {
+      "id": "http-recorder/src/replay/state.ts#ReplayPoolState",
+      "package": "http-recorder",
+      "file": "src/replay/state.ts",
+      "symbol": "ReplayPoolState",
+      "kind": "interface",
+      "line": 27,
+      "bodyHash": "eac312cda8ec"
+    },
+    {
+      "id": "http-recorder/src/replay/state.ts#makeReplayPoolState",
+      "package": "http-recorder",
+      "file": "src/replay/state.ts",
+      "symbol": "makeReplayPoolState",
+      "kind": "const",
+      "line": 36,
+      "bodyHash": "7c0b2afcd7e5"
+    },
+    {
+      "id": "http-recorder/src/replay/state.ts#makeReplayState",
+      "package": "http-recorder",
+      "file": "src/replay/state.ts",
+      "symbol": "makeReplayState",
+      "kind": "const",
+      "line": 83,
+      "bodyHash": "66bc82228ba8"
+    },
+    {
+      "id": "http-recorder/src/websocket/model.ts#WebSocketEventSchema",
+      "package": "http-recorder",
+      "file": "src/websocket/model.ts",
+      "symbol": "WebSocketEventSchema",
+      "kind": "const",
+      "line": 3,
+      "bodyHash": "642d2ce048de"
+    },
+    {
+      "id": "http-recorder/src/websocket/model.ts#WebSocketEvent",
+      "package": "http-recorder",
+      "file": "src/websocket/model.ts",
+      "symbol": "WebSocketEvent",
+      "kind": "type",
+      "line": 17,
+      "bodyHash": "944de635b321"
+    },
+    {
+      "id": "http-recorder/src/websocket/model.ts#WebSocketInteractionSchema",
+      "package": "http-recorder",
+      "file": "src/websocket/model.ts",
+      "symbol": "WebSocketInteractionSchema",
+      "kind": "const",
+      "line": 19,
+      "bodyHash": "389d9b94613f"
+    },
+    {
+      "id": "http-recorder/src/websocket/model.ts#WebSocketInteraction",
+      "package": "http-recorder",
+      "file": "src/websocket/model.ts",
+      "symbol": "WebSocketInteraction",
+      "kind": "interface",
+      "line": 35,
+      "bodyHash": "eb63fa6d830f"
+    },
+    {
+      "id": "http-recorder/src/websocket/recorder.ts#layerSocket",
+      "package": "http-recorder",
+      "file": "src/websocket/recorder.ts",
+      "symbol": "layerSocket",
+      "kind": "const",
+      "line": 354,
+      "bodyHash": "3d6d20fd3a1d"
+    },
+    {
+      "id": "http-recorder/src/websocket/recorder.ts#layerSocketWithMode",
+      "package": "http-recorder",
+      "file": "src/websocket/recorder.ts",
+      "symbol": "layerSocketWithMode",
+      "kind": "const",
+      "line": 360,
+      "bodyHash": "1fd8bb42841b"
+    },
+    {
+      "id": "http-recorder/src/websocket/recorder.ts#layerWebSocketConstructor",
+      "package": "http-recorder",
+      "file": "src/websocket/recorder.ts",
+      "symbol": "layerWebSocketConstructor",
+      "kind": "const",
+      "line": 579,
+      "bodyHash": "0765cd106c84"
+    },
+    {
+      "id": "simulation/src/backend/index.ts#simulationReplacements",
+      "package": "simulation",
+      "file": "src/backend/index.ts",
+      "symbol": "simulationReplacements",
+      "kind": "const",
+      "line": 24,
+      "bodyHash": "bfbc8279b35b"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#Route",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "Route",
+      "kind": "interface",
+      "line": 19,
+      "bodyHash": "1bcd66af51f4"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#LogEntry",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "LogEntry",
+      "kind": "type",
+      "line": 27,
+      "bodyHash": "1d331db0af62"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#json",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "json",
+      "kind": "function",
+      "line": 32,
+      "bodyHash": "623a27188331"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#Run",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "Run",
+      "kind": "interface",
+      "line": 47,
+      "bodyHash": "6464f68b0bff"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#make",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "make",
+      "kind": "effect_function",
+      "line": 52,
+      "bodyHash": "ab5fa7484c87"
+    },
+    {
+      "id": "simulation/src/backend/network.ts#layer",
+      "package": "simulation",
+      "file": "src/backend/network.ts",
+      "symbol": "layer",
+      "kind": "arrow_function",
+      "line": 82,
+      "bodyHash": "55b91eea73c2"
+    },
+    {
+      "id": "simulation/src/backend/openai.ts#route",
+      "package": "simulation",
+      "file": "src/backend/openai.ts",
+      "symbol": "route",
+      "kind": "arrow_function",
+      "line": 102,
+      "bodyHash": "faf6003bd3e6"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#ProviderRequest",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "ProviderRequest",
+      "kind": "interface",
+      "line": 25,
+      "bodyHash": "f07c86710c14"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#ProviderResponseEvent",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "ProviderResponseEvent",
+      "kind": "type",
+      "line": 30,
+      "bodyHash": "94465b276a80"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#ProviderDisconnectedError",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "ProviderDisconnectedError",
+      "kind": "class",
+      "line": 34,
+      "bodyHash": "9fb1b35069de"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#Interface",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "Interface",
+      "kind": "interface",
+      "line": 39,
+      "bodyHash": "4859ef408819"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#Service",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "Service",
+      "kind": "class",
+      "line": 43,
+      "bodyHash": "e4df795012da"
+    },
+    {
+      "id": "simulation/src/backend/simulated-provider.ts#layerDrive",
+      "package": "simulation",
+      "file": "src/backend/simulated-provider.ts",
+      "symbol": "layerDrive",
+      "kind": "arrow_function",
+      "line": 153,
+      "bodyHash": "93d7caa1cea6"
+    },
+    {
+      "id": "simulation/src/control-server.ts#Server",
+      "package": "simulation",
+      "file": "src/control-server.ts",
+      "symbol": "Server",
+      "kind": "interface",
+      "line": 4,
+      "bodyHash": "34d36a342715"
+    },
+    {
+      "id": "simulation/src/control-server.ts#SocketData",
+      "package": "simulation",
+      "file": "src/control-server.ts",
+      "symbol": "SocketData",
+      "kind": "interface",
+      "line": 12,
+      "bodyHash": "74e9e33bbbde"
+    },
+    {
+      "id": "simulation/src/control-server.ts#Socket",
+      "package": "simulation",
+      "file": "src/control-server.ts",
+      "symbol": "Socket",
+      "kind": "interface",
+      "line": 18,
+      "bodyHash": "ec958a049054"
+    },
+    {
+      "id": "simulation/src/control-server.ts#start",
+      "package": "simulation",
+      "file": "src/control-server.ts",
+      "symbol": "start",
+      "kind": "function",
+      "line": 25,
+      "bodyHash": "3658be8d2a7f"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#Action",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "Action",
+      "kind": "type",
+      "line": 16,
+      "bodyHash": "4dc5e9973487"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#Element",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "Element",
+      "kind": "type",
+      "line": 17,
+      "bodyHash": "d17a86657e1f"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#Harness",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "Harness",
+      "kind": "interface",
+      "line": 19,
+      "bodyHash": "8355ad7ae180"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#createHarness",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "createHarness",
+      "kind": "function",
+      "line": 77,
+      "bodyHash": "86c711f5c2eb"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#elements",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "elements",
+      "kind": "function",
+      "line": 98,
+      "bodyHash": "1a644dd14c8c"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#state",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "state",
+      "kind": "function",
+      "line": 119,
+      "bodyHash": "8138eac15f2b"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#snapshot",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "snapshot",
+      "kind": "function",
+      "line": 130,
+      "bodyHash": "9f9c046feb38"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#matches",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "matches",
+      "kind": "function",
+      "line": 149,
+      "bodyHash": "32d2f65775c8"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#capture",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "capture",
+      "kind": "effect_function",
+      "line": 153,
+      "bodyHash": "4b90559fc8cc"
+    },
+    {
+      "id": "simulation/src/frontend/actions.ts#execute",
+      "package": "simulation",
+      "file": "src/frontend/actions.ts",
+      "symbol": "execute",
+      "kind": "effect_function",
+      "line": 218,
+      "bodyHash": "5dc6661ad17d"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#Viewport",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "Viewport",
+      "kind": "interface",
+      "line": 16,
+      "bodyHash": "efbc78adb29b"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#create",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "create",
+      "kind": "effect_function",
+      "line": 21,
+      "bodyHash": "b720402c6619"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#recordResize",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "recordResize",
+      "kind": "function",
+      "line": 71,
+      "bodyHash": "9fd8017f091e"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#recordPointer",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "recordPointer",
+      "kind": "function",
+      "line": 75,
+      "bodyHash": "1f979afc73b3"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#setupFor",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "setupFor",
+      "kind": "function",
+      "line": 79,
+      "bodyHash": "456ab40e5bde"
+    },
+    {
+      "id": "simulation/src/frontend/renderer.ts#finish",
+      "package": "simulation",
+      "file": "src/frontend/renderer.ts",
+      "symbol": "finish",
+      "kind": "function",
+      "line": 83,
+      "bodyHash": "3904dff5eb1f"
+    },
+    {
+      "id": "simulation/src/frontend/semantics.ts#Definition",
+      "package": "simulation",
+      "file": "src/frontend/semantics.ts",
+      "symbol": "Definition",
+      "kind": "type",
+      "line": 7,
+      "bodyHash": "a249934ad0aa"
+    },
+    {
+      "id": "simulation/src/frontend/semantics.ts#read",
+      "package": "simulation",
+      "file": "src/frontend/semantics.ts",
+      "symbol": "read",
+      "kind": "arrow_function",
+      "line": 16,
+      "bodyHash": "ec9b4376b387"
+    },
+    {
+      "id": "simulation/src/frontend/semantics.ts#SimulationSemantics",
+      "package": "simulation",
+      "file": "src/frontend/semantics.ts",
+      "symbol": "SimulationSemantics",
+      "kind": "const",
+      "line": 18,
+      "bodyHash": "bdab92315e30"
+    },
+    {
+      "id": "simulation/src/frontend/server.ts#start",
+      "package": "simulation",
+      "file": "src/frontend/server.ts",
+      "symbol": "start",
+      "kind": "effect_function",
+      "line": 61,
+      "bodyHash": "fe7150e0bb1e"
+    },
+    {
+      "id": "simulation/src/frontend/simulation.ts#create",
+      "package": "simulation",
+      "file": "src/frontend/simulation.ts",
+      "symbol": "create",
+      "kind": "effect_function",
+      "line": 9,
+      "bodyHash": "5142c60433d5"
+    },
+    {
+      "id": "simulation/src/manifest.ts#Manifest",
+      "package": "simulation",
+      "file": "src/manifest.ts",
+      "symbol": "Manifest",
+      "kind": "const",
+      "line": 27,
+      "bodyHash": "7ee528f5bafd"
+    },
+    {
+      "id": "simulation/src/manifest.ts#ResolveError",
+      "package": "simulation",
+      "file": "src/manifest.ts",
+      "symbol": "ResolveError",
+      "kind": "class",
+      "line": 46,
+      "bodyHash": "66f4fbdc5bb1"
+    },
+    {
+      "id": "simulation/src/manifest.ts#defaults",
+      "package": "simulation",
+      "file": "src/manifest.ts",
+      "symbol": "defaults",
+      "kind": "const",
+      "line": 53,
+      "bodyHash": "a968a2785c9c"
+    },
+    {
+      "id": "simulation/src/manifest.ts#resolve",
+      "package": "simulation",
+      "file": "src/manifest.ts",
+      "symbol": "resolve",
+      "kind": "effect_function",
+      "line": 69,
+      "bodyHash": "181dcf45b07d"
+    },
+    {
+      "id": "simulation/src/recording.ts#Header",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Header",
+      "kind": "const",
+      "line": 8,
+      "bodyHash": "ff4474957bca"
+    },
+    {
+      "id": "simulation/src/recording.ts#Output",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Output",
+      "kind": "const",
+      "line": 17,
+      "bodyHash": "8e46cb65b677"
+    },
+    {
+      "id": "simulation/src/recording.ts#Resize",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Resize",
+      "kind": "const",
+      "line": 24,
+      "bodyHash": "bcd9e4e3088f"
+    },
+    {
+      "id": "simulation/src/recording.ts#Event",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Event",
+      "kind": "const",
+      "line": 32,
+      "bodyHash": "95150a8bcc44"
+    },
+    {
+      "id": "simulation/src/recording.ts#Pointer",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Pointer",
+      "kind": "const",
+      "line": 35,
+      "bodyHash": "bd487864212d"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline",
+      "kind": "class",
+      "line": 43,
+      "bodyHash": "49ee6569cffa"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.create",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.create",
+      "kind": "method",
+      "line": 65,
+      "bodyHash": "14f1c71836a2"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.getColorDepth",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.getColorDepth",
+      "kind": "method",
+      "line": 78,
+      "bodyHash": "6e808a2891ef"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.write",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.write",
+      "kind": "method",
+      "line": 84,
+      "bodyHash": "f56d29c6569f"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.finish",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.finish",
+      "kind": "method",
+      "line": 124,
+      "bodyHash": "67ef1ad0710c"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.resize",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.resize",
+      "kind": "method",
+      "line": 131,
+      "bodyHash": "f5e3748d2e8b"
+    },
+    {
+      "id": "simulation/src/recording.ts#Timeline.pointer",
+      "package": "simulation",
+      "file": "src/recording.ts",
+      "symbol": "Timeline.pointer",
+      "kind": "method",
+      "line": 139,
+      "bodyHash": "2c8fbc1d4af0"
+    }
+  ],
   "packages": [
     {
       "package": "util",
@@ -368,6 +1593,178 @@
       "unmappedSymbols": 0,
       "driftedSymbols": 0,
       "unmappedIds": []
+    },
+    {
+      "package": "http-recorder",
+      "swiftTarget": "OpenCodeRecorder",
+      "tier": "tier4-extensions",
+      "files": 14,
+      "lines": 1614,
+      "totalSymbols": 81,
+      "totalFunctions": 19,
+      "implementedSymbols": 0,
+      "implementedFunctions": 0,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 81,
+      "driftedSymbols": 0,
+      "unmappedIds": [
+        "http-recorder/src/api.ts#JsonValue",
+        "http-recorder/src/api.ts#CassetteMetadata",
+        "http-recorder/src/api.ts#RequestSnapshot",
+        "http-recorder/src/api.ts#RequestMatcher",
+        "http-recorder/src/api.ts#RedactOptions",
+        "http-recorder/src/api.ts#RecorderOptions",
+        "http-recorder/src/api.ts#SocketRecorderOptions",
+        "http-recorder/src/cassette/model.ts#CassetteMetadataSchema",
+        "http-recorder/src/cassette/model.ts#InteractionSchema",
+        "http-recorder/src/cassette/model.ts#Interaction",
+        "http-recorder/src/cassette/model.ts#isHttpInteraction",
+        "http-recorder/src/cassette/model.ts#isWebSocketInteraction",
+        "http-recorder/src/cassette/model.ts#httpInteractions",
+        "http-recorder/src/cassette/model.ts#webSocketInteractions",
+        "http-recorder/src/cassette/model.ts#CassetteSchema",
+        "http-recorder/src/cassette/model.ts#Cassette",
+        "http-recorder/src/cassette/model.ts#decodeCassette",
+        "http-recorder/src/cassette/model.ts#encodeCassette",
+        "http-recorder/src/cassette/store.ts#CassetteNotFoundError",
+        "http-recorder/src/cassette/store.ts#CassetteNotFoundError.message",
+        "http-recorder/src/cassette/store.ts#InvalidCassetteError",
+        "http-recorder/src/cassette/store.ts#InvalidCassetteError.message",
+        "http-recorder/src/cassette/store.ts#UnsafeCassetteError",
+        "http-recorder/src/cassette/store.ts#UnsafeCassetteError.message",
+        "http-recorder/src/cassette/store.ts#Interface",
+        "http-recorder/src/cassette/store.ts#Service",
+        "http-recorder/src/cassette/store.ts#hasCassetteSync",
+        "http-recorder/src/cassette/store.ts#removeCassetteSync",
+        "http-recorder/src/cassette/store.ts#fileSystem",
+        "http-recorder/src/cassette/store.ts#memory",
+        "http-recorder/src/http/matching.ts#canonicalSnapshot",
+        "http-recorder/src/http/matching.ts#defaultMatcher",
+        "http-recorder/src/http/matching.ts#requestDiff",
+        "http-recorder/src/http/matching.ts#selectFirstMatching",
+        "http-recorder/src/http/model.ts#RequestSnapshotSchema",
+        "http-recorder/src/http/model.ts#ResponseSnapshotSchema",
+        "http-recorder/src/http/model.ts#ResponseSnapshot",
+        "http-recorder/src/http/model.ts#HttpInteractionSchema",
+        "http-recorder/src/http/model.ts#HttpInteraction",
+        "http-recorder/src/http/recorder.ts#RecordReplayMode",
+        "http-recorder/src/http/recorder.ts#RecordReplayOptions",
+        "http-recorder/src/http/recorder.ts#redactedErrorRequest",
+        "http-recorder/src/http/recorder.ts#recordingLayer",
+        "http-recorder/src/http/recorder.ts#cassetteLayer",
+        "http-recorder/src/http/recorder.ts#layer",
+        "http-recorder/src/http/recorder.ts#layerFetch",
+        "http-recorder/src/http/recorder.ts#defaultMatcher",
+        "http-recorder/src/index.ts#HttpRecorder",
+        "http-recorder/src/index.ts#HttpRecorder.JsonValue",
+        "http-recorder/src/index.ts#HttpRecorder.CassetteMetadata",
+        "http-recorder/src/index.ts#HttpRecorder.RecorderOptions",
+        "http-recorder/src/index.ts#HttpRecorder.RedactOptions",
+        "http-recorder/src/index.ts#HttpRecorder.RequestMatcher",
+        "http-recorder/src/index.ts#HttpRecorder.RequestSnapshot",
+        "http-recorder/src/index.ts#HttpRecorder.SocketRecorderOptions",
+        "http-recorder/src/redaction/redactor.ts#REDACTED",
+        "http-recorder/src/redaction/redactor.ts#redactUrl",
+        "http-recorder/src/redaction/redactor.ts#redactHeaders",
+        "http-recorder/src/redaction/redactor.ts#Redactor",
+        "http-recorder/src/redaction/redactor.ts#compose",
+        "http-recorder/src/redaction/redactor.ts#make",
+        "http-recorder/src/redaction/secrets.ts#SecretFindingSchema",
+        "http-recorder/src/redaction/secrets.ts#SecretFinding",
+        "http-recorder/src/redaction/secrets.ts#secretFindings",
+        "http-recorder/src/replay/comparison.ts#decodeJson",
+        "http-recorder/src/replay/comparison.ts#canonicalizeJson",
+        "http-recorder/src/replay/comparison.ts#safeText",
+        "http-recorder/src/replay/comparison.ts#jsonBody",
+        "http-recorder/src/replay/comparison.ts#isJsonRecord",
+        "http-recorder/src/replay/state.ts#resolveAutoMode",
+        "http-recorder/src/replay/state.ts#ReplayState",
+        "http-recorder/src/replay/state.ts#ReplayPoolState",
+        "http-recorder/src/replay/state.ts#makeReplayPoolState",
+        "http-recorder/src/replay/state.ts#makeReplayState",
+        "http-recorder/src/websocket/model.ts#WebSocketEventSchema",
+        "http-recorder/src/websocket/model.ts#WebSocketEvent",
+        "http-recorder/src/websocket/model.ts#WebSocketInteractionSchema",
+        "http-recorder/src/websocket/model.ts#WebSocketInteraction",
+        "http-recorder/src/websocket/recorder.ts#layerSocket",
+        "http-recorder/src/websocket/recorder.ts#layerSocketWithMode",
+        "http-recorder/src/websocket/recorder.ts#layerWebSocketConstructor"
+      ]
+    },
+    {
+      "package": "simulation",
+      "swiftTarget": "OpenCodeSimulation",
+      "tier": "tier4-extensions",
+      "files": 13,
+      "lines": 2207,
+      "totalSymbols": 55,
+      "totalFunctions": 28,
+      "implementedSymbols": 0,
+      "implementedFunctions": 0,
+      "partialSymbols": 0,
+      "stubSymbols": 0,
+      "excludedSymbols": 0,
+      "unmappedSymbols": 55,
+      "driftedSymbols": 0,
+      "unmappedIds": [
+        "simulation/src/backend/index.ts#simulationReplacements",
+        "simulation/src/backend/network.ts#Route",
+        "simulation/src/backend/network.ts#LogEntry",
+        "simulation/src/backend/network.ts#json",
+        "simulation/src/backend/network.ts#Run",
+        "simulation/src/backend/network.ts#make",
+        "simulation/src/backend/network.ts#layer",
+        "simulation/src/backend/openai.ts#route",
+        "simulation/src/backend/simulated-provider.ts#ProviderRequest",
+        "simulation/src/backend/simulated-provider.ts#ProviderResponseEvent",
+        "simulation/src/backend/simulated-provider.ts#ProviderDisconnectedError",
+        "simulation/src/backend/simulated-provider.ts#Interface",
+        "simulation/src/backend/simulated-provider.ts#Service",
+        "simulation/src/backend/simulated-provider.ts#layerDrive",
+        "simulation/src/control-server.ts#Server",
+        "simulation/src/control-server.ts#SocketData",
+        "simulation/src/control-server.ts#Socket",
+        "simulation/src/control-server.ts#start",
+        "simulation/src/frontend/actions.ts#Action",
+        "simulation/src/frontend/actions.ts#Element",
+        "simulation/src/frontend/actions.ts#Harness",
+        "simulation/src/frontend/actions.ts#createHarness",
+        "simulation/src/frontend/actions.ts#elements",
+        "simulation/src/frontend/actions.ts#state",
+        "simulation/src/frontend/actions.ts#snapshot",
+        "simulation/src/frontend/actions.ts#matches",
+        "simulation/src/frontend/actions.ts#capture",
+        "simulation/src/frontend/actions.ts#execute",
+        "simulation/src/frontend/renderer.ts#Viewport",
+        "simulation/src/frontend/renderer.ts#create",
+        "simulation/src/frontend/renderer.ts#recordResize",
+        "simulation/src/frontend/renderer.ts#recordPointer",
+        "simulation/src/frontend/renderer.ts#setupFor",
+        "simulation/src/frontend/renderer.ts#finish",
+        "simulation/src/frontend/semantics.ts#Definition",
+        "simulation/src/frontend/semantics.ts#read",
+        "simulation/src/frontend/semantics.ts#SimulationSemantics",
+        "simulation/src/frontend/server.ts#start",
+        "simulation/src/frontend/simulation.ts#create",
+        "simulation/src/manifest.ts#Manifest",
+        "simulation/src/manifest.ts#ResolveError",
+        "simulation/src/manifest.ts#defaults",
+        "simulation/src/manifest.ts#resolve",
+        "simulation/src/recording.ts#Header",
+        "simulation/src/recording.ts#Output",
+        "simulation/src/recording.ts#Resize",
+        "simulation/src/recording.ts#Event",
+        "simulation/src/recording.ts#Pointer",
+        "simulation/src/recording.ts#Timeline",
+        "simulation/src/recording.ts#Timeline.create",
+        "simulation/src/recording.ts#Timeline.getColorDepth",
+        "simulation/src/recording.ts#Timeline.write",
+        "simulation/src/recording.ts#Timeline.finish",
+        "simulation/src/recording.ts#Timeline.resize",
+        "simulation/src/recording.ts#Timeline.pointer"
+      ]
     }
   ]
 }
