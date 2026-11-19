@@ -1,0 +1,132 @@
+[
+  {
+    "fn": "util/src/path.ts#getFilename",
+    "cases": [
+      { "name": "null", "args": [null] },
+      { "name": "empty", "args": [""] },
+      { "name": "posix file", "args": ["/repo/src/index.ts"] },
+      { "name": "posix trailing slashes", "args": ["/repo/src/index.ts///"] },
+      { "name": "windows file with trailing backslash", "args": ["C:\\repo\\src\\index.ts\\"] },
+      { "name": "windows mixed", "args": ["C:/repo\\src/file/\\"] },
+      { "name": "unc", "args": ["\\\\server\\share\\file"] },
+      { "name": "root slash", "args": ["/"] },
+      { "name": "root backslash", "args": ["\\"] },
+      { "name": "mixed slashes only", "args": ["/\\/\\"] },
+      { "name": "drive root", "args": ["C:\\"] },
+      { "name": "bare filename", "args": ["file"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#getDirectory",
+    "cases": [
+      { "name": "null", "args": [null] },
+      { "name": "empty", "args": [""] },
+      { "name": "posix", "args": ["/repo/src/index.ts"] },
+      { "name": "windows", "args": ["C:\\repo\\src\\index.ts"] },
+      { "name": "windows mixed", "args": ["C:\\repo/src\\file"] },
+      { "name": "unc", "args": ["\\\\server\\share\\file"] },
+      { "name": "single segment", "args": ["file"] },
+      { "name": "root slash", "args": ["/"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#getFilenameTruncated",
+    "cases": [
+      { "name": "fits default", "args": ["/repo/short.ts"] },
+      { "name": "long tsx file", "args": ["/repo/long-component-name.tsx", 16] },
+      { "name": "dotfile", "args": ["/repo/.env.local.very.long.name", 12] },
+      { "name": "no extension", "args": ["/repo/superlongfilenamewithoutext", 10] },
+      { "name": "extension longer than max", "args": ["/repo/a.verylongextension", 8] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#truncateMiddle",
+    "cases": [
+      { "name": "width 0", "args": ["abcdefghij", 0] },
+      { "name": "width 1", "args": ["abcdefghij", 1] },
+      { "name": "width 2", "args": ["abcdefghij", 2] },
+      { "name": "width 3", "args": ["abcdefghij", 3] },
+      { "name": "width 4", "args": ["abcdefghij", 4] },
+      { "name": "width 9", "args": ["abcdefghijklmnop", 9] },
+      { "name": "exact fit", "args": ["abcd", 4] },
+      { "name": "shorter than max", "args": ["abcd", 10] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#comparablePath",
+    "cases": [
+      { "name": "posix root", "args": ["/"] },
+      { "name": "posix root multiple", "args": ["///"] },
+      { "name": "posix dir trailing", "args": ["/Users/dev/project/"] },
+      { "name": "windows drive root", "args": ["C:\\"] },
+      { "name": "windows subdir", "args": ["C:\\Users\\Dev\\Repo\\"] },
+      { "name": "unc path", "args": ["\\\\Server\\Share\\Repo\\"] },
+      { "name": "relative", "args": ["src/app/"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#containsDirectory",
+    "cases": [
+      { "name": "posix same", "args": ["/repo", "/repo/"] },
+      { "name": "posix child", "args": ["/repo", "/repo/packages/core"] },
+      { "name": "posix sibling prefix trap", "args": ["/repo", "/repo-other"] },
+      { "name": "posix root contains all", "args": ["/", "/anywhere"] },
+      { "name": "windows case-insensitive", "args": ["C:\\Work\\Repo", "c:/work/repo/src"] },
+      { "name": "unc case-insensitive", "args": ["\\\\Server\\Share", "//server/share/sub"] },
+      { "name": "posix case-sensitive", "args": ["/Repo", "/repo/sub"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#sameDirectory",
+    "cases": [
+      { "name": "posix trailing slash", "args": ["/a/b", "/a/b/"] },
+      { "name": "windows drive case", "args": ["C:\\A\\B\\", "c:/a/b"] },
+      { "name": "different", "args": ["/a/b", "/a/c"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#encodeFilePath",
+    "cases": [
+      { "name": "simple posix", "args": ["/home/user/project/README.md"] },
+      { "name": "hash and spaces", "args": ["/home/user/file#name with spaces.txt"] },
+      { "name": "special chars", "args": ["/path/to/file#with?special%chars&more.txt"] },
+      { "name": "unicode cjk", "args": ["/home/user/文档/README.md"] },
+      { "name": "root", "args": ["/"] },
+      { "name": "empty", "args": [""] },
+      { "name": "double slashes", "args": ["//path//to///file.txt"] },
+      { "name": "windows drive", "args": ["D:\\dev\\projects\\opencode\\README.bs.md"] },
+      { "name": "windows spaces", "args": ["C:\\Program Files\\MyApp\\file with spaces.txt"] },
+      { "name": "windows root", "args": ["C:\\"] },
+      { "name": "bare drive", "args": ["D:"] },
+      { "name": "already rooted drive", "args": ["/D:/path/file.txt"] },
+      { "name": "unreserved uri chars", "args": ["/a/!~*'()-_.txt"] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#isLineRangeHash",
+    "cases": [
+      { "name": "single line", "args": ["#L10"] },
+      { "name": "lowercase", "args": ["#l10c4-l20c8"] },
+      { "name": "range without second L", "args": ["#L10-20"] },
+      { "name": "invalid", "args": ["#section"] },
+      { "name": "empty", "args": [""] }
+    ]
+  },
+  {
+    "fn": "util/src/path.ts#parsePathLineSuffix",
+    "cases": [
+      { "name": "plain path", "args": ["src/app.ts"] },
+      { "name": "hash single line", "args": ["src/app.ts#L42"] },
+      { "name": "hash range reversed", "args": ["src/app.ts#L50-L12"] },
+      { "name": "hash with columns", "args": ["src/app.ts#L10C2-L20C9"] },
+      { "name": "colon single line", "args": ["src/app.ts:15"] },
+      { "name": "colon line and col", "args": ["src/app.ts:15:4"] },
+      { "name": "colon range", "args": ["src/app.ts:15-30"] },
+      { "name": "colon range with cols and trailing colon", "args": ["src/app.ts:15:2-30:8:"] },
+      { "name": "windows drive guard", "args": ["C:10"] },
+      { "name": "windows full path with line", "args": ["C:\\src\\app.ts:12-24"] },
+      { "name": "out of range line 0", "args": ["src/app.ts:0"] },
+      { "name": "out of range > 1M", "args": ["src/app.ts:1000001"] }
+    ]
+  }
+]

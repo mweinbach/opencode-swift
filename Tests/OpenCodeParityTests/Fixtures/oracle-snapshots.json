@@ -1,0 +1,2850 @@
+{
+  "upstreamCommit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
+  "generatedAt": "2026-11-19T04:04:45.222Z",
+  "vectorCount": 235,
+  "cases": [
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "empty",
+      "args": [
+        []
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "single byte",
+      "args": [
+        [
+          0
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "AA=="
+    },
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "two bytes",
+      "args": [
+        [
+          1,
+          2
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "AQI="
+    },
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "three bytes",
+      "args": [
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "AQID"
+    },
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "hello ascii",
+      "args": [
+        [
+          104,
+          101,
+          108,
+          108,
+          111
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "aGVsbG8="
+    },
+    {
+      "fn": "util/src/base64.ts#bytesToBase64",
+      "name": "all bit patterns",
+      "args": [
+        [
+          0,
+          127,
+          128,
+          254,
+          255
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "AH+A/v8="
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "single byte padded",
+      "args": [
+        "AA=="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        0
+      ]
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "two bytes padded",
+      "args": [
+        "AQI="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        1,
+        2
+      ]
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "three bytes",
+      "args": [
+        "AQID"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "hello ascii",
+      "args": [
+        "aGVsbG8="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ]
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "all bit patterns",
+      "args": [
+        "AH+A/v8="
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        0,
+        127,
+        128,
+        254,
+        255
+      ]
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "invalid characters",
+      "args": [
+        "%%%"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/base64.ts#base64ToBytes",
+      "name": "invalid length mod 1",
+      "args": [
+        "A"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "empty array",
+      "args": [
+        [],
+        "a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": false,
+        "index": 0
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "single found",
+      "args": [
+        [
+          "a"
+        ],
+        "a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": true,
+        "index": 0
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "single before",
+      "args": [
+        [
+          "b"
+        ],
+        "a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": false,
+        "index": 0
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "single after",
+      "args": [
+        [
+          "b"
+        ],
+        "c"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": false,
+        "index": 1
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "middle hit",
+      "args": [
+        [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "c"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": true,
+        "index": 2
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "insertion gap",
+      "args": [
+        [
+          "a",
+          "c",
+          "e"
+        ],
+        "d"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": false,
+        "index": 2
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "descending session ids",
+      "args": [
+        [
+          "ses_01",
+          "ses_05",
+          "ses_09"
+        ],
+        "ses_05"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": true,
+        "index": 1
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.search",
+      "name": "utf16 code unit ordering",
+      "args": [
+        [
+          "",
+          "a"
+        ],
+        "😀"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "found": false,
+        "index": 0
+      }
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.insert",
+      "name": "insert into empty",
+      "args": [
+        [],
+        "b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "b"
+      ]
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.insert",
+      "name": "insert at start",
+      "args": [
+        [
+          "b",
+          "d"
+        ],
+        "a"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "a",
+        "b",
+        "d"
+      ]
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.insert",
+      "name": "insert in middle",
+      "args": [
+        [
+          "a",
+          "d"
+        ],
+        "c"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "a",
+        "c",
+        "d"
+      ]
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.insert",
+      "name": "insert at end",
+      "args": [
+        [
+          "a",
+          "c"
+        ],
+        "z"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "a",
+        "c",
+        "z"
+      ]
+    },
+    {
+      "fn": "util/src/binary.ts#Binary.insert",
+      "name": "insert duplicate",
+      "args": [
+        [
+          "a",
+          "b",
+          "c"
+        ],
+        "b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        "a",
+        "b",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": false,
+        "text": ""
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "no bom",
+      "args": [
+        "hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": false,
+        "text": "hello"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "single bom",
+      "args": [
+        "﻿hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": "hello"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "multiple leading boms",
+      "args": [
+        "﻿﻿hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": "hello"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "interior bom preserved",
+      "args": [
+        "﻿a﻿b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": "a﻿b"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#split",
+      "name": "only bom",
+      "args": [
+        "﻿"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": ""
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#join",
+      "name": "add bom",
+      "args": [
+        "hello",
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "﻿hello"
+    },
+    {
+      "fn": "util/src/bom.ts#join",
+      "name": "remove bom",
+      "args": [
+        "﻿hello",
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello"
+    },
+    {
+      "fn": "util/src/bom.ts#join",
+      "name": "idempotent add bom",
+      "args": [
+        "﻿﻿hello",
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "﻿hello"
+    },
+    {
+      "fn": "util/src/bom.ts#join",
+      "name": "keep interior bom",
+      "args": [
+        "﻿a﻿b",
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a﻿b"
+    },
+    {
+      "fn": "util/src/bom.ts#has",
+      "name": "empty bytes",
+      "args": [
+        []
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/bom.ts#has",
+      "name": "short bytes",
+      "args": [
+        [
+          239,
+          187
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/bom.ts#has",
+      "name": "utf8 bom",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          97
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/bom.ts#has",
+      "name": "no bom",
+      "args": [
+        [
+          97,
+          98,
+          99
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/bom.ts#decodeBytes",
+      "name": "plain utf8",
+      "args": [
+        [
+          97,
+          195,
+          169
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": false,
+        "text": "aé"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#decodeBytes",
+      "name": "with utf8 bom",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          97,
+          195,
+          169
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": "aé"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#decodeBytes",
+      "name": "double utf8 bom",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          239,
+          187,
+          191,
+          97
+        ]
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bom": true,
+        "text": "a"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "plain want false (no change)",
+      "args": [
+        [
+          97,
+          239,
+          187,
+          191,
+          195,
+          169
+        ],
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": null,
+        "text": "a﻿é"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "plain want true (add bom)",
+      "args": [
+        [
+          97,
+          239,
+          187,
+          191,
+          195,
+          169
+        ],
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": [
+          239,
+          187,
+          191,
+          97,
+          239,
+          187,
+          191,
+          195,
+          169
+        ],
+        "text": "a﻿é"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "single bom want false (strip)",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          97,
+          195,
+          169
+        ],
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": [
+          97,
+          195,
+          169
+        ],
+        "text": "aé"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "single bom want true (no change)",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          97,
+          195,
+          169
+        ],
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": null,
+        "text": "aé"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "double bom want false",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          239,
+          187,
+          191,
+          97
+        ],
+        false
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": [
+          97
+        ],
+        "text": "a"
+      }
+    },
+    {
+      "fn": "util/src/bom.ts#syncBytes",
+      "name": "double bom want true (collapse)",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          239,
+          187,
+          191,
+          97
+        ],
+        true
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "bytes": [
+          239,
+          187,
+          191,
+          97
+        ],
+        "text": "a"
+      }
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "zero ms",
+      "args": [
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "0ms"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "sub-second",
+      "args": [
+        850
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "850ms"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "boundary 999ms",
+      "args": [
+        999
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "999ms"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "exact 1s",
+      "args": [
+        1000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "1.0s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "fractional seconds",
+      "args": [
+        12400
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "12.4s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "rounding seconds",
+      "args": [
+        59940
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "59.9s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "exact 1m",
+      "args": [
+        60000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "1m 0s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "minutes and seconds",
+      "args": [
+        185000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "3m 5s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "59m 59s",
+      "args": [
+        3599999
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "59m 59s"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "exact 1h",
+      "args": [
+        3600000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "1h 0m"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "hours and minutes",
+      "args": [
+        7800000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "2h 10m"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "exact 1d",
+      "args": [
+        86400000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "1d 0h"
+    },
+    {
+      "fn": "util/src/duration.ts#duration",
+      "name": "days and hours",
+      "args": [
+        100800000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "1d 4h"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Encode",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/encode.ts#base64Encode",
+      "name": "ascii",
+      "args": [
+        "hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "aGVsbG8"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Encode",
+      "name": "unicode",
+      "args": [
+        "✓ à la mode"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "4pyTIMOgIGxhIG1vZGU"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Encode",
+      "name": "emoji",
+      "args": [
+        "🚀 swift-opencode"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "8J-agCBzd2lmdC1vcGVuY29kZQ"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Encode",
+      "name": "url-unsafe chars (+ and /)",
+      "args": [
+        "subjects?_d=1>>>???"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "c3ViamVjdHM_X2Q9MT4-Pj8_Pw"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Decode",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/encode.ts#base64Decode",
+      "name": "ascii unpadded",
+      "args": [
+        "aGVsbG8"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "hello"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Decode",
+      "name": "unicode unpadded",
+      "args": [
+        "4pyTIMOgIGxhIG1vZGU"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "✓ à la mode"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Decode",
+      "name": "credentials",
+      "args": [
+        "dXNlcjpwYXNz"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "user:pass"
+    },
+    {
+      "fn": "util/src/encode.ts#base64Decode",
+      "name": "invalid base64",
+      "args": [
+        "%%%"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/encode.ts#checksum",
+      "name": "empty returns null",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/encode.ts#checksum",
+      "name": "ascii hello",
+      "args": [
+        "hello"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "m3bicr"
+    },
+    {
+      "fn": "util/src/encode.ts#checksum",
+      "name": "unicode",
+      "args": [
+        "✓ à la mode"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "jmczk0"
+    },
+    {
+      "fn": "util/src/encode.ts#checksum",
+      "name": "surrogate pair emoji",
+      "args": [
+        "a😀b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "13waept"
+    },
+    {
+      "fn": "util/src/encode.ts#checksum",
+      "name": "cjk",
+      "args": [
+        "日本語テスト"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "m83iht"
+    },
+    {
+      "fn": "util/src/encode.ts#sampledChecksum",
+      "name": "empty returns null",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/encode.ts#sampledChecksum",
+      "name": "at limit boundary",
+      "args": [
+        "abcdefabcdefabcdefabcdefabcdef",
+        30
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "fh6dca"
+    },
+    {
+      "fn": "util/src/encode.ts#sampledChecksum",
+      "name": "above limit boundary",
+      "args": [
+        "abcdefabcdefabcdefabcdefabcdef",
+        29
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "30:fh6dca:fh6dca:fh6dca:fh6dca:fh6dca"
+    },
+    {
+      "fn": "util/src/encode.ts#sampledChecksum",
+      "name": "sampled 600 chars with limit 599",
+      "args": [
+        "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef",
+        599
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "600:1isj1k5:1isj1k5:1isj1k5:1isj1k5:1isj1k5"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.fast",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.fast",
+      "name": "abc",
+      "args": [
+        "abc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a9993e364706816aba3e25717850c26c9cd0d89d"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.fast",
+      "name": "hello world",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.fast",
+      "name": "unicode",
+      "args": [
+        "✓ à la mode 🚀"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "b9b7f89807633efd5b82faab0970e3666620439c"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.fast",
+      "name": "multi-block >64 bytes",
+      "args": [
+        "The quick brown fox jumps over the lazy dog and then keeps running past sixty four bytes!"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "6a297aedfeaa43052ba8ad4467e99880b39b5f93"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.sha256",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.sha256",
+      "name": "abc",
+      "args": [
+        "abc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.sha256",
+      "name": "hello world",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.sha256",
+      "name": "unicode",
+      "args": [
+        "✓ à la mode 🚀"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "9876e4d2186d1a3b95ac36b11a0ad14e92395b91a027f52a3454d41bbd206ea5"
+    },
+    {
+      "fn": "util/src/hash.ts#Hash.sha256",
+      "name": "multi-block >64 bytes",
+      "args": [
+        "The quick brown fox jumps over the lazy dog and then keeps running past sixty four bytes!"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "f294750d323889a8e0e38c1755cf0e6b966f747c40f527fe431c66ac7da76131"
+    },
+    {
+      "fn": "schema/src/identifier.ts#create",
+      "name": "ascending fixed timestamp",
+      "args": [
+        false,
+        1700000000000
+      ],
+      "compare": "identifier_prefix_12",
+      "expectedOk": true,
+      "expectedValue": "bcfe56800001DoR5BpF4aYrJhp"
+    },
+    {
+      "fn": "schema/src/identifier.ts#create",
+      "name": "ascending same timestamp increments counter",
+      "args": [
+        false,
+        1700000000000
+      ],
+      "compare": "identifier_prefix_12",
+      "expectedOk": true,
+      "expectedValue": "bcfe56800002o8uWtAQr3Lx6pD"
+    },
+    {
+      "fn": "schema/src/identifier.ts#create",
+      "name": "descending fixed timestamp",
+      "args": [
+        true,
+        1700000000001
+      ],
+      "compare": "identifier_prefix_12",
+      "expectedOk": true,
+      "expectedValue": "4301a97feffeJBqnSw00NB9L8A"
+    },
+    {
+      "fn": "schema/src/identifier.ts#create",
+      "name": "descending same timestamp increments counter",
+      "args": [
+        true,
+        1700000000001
+      ],
+      "compare": "identifier_prefix_12",
+      "expectedOk": true,
+      "expectedValue": "4301a97feffdc4e6B3m6t68494"
+    },
+    {
+      "fn": "schema/src/identifier.ts#ascending",
+      "name": "ascending shape",
+      "args": [],
+      "compare": "identifier_shape",
+      "expectedOk": true,
+      "expectedValue": "1f1fa7350001y3PtQArl7BG1J6"
+    },
+    {
+      "fn": "schema/src/identifier.ts#descending",
+      "name": "descending shape",
+      "args": [],
+      "compare": "identifier_shape",
+      "expectedOk": true,
+      "expectedValue": "e0e058cafffdfOSrzhTYyjFM4d"
+    },
+    {
+      "fn": "util/src/uuid.ts#uuid",
+      "name": "valid rfc4122 v4",
+      "args": [],
+      "compare": "uuid_v4",
+      "expectedOk": true,
+      "expectedValue": "8a711b4f-54cd-458d-87a9-83609b5098e1"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "null",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "posix file",
+      "args": [
+        "/repo/src/index.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "index.ts"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "posix trailing slashes",
+      "args": [
+        "/repo/src/index.ts///"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "index.ts"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "windows file with trailing backslash",
+      "args": [
+        "C:\\repo\\src\\index.ts\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "index.ts"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "windows mixed",
+      "args": [
+        "C:/repo\\src/file/\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "file"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "unc",
+      "args": [
+        "\\\\server\\share\\file"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "file"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "root slash",
+      "args": [
+        "/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "root backslash",
+      "args": [
+        "\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "mixed slashes only",
+      "args": [
+        "/\\/\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "drive root",
+      "args": [
+        "C:\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "C:"
+    },
+    {
+      "fn": "util/src/path.ts#getFilename",
+      "name": "bare filename",
+      "args": [
+        "file"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "file"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "null",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "posix",
+      "args": [
+        "/repo/src/index.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/repo/src/"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "windows",
+      "args": [
+        "C:\\repo\\src\\index.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "C:/repo/src/"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "windows mixed",
+      "args": [
+        "C:\\repo/src\\file"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "C:/repo/src/"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "unc",
+      "args": [
+        "\\\\server\\share\\file"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "//server/share/"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "single segment",
+      "args": [
+        "file"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/"
+    },
+    {
+      "fn": "util/src/path.ts#getDirectory",
+      "name": "root slash",
+      "args": [
+        "/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/"
+    },
+    {
+      "fn": "util/src/path.ts#getFilenameTruncated",
+      "name": "fits default",
+      "args": [
+        "/repo/short.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "short.ts"
+    },
+    {
+      "fn": "util/src/path.ts#getFilenameTruncated",
+      "name": "long tsx file",
+      "args": [
+        "/repo/long-component-name.tsx",
+        16
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "long-compon….tsx"
+    },
+    {
+      "fn": "util/src/path.ts#getFilenameTruncated",
+      "name": "dotfile",
+      "args": [
+        "/repo/.env.local.very.long.name",
+        12
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ".env.l….name"
+    },
+    {
+      "fn": "util/src/path.ts#getFilenameTruncated",
+      "name": "no extension",
+      "args": [
+        "/repo/superlongfilenamewithoutext",
+        10
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "superlong…"
+    },
+    {
+      "fn": "util/src/path.ts#getFilenameTruncated",
+      "name": "extension longer than max",
+      "args": [
+        "/repo/a.verylongextension",
+        8
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a.veryl…"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 0",
+      "args": [
+        "abcdefghij",
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 1",
+      "args": [
+        "abcdefghij",
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "…"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 2",
+      "args": [
+        "abcdefghij",
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a…"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 3",
+      "args": [
+        "abcdefghij",
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "a…j"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 4",
+      "args": [
+        "abcdefghij",
+        4
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ab…j"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "width 9",
+      "args": [
+        "abcdefghijklmnop",
+        9
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "abcd…mnop"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "exact fit",
+      "args": [
+        "abcd",
+        4
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "abcd"
+    },
+    {
+      "fn": "util/src/path.ts#truncateMiddle",
+      "name": "shorter than max",
+      "args": [
+        "abcd",
+        10
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "abcd"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "posix root",
+      "args": [
+        "/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "posix root multiple",
+      "args": [
+        "///"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "posix dir trailing",
+      "args": [
+        "/Users/dev/project/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/Users/dev/project"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "windows drive root",
+      "args": [
+        "C:\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "C:/"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "windows subdir",
+      "args": [
+        "C:\\Users\\Dev\\Repo\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "C:/Users/Dev/Repo"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "unc path",
+      "args": [
+        "\\\\Server\\Share\\Repo\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "//Server/Share/Repo"
+    },
+    {
+      "fn": "util/src/path.ts#comparablePath",
+      "name": "relative",
+      "args": [
+        "src/app/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "src/app"
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "posix same",
+      "args": [
+        "/repo",
+        "/repo/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "posix child",
+      "args": [
+        "/repo",
+        "/repo/packages/core"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "posix sibling prefix trap",
+      "args": [
+        "/repo",
+        "/repo-other"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "posix root contains all",
+      "args": [
+        "/",
+        "/anywhere"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "windows case-insensitive",
+      "args": [
+        "C:\\Work\\Repo",
+        "c:/work/repo/src"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "unc case-insensitive",
+      "args": [
+        "\\\\Server\\Share",
+        "//server/share/sub"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#containsDirectory",
+      "name": "posix case-sensitive",
+      "args": [
+        "/Repo",
+        "/repo/sub"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/path.ts#sameDirectory",
+      "name": "posix trailing slash",
+      "args": [
+        "/a/b",
+        "/a/b/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#sameDirectory",
+      "name": "windows drive case",
+      "args": [
+        "C:\\A\\B\\",
+        "c:/a/b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#sameDirectory",
+      "name": "different",
+      "args": [
+        "/a/b",
+        "/a/c"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "simple posix",
+      "args": [
+        "/home/user/project/README.md"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/home/user/project/README.md"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "hash and spaces",
+      "args": [
+        "/home/user/file#name with spaces.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/home/user/file%23name%20with%20spaces.txt"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "special chars",
+      "args": [
+        "/path/to/file#with?special%chars&more.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/path/to/file%23with%3Fspecial%25chars%26more.txt"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "unicode cjk",
+      "args": [
+        "/home/user/文档/README.md"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/home/user/%E6%96%87%E6%A1%A3/README.md"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "root",
+      "args": [
+        "/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "double slashes",
+      "args": [
+        "//path//to///file.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "//path//to///file.txt"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "windows drive",
+      "args": [
+        "D:\\dev\\projects\\opencode\\README.bs.md"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/D:/dev/projects/opencode/README.bs.md"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "windows spaces",
+      "args": [
+        "C:\\Program Files\\MyApp\\file with spaces.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/C:/Program%20Files/MyApp/file%20with%20spaces.txt"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "windows root",
+      "args": [
+        "C:\\"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/C:/"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "bare drive",
+      "args": [
+        "D:"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/D:"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "already rooted drive",
+      "args": [
+        "/D:/path/file.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/D:/path/file.txt"
+    },
+    {
+      "fn": "util/src/path.ts#encodeFilePath",
+      "name": "unreserved uri chars",
+      "args": [
+        "/a/!~*'()-_.txt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "/a/!~*'()-_.txt"
+    },
+    {
+      "fn": "util/src/path.ts#isLineRangeHash",
+      "name": "single line",
+      "args": [
+        "#L10"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#isLineRangeHash",
+      "name": "lowercase",
+      "args": [
+        "#l10c4-l20c8"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#isLineRangeHash",
+      "name": "range without second L",
+      "args": [
+        "#L10-20"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/path.ts#isLineRangeHash",
+      "name": "invalid",
+      "args": [
+        "#section"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/path.ts#isLineRangeHash",
+      "name": "empty",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "plain path",
+      "args": [
+        "src/app.ts"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": null
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "hash single line",
+      "args": [
+        "src/app.ts#L42"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 42,
+          "start": 42
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "hash range reversed",
+      "args": [
+        "src/app.ts#L50-L12"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 50,
+          "start": 12
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "hash with columns",
+      "args": [
+        "src/app.ts#L10C2-L20C9"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 20,
+          "start": 10
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "colon single line",
+      "args": [
+        "src/app.ts:15"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 15,
+          "start": 15
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "colon line and col",
+      "args": [
+        "src/app.ts:15:4"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 15,
+          "start": 15
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "colon range",
+      "args": [
+        "src/app.ts:15-30"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 30,
+          "start": 15
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "colon range with cols and trailing colon",
+      "args": [
+        "src/app.ts:15:2-30:8:"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": {
+          "end": 30,
+          "start": 15
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "windows drive guard",
+      "args": [
+        "C:10"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "C:10",
+        "selection": null
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "windows full path with line",
+      "args": [
+        "C:\\src\\app.ts:12-24"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "C:\\src\\app.ts",
+        "selection": {
+          "end": 24,
+          "start": 12
+        }
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "out of range line 0",
+      "args": [
+        "src/app.ts:0"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": null
+      }
+    },
+    {
+      "fn": "util/src/path.ts#parsePathLineSuffix",
+      "name": "out of range > 1M",
+      "args": [
+        "src/app.ts:1000001"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "path": "src/app.ts",
+        "selection": null
+      }
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "no mentions",
+      "args": [
+        "hello world"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "bare and prefixed",
+      "args": [
+        "See @session:ses_0123456789abcdefghijklmnop, then ses_0123456789abcdefghijklmnop."
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        {
+          "end": 43,
+          "id": "ses_0123456789abcdefghijklmnop",
+          "start": 4,
+          "text": "@session:ses_0123456789abcdefghijklmnop"
+        },
+        {
+          "end": 80,
+          "id": "ses_0123456789abcdefghijklmnop",
+          "start": 50,
+          "text": "ses_0123456789abcdefghijklmnop"
+        }
+      ]
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "emoji utf16 index offset",
+      "args": [
+        "😀 ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": [
+        {
+          "end": 33,
+          "id": "ses_0123456789abcdefghijklmnop",
+          "start": 3,
+          "text": "ses_0123456789abcdefghijklmnop"
+        }
+      ]
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject short id",
+      "args": [
+        "ses_123"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject extra suffix",
+      "args": [
+        "@session:ses_0123456789abcdefghijklmnopextra"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject leading word char",
+      "args": [
+        "xses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject trailing slash path",
+      "args": [
+        "ses_0123456789abcdefghijklmnop/path"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject url embedded",
+      "args": [
+        "https://host/ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject other @ prefix",
+      "args": [
+        "@other:ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#sessionMentions",
+      "name": "reject trailing underscore",
+      "args": [
+        "ses_0123456789abcdefghijklmnop_x"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": []
+    },
+    {
+      "fn": "util/src/session-mention.ts#parseSessionMention",
+      "name": "prefixed exact",
+      "args": [
+        "@session:ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "id": "ses_0123456789abcdefghijklmnop"
+      }
+    },
+    {
+      "fn": "util/src/session-mention.ts#parseSessionMention",
+      "name": "bare exact",
+      "args": [
+        "ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "id": "ses_0123456789abcdefghijklmnop"
+      }
+    },
+    {
+      "fn": "util/src/session-mention.ts#parseSessionMention",
+      "name": "surrounded by text fails",
+      "args": [
+        "see ses_0123456789abcdefghijklmnop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/session-mention.ts#parseSessionMention",
+      "name": "malformed fails",
+      "args": [
+        "ses_123"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": null
+    },
+    {
+      "fn": "util/src/session-mention.ts#serializeSessionMention",
+      "name": "serialize",
+      "args": [
+        {
+          "id": "ses_0123456789abcdefghijklmnop"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "@session:ses_0123456789abcdefghijklmnop"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+      "name": "explicit title kept",
+      "args": [
+        {
+          "title": "Fix bug",
+          "time": {
+            "created": 1700000000000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Fix bug"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+      "name": "root fallback epoch 0",
+      "args": [
+        {
+          "time": {
+            "created": 0
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session - 1970-01-01T00:00:00.000Z"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+      "name": "root fallback modern",
+      "args": [
+        {
+          "time": {
+            "created": 1763492174123
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session - 2025-11-18T18:56:14.123Z"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+      "name": "child fallback",
+      "args": [
+        {
+          "parentID": "ses_parent",
+          "time": {
+            "created": 1700000000500
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Child session - 2023-11-14T22:13:20.500Z"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+      "name": "leap day 2024-02-29",
+      "args": [
+        {
+          "time": {
+            "created": 1709164800000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session - 2024-02-29T00:00:00.000Z"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "missing root",
+      "args": [
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "missing child",
+      "args": [
+        {
+          "parentID": "ses_1"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Child session"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "custom title",
+      "args": [
+        {
+          "title": "Port to Swift"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Port to Swift"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "collapses root timestamped fallback",
+      "args": [
+        {
+          "title": "New session - 2026-11-18T18:56:14.000Z"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "collapses child timestamped fallback",
+      "args": [
+        {
+          "title": "Child session - 2026-11-18T18:56:14.000Z"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "Child session"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#displayLabel",
+      "name": "malformed timestamp stays verbatim",
+      "args": [
+        {
+          "title": "New session - not-a-date"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "New session - not-a-date"
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isFallbackTitle",
+      "name": "undefined",
+      "args": [
+        null
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isFallbackTitle",
+      "name": "root fallback",
+      "args": [
+        "New session - 2026-11-18T18:56:14.123Z"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isFallbackTitle",
+      "name": "child fallback",
+      "args": [
+        "Child session - 2026-11-18T18:56:14.123Z"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isFallbackTitle",
+      "name": "custom title",
+      "args": [
+        "Custom title"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isExactRootFallback",
+      "name": "missing title",
+      "args": [
+        {
+          "time": {
+            "created": 1700000000000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isExactRootFallback",
+      "name": "exact match",
+      "args": [
+        {
+          "title": "New session - 2023-11-14T22:13:20.000Z",
+          "time": {
+            "created": 1700000000000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isExactRootFallback",
+      "name": "wrong timestamp",
+      "args": [
+        {
+          "title": "New session - 2023-11-14T22:13:21.000Z",
+          "time": {
+            "created": 1700000000000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/session-title-fallback.ts#isExactRootFallback",
+      "name": "child title does not match root",
+      "args": [
+        {
+          "title": "Child session - 2023-11-14T22:13:20.000Z",
+          "time": {
+            "created": 1700000000000
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "empty",
+      "args": [
+        "",
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "ascii within limit",
+      "args": [
+        "ascii",
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ascii"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "ascii cut",
+      "args": [
+        "ascii",
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "asc"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "emoji cut at 1 yields empty",
+      "args": [
+        "😀",
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "emoji cut at 2 keeps emoji",
+      "args": [
+        "😀",
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "😀"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "mixed surrogate split drops high surrogate",
+      "args": [
+        "ab😀cd",
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ab"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "mixed surrogate intact",
+      "args": [
+        "ab😀cd",
+        4
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ab😀"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#head",
+      "name": "limit 0",
+      "args": [
+        "ab😀cd",
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "empty",
+      "args": [
+        "",
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "ascii within limit",
+      "args": [
+        "ascii",
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "ascii"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "ascii cut",
+      "args": [
+        "ascii",
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "cii"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "emoji cut at 1 yields empty",
+      "args": [
+        "😀",
+        1
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "emoji cut at 2 keeps emoji",
+      "args": [
+        "😀",
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "😀"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "mixed surrogate split skips low surrogate",
+      "args": [
+        "ab😀cd",
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "cd"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "mixed surrogate intact",
+      "args": [
+        "ab😀cd",
+        4
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "😀cd"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#tail",
+      "name": "limit 0",
+      "args": [
+        "ab😀cd",
+        0
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "empty",
+      "args": [
+        [],
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": ""
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "ascii cut",
+      "args": [
+        [
+          97,
+          98,
+          99,
+          100
+        ],
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "cd"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "skips utf8 continuation bytes of 4-byte emoji",
+      "args": [
+        [
+          97,
+          240,
+          159,
+          152,
+          128,
+          98
+        ],
+        3
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "b"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "keeps full 4-byte emoji when limit fits",
+      "args": [
+        [
+          97,
+          240,
+          159,
+          152,
+          128,
+          98
+        ],
+        5
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "😀b"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "preserves leading utf8 bom",
+      "args": [
+        [
+          239,
+          187,
+          191,
+          97
+        ],
+        4
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "﻿a"
+    },
+    {
+      "fn": "util/src/text-boundary.ts#utf8Tail",
+      "name": "invalid leading continuation within limit yields replacement char",
+      "args": [
+        [
+          128,
+          65
+        ],
+        2
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "�A"
+    }
+  ]
+}

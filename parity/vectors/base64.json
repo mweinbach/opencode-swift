@@ -1,0 +1,26 @@
+[
+  {
+    "fn": "util/src/base64.ts#bytesToBase64",
+    "cases": [
+      { "name": "empty", "args": [[]] },
+      { "name": "single byte", "args": [[0]] },
+      { "name": "two bytes", "args": [[1, 2]] },
+      { "name": "three bytes", "args": [[1, 2, 3]] },
+      { "name": "hello ascii", "args": [[104, 101, 108, 108, 111]] },
+      { "name": "all bit patterns", "args": [[0, 127, 128, 254, 255]] }
+    ]
+  },
+  {
+    "fn": "util/src/base64.ts#base64ToBytes",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "single byte padded", "args": ["AA=="] },
+      { "name": "two bytes padded", "args": ["AQI="] },
+      { "name": "three bytes", "args": ["AQID"] },
+      { "name": "hello ascii", "args": ["aGVsbG8="] },
+      { "name": "all bit patterns", "args": ["AH+A/v8="] },
+      { "name": "invalid characters", "args": ["%%%"], "compare": "expect_error" },
+      { "name": "invalid length mod 1", "args": ["A"], "compare": "expect_error" }
+    ]
+  }
+]

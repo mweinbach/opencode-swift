@@ -1,0 +1,22 @@
+[
+  {
+    "fn": "util/src/hash.ts#Hash.fast",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "abc", "args": ["abc"] },
+      { "name": "hello world", "args": ["hello world"] },
+      { "name": "unicode", "args": ["✓ à la mode 🚀"] },
+      { "name": "multi-block >64 bytes", "args": ["The quick brown fox jumps over the lazy dog and then keeps running past sixty four bytes!"] }
+    ]
+  },
+  {
+    "fn": "util/src/hash.ts#Hash.sha256",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "abc", "args": ["abc"] },
+      { "name": "hello world", "args": ["hello world"] },
+      { "name": "unicode", "args": ["✓ à la mode 🚀"] },
+      { "name": "multi-block >64 bytes", "args": ["The quick brown fox jumps over the lazy dog and then keeps running past sixty four bytes!"] }
+    ]
+  }
+]

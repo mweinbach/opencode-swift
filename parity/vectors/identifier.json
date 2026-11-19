@@ -1,0 +1,29 @@
+[
+  {
+    "fn": "schema/src/identifier.ts#create",
+    "cases": [
+      { "name": "ascending fixed timestamp", "args": [false, 1700000000000], "compare": "identifier_prefix_12" },
+      { "name": "ascending same timestamp increments counter", "args": [false, 1700000000000], "compare": "identifier_prefix_12" },
+      { "name": "descending fixed timestamp", "args": [true, 1700000000001], "compare": "identifier_prefix_12" },
+      { "name": "descending same timestamp increments counter", "args": [true, 1700000000001], "compare": "identifier_prefix_12" }
+    ]
+  },
+  {
+    "fn": "schema/src/identifier.ts#ascending",
+    "cases": [
+      { "name": "ascending shape", "args": [], "compare": "identifier_shape" }
+    ]
+  },
+  {
+    "fn": "schema/src/identifier.ts#descending",
+    "cases": [
+      { "name": "descending shape", "args": [], "compare": "identifier_shape" }
+    ]
+  },
+  {
+    "fn": "util/src/uuid.ts#uuid",
+    "cases": [
+      { "name": "valid rfc4122 v4", "args": [], "compare": "uuid_v4" }
+    ]
+  }
+]

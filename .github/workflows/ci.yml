@@ -1,0 +1,48 @@
+name: CI & Cross-Platform Parity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  swift-testing-matrix:
+    name: Swift Testing (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-15
+          - name: Linux
+            os: ubuntu-24.04
+            container: swift:6.2
+          - name: Windows
+            os: windows-2022
+            swift: true
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Swift on Windows
+        if: matrix.os == 'windows-2022'
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+      - name: Test swift-opencode (Swift Testing)
+        run: swift test --disable-xctest --enable-swift-testing
+      - name: Test Packages/OpenTUI (Swift Testing)
+        run: swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing
+      - name: Build opencode CLI
+        run: swift build --product opencode
+
+  upstream-parity-audit:
+    name: Live Upstream Parity & Drift Check
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Sync pinned upstream commits
+        run: ./scripts/parity.sh sync
+      - name: Run full code-level & function-level parity harness
+        run: ./scripts/parity.sh all

@@ -1,0 +1,50 @@
+[
+  {
+    "fn": "util/src/bom.ts#split",
+    "cases": [
+      { "name": "empty", "args": [""] },
+      { "name": "no bom", "args": ["hello"] },
+      { "name": "single bom", "args": ["\uFEFFhello"] },
+      { "name": "multiple leading boms", "args": ["\uFEFF\uFEFFhello"] },
+      { "name": "interior bom preserved", "args": ["\uFEFFa\uFEFFb"] },
+      { "name": "only bom", "args": ["\uFEFF"] }
+    ]
+  },
+  {
+    "fn": "util/src/bom.ts#join",
+    "cases": [
+      { "name": "add bom", "args": ["hello", true] },
+      { "name": "remove bom", "args": ["\uFEFFhello", false] },
+      { "name": "idempotent add bom", "args": ["\uFEFF\uFEFFhello", true] },
+      { "name": "keep interior bom", "args": ["\uFEFFa\uFEFFb", false] }
+    ]
+  },
+  {
+    "fn": "util/src/bom.ts#has",
+    "cases": [
+      { "name": "empty bytes", "args": [[]] },
+      { "name": "short bytes", "args": [[239, 187]] },
+      { "name": "utf8 bom", "args": [[239, 187, 191, 97]] },
+      { "name": "no bom", "args": [[97, 98, 99]] }
+    ]
+  },
+  {
+    "fn": "util/src/bom.ts#decodeBytes",
+    "cases": [
+      { "name": "plain utf8", "args": [[97, 195, 169]] },
+      { "name": "with utf8 bom", "args": [[239, 187, 191, 97, 195, 169]] },
+      { "name": "double utf8 bom", "args": [[239, 187, 191, 239, 187, 191, 97]] }
+    ]
+  },
+  {
+    "fn": "util/src/bom.ts#syncBytes",
+    "cases": [
+      { "name": "plain want false (no change)", "args": [[97, 239, 187, 191, 195, 169], false] },
+      { "name": "plain want true (add bom)", "args": [[97, 239, 187, 191, 195, 169], true] },
+      { "name": "single bom want false (strip)", "args": [[239, 187, 191, 97, 195, 169], false] },
+      { "name": "single bom want true (no change)", "args": [[239, 187, 191, 97, 195, 169], true] },
+      { "name": "double bom want false", "args": [[239, 187, 191, 239, 187, 191, 97], false] },
+      { "name": "double bom want true (collapse)", "args": [[239, 187, 191, 239, 187, 191, 97], true] }
+    ]
+  }
+]

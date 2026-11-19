@@ -1,0 +1,41 @@
+[
+  {
+    "fn": "util/src/session-title-fallback.ts#withTimestampedFallback",
+    "cases": [
+      { "name": "explicit title kept", "args": [{ "title": "Fix bug", "time": { "created": 1700000000000 } }] },
+      { "name": "root fallback epoch 0", "args": [{ "time": { "created": 0 } }] },
+      { "name": "root fallback modern", "args": [{ "time": { "created": 1763492174123 } }] },
+      { "name": "child fallback", "args": [{ "parentID": "ses_parent", "time": { "created": 1700000000500 } }] },
+      { "name": "leap day 2024-02-29", "args": [{ "time": { "created": 1709164800000 } }] }
+    ]
+  },
+  {
+    "fn": "util/src/session-title-fallback.ts#displayLabel",
+    "cases": [
+      { "name": "missing root", "args": [{}] },
+      { "name": "missing child", "args": [{ "parentID": "ses_1" }] },
+      { "name": "custom title", "args": [{ "title": "Port to Swift" }] },
+      { "name": "collapses root timestamped fallback", "args": [{ "title": "New session - 2026-11-18T18:56:14.000Z" }] },
+      { "name": "collapses child timestamped fallback", "args": [{ "title": "Child session - 2026-11-18T18:56:14.000Z" }] },
+      { "name": "malformed timestamp stays verbatim", "args": [{ "title": "New session - not-a-date" }] }
+    ]
+  },
+  {
+    "fn": "util/src/session-title-fallback.ts#isFallbackTitle",
+    "cases": [
+      { "name": "undefined", "args": [null] },
+      { "name": "root fallback", "args": ["New session - 2026-11-18T18:56:14.123Z"] },
+      { "name": "child fallback", "args": ["Child session - 2026-11-18T18:56:14.123Z"] },
+      { "name": "custom title", "args": ["Custom title"] }
+    ]
+  },
+  {
+    "fn": "util/src/session-title-fallback.ts#isExactRootFallback",
+    "cases": [
+      { "name": "missing title", "args": [{ "time": { "created": 1700000000000 } }] },
+      { "name": "exact match", "args": [{ "title": "New session - 2023-11-14T22:13:20.000Z", "time": { "created": 1700000000000 } }] },
+      { "name": "wrong timestamp", "args": [{ "title": "New session - 2023-11-14T22:13:21.000Z", "time": { "created": 1700000000000 } }] },
+      { "name": "child title does not match root", "args": [{ "title": "Child session - 2023-11-14T22:13:20.000Z", "time": { "created": 1700000000000 } }] }
+    ]
+  }
+]

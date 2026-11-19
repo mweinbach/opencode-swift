@@ -1,0 +1,32 @@
+[
+  {
+    "fn": "util/src/session-mention.ts#sessionMentions",
+    "cases": [
+      { "name": "no mentions", "args": ["hello world"] },
+      { "name": "bare and prefixed", "args": ["See @session:ses_0123456789abcdefghijklmnop, then ses_0123456789abcdefghijklmnop."] },
+      { "name": "emoji utf16 index offset", "args": ["😀 ses_0123456789abcdefghijklmnop"] },
+      { "name": "reject short id", "args": ["ses_123"] },
+      { "name": "reject extra suffix", "args": ["@session:ses_0123456789abcdefghijklmnopextra"] },
+      { "name": "reject leading word char", "args": ["xses_0123456789abcdefghijklmnop"] },
+      { "name": "reject trailing slash path", "args": ["ses_0123456789abcdefghijklmnop/path"] },
+      { "name": "reject url embedded", "args": ["https://host/ses_0123456789abcdefghijklmnop"] },
+      { "name": "reject other @ prefix", "args": ["@other:ses_0123456789abcdefghijklmnop"] },
+      { "name": "reject trailing underscore", "args": ["ses_0123456789abcdefghijklmnop_x"] }
+    ]
+  },
+  {
+    "fn": "util/src/session-mention.ts#parseSessionMention",
+    "cases": [
+      { "name": "prefixed exact", "args": ["@session:ses_0123456789abcdefghijklmnop"] },
+      { "name": "bare exact", "args": ["ses_0123456789abcdefghijklmnop"] },
+      { "name": "surrounded by text fails", "args": ["see ses_0123456789abcdefghijklmnop"] },
+      { "name": "malformed fails", "args": ["ses_123"] }
+    ]
+  },
+  {
+    "fn": "util/src/session-mention.ts#serializeSessionMention",
+    "cases": [
+      { "name": "serialize", "args": [{ "id": "ses_0123456789abcdefghijklmnop" }] }
+    ]
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "fn": "util/src/duration.ts#duration",
+    "cases": [
+      { "name": "zero ms", "args": [0] },
+      { "name": "sub-second", "args": [850] },
+      { "name": "boundary 999ms", "args": [999] },
+      { "name": "exact 1s", "args": [1000] },
+      { "name": "fractional seconds", "args": [12400] },
+      { "name": "rounding seconds", "args": [59940] },
+      { "name": "exact 1m", "args": [60000] },
+      { "name": "minutes and seconds", "args": [185000] },
+      { "name": "59m 59s", "args": [3599999] },
+      { "name": "exact 1h", "args": [3600000] },
+      { "name": "hours and minutes", "args": [7800000] },
+      { "name": "exact 1d", "args": [86400000] },
+      { "name": "days and hours", "args": [100800000] }
+    ]
+  }
+]

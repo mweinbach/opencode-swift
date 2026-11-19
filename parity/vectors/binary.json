@@ -1,0 +1,25 @@
+[
+  {
+    "fn": "util/src/binary.ts#Binary.search",
+    "cases": [
+      { "name": "empty array", "args": [[], "a"] },
+      { "name": "single found", "args": [["a"], "a"] },
+      { "name": "single before", "args": [["b"], "a"] },
+      { "name": "single after", "args": [["b"], "c"] },
+      { "name": "middle hit", "args": [["a", "b", "c", "d"], "c"] },
+      { "name": "insertion gap", "args": [["a", "c", "e"], "d"] },
+      { "name": "descending session ids", "args": [["ses_01", "ses_05", "ses_09"], "ses_05"] },
+      { "name": "utf16 code unit ordering", "args": [["\uE000", "a"], "\uD83D\uDE00"] }
+    ]
+  },
+  {
+    "fn": "util/src/binary.ts#Binary.insert",
+    "cases": [
+      { "name": "insert into empty", "args": [[], "b"] },
+      { "name": "insert at start", "args": [["b", "d"], "a"] },
+      { "name": "insert in middle", "args": [["a", "d"], "c"] },
+      { "name": "insert at end", "args": [["a", "c"], "z"] },
+      { "name": "insert duplicate", "args": [["a", "b", "c"], "b"] }
+    ]
+  }
+]

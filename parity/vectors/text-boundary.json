@@ -1,0 +1,39 @@
+[
+  {
+    "fn": "util/src/text-boundary.ts#head",
+    "cases": [
+      { "name": "empty", "args": ["", 5] },
+      { "name": "ascii within limit", "args": ["ascii", 5] },
+      { "name": "ascii cut", "args": ["ascii", 3] },
+      { "name": "emoji cut at 1 yields empty", "args": ["😀", 1] },
+      { "name": "emoji cut at 2 keeps emoji", "args": ["😀", 2] },
+      { "name": "mixed surrogate split drops high surrogate", "args": ["ab😀cd", 3] },
+      { "name": "mixed surrogate intact", "args": ["ab😀cd", 4] },
+      { "name": "limit 0", "args": ["ab😀cd", 0] }
+    ]
+  },
+  {
+    "fn": "util/src/text-boundary.ts#tail",
+    "cases": [
+      { "name": "empty", "args": ["", 5] },
+      { "name": "ascii within limit", "args": ["ascii", 5] },
+      { "name": "ascii cut", "args": ["ascii", 3] },
+      { "name": "emoji cut at 1 yields empty", "args": ["😀", 1] },
+      { "name": "emoji cut at 2 keeps emoji", "args": ["😀", 2] },
+      { "name": "mixed surrogate split skips low surrogate", "args": ["ab😀cd", 3] },
+      { "name": "mixed surrogate intact", "args": ["ab😀cd", 4] },
+      { "name": "limit 0", "args": ["ab😀cd", 0] }
+    ]
+  },
+  {
+    "fn": "util/src/text-boundary.ts#utf8Tail",
+    "cases": [
+      { "name": "empty", "args": [[], 5] },
+      { "name": "ascii cut", "args": [[97, 98, 99, 100], 2] },
+      { "name": "skips utf8 continuation bytes of 4-byte emoji", "args": [[97, 240, 159, 152, 128, 98], 3] },
+      { "name": "keeps full 4-byte emoji when limit fits", "args": [[97, 240, 159, 152, 128, 98], 5] },
+      { "name": "preserves leading utf8 bom", "args": [[239, 187, 191, 97], 4] },
+      { "name": "invalid leading continuation within limit yields replacement char", "args": [[128, 65], 2] }
+    ]
+  }
+]

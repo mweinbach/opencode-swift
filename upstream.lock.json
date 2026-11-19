@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/anomalyco/opencode.git",
+  "branch": "dev",
+  "commit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
+  "commitDate": "2026-11-18T18:56:14Z",
+  "commitSubject": "fix(core): reload config only when a config input changes (#62158)",
+  "license": "MIT"
+}
