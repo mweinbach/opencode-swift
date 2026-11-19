@@ -168,7 +168,7 @@ private func matchIncompleteLinkTail(in u: [UInt16], openBracket: Int) -> (match
 
 /// Computes the edit that heals the end of `input` (an inline run: a paragraph, heading, or table row).
 /// Offsets are relative to `input` with trailing whitespace removed.
-// parity: patchmark/src/heal.ts#computeTailHeal [status=implemented hash=83ea2122db0a]
+// parity: patchmark/src/heal.ts#computeTailHeal [status=implemented hash=82e109a1df04]
 public func computeTailHeal(_ input: String) -> TailHeal {
     let rawU16 = Array(input.utf16)
     let trimmedEnd = rtrimLength(rawU16)

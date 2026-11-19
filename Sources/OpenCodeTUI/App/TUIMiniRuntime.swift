@@ -1959,12 +1959,13 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream [status=adapted hash=4c5b05f26389]
+    // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream [status=adapted hash=04a4f2df166c]
     public final class RunScrollbackStream: @unchecked Sendable {
         private let renderer: CliRenderer
         private var theme: RunTheme
         private var mono: Bool
         private var shellOutput: Bool
+        private var wrote: Bool
         private var tail: StreamCommit?
         private var destroyed = false
         public private(set) var committed: [StreamCommit] = []
@@ -1973,39 +1974,66 @@ public enum TUIMini {
             renderer: CliRenderer,
             theme: RunTheme = RUN_THEME_FALLBACK,
             mono: Bool = false,
-            shellOutput: Bool = true
+            shellOutput: Bool = true,
+            wrote: Bool = false
         ) {
             self.renderer = renderer
             self.theme = theme
             self.mono = mono
             self.shellOutput = shellOutput
+            self.wrote = wrote
         }
 
-        public func setTheme(_ theme: RunTheme) { self.theme = theme }
-        public func setMono(_ mono: Bool) { self.mono = mono }
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.setTheme [status=implemented hash=f81976a2e0ea]
+        public func setTheme(_ theme: RunTheme) {
+            self.theme = theme
+        }
 
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.setMono [status=implemented hash=205122a1d6e2]
+        public func setMono(_ mono: Bool) {
+            self.mono = mono
+        }
+
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.append [status=implemented hash=e41f26a7ddf9]
         public func append(_ commit: StreamCommit) {
             guard !destroyed else { return }
             let opts = ScrollbackOptions(shellOutput: shellOutput, mono: mono)
             if let summary = commit.summary {
-                if separatorRows(prev: tail, next: commit) > 0 {
+                if separatorRows(prev: tail, next: commit) > 0 || (tail == nil && wrote) {
                     try? renderer.writeToScrollback(spacerWriter())
                 }
                 try? renderer.writeToScrollback(turnSummaryWriter(summary: summary, theme: theme, mono: mono))
                 tail = commit
+                wrote = true
                 committed.append(commit)
                 return
             }
             let body = entryBody(commit, options: opts)
             guard body != .none else { return }
-            if separatorRows(prev: tail, next: commit, body: body) > 0 {
+            if separatorRows(prev: tail, next: commit, body: body) > 0 || (tail == nil && wrote) {
                 try? renderer.writeToScrollback(spacerWriter())
             }
             try? renderer.writeToScrollback(entryWriter(commit: commit, body: body, theme: theme, opts: opts))
             tail = commit
+            wrote = true
             committed.append(commit)
         }
 
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.complete [status=implemented hash=f15383b96887]
+        public func complete(trailingNewline: Bool = false) async {
+            guard !destroyed else { return }
+            if trailingNewline && tail != nil {
+                try? renderer.writeToScrollback(spacerWriter())
+            }
+            tail = nil
+        }
+
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.writeTurnSummary [status=implemented hash=0ede79e98cc6]
+        public func writeTurnSummary(agent: String, model: String, duration: String) async {
+            append(TUIMini.turnSummaryCommit(agent: agent, model: model, duration: duration))
+        }
+
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.destroy [status=implemented hash=1aa5a9343c60]
         public func destroy() {
             destroyed = true
             tail = nil
@@ -2565,6 +2593,11 @@ public enum TUIMini {
         }
     }
 
+    // parity: tui/src/mini/permission.shared.ts#permissionAlwaysLines [status=implemented hash=1c1edbe424e6]
+    public static func permissionAlwaysLines(action: String, save: [String] = []) -> [String] {
+        TUIUtil.permissionAlwaysLines(action: action, save: save)
+    }
+
     // parity: tui/src/mini/permission.shared.ts#permissionShift [status=implemented hash=689223891586]
     public static func permissionShift(
         _ state: PermissionBodyState,
@@ -2645,6 +2678,31 @@ public enum TUIMini {
     }
 
     // MARK: - Form State Machine (`packages/tui/src/mini/form.shared.ts`)
+
+    // parity: tui/src/mini/form.shared.ts#formCustom [status=implemented hash=0560719d06b5]
+    public static func formCustom(_ field: TUIUtil.FormField?) -> Bool {
+        TUIUtil.formCustom(field)
+    }
+
+    // parity: tui/src/mini/form.shared.ts#formLabel [status=implemented hash=0560719d06b5]
+    public static func formLabel(_ field: TUIUtil.FormField) -> String {
+        TUIUtil.formLabel(field)
+    }
+
+    // parity: tui/src/mini/form.shared.ts#formRows [status=implemented hash=0560719d06b5]
+    public static func formRows(_ field: TUIUtil.FormField?) -> [TUIUtil.FormRow] {
+        TUIUtil.formRows(field)
+    }
+
+    // parity: tui/src/mini/form.shared.ts#formTextual [status=implemented hash=0560719d06b5]
+    public static func formTextual(_ field: TUIUtil.FormField?) -> Bool {
+        TUIUtil.formTextual(field)
+    }
+
+    // parity: tui/src/mini/form.shared.ts#formValidateValue [status=implemented hash=0560719d06b5]
+    public static func formValidateValue(_ field: TUIUtil.FormAnswerField, value: TUIUtil.FormValue?) -> String? {
+        TUIUtil.formValidateValue(field, value: value)
+    }
 
     // parity: tui/src/mini/form.shared.ts#FormBodyState [status=implemented hash=18c3a52a6bb6]
     public struct FormBodyState: Equatable, Hashable, Sendable, Codable {
@@ -3636,7 +3694,7 @@ public enum TUIMini {
         public func close() {}
     }
 
-    // parity: tui/src/mini/stream-v2.subagent.ts#createSubagentTracker [status=adapted hash=02697470a5bc]
+    // parity: tui/src/mini/stream-v2.subagent.ts#createSubagentTracker [status=adapted hash=1ebf36f3724c]
     public static func createSubagentTracker(_ input: SubagentTrackerInput) -> SubagentTracker {
         SubagentTracker(input: input)
     }
@@ -4739,7 +4797,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/stream-v2.transport.ts#createSessionTransport [status=adapted hash=33055a05fccf]
+    // parity: tui/src/mini/stream-v2.transport.ts#createSessionTransport [status=adapted hash=69202b282d92]
     public static func createSessionTransport(
         sessionID: String? = nil,
         footer: any FooterApi,
@@ -5114,7 +5172,7 @@ public enum TUIMini {
         return PromptCommandSelection(name: command.name, arguments: head.arguments, source: command.source)
     }
 
-    // parity: tui/src/mini/footer.prompt.tsx#createPromptState [status=adapted hash=af9411310481]
+    // parity: tui/src/mini/footer.prompt.tsx#createPromptState [status=adapted hash=a4f10463269f]
     public static func createPromptState(history: [RunPrompt] = []) -> PromptState {
         PromptState(history: createPromptHistory(history))
     }
@@ -5348,7 +5406,7 @@ public enum TUIMini {
         return box
     }
 
-    // parity: tui/src/mini/footer.view.tsx#RunFooterView [status=adapted hash=85c95194a984]
+    // parity: tui/src/mini/footer.view.tsx#RunFooterView [status=adapted hash=4b899aa7dc2f]
     public static func RunFooterView(
         ctx: any RenderContext,
         state: FooterState,
@@ -5413,8 +5471,18 @@ public enum TUIMini {
         return merged
     }
 
-    // parity: tui/src/mini/footer.ts#RunFooter [status=adapted hash=7b502ca10c43]
+    // parity: tui/src/mini/footer.ts#RunFooter [status=adapted hash=9194f37c1fff]
     public final class RunFooter: FooterApi, @unchecked Sendable {
+        public struct StartupSplash: Equatable, Hashable, Sendable {
+            public let version: String
+            public let detail: String?
+
+            public init(version: String, detail: String? = nil) {
+                self.version = version
+                self.detail = detail
+            }
+        }
+
         private struct Inner: @unchecked Sendable {
             var state: FooterState
             var view: FooterView = .prompt
@@ -5424,32 +5492,71 @@ public enum TUIMini {
             var subagent: FooterSubagentState = FooterSubagentState()
             var pendingCommits: [StreamCommit] = []
             var closed: Bool = false
+            var destroyed: Bool = false
+            var startup: StartupSplash?
+            var theme: RunTheme
+            var miniSettings: MiniSettings
+            var themeConfig: TUIConfig.ThemeConfig?
             var promptListeners: [UInt64: @Sendable (RunPrompt) -> Void] = [:]
             var closeListeners: [UInt64: @Sendable () -> Void] = [:]
             var nextID: UInt64 = 1
         }
 
         private let renderer: CliRenderer
-        private let scrollback: RunScrollbackStream
+        private let scrollbackLock: Mutex<RunScrollbackStream>
         private let inner: Mutex<Inner>
+        private let requestExitHandler: (@Sendable () -> Bool)?
 
         public init(
             renderer: CliRenderer,
             modelLabel: String = "",
             agent: String? = nil,
             theme: RunTheme = RUN_THEME_FALLBACK,
-            mono: Bool = false
+            mono: Bool = false,
+            miniSettings: MiniSettings? = nil,
+            themeConfig: TUIConfig.ThemeConfig? = nil,
+            startup: StartupSplash? = nil,
+            requestExitHandler: (@Sendable () -> Bool)? = nil
         ) {
+            let resolvedSettings = miniSettings ?? MiniSettings(mono: mono)
             self.renderer = renderer
-            self.scrollback = RunScrollbackStream(renderer: renderer, theme: theme, mono: mono)
-            self.inner = Mutex(Inner(state: FooterState(model: modelLabel), agent: agent))
+            self.scrollbackLock = Mutex(RunScrollbackStream(renderer: renderer, theme: theme, mono: resolvedSettings.mono))
+            self.requestExitHandler = requestExitHandler
+            self.inner = Mutex(Inner(
+                state: FooterState(model: modelLabel),
+                agent: agent,
+                startup: startup,
+                theme: theme,
+                miniSettings: resolvedSettings,
+                themeConfig: themeConfig
+            ))
         }
 
-        public var isClosed: Bool { inner.withLock { $0.closed } }
+        // parity: tui/src/mini/footer.ts#RunFooter.finishStartup [status=implemented hash=59ce9702e857]
+        public func finishStartup() {
+            let splash: (StartupSplash, RunTheme, Bool)? = inner.withLock { s in
+                guard let st = s.startup else { return nil }
+                s.startup = nil
+                guard !s.destroyed else { return nil }
+                return (st, s.theme, s.miniSettings.mono)
+            }
+            guard let (st, theme, mono) = splash else { return }
+            try? renderer.writeToScrollback(TUIMini.entrySplash(
+                version: st.version,
+                detail: st.detail,
+                mono: mono,
+                theme: theme.splash
+            ))
+            renderer.requestRender()
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.isClosed [status=implemented hash=64af2cbf4bb0]
+        public var isClosed: Bool { inner.withLock { $0.closed || $0.destroyed } }
         public var currentState: FooterState { inner.withLock { $0.state } }
         public var currentView: FooterView { inner.withLock { $0.view } }
-        public var committedScrollback: [StreamCommit] { scrollback.committed }
+        public var committedScrollback: [StreamCommit] { scrollbackLock.withLock { $0.committed } }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.onPrompt [status=implemented hash=9ebe65f56883]
         public func onPrompt(_ fn: @escaping @Sendable (RunPrompt) -> Void) -> @Sendable () -> Void {
             let id = inner.withLock { s -> UInt64 in
                 let cur = s.nextID; s.nextID &+= 1; s.promptListeners[cur] = fn; return cur
@@ -5457,7 +5564,12 @@ public enum TUIMini {
             return { [weak self] in _ = self?.inner.withLock { $0.promptListeners.removeValue(forKey: id) } }
         }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.onClose [status=implemented hash=71748b48f079]
         public func onClose(_ fn: @escaping @Sendable () -> Void) -> @Sendable () -> Void {
+            if isClosed {
+                fn()
+                return {}
+            }
             let id = inner.withLock { s -> UInt64 in
                 let cur = s.nextID; s.nextID &+= 1; s.closeListeners[cur] = fn; return cur
             }
@@ -5469,6 +5581,7 @@ public enum TUIMini {
             for fn in listeners { fn(prompt) }
         }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.event [status=implemented hash=8cc8b6864a31]
         public func event(_ next: FooterEvent) {
             inner.withLock { s in
                 switch next {
@@ -5488,7 +5601,9 @@ public enum TUIMini {
             }
         }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.append [status=implemented hash=19c4ab69012a]
         public func append(_ commit: StreamCommit) {
+            finishStartup()
             inner.withLock { s in
                 if let last = s.pendingCommits.last, let merged = coalesceProgressCommit(last, commit) {
                     s.pendingCommits[s.pendingCommits.count - 1] = merged
@@ -5505,15 +5620,44 @@ public enum TUIMini {
                 s.pendingCommits.removeAll()
                 return items
             }
-            for commit in batch { scrollback.append(commit) }
+            let sb = scrollbackLock.withLock { $0 }
+            for commit in batch { sb.append(commit) }
         }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.idle [status=implemented hash=2df2d34d13cf]
         public func idle() async {
             flush()
+            if inner.withLock({ $0.state.phase == .idle }) {
+                let sb = scrollbackLock.withLock { $0 }
+                await sb.complete()
+            }
             await renderer.idle()
         }
 
+        // parity: tui/src/mini/footer.ts#RunFooter.resetForReplay [status=implemented hash=cf2427d3b257]
+        public func resetForReplay(wrote: Bool = false) {
+            guard !inner.withLock({ $0.destroyed }) else { return }
+            finishStartup()
+            let (theme, mono) = inner.withLock { ($0.theme, $0.miniSettings.mono) }
+            scrollbackLock.withLock { sb in
+                sb.destroy()
+                sb = RunScrollbackStream(renderer: renderer, theme: theme, mono: mono, wrote: wrote)
+            }
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.currentTheme [status=implemented hash=831281c335d4]
+        public func currentTheme() -> RunTheme {
+            inner.withLock { $0.theme }
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.currentMiniSettings [status=implemented hash=f93b3fbfadf6]
+        public func currentMiniSettings() -> MiniSettings {
+            inner.withLock { $0.miniSettings }
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.close [status=implemented hash=b6ee7f8f8ab3]
         public func close() {
+            finishStartup()
             flush()
             let listeners = inner.withLock { s -> [@Sendable () -> Void] in
                 if s.closed { return [] }
@@ -5523,9 +5667,33 @@ public enum TUIMini {
             for fn in listeners { fn() }
         }
 
-        public func destroy() {
+        // parity: tui/src/mini/footer.ts#RunFooter.requestExit [status=implemented hash=2ecdf520a239]
+        @discardableResult
+        public func requestExit() -> Bool {
+            if let handler = requestExitHandler {
+                return handler()
+            }
+            let alreadyClosed = inner.withLock { $0.closed || $0.destroyed }
+            if alreadyClosed { return true }
             close()
-            scrollback.destroy()
+            return true
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.destroy [status=implemented hash=c22de2d1779e]
+        public func destroy() {
+            inner.withLock { $0.destroyed = true }
+            close()
+            scrollbackLock.withLock { $0.destroy() }
+        }
+
+        // parity: tui/src/mini/footer.ts#RunFooter.refreshTheme [status=implemented hash=fab225f45f5d]
+        public func refreshTheme() async {
+            let (cfg, mono, destroyed) = inner.withLock { ($0.themeConfig, $0.miniSettings.mono, $0.destroyed) }
+            guard !destroyed else { return }
+            let next = await TUIMini.resolveRunTheme(renderer: renderer, config: cfg, mono: mono)
+            inner.withLock { $0.theme = next }
+            scrollbackLock.withLock { $0.setTheme(next) }
+            renderer.requestRender()
         }
     }
 
@@ -5573,7 +5741,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/runtime.lifecycle.ts#createRuntimeLifecycle [status=adapted hash=8d0720506f5f]
+    // parity: tui/src/mini/runtime.lifecycle.ts#createRuntimeLifecycle [status=adapted hash=7b9f0f9b5b15]
     public static func createRuntimeLifecycle(_ input: LifecycleInput) async -> Lifecycle {
         let theme = await resolveRunTheme(renderer: input.renderer, config: input.tuiConfig.theme, mono: input.miniSettings.mono)
         if input.miniSettings.splash == .show {
@@ -5674,7 +5842,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/runtime.queue.ts#runPromptQueue [status=adapted hash=ed3a7246364b]
+    // parity: tui/src/mini/runtime.queue.ts#runPromptQueue [status=adapted hash=45e46630d5d3]
     public static func runPromptQueue(_ input: QueueInput) async {
         func executePrompt(_ prompt: RunPrompt) async -> Bool {
             let trimmed = prompt.text.trimmingCharacters(in: .whitespacesAndNewlines)

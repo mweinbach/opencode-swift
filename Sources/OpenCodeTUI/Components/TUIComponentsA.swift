@@ -91,6 +91,7 @@ public enum TUIComponent {
             self.frames = options.frames
         }
 
+        // parity: tui/src/component/spinner-renderable.ts#SpinnerRenderable.frames [status=implemented hash=9bf1d5c0c781]
         public var frames: [String] {
             get { frameTexts }
             set {
@@ -109,6 +110,7 @@ public enum TUIComponent {
             }
         }
 
+        // parity: tui/src/component/spinner-renderable.ts#SpinnerRenderable.interval [status=implemented hash=329cca64a574]
         public var interval: Double {
             get { _interval }
             set {
@@ -118,6 +120,7 @@ public enum TUIComponent {
             }
         }
 
+        // parity: tui/src/component/spinner-renderable.ts#SpinnerRenderable.autoplay [status=implemented hash=6eb180884f48]
         public var autoplay: Bool {
             get { _autoplay }
             set {
@@ -127,6 +130,7 @@ public enum TUIComponent {
             }
         }
 
+        // parity: tui/src/component/spinner-renderable.ts#SpinnerRenderable.color [status=implemented hash=adf82e3d15aa]
         public var color: SpinnerColorSource {
             get { _color }
             set {
@@ -135,6 +139,7 @@ public enum TUIComponent {
             }
         }
 
+        // parity: tui/src/component/spinner-renderable.ts#SpinnerRenderable.backgroundColor [status=implemented hash=c998a5afa84c]
         public var backgroundColor: RGBA {
             get { _backgroundColor }
             set {
@@ -698,7 +703,7 @@ public enum TUIComponent {
         return out
     }
 
-    // parity: tui/src/component/devtools-bar.tsx#DevToolsBar [status=adapted hash=bb8d1bec4194]
+    // parity: tui/src/component/devtools-bar.tsx#DevToolsBar [status=adapted hash=13431750a506]
     public static func DevToolsBar(
         ctx: any RenderContext,
         connectionStatus: String = "connected",
@@ -899,12 +904,17 @@ public enum TUIComponent {
     }
 
     /// Radiating shimmer background art renderable for OpenCode Go upsell (`go-upsell-art.ts`).
-    // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable [status=adapted hash=3f05cba54a03]
+    // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable [status=adapted hash=6dec1d006e67]
     public final class GoUpsellArtRenderable: Renderable, @unchecked Sendable {
-        public var animate: Bool
-        public var backgroundColor: RGBA
-        public var primaryColor: RGBA
-        public var logoBaseColor: RGBA
+        private static let periodMs: Double = 4600.0
+        private static let stillMs: Double = 2300.0
+
+        private var _animate: Bool
+        private var _background: RGBA
+        private var _primary: RGBA
+        private var _logoBase: RGBA
+        private var _logoAnchor: Renderable?
+        private var drawnKey: String = ""
         public private(set) var elapsedMs: Double
 
         public init(
@@ -912,29 +922,108 @@ public enum TUIComponent {
             animate: Bool = true,
             background: RGBA = RGBA.fromInts(0, 0, 0),
             primary: RGBA = RGBA.fromHex("#fab283"),
-            logoBase: RGBA = RGBA.fromInts(255, 255, 255)
+            logoBase: RGBA = RGBA.fromInts(255, 255, 255),
+            logoAnchor: Renderable? = nil
         ) {
-            self.animate = animate
-            self.backgroundColor = background
-            self.primaryColor = primary
-            self.logoBaseColor = logoBase
-            self.elapsedMs = animate ? 0 : 2300
+            self._animate = animate
+            self._background = background
+            self._primary = primary
+            self._logoBase = logoBase
+            self._logoAnchor = logoAnchor
+            self.elapsedMs = animate ? 0 : Self.stillMs
             super.init(ctx: ctx, options: RenderableOptions(id: "go-upsell-art"))
             if animate { animationFps = 30 }
         }
 
-        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
-            guard animate else { return }
-            elapsedMs += deltaTime
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.animate [status=implemented hash=6b9a11ac587c]
+        public var animate: Bool {
+            get { _animate }
+            set {
+                guard newValue != _animate else { return }
+                _animate = newValue
+                animationFps = newValue ? 30 : nil
+                if !newValue { elapsedMs = Self.stillMs }
+                redraw()
+            }
+        }
+
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.background [status=implemented hash=0cd9370aaf01]
+        public var background: RGBA {
+            get { _background }
+            set {
+                _background = newValue
+                redraw()
+            }
+        }
+
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.primary [status=implemented hash=6190a6f696ed]
+        public var primary: RGBA {
+            get { _primary }
+            set {
+                _primary = newValue
+                redraw()
+            }
+        }
+
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.logoBase [status=implemented hash=5d409d5c5e6a]
+        public var logoBase: RGBA {
+            get { _logoBase }
+            set {
+                _logoBase = newValue
+                redraw()
+            }
+        }
+
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.logoAnchor [status=implemented hash=e413e00e3e0a]
+        public var logoAnchor: Renderable? {
+            get { _logoAnchor }
+            set {
+                _logoAnchor = newValue
+                redraw()
+            }
+        }
+
+        public var backgroundColor: RGBA {
+            get { _background }
+            set { background = newValue }
+        }
+
+        public var primaryColor: RGBA {
+            get { _primary }
+            set { primary = newValue }
+        }
+
+        public var logoBaseColor: RGBA {
+            get { _logoBase }
+            set { logoBase = newValue }
+        }
+
+        private func redraw() {
+            drawnKey = ""
             requestRender()
         }
 
+        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
+            guard _animate else { return }
+            elapsedMs = (elapsedMs + deltaTime).truncatingRemainder(dividingBy: Self.periodMs)
+            requestRender()
+        }
+
+        public override func destroySelf() {
+            animationFps = nil
+            _logoAnchor = nil
+            super.destroySelf()
+        }
+
         public override func renderSelf(buffer: OptimizedBuffer, deltaTime: Double) {
-            let phase = (elapsedMs.truncatingRemainder(dividingBy: 4600.0)) / 4600.0
-            let glow = TUIThemeBridge.tint(backgroundColor, overlay: primaryColor, alpha: 0.2 + 0.35 * sin(phase * Double.pi))
+            let phase = (elapsedMs.truncatingRemainder(dividingBy: Self.periodMs)) / Self.periodMs
+            let glow = TUIThemeBridge.tint(_background, overlay: _primary, alpha: 0.2 + 0.35 * sin(phase * Double.pi))
             let lines = ["    █▀▀▀ █▀▀█", "    █_^█ █__█", "    ▀▀▀▀ ▀▀▀▀"]
+            let key = "\(width)x\(height):\(Int(elapsedMs))"
+            if !_animate && key == drawnKey { return }
+            drawnKey = key
             for (dy, line) in lines.enumerated() where dy < height {
-                buffer.drawText(line, x: screenX, y: screenY + dy, fg: logoBaseColor, bg: glow)
+                buffer.drawText(line, x: screenX, y: screenY + dy, fg: _logoBase, bg: glow)
             }
         }
     }
@@ -1353,7 +1442,7 @@ public enum TUIComponent {
         return nil
     }
 
-    // parity: tui/src/component/dialog-session-list.tsx#DialogSessionList [status=adapted hash=3092afe5a39b]
+    // parity: tui/src/component/dialog-session-list.tsx#DialogSessionList [status=adapted hash=ae82fc9f0fb4]
     public static func DialogSessionList(
         ctx: any RenderContext,
         sessions: [OpenSessionItem],
@@ -1691,7 +1780,7 @@ public enum TUIComponent {
         case new(name: String)
     }
 
-    // parity: tui/src/component/dialog-workspaces.tsx#DialogWorkspaces [status=adapted hash=fca66cf76280]
+    // parity: tui/src/component/dialog-workspaces.tsx#DialogWorkspaces [status=adapted hash=33a7f0d7e4f2]
     public static func DialogWorkspaces(
         ctx: any RenderContext,
         directories: [String],
@@ -1942,7 +2031,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/usage.tsx#useUsageLimits [status=adapted hash=53de418c187e]
+    // parity: tui/src/component/usage.tsx#useUsageLimits [status=adapted hash=ec9814806238]
     public static func useUsageLimits(
         budgets: [UsageLimitsSchema.Budget] = [],
         workspaceName: String? = nil,
@@ -1974,7 +2063,7 @@ public enum TUIComponent {
         return LimitLabelResult(text: "\(TUIUtil.formatDollars(usage.left)) left", danger: level == .out)
     }
 
-    // parity: tui/src/component/usage.tsx#DialogUsage [status=adapted hash=f37986cf59eb]
+    // parity: tui/src/component/usage.tsx#DialogUsage [status=adapted hash=d2fac3b6652e]
     public static func DialogUsage(
         ctx: any RenderContext,
         limits: UsageLimitsViewModel,

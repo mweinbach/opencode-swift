@@ -1306,7 +1306,7 @@ public enum TUIPrimitive {
     }
 
     /// Creates a session-ID linkifier & click hit-tester for markdown prose blocks, matching `ui/session-link.ts#useSessionLinks`.
-    // parity: tui/src/ui/session-link.ts#useSessionLinks [status=adapted hash=5cd597e8bbf2]
+    // parity: tui/src/ui/session-link.ts#useSessionLinks [status=adapted hash=6d721808062f]
     public static func useSessionLinks(
         currentSessionID: String? = nil,
         resolveLabel: @escaping @Sendable (String) -> String?
@@ -2595,7 +2595,7 @@ public enum TUIPrimitive {
         }
     }
 
-    // parity: tui/src/ui/dialog-prompt.tsx#DialogPrompt [status=adapted hash=9b7549832df0]
+    // parity: tui/src/ui/dialog-prompt.tsx#DialogPrompt [status=adapted hash=fa9749c76853]
     public static func DialogPrompt(
         ctx: any RenderContext,
         props: DialogPromptProps,
@@ -2643,7 +2643,7 @@ public enum TUIPrimitive {
         )
     }
 
-    // parity: tui/src/ui/dialog-select.tsx#DialogSelectOption [status=implemented hash=ddfcbdc8da19]
+    // parity: tui/src/ui/dialog-select.tsx#DialogSelectOption [status=implemented hash=5f0ab814105a]
     public struct DialogSelectOption<Value: Equatable & Sendable>: Sendable {
         public var title: String
         public var value: Value
@@ -2842,7 +2842,7 @@ public enum TUIPrimitive {
     }
 
     /// Renders a searchable grouped select dialog into a `BoxRenderable`, matching `ui/dialog-select.tsx#DialogSelect`.
-    // parity: tui/src/ui/dialog-select.tsx#DialogSelect [status=adapted hash=d6d2d815ea24]
+    // parity: tui/src/ui/dialog-select.tsx#DialogSelect [status=adapted hash=55a8e8d322b6]
     public static func DialogSelect<Value: Equatable & Sendable>(
         ctx: any RenderContext,
         props: DialogSelectProps<Value>,

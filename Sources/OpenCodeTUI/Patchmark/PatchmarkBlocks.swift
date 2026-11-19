@@ -166,10 +166,12 @@ public final class BNode {
         self.serial = serial
     }
 
+    // parity: patchmark/src/blocks.ts#BNode.lastChild [status=implemented hash=b2312ebfa820]
     public var lastChild: BNode? {
         children.last
     }
 
+    // parity: patchmark/src/blocks.ts#BNode.shallowClone [status=implemented hash=b5ab9a88a67e]
     public func shallowClone(cloneChildren: Bool = true) -> BNode {
         let copy = BNode(type: type, startLine: startLine, serial: serial)
         copy.parent = parent
@@ -576,14 +578,15 @@ public struct ParserOptions: Equatable, Hashable, Sendable {
     }
 }
 
-private enum ContinueResult {
+/// Continuation result for `BlockParser.continueBlock(_:)`.
+public enum ContinueResult: Equatable, Hashable, Sendable {
     case matched
     case notMatched
     case finishedLine
 }
 
 /// Persistent incremental CommonMark + GFM + Math block parser.
-// parity: patchmark/src/blocks.ts#BlockParser [status=implemented hash=529fb1f396ef]
+// parity: patchmark/src/blocks.ts#BlockParser [status=implemented hash=7827c4c7b94c]
 public final class BlockParser {
     public var doc: BNode
     public var tip: BNode
@@ -628,6 +631,7 @@ public final class BlockParser {
         self.refmap = refmap ?? [:]
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.newNode [status=implemented hash=74eebce2a3bd]
     public func newNode(_ type: BlockType, startLine: Int) -> BNode {
         let node = BNode(type: type, startLine: startLine, serial: serialCounter.next())
         if type == .list {
@@ -642,6 +646,7 @@ public final class BlockParser {
 
     /// Forks the parser for a throwaway continuation (the streaming tail). Only the open spine is cloned;
     /// closed nodes are shared and never mutated.
+    // parity: patchmark/src/blocks.ts#BlockParser.fork [status=implemented hash=29d12add6528]
     public func fork() -> BlockParser {
         let forkedDoc = doc.shallowClone(cloneChildren: false)
         let f = BlockParser(
@@ -679,6 +684,7 @@ public final class BlockParser {
         return String(decoding: currentU16[start..<currentU16.count], as: UTF16.self)
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.addLine [status=implemented hash=cf485ca69c7a]
     public func addLine() {
         if partiallyConsumedTab {
             offset += 1
@@ -689,6 +695,7 @@ public final class BlockParser {
         tip.content.append("\n")
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.addChild [status=implemented hash=592813e66568]
     @discardableResult
     public func addChild(_ tag: BlockType, offset: Int) -> BNode {
         while !canContain(tip.type, tag) {
@@ -702,6 +709,7 @@ public final class BlockParser {
         return newBlock
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.canContain [status=implemented hash=e1ea9d80c6b5]
     public func canContain(_ parent: BlockType, _ child: BlockType) -> Bool {
         switch parent {
         case .document, .blockQuote, .item:
@@ -713,10 +721,12 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.acceptsLines [status=implemented hash=d72fb65b730b]
     public func acceptsLines(_ t: BlockType) -> Bool {
         t == .paragraph || t == .codeBlock || t == .htmlBlock || t == .table || t == .mathBlock
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.parseListMarker [status=implemented hash=968eeec513a3]
     public func parseListMarker(_ container: BNode) -> ListData? {
         if indent >= 4 { return nil }
         let n = currentU16.count
@@ -775,6 +785,7 @@ public final class BlockParser {
         return data
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.closeUnmatchedBlocks [status=implemented hash=ad3fcf83bae3]
     public func closeUnmatchedBlocks() {
         if !allClosed {
             while oldtip !== lastMatchedContainer {
@@ -786,7 +797,8 @@ public final class BlockParser {
         }
     }
 
-    private func continueBlock(_ container: BNode) -> ContinueResult {
+    // parity: patchmark/src/blocks.ts#BlockParser.continueBlock [status=implemented hash=966f09931704]
+    public func continueBlock(_ container: BNode) -> ContinueResult {
         switch container.type {
         case .document, .list:
             return .matched
@@ -848,6 +860,7 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.finalizeBlock [status=implemented hash=c891a72b587d]
     public func finalizeBlock(_ block: BNode) {
         switch block.type {
         case .list:
@@ -927,6 +940,7 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.parseRef [status=implemented hash=f011761d1d18]
     public func parseRef(_ s: String, startLine: Int) -> Int {
         if forkMode && !refmapCloned {
             refmapCloned = true
@@ -943,7 +957,8 @@ public final class BlockParser {
     }
 
     /// Block starts. Returns 0 = no match, 1 = matched container, 2 = matched leaf.
-    private func tryStart(_ i: Int, container: inout BNode) -> Int {
+    // parity: patchmark/src/blocks.ts#BlockParser.tryStart [status=implemented hash=9fe41f52c8e4]
+    public func tryStart(_ i: Int, container: inout BNode) -> Int {
         switch i {
         case 0:
             // block quote
@@ -1126,6 +1141,7 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.advanceOffset [status=implemented hash=3cdf3f8d0ecf]
     public func advanceOffset(_ initialCount: Int, columns: Bool = false) {
         var count = initialCount
         let n = currentU16.count
@@ -1154,12 +1170,14 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.advanceNextNonspace [status=implemented hash=ba67577374a8]
     public func advanceNextNonspace() {
         offset = nextNonspace
         column = nextNonspaceColumn
         partiallyConsumedTab = false
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.findNextNonspace [status=implemented hash=634174b023b7]
     public func findNextNonspace() {
         let len = currentU16.count
         var i = offset
@@ -1184,6 +1202,7 @@ public final class BlockParser {
         indented = indent >= codeIndent
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.incorporateLine [status=implemented hash=367a1d4318b6]
     public func incorporateLine(_ input: String) {
         var container = doc
         oldtip = tip
@@ -1282,6 +1301,7 @@ public final class BlockParser {
         }
     }
 
+    // parity: patchmark/src/blocks.ts#BlockParser.finalize [status=implemented hash=f40431f136be]
     public func finalize(_ block: BNode, lineNumber: Int) {
         let above = block.parent
         block.open = false
@@ -1291,6 +1311,7 @@ public final class BlockParser {
     }
 
     /// Closes every open block, as at the end of the document.
+    // parity: patchmark/src/blocks.ts#BlockParser.finish [status=implemented hash=3491db482186]
     public func finish() {
         while tip !== doc {
             finalize(tip, lineNumber: lineNumber)

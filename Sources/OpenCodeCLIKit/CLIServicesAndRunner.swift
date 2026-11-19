@@ -3085,7 +3085,7 @@ public enum CLIRun {
     private static let permissionRejectedFeedback =
         "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
 
-    // parity: cli/src/run/noninteractive.ts#runNonInteractivePrompt [status=implemented hash=8d175a858a72]
+    // parity: cli/src/run/noninteractive.ts#runNonInteractivePrompt [status=implemented hash=28f4b5f5f913]
     public static func runNonInteractivePrompt(
         _ input: NonInteractivePromptInput,
         context: CLIContext = CLIContext.current
@@ -3102,6 +3102,7 @@ public enum CLIRun {
         let streamController = AbortController()
         let eventStream = input.client.event.subscribe(SubscribeOptions(signal: streamController.signal))
         let ownedCache = Mutex<[String: Bool]>([input.sessionID: true])
+        let formFailure = Mutex<String?>(nil)
 
         func ownsSession(_ sessionID: String) async -> Bool {
             if let cached = ownedCache.withLock({ $0[sessionID] }) { return cached }
@@ -3134,7 +3135,7 @@ public enum CLIRun {
             )
         }
 
-        func cancelForm(sessionID: String, formID: String, isQuestion: Bool) async {
+        func cancelForm(sessionID: String, formID: String, title: String, isQuestion: Bool) async {
             let headers: [String: String]? = sessionID == "global"
                 ? ["x-opencode-directory": ClientURLBuilder.encodeURIComponent(input.directory)]
                 : nil
@@ -3142,10 +3143,17 @@ public enum CLIRun {
                 SessionFormCancelInput(
                     sessionID: sessionID,
                     formID: formID,
-                    message: isQuestion ? nil : questionCancelledFeedback
+                    message: isQuestion ? questionCancelledFeedback : nil
                 ),
                 options: headers.map { RequestOptions(headers: $0) }
             )
+            if !isQuestion {
+                formFailure.withLock { existing in
+                    if existing == nil {
+                        existing = "Cancelled a request for input this run cannot answer: \(title)"
+                    }
+                }
+            }
         }
 
         let consumerTask = Task {
@@ -3177,7 +3185,13 @@ public enum CLIRun {
                             if case .object(let meta) = form["metadata"], case .string("question") = meta["kind"] {
                                 isQuestion = true
                             }
-                            await cancelForm(sessionID: sid, formID: fid, isQuestion: isQuestion)
+                            let formTitle: String
+                            if case .string(let t) = form["title"] {
+                                formTitle = t
+                            } else {
+                                formTitle = fid
+                            }
+                            await cancelForm(sessionID: sid, formID: fid, title: formTitle, isQuestion: isQuestion)
                         }
                     }
                 }
@@ -3285,7 +3299,11 @@ public enum CLIRun {
             }
         }
 
-        // Check idle outcome
+        // Check form failure & idle outcome
+        if let failureMsg = formFailure.withLock({ $0 }) {
+            reportRunError(format: input.format, message: failureMsg, sessionID: input.sessionID, context: context)
+            return
+        }
         if !projected.found {
             reportRunError(format: input.format, message: "Prompt was not promoted", sessionID: input.sessionID, context: context)
             return

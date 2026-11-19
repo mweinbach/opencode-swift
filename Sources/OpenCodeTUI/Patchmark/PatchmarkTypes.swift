@@ -183,7 +183,7 @@ public enum BlockPatch: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Snapshot and incremental patch list emitted after a stream `append`, `update`, or `finalize`.
-// parity: patchmark/src/types.ts#StreamFrame [status=implemented hash=919ff7d776c8]
+// parity: patchmark/src/types.ts#StreamFrame [status=implemented hash=8fa532d2cd44]
 public struct StreamFrame: Equatable, Hashable, Sendable, Codable {
     /// Full accumulated source text.
     public let text: String

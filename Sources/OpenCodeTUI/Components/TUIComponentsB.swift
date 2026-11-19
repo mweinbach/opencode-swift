@@ -189,12 +189,31 @@ extension TUIComponent {
     }
 
     /// Session tab title shimmer renderable for pending automatic renames (`src/component/title-shimmer.tsx`).
-    // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable [status=adapted hash=0aa8f3546bf5]
+    // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable [status=adapted hash=726c0c78f51d]
     public final class TitleShimmerRenderable: TextRenderable, @unchecked Sendable {
-        public var renameTitle: String?
-        public var renamePending: Bool
-        public var shimmerEnabled: Bool
-        public var backdrop: RGBA
+        public struct RenameState: Equatable, Hashable, Sendable {
+            public var title: String
+            public var pending: Bool
+
+            public init(title: String, pending: Bool) {
+                self.title = title
+                self.pending = pending
+            }
+        }
+
+        private var _rename: RenameState?
+        private var _enabled: Bool
+        private var _backdrop: RGBA
+        private var pendingTitle: String?
+        public private(set) var elapsed: Double = 0
+        public private(set) var blend: Double = 0
+        public private(set) var arrival: Double?
+        public private(set) var backdropMatrix: [Float] = [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ]
 
         public init(
             ctx: any RenderContext,
@@ -205,15 +224,109 @@ extension TUIComponent {
             enabled: Bool = true,
             backdrop: RGBA = RGBA.fromInts(0, 0, 0)
         ) {
-            self.renameTitle = renameTitle
-            self.renamePending = renamePending
-            self.shimmerEnabled = enabled
-            self.backdrop = backdrop
+            let initialRename = renameTitle.map { RenameState(title: $0, pending: renamePending) }
+            self._rename = initialRename
+            self.pendingTitle = initialRename?.title
+            self._enabled = enabled
+            self._backdrop = backdrop
             super.init(ctx: ctx, options: TextOptions(content: .string(text), fg: .rgba(fg)))
+            updateBackdrop()
+            updateAnimationState()
+        }
+
+        public var renameTitle: String? {
+            get { _rename?.title }
+            set {
+                if let newValue {
+                    rename = RenameState(title: newValue, pending: _rename?.pending ?? false)
+                } else {
+                    rename = nil
+                }
+            }
+        }
+
+        public var renamePending: Bool {
+            get { _rename?.pending ?? false }
+            set {
+                if let current = _rename {
+                    rename = RenameState(title: current.title, pending: newValue)
+                } else if newValue {
+                    rename = RenameState(title: "", pending: true)
+                }
+            }
+        }
+
+        public var shimmerEnabled: Bool {
+            get { _enabled }
+            set { enabled = newValue }
+        }
+
+        // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable.rename [status=implemented hash=b67b98481f7c]
+        public var rename: RenameState? {
+            get { _rename }
+            set {
+                if newValue == _rename { return }
+                if newValue?.pending == true && _rename?.pending != true {
+                    if pendingTitle != newValue?.title { blend = 0 }
+                    pendingTitle = newValue?.title
+                    if blend == 0 { elapsed = 0 }
+                    arrival = nil
+                }
+                if newValue?.title != _rename?.title {
+                    arrival = (newValue != nil && _rename?.pending == true && _enabled) ? 0 : nil
+                    if arrival == nil { blend = 0 }
+                }
+                _rename = newValue
+                changed()
+            }
+        }
+
+        // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable.enabled [status=implemented hash=38555c22577b]
+        public var enabled: Bool {
+            get { _enabled }
+            set {
+                guard newValue != _enabled else { return }
+                _enabled = newValue
+                if !newValue {
+                    arrival = nil
+                    blend = 0
+                }
+                changed()
+            }
+        }
+
+        // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable.backdrop [status=implemented hash=7aafccff8c68]
+        public var backdrop: RGBA {
+            get { _backdrop }
+            set {
+                guard newValue != _backdrop else { return }
+                _backdrop = newValue
+                updateBackdrop()
+                requestRender()
+            }
         }
 
         public var isShimmering: Bool {
-            shimmerEnabled && renamePending
+            _enabled && (_rename?.pending == true) && (_rename?.title == pendingTitle)
+        }
+
+        private var isAnimating: Bool {
+            _enabled && (isShimmering || arrival != nil || blend > 0)
+        }
+
+        private func updateBackdrop() {
+            backdropMatrix[3] = Float(_backdrop.r)
+            backdropMatrix[7] = Float(_backdrop.g)
+            backdropMatrix[11] = Float(_backdrop.b)
+        }
+
+        private func updateAnimationState() {
+            animationFps = isAnimating ? 30 : nil
+        }
+
+        private func changed() {
+            updateAnimationState()
+            requestRender()
         }
     }
 
@@ -802,7 +915,7 @@ extension TUIComponent {
         return TextRenderable(ctx: ctx, options: TextOptions(content: .string("Press esc again to interrupt"), fg: .rgba(theme.text.feedback.warning.base)))
     }
 
-    // parity: tui/src/component/prompt/index.tsx#Prompt [status=adapted hash=cf59ef225bf7]
+    // parity: tui/src/component/prompt/index.tsx#Prompt [status=adapted hash=b26d4a9e3395]
     public static func Prompt(
         ctx: any RenderContext,
         props: PromptProps,
@@ -913,7 +1026,7 @@ extension TUIComponent {
         await readLocalAttachmentWith(files: DefaultLocalFiles(), path: file, maxBytes: maxBytes)
     }
 
-    // parity: tui/src/component/prompt/local-attachment.ts#normalizePastedFilepath [status=implemented hash=850286bf0c32]
+    // parity: tui/src/component/prompt/local-attachment.ts#normalizePastedFilepath [status=implemented hash=418a7f8dbd25]
     public static func normalizePastedFilepath(_ value: String, platform: String) -> String {
         var raw = value
         while let first = raw.first, first == "'" || first == "\"" { raw.removeFirst() }
@@ -1091,7 +1204,7 @@ extension TUIComponent {
 
     // MARK: Prompt Metadata & Move (`src/component/prompt/metadata.tsx`, `move.tsx`)
 
-    // parity: tui/src/component/prompt/metadata.tsx#PromptMetadataRow [status=adapted hash=6d3bb4490e79]
+    // parity: tui/src/component/prompt/metadata.tsx#PromptMetadataRow [status=adapted hash=4a63bb32a38b]
     public static func PromptMetadataRow(
         ctx: any RenderContext,
         mode: String = "normal",
@@ -1151,22 +1264,157 @@ extension TUIComponent {
 
     // MARK: - Retry Provider (`src/component/retry-provider.tsx`)
 
-    // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable [status=adapted hash=5ea4980c82d3]
+    // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable [status=adapted hash=4a8b3c32c3c1]
     public final class RetryProviderRenderable: TextRenderable, @unchecked Sendable {
-        public private(set) var providerName: String
+        public struct Value: Equatable, Hashable, Sendable {
+            public var id: String
+            public var provider: String
+            public var running: Bool
 
-        public init(ctx: any RenderContext, provider: String, fg: RGBA? = nil) {
+            public init(id: String, provider: String, running: Bool) {
+                self.id = id
+                self.provider = provider
+                self.running = running
+            }
+        }
+
+        private static let fadeDuration: Double = 80
+        private static let resizeDuration: Double = 60
+        private static let totalDuration: Double = 220
+
+        public private(set) var providerName: String
+        private var currentValue: Value?
+        private var enabledValue: Bool = true
+        private var disposed: Bool = false
+        private var transitionElapsed: Double?
+        private var sourceText: String = ""
+        private var targetText: String = ""
+        private var displayedText: String = ""
+        public private(set) var transitionOpacity: Double = 1.0
+        private var fromOpacity: Double = 1.0
+
+        public init(ctx: any RenderContext, provider: String, fg: RGBA? = nil, enabled: Bool = true) {
             let formatted = TUIUtil.webSearchProviderName(provider)
             self.providerName = formatted
+            self.targetText = formatted
+            self.displayedText = formatted
+            self.enabledValue = enabled
             super.init(ctx: ctx, options: TextOptions(content: .string(formatted), fg: fg.map { .rgba($0) }))
+        }
+
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.value [status=implemented hash=5da95466b9fb]
+        public var value: Value? {
+            get { currentValue }
+            set {
+                guard !disposed, let newValue else { return }
+                let previous = currentValue
+                currentValue = newValue
+                if previous?.id == newValue.id && previous?.provider == newValue.provider { return }
+                targetText = TUIUtil.webSearchProviderName(newValue.provider)
+                providerName = targetText
+                let shouldAnimate = enabledValue
+                    && previous?.id == newValue.id
+                    && previous?.running == true
+                    && newValue.running
+                if !shouldAnimate {
+                    finishTransition()
+                    return
+                }
+                if let elapsed = transitionElapsed, elapsed < Self.fadeDuration { return }
+                sourceText = displayedText
+                fromOpacity = transitionOpacity
+                let starting = transitionElapsed == nil
+                transitionElapsed = 0
+                if starting {
+                    animationFps = 60
+                    requestRender()
+                }
+            }
+        }
+
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.enabled [status=implemented hash=2ef0db77733d]
+        public var enabled: Bool {
+            get { enabledValue }
+            set {
+                guard newValue != enabledValue else { return }
+                enabledValue = newValue
+                if !newValue { finishTransition() }
+            }
         }
 
         public func update(provider: String) {
             let next = TUIUtil.webSearchProviderName(provider)
             guard next != providerName else { return }
             providerName = next
-            content = stringToStyledText(next)
+            targetText = next
+            showText(next, opacity: 1.0)
+        }
+
+        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
+            guard let elapsed = transitionElapsed else { return }
+            let nextElapsed = elapsed + deltaTime
+            transitionElapsed = nextElapsed
+            if nextElapsed >= Self.totalDuration {
+                finishTransition()
+                return
+            }
+            if nextElapsed < Self.fadeDuration {
+                let progress = TUIComponent.smootherstep(nextElapsed / Self.fadeDuration)
+                showText(sourceText, opacity: fromOpacity * (1.0 - progress))
+                return
+            }
+            if nextElapsed < Self.fadeDuration + Self.resizeDuration {
+                let fromW = Double(TUIUtil.stringWidth(sourceText))
+                let toW = Double(TUIUtil.stringWidth(targetText))
+                let p = TUIComponent.smootherstep((nextElapsed - Self.fadeDuration) / Self.resizeDuration)
+                let width = max(0, Int((fromW + (toW - fromW) * p).rounded()))
+                showText(String(repeating: " ", count: width), opacity: 0.0)
+                return
+            }
+            let p = TUIComponent.smootherstep((nextElapsed - Self.fadeDuration - Self.resizeDuration) / Self.fadeDuration)
+            showText(targetText, opacity: p)
+        }
+
+        private func showText(_ text: String, opacity nextOpacity: Double) {
+            if text == displayedText && nextOpacity == transitionOpacity { return }
+            displayedText = text
+            transitionOpacity = nextOpacity
+            self.opacity = nextOpacity
+            content = stringToStyledText(text)
             requestRender()
+        }
+
+        private func stopTransition() {
+            if transitionElapsed != nil {
+                animationFps = nil
+            }
+            transitionElapsed = nil
+        }
+
+        private func finishTransition() {
+            stopTransition()
+            showText(targetText, opacity: 1.0)
+        }
+
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.mergeStyles [status=implemented hash=a20b02b12210]
+        public func mergeStyles(_ parentStyle: TextNodeStyle) -> TextNodeStyle {
+            guard transitionOpacity < 1.0 else { return parentStyle }
+            let baseFg = parentStyle.fg ?? RGBA.defaultForeground()
+            let faded = RGBA.fromValues(baseFg.r, baseFg.g, baseFg.b, baseFg.a * transitionOpacity)
+            return TextNodeStyle(fg: faded, bg: parentStyle.bg, attributes: parentStyle.attributes, link: parentStyle.link)
+        }
+
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.destroy [status=implemented hash=2b54aa1dc0f0]
+        public override func destroy() {
+            guard !disposed else { return }
+            disposed = true
+            stopTransition()
+            super.destroy()
+        }
+
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.destroyRecursively [status=implemented hash=38c10cdeaa8c]
+        public override func destroyRecursively() {
+            destroy()
         }
     }
 

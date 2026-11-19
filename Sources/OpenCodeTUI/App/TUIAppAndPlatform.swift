@@ -81,6 +81,24 @@ public enum TUIAttention {
     // parity: tui/src/attention-sounds.node.ts#subagentDoneSoundPath [status=adapted hash=82ca268612ce]
     public static let subagentDoneSoundPath: String = resolveSoundPath("yup-01.mp3")
 
+    /// Bundled attention sound asset paths matching `packages/tui/src/attention-sounds.bun.ts`.
+    public enum BunSounds {
+        // parity: tui/src/attention-sounds.bun.ts#defaultSoundPath [status=adapted hash=7592e8582743]
+        public static let defaultSoundPath: String = TUIAttention.defaultSoundPath
+
+        // parity: tui/src/attention-sounds.bun.ts#questionSoundPath [status=adapted hash=7592e8582743]
+        public static let questionSoundPath: String = TUIAttention.questionSoundPath
+
+        // parity: tui/src/attention-sounds.bun.ts#permissionSoundPath [status=adapted hash=7592e8582743]
+        public static let permissionSoundPath: String = TUIAttention.permissionSoundPath
+
+        // parity: tui/src/attention-sounds.bun.ts#errorSoundPath [status=adapted hash=7592e8582743]
+        public static let errorSoundPath: String = TUIAttention.errorSoundPath
+
+        // parity: tui/src/attention-sounds.bun.ts#subagentDoneSoundPath [status=adapted hash=7592e8582743]
+        public static let subagentDoneSoundPath: String = TUIAttention.subagentDoneSoundPath
+    }
+
     private struct AudioBox: @unchecked Sendable {
         var engine: Audio? = nil
         var attempted: Bool = false
@@ -732,10 +750,12 @@ public enum TUIEditor {
             }
         }
 
+        // parity: tui/src/editor-zed-sqlite.node.ts#Database.query [status=implemented hash=a7ecf730cf1f]
         public func query(_ sql: String) -> QueryHandle {
             QueryHandle(db: db, sql: sql)
         }
 
+        // parity: tui/src/editor-zed-sqlite.node.ts#Database.close [status=implemented hash=9f98a788d0cb]
         public func close() {
             try? db.close()
         }
@@ -1417,7 +1437,7 @@ public enum TUIApp {
     }
 
     /// Resolves TUI configuration, theme, route, and OpenTUI renderer lifecycle for an OpenCode TUI session.
-    // parity: tui/src/app.tsx#run [status=adapted hash=d150905842b3]
+    // parity: tui/src/app.tsx#run [status=adapted hash=c0450ef34a97]
     public static func run(_ input: TuiInput) async throws -> RunResult {
         let log: TUIContext.LogSink = input.log ?? { _, _, _ in }
         let rawConfig = try await input.config.get()
@@ -1454,4 +1474,55 @@ public enum TUIApp {
             exitReason: nil
         )
     }
+}
+
+// MARK: - Tree-Sitter Parsers Config (`packages/tui/src/parsers-config.ts`)
+
+/// Built-in tree-sitter parser grammar & highlight query catalog matching `packages/tui/src/parsers-config.ts`.
+public enum TUIParsersConfig {
+    public struct ParsersConfig: Equatable, Hashable, Sendable, Codable {
+        public let parsers: [FiletypeParserOptions]
+
+        public init(parsers: [FiletypeParserOptions]) {
+            self.parsers = parsers
+        }
+    }
+
+    // parity: tui/src/parsers-config.ts#default [status=implemented hash=90e077a22565]
+    public static let defaultConfig = ParsersConfig(parsers: [
+        FiletypeParserOptions(filetype: "python", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://github.com/tree-sitter/tree-sitter-python/raw/refs/heads/master/queries/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-python/releases/download/v0.23.6/tree-sitter-python.wasm"),
+        FiletypeParserOptions(filetype: "rust", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/rust/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-rust/releases/download/v0.24.0/tree-sitter-rust.wasm"),
+        FiletypeParserOptions(filetype: "go", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/go/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-go/releases/download/v0.25.0/tree-sitter-go.wasm"),
+        FiletypeParserOptions(filetype: "cpp", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/cpp/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-cpp/releases/download/v0.23.4/tree-sitter-cpp.wasm"),
+        FiletypeParserOptions(filetype: "csharp", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/c_sharp/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-c-sharp/releases/download/v0.23.1/tree-sitter-c_sharp.wasm"),
+        FiletypeParserOptions(filetype: "bash", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/bash/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-bash/releases/download/v0.25.0/tree-sitter-bash.wasm"),
+        FiletypeParserOptions(filetype: "c", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/c/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-c/releases/download/v0.24.1/tree-sitter-c.wasm"),
+        FiletypeParserOptions(filetype: "java", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/java/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-java/releases/download/v0.23.5/tree-sitter-java.wasm"),
+        FiletypeParserOptions(filetype: "kotlin", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/fwcd/tree-sitter-kotlin/0.3.8/queries/highlights.scm"]), wasm: "https://github.com/fwcd/tree-sitter-kotlin/releases/download/0.3.8/tree-sitter-kotlin.wasm"),
+        FiletypeParserOptions(filetype: "ruby", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/ruby/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-ruby/releases/download/v0.23.1/tree-sitter-ruby.wasm"),
+        FiletypeParserOptions(filetype: "php", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://github.com/tree-sitter/tree-sitter-php/raw/refs/heads/master/queries/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-php/releases/download/v0.24.2/tree-sitter-php_only.wasm"),
+        FiletypeParserOptions(filetype: "scala", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/scala/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-scala/releases/download/v0.24.0/tree-sitter-scala.wasm"),
+        FiletypeParserOptions(filetype: "html", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://github.com/tree-sitter/tree-sitter-html/raw/refs/heads/master/queries/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-html/releases/download/v0.23.2/tree-sitter-html.wasm"),
+        FiletypeParserOptions(filetype: "vue", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/anomalyco/tree-sitter-vue/v0.1.2/queries/html_tags/highlights.scm", "https://raw.githubusercontent.com/anomalyco/tree-sitter-vue/v0.1.2/queries/vue/highlights.scm"]), wasm: "https://github.com/anomalyco/tree-sitter-vue/releases/download/v0.1.2/tree-sitter-vue.wasm"),
+        FiletypeParserOptions(filetype: "hcl", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/master/queries/hcl/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-hcl/releases/download/v1.2.0/tree-sitter-hcl.wasm"),
+        FiletypeParserOptions(filetype: "json", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/json/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-json/releases/download/v0.24.8/tree-sitter-json.wasm"),
+        FiletypeParserOptions(filetype: "yaml", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/yaml/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-yaml/releases/download/v0.7.2/tree-sitter-yaml.wasm"),
+        FiletypeParserOptions(filetype: "haskell", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/haskell/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-haskell/releases/download/v0.23.1/tree-sitter-haskell.wasm"),
+        FiletypeParserOptions(filetype: "css", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/css/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-css/releases/download/v0.25.0/tree-sitter-css.wasm"),
+        FiletypeParserOptions(filetype: "julia", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/julia/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-julia/releases/download/v0.23.1/tree-sitter-julia.wasm"),
+        FiletypeParserOptions(filetype: "lua", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/tree-sitter-grammars/tree-sitter-lua/v0.5.0/queries/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-lua/releases/download/v0.5.0/tree-sitter-lua.wasm"),
+        FiletypeParserOptions(filetype: "ocaml", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/ocaml/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-ocaml/releases/download/v0.24.2/tree-sitter-ocaml.wasm"),
+        FiletypeParserOptions(filetype: "clojure", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/clojure/highlights.scm"]), wasm: "https://github.com/anomalyco/tree-sitter-clojure/releases/download/v0.0.1/tree-sitter-clojure.wasm"),
+        FiletypeParserOptions(filetype: "swift", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/alex-pinkus/tree-sitter-swift/main/queries/highlights.scm"]), wasm: "https://github.com/alex-pinkus/tree-sitter-swift/releases/download/0.7.1/tree-sitter-swift.wasm"),
+        FiletypeParserOptions(filetype: "toml", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/master/queries/toml/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-toml/releases/download/v0.7.0/tree-sitter-toml.wasm"),
+        FiletypeParserOptions(filetype: "nix", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/nix/highlights.scm"]), wasm: "https://github.com/ast-grep/ast-grep.github.io/raw/40b84530640aa83a0d34a20a2b0623d7b8e5ea97/website/public/parsers/tree-sitter-nix.wasm"),
+        FiletypeParserOptions(filetype: "diff", aliases: ["udiff", "patch"], queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/tree-sitter-grammars/tree-sitter-diff/2520c3f934b3179bb540d23e0ef45f75304b5fed/queries/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-diff/releases/download/v0.1.0/tree-sitter-diff.wasm"),
+        FiletypeParserOptions(filetype: "elixir", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/elixir/highlights.scm"]), wasm: "https://github.com/elixir-lang/tree-sitter-elixir/releases/download/v0.3.5/tree-sitter-elixir.wasm"),
+        FiletypeParserOptions(filetype: "fsharp", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/fsharp/highlights.scm"]), wasm: "https://github.com/ionide/tree-sitter-fsharp/releases/download/0.3.0/tree-sitter-fsharp.wasm"),
+        FiletypeParserOptions(filetype: "r", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/r/highlights.scm"]), wasm: "https://github.com/r-lib/tree-sitter-r/releases/download/v1.2.0/tree-sitter-r.wasm"),
+        FiletypeParserOptions(filetype: "make", aliases: ["makefile"], queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/make/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-make/releases/download/v1.1.1/tree-sitter-make.wasm"),
+        FiletypeParserOptions(filetype: "vim", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/vim/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-vim/releases/download/v0.8.1/tree-sitter-vim.wasm"),
+        FiletypeParserOptions(filetype: "xml", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/xml/highlights.scm"]), wasm: "https://github.com/tree-sitter-grammars/tree-sitter-xml/releases/download/v0.7.0/tree-sitter-xml.wasm"),
+        FiletypeParserOptions(filetype: "agda", aliases: nil, queries: FiletypeParserQueries(highlights: ["https://raw.githubusercontent.com/nvim-treesitter/nvim-treesitter/refs/heads/master/queries/agda/highlights.scm"]), wasm: "https://github.com/tree-sitter/tree-sitter-agda/releases/download/v1.3.3/tree-sitter-agda.wasm"),
+    ])
 }

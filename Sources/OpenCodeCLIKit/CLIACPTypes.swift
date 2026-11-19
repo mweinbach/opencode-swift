@@ -1869,6 +1869,7 @@ public enum CLIACP {
                 self.reason = reason
             }
 
+            // parity: cli/src/acp/error.ts#CatalogNotReadyError.message [status=implemented hash=f924debcf1eb]
             public var message: String {
                 reason == .models ? "No models are available" : "No primary agents are available"
             }

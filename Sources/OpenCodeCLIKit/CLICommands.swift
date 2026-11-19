@@ -500,6 +500,7 @@ public enum CLICommands {
             return queryItems.isEmpty ? pathname : "\(pathname)?\(queryItems.joined(separator: "&"))"
         }
 
+        // parity: cli/src/commands/handlers/api.ts#default [status=implemented hash=4969ddf7ab04]
         public static func run(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             try await CLICommands.withResolvedServer(
                 CLIServices.ServerConnection.Args(mismatch: .ignore),
@@ -965,6 +966,7 @@ public enum CLICommands {
 
         // MARK: Auth Subcommand Handlers
 
+        // parity: cli/src/commands/handlers/auth/list.ts#default [status=implemented hash=dc863f7a1f7f]
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -1012,6 +1014,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/auth/login.ts#default [status=implemented hash=28b8aa60d2b8]
         public static func runLogin(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
                 let target = input.arg("target")
@@ -1127,6 +1130,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/auth/logout.ts#default [status=implemented hash=e36d3280230a]
         public static func runLogout(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
                 let target = input.arg("target")
@@ -1149,6 +1153,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/auth/switch.ts#default [status=implemented hash=babe40a2d204]
         public static func runSwitch(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
                 let target = input.arg("target")
@@ -1171,6 +1176,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/auth/export.ts#default [status=implemented hash=80bc4ce10c3e]
         public static func runExport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -1197,6 +1203,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/auth/import.ts#default [status=implemented hash=c0334d467fd0]
         public static func runImport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 let file = input.arg("file")
@@ -1470,6 +1477,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/debug/paths.ts#default [status=implemented hash=f90e1c8bbd27]
         public static func runPaths(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let global = context.globalPaths
             let db = CLIUtil.databasePath(global.data, channel: context.channel, environment: context.environment)
@@ -1495,6 +1503,7 @@ public enum CLICommands {
             context.io.writeStdout(lines.joined())
         }
 
+        // parity: cli/src/commands/handlers/debug/agents.ts#default [status=implemented hash=c188ea6e218b]
         public static func runAgents(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -1507,6 +1516,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/debug/config.ts#default [status=implemented hash=ebe69eccc935]
         public static func runConfig(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -1520,6 +1530,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/debug/heap-dump.ts#default [status=implemented hash=1da43f4ca848]
         public static func runHeapDump(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 let endpoint: ServiceEndpoint
@@ -1640,6 +1651,7 @@ public enum CLICommands {
             return result.data
         }
 
+        // parity: cli/src/commands/handlers/mcp/list.ts#default [status=implemented hash=2c75c98700c9]
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -1674,6 +1686,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/mcp/add.ts#default [status=implemented hash=00d495bc674e]
         public static func runAdd(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let name = input.arg("name") else {
                 throw CLIError("Missing required argument: name")
@@ -1739,6 +1752,7 @@ public enum CLICommands {
             context.io.writeStdout("MCP server \"\(name)\" added to \(configPath)\(context.io.eol)")
         }
 
+        // parity: cli/src/commands/handlers/mcp/auth.ts#default [status=implemented hash=e37f531c71b7]
         public static func runAuth(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
                 let name = input.arg("name")
@@ -1812,6 +1826,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/mcp/logout.ts#default [status=implemented hash=8794f3607353]
         public static func runLogout(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let name = input.arg("name") else {
                 throw CLIError("Missing required argument: name")
@@ -1910,6 +1925,7 @@ public enum CLICommands {
             return true
         }
 
+        // parity: cli/src/commands/handlers/pair.ts#default [status=implemented hash=507db6ffc239]
         public static func run(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let config = try await CLIServices.ServiceConfig.read(context: context)
             if config.disabled == true {
@@ -2397,6 +2413,7 @@ public enum CLICommands {
             }.joined(separator: eol)
         }
 
+        // parity: cli/src/commands/handlers/plugin/list.ts#default [status=implemented hash=843cb7198e3e]
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             try await CLICommands.withResolvedServer(context: context) { _, client in
                 let response = try await client.plugin.list(
@@ -2429,6 +2446,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/plugin/add.ts#default [status=implemented hash=17e79128fcb1]
         public static func runAdd(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let pkg = input.arg("package") else { throw CLIError("Missing required argument: package") }
             guard NpmSpec.isInstallablePackage(pkg) else {
@@ -2467,6 +2485,7 @@ public enum CLICommands {
             context.io.writeStdout("TUI plugin \"\(pkg)\" installed and added to \(context.configService.path)\(context.io.eol)")
         }
 
+        // parity: cli/src/commands/handlers/plugin/check.ts#default [status=implemented hash=5521c2e5de86]
         public static func runCheck(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let result = try await Inventory.inspect(selected: input.arg("target"), context: context)
             defer {
@@ -2481,6 +2500,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/plugin/update.ts#default [status=implemented hash=03b104356ac5]
         public static func runUpdate(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let result = try await Inventory.inspect(selected: input.arg("target"), context: context)
             defer {
@@ -2514,6 +2534,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/plugin/remove.ts#default [status=implemented hash=2f2ef1858c65]
         public static func runRemove(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let pkg = input.arg("package") else { throw CLIError("Missing required argument: package") }
             let configPath = await MCP.resolveConfigPath(context.globalPaths.config, fileSystem: context.fileSystem)
@@ -2875,6 +2896,7 @@ public enum CLICommands {
             return ("36", ["2;36", "36", "1;36", "1;96"])
         }
 
+        // parity: cli/src/commands/handlers/stats.ts#default [status=implemented hash=0f5c25f02b25]
         public static func run(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 let days = input.integer("days")
@@ -2981,6 +3003,7 @@ public enum CLICommands {
     // MARK: Session Commands (`packages/cli/src/commands/handlers/session/*`)
 
     public enum Session {
+        // parity: cli/src/commands/handlers/session/list.ts#default [status=implemented hash=b0b57a0d8536]
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 try await CLICommands.withResolvedServer(context: context) { _, client in
@@ -3027,6 +3050,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/session/delete.ts#default [status=implemented hash=4a99e8cf9422]
         public static func runDelete(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 guard let sessionID = input.arg("sessionID") else {
@@ -3042,6 +3066,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/session/export.ts#default [status=implemented hash=7bdc3d6329e4]
         public static func runExport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
                 let requested = input.arg("session")
@@ -3100,6 +3125,7 @@ public enum CLICommands {
             }
         }
 
+        // parity: cli/src/commands/handlers/session/import.ts#default [status=implemented hash=618c3ad3bb6f]
         public static func runImport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let file = input.arg("file") else { throw CLIError("Missing required argument: file") }
             let rawText: String
@@ -3153,6 +3179,7 @@ public enum CLICommands {
     // MARK: Service Lifecycle Commands (`packages/cli/src/commands/handlers/service/*`)
 
     public enum ServiceCmd {
+        // parity: cli/src/commands/handlers/service/start.ts#default [status=implemented hash=ad50bc9041f4]
         public static func runStart(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             let opts = try await CLIServices.ServiceConfig.options(CLIServices.ServiceConfig.OptionsInput(), context)
@@ -3167,6 +3194,7 @@ public enum CLICommands {
             context.io.writeStdout(endpoint.url + context.io.eol)
         }
 
+        // parity: cli/src/commands/handlers/service/restart.ts#default [status=implemented hash=7a2e75c90417]
         public static func runRestart(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             let opts = try await CLIServices.ServiceConfig.options(CLIServices.ServiceConfig.OptionsInput(), context)
@@ -3188,6 +3216,7 @@ public enum CLICommands {
             context.io.writeStdout(endpoint.url + context.io.eol)
         }
 
+        // parity: cli/src/commands/handlers/service/status.ts#default [status=implemented hash=4ca3f63a384a]
         public static func runStatus(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             let opts = try await CLIServices.ServiceConfig.options(CLIServices.ServiceConfig.OptionsInput(), context)
@@ -3200,6 +3229,7 @@ public enum CLICommands {
             context.io.writeStdout((found?.url ?? "stopped") + context.io.eol)
         }
 
+        // parity: cli/src/commands/handlers/service/stop.ts#default [status=implemented hash=948a8894a47b]
         public static func runStop(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
             let opts = try await CLIServices.ServiceConfig.options(CLIServices.ServiceConfig.OptionsInput(), context)
@@ -3212,6 +3242,7 @@ public enum CLICommands {
             )
         }
 
+        // parity: cli/src/commands/handlers/service/get.ts#default [status=implemented hash=7486d0c5bd46]
         public static func runGet(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let value = try await CLIServices.ServiceConfig.get(
                 key: input.arg("key"),
@@ -3221,6 +3252,7 @@ public enum CLICommands {
             context.io.writeStdout(value + context.io.eol)
         }
 
+        // parity: cli/src/commands/handlers/service/set.ts#default [status=implemented hash=25553a825c40]
         public static func runSet(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let key = input.arg("key"), let value = input.arg("value") else {
                 throw CLIError("Usage: opencode service set <key> <value>")
@@ -3233,6 +3265,7 @@ public enum CLICommands {
             )
         }
 
+        // parity: cli/src/commands/handlers/service/unset.ts#default [status=implemented hash=89ee618f5638]
         public static func runUnset(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let key = input.arg("key") else {
                 throw CLIError("Usage: opencode service unset <key>")
@@ -3247,6 +3280,7 @@ public enum CLICommands {
 
     // MARK: Top-Level Commands (`default`, `serve`, `run`, `mini`, `acp`, `models`, `reload`, `upgrade`, `uninstall`)
 
+    // parity: cli/src/commands/handlers/default.ts#default [status=implemented hash=467bfdf8b222]
     public static func runDefault(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         if let dir = input.arg("directory") {
             context.cwd = CLIPath.resolve(context.cwd, dir)
@@ -3334,6 +3368,7 @@ public enum CLICommands {
         }
     }
 
+    // parity: cli/src/commands/handlers/serve.ts#default [status=implemented hash=a7a8fd76d239]
     public static func runServe(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         let isService = input.bool("service")
         let isStdio = input.bool("stdio")
@@ -3353,6 +3388,7 @@ public enum CLICommands {
         )
     }
 
+    // parity: cli/src/commands/handlers/run.ts#default [status=implemented hash=5c3802382df9]
     public static func runCommand(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
         let format = CLIRun.OutputFormat(rawValue: input.string("format") ?? "default") ?? .default
         let server: CLIServices.ServerConnection.Resolved
@@ -3390,6 +3426,7 @@ public enum CLICommands {
         await CLIRun.runNonInteractive(cmdInput, signal: controller.signal, context: context)
     }
 
+    // parity: cli/src/commands/handlers/mini.ts#default [status=implemented hash=cc6a3a418638]
     public static func runMini(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         try CLIRun.Mini.validateMiniTerminal(context: context)
         let server = try await CLIServices.ServerConnection.resolve(
@@ -3433,6 +3470,7 @@ public enum CLICommands {
         try await CLIRun.Mini.runMini(miniInput, context: context)
     }
 
+    // parity: cli/src/commands/handlers/acp.ts#default [status=implemented hash=924ec1830b9d]
     public static func runACP(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         try await runACPBridge(input, context: context, stream: nil)
     }
@@ -3511,6 +3549,7 @@ public enum CLICommands {
         }
     }
 
+    // parity: cli/src/commands/handlers/models.ts#default [status=implemented hash=5dbfa03338f7]
     public static func runModels(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         try await withResolvedServer(context: context) { _, client in
             if input.bool("refresh") {
@@ -3545,6 +3584,7 @@ public enum CLICommands {
         }
     }
 
+    // parity: cli/src/commands/handlers/reload.ts#default [status=implemented hash=3ceecbf0d747]
     public static func runReload(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         _ = input
         try await withResolvedServer(context: context) { _, client in
@@ -3553,6 +3593,7 @@ public enum CLICommands {
         }
     }
 
+    // parity: cli/src/commands/handlers/upgrade.ts#default [status=implemented hash=2ab15f4ccb1c]
     public static func runUpgrade(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
         _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
             let updater = context.updaterService
@@ -3608,6 +3649,7 @@ public enum CLICommands {
         return lines.joined(separator: "\n")
     }
 
+    // parity: cli/src/commands/handlers/uninstall.ts#default [status=implemented hash=f7a90547c1f4]
     public static func runUninstall(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
         _ = await CLIUI.Prompt.handlePromptErrors(context: context) {
             let fs = context.fileSystem

@@ -154,7 +154,7 @@ private struct TailRawCache {
 }
 
 /// Incremental CommonMark + GFM + Math streaming markdown parser emitting minimal `BlockPatch` frames.
-// parity: patchmark/src/stream.ts#PatchmarkStream [status=implemented hash=434ebc09ec11]
+// parity: patchmark/src/stream.ts#PatchmarkStream [status=implemented hash=86baf18d4609]
 public final class PatchmarkStream {
     private let options: StreamOptions
     private var text = ""
@@ -209,20 +209,24 @@ public final class PatchmarkStream {
     }
 
     /// Resets the stream to empty state.
+    // parity: patchmark/src/stream.ts#PatchmarkStream.reset [status=implemented hash=a39cf843d48d]
     public func reset() {
         resetState()
         nextId = 0
     }
 
+    // parity: patchmark/src/stream.ts#PatchmarkStream.getBlocks [status=implemented hash=1f0135a11115]
     public func getBlocks() -> [MarkdownBlock] {
         blocks
     }
 
+    // parity: patchmark/src/stream.ts#PatchmarkStream.getText [status=implemented hash=c57b7d9927cb]
     public func getText() -> String {
         text
     }
 
     /// Appends a streaming delta chunk.
+    // parity: patchmark/src/stream.ts#PatchmarkStream.append [status=implemented hash=74d91d7abb47]
     @discardableResult
     public func append(_ delta: String) -> StreamFrame {
         if delta.isEmpty { return emptyFrame() }
@@ -233,12 +237,14 @@ public final class PatchmarkStream {
     }
 
     /// Finalizes the stream: flushes held markers and settles every block.
+    // parity: patchmark/src/stream.ts#PatchmarkStream.finalize [status=implemented hash=6d54a925b134]
     @discardableResult
     public func finalize() -> StreamFrame {
         update(text, streaming: false)
     }
 
     /// Declarative update: prefix appends are incremental; anything else re-parses and patches the difference.
+    // parity: patchmark/src/stream.ts#PatchmarkStream.update [status=implemented hash=7f00e8dfa5ac]
     @discardableResult
     public func update(_ newText: String, streaming: Bool = true) -> StreamFrame {
         if finished || !newText.hasPrefix(text) {

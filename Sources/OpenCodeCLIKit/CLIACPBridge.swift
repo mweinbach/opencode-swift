@@ -1378,7 +1378,7 @@ extension CLIACP {
             list(metadata: session.metadata)
         }
 
-        // parity: cli/src/acp/directories.ts#activate [status=implemented hash=fd1d1bf16870]
+        // parity: cli/src/acp/directories.ts#activate [status=implemented hash=38d509920097]
         public static func activate(
             client: any BackendClient,
             session: SessionSchema.Info,
@@ -3854,7 +3854,7 @@ extension CLIACP {
         }
 
         /// Connects an ACP JSON-RPC agent to an `NDJSONStream` using any `BackendClient`.
-        // parity: cli/src/acp/agent.ts#connect [status=adapted hash=5b727faf3e7a]
+        // parity: cli/src/acp/agent.ts#connect [status=adapted hash=df3d8ef5ff88]
         public static func connect(
             client: any BackendClient,
             stream: NDJSONStream,

@@ -148,7 +148,7 @@ public enum TUIConfig {
         // parity: tui/src/config/keybind.ts#LeaderDefault [status=implemented hash=83ca3f4e2efe]
         public static let LeaderDefault = "ctrl+x"
 
-        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=871b5d0a8b1d]
+        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=fbb65a5e11fb]
         public static let Definitions: [String: Definition] = [
             "leader": Definition(.item(.sequence(LeaderDefault)), "Leader key for keybind combinations"),
             "app.exit": Definition("ctrl+c,ctrl+d,<leader>q", "Exit the application"),
@@ -816,7 +816,7 @@ public enum TUIConfig {
         }
     }
 
-    // parity: tui/src/config/index.tsx#Info [status=implemented hash=d453d621a93a]
+    // parity: tui/src/config/index.tsx#Info [status=implemented hash=6130e55b9996]
     public struct Info: Equatable, Sendable, Codable {
         public var theme: ThemeConfig?
         public var keybinds: Keybind.KeybindOverrides?
@@ -1221,7 +1221,7 @@ public enum TUIConfig {
 
             public typealias Definition = TUIConfig.Keybind.Definition
 
-            // parity: tui/src/config/v1/keybind.ts#Definitions [status=implemented hash=bbcdb8dde285]
+            // parity: tui/src/config/v1/keybind.ts#Definitions [status=implemented hash=170ee89fc3d3]
             public static let Definitions: [String: Definition] = [
                 "leader": Definition(.item(.sequence(LeaderDefault)), "Leader key for keybind combinations"),
                 "app_exit": Definition("ctrl+c,ctrl+d,<leader>q", "Exit the application"),
@@ -1411,7 +1411,7 @@ public enum TUIConfig {
             // parity: tui/src/config/v1/keybind.ts#KeybindOverrides [status=implemented hash=49274a531c5e]
             public typealias KeybindOverrides = [String: BindingValueSchema]
 
-            // parity: tui/src/config/v1/keybind.ts#CommandMap [status=implemented hash=d451f61e295a]
+            // parity: tui/src/config/v1/keybind.ts#CommandMap [status=implemented hash=5020af297b68]
             public static let CommandMap: BindingCommandMap = [
                 "app_exit": "app.exit",
                 "app_debug": "app.debug",
@@ -2023,6 +2023,143 @@ public enum TUIContext {
         }
     }
 
+    public final class ArgsController: @unchecked Sendable {
+        public let args: Args
+        private let pending: Mutex<String?>
+
+        public init(_ args: Args) {
+            self.args = args
+            self.pending = Mutex(args.newSessionID)
+        }
+
+        public var model: String? { args.model }
+        public var agent: String? { args.agent }
+        public var prompt: String? { args.prompt }
+        public var `continue`: Bool? { args.`continue` }
+        public var sessionID: String? { args.sessionID }
+        public var fork: Bool? { args.fork }
+        public var auto: Bool? { args.auto }
+
+        public func takeNewSessionID() -> String? {
+            pending.withLock { value in
+                let id = value
+                value = nil
+                return id
+            }
+        }
+
+        public func restoreNewSessionID(_ id: String) {
+            pending.withLock { value in
+                if value == nil { value = id }
+            }
+        }
+    }
+
+    @TaskLocal private static var currentArgs: ArgsController?
+
+    // parity: tui/src/context/args.tsx#ArgsProvider [status=adapted hash=bccaf9a6585b]
+    public static func ArgsProvider<R>(_ args: Args = Args(), body: () throws -> R) rethrows -> R {
+        try $currentArgs.withValue(ArgsController(args), operation: body)
+    }
+
+    // parity: tui/src/context/args.tsx#useArgs [status=adapted hash=bccaf9a6585b]
+    public static func useArgs() throws(TUIConfig.ConfigError) -> ArgsController {
+        guard let value = currentArgs else { throw .missingContext("ArgsProvider") }
+        return value
+    }
+
+    // MARK: - Client & Data Contexts (`packages/tui/src/context/client.tsx`, `data.tsx`)
+
+    public final class ClientService: @unchecked Sendable {
+        public let api: OpenCodeClient
+        public let url: String?
+        public let headers: [String: String]?
+        public let media: TUIUtil.MediaCache
+        public let eventBus: ClientDataEventBus
+        public let reconnect: (@Sendable (AbortSignal) async throws -> OpenCodeClient)?
+        public let restart: (@Sendable () async throws -> Void)?
+
+        public init(
+            api: OpenCodeClient,
+            url: String? = nil,
+            headers: [String: String]? = nil,
+            media: TUIUtil.MediaCache? = nil,
+            eventBus: ClientDataEventBus = ClientDataEventBus(),
+            reconnect: (@Sendable (AbortSignal) async throws -> OpenCodeClient)? = nil,
+            restart: (@Sendable () async throws -> Void)? = nil
+        ) {
+            self.api = api
+            self.url = url
+            self.headers = headers
+            self.media = media ?? TUIUtil.createMediaCache(fetcher: { _ in [] })
+            self.eventBus = eventBus
+            self.reconnect = reconnect
+            self.restart = restart
+        }
+    }
+
+    // parity: tui/src/context/client.tsx#ClientContext [status=adapted hash=ab68875726be]
+    public static let ClientContext: SimpleContext<ClientService> = createSimpleContext(name: "Client")
+
+    @TaskLocal private static var currentClient: ClientService?
+
+    // parity: tui/src/context/client.tsx#ClientProvider [status=adapted hash=ab68875726be]
+    public static func ClientProvider<R>(_ service: ClientService, body: () throws -> R) rethrows -> R {
+        try ClientContext.provide(service) {
+            try $currentClient.withValue(service, operation: body)
+        }
+    }
+
+    // parity: tui/src/context/client.tsx#useClient [status=adapted hash=ab68875726be]
+    public static func useClient() throws(TUIConfig.ConfigError) -> ClientService {
+        if let value = currentClient { return value }
+        return try ClientContext.use()
+    }
+
+    public final class DataContextController: @unchecked Sendable {
+        public let directory: String
+        public let store: ClientDataStore
+
+        public init(directory: String, store: ClientDataStore) {
+            self.directory = directory
+            self.store = store
+        }
+
+        public convenience init(
+            directory: String,
+            client: ClientService,
+            initialMessageLimit: (@Sendable () -> Int)? = nil
+        ) {
+            let api = client.api
+            let store = createData(CreateDataInput(
+                api: { api },
+                directory: directory,
+                initialMessageLimit: initialMessageLimit,
+                event: client.eventBus
+            ))
+            self.init(directory: directory, store: store)
+        }
+    }
+
+    @TaskLocal private static var currentData: DataContextController?
+
+    // parity: tui/src/context/data.tsx#DataProvider [status=adapted hash=5f5ce71d4772]
+    public static func DataProvider<R>(_ controller: DataContextController, body: () throws -> R) rethrows -> R {
+        try $currentData.withValue(controller, operation: body)
+    }
+
+    public static func DataProvider<R>(directory: String, body: () throws -> R) throws -> R {
+        let client = try useClient()
+        let controller = DataContextController(directory: directory, client: client)
+        return try $currentData.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/data.tsx#useData [status=adapted hash=5f5ce71d4772]
+    public static func useData() throws(TUIConfig.ConfigError) -> DataContextController {
+        guard let value = currentData else { throw .missingContext("DataProvider") }
+        return value
+    }
+
     // MARK: - Attention Context (`packages/tui/src/context/attention.tsx`)
 
     @TaskLocal private static var currentAttention: PluginTui.Attention?
@@ -2077,7 +2214,7 @@ public enum TUIContext {
     }
 
     /// Initializes the client-side `"tui"` MCP tool registration (`open_terminal`, `write_terminal`).
-    // parity: tui/src/context/client-mcp.tsx#ClientMcp [status=adapted hash=758cfdb2c388]
+    // parity: tui/src/context/client-mcp.tsx#ClientMcp [status=adapted hash=403e9c96faed]
     public static func ClientMcp(enabled: Bool, directory: String) -> ClientMcpHandle {
         let tools: [ClientMcpToolDescriptor] = enabled
             ? [
@@ -2244,6 +2381,89 @@ public enum TUIContext {
         return parts.joined(separator: "\u{0}")
     }
 
+    public final class EditorContextController: @unchecked Sendable {
+        private struct Inner: Sendable {
+            var selection: EditorSelection?
+            var labelState: EditorLabelState
+            var connected: Bool
+            var editorName: String?
+            var sentSelectionKey: String
+        }
+
+        private let state: Mutex<Inner>
+
+        public init(
+            selection: EditorSelection? = nil,
+            labelState: EditorLabelState = .none,
+            connected: Bool = false,
+            editorName: String? = nil
+        ) {
+            self.state = Mutex(Inner(
+                selection: selection,
+                labelState: labelState,
+                connected: connected,
+                editorName: editorName,
+                sentSelectionKey: ""
+            ))
+        }
+
+        public var selection: EditorSelection? { state.withLock { $0.selection } }
+        public var labelState: EditorLabelState { state.withLock { $0.labelState } }
+        public var connected: Bool { state.withLock { $0.connected } }
+        public var editorName: String? { state.withLock { $0.editorName } }
+
+        public func setSelection(_ next: EditorSelection?, connected: Bool = true, editorName: String? = nil) {
+            state.withLock { s in
+                s.selection = next
+                s.connected = connected
+                if let editorName { s.editorName = editorName }
+                guard let next else {
+                    s.labelState = .none
+                    return
+                }
+                let key = TUIContext.editorSelectionKey(next)
+                s.labelState = (key == s.sentSelectionKey && !key.isEmpty) ? .sent : .pending
+            }
+        }
+
+        public func markSent() {
+            state.withLock { s in
+                let key = TUIContext.editorSelectionKey(s.selection)
+                s.sentSelectionKey = key
+                s.labelState = key.isEmpty ? .none : .sent
+            }
+        }
+
+        public func clearSelection() {
+            setSelection(nil, connected: state.withLock { $0.connected })
+        }
+
+        public func currentMention() -> EditorMention? {
+            guard let sel = selection, let first = sel.ranges.first else { return nil }
+            return EditorMention(
+                filePath: sel.filePath,
+                lineStart: first.selection.start.line + 1,
+                lineEnd: first.selection.end.line + 1
+            )
+        }
+    }
+
+    @TaskLocal private static var currentEditorContext: EditorContextController?
+
+    // parity: tui/src/context/editor.ts#EditorContextProvider [status=adapted hash=ab4d3b64138a]
+    public static func EditorContextProvider<R>(
+        controller: EditorContextController = EditorContextController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentEditorContext.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/editor.ts#useEditorContext [status=adapted hash=ab4d3b64138a]
+    public static func useEditorContext() throws(TUIConfig.ConfigError) -> EditorContextController {
+        guard let value = currentEditorContext else { throw .missingContext("EditorContextProvider") }
+        return value
+    }
+
     // MARK: - Epilogue, Event & Exit (`epilogue.tsx`, `event.ts`, `exit.tsx`)
 
     public struct SessionEpilogueInfo: Equatable, Hashable, Sendable, Codable {
@@ -2268,6 +2488,19 @@ public enum TUIContext {
             self.session = session
             self.updatedVersion = updatedVersion
         }
+    }
+
+    @TaskLocal private static var currentEpilogue: Epilogue?
+
+    // parity: tui/src/context/epilogue.tsx#EpilogueProvider [status=adapted hash=a78312331dbf]
+    public static func EpilogueProvider<R>(value: Epilogue, body: () throws -> R) rethrows -> R {
+        try $currentEpilogue.withValue(value, operation: body)
+    }
+
+    // parity: tui/src/context/epilogue.tsx#useEpilogue [status=adapted hash=a78312331dbf]
+    public static func useEpilogue() throws(TUIConfig.ConfigError) -> Epilogue {
+        guard let value = currentEpilogue else { throw .missingContext("EpilogueProvider") }
+        return value
     }
 
     public struct EventMetadata: Equatable, Hashable, Sendable {
@@ -2326,6 +2559,19 @@ public enum TUIContext {
 
     // parity: tui/src/context/exit.tsx#Exit [status=implemented hash=f89607ea3849]
     public typealias Exit = @Sendable (String?) -> Void
+
+    @TaskLocal private static var currentExit: Exit?
+
+    // parity: tui/src/context/exit.tsx#ExitProvider [status=adapted hash=45a4eeb456ff]
+    public static func ExitProvider<R>(exit: @escaping Exit, body: () throws -> R) rethrows -> R {
+        try $currentExit.withValue(exit, operation: body)
+    }
+
+    // parity: tui/src/context/exit.tsx#useExit [status=adapted hash=45a4eeb456ff]
+    public static func useExit() throws(TUIConfig.ConfigError) -> Exit {
+        guard let value = currentExit else { throw .missingContext("ExitProvider") }
+        return value
+    }
 
     // MARK: - Interactivity (`packages/tui/src/context/interactivity.tsx`)
 
@@ -2482,7 +2728,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentLocation: LocationState?
 
-    // parity: tui/src/context/location.tsx#LocationProvider [status=adapted hash=6c9a5a8b497b]
+    // parity: tui/src/context/location.tsx#LocationProvider [status=adapted hash=95a0a9712388]
     public static func LocationProvider<R>(initial: LocationSchema.Ref? = nil, body: () throws -> R) rethrows -> R {
         try $currentLocation.withValue(LocationState(initial: initial), operation: body)
     }
@@ -2490,6 +2736,137 @@ public enum TUIContext {
     // parity: tui/src/context/location.tsx#useLocation [status=adapted hash=82d6f116bb71]
     public static func useLocation() throws(TUIConfig.ConfigError) -> LocationState {
         guard let value = currentLocation else { throw .missingContext("LocationProvider") }
+        return value
+    }
+
+    // MARK: - Local Context (`packages/tui/src/context/local.tsx`)
+
+    public final class LocalStateController: @unchecked Sendable {
+        private struct Inner: Sendable {
+            var agents: [String]
+            var currentAgent: String?
+            var currentModel: TUIModelPreference.ModelPreferenceModel?
+            var preference: TUIModelPreference.ModelPreference
+            var variantByModel: [String: String]
+        }
+
+        private let state: Mutex<Inner>
+
+        public init(
+            agents: [String] = [],
+            currentAgent: String? = nil,
+            currentModel: TUIModelPreference.ModelPreferenceModel? = nil,
+            preference: TUIModelPreference.ModelPreference = TUIModelPreference.ModelPreference(),
+            variantByModel: [String: String] = [:]
+        ) {
+            self.state = Mutex(Inner(
+                agents: agents,
+                currentAgent: currentAgent ?? agents.first,
+                currentModel: currentModel,
+                preference: preference,
+                variantByModel: variantByModel
+            ))
+        }
+
+        public var agents: [String] { state.withLock { $0.agents } }
+        public var currentAgent: String? { state.withLock { $0.currentAgent } }
+        public var currentModel: TUIModelPreference.ModelPreferenceModel? { state.withLock { $0.currentModel } }
+        public var recentModels: [TUIModelPreference.ModelPreferenceModel] { state.withLock { $0.preference.recent } }
+        public var favoriteModels: [TUIModelPreference.ModelPreferenceModel] { state.withLock { $0.preference.favorite } }
+
+        public func setAgents(_ next: [String]) {
+            state.withLock { s in
+                s.agents = next
+                if let current = s.currentAgent, !next.contains(current) {
+                    s.currentAgent = next.first
+                } else if s.currentAgent == nil {
+                    s.currentAgent = next.first
+                }
+            }
+        }
+
+        public func setAgent(_ name: String) {
+            state.withLock { s in
+                if s.agents.isEmpty || s.agents.contains(name) {
+                    s.currentAgent = name
+                }
+            }
+        }
+
+        public func moveAgent(_ delta: Int) -> String? {
+            state.withLock { s in
+                guard !s.agents.isEmpty else { return nil }
+                let idx = s.currentAgent.flatMap { s.agents.firstIndex(of: $0) } ?? 0
+                let nextIdx = ((idx + delta) % s.agents.count + s.agents.count) % s.agents.count
+                s.currentAgent = s.agents[nextIdx]
+                return s.currentAgent
+            }
+        }
+
+        public func setModel(_ model: TUIModelPreference.ModelPreferenceModel, addToRecent: Bool = true) {
+            state.withLock { s in
+                s.currentModel = model
+                if addToRecent {
+                    s.preference.recent = TUIModelPreference.recentModels(model, recent: s.preference.recent)
+                }
+            }
+        }
+
+        public func toggleFavorite(_ model: TUIModelPreference.ModelPreferenceModel) {
+            state.withLock { s in
+                let key = TUIModelPreference.modelPreferenceKey(model)
+                let isFav = s.preference.favorite.contains { TUIModelPreference.modelPreferenceKey($0) == key }
+                s.preference.favorite = TUIModelPreference.favoriteModels(model, favorite: s.preference.favorite, enabled: !isFav)
+            }
+        }
+
+        public func variant(for model: TUIModelPreference.ModelPreferenceModel? = nil) -> String? {
+            state.withLock { s in
+                guard let target = model ?? s.currentModel else { return nil }
+                return s.variantByModel[TUIModelPreference.modelPreferenceKey(target)]
+            }
+        }
+
+        public func setVariant(_ value: String?, for model: TUIModelPreference.ModelPreferenceModel? = nil) {
+            state.withLock { s in
+                guard let target = model ?? s.currentModel else { return }
+                let key = TUIModelPreference.modelPreferenceKey(target)
+                if let normalized = TUIModelPreference.normalizeModelVariant(value) {
+                    s.variantByModel[key] = normalized
+                } else {
+                    s.variantByModel.removeValue(forKey: key)
+                }
+            }
+        }
+
+        public func cycleVariant(available variants: [String]) -> String? {
+            state.withLock { s in
+                guard let target = s.currentModel else { return nil }
+                let key = TUIModelPreference.modelPreferenceKey(target)
+                let next = TUIModelPreference.cycleModelVariant(s.variantByModel[key], variants: variants)
+                if let next {
+                    s.variantByModel[key] = next
+                } else {
+                    s.variantByModel.removeValue(forKey: key)
+                }
+                return next
+            }
+        }
+    }
+
+    @TaskLocal private static var currentLocal: LocalStateController?
+
+    // parity: tui/src/context/local.tsx#LocalProvider [status=adapted hash=40abbddcd144]
+    public static func LocalProvider<R>(
+        controller: LocalStateController = LocalStateController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentLocal.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/local.tsx#useLocal [status=adapted hash=40abbddcd144]
+    public static func useLocal() throws(TUIConfig.ConfigError) -> LocalStateController {
+        guard let value = currentLocal else { throw .missingContext("LocalProvider") }
         return value
     }
 
@@ -2686,6 +3063,74 @@ public enum TUIContext {
     public enum PermissionMode: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case prompt
         case autoaccept
+    }
+
+    public struct PermissionContextValue: Equatable, Hashable, Sendable {
+        public let mode: PermissionMode
+
+        public init(mode: PermissionMode) {
+            self.mode = mode
+        }
+    }
+
+    @TaskLocal private static var currentPermission: PermissionContextValue?
+
+    // parity: tui/src/context/permission.tsx#PermissionProvider [status=adapted hash=c4f54d69b3ec]
+    public static func PermissionProvider<R>(
+        mode: PermissionMode? = nil,
+        body: () throws -> R
+    ) rethrows -> R {
+        let resolved: PermissionMode
+        if let mode {
+            resolved = mode
+        } else if currentArgs?.auto == true {
+            resolved = .autoaccept
+        } else if let cfg = try? TUIConfig.useConfig() {
+            resolved = cfg.data.session.permissions
+        } else {
+            resolved = .prompt
+        }
+        return try $currentPermission.withValue(PermissionContextValue(mode: resolved), operation: body)
+    }
+
+    // parity: tui/src/context/permission.tsx#usePermission [status=adapted hash=c4f54d69b3ec]
+    public static func usePermission() throws(TUIConfig.ConfigError) -> PermissionContextValue {
+        guard let value = currentPermission else { throw .missingContext("PermissionProvider") }
+        return value
+    }
+
+    // MARK: - PromptRef Context (`packages/tui/src/context/prompt.tsx`)
+
+    public final class PromptRefBox: @unchecked Sendable {
+        private let ref: Mutex<TUIComponent.PromptRef?>
+
+        public init(current: TUIComponent.PromptRef? = nil) {
+            self.ref = Mutex(current)
+        }
+
+        public var current: TUIComponent.PromptRef? {
+            ref.withLock { $0 }
+        }
+
+        public func set(_ value: TUIComponent.PromptRef?) {
+            ref.withLock { $0 = value }
+        }
+    }
+
+    @TaskLocal private static var currentPromptRef: PromptRefBox?
+
+    // parity: tui/src/context/prompt.tsx#PromptRefProvider [status=adapted hash=6e2ec413ebe5]
+    public static func PromptRefProvider<R>(
+        box: PromptRefBox = PromptRefBox(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentPromptRef.withValue(box, operation: body)
+    }
+
+    // parity: tui/src/context/prompt.tsx#usePromptRef [status=adapted hash=6e2ec413ebe5]
+    public static func usePromptRef() throws(TUIConfig.ConfigError) -> PromptRefBox {
+        guard let value = currentPromptRef else { throw .missingContext("PromptRefProvider") }
+        return value
     }
 
     // MARK: - Program Status OSC 7501 (`packages/tui/src/context/program-status.ts`)
@@ -2924,10 +3369,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentRoute: RouteController?
 
+    // parity: tui/src/context/route.tsx#RouteProvider [status=adapted hash=38fe2e5c6655]
     public static func RouteProvider<R>(controller: RouteController, body: () throws -> R) rethrows -> R {
         try $currentRoute.withValue(controller, operation: body)
     }
 
+    // parity: tui/src/context/route.tsx#useRoute [status=adapted hash=38fe2e5c6655]
     public static func useRoute() throws(TUIConfig.ConfigError) -> RouteController {
         guard let value = currentRoute else { throw .missingContext("RouteProvider") }
         return value
@@ -2951,7 +3398,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiApp [status=implemented hash=783e270c2180]
+    // parity: tui/src/context/runtime.tsx#TuiApp [status=implemented hash=e81ab16e8b7e]
     public struct TuiApp: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let version: String
@@ -3433,6 +3880,225 @@ public enum TUIContext {
         }
     }
 
+    public final class SessionTabsContextController: @unchecked Sendable {
+        private struct Inner: Sendable {
+            var tabs: [SessionTab]
+            var activeSessionID: String?
+            var closed: [ClosedSessionTab]
+            var history: SessionTabHistory
+            var anchors: [String: ScrollAnchor]
+        }
+
+        private let state: Mutex<Inner>
+
+        public init(
+            tabs: [SessionTab] = [],
+            activeSessionID: String? = nil,
+            closed: [ClosedSessionTab] = [],
+            history: SessionTabHistory = SessionTabHistory()
+        ) {
+            self.state = Mutex(Inner(
+                tabs: tabs,
+                activeSessionID: activeSessionID ?? tabs.first?.sessionID,
+                closed: closed,
+                history: history,
+                anchors: [:]
+            ))
+        }
+
+        public var tabs: [SessionTab] { state.withLock { $0.tabs } }
+        public var activeSessionID: String? { state.withLock { $0.activeSessionID } }
+        public var closedTabs: [ClosedSessionTab] { state.withLock { $0.closed } }
+        public var history: SessionTabHistory { state.withLock { $0.history } }
+
+        public func open(_ tab: SessionTab, activate: Bool = true) {
+            state.withLock { s in
+                s.tabs = TUIContext.openSessionTab(s.tabs, tab)
+                if activate {
+                    s.activeSessionID = tab.sessionID
+                    s.history = TUIContext.recordSessionTabHistory(s.history, sessionID: tab.sessionID)
+                }
+            }
+        }
+
+        @discardableResult
+        public func close(sessionID: String) -> String? {
+            state.withLock { s in
+                if let idx = s.tabs.firstIndex(where: { $0.sessionID == sessionID }) {
+                    s.closed = TUIContext.recordClosedSessionTab(s.closed, tab: s.tabs[idx], index: idx)
+                }
+                let result = TUIContext.closeSessionTab(s.tabs, sessionID: sessionID)
+                s.tabs = result.tabs
+                if s.activeSessionID == sessionID {
+                    s.activeSessionID = result.next
+                }
+                return result.next
+            }
+        }
+
+        @discardableResult
+        public func reopen(sessionID: String? = nil) -> String? {
+            state.withLock { s in
+                let res = TUIContext.reopenSessionTab(s.closed, tabs: s.tabs, sessionID: sessionID)
+                s.closed = res.stack
+                if let nextTabs = res.tabs, let reopenedID = res.sessionID {
+                    s.tabs = nextTabs
+                    s.activeSessionID = reopenedID
+                    s.history = TUIContext.recordSessionTabHistory(s.history, sessionID: reopenedID)
+                    return reopenedID
+                }
+                return nil
+            }
+        }
+
+        public func move(sessionID: String, to index: Int) {
+            state.withLock { s in
+                s.tabs = TUIContext.moveSessionTab(s.tabs, sessionID: sessionID, index: index)
+            }
+        }
+
+        @discardableResult
+        public func cycle(direction: Int) -> SessionTab? {
+            state.withLock { s in
+                guard let target = TUIContext.cycleSessionTab(s.tabs, active: s.activeSessionID, direction: direction) else {
+                    return nil
+                }
+                s.activeSessionID = target.sessionID
+                s.history = TUIContext.recordSessionTabHistory(s.history, sessionID: target.sessionID)
+                return target
+            }
+        }
+
+        @discardableResult
+        public func navigateHistory(direction: Int) -> String? {
+            state.withLock { s in
+                let res = TUIContext.moveSessionTabHistory(s.history, tabs: s.tabs, active: s.activeSessionID, direction: direction)
+                s.history = res.history
+                if let nextID = res.sessionID {
+                    s.activeSessionID = nextID
+                }
+                return res.sessionID
+            }
+        }
+
+        public func layout(available: Int, previousStart: Int = 0) -> AdaptiveSessionTabLayoutResult {
+            state.withLock { s in
+                TUIContext.adaptiveSessionTabLayout(
+                    tabs: s.tabs,
+                    active: s.activeSessionID,
+                    available: available,
+                    previousStart: previousStart
+                )
+            }
+        }
+
+        public func setScrollAnchor(_ anchor: ScrollAnchor?, for sessionID: String) {
+            state.withLock { s in
+                if let anchor {
+                    s.anchors[sessionID] = anchor
+                } else {
+                    s.anchors.removeValue(forKey: sessionID)
+                }
+            }
+        }
+
+        public func scrollAnchor(for sessionID: String) -> ScrollAnchor? {
+            state.withLock { $0.anchors[sessionID] }
+        }
+    }
+
+    @TaskLocal private static var currentSessionTabs: SessionTabsContextController?
+
+    // parity: tui/src/context/session-tabs.tsx#SessionTabsProvider [status=adapted hash=a4b729b20488]
+    public static func SessionTabsProvider<R>(
+        controller: SessionTabsContextController = SessionTabsContextController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentSessionTabs.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/session-tabs.tsx#useSessionTabs [status=adapted hash=a4b729b20488]
+    public static func useSessionTabs() throws(TUIConfig.ConfigError) -> SessionTabsContextController {
+        guard let value = currentSessionTabs else { throw .missingContext("SessionTabsProvider") }
+        return value
+    }
+
+    // MARK: - Session Terminals Context (`packages/tui/src/context/session-terminals.tsx`)
+
+    public final class SessionTerminalsController: @unchecked Sendable {
+        private struct Inner: Sendable {
+            var available: Bool = false
+            var focus: String?
+            var sessions: [String: String?] = [:]
+            var writers: [String: @Sendable ([UInt8]) -> Void] = [:]
+            var pendingWrites: [String: [[UInt8]]] = [:]
+        }
+
+        private let state = Mutex(Inner())
+
+        public init(available: Bool = false) {
+            state.withLock { $0.available = available }
+        }
+
+        public var available: Bool { state.withLock { $0.available } }
+        public var focus: String? { state.withLock { $0.focus } }
+
+        public func setAvailable(_ value: Bool) {
+            state.withLock { $0.available = value }
+        }
+
+        public func setFocus(_ terminalID: String?) {
+            state.withLock { $0.focus = terminalID }
+        }
+
+        public func setTerminal(_ terminalID: String?, for sessionID: String) {
+            state.withLock { $0.sessions[sessionID] = terminalID }
+        }
+
+        public func terminalID(for sessionID: String) -> String? {
+            state.withLock { $0.sessions[sessionID] ?? nil }
+        }
+
+        public func attachWriter(
+            terminalID: String,
+            writer: @escaping @Sendable ([UInt8]) -> Void
+        ) -> @Sendable () -> Void {
+            let queued = state.withLock { s -> [[UInt8]] in
+                s.writers[terminalID] = writer
+                return s.pendingWrites.removeValue(forKey: terminalID) ?? []
+            }
+            for chunk in queued { writer(chunk) }
+            return { [weak self] in
+                _ = self?.state.withLock { $0.writers.removeValue(forKey: terminalID) }
+            }
+        }
+
+        public func write(terminalID: String, data: [UInt8]) {
+            let writer = state.withLock { s -> (@Sendable ([UInt8]) -> Void)? in
+                if let w = s.writers[terminalID] { return w }
+                s.pendingWrites[terminalID, default: []].append(data)
+                return nil
+            }
+            writer?(data)
+        }
+    }
+
+    @TaskLocal private static var currentSessionTerminals: SessionTerminalsController?
+
+    // parity: tui/src/context/session-terminals.tsx#SessionTerminalsProvider [status=adapted hash=8f5ce5a9a905]
+    public static func SessionTerminalsProvider<R>(
+        controller: SessionTerminalsController = SessionTerminalsController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentSessionTerminals.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/session-terminals.tsx#useSessionTerminals [status=adapted hash=8f5ce5a9a905]
+    public static func useSessionTerminals() throws(TUIConfig.ConfigError) -> SessionTerminalsController {
+        guard let value = currentSessionTerminals else { throw .missingContext("SessionTerminalsProvider") }
+        return value
+    }
+
     // MARK: - Storage Context (`packages/tui/src/context/storage.tsx`)
 
     // parity: tui/src/context/storage.tsx#Storage [status=adapted hash=249412b706fa]
@@ -3821,5 +4487,97 @@ public enum TUIContext {
             self.check = check
             self.apply = apply
         }
+    }
+
+    public final class UpdateNotificationController: @unchecked Sendable {
+        private struct Inner: Sendable {
+            var state: UpdateState?
+            var dismissedVersion: String?
+        }
+
+        private let source: UpdateSource
+        private let inner = Mutex(Inner())
+
+        public init(source: UpdateSource = UpdateSource()) {
+            self.source = source
+        }
+
+        public var remote: Bool { source.remote }
+        public var state: UpdateState? { inner.withLock { $0.state } }
+        public var dismissedVersion: String? { inner.withLock { $0.dismissedVersion } }
+
+        public var visibleState: UpdateState? {
+            inner.withLock { s in
+                guard let current = s.state else { return nil }
+                switch current {
+                case .available(let v), .installed(let v):
+                    return s.dismissedVersion == v ? nil : current
+                case .installing, .failed:
+                    return current
+                }
+            }
+        }
+
+        public func notify(_ notice: ClientUpdateNotice) {
+            inner.withLock { s in
+                switch notice.type {
+                case .available: s.state = .available(version: notice.version)
+                case .installed: s.state = .installed(version: notice.version)
+                }
+            }
+        }
+
+        public func dismiss() {
+            inner.withLock { s in
+                switch s.state {
+                case .available(let v), .installed(let v):
+                    s.dismissedVersion = v
+                case .failed:
+                    s.state = nil
+                case .installing, .none:
+                    break
+                }
+            }
+        }
+
+        public func check(signal: AbortSignal = AbortController().signal, onStatus: @escaping @Sendable (String) -> Void = { _ in }) async {
+            do {
+                guard let result = try await source.check(signal, onStatus) else { return }
+                switch result {
+                case .notice(let notice):
+                    notify(notice)
+                case .unavailable(let message):
+                    inner.withLock { $0.state = .failed(message: message) }
+                }
+            } catch {
+                inner.withLock { $0.state = .failed(message: TUIUtil.errorMessage(error)) }
+            }
+        }
+
+        public func apply(version: String) async {
+            inner.withLock { $0.state = .installing(version: version) }
+            do {
+                try await source.apply(version)
+                inner.withLock { $0.state = .installed(version: version) }
+            } catch {
+                inner.withLock { $0.state = .failed(message: TUIUtil.errorMessage(error)) }
+            }
+        }
+    }
+
+    @TaskLocal private static var currentUpdateNotification: UpdateNotificationController?
+
+    // parity: tui/src/context/update-notification.tsx#UpdateNotificationProvider [status=adapted hash=5556ab9d9d26]
+    public static func UpdateNotificationProvider<R>(
+        controller: UpdateNotificationController = UpdateNotificationController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentUpdateNotification.withValue(controller, operation: body)
+    }
+
+    // parity: tui/src/context/update-notification.tsx#useUpdateNotification [status=adapted hash=5556ab9d9d26]
+    public static func useUpdateNotification() throws(TUIConfig.ConfigError) -> UpdateNotificationController {
+        guard let value = currentUpdateNotification else { throw .missingContext("UpdateNotificationProvider") }
+        return value
     }
 }

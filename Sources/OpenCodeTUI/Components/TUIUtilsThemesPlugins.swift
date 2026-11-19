@@ -2027,10 +2027,12 @@ public enum TUIUtil {
             self.speed = speed
         }
 
+        // parity: tui/src/util/scroll.ts#CustomSpeedScroll.tick [status=implemented hash=807a8ca03294]
         public mutating func tick(now: Double = 0) -> Double {
             speed
         }
 
+        // parity: tui/src/util/scroll.ts#CustomSpeedScroll.reset [status=implemented hash=970cb8d0b1d5]
         public mutating func reset() {}
     }
 
@@ -2766,7 +2768,7 @@ public enum TUIThemeBridge {
     // parity: tui/src/theme/component.ts#ComponentTheme [status=implemented hash=bebb06b8d8fc]
     public typealias ComponentTheme = ResolvedTheme
 
-    // parity: tui/src/theme/component.ts#createComponentTheme [status=adapted hash=f7be233efb27]
+    // parity: tui/src/theme/component.ts#createComponentTheme [status=adapted hash=5d323067c465]
     public static func createComponentTheme(_ view: @escaping @Sendable () -> ResolvedTheme) -> ComponentTheme {
         view()
     }
@@ -3182,7 +3184,7 @@ public enum TUIPluginHost {
         }
     }
 
-    // parity: tui/src/plugin/structure.ts#Suppressed [status=implemented hash=7f336e22a88e]
+    // parity: tui/src/plugin/structure.ts#Suppressed [status=implemented hash=f3f3c4746799]
     public struct Suppressed<Render: Sendable>: Sendable {
         public let claim: Claim<Render>
         public let by: Claim<Render>?
@@ -3666,6 +3668,19 @@ public enum TUIPluginHost {
 
     // MARK: Plugin Discovery (`src/plugin/discovery.ts`)
 
+    // parity: tui/src/plugin/discovery.ts#localSource [status=implemented hash=f75672fe177b]
+    public static func localSource(_ spec: String, directory: String) -> URL? {
+        if spec.hasPrefix("file://") {
+            return URL(string: spec)
+        }
+        if spec.hasPrefix("./") || spec.hasPrefix("../") || spec.hasPrefix("/") {
+            return spec.hasPrefix("/")
+                ? URL(fileURLWithPath: spec).standardized
+                : URL(fileURLWithPath: directory).appendingPathComponent(spec).standardized
+        }
+        return nil
+    }
+
     // parity: tui/src/plugin/discovery.ts#localPluginDirectories [status=implemented hash=8d5571ee6478]
     public static func localPluginDirectories(cwd: String, configDirectory: String) async throws -> [String] {
         let projectDir = try await TUIUtil.localProjectDirectory(cwd)
@@ -3721,22 +3736,11 @@ public enum TUIPluginHost {
         var order: [String] = []
         var map: [String: PluginTargetEntry] = [:]
         for target in targets {
-            let key = canonicalPluginKey(target.spec, baseDirectory: directory)
+            let key = localSource(target.spec, directory: directory)?.absoluteString ?? target.spec
             if map[key] == nil { order.append(key) }
             map[key] = target
         }
         return order.compactMap { map[$0] }
-    }
-
-    private static func canonicalPluginKey(_ spec: String, baseDirectory: String) -> String {
-        if spec.hasPrefix("file://") { return spec }
-        if spec.hasPrefix("/") || spec.hasPrefix("./") || spec.hasPrefix("../") {
-            let url = spec.hasPrefix("/")
-                ? URL(fileURLWithPath: spec).standardized
-                : URL(fileURLWithPath: baseDirectory).appendingPathComponent(spec).standardized
-            return url.absoluteString
-        }
-        return spec
     }
 
     // MARK: Markdown Code-Block Renderer (`src/plugin/markdown.ts`)
@@ -4614,7 +4618,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/diff-viewer-file-tree.tsx#DiffViewerFileTree [status=adapted hash=13a15a0f361d]
+    // parity: tui/src/feature-plugins/system/diff-viewer-file-tree.tsx#DiffViewerFileTree [status=adapted hash=cdfcd8733dc5]
     public static func DiffViewerFileTree(
         ctx: any RenderContext,
         props: DiffViewerFileTreeProps,
@@ -4985,4 +4989,608 @@ public enum TUIFeaturePlugin {
             StoryFooterControl(shortcut: "esc", label: "back"),
         ], theme: theme)
     }
+
+    public static let allStories: [Story] = [
+        highlightsStory,
+        linkClicksStory,
+        mermanLayoutsStory,
+        oneCellSpinnerStory,
+        sessionLocationMissingStory,
+        sessionTabsStory,
+        todoStory,
+    ]
+
+    // MARK: - Diff Viewer Content (`src/feature-plugins/system/diff-viewer.tsx`)
+
+    public enum DiffMode: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
+        case turn
+        case session
+        case working
+        case branch
+    }
+
+    public enum DiffView: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
+        case unified
+        case split
+    }
+
+    public struct DiffPreferences: Equatable, Hashable, Sendable, Codable {
+        public var tree: Bool?
+        public var single: Bool?
+        public var view: String?
+        public var fullscreen: Bool?
+
+        public init(tree: Bool? = nil, single: Bool? = nil, view: String? = nil, fullscreen: Bool? = nil) {
+            self.tree = tree
+            self.single = single
+            self.view = view
+            self.fullscreen = fullscreen
+        }
+    }
+
+    public struct DiffViewerContentProps: Sendable {
+        public let files: [DiffFile]
+        public let loading: Bool
+        public let error: String?
+        public let mode: DiffMode
+        public let sources: [DiffMode]
+        public let sourceDetail: String?
+        public let unavailable: Bool
+        public let width: Int
+        public let docked: Bool
+        public let selectedFileIndex: Int?
+        public let preferences: DiffPreferences
+        public let onClose: (@Sendable () -> Void)?
+        public let onSwitchSource: (@Sendable (DiffMode) -> Void)?
+
+        public init(
+            files: [DiffFile],
+            loading: Bool = false,
+            error: String? = nil,
+            mode: DiffMode = .working,
+            sources: [DiffMode] = [.working, .branch],
+            sourceDetail: String? = nil,
+            unavailable: Bool = false,
+            width: Int = 120,
+            docked: Bool = false,
+            selectedFileIndex: Int? = nil,
+            preferences: DiffPreferences = DiffPreferences(),
+            onClose: (@Sendable () -> Void)? = nil,
+            onSwitchSource: (@Sendable (DiffMode) -> Void)? = nil
+        ) {
+            self.files = files
+            self.loading = loading
+            self.error = error
+            self.mode = mode
+            self.sources = sources
+            self.sourceDetail = sourceDetail
+            self.unavailable = unavailable
+            self.width = width
+            self.docked = docked
+            self.selectedFileIndex = selectedFileIndex
+            self.preferences = preferences
+            self.onClose = onClose
+            self.onSwitchSource = onSwitchSource
+        }
+    }
+
+    /// Renders the full diff viewer layout (header, optional file tree sidebar, patch cards or image previews, and footer).
+    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#DiffViewerContent [status=adapted hash=3c08eb458828]
+    public static func DiffViewerContent(
+        ctx: any RenderContext,
+        props: DiffViewerContentProps,
+        theme: ResolvedTheme
+    ) -> BoxRenderable {
+        let fullLayoutMinWidth = 80
+        let fileTreeMinWidth = 24
+        let fileTreeMaxWidth = 36
+        let minSplitWidth = 100
+        let fullInset = 2
+
+        let compact = props.docked || props.width < fullLayoutMinWidth
+        let surfaceBg = props.docked ? theme.background.raised.base : theme.background.base
+        let inset = compact ? 0 : fullInset
+        let fileTreeEnabled = props.preferences.tree ?? true
+        let showTree = !compact && showDiffViewerFileTree(fileTreeEnabled, fileCount: props.files.count)
+        let treeWidth = max(fileTreeMinWidth, min(fileTreeMaxWidth, props.width / 4))
+        let patchPaneWidth = props.width - (showTree ? treeWidth : 0) - inset * 2
+        let splitAvailable = patchPaneWidth >= minSplitWidth
+        let resolvedView: DiffView = {
+            guard splitAvailable else { return .unified }
+            if props.preferences.view == "unified" { return .unified }
+            return .split
+        }()
+        let singlePatch = props.preferences.single ?? false
+
+        let root = BoxRenderable(
+            ctx: ctx,
+            options: BoxOptions(
+                id: "diff-viewer-content",
+                width: .percent(100),
+                height: .percent(100),
+                flexDirection: .column,
+                backgroundColor: .rgba(surfaceBg)
+            )
+        )
+
+        let totalAdditions = props.files.reduce(0) { $0 + $1.additions }
+        let totalDeletions = props.files.reduce(0) { $0 + $1.deletions }
+        let sourceTitle = props.sourceDetail.map { "\(props.mode.rawValue) (\($0))" } ?? props.mode.rawValue
+        let headerRow = BoxRenderable(
+            ctx: ctx,
+            options: BoxOptions(
+                id: "diff-viewer-header",
+                width: .percent(100),
+                flexDirection: .row,
+                justifyContent: .spaceBetween,
+                paddingRight: .point(Float(max(1, inset))),
+                paddingLeft: .point(Float(max(1, inset)))
+            )
+        )
+        headerRow.add(TextRenderable(
+            ctx: ctx,
+            options: TextOptions(
+                content: .string("Diffs · \(sourceTitle) · \(props.files.count) files (+\(totalAdditions) -\(totalDeletions)) [\(resolvedView.rawValue)]"),
+                fg: .rgba(theme.text.base),
+                attributes: TextAttributes.bold
+            )
+        ))
+        root.add(headerRow)
+
+        if props.loading {
+            root.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("Loading diffs…"), fg: .rgba(theme.text.muted))))
+            return root
+        }
+        if let err = props.error, !err.isEmpty {
+            root.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(err), fg: .rgba(theme.text.feedback.error.base))))
+            return root
+        }
+        if props.unavailable {
+            root.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("Diff source unavailable"), fg: .rgba(theme.text.muted))))
+            return root
+        }
+        if props.files.isEmpty {
+            root.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("No changes"), fg: .rgba(theme.text.muted))))
+            return root
+        }
+
+        let fileItems = props.files.map { FileTreeItem(file: $0.file, status: $0.status) }
+        let tree = buildFileTree(fileItems)
+        let expanded = allExpandedFileTreeDirectories(tree)
+        let rows = flattenFileTree(tree, expanded: expanded)
+        let orderedIndexes = orderedPatchFileIndexes(rows)
+        let activeSingleIndex = singlePatch
+            ? singlePatchFileIndex(selected: props.selectedFileIndex, current: nil, first: orderedIndexes.first)
+            : nil
+        let visibleIndexes = activeSingleIndex.map { [$0] } ?? orderedIndexes
+
+        let bodyRow = BoxRenderable(
+            ctx: ctx,
+            options: BoxOptions(
+                id: "diff-viewer-body",
+                width: .percent(100),
+                flexGrow: 1,
+                flexDirection: .row,
+                gap: .point(1)
+            )
+        )
+
+        if showTree {
+            let treeView = DiffViewerFileTree(
+                ctx: ctx,
+                props: DiffViewerFileTreeProps(
+                    width: treeWidth,
+                    files: fileItems,
+                    selectedFileIndex: activeSingleIndex ?? props.selectedFileIndex,
+                    expandedNodes: expanded,
+                    source: props.mode.rawValue
+                ),
+                theme: theme
+            )
+            bodyRow.add(treeView)
+        }
+
+        let patchPane = BoxRenderable(
+            ctx: ctx,
+            options: BoxOptions(
+                id: "diff-viewer-patches",
+                flexGrow: 1,
+                flexDirection: .column,
+                gap: .point(1)
+            )
+        )
+        for fileIndex in visibleIndexes where props.files.indices.contains(fileIndex) {
+            let file = props.files[fileIndex]
+            let card = BoxRenderable(
+                ctx: ctx,
+                options: BoxOptions(
+                    id: "diff-file-\(fileIndex)",
+                    width: .percent(100),
+                    flexDirection: .column,
+                    backgroundColor: .rgba(theme.background.raised.base)
+                )
+            )
+            card.add(TextRenderable(
+                ctx: ctx,
+                options: TextOptions(
+                    content: .string("\(file.file)  +\(file.additions) -\(file.deletions)"),
+                    fg: .rgba(theme.text.base),
+                    attributes: TextAttributes.bold
+                )
+            ))
+            if isDiffImageFile(file.file) {
+                card.add(DiffViewerImage(ctx: ctx, file: file.file, theme: theme))
+            } else if let patch = file.patch, !patch.isEmpty {
+                for line in patch.split(separator: "\n", omittingEmptySubsequences: false).prefix(200) {
+                    let text = String(line)
+                    let fg: RGBA
+                    if text.hasPrefix("+") && !text.hasPrefix("+++") {
+                        fg = theme.diff.text.added
+                    } else if text.hasPrefix("-") && !text.hasPrefix("---") {
+                        fg = theme.diff.text.removed
+                    } else if text.hasPrefix("@@") {
+                        fg = theme.text.muted
+                    } else {
+                        fg = theme.diff.text.context
+                    }
+                    card.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(text), fg: .rgba(fg), wrapMode: TextWrapMode.none)))
+                }
+            }
+            patchPane.add(card)
+        }
+        bodyRow.add(patchPane)
+        root.add(bodyRow)
+
+        let footerText = props.sources.count > 1
+            ? "tab switch source · v toggle view · t toggle tree · esc close"
+            : "v toggle view · t toggle tree · esc close"
+        root.add(TextRenderable(
+            ctx: ctx,
+            options: TextOptions(id: "diff-viewer-footer", content: .string(footerText), fg: .rgba(theme.text.muted))
+        ))
+        return root
+    }
+
+    // MARK: - Built-in Feature Plugin Modules (`export default Plugin.define(...)`)
+
+    /// Built-in TUI feature plugin definition matching upstream `Plugin.define({ id, setup })`.
+    public struct FeaturePluginModule: Sendable {
+        public let id: String
+        public let setup: @Sendable (TUIPluginHost.PluginRuntimeContext) -> (@Sendable () -> Void)?
+
+        public init(
+            id: String,
+            setup: @escaping @Sendable (TUIPluginHost.PluginRuntimeContext) -> (@Sendable () -> Void)?
+        ) {
+            self.id = id
+            self.setup = setup
+        }
+    }
+
+    // parity: tui/src/feature-plugins/home/footer.tsx#default [status=adapted hash=df4dec35b8e1]
+    public static let homeFooterPlugin = FeaturePluginModule(id: "opencode.home.footer") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "home.footer")) { ctx, input in
+            let width: Int
+            if case .int(let w) = input["width"] { width = Int(w) } else { width = 80 }
+            let visibility = homeFooterVisibility(width: width)
+            let theme = context.host.theme()
+            let row = BoxRenderable(ctx: ctx, options: BoxOptions(id: "home-footer-plugin", width: .percent(100), flexDirection: .row, gap: .point(2)))
+            if visibility.version {
+                row.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(context.host.version), fg: .rgba(theme.text.muted))))
+            }
+            return row
+        }
+    }
+
+    // parity: tui/src/feature-plugins/prompt/btw.tsx#default [status=adapted hash=dd53d390bf6d]
+    public static let promptBtwPlugin = FeaturePluginModule(id: "opencode.btw") { context in
+        let offStatus = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "prompt.footer.status")) { ctx, input in
+            let theme = context.host.theme()
+            let pending = (input["pending"] == .bool(true))
+            let box = BoxRenderable(ctx: ctx, options: BoxOptions(id: "btw-status", flexShrink: 0, visible: pending))
+            if pending {
+                box.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("/btw"), fg: .rgba(theme.text.muted))))
+            }
+            return box
+        }
+        let offApp = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, input in
+            if case .string(let question) = input["question"], case .string(let answer) = input["answer"] {
+                return Answer(ctx: ctx, question: question, answer: answer, theme: context.host.theme())
+            }
+            return BoxRenderable(ctx: ctx, options: BoxOptions(id: "btw-commands", visible: false))
+        }
+        return {
+            offApp()
+            offStatus()
+        }
+    }
+
+    // parity: tui/src/feature-plugins/prompt/footer.tsx#default [status=adapted hash=1cb45d71988f]
+    public static let promptFooterPlugin = FeaturePluginModule(id: "opencode.prompt.footer") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "prompt.footer")) { ctx, input in
+            let usage: String? = { if case .string(let s) = input["usage"] { return s }; return nil }()
+            let cost: String? = { if case .string(let s) = input["cost"] { return s }; return nil }()
+            let subagents: Int = { if case .int(let n) = input["subagents"] { return Int(n) }; return 0 }()
+            let shells: Int = { if case .int(let n) = input["shells"] { return Int(n) }; return 0 }()
+            return PromptFooter(
+                ctx: ctx,
+                usageText: usage,
+                costText: cost,
+                subagentCount: subagents,
+                shellCount: shells,
+                theme: context.host.theme()
+            )
+        }
+    }
+
+    // parity: tui/src/feature-plugins/sidebar/context.tsx#default [status=adapted hash=8a358eea56d2]
+    public static let sidebarContextPlugin = FeaturePluginModule(id: "opencode.sidebar.context") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
+            let tokens: Int = { if case .int(let n) = input["tokens"] { return Int(n) }; return 0 }()
+            let percent: Int? = { if case .int(let n) = input["percent"] { return Int(n) }; return nil }()
+            let cost: Double = {
+                switch input["cost"] {
+                case .double(let d): return d
+                case .int(let i): return Double(i)
+                default: return 0
+                }
+            }()
+            let summary = tokens > 0 ? TUIUtil.ContextUsageSummary(tokens: tokens, percent: percent) : nil
+            return SidebarContext(ctx: ctx, usage: summary, cost: cost, theme: context.host.theme())
+                ?? BoxRenderable(ctx: ctx, options: BoxOptions(id: "sidebar-context-empty", visible: false))
+        }
+    }
+
+    // parity: tui/src/feature-plugins/sidebar/footer.tsx#default [status=adapted hash=04c3121c4d47]
+    public static let sidebarFooterPlugin = FeaturePluginModule(id: "opencode.sidebar.footer") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.footer")) { ctx, input in
+            let theme = context.host.theme()
+            let container = BoxRenderable(ctx: ctx, options: BoxOptions(id: "sidebar-footer-plugin", flexDirection: .column, gap: .point(1)))
+            let height: Int = { if case .int(let h) = input["height"] { return Int(h) }; return 24 }()
+            let dismissed = (input["dismissed"] == .bool(true))
+            let hasProvider = (input["hasConnectedProvider"] == .bool(true))
+            if let onboarding = SidebarOnboarding(
+                ctx: ctx,
+                terminalHeight: height,
+                dismissed: dismissed,
+                hasConnectedProvider: hasProvider,
+                theme: theme
+            ) {
+                container.add(onboarding)
+            }
+            if case .string(let dir) = input["directory"], !dir.isEmpty {
+                let formatted = context.formatPath(dir)
+                let label: String
+                if case .string(let branch) = input["branch"], !branch.isEmpty {
+                    label = "\(formatted):\(branch)"
+                } else {
+                    label = formatted
+                }
+                container.add(TextRenderable(ctx: ctx, options: TextOptions(id: "sidebar.footer.location", content: .string(label), fg: .rgba(theme.text.muted))))
+            }
+            return container
+        }
+    }
+
+    // parity: tui/src/feature-plugins/sidebar/limit.tsx#default [status=adapted hash=9cd60581fc1d]
+    public static let sidebarLimitPlugin = FeaturePluginModule(id: "opencode.sidebar.limit") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
+            let left: Double? = {
+                switch input["left"] {
+                case .double(let d): return d
+                case .int(let i): return Double(i)
+                default: return nil
+                }
+            }()
+            let limit: Double = {
+                switch input["limit"] {
+                case .double(let d): return d
+                case .int(let i): return Double(i)
+                default: return 0
+                }
+            }()
+            let reached = input["reached"] == .bool(true)
+            let usage = left.map { TUIUtil.ModelUsage(left: $0, reached: reached, resetsAt: 0, limits: []) }
+            let model = left != nil ? TUIUtil.LimitedModel(id: "model", providerID: "provider", inputCosts: [limit], contextLimit: 200_000) : nil
+            return SidebarLimit(ctx: ctx, usage: usage, model: model, theme: context.host.theme())
+                ?? BoxRenderable(ctx: ctx, options: BoxOptions(id: "sidebar-limit-empty", visible: false))
+        }
+    }
+
+    // parity: tui/src/feature-plugins/sidebar/mcp.tsx#default [status=adapted hash=54c424ffda54]
+    public static let sidebarMcpPlugin = FeaturePluginModule(id: "opencode.sidebar.mcp") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
+            var servers: [SidebarMcpServer] = []
+            if case .array(let arr) = input["servers"] {
+                for entry in arr {
+                    if case .object(let dict) = entry,
+                       case .string(let name) = dict["name"],
+                       case .string(let status) = dict["status"]
+                    {
+                        servers.append(SidebarMcpServer(name: name, status: status))
+                    }
+                }
+            }
+            let open = input["open"] != .bool(false)
+            return SidebarMcp(ctx: ctx, servers: servers, open: open, theme: context.host.theme())
+                ?? BoxRenderable(ctx: ctx, options: BoxOptions(id: "sidebar-mcp-empty", visible: false))
+        }
+    }
+
+    // parity: tui/src/feature-plugins/sidebar/todo.tsx#default [status=adapted hash=b63838795b6b]
+    public static let sidebarTodoPlugin = FeaturePluginModule(id: "opencode.sidebar.todo") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
+            var todos: [TUIUtil.Todo] = []
+            if case .array(let arr) = input["todos"] {
+                for entry in arr {
+                    if case .object(let dict) = entry,
+                       case .string(let content) = dict["content"],
+                       case .string(let rawStatus) = dict["status"],
+                       let status = TUIUtil.TodoStatus(rawValue: rawStatus)
+                    {
+                        todos.append(TUIUtil.Todo(content: content, status: status))
+                    }
+                }
+            }
+            let open = input["open"] != .bool(false)
+            return SidebarTodo(ctx: ctx, todos: todos, open: open, theme: context.host.theme())
+                ?? BoxRenderable(ctx: ctx, options: BoxOptions(id: "sidebar-todo-empty", visible: false))
+        }
+    }
+
+    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#default [status=adapted hash=3e826ee10d46]
+    public static let diffViewerPlugin = FeaturePluginModule(id: "opencode.diffs") { context in
+        let offPanel = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "session.panel")) { ctx, input in
+            let width: Int = { if case .int(let w) = input["width"] { return Int(w) }; return 80 }()
+            let mode: DiffMode = {
+                if case .string(let raw) = input["mode"], let m = DiffMode(rawValue: raw) { return m }
+                return .working
+            }()
+            return DiffViewerContent(
+                ctx: ctx,
+                props: DiffViewerContentProps(files: [], mode: mode, width: width, docked: true),
+                theme: context.host.theme()
+            )
+        }
+        let offRoute = try? context.registerRoute(TUIPluginHost.RegisteredRoute(name: "diffs") { ctx, data in
+            let mode: DiffMode = {
+                if case .string(let raw) = data["mode"], let m = DiffMode(rawValue: raw) { return m }
+                return .working
+            }()
+            return DiffViewerContent(
+                ctx: ctx,
+                props: DiffViewerContentProps(files: [], mode: mode, docked: false),
+                theme: context.host.theme()
+            )
+        })
+        let offApp = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, _ in
+            BoxRenderable(ctx: ctx, options: BoxOptions(id: "diff-viewer-commands", visible: false))
+        }
+        return {
+            offApp()
+            offRoute?()
+            offPanel()
+        }
+    }
+
+    // parity: tui/src/feature-plugins/system/notifications.ts#default [status=adapted hash=219036bd0b67]
+    public static let notificationsPlugin = FeaturePluginModule(id: "opencode.notifications") { context in
+        let hub = TUIContext.useEvent()
+        let toast = context.host.toast
+        let unsub = hub.on("session.execution.failed") { payload, _ in
+            let errorType: String?
+            let message: String?
+            if case .object(let err) = payload.data["error"] {
+                errorType = { if case .string(let s) = err["type"] { return s }; return nil }()
+                message = { if case .string(let s) = err["message"] { return s }; return nil }()
+            } else {
+                errorType = nil
+                message = nil
+            }
+            guard errorType != "provider.free-limit", errorType != "provider.go-limit", let message else { return }
+            toast.show(TUIPrimitive.ToastOptions(title: "Session failed", message: message, variant: .error))
+        }
+        let offSlot = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, _ in
+            BoxRenderable(ctx: ctx, options: BoxOptions(id: "notifications-plugin", visible: false))
+        }
+        return {
+            offSlot()
+            unsub()
+        }
+    }
+
+    // parity: tui/src/feature-plugins/system/plugins.tsx#default [status=adapted hash=d52e6b0a996e]
+    public static let pluginsManagerPlugin = FeaturePluginModule(id: "opencode.plugins") { context in
+        context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, input in
+            if input["open"] == .bool(true) {
+                return PluginsDialog(
+                    ctx: ctx,
+                    manager: TUIPluginHost.usePlugin(),
+                    showInternal: input["showInternal"] == .bool(true),
+                    dialog: context.host.dialog,
+                    theme: context.host.theme()
+                )
+            }
+            return BoxRenderable(ctx: ctx, options: BoxOptions(id: "plugins-commands", visible: false))
+        }
+    }
+
+    // parity: tui/src/feature-plugins/system/stats.tsx#default [status=adapted hash=e9ec186fcb87]
+    public static let statsPlugin = FeaturePluginModule(id: "opencode.stats") { context in
+        let offRoute = try? context.registerRoute(TUIPluginHost.RegisteredRoute(name: "stats") { ctx, data in
+            let width: Int = { if case .int(let w) = data["width"] { return Int(w) }; return 80 }()
+            let statsInput = StatsPosterInput(
+                tokens: 0,
+                streak: 0,
+                activeDays: 0,
+                sessions: 0,
+                activity: [],
+                fromMs: 0,
+                toMs: 0
+            )
+            return StatsPoster(ctx: ctx, stats: statsInput, terminalWidth: width, theme: context.host.theme())
+        })
+        let offApp = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, _ in
+            BoxRenderable(ctx: ctx, options: BoxOptions(id: "stats-commands", visible: false))
+        }
+        return {
+            offApp()
+            offRoute?()
+        }
+    }
+
+    // parity: tui/src/feature-plugins/system/storybook/index.tsx#default [status=adapted hash=a14f91e913ca]
+    public static let storybookPlugin = FeaturePluginModule(id: "opencode.storybook") { context in
+        let offRoute = try? context.registerRoute(TUIPluginHost.RegisteredRoute(name: "storybook") { ctx, data in
+            let theme = context.host.theme()
+            if case .string(let storyID) = data["story"],
+               let story = allStories.first(where: { $0.id == storyID })
+            {
+                return story.render(ctx, theme)
+            }
+            let indexBox = BoxRenderable(
+                ctx: ctx,
+                options: BoxOptions(id: "storybook-index", width: .percent(100), flexDirection: .column, backgroundColor: .rgba(theme.background.base))
+            )
+            indexBox.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("storybook"), fg: .rgba(theme.text.base), attributes: TextAttributes.bold)))
+            for (idx, story) in allStories.enumerated() {
+                indexBox.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("\(idx + 1) \(story.title)"), fg: .rgba(theme.text.muted))))
+            }
+            indexBox.add(StoryFooter(
+                ctx: ctx,
+                title: "storybook",
+                controls: [
+                    StoryFooterControl(shortcut: "↑/↓", label: "select"),
+                    StoryFooterControl(shortcut: "enter", label: "open"),
+                    StoryFooterControl(shortcut: "esc", label: "home"),
+                ],
+                theme: theme
+            ))
+            return indexBox
+        })
+        let offApp = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, _ in
+            BoxRenderable(ctx: ctx, options: BoxOptions(id: "storybook-commands", visible: false))
+        }
+        return {
+            offApp()
+            offRoute?()
+        }
+    }
+
+    /// All 13 core built-in TUI feature plugin modules ready to install into a `TUIPluginHost.PluginManager`.
+    public static let builtinFeaturePlugins: [FeaturePluginModule] = [
+        homeFooterPlugin,
+        promptBtwPlugin,
+        promptFooterPlugin,
+        sidebarContextPlugin,
+        sidebarFooterPlugin,
+        sidebarLimitPlugin,
+        sidebarMcpPlugin,
+        sidebarTodoPlugin,
+        diffViewerPlugin,
+        notificationsPlugin,
+        pluginsManagerPlugin,
+        statsPlugin,
+        storybookPlugin,
+    ]
 }

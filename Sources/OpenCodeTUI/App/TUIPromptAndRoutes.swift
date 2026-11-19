@@ -488,12 +488,25 @@ public enum TUIPrompt {
         }
     }
 
+    @TaskLocal private static var currentPromptHistory: PromptHistoryController?
+
+    // parity: tui/src/prompt/history.tsx#PromptHistoryProvider [status=adapted hash=b4b6735b1d67]
+    public static func PromptHistoryProvider<R>(
+        controller: PromptHistoryController = PromptHistoryController(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentPromptHistory.withValue(controller, operation: body)
+    }
+
     // parity: tui/src/prompt/history.tsx#usePromptHistory [status=adapted hash=d7c291c3d0bb]
     public static func usePromptHistory(
         initial: [PromptInfo] = [],
-        currentDraft: @escaping @Sendable () -> PromptInfo = emptyPrompt
+        currentDraft: (@Sendable () -> PromptInfo)? = nil
     ) -> PromptHistoryController {
-        PromptHistoryController(initial: initial, currentDraft: currentDraft)
+        if initial.isEmpty, currentDraft == nil, let scoped = currentPromptHistory {
+            return scoped
+        }
+        return PromptHistoryController(initial: initial, currentDraft: currentDraft ?? emptyPrompt)
     }
 
     // MARK: - Attachments (`packages/tui/src/prompt/attachment.ts`)
@@ -1202,6 +1215,22 @@ public enum TUIPrompt {
         }
     }
 
+    @TaskLocal private static var currentFrecency: FrecencyStore?
+
+    // parity: tui/src/prompt/frecency.tsx#FrecencyProvider [status=adapted hash=1c494f8cd849]
+    public static func FrecencyProvider<R>(
+        store: FrecencyStore = FrecencyStore(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentFrecency.withValue(store, operation: body)
+    }
+
+    // parity: tui/src/prompt/frecency.tsx#useFrecency [status=adapted hash=1c494f8cd849]
+    public static func useFrecency() throws(TUIConfig.ConfigError) -> FrecencyStore {
+        guard let value = currentFrecency else { throw .missingContext("FrecencyProvider") }
+        return value
+    }
+
     // MARK: - Stash (`packages/tui/src/prompt/stash.tsx`)
 
     // parity: tui/src/prompt/stash.tsx#StashEntry [status=implemented hash=d5c6ca77b1a4]
@@ -1265,6 +1294,22 @@ public enum TUIPrompt {
                 list.remove(at: index)
             }
         }
+    }
+
+    @TaskLocal private static var currentPromptStash: PromptStashStore?
+
+    // parity: tui/src/prompt/stash.tsx#PromptStashProvider [status=adapted hash=3d828848a289]
+    public static func PromptStashProvider<R>(
+        store: PromptStashStore = PromptStashStore(),
+        body: () throws -> R
+    ) rethrows -> R {
+        try $currentPromptStash.withValue(store, operation: body)
+    }
+
+    // parity: tui/src/prompt/stash.tsx#usePromptStash [status=adapted hash=3d828848a289]
+    public static func usePromptStash() throws(TUIConfig.ConfigError) -> PromptStashStore {
+        guard let value = currentPromptStash else { throw .missingContext("PromptStashProvider") }
+        return value
     }
 
     // MARK: - Traits (`packages/tui/src/prompt/traits.ts`)
@@ -1955,7 +2000,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/activity-summary.ts#activitySummary [status=implemented hash=4bd01c48473f]
+    // parity: tui/src/routes/session/activity-summary.ts#activitySummary [status=implemented hash=a64d74f8a034]
     public static func activitySummary(
         _ items: [ActivityItem],
         instructions: Int,
@@ -2258,7 +2303,7 @@ public enum TUIRoutes {
         tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
     }
 
-    // parity: tui/src/routes/session/rows.ts#reduceSessionRows [status=implemented hash=21f707f56dfb]
+    // parity: tui/src/routes/session/rows.ts#reduceSessionRows [status=implemented hash=7a8cff420e49]
     public static func reduceSessionRows(
         _ messages: [SessionMessageSchema.Info],
         inputs: Set<String> = [],
@@ -2382,7 +2427,7 @@ public enum TUIRoutes {
         return projectEntries(entries)
     }
 
-    // parity: tui/src/routes/session/rows.ts#createSessionRows [status=adapted hash=7cb85753233c]
+    // parity: tui/src/routes/session/rows.ts#createSessionRows [status=adapted hash=52ba5b9e7cf0]
     public static func createSessionRows(
         messages: [SessionMessageSchema.Info],
         inputs: Set<String> = [],
@@ -2559,6 +2604,11 @@ public enum TUIRoutes {
         }
         let name = models?.first(where: { $0.providerID == providerID && $0.id == modelID })?.name
         return "\(name ?? reference)\(variant.map { " (\($0))" } ?? "")"
+    }
+
+    // parity: tui/src/routes/session/index.tsx#executeCallSummary [status=implemented hash=660bad7aa726]
+    public static func executeCallSummary(_ call: TUIUtil.ExecuteCall) -> String {
+        TUIUtil.executeCallSummary(call)
     }
 
     public struct ParsedApplyPatchFile: Equatable, Hashable, Sendable {
@@ -3234,7 +3284,7 @@ public enum TUIRoutes {
         SessionLocationUnavailable(ctx: ctx, directory: directory, theme: theme)
     }
 
-    // parity: tui/src/routes/session/composer/index.tsx#Composer [status=adapted hash=a7e7c5191123]
+    // parity: tui/src/routes/session/composer/index.tsx#Composer [status=adapted hash=316985d02260]
     public static func Composer(
         ctx: any RenderContext,
         props: ComposerProps,

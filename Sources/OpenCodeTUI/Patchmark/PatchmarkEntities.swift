@@ -282,7 +282,7 @@ private func buildHtmlEntities() -> [String: String] {
 }
 
 /// Complete HTML5 named character reference map (all 2,125 named entities).
-// parity: patchmark/src/entities.ts#HTML_ENTITIES [status=implemented hash=efd4a2721753]
+// parity: patchmark/src/entities.ts#HTML_ENTITIES [status=implemented hash=15e02647f5db]
 public let HTML_ENTITIES: [String: String] = buildHtmlEntities()
 
 private let decodeCodePointMap: [Int: UInt32] = [

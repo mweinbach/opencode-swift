@@ -35,9 +35,13 @@ public enum CLIUtil {
             }
         }
 
+        // parity: cli/src/version.ts#OPENCODE_VERSION [status=implemented hash=d10b83002c91]
         public static let OPENCODE_VERSION: String = "local"
+        // parity: cli/src/version.ts#OPENCODE_CHANNEL [status=implemented hash=cb038e26553b]
         public static let OPENCODE_CHANNEL: String = "local"
+        // parity: cli/src/version.ts#OPENCODE_ARTIFACT [status=implemented hash=a68bef1bc782]
         public static let OPENCODE_ARTIFACT: String = "cli"
+        // parity: cli/src/version.ts#OPENCODE_HIGHLIGHTS [status=implemented hash=0ea9a722a821]
         public static let OPENCODE_HIGHLIGHTS: [ReleaseHighlight] = []
 
         // parity: cli/src/version.ts#OPENCODE_LOCAL [status=implemented hash=f27e42b689b3]
@@ -276,7 +280,7 @@ public enum CLIUtil {
         public static let DEADLINE: Duration = .seconds(10)
 
         /// Installs a bounded signal teardown guard matching `ShutdownDeadline.install`.
-        // parity: cli/src/shutdown-deadline.ts#install [status=adapted hash=b877d0434544]
+        // parity: cli/src/shutdown-deadline.ts#install [status=adapted hash=da4143a575a2]
         public static func install(
             _ deadline: Duration = DEADLINE,
             _ context: CLIContext = CLIContext.current,
@@ -2171,7 +2175,7 @@ public enum CLIConfig {
             return await persist(encoded, info: withSchema)
         }
 
-        // parity: cli/src/config/migrate.ts#migrateV1 [status=implemented hash=6347103e926a]
+        // parity: cli/src/config/migrate.ts#migrateV1 [status=implemented hash=17139b449864]
         public static func migrateV1(_ legacy: TUIConfig.V1.Info?, kv: [String: JSONValue]) -> Info {
             var info = Info()
 
@@ -3514,7 +3518,7 @@ public enum CLIUI {
         }
     }
 
-    // parity: cli/src/ui/timeline.tsx#createTimelineHost [status=adapted hash=b417a4cfff7e]
+    // parity: cli/src/ui/timeline.tsx#createTimelineHost [status=adapted hash=92ee791e1842]
     public static func createTimelineHost(context: CLIContext = CLIContext.current) async -> any TimelineHost {
         DefaultTimelineHost(context: context)
     }

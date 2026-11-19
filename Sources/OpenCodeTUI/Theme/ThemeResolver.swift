@@ -423,7 +423,7 @@ public func supportsThemeMode(_ document: ThemeDocument, mode: Mode) -> Bool {
 // MARK: - Resolution & Validation (`packages/theme/src/tui/resolve.ts`)
 
 /// Wraps a theme schema or resolution error with the canonical `"Invalid theme: <name> <value> is an invalid value"` diagnostic.
-// parity: theme/src/tui/resolve.ts#themeDecodeError [status=implemented hash=26eeaf795e0f]
+// parity: theme/src/tui/resolve.ts#themeDecodeError [status=implemented hash=136a336855f0]
 public func themeDecodeError(_ error: any Error, name: String = "theme") -> ThemeError {
     let message: String
     if let te = error as? ThemeError {
@@ -1274,7 +1274,7 @@ private func resolveView(
 // MARK: - SyntaxStyle Generation (`packages/theme/src/tui/syntax.ts`)
 
 /// Generates an `OpenTUICore.SyntaxStyle` table from a resolved semantic theme token set.
-// parity: theme/src/tui/syntax.ts#generateSyntax [status=implemented hash=09d66b486ca4]
+// parity: theme/src/tui/syntax.ts#generateSyntax [status=implemented hash=24c6c8a18ec7]
 public func generateSyntax(_ theme: ResolvedThemeTokens) -> SyntaxStyle {
     let step = HueStep.s200
     let syntax = theme.syntax
