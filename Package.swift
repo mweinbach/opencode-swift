@@ -130,6 +130,10 @@ let package = Package(
             dependencies: ["OpenCodeSchema", "OpenCodeUtil"]
         ),
         .testTarget(
+            name: "OpenCodeProtocolTests",
+            dependencies: ["OpenCodeProtocol", "OpenCodeSchema", "OpenCodeUtil"]
+        ),
+        .testTarget(
             name: "OpenCodePlatformTests",
             dependencies: ["OpenCodePlatform", "OpenCodeUtil"]
         ),

@@ -9,8 +9,8 @@
 | Tracked upstream packages | 15 |
 | Tracked upstream source files | 1708 |
 | Tracked upstream LOC | 294,330 |
-| Upstream exported symbols (implemented / total) | 47 / 9404 (0.5%) |
-| Upstream functions (implemented / total) | 41 / 2443 (1.7%) |
+| Upstream exported symbols (implemented / total) | 206 / 9404 (2.2%) |
+| Upstream functions (implemented / total) | 113 / 2443 (4.6%) |
 | Differential oracle-verified functions | 40 (235 test vectors) |
 | Upstream code drift alerts | 0 |
 | Dangling parity annotations | 0 |
@@ -20,7 +20,7 @@
 
 | Upstream Package | Swift Target | Tier | Files | LOC | Functions (Impl/Total) | Symbols (Impl/Total) | Drift |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `packages/util` | `OpenCodeUtil` | `tier1-foundation` | 47 | 5,032 | 38/110 (34.5%) | 41/200 (20.5%) | 0 |
+| `packages/util` | `OpenCodeUtil` | `tier1-foundation` | 47 | 5,032 | 110/110 (100.0%) | 200/200 (100.0%) | 0 |
 | `packages/schema` | `OpenCodeSchema` | `tier1-foundation` | 108 | 7,315 | 3/22 (13.6%) | 6/699 (0.9%) | 0 |
 | `packages/protocol` | `OpenCodeProtocol` | `tier1-foundation` | 44 | 5,160 | 0/11 (0.0%) | 0/215 (0.0%) | 0 |
 | `packages/ai` | `OpenCodeAI` | `tier2-engine` | 278 | 36,800 | 0/418 (0.0%) | 0/1802 (0.0%) | 0 |
@@ -46,6 +46,11 @@
 | `schema/src/project-id.ts#ProjectID` | `implemented` | `Sources/OpenCodeSchema/ProjectID.swift:2` | `90507be14ce0` (synced) |
 | `schema/src/session-id.ts#SessionID` | `implemented` | `Sources/OpenCodeSchema/SessionID.swift:6` | `6736768baf7a` (synced) |
 | `schema/src/workspace-id.ts#WorkspaceID` | `implemented` | `Sources/OpenCodeSchema/WorkspaceID.swift:2` | `8a553a2cbb88` (synced) |
+| `util/src/abort.ts#abort` | `implemented` | `Sources/OpenCodeUtil/Abort.swift:99` | `683b597a1861` (synced) |
+| `util/src/activity-calendar.ts#activityCalendar` | `implemented` | `Sources/OpenCodeUtil/ActivityCalendar.swift:116` | `88792ed59993` (synced) |
+| `util/src/artifact.ts#artifactKind` | `implemented` | `Sources/OpenCodeUtil/Artifact.swift:105` | `c61eac57be79` (synced) |
+| `util/src/artifact.ts#ArtifactKind` | `implemented` | `Sources/OpenCodeUtil/Artifact.swift:2` | `12192626739b` (synced) |
+| `util/src/artifact.ts#artifactMime` | `implemented` | `Sources/OpenCodeUtil/Artifact.swift:99` | `b045b83177aa` (synced) |
 | `util/src/base64.ts#base64ToBytes` | `implemented` | `Sources/OpenCodeUtil/Base64.swift:62` | `08cb09d85c41` (synced) |
 | `util/src/base64.ts#bytesToBase64` | `implemented` | `Sources/OpenCodeUtil/Base64.swift:21` | `71b1ceeed0c0` (synced) |
 | `util/src/binary.ts#Binary` | `implemented` | `Sources/OpenCodeUtil/Binary.swift:17` | `fefcc0b3ce3f` (synced) |
@@ -54,17 +59,138 @@
 | `util/src/bom.ts#decodeBytes` | `implemented` | `Sources/OpenCodeUtil/Bom.swift:48` | `0efb2d38835d` (synced) |
 | `util/src/bom.ts#has` | `implemented` | `Sources/OpenCodeUtil/Bom.swift:43` | `9255b141b000` (synced) |
 | `util/src/bom.ts#join` | `implemented` | `Sources/OpenCodeUtil/Bom.swift:37` | `3244b78b0851` (synced) |
+| `util/src/bom.ts#readFile` | `implemented` | `Sources/OpenCodePlatform/BomFileIO.swift:5` | `47ed372886c6` (synced) |
 | `util/src/bom.ts#split` | `implemented` | `Sources/OpenCodeUtil/Bom.swift:25` | `a3005f022109` (synced) |
 | `util/src/bom.ts#syncBytes` | `implemented` | `Sources/OpenCodeUtil/Bom.swift:53` | `d6ca903fea7d` (synced) |
+| `util/src/bom.ts#syncFile` | `implemented` | `Sources/OpenCodePlatform/BomFileIO.swift:13` | `41fee28053c4` (synced) |
+| `util/src/cross-spawn-spawner.ts#KilledBySignal` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:23` | `1903b260c62e` (synced) |
+| `util/src/cross-spawn-spawner.ts#node` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:117` | `dcfc1a1b751f` (synced) |
+| `util/src/cross-spawn-spawner.ts#RELEASE_FORCE_KILL_AFTER` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:20` | `eead7c55cc8e` (synced) |
 | `util/src/duration.ts#duration` | `implemented` | `Sources/OpenCodeUtil/Duration.swift:2` | `491dfe2b70a8` (synced) |
+| `util/src/effect-flock.ts#EffectFlock` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:303` | `e89d4c8a9682` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.Interface` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:351` | `4d38bddc4e28` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.LockCompromisedError` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:316` | `5f2400a5b830` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.LockError` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:327` | `cfffac0f0f43` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.LockTimeoutError` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:305` | `99a198d0e976` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.node` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:397` | `48efd3a37f87` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.Options` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:340` | `4bb6b62d1ce3` (synced) |
+| `util/src/effect-flock.ts#EffectFlock.Service` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:357` | `38947169279d` (synced) |
+| `util/src/effect/app-node-platform.ts#Fetch` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:31` | `3a8c3b0953ee` (synced) |
+| `util/src/effect/app-node-platform.ts#fetchLayer` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:48` | `4e703ea54607` (synced) |
+| `util/src/effect/app-node-platform.ts#filesystem` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:34` | `ab5502181afa` (synced) |
+| `util/src/effect/app-node-platform.ts#httpClient` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:94` | `b8a472908dbb` (synced) |
+| `util/src/effect/app-node-platform.ts#httpFetch` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:64` | `a50b005fd924` (synced) |
+| `util/src/effect/app-node-platform.ts#path` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:41` | `f0b2c7f86569` (synced) |
+| `util/src/effect/app-node.ts#GlobalGraph` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:11` | `013e5a80c592` (synced) |
+| `util/src/effect/app-node.ts#LocationGraph` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:14` | `4520717f3b49` (synced) |
+| `util/src/effect/app-node.ts#makeGlobalNode` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:17` | `60799060bb87` (synced) |
+| `util/src/effect/app-node.ts#makeLocationNode` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:20` | `a64547cb2bc9` (synced) |
+| `util/src/effect/app-node.ts#tags` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:5` | `8ad7297c4b5d` (synced) |
+| `util/src/effect/layer-node.ts#compile` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:323` | `a250dd7de616` (synced) |
+| `util/src/effect/layer-node.ts#CompileOptions` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:243` | `4af29e4ccd53` (synced) |
+| `util/src/effect/layer-node.ts#Error` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:21` | `34259b4a382b` (synced) |
+| `util/src/effect/layer-node.ts#Graph` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:119` | `2732d68c582b` (synced) |
+| `util/src/effect/layer-node.ts#group` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:238` | `7e5140a68a62` (synced) |
+| `util/src/effect/layer-node.ts#make` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:223` | `2717f96c2efd` (synced) |
+| `util/src/effect/layer-node.ts#Node` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:130` | `84d6239b8866` (synced) |
+| `util/src/effect/layer-node.ts#Output` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:33` | `1ea5dcf9f491` (synced) |
+| `util/src/effect/layer-node.ts#Provider` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:158` | `7353ae6282b4` (synced) |
+| `util/src/effect/layer-node.ts#Replacement` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:176` | `79caf3ce9c88` (synced) |
+| `util/src/effect/layer-node.ts#Replacements` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:187` | `a116f8f6132b` (synced) |
+| `util/src/effect/layer-node.ts#Tag` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:9` | `8e62f218abd0` (synced) |
+| `util/src/effect/layer-node.ts#TagConfig` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:190` | `e366ddd6e71c` (synced) |
+| `util/src/effect/layer-node.ts#TagMaker` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:193` | `720df069caa3` (synced) |
+| `util/src/effect/layer-node.ts#tags` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:214` | `ca2088e658a4` (synced) |
+| `util/src/effect/layer-node.ts#Tags` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:196` | `9912ce945ee5` (synced) |
+| `util/src/effect/layer-node.ts#unbound` | `implemented` | `Sources/OpenCodeUtil/LayerNode.swift:233` | `d9a8d440429d` (synced) |
 | `util/src/encode.ts#base64Decode` | `implemented` | `Sources/OpenCodeUtil/Encode.swift:23` | `5802f561ea96` (synced) |
 | `util/src/encode.ts#base64Encode` | `implemented` | `Sources/OpenCodeUtil/Encode.swift:2` | `7c4b243db216` (synced) |
 | `util/src/encode.ts#checksum` | `implemented` | `Sources/OpenCodeUtil/Encode.swift:43` | `55b1d17100d8` (synced) |
 | `util/src/encode.ts#sampledChecksum` | `implemented` | `Sources/OpenCodeUtil/Encode.swift:50` | `fd820c3012df` (synced) |
+| `util/src/execute-output.ts#formatExecuteOutput` | `implemented` | `Sources/OpenCodeUtil/ExecuteOutput.swift:17` | `01b59dec482e` (synced) |
+| `util/src/flock.ts#Flock` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:20` | `86a4b324e350` (synced) |
+| `util/src/flock.ts#Flock.acquire` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:98` | `ee502e5c3024` (synced) |
+| `util/src/flock.ts#Flock.Lease` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:69` | `9aa8eb520102` (synced) |
+| `util/src/flock.ts#Flock.Options` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:40` | `b07b03fcbc8b` (synced) |
+| `util/src/flock.ts#Flock.setGlobal` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:84` | `cfd65ca1b154` (synced) |
+| `util/src/flock.ts#Flock.Wait` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:37` | `777e07a5676c` (synced) |
+| `util/src/flock.ts#Flock.WaitEvent` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:22` | `74ccb8545e32` (synced) |
+| `util/src/flock.ts#Flock.withLock` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:148` | `7ef59d710f47` (synced) |
+| `util/src/flock.ts#FlockGlobal` | `implemented` | `Sources/OpenCodePlatform/Flock.swift:9` | `bdde41bbbfd8` (synced) |
+| `util/src/fs-util.ts#FSUtil` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:16` | `bdd4e2da882e` (synced) |
+| `util/src/fs-util.ts#FSUtil.contains` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:211` | `cfb3e1ed8297` (synced) |
+| `util/src/fs-util.ts#FSUtil.Error` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:18` | `cbb8b70433d4` (synced) |
+| `util/src/fs-util.ts#FSUtil.FileSystemError` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:3` | `81fb24d92e0b` (synced) |
+| `util/src/fs-util.ts#FSUtil.ignoredDirectories` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:56` | `d8f78139eb76` (synced) |
+| `util/src/fs-util.ts#FSUtil.ignoreGlobs` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:61` | `a8cef7f31e58` (synced) |
+| `util/src/fs-util.ts#FSUtil.Interface` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:31` | `9579fa9115f3` (synced) |
+| `util/src/fs-util.ts#FSUtil.isAccessDenied` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:248` | `40bd0772ef86` (synced) |
+| `util/src/fs-util.ts#FSUtil.layer` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:234` | `b96489c5edca` (synced) |
+| `util/src/fs-util.ts#FSUtil.mimeType` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:139` | `7cb23319bfe0` (synced) |
+| `util/src/fs-util.ts#FSUtil.node` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:240` | `a8936844d1ae` (synced) |
+| `util/src/fs-util.ts#FSUtil.normalizePath` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:260` | `eb634425e254` (synced) |
+| `util/src/fs-util.ts#FSUtil.overlaps` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:205` | `83073e3c05c5` (synced) |
+| `util/src/fs-util.ts#FSUtil.resolve` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:269` | `9a54ef883ce7` (synced) |
+| `util/src/fs-util.ts#FSUtil.Service` | `implemented` | `Sources/OpenCodePlatform/FSUtilService.swift:50` | `2fa19bd318ca` (synced) |
+| `util/src/fs-util.ts#FSUtil.UpOptions` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:33` | `a7214da65487` (synced) |
+| `util/src/fs-util.ts#FSUtil.windowsPath` | `implemented` | `Sources/OpenCodeUtil/FSPathUtil.swift:151` | `af049433819b` (synced) |
+| `util/src/glob.ts#Glob` | `implemented` | `Sources/OpenCodeUtil/Glob.swift:16` | `b2de3c26b7ce` (synced) |
+| `util/src/glob.ts#Glob.match` | `implemented` | `Sources/OpenCodeUtil/Glob.swift:77` | `7e1393c270e2` (synced) |
+| `util/src/glob.ts#Glob.Options` | `implemented` | `Sources/OpenCodeUtil/Glob.swift:23` | `e1895c7008cd` (synced) |
+| `util/src/glob.ts#Glob.scan` | `implemented` | `Sources/OpenCodeUtil/Glob.swift:50` | `6179518d7050` (synced) |
 | `util/src/global-roots.ts#roots` | `implemented` | `Sources/OpenCodePlatform/GlobalPaths.swift:20` | `e489d5d92086` (synced) |
+| `util/src/global-roots.workerd.ts#roots` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:5` | `d11ac8453ac8` (synced) |
+| `util/src/global.ts#Interface` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:25` | `aa26d25defae` (synced) |
+| `util/src/global.ts#layerWith` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:136` | `697ce716e661` (synced) |
+| `util/src/global.ts#make` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:109` | `0bec3fcad96c` (synced) |
+| `util/src/global.ts#node` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:163` | `0690353164c9` (synced) |
+| `util/src/global.ts#Path` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:94` | `888309e59712` (synced) |
+| `util/src/global.ts#Service` | `implemented` | `Sources/OpenCodePlatform/GlobalService.swift:99` | `c202787be55d` (synced) |
 | `util/src/hash.ts#Hash` | `implemented` | `Sources/OpenCodeUtil/Hash.swift:4` | `a8b79ef1bfce` (synced) |
 | `util/src/hash.ts#Hash.fast` | `implemented` | `Sources/OpenCodeUtil/Hash.swift:6` | `ea481ba9656c` (synced) |
 | `util/src/hash.ts#Hash.sha256` | `implemented` | `Sources/OpenCodeUtil/Hash.swift:15` | `76ab1b114b50` (synced) |
+| `util/src/heap-snapshot.ts#write` | `adapted` | `Sources/OpenCodePlatform/ProcessRunner.swift:575` | `721d3e0e7a6c` (synced) |
+| `util/src/no-timeout-fetch.ts#noTimeoutFetch` | `implemented` | `Sources/OpenCodePlatform/AppNode.swift:110` | `5ef020dcc4c1` (synced) |
+| `util/src/npm-config.ts#load` | `implemented` | `Sources/OpenCodePlatform/NpmPlatform.swift:6` | `6bb1a540cdc1` (synced) |
+| `util/src/npm-config.ts#registry` | `implemented` | `Sources/OpenCodePlatform/NpmPlatform.swift:41` | `0e9f0c2b125f` (synced) |
+| `util/src/npm.ts#cacheKey` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:93` | `bffe9eca4a08` (synced) |
+| `util/src/npm.ts#InstallFailedError` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:3` | `3f7b6785d4b4` (synced) |
+| `util/src/npm.ts#Interface` | `implemented` | `Sources/OpenCodePlatform/NpmPlatform.swift:55` | `492660a6754d` (synced) |
+| `util/src/npm.ts#isInstallablePackage` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:88` | `e947d1f4e16d` (synced) |
+| `util/src/npm.ts#isRegistryPackage` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:82` | `f1e0ecdd30cb` (synced) |
+| `util/src/npm.ts#node` | `implemented` | `Sources/OpenCodePlatform/NpmPlatform.swift:133` | `677b73ca514c` (synced) |
+| `util/src/npm.ts#Package` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:36` | `b6a2a8c6f446` (synced) |
+| `util/src/npm.ts#sanitize` | `implemented` | `Sources/OpenCodeUtil/NpmSpec.swift:67` | `1abc6f1eb40e` (synced) |
+| `util/src/npm.ts#Service` | `implemented` | `Sources/OpenCodePlatform/NpmPlatform.swift:64` | `fe977ad18650` (synced) |
+| `util/src/observability.ts#layer` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:394` | `5bdc4711a997` (synced) |
+| `util/src/observability.ts#node` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:427` | `3e6a40fdb0c8` (synced) |
+| `util/src/observability.ts#Options` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:360` | `0a2aa998f1ba` (synced) |
+| `util/src/observability/logging.ts#file` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:106` | `f6a3a0f9865c` (synced) |
+| `util/src/observability/logging.ts#fileLogger` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:142` | `a2dc14035db4` (synced) |
+| `util/src/observability/logging.ts#LOG_KEEP_BYTES` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:70` | `737076a41292` (synced) |
+| `util/src/observability/logging.ts#LOG_MAX_BYTES` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:67` | `f3573128981c` (synced) |
+| `util/src/observability/logging.ts#LOG_TRIM_INTERVAL` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:73` | `b074aed6964f` (synced) |
+| `util/src/observability/logging.ts#LOG_TRIM_LOCK_STALE_MS` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:76` | `5c36b4350f7a` (synced) |
+| `util/src/observability/logging.ts#loggers` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:208` | `325c1afd5402` (synced) |
+| `util/src/observability/logging.ts#minimumLogLevel` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:195` | `ca840d0315fb` (synced) |
+| `util/src/observability/logging.ts#trim` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:153` | `4ad03e5456c5` (synced) |
+| `util/src/observability/otlp.ts#App` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:232` | `8dbb344251d2` (synced) |
+| `util/src/observability/otlp.ts#loggers` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:330` | `371686b89cd8` (synced) |
+| `util/src/observability/otlp.ts#Options` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:221` | `43e10659d3ee` (synced) |
+| `util/src/observability/otlp.ts#resource` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:316` | `fda9351650d9` (synced) |
+| `util/src/observability/otlp.ts#tracingLayer` | `implemented` | `Sources/OpenCodePlatform/Observability.swift:347` | `f691d9439716` (synced) |
+| `util/src/observability/shared.ts#runID` | `implemented` | `Sources/OpenCodeUtil/ObservabilityShared.swift:8` | `50a88adcd5e5` (synced) |
+| `util/src/open.ts#openPath` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:514` | `30ca773450c9` (synced) |
+| `util/src/open.ts#openUrl` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:500` | `6ccbdc56b1e0` (synced) |
+| `util/src/patch.ts#BoundaryError` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:7` | `4979cc508098` (synced) |
+| `util/src/patch.ts#derive` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:198` | `be5f8ac74735` (synced) |
+| `util/src/patch.ts#FileUpdate` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:96` | `71ee4894189e` (synced) |
+| `util/src/patch.ts#Hunk` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:89` | `90ab15ba6572` (synced) |
+| `util/src/patch.ts#InvalidHunkError` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:22` | `a82907c27988` (synced) |
+| `util/src/patch.ts#joinBom` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:220` | `644792e24478` (synced) |
+| `util/src/patch.ts#parse` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:107` | `384f45fd525e` (synced) |
+| `util/src/patch.ts#ParseError` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:44` | `3c6e05147cf9` (synced) |
+| `util/src/patch.ts#UpdateFileChunk` | `implemented` | `Sources/OpenCodeUtil/Patch.swift:69` | `1e9ecd9db14b` (synced) |
 | `util/src/path.ts#comparablePath` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:85` | `c32a2eb84da3` (synced) |
 | `util/src/path.ts#containsDirectory` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:98` | `2d1040d78b3c` (synced) |
 | `util/src/path.ts#encodeFilePath` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:119` | `2abe2428bf2e` (synced) |
@@ -75,6 +201,32 @@
 | `util/src/path.ts#parsePathLineSuffix` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:137` | `05b60e446356` (synced) |
 | `util/src/path.ts#sameDirectory` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:114` | `8aabb2a3d470` (synced) |
 | `util/src/path.ts#truncateMiddle` | `implemented` | `Sources/OpenCodeUtil/PathUtil.swift:71` | `9b3e9bc2f34f` (synced) |
+| `util/src/process-signal.ts#install` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:434` | `ec1d26a15ffe` (synced) |
+| `util/src/process-signal.ts#subscribe` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:443` | `d466134be985` (synced) |
+| `util/src/process.ts#abortError` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:356` | `5bdccdadee1f` (synced) |
+| `util/src/process.ts#AppProcessError` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:128` | `59c5d12b4a1c` (synced) |
+| `util/src/process.ts#collectStream` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:383` | `50d0a7cff772` (synced) |
+| `util/src/process.ts#Interface` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:235` | `016a061d3ff5` (synced) |
+| `util/src/process.ts#node` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:411` | `c10cdaefc7ab` (synced) |
+| `util/src/process.ts#requireExitIn` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:344` | `07ddd077561e` (synced) |
+| `util/src/process.ts#requireSuccess` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:334` | `4b5f58493165` (synced) |
+| `util/src/process.ts#RunOptions` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:157` | `29d3ed343c62` (synced) |
+| `util/src/process.ts#RunResult` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:203` | `9dc13df2e011` (synced) |
+| `util/src/process.ts#RunStreamOptions` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:183` | `9a4178d3acfb` (synced) |
+| `util/src/process.ts#Service` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:241` | `b6e2fa738603` (synced) |
+| `util/src/process.ts#waitForAbort` | `implemented` | `Sources/OpenCodePlatform/ProcessRunner.swift:362` | `1f3e77df358a` (synced) |
+| `util/src/qr.ts#encode` | `implemented` | `Sources/OpenCodeUtil/QR.swift:36` | `4515d23eb39c` (synced) |
+| `util/src/qr.ts#renderSVG` | `implemented` | `Sources/OpenCodeUtil/QR.swift:84` | `3b2029585703` (synced) |
+| `util/src/qr.ts#renderUnicodeCompact` | `implemented` | `Sources/OpenCodeUtil/QR.swift:105` | `b4d21a2e4691` (synced) |
+| `util/src/record.ts#isRecord` | `implemented` | `Sources/OpenCodeUtil/Record.swift:3` | `edbb9bd43aff` (synced) |
+| `util/src/retry.ts#retry` | `implemented` | `Sources/OpenCodeUtil/Retry.swift:68` | `90375e6855b4` (synced) |
+| `util/src/retry.ts#RetryOptions` | `implemented` | `Sources/OpenCodeUtil/Retry.swift:13` | `af06d619b161` (synced) |
+| `util/src/runtime/import.bun.ts#importModule` | `adapted` | `Sources/OpenCodePlatform/RuntimeImport.swift:62` | `2688fbecd340` (synced) |
+| `util/src/runtime/import.bun.ts#resolveModule` | `adapted` | `Sources/OpenCodePlatform/RuntimeImport.swift:67` | `730bfa5525a3` (synced) |
+| `util/src/runtime/import.node.ts#importModule` | `adapted` | `Sources/OpenCodePlatform/RuntimeImport.swift:26` | `344852c6ab04` (synced) |
+| `util/src/runtime/import.node.ts#resolveModule` | `adapted` | `Sources/OpenCodePlatform/RuntimeImport.swift:32` | `dcce5f69130a` (synced) |
+| `util/src/runtime/import.workerd.ts#importModule` | `implemented` | `Sources/OpenCodePlatform/RuntimeImport.swift:76` | `bcc321a0fd4e` (synced) |
+| `util/src/runtime/import.workerd.ts#resolveModule` | `implemented` | `Sources/OpenCodePlatform/RuntimeImport.swift:82` | `06410dbe7f08` (synced) |
 | `util/src/session-mention.ts#parseSessionMention` | `implemented` | `Sources/OpenCodeUtil/SessionMention.swift:83` | `6c62181c54c8` (synced) |
 | `util/src/session-mention.ts#serializeSessionMention` | `implemented` | `Sources/OpenCodeUtil/SessionMention.swift:91` | `4b39ce2cdcea` (synced) |
 | `util/src/session-mention.ts#SessionMention` | `implemented` | `Sources/OpenCodeUtil/SessionMention.swift:1` | `cfc31d820894` (synced) |
@@ -83,6 +235,13 @@
 | `util/src/session-title-fallback.ts#isExactRootFallback` | `implemented` | `Sources/OpenCodeUtil/SessionTitleFallback.swift:48` | `ac4913b4097c` (synced) |
 | `util/src/session-title-fallback.ts#isFallbackTitle` | `implemented` | `Sources/OpenCodeUtil/SessionTitleFallback.swift:41` | `a6d0d7318bb4` (synced) |
 | `util/src/session-title-fallback.ts#withTimestampedFallback` | `implemented` | `Sources/OpenCodeUtil/SessionTitleFallback.swift:23` | `c0f847b73473` (synced) |
+| `util/src/session-turn.ts#duration` | `implemented` | `Sources/OpenCodeUtil/SessionTurn.swift:58` | `84e6c34c7bbc` (synced) |
+| `util/src/session-turn.ts#legacy` | `implemented` | `Sources/OpenCodeUtil/SessionTurn.swift:96` | `310709db9918` (synced) |
+| `util/src/session-turn.ts#Message` | `implemented` | `Sources/OpenCodeUtil/SessionTurn.swift:31` | `3a82d99d5d27` (synced) |
+| `util/src/session-turn.ts#Options` | `implemented` | `Sources/OpenCodeUtil/SessionTurn.swift:46` | `f9413c78cfcb` (synced) |
+| `util/src/session-turn.ts#tokensPerSecond` | `implemented` | `Sources/OpenCodeUtil/SessionTurn.swift:76` | `9750cd17b945` (synced) |
+| `util/src/teardown.ts#pending` | `implemented` | `Sources/OpenCodeUtil/Teardown.swift:46` | `1e50b67cc5d1` (synced) |
+| `util/src/teardown.ts#track` | `implemented` | `Sources/OpenCodeUtil/Teardown.swift:29` | `0ab66b37ce02` (synced) |
 | `util/src/text-boundary.ts#head` | `implemented` | `Sources/OpenCodeUtil/TextBoundary.swift:4` | `8aff2245ec6e` (synced) |
 | `util/src/text-boundary.ts#tail` | `implemented` | `Sources/OpenCodeUtil/TextBoundary.swift:15` | `1bfc97044540` (synced) |
 | `util/src/text-boundary.ts#utf8Tail` | `implemented` | `Sources/OpenCodeUtil/TextBoundary.swift:28` | `8c5ad3cfe734` (synced) |
