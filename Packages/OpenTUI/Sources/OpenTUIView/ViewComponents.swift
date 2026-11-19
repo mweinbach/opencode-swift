@@ -1430,14 +1430,44 @@ public struct TUIInput: TUIView {
     }
 }
 
+private func normalizeTextareaLineEndings(_ text: String) -> String {
+    guard text.utf8.contains(0x0D) else { return text }
+    var out = ""
+    out.reserveCapacity(text.utf8.count)
+    let scalars = Array(text.unicodeScalars)
+    var i = 0
+    while i < scalars.count {
+        if scalars[i] == "\r" {
+            out.unicodeScalars.append("\n")
+            if i + 1 < scalars.count && scalars[i + 1] == "\n" {
+                i += 2
+            } else {
+                i += 1
+            }
+        } else {
+            out.unicodeScalars.append(scalars[i])
+            i += 1
+        }
+    }
+    return out
+}
+
 /// Declarative multi-line text editor backed by `TextareaRenderable`.
+///
+/// Pass `value: nil` for uncontrolled editing (optionally seeded with `initialValue`, preserving
+/// live user edits and cursor state across re-renders), or pass a controlled `value` string
+/// (which only overwrites the buffer if it diverges from `plainText`, moving the cursor to the
+/// end of the buffer without re-triggering `onContentChange`).
 public struct TUITextarea: TUIView {
     public typealias Body = Never
 
+    public let value: String?
     public let initialValue: String?
     public let placeholder: PlaceholderValue?
     public let placeholderColor: Color?
     public let wrapMode: TextWrapMode?
+    public let maxHeight: FlexValue?
+    public let keyBindings: [TextareaKeyBinding]?
     public let textColor: Color?
     public let backgroundColor: Color?
     public let focusedTextColor: Color?
@@ -1449,10 +1479,13 @@ public struct TUITextarea: TUIView {
     public let onSubmit: ((SubmitEvent) -> Void)?
 
     public init(
+        value: String? = nil,
         initialValue: String? = nil,
         placeholder: PlaceholderValue? = nil,
         placeholderColor: Color? = nil,
         wrapMode: TextWrapMode? = nil,
+        maxHeight: FlexValue? = nil,
+        keyBindings: [TextareaKeyBinding]? = nil,
         textColor: Color? = nil,
         backgroundColor: Color? = nil,
         focusedTextColor: Color? = nil,
@@ -1463,10 +1496,13 @@ public struct TUITextarea: TUIView {
         onCursorChange: ((CursorChangeEvent) -> Void)? = nil,
         onSubmit: ((SubmitEvent) -> Void)? = nil
     ) {
+        self.value = value
         self.initialValue = initialValue
         self.placeholder = placeholder
         self.placeholderColor = placeholderColor
         self.wrapMode = wrapMode
+        self.maxHeight = maxHeight
+        self.keyBindings = keyBindings
         self.textColor = textColor
         self.backgroundColor = backgroundColor
         self.focusedTextColor = focusedTextColor
@@ -1481,17 +1517,21 @@ public struct TUITextarea: TUIView {
     public func resolveNodes() -> [TUIViewNode] {
         let snapshot = self
         var props: [String: Any] = [:]
+        if let value { props["value"] = value }
         if let wrapMode { props["wrapMode"] = wrapMode }
+        if let maxHeight { props["maxHeight"] = maxHeight }
         return [
             TUIViewNode(
                 kind: "textarea",
                 props: props,
                 isLeaf: true,
                 mount: { ctx in
-                    TextareaRenderable(
+                    let initialText = snapshot.value ?? snapshot.initialValue
+                    let textarea = TextareaRenderable(
                         ctx: ctx,
                         options: TextareaOptions(
-                            initialValue: snapshot.initialValue,
+                            maxHeight: snapshot.maxHeight,
+                            initialValue: initialText,
                             backgroundColor: snapshot.backgroundColor,
                             textColor: snapshot.textColor,
                             focusedBackgroundColor: snapshot.focusedBackgroundColor,
@@ -1501,11 +1541,16 @@ public struct TUITextarea: TUIView {
                             cursorColor: snapshot.cursorColor,
                             placeholder: snapshot.placeholder,
                             placeholderColor: snapshot.placeholderColor,
-                            onSubmit: snapshot.onSubmit,
-                            onCursorChange: snapshot.onCursorChange,
-                            onContentChange: snapshot.onContentChange
+                            keyBindings: snapshot.keyBindings,
+                            onSubmit: snapshot.onSubmit
                         )
                     )
+                    if snapshot.value != nil && !textarea.plainText.isEmpty {
+                        textarea.gotoBufferEnd()
+                    }
+                    textarea.onCursorChange = snapshot.onCursorChange
+                    textarea.onContentChange = snapshot.onContentChange
+                    return textarea
                 },
                 patch: { existing in
                     guard let textarea = existing as? TextareaRenderable else { return false }
@@ -1521,6 +1566,16 @@ public struct TUITextarea: TUIView {
                     }
                     if let wrapMode = snapshot.wrapMode, textarea.wrapMode != wrapMode {
                         textarea.wrapMode = wrapMode
+                    }
+                    if let maxHeight = snapshot.maxHeight, textarea.maxHeight != maxHeight {
+                        textarea.maxHeight = maxHeight
+                    }
+                    if let keyBindings = snapshot.keyBindings {
+                        if textarea.keyBindings != keyBindings {
+                            textarea.keyBindings = keyBindings
+                        }
+                    } else if !textarea.keyBindings.isEmpty {
+                        textarea.keyBindings = []
                     }
                     if let textColor = snapshot.textColor {
                         let resolved = textColor.resolved()
@@ -1542,6 +1597,24 @@ public struct TUITextarea: TUIView {
                     if let cursorColor = snapshot.cursorColor {
                         let resolved = cursorColor.resolved()
                         if textarea.cursorColor != resolved { textarea.cursorColor = resolved }
+                    }
+                    // Only synchronize controlled value when caller explicitly passed one that differs
+                    // from the live buffer, suppressing echo callbacks to avoid re-entrant loops.
+                    if let controlledValue = snapshot.value {
+                        let normalized = normalizeTextareaLineEndings(controlledValue)
+                        if textarea.plainText != normalized {
+                            let prevOnContentChange = textarea.onContentChange
+                            let prevOnCursorChange = textarea.onCursorChange
+                            textarea.onContentChange = nil
+                            textarea.onCursorChange = nil
+                            if textarea.hasSelection() {
+                                _ = textarea.clearSelection()
+                            }
+                            textarea.setText(normalized)
+                            textarea.gotoBufferEnd()
+                            textarea.onContentChange = prevOnContentChange
+                            textarea.onCursorChange = prevOnCursorChange
+                        }
                     }
                     return true
                 }
