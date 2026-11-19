@@ -1,3 +1,8 @@
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import Synchronization
 import OpenCodeClient
 import OpenCodePlatform
@@ -11,9 +16,131 @@ import OpenTUIRenderables
 import OpenTUITerminal
 import OpenTUIView
 
+// MARK: - OSC 11 / COLORFGBG Terminal Theme Auto-Detection
+
+/// Probing and parsing utilities for automatic terminal Light/Dark detection via OSC 11 and `COLORFGBG`.
+public enum TerminalThemeDetector {
+    private final class ProbeHost: RendererThemeModeHost {
+        func queryThemeColors() -> Bool { false }
+    }
+
+    /// Parses an OSC 11 background color reply (`\x1b]11;rgb:RRRR/GGGG/BBBB\x07`, `\x1b]11;rgb:RRRR/GGGG/BBBB\x1b\\`,
+    /// or `\x1b]11;#RRGGBB\x07`) into `.light` or `.dark` using `OpenTUICore.RendererThemeMode` luminance classification.
+    public static func parseOSC11Response(_ raw: String) -> ThemeMode? {
+        guard !raw.isEmpty else { return nil }
+        let host = ProbeHost()
+        let state = RendererThemeMode(host: host, clock: ManualClock())
+        let result = state.handleSequence(raw)
+        return result.changedMode ?? state.themeMode
+    }
+
+    /// Parses raw bytes containing an OSC 11 reply into `.light` or `.dark`.
+    public static func parseOSC11Response(_ bytes: [UInt8]) -> ThemeMode? {
+        guard !bytes.isEmpty else { return nil }
+        return parseOSC11Response(String(decoding: bytes, as: UTF8.self))
+    }
+
+    /// Extracts an OSC 11 mode from buffered raw bytes while preserving any unrelated non-OSC bytes
+    /// (such as early user keystrokes typed during startup).
+    public static func extractOSC11(from bytes: [UInt8]) -> (mode: ThemeMode?, remaining: [UInt8]) {
+        guard !bytes.isEmpty else { return (nil, []) }
+        var remaining: [UInt8] = []
+        remaining.reserveCapacity(bytes.count)
+        var detected: ThemeMode? = nil
+
+        var i = 0
+        while i < bytes.count {
+            if i + 4 < bytes.count,
+               bytes[i] == 0x1B, // ESC
+               bytes[i + 1] == 0x5D, // ']'
+               bytes[i + 2] == 0x31, // '1'
+               (bytes[i + 3] == 0x30 || bytes[i + 3] == 0x31), // '0' or '1'
+               bytes[i + 4] == 0x3B // ';'
+            {
+                // Find BEL (0x07) or ST (ESC \)
+                var end = i + 5
+                var foundTermEnd: Int? = nil
+                while end < bytes.count {
+                    if bytes[end] == 0x07 {
+                        foundTermEnd = end + 1
+                        break
+                    }
+                    if end + 1 < bytes.count && bytes[end] == 0x1B && bytes[end + 1] == 0x5C {
+                        foundTermEnd = end + 2
+                        break
+                    }
+                    end += 1
+                }
+                if let termEnd = foundTermEnd {
+                    let seq = String(decoding: bytes[i..<termEnd], as: UTF8.self)
+                    if let parsed = parseOSC11Response(seq) {
+                        detected = parsed
+                    }
+                    i = termEnd
+                    continue
+                }
+            }
+            remaining.append(bytes[i])
+            i += 1
+        }
+        return (detected, remaining)
+    }
+
+    /// Infers terminal light/dark mode from the `COLORFGBG` environment variable (e.g., `"0;15"` -> `.light`, `"15;0"` -> `.dark`).
+    public static func detectFromEnvironment(_ environment: [String: String]) -> ThemeMode? {
+        guard let raw = environment["COLORFGBG"], !raw.isEmpty else { return nil }
+        let parts = raw.split(separator: ";")
+        guard let last = parts.last, let bgCode = Int(last.trimmingCharacters(in: .whitespaces)) else {
+            return nil
+        }
+        guard bgCode >= 0 && bgCode <= 255 else { return nil }
+        let rgba = TUIThemeBridge.ansiToRgba(bgCode)
+        let (r, g, b, _) = rgba.toInts()
+        return inferThemeModeFromRGB(r: r, g: g, b: b)
+    }
+
+    /// Queries a live terminal (already in raw mode) with OSC 11 (`\x1b]11;?\x07`), polling non-blocking
+    /// for up to `timeoutMs` ms before falling back to `COLORFGBG` and finally `.dark`.
+    public static func probeLiveTerminal(
+        backend: PlatformTerminalBackend,
+        environment: [String: String],
+        timeoutMs: Int = 120
+    ) async -> (mode: ThemeMode, leftoverBytes: [UInt8]) {
+        let query = Array("\u{1B}]11;?\u{07}".utf8)
+        try? await backend.write(query)
+
+        let deadline = ContinuousClock.now + .milliseconds(max(1, timeoutMs))
+        var accumulated: [UInt8] = []
+
+        while ContinuousClock.now < deadline {
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            let remMs = max(1, Int32(remaining.components.seconds * 1000 + remaining.components.attoseconds / 1_000_000_000_000_000))
+            let chunk = (try? backend.pollRead(maxBytes: 1024, timeoutMs: min(remMs, 20))) ?? []
+            if !chunk.isEmpty {
+                accumulated.append(contentsOf: chunk)
+                let extracted = extractOSC11(from: accumulated)
+                if let mode = extracted.mode {
+                    return (mode, extracted.remaining)
+                }
+            }
+        }
+
+        let extracted = extractOSC11(from: accumulated)
+        if let mode = extracted.mode {
+            return (mode, extracted.remaining)
+        }
+        if let envMode = detectFromEnvironment(environment) {
+            return (envMode, extracted.remaining)
+        }
+        return (.dark, extracted.remaining)
+    }
+}
+
+// MARK: - Live Interactive OpenCode TUI Loop
+
 /// Live interactive terminal UI runtime for `swift-opencode`, built directly on `Packages/OpenTUI`
 /// (`OpenTUIView` + `OpenTUIRenderables` + `OpenTUITerminal`), `ThemeDefaults`/`ThemeResolver`,
-/// and `OpenCodeClient`.
+/// and `OpenCodeClient`, matching upstream OpenCode 2.3.2 visually and interactively.
 public enum TUIInteractiveLoop {
     public struct TranscriptMessage: Equatable, Sendable {
         public let id: String
@@ -39,62 +166,31 @@ public enum TUIInteractiveLoop {
         }
     }
 
-    private struct UIState: Sendable {
-        var route: TUIContext.Route
-        var mode: ThemeMode
-        var showSidebar: Bool = true
-        var showPalette: Bool = false
-        var paletteIndex: Int = 0
-        var sessionSelectIndex: Int = 0
-        var focusOnSessions: Bool = false
-        var promptText: String = ""
-        var serverVersion: String = "connecting…"
-        var serverURL: String
-        var directory: String
-        var statusLine: String = "Connected — type a prompt and press Enter, or Ctrl+P for commands"
-        var sessions: [SessionSummary] = []
-        var activeSessionID: String? = nil
-        var activeSessionTitle: String = "New Session"
-        var messages: [TranscriptMessage] = []
-        var cols: Int = 100
-        var rows: Int = 30
-        var shouldQuit: Bool = false
-        var exitReason: String? = nil
+    private static let doubleEscInterruptWindowMs: Double = 2_000
+    private static let spinnerFrameIntervalMs: Double = 80
 
-        var isHome: Bool {
-            if case .home = route { return true }
-            return false
-        }
-    }
-
-    private final class Store: Sendable {
-        private let state: Mutex<UIState>
-        init(_ initial: UIState) { self.state = Mutex(initial) }
-        func withLock<R>(_ body: (inout UIState) -> sending R) -> sending R { state.withLock(body) }
-    }
-
-    private static let paletteOptions: [SelectOption] = [
-        SelectOption(name: "New Session", description: "Start a fresh conversation (/new)"),
-        SelectOption(name: "Go to Home", description: "Return to the home dashboard (/home)"),
-        SelectOption(name: "Toggle Sidebar", description: "Show or hide session metadata sidebar (Ctrl+B)"),
-        SelectOption(name: "Toggle Theme (Dark / Light)", description: "Switch OpenCode semantic theme mode (Ctrl+T)"),
-        SelectOption(name: "Refresh Sessions", description: "Reload sessions & messages from server"),
-        SelectOption(name: "Quit OpenCode", description: "Exit the terminal UI cleanly (Ctrl+C)"),
-    ]
-
-    /// Runs the live interactive terminal UI loop over `PlatformTerminalBackend`.
+    /// Runs the live interactive terminal UI loop over `PlatformTerminalBackend` with automatic
+    /// OSC 11 light/dark theme detection and live SSE `/api/event` streaming.
     public static func runInteractive(
         input: TUIApp.TuiInput,
         resolved: TUIConfig.Resolved,
         initialRoute: TUIContext.Route
     ) async throws -> TUIApp.RunResult {
-        let backend = PlatformTerminalBackend(defaultSize: TerminalSize(width: 100, height: 30))
+        let backend = PlatformTerminalBackend(defaultSize: TerminalSize(width: 100, height: 34))
         let initialSize = await backend.size
         let directory = input.environment["OPENCODE_CWD"]
             ?? input.environment["PWD"]
             ?? Global.Path.home
+        let homeDirectory = input.environment["HOME"] ?? Global.Path.home
 
-        let initialMode: ThemeMode = (resolved.theme?.mode == .light) ? .light : .dark
+        let themePreference: TUIThemePreference
+        switch resolved.theme?.mode {
+        case .light: themePreference = .light
+        case .dark: themePreference = .dark
+        case .system, .none: themePreference = .auto
+        }
+
+        let initialDetected = TerminalThemeDetector.detectFromEnvironment(input.environment) ?? .dark
         let initialSessionID: String?
         if case .session(let sr) = initialRoute {
             initialSessionID = sr.sessionID
@@ -102,16 +198,22 @@ public enum TUIInteractiveLoop {
             initialSessionID = nil
         }
 
-        let store = Store(UIState(
+        let initialState = TUIInteractiveState(
             route: initialRoute,
-            mode: initialMode,
-            promptText: input.args.prompt ?? "",
+            themeName: resolved.theme?.name ?? "opencode",
+            themePreference: themePreference,
+            detectedMode: initialDetected,
+            cols: initialSize.width,
+            rows: initialSize.height,
+            serverVersion: input.app.version.isEmpty ? "2.3.2" : input.app.version,
             serverURL: input.server.baseUrl,
             directory: directory,
+            homeDirectory: homeDirectory,
             activeSessionID: initialSessionID,
-            cols: initialSize.width,
-            rows: initialSize.height
-        ))
+            promptText: input.args.prompt ?? ""
+        )
+
+        let store = TUIInteractiveStore(initialState)
 
         let client = OpenCodeClient(options: ClientOptions(
             baseUrl: input.server.baseUrl,
@@ -119,6 +221,8 @@ public enum TUIInteractiveLoop {
             headers: input.server.headers
         ))
 
+        let clock = ManualClock()
+        let initialTheme = initialState.resolveTheme()
         let renderer = CliRenderer(
             config: CliRendererConfig(
                 width: initialSize.width,
@@ -127,44 +231,20 @@ public enum TUIInteractiveLoop {
                 exitOnCtrlC: false,
                 debounceDelay: 0,
                 useMouse: resolved.mouse,
-                clock: ManualClock()
+                backgroundColor: initialTheme.background.base,
+                clock: clock
             )
         )
 
         let dirty = Mutex(true)
         @Sendable func markDirty() { dirty.withLock { $0 = true } }
 
-        // Background initial server bootstrap (non-blocking — TUI renders immediately!)
-        let refreshSessions: @Sendable () -> Void = {
-            Task {
-                if let info = try? await client.server.info() {
-                    store.withLock {
-                        $0.serverVersion = info.version
-                    }
-                    markDirty()
-                }
-                if let list = try? await client.session.list(SessionListInput(limit: 20)) {
-                    let summaries = list.data.map { s in
-                        SessionSummary(
-                            id: s.id.rawValue,
-                            title: SessionTitleFallback.displayLabel(title: s.title, parentID: s.parentID?.rawValue)
-                        )
-                    }
-                    store.withLock {
-                        $0.sessions = summaries
-                        if let activeID = $0.activeSessionID,
-                           let matched = summaries.first(where: { $0.id == activeID }) {
-                            $0.activeSessionTitle = matched.title
-                        }
-                    }
-                    markDirty()
-                }
-                if let activeID = store.withLock({ $0.activeSessionID }) {
-                    await loadMessages(sessionID: activeID, client: client, store: store, markDirty: markDirty)
-                }
-            }
-        }
-        refreshSessions()
+        let controller = TUIInteractiveClient(
+            client: client,
+            store: store,
+            directory: directory,
+            markDirty: markDirty
+        )
 
         try await runWithTerminalBackend(
             renderer: renderer,
@@ -177,20 +257,68 @@ public enum TUIInteractiveLoop {
                 enableMouseMovement: resolved.mouse
             )
         ) { liveRenderer, session in
+            // 1. Auto-detect Light/Dark terminal background via OSC 11 before first paint (120ms max wait)
+            var startupLeftoverBytes: [UInt8] = []
+            if themePreference == .auto {
+                let probe = await TerminalThemeDetector.probeLiveTerminal(
+                    backend: backend,
+                    environment: input.environment,
+                    timeoutMs: 120
+                )
+                startupLeftoverBytes = probe.leftoverBytes
+                store.withLock { state in
+                    state.detectedMode = probe.mode
+                }
+            }
+
+            // Subscribe to live OS/terminal theme changes (DSR ?997 / late OSC 11 replies)
+            _ = liveRenderer.onThemeMode { mode in
+                store.withLock { state in
+                    state.detectedMode = mode
+                }
+                markDirty()
+            }
+
+            // 2. Sync initial theme background and mount view
+            let bootTheme = store.snapshot().resolveTheme()
+            liveRenderer.setBackgroundColor(bootTheme.background.base)
+
             let viewRoot = mountInteractiveView(
                 on: liveRenderer,
                 store: store,
-                client: client,
-                directory: directory,
-                refreshSessions: refreshSessions,
+                clientController: controller,
                 markDirty: markDirty
             )
             defer { viewRoot.unmount() }
 
-            await session.renderNow(force: true)
+            // 3. Kick off non-blocking server bootstrap and live SSE `/api/event` subscription
+            controller.bootstrap()
+            let sseTask = controller.startEventStream()
+            defer { sseTask.cancel() }
 
+            // 4. First crisp paint
+            await session.renderNow(force: true)
+            dirty.withLock { $0 = false }
+
+            if !startupLeftoverBytes.isEmpty {
+                session.feedInput(startupLeftoverBytes)
+            }
+
+            // 5. Responsive ~60fps event loop
             var lastSize = initialSize
+            var lastLoopInstant = ContinuousClock.now
+            var spinnerAccumMs: Double = 0
+
             while !store.withLock({ $0.shouldQuit }) && !liveRenderer.isDestroyed {
+                let nowInstant = ContinuousClock.now
+                let elapsed = lastLoopInstant.duration(to: nowInstant)
+                lastLoopInstant = nowInstant
+                let dtMs = max(0.0, Double(elapsed.components.seconds) * 1000.0 + Double(elapsed.components.attoseconds) / 1_000_000_000_000_000.0)
+                if dtMs > 0 {
+                    clock.advance(by: dtMs)
+                }
+
+                // Check terminal resize
                 let currentSize = await backend.size
                 if currentSize != lastSize {
                     lastSize = currentSize
@@ -204,9 +332,34 @@ public enum TUIInteractiveLoop {
                     dirty.withLock { $0 = false }
                 }
 
+                // Poll terminal input (~60fps cadence)
                 let bytes = (try? backend.pollRead(maxBytes: 4096, timeoutMs: 16)) ?? []
                 if !bytes.isEmpty {
                     session.feedInput(bytes)
+                }
+
+                // Advance live spinner animation & auto-disarm double-Esc interrupt timer
+                let clockNow = clock.now()
+                let tickDirty = store.withLock { state -> Bool in
+                    var changed = false
+                    if state.interruptArmed && (clockNow - state.interruptArmedAtMs >= doubleEscInterruptWindowMs) {
+                        state.interruptArmed = false
+                        changed = true
+                    }
+                    if state.sessionStatus.isRunning {
+                        spinnerAccumMs += dtMs
+                        if spinnerAccumMs >= spinnerFrameIntervalMs {
+                            spinnerAccumMs = spinnerAccumMs.truncatingRemainder(dividingBy: spinnerFrameIntervalMs)
+                            state.spinnerTick &+= 1
+                            changed = true
+                        }
+                    } else {
+                        spinnerAccumMs = 0
+                    }
+                    return changed
+                }
+                if tickDirty {
+                    markDirty()
                 }
 
                 let needsRender = dirty.withLock { flag -> Bool in
@@ -215,6 +368,8 @@ public enum TUIInteractiveLoop {
                     return true
                 }
                 if needsRender && !store.withLock({ $0.shouldQuit }) && !liveRenderer.isDestroyed {
+                    let theme = store.snapshot().resolveTheme()
+                    liveRenderer.setBackgroundColor(theme.background.base)
                     viewRoot.invalidate()
                     await session.renderNow(force: false)
                 } else if bytes.isEmpty {
@@ -235,40 +390,31 @@ public enum TUIInteractiveLoop {
     /// Renders a headless OpenTUI text snapshot of either the Home or Session view for testing and non-TTY previews.
     public static func renderPreviewFrame(
         width: Int = 100,
-        height: Int = 30,
+        height: Int = 34,
         route: TUIContext.Route = .home(TUIContext.HomeRoute()),
         mode: ThemeMode = .dark,
         serverURL: String = "http://127.0.0.1:4096",
-        directory: String = "/workspace"
+        directory: String = "/workspace",
+        state overrideState: TUIInteractiveState? = nil
     ) -> String {
-        let test = createTestRenderer(width: width, height: height)
-        defer { test.destroy() }
-        let store = Store(UIState(
+        let initial = overrideState ?? makeDefaultPreviewState(
+            width: width,
+            height: height,
             route: route,
             mode: mode,
-            serverVersion: "swift-opencode 2.0",
             serverURL: serverURL,
-            directory: directory,
-            sessions: [
-                SessionSummary(id: "ses_demo01", title: "Port OpenCode to Swift 6.2"),
-                SessionSummary(id: "ses_demo02", title: "Verify OpenTUI 100% Parity"),
-            ],
-            activeSessionID: "ses_demo01",
-            activeSessionTitle: "Port OpenCode to Swift 6.2",
-            messages: [
-                TranscriptMessage(id: "msg_1", role: "user", text: "Check parity status across all Swift targets."),
-                TranscriptMessage(id: "msg_2", role: "assistant", text: "All **15 OpenCode packages** (9,404 symbols) and **5 OpenTUI packages** (5,679 symbols) are at **100.0% parity**."),
-            ],
-            cols: width,
-            rows: height
-        ))
+            directory: directory
+        )
+        let theme = initial.resolveTheme()
+        let test = createTestRenderer(width: width, height: height, backgroundColor: theme.background.base)
+        defer { test.destroy() }
+        let store = TUIInteractiveStore(initial)
         let client = OpenCodeClient(options: ClientOptions(baseUrl: serverURL, transport: MockHTTPTransport()))
+        let controller = TUIInteractiveClient(client: client, store: store, directory: directory, markDirty: {})
         let root = mountInteractiveView(
             on: test.renderer,
             store: store,
-            client: client,
-            directory: directory,
-            refreshSessions: {},
+            clientController: controller,
             markDirty: {}
         )
         test.renderOnce(force: true)
@@ -277,253 +423,356 @@ public enum TUIInteractiveLoop {
         return frame
     }
 
-    // MARK: - View Composition & Event Wiring
-
-    private static func loadMessages(
-        sessionID: String,
-        client: OpenCodeClient,
-        store: Store,
-        markDirty: @escaping @Sendable () -> Void
-    ) async {
-        guard let resp = try? await client.message.list(MessageListInput(sessionID: sessionID, limit: 50)) else {
-            return
-        }
-        let mapped: [TranscriptMessage] = resp.data.compactMap { msg in
-            switch msg {
-            case .user(let u):
-                return TranscriptMessage(id: u.id.rawValue, role: "user", text: u.text)
-            case .synthetic(let s):
-                return TranscriptMessage(id: s.id.rawValue, role: "system", text: s.text)
-            case .assistant(let a):
-                let parts = a.content.compactMap { part -> String? in
-                    switch part {
-                    case .text(let t): return t.text
-                    case .reasoning(let r): return r.text.isEmpty ? nil : "_Thinking:_ \(r.text)"
-                    case .tool(let tl): return "`tool:\(tl.name)`"
-                    }
-                }
-                let combined = parts.joined(separator: "\n")
-                return combined.isEmpty ? nil : TranscriptMessage(id: a.id.rawValue, role: "assistant", text: combined)
-            default:
-                return nil
-            }
-        }
-        store.withLock {
-            if $0.activeSessionID == sessionID {
-                $0.messages = mapped
-            }
-        }
-        markDirty()
+    public static func makeDefaultPreviewState(
+        width: Int = 100,
+        height: Int = 34,
+        route: TUIContext.Route = .home(TUIContext.HomeRoute()),
+        mode: ThemeMode = .dark,
+        serverURL: String = "http://127.0.0.1:4096",
+        directory: String = "/Users/dev/.t3/projects/swift-opencode",
+        homeDirectory: String = "/Users/dev"
+    ) -> TUIInteractiveState {
+        let claude = TUIModelItem(
+            id: "claude-sonnet-4-5",
+            providerID: "anthropic",
+            name: "Claude Sonnet 4.5",
+            providerName: "Anthropic",
+            variants: ["high", "xhigh"],
+            contextLimit: 200_000
+        )
+        let gpt = TUIModelItem(
+            id: "gpt-5.3-codex",
+            providerID: "openai",
+            name: "GPT-5.3 Codex",
+            providerName: "OpenAI",
+            variants: ["medium", "high"],
+            contextLimit: 256_000
+        )
+        return TUIInteractiveState(
+            route: route,
+            themeName: "opencode",
+            themePreference: mode == .light ? .light : .dark,
+            detectedMode: mode,
+            cols: width,
+            rows: height,
+            serverVersion: "2.3.2",
+            serverURL: serverURL,
+            directory: directory,
+            homeDirectory: homeDirectory,
+            gitBranch: "main",
+            agents: TUIAgentItem.defaultFallback,
+            selectedAgentIndex: 0,
+            providers: ["anthropic": "Anthropic", "openai": "OpenAI"],
+            models: [claude, gpt],
+            selectedModel: claude,
+            mcpServers: [
+                TUIMCPServerItem(name: "github", status: .connected),
+                TUIMCPServerItem(name: "linear", status: .connected),
+                TUIMCPServerItem(name: "postgres", status: .connected),
+            ],
+            sessions: [
+                TUISessionItem(id: "ses_demo01", title: "Port OpenCode to Swift 6.2", directory: directory),
+                TUISessionItem(id: "ses_demo02", title: "Verify OpenTUI 100% Parity", directory: directory),
+            ],
+            activeSessionID: "ses_demo01",
+            activeSessionTitle: "Port OpenCode to Swift 6.2",
+            contextTokens: 12_400,
+            contextLimit: 200_000,
+            sessionCost: 0.04,
+            modifiedFiles: [
+                TUIModifiedFileItem(path: "Sources/OpenCodeTUI/App/TUIInteractiveLoop.swift", additions: 142, deletions: 48, status: "modified"),
+            ],
+            messages: [
+                .user(id: "msg_1", text: "Check parity status across all Swift targets.", agentName: "Build", isOptimistic: false),
+                .assistant(
+                    id: "msg_2",
+                    agentName: "Build",
+                    modelLabel: "Claude Sonnet 4.5",
+                    parts: [
+                        .reasoning(id: "r_1", text: "Inspecting the parity manifest and test targets.", completed: true),
+                        .tool(id: "t_1", name: "read", status: .completed, summary: "parity/report.json", outputPreview: "9404/9404 symbols implemented", error: nil),
+                        .text(id: "p_1", text: "All **15 OpenCode packages** (9,404 symbols) and **5 OpenTUI packages** are at **100.0% parity**."),
+                    ],
+                    completed: true,
+                    error: nil
+                ),
+            ]
+        )
     }
 
-    private static func submitPrompt(
-        rawText: String,
-        store: Store,
-        client: OpenCodeClient,
-        directory: String,
-        refreshSessions: @escaping @Sendable () -> Void,
-        markDirty: @escaping @Sendable () -> Void
-    ) {
-        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    // MARK: - View Composition & Keyboard Routing
 
-        // Handle slash commands directly in the TUI
-        switch trimmed.lowercased() {
-        case "/quit", "/exit", "/q":
-            store.withLock { $0.shouldQuit = true; $0.exitReason = "slash_quit" }
-            markDirty()
-            return
-        case "/home":
-            store.withLock {
-                $0.route = .home(TUIContext.HomeRoute())
-                $0.promptText = ""
-                $0.statusLine = "Home — type a prompt or pick a session"
-            }
-            markDirty()
-            return
-        case "/new":
-            store.withLock {
-                $0.activeSessionID = nil
-                $0.activeSessionTitle = "New Session"
-                $0.messages = []
-                $0.route = .home(TUIContext.HomeRoute())
-                $0.promptText = ""
-                $0.statusLine = "Started fresh session draft"
-            }
-            markDirty()
-            return
-        case "/theme":
-            store.withLock {
-                $0.mode = ($0.mode == .dark) ? .light : .dark
-                $0.promptText = ""
-                $0.statusLine = "Switched theme to \($0.mode.rawValue) mode"
-            }
-            markDirty()
-            return
-        case "/sidebar":
-            store.withLock {
-                $0.showSidebar.toggle()
-                $0.promptText = ""
-                $0.statusLine = $0.showSidebar ? "Sidebar visible" : "Sidebar hidden"
-            }
-            markDirty()
-            return
-        case "/help", "/commands":
-            store.withLock {
-                $0.showPalette = true
-                $0.promptText = ""
-            }
-            markDirty()
-            return
-        default:
-            break
-        }
-
-        let currentSessionID = store.withLock { s -> String? in
-            s.promptText = ""
-            s.messages.append(TranscriptMessage(id: "local-\(s.messages.count + 1)", role: "user", text: trimmed))
-            s.statusLine = "Sending prompt to \(s.serverURL)…"
-            return s.activeSessionID
-        }
-        markDirty()
-
-        Task {
-            do {
-                let targetSessionID: String
-                if let existing = currentSessionID {
-                    targetSessionID = existing
-                } else {
-                    let title = String(trimmed.prefix(48))
-                    let loc = LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: directory))
-                    let created = try await client.session.create(SessionCreateInput(
-                        title: title,
-                        location: loc
-                    ))
-                    targetSessionID = created.id.rawValue
-                    store.withLock {
-                        $0.activeSessionID = targetSessionID
-                        $0.activeSessionTitle = title
-                        $0.route = .session(TUIContext.SessionRoute(sessionID: targetSessionID))
-                    }
-                    markDirty()
-                }
-                _ = try await client.session.prompt(SessionPromptInput(
-                    sessionID: targetSessionID,
-                    text: trimmed
-                ))
-                store.withLock {
-                    $0.route = .session(TUIContext.SessionRoute(sessionID: targetSessionID))
-                    $0.statusLine = "Prompt admitted on session \(targetSessionID)"
-                }
-                await loadMessages(sessionID: targetSessionID, client: client, store: store, markDirty: markDirty)
-                refreshSessions()
-            } catch {
-                store.withLock {
-                    $0.messages.append(TranscriptMessage(
-                        id: "err-\($0.messages.count + 1)",
-                        role: "system",
-                        text: "Server response: \(error)"
-                    ))
-                    $0.statusLine = "Error: \(error)"
-                }
-                markDirty()
-            }
-        }
-    }
-
-    private static func mountInteractiveView(
+    /// Mounts the complete upstream-parity interactive TUI view tree and keyboard router onto `renderer`.
+    public static func mountInteractiveView(
         on renderer: CliRenderer,
-        store: Store,
-        client: OpenCodeClient,
-        directory: String,
-        refreshSessions: @escaping @Sendable () -> Void,
+        store: TUIInteractiveStore,
+        clientController: TUIInteractiveClient,
         markDirty: @escaping @Sendable () -> Void
     ) -> TUIViewRoot {
         let viewRoot = TUIViewRoot(renderer: renderer)
         viewRoot.autoRenderOnInvalidate = false
 
-        let executePaletteAction: @Sendable (Int) -> Void = { index in
-            store.withLock { $0.showPalette = false }
-            switch index {
-            case 0:
-                submitPrompt(rawText: "/new", store: store, client: client, directory: directory, refreshSessions: refreshSessions, markDirty: markDirty)
-            case 1:
-                submitPrompt(rawText: "/home", store: store, client: client, directory: directory, refreshSessions: refreshSessions, markDirty: markDirty)
-            case 2:
-                submitPrompt(rawText: "/sidebar", store: store, client: client, directory: directory, refreshSessions: refreshSessions, markDirty: markDirty)
-            case 3:
-                submitPrompt(rawText: "/theme", store: store, client: client, directory: directory, refreshSessions: refreshSessions, markDirty: markDirty)
-            case 4:
-                store.withLock { $0.statusLine = "Refreshing sessions from server…" }
-                refreshSessions()
-            case 5:
-                store.withLock { $0.shouldQuit = true; $0.exitReason = "palette_quit" }
-            default:
-                break
+        let actions = TUIScreenActions(
+            onPromptInput: { value in
+                store.withLock { state in
+                    state.promptText = value
+                    state.slashAutocompleteDismissed = false
+                    state.slashAutocompleteIndex = 0
+                }
+                markDirty()
+            },
+            onPromptSubmit: { value in
+                clientController.submitPrompt(rawText: value)
+            },
+            onDialogFilterInput: { value in
+                store.withLock { state in
+                    state.dialogFilter = value
+                    state.dialogSelectedIndex = 0
+                }
+                clientController.previewThemeRowIfNeeded()
+                markDirty()
+            },
+            onDialogSubmit: {
+                clientController.confirmSelectedDialogRow()
+            },
+            onDialogClose: {
+                clientController.closeDialog(commitTheme: false)
+            },
+            onOpenMCPDialog: {
+                clientController.openDialog(.mcpStatus)
             }
-            markDirty()
-        }
+        )
 
-        _ = renderer.keyInput.onKeypress { event in
-            let snap = store.withLock { $0 }
-            if event.ctrl && (event.name == "c" || event.name == "d") {
-                store.withLock { $0.shouldQuit = true; $0.exitReason = "ctrl_c" }
+        _ = renderer.keyInput.onKeypress { [weak renderer] event in
+            let snap = store.snapshot()
+
+            // Ctrl+D always exits cleanly
+            if event.ctrl && event.name == "d" {
+                store.withLock {
+                    $0.shouldQuit = true
+                    $0.exitReason = "ctrl_d"
+                }
                 event.preventDefault()
                 markDirty()
                 return
             }
+
+            // Ctrl+C: close/clear dialog filter, clear non-empty prompt, or quit
+            if event.ctrl && event.name == "c" {
+                if snap.activeDialog != nil {
+                    if !snap.dialogFilter.isEmpty {
+                        store.withLock {
+                            $0.dialogFilter = ""
+                            $0.dialogSelectedIndex = 0
+                        }
+                        markDirty()
+                    } else {
+                        clientController.closeDialog(commitTheme: false)
+                    }
+                    event.preventDefault()
+                    return
+                }
+                if !snap.promptText.isEmpty {
+                    store.withLock {
+                        $0.promptText = ""
+                        $0.slashAutocompleteDismissed = false
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+                }
+                store.withLock {
+                    $0.shouldQuit = true
+                    $0.exitReason = "ctrl_c"
+                }
+                event.preventDefault()
+                markDirty()
+                return
+            }
+
+            // Ctrl+P toggles Command Palette
             if event.ctrl && event.name == "p" {
-                store.withLock { $0.showPalette.toggle() }
+                if snap.activeDialog == .commandPalette {
+                    clientController.closeDialog(commitTheme: false)
+                } else {
+                    clientController.openDialog(.commandPalette)
+                }
                 event.preventDefault()
-                markDirty()
                 return
             }
+
+            // Ctrl+T toggles Light / Dark theme mode immediately
             if event.ctrl && event.name == "t" {
-                store.withLock {
-                    $0.mode = ($0.mode == .dark) ? .light : .dark
-                    $0.statusLine = "Theme: \($0.mode.rawValue)"
+                clientController.toggleThemeMode()
+                if let r = renderer {
+                    r.setBackgroundColor(store.snapshot().resolveTheme().background.base)
                 }
                 event.preventDefault()
-                markDirty()
                 return
             }
+
+            // Ctrl+B toggles right Session Sidebar
             if event.ctrl && event.name == "b" {
-                store.withLock {
-                    $0.showSidebar.toggle()
-                    $0.statusLine = $0.showSidebar ? "Sidebar shown" : "Sidebar hidden"
-                }
+                clientController.toggleSidebar()
                 event.preventDefault()
-                markDirty()
                 return
             }
+
+            // Ctrl+N starts a new session
             if event.ctrl && event.name == "n" {
-                submitPrompt(rawText: "/new", store: store, client: client, directory: directory, refreshSessions: refreshSessions, markDirty: markDirty)
+                clientController.startNewSession()
                 event.preventDefault()
                 return
             }
-            if event.name == "escape" {
-                if snap.showPalette {
-                    store.withLock { $0.showPalette = false }
+
+            // Modal Dialog Keyboard Handling (arrows, pageup/down, enter, escape)
+            if snap.activeDialog != nil {
+                switch event.name {
+                case "escape":
+                    clientController.closeDialog(commitTheme: false)
+                    event.preventDefault()
+                    return
+
+                case "up":
+                    moveDialogSelection(by: -1, store: store, controller: clientController, markDirty: markDirty)
+                    event.preventDefault()
+                    return
+
+                case "down":
+                    moveDialogSelection(by: 1, store: store, controller: clientController, markDirty: markDirty)
+                    event.preventDefault()
+                    return
+
+                case "pageup":
+                    moveDialogSelection(by: -5, store: store, controller: clientController, markDirty: markDirty)
+                    event.preventDefault()
+                    return
+
+                case "pagedown":
+                    moveDialogSelection(by: 5, store: store, controller: clientController, markDirty: markDirty)
+                    event.preventDefault()
+                    return
+
+                case "return", "enter":
+                    clientController.confirmSelectedDialogRow()
+                    event.preventDefault()
+                    return
+
+                default:
+                    // Let focused filter TUIInput receive printable typing & editing keys
+                    return
+                }
+            }
+
+            // Shift+Tab cycles active agent (`Build` <-> `Plan` <-> server agents)
+            if event.name == "tab" && event.shift {
+                clientController.cycleAgent(direction: 1)
+                event.preventDefault()
+                return
+            }
+
+            // Live `/` Slash Command Autocomplete Navigation
+            if snap.isSlashAutocompleteVisible {
+                let matches = snap.slashMatches
+                switch event.name {
+                case "up":
+                    store.withLock { state in
+                        let count = max(1, matches.count)
+                        state.slashAutocompleteIndex = (state.slashAutocompleteIndex - 1 + count) % count
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                case "down":
+                    store.withLock { state in
+                        let count = max(1, matches.count)
+                        state.slashAutocompleteIndex = (state.slashAutocompleteIndex + 1) % count
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                case "tab":
+                    let idx = min(max(0, snap.slashAutocompleteIndex), matches.count - 1)
+                    let chosen = matches[idx]
+                    store.withLock { state in
+                        state.promptText = chosen.name
+                        state.slashAutocompleteIndex = 0
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                case "escape":
+                    store.withLock { state in
+                        state.slashAutocompleteDismissed = true
+                    }
+                    event.preventDefault()
+                    markDirty()
+                    return
+
+                case "return", "enter":
+                    let idx = min(max(0, snap.slashAutocompleteIndex), matches.count - 1)
+                    let chosen = matches[idx]
+                    event.preventDefault()
+                    clientController.submitPrompt(rawText: chosen.name)
+                    return
+
+                default:
+                    break
+                }
+            }
+
+            // Smooth Session Transcript Scrolling (PageUp / PageDown / Up & Down when prompt empty)
+            if !snap.isHome, let scrollBox = renderer?.root.findDescendantById("session-scrollbox") as? ScrollBoxRenderable {
+                let pageStep = Double(max(4, snap.rows - 10))
+                if event.name == "pageup" {
+                    scrollBox.scrollBy(-pageStep)
                     event.preventDefault()
                     markDirty()
                     return
                 }
-                if snap.focusOnSessions {
-                    store.withLock { $0.focusOnSessions = false }
+                if event.name == "pagedown" {
+                    scrollBox.scrollBy(pageStep)
                     event.preventDefault()
                     markDirty()
                     return
                 }
-                if case .session = snap.route {
-                    store.withLock { $0.route = .home(TUIContext.HomeRoute()) }
+                if snap.promptText.isEmpty && event.name == "up" {
+                    scrollBox.scrollBy(-3)
+                    event.preventDefault()
+                    markDirty()
+                    return
+                }
+                if snap.promptText.isEmpty && event.name == "down" {
+                    scrollBox.scrollBy(3)
                     event.preventDefault()
                     markDirty()
                     return
                 }
             }
-            if event.name == "tab" && !snap.showPalette {
-                if case .home = snap.route, !snap.sessions.isEmpty {
-                    store.withLock { $0.focusOnSessions.toggle() }
+
+            // Escape on Session: double-Esc interrupts running execution, or returns Home when idle
+            if event.name == "escape" {
+                if !snap.isHome {
+                    if snap.sessionStatus.isRunning {
+                        let nowMs = renderer?.clock.now() ?? 0
+                        if snap.interruptArmed && (nowMs - snap.interruptArmedAtMs < doubleEscInterruptWindowMs) {
+                            clientController.interruptActiveSession()
+                        } else {
+                            store.withLock { state in
+                                state.interruptArmed = true
+                                state.interruptArmedAtMs = nowMs
+                            }
+                            markDirty()
+                        }
+                        event.preventDefault()
+                        return
+                    }
+                    store.withLock { state in
+                        state.route = .home(TUIContext.HomeRoute())
+                    }
                     event.preventDefault()
                     markDirty()
                     return
@@ -531,289 +780,35 @@ public enum TUIInteractiveLoop {
             }
         }
 
-        viewRoot.render {
-            let snap = store.withLock { $0 }
-            let resolvedTheme = ThemeDefaults.resolveOrDefault(nil, mode: snap.mode)
-            let tokens = resolvedTheme.tokens
-            let syntaxStyle = generateSyntax(resolvedTheme)
-            let bgRoot = Color.rgba(tokens.background.base)
-            let bgPanel = Color.rgba(tokens.background.raised.base)
-            let fgText = Color.rgba(tokens.text.base)
-            let fgMuted = Color.rgba(tokens.text.muted)
-            let fgAccent = Color.rgba(tokens.text.action.primary.base)
-            let borderCol = Color.rgba(tokens.border.base)
-            let borderFocus = Color.rgba(tokens.text.formfield.focused)
-
-            let sessionSelectOpts: [SelectOption] = snap.sessions.isEmpty
-                ? [SelectOption(name: "No sessions yet", description: "Type a prompt above and press Enter to start one")]
-                : snap.sessions.map { SelectOption(name: $0.title, description: $0.id) }
-
-            let isHome = snap.isHome
-
-            VStack(spacing: 0) {
-                // Top Header Bar
-                TUIBox(
-                    border: false,
-                    backgroundColor: bgPanel,
-                    shouldFill: true
-                ) {
-                    HStack(spacing: 2) {
-                        TUIText(" ◆ OPENCODE SWIFT ", fg: fgAccent, attributes: createTextAttributes(bold: true))
-                        TUIText(isHome ? "Home" : "Session: \(snap.activeSessionTitle)", fg: fgText)
-                        TUISpacer()
-                        TUIText("● \(snap.serverURL) (\(snap.serverVersion)) ", fg: fgMuted)
-                    }
-                }
-                .width(.percent(100))
-                .height(1)
-
-                if snap.showPalette {
-                    // Command Palette Overlay
-                    VStack(spacing: 1) {
-                        TUIBox(
-                            border: true,
-                            borderStyle: .rounded,
-                            borderColor: borderFocus,
-                            backgroundColor: bgPanel,
-                            shouldFill: true,
-                            title: " Command Palette (↑/↓ Enter, Esc close) "
-                        ) {
-                            TUISelect(
-                                options: paletteOptions,
-                                selectedIndex: snap.paletteIndex,
-                                wrapSelection: true,
-                                showDescription: true,
-                                selectedTextColor: bgRoot,
-                                selectedBackgroundColor: fgAccent,
-                                onChange: { idx, _ in
-                                    store.withLock { $0.paletteIndex = idx }
-                                    markDirty()
-                                },
-                                onSelect: { idx, _ in
-                                    executePaletteAction(idx)
-                                }
-                            )
-                            .key("opencode-palette")
-                            .width(.percent(100))
-                            .height(12)
-                            .focused(true)
-                        }
-                        .width(.percent(100))
-                        .flexGrow(1)
-                    }
-                    .padding(top: 1, right: 2, bottom: 1, left: 2)
-                    .width(.percent(100))
-                    .flexGrow(1)
-                } else if isHome {
-                    // Home Screen
-                    VStack(spacing: 1) {
-                        TUIBox(
-                            border: true,
-                            borderStyle: .rounded,
-                            borderColor: borderCol,
-                            backgroundColor: bgPanel,
-                            shouldFill: true,
-                            title: " swift-opencode • 100% Parity Native Swift 6.2 "
-                        ) {
-                            VStack(spacing: 0) {
-                                TUIASCIIFont("OPENCODE", font: .tiny, color: fgAccent)
-                                TUIText("Directory: \(snap.directory)", fg: fgMuted)
-                                TUIText("Commands: /new • /theme • /sidebar • /help • /quit", fg: fgMuted)
-                            }
-                        }
-                        .width(.percent(100))
-                        .height(7)
-
-                        TUIBox(
-                            border: true,
-                            borderStyle: .rounded,
-                            borderColor: !snap.focusOnSessions ? borderFocus : borderCol,
-                            backgroundColor: bgPanel,
-                            shouldFill: true,
-                            title: " Ask anything (Enter to send • Tab to switch to Sessions) "
-                        ) {
-                            TUIInput(
-                                value: snap.promptText,
-                                placeholder: "Type a message or /help...",
-                                maxLength: 500,
-                                onInput: { val in
-                                    store.withLock { $0.promptText = val }
-                                    markDirty()
-                                },
-                                onSubmit: { val in
-                                    submitPrompt(
-                                        rawText: val,
-                                        store: store,
-                                        client: client,
-                                        directory: directory,
-                                        refreshSessions: refreshSessions,
-                                        markDirty: markDirty
-                                    )
-                                }
-                            )
-                            .key("home-prompt-input")
-                            .width(.percent(100))
-                            .focused(!snap.focusOnSessions)
-                        }
-                        .width(.percent(100))
-                        .height(3)
-
-                        TUIBox(
-                            border: true,
-                            borderStyle: .rounded,
-                            borderColor: snap.focusOnSessions ? borderFocus : borderCol,
-                            backgroundColor: bgPanel,
-                            shouldFill: true,
-                            title: " Recent Sessions (\(snap.sessions.count)) "
-                        ) {
-                            TUISelect(
-                                options: sessionSelectOpts,
-                                selectedIndex: min(snap.sessionSelectIndex, max(0, sessionSelectOpts.count - 1)),
-                                wrapSelection: true,
-                                showDescription: true,
-                                selectedTextColor: bgRoot,
-                                selectedBackgroundColor: fgAccent,
-                                onChange: { idx, _ in
-                                    store.withLock { $0.sessionSelectIndex = idx }
-                                    markDirty()
-                                },
-                                onSelect: { idx, _ in
-                                    let picked = store.withLock { s -> SessionSummary? in
-                                        guard idx >= 0 && idx < s.sessions.count else { return nil }
-                                        let chosen = s.sessions[idx]
-                                        s.activeSessionID = chosen.id
-                                        s.activeSessionTitle = chosen.title
-                                        s.route = .session(TUIContext.SessionRoute(sessionID: chosen.id))
-                                        s.focusOnSessions = false
-                                        s.statusLine = "Opened session \(chosen.id)"
-                                        return chosen
-                                    }
-                                    markDirty()
-                                    if let picked {
-                                        Task {
-                                            await loadMessages(sessionID: picked.id, client: client, store: store, markDirty: markDirty)
-                                        }
-                                    }
-                                }
-                            )
-                            .key("home-sessions-list")
-                            .width(.percent(100))
-                            .flexGrow(1)
-                            .focused(snap.focusOnSessions)
-                        }
-                        .width(.percent(100))
-                        .flexGrow(1)
-                    }
-                    .padding(top: 1, right: 1, bottom: 0, left: 1)
-                    .width(.percent(100))
-                    .flexGrow(1)
-                } else {
-                    // Session Screen (Transcript + Optional Sidebar + Prompt Composer)
-                    VStack(spacing: 1) {
-                        HStack(spacing: 1) {
-                            TUIBox(
-                                border: true,
-                                borderStyle: .rounded,
-                                borderColor: borderCol,
-                                backgroundColor: bgRoot,
-                                shouldFill: true,
-                                title: " Transcript (\(snap.messages.count) messages) "
-                            ) {
-                                let markdownBody: String = snap.messages.isEmpty
-                                    ? "_No messages yet. Type below and press Enter to send a prompt._"
-                                    : snap.messages.map { m in
-                                        let badge = m.role == "user" ? "**You**" : (m.role == "assistant" ? "**OpenCode**" : "_System_")
-                                        return "\(badge)\n\n\(m.text)"
-                                    }.joined(separator: "\n\n---\n\n")
-
-                                TUIMarkdown(markdownBody, syntaxStyle: syntaxStyle)
-                                    .key("session-transcript")
-                                    .width(.percent(100))
-                                    .flexGrow(1)
-                            }
-                            .flexGrow(1)
-
-                            if snap.showSidebar {
-                                TUIBox(
-                                    border: true,
-                                    borderStyle: .rounded,
-                                    borderColor: borderCol,
-                                    backgroundColor: bgPanel,
-                                    shouldFill: true,
-                                    title: " Session Info "
-                                ) {
-                                    VStack(spacing: 1) {
-                                        TUIText("ID: \(snap.activeSessionID ?? "draft")", fg: fgAccent)
-                                        TUIText("Dir: \(snap.directory)", fg: fgMuted)
-                                        TUIText("Server: \(snap.serverURL)", fg: fgMuted)
-                                        TUIText("Theme: \(snap.mode.rawValue)", fg: fgText)
-                                        TUIText("Messages: \(snap.messages.count)", fg: fgText)
-                                    }
-                                }
-                                .width(32)
-                            }
-                        }
-                        .width(.percent(100))
-                        .flexGrow(1)
-
-                        TUIBox(
-                            border: true,
-                            borderStyle: .rounded,
-                            borderColor: borderFocus,
-                            backgroundColor: bgPanel,
-                            shouldFill: true,
-                            title: " Message (Enter send • Esc home • Ctrl+P commands) "
-                        ) {
-                            TUIInput(
-                                value: snap.promptText,
-                                placeholder: "Send a message or /home, /new, /quit...",
-                                maxLength: 500,
-                                onInput: { val in
-                                    store.withLock { $0.promptText = val }
-                                    markDirty()
-                                },
-                                onSubmit: { val in
-                                    submitPrompt(
-                                        rawText: val,
-                                        store: store,
-                                        client: client,
-                                        directory: directory,
-                                        refreshSessions: refreshSessions,
-                                        markDirty: markDirty
-                                    )
-                                }
-                            )
-                            .key("session-prompt-input")
-                            .width(.percent(100))
-                            .focused(true)
-                        }
-                        .width(.percent(100))
-                        .height(3)
-                    }
-                    .padding(top: 1, right: 1, bottom: 0, left: 1)
-                    .width(.percent(100))
-                    .flexGrow(1)
-                }
-
-                // Bottom Status Bar
-                TUIBox(
-                    border: false,
-                    backgroundColor: bgPanel,
-                    shouldFill: true
-                ) {
-                    HStack(spacing: 2) {
-                        TUIText(" ● \(snap.statusLine)", fg: fgAccent)
-                        TUISpacer()
-                        TUIText("Ctrl+P Palette • Ctrl+T Theme • Ctrl+B Sidebar • Ctrl+C Quit ", fg: fgMuted)
-                    }
-                }
-                .width(.percent(100))
-                .height(1)
-            }
-            .width(.percent(100))
-            .height(.percent(100))
+        viewRoot.render { [weak renderer] in
+            let snap = store.snapshot()
+            let resolvedTheme = snap.resolveTheme()
+            renderer?.setBackgroundColor(resolvedTheme.background.base)
+            return TUIScreens.buildRootView(state: snap, actions: actions)
         }
 
         return viewRoot
+    }
+
+    private static func moveDialogSelection(
+        by delta: Int,
+        store: TUIInteractiveStore,
+        controller: TUIInteractiveClient,
+        markDirty: @escaping @Sendable () -> Void
+    ) {
+        store.withLock { state in
+            let count = state.dialogRows().count
+            guard count > 0 else {
+                state.dialogSelectedIndex = 0
+                return
+            }
+            if abs(delta) == 1 {
+                state.dialogSelectedIndex = ((state.dialogSelectedIndex + delta) % count + count) % count
+            } else {
+                state.dialogSelectedIndex = min(max(0, state.dialogSelectedIndex + delta), count - 1)
+            }
+        }
+        controller.previewThemeRowIfNeeded()
+        markDirty()
     }
 }
