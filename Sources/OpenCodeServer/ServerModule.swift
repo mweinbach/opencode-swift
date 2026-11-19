@@ -752,6 +752,9 @@ public final class ServerLocationBundle: Sendable {
         if let sessionRunner {
             map[CoreSessionRunner.Service.serviceKey] = sessionRunner
         }
+        if let sessionTitle {
+            map[CoreSessionTitle.Service.serviceKey] = sessionTitle
+        }
         return LayerNode.Output(map)
     }
 
@@ -1280,6 +1283,79 @@ public final class ServerAppRuntime: Sendable {
         let capturedGlobal = globalPaths
         let capturedOptions = options
 
+        // Weak indirection box avoids retain cycles between process-global session/automation
+        // services and location-scoped tool environments while letting built-in tools receive
+        // real `session`, `sessionMove`, and `automation` instances directly.
+        let locationsBox = LateBoundLocationMap()
+
+        // Process-global live SessionExecution wired to Location-scoped LiveSessionRunner.
+        let coreSessionExecution = CoreSessionExecution.Service(
+            db: db,
+            store: sessionStore,
+            bus: bus,
+            inbox: sessionInbox,
+            runnerForLocation: { session in
+                guard let locations = locationsBox.value else {
+                    throw CoreSessionErrors.NotFoundError(sessionID: session.id)
+                }
+                let locRef = LocationSchema.Ref(
+                    directory: SchemaPrimitive.AbsolutePath(rawValue: session.location.directory),
+                    workspaceID: session.location.workspaceID
+                )
+                let canonical = CoreLocation.ServiceMap.canonical(locRef)
+                let out = try await locations.get(canonical)
+                guard let bundle = ServerLocationBundle.from(out),
+                      let runner = bundle.sessionRunner
+                else {
+                    throw CoreSessionErrors.NotFoundError(sessionID: session.id)
+                }
+                return runner
+            }
+        )
+        let sessionExecution: any CoreSessionExecution.Interface = ServerLiveRuntime.LiveSessionExecution(
+            inner: coreSessionExecution,
+            store: sessionStore,
+            locationsProvider: { locationsBox.value }
+        )
+        let sessionMove = CoreSessionMove.Service(
+            db: db,
+            bus: bus,
+            store: sessionStore,
+            inbox: sessionInbox,
+            execution: sessionExecution,
+            fileSystem: fileSystem
+        )
+        let sessionRestart = CoreSessionRestart.Service(
+            db: db,
+            store: sessionStore,
+            execution: sessionExecution,
+            bus: bus
+        )
+        let appVersion = options.app?.version ?? "unknown"
+        let session = CoreSession.Service(
+            db: db,
+            bus: bus,
+            store: sessionStore,
+            inbox: sessionInbox,
+            execution: sessionExecution,
+            environment: sessionEnv,
+            fileSystem: fileSystem,
+            version: appVersion
+        )
+
+        let automation = try CoreAutomation.Service(
+            database: db,
+            isEnabled: { dir in
+                guard let locations = locationsBox.value else { return false }
+                let ref = LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
+                guard let out = try? await locations.get(ref),
+                      let bundle = ServerLocationBundle.from(out) else {
+                    return false
+                }
+                return await bundle.flag.enabled(.automations)
+            }
+        )
+
         let locations = CoreLocation.ServiceMap.Service { ref, locScope in
             let dirPath = ref.directory.rawValue
             // Verify directory exists on the configured filesystem (unless root "/" or workerd).
@@ -1325,12 +1401,16 @@ public final class ServerAppRuntime: Sendable {
                 file: capturedConfigOpts?.file,
                 content: capturedConfigOpts?.content
             )
+            let configUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: ConfigSchema.Event.updated.type)
             let configService = await CoreConfig.Service(
                 directory: dirPath,
                 options: configOpts,
                 globalPaths: capturedGlobal,
                 fileSystem: capturedFs,
-                environment: capturedEnv
+                environment: capturedEnv,
+                onUpdated: {
+                    await bus.emit(configUpdatedDef, data: JSONValue.object([:]))
+                }
             )
             let configEntries = await configService.entries()
             let flagService = CoreFlag.Service(
@@ -1364,9 +1444,18 @@ public final class ServerAppRuntime: Sendable {
                 }
             )
             let pluginService = ServerTrackedPluginService(inner: rawPluginService)
-            let commandService = CoreSubsystems.Command.Service()
-            let skillService = CoreSkill.Service()
-            let referenceService = CoreInstruction.Reference.Service()
+            let commandUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: CommandSchema.Event.updated.type)
+            let commandService = CoreSubsystems.Command.Service(onUpdated: {
+                await bus.emit(commandUpdatedDef, data: JSONValue.object([:]))
+            })
+            let skillUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: SkillSchema.Event.updated.type)
+            let skillService = CoreSkill.Service(onUpdated: {
+                await bus.emit(skillUpdatedDef, data: JSONValue.object([:]))
+            })
+            let referenceUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: ReferenceSchema.Event.updated.type)
+            let referenceService = CoreInstruction.Reference.Service(onUpdated: {
+                await bus.emit(referenceUpdatedDef, data: JSONValue.object([:]))
+            })
 
             let fsService: any CoreFilesystem.Interface
             let fsSearchService: any CoreFilesystem.Search.Interface
@@ -1399,6 +1488,7 @@ public final class ServerAppRuntime: Sendable {
                 )
                 vcsService = liveVcs
                 snapshotService = CoreSnapshot.Service(directory: dirPath, fileSystem: capturedFs, enabled: true)
+                await CoreConfigPlugin.Snapshot.apply(entries: configEntries, to: snapshotService)
             }
 
             let shellSelectService = CoreShell.Select.Service(
@@ -1475,18 +1565,43 @@ public final class ServerAppRuntime: Sendable {
                 gitStrategy: CoreWorktree.GitStrategy.make(fileSystem: capturedFs, git: gitService)
             )
 
-            // Seed built-in agents, providers/models, configured MCP servers, and built-in tools.
+            // Seed built-in agents, commands, skills, providers/models (with ModelsDev cache),
+            // configured MCP servers, and built-in tools.
             let defaultAgentsReg = try await ServerLiveRuntime.seedDefaultAgents(
                 into: agentService,
                 configEntries: configEntries,
                 globalPaths: capturedGlobal
             )
+            _ = try await ServerLiveRuntime.seedCommands(
+                into: commandService,
+                directory: dirPath,
+                projectDirectory: resolvedProject.directory.rawValue,
+                globalPaths: capturedGlobal,
+                configEntries: configEntries,
+                fileSystem: capturedFs,
+                sessionProvider: { session },
+                agentService: agentService
+            )
+            _ = try await ServerLiveRuntime.seedSkills(
+                into: skillService,
+                directory: dirPath,
+                projectDirectory: resolvedProject.directory.rawValue,
+                globalPaths: capturedGlobal,
+                configEntries: configEntries,
+                fileSystem: capturedFs
+            )
             try await ServerLiveRuntime.seedProvidersAndModels(
                 integrations: integrationService,
                 providers: providerService,
                 models: modelService,
-                configEntries: configEntries
+                configEntries: configEntries,
+                globalPaths: capturedGlobal,
+                fileSystem: capturedFs
             )
+            let emptyEventPayload = JSONValue.object([:])
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: IntegrationSchema.Event.updated.type), data: emptyEventPayload)
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ProviderSchema.Event.updated.type), data: emptyEventPayload)
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ModelSchema.Event.updated.type), data: emptyEventPayload)
             await ServerLiveRuntime.seedConfiguredMcpServers(
                 into: mcpService,
                 configEntries: configEntries
@@ -1506,8 +1621,11 @@ public final class ServerAppRuntime: Sendable {
                 projectID: resolvedProject.id,
                 webSearch: webSearchService,
                 form: formService,
+                session: session,
+                sessionMove: sessionMove,
                 sessionStore: sessionStore,
                 skill: skillService,
+                automation: automation,
                 mcp: mcpService,
                 worktree: worktree,
                 worktreeStrategies: worktreeStrategies,
@@ -1532,6 +1650,7 @@ public final class ServerAppRuntime: Sendable {
                 toolService: toolService,
                 httpTransport: capturedHttp,
                 environment: capturedEnv,
+                snapshotService: capturedWorkerd ? nil : snapshotService,
                 isLocationClosed: { closedFlag.withLock { $0 } }
             )
 
@@ -1577,7 +1696,8 @@ public final class ServerAppRuntime: Sendable {
                 snapshot: snapshotService,
                 worktreeStrategies: worktreeStrategies,
                 tool: toolService,
-                sessionRunner: sessionRunner
+                sessionRunner: sessionRunner,
+                sessionTitle: sessionRunner.sessionTitle
             )
             if let onLocationBoot {
                 await onLocationBoot(bundle)
@@ -1588,70 +1708,8 @@ public final class ServerAppRuntime: Sendable {
             }
             return bundle.layerOutput
         }
+        locationsBox.bind(locations)
 
-        // Process-global live SessionExecution wired to Location-scoped CoreSessionRunner.
-        let coreSessionExecution = CoreSessionExecution.Service(
-            db: db,
-            store: sessionStore,
-            bus: bus,
-            inbox: sessionInbox,
-            runnerForLocation: { session in
-                let locRef = LocationSchema.Ref(
-                    directory: SchemaPrimitive.AbsolutePath(rawValue: session.location.directory),
-                    workspaceID: session.location.workspaceID
-                )
-                let canonical = CoreLocation.ServiceMap.canonical(locRef)
-                let out = try await locations.get(canonical)
-                guard let bundle = ServerLocationBundle.from(out),
-                      let runner = bundle.sessionRunner
-                else {
-                    throw CoreSessionErrors.NotFoundError(sessionID: session.id)
-                }
-                return runner
-            }
-        )
-        let sessionExecution: any CoreSessionExecution.Interface = ServerLiveRuntime.LiveSessionExecution(
-            inner: coreSessionExecution,
-            store: sessionStore,
-            locations: locations
-        )
-        let sessionMove = CoreSessionMove.Service(
-            db: db,
-            bus: bus,
-            store: sessionStore,
-            inbox: sessionInbox,
-            execution: sessionExecution,
-            fileSystem: fileSystem
-        )
-        let sessionRestart = CoreSessionRestart.Service(
-            db: db,
-            store: sessionStore,
-            execution: sessionExecution,
-            bus: bus
-        )
-        let appVersion = options.app?.version ?? "unknown"
-        let session = CoreSession.Service(
-            db: db,
-            bus: bus,
-            store: sessionStore,
-            inbox: sessionInbox,
-            execution: sessionExecution,
-            environment: sessionEnv,
-            fileSystem: fileSystem,
-            version: appVersion
-        )
-
-        let automation = try CoreAutomation.Service(
-            database: db,
-            isEnabled: { dir in
-                let ref = LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
-                guard let out = try? await locations.get(ref),
-                      let bundle = ServerLocationBundle.from(out) else {
-                    return false
-                }
-                return await bundle.flag.enabled(.automations)
-            }
-        )
         let instance = CoreLocation.Instance.Service(locations: locations)
 
         return ServerAppRuntime(
@@ -1741,6 +1799,24 @@ public final class ServerUnsupportedVideoGeneration: CoreIntegration.VideoGenera
 
     public func get(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
         throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
+    }
+}
+
+/// Weak indirection container breaking potential ARC retain cycles between process-global
+/// session/automation services and the location service map that constructs built-in tools.
+private final class LateBoundLocationMap: Sendable {
+    private struct WeakHolder: @unchecked Sendable {
+        weak var locations: CoreLocation.ServiceMap.Service?
+    }
+
+    private let holder = Mutex(WeakHolder())
+
+    var value: CoreLocation.ServiceMap.Service? {
+        holder.withLock { $0.locations }
+    }
+
+    func bind(_ locations: CoreLocation.ServiceMap.Service) {
+        holder.withLock { $0.locations = locations }
     }
 }
 

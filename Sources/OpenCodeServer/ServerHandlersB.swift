@@ -1852,14 +1852,15 @@ public let SessionHandler = ServerHandlerGroup(
                     throw SkillNotFoundError(skill: payload.id.rawValue, message: "Skill not found: \(payload.id.rawValue)")
                 }
                 let files = await loc.skill.files(payload.id) ?? [:]
-                let body = files["SKILL.md"] ?? skillInfo.description ?? ""
-                let messageID = SessionMessageSchema.ID.create()
+                let body = skillInfo.content.isEmpty
+                    ? (files["SKILL.md"] ?? skillInfo.description ?? "")
+                    : skillInfo.content
                 _ = try await ctx.runtime.bus.publish(
                     SessionEventSchema.Skill.Activated,
                     data: SessionEventSchema.Skill.ActivatedData(
                         sessionID: sessionInfo.id,
-                        id: messageID.rawValue,
-                        name: skillInfo.id.rawValue,
+                        id: skillInfo.id.rawValue,
+                        name: skillInfo.name.rawValue,
                         text: body
                     ),
                     options: CoreBus.PublishOptions(location: sessionInfo.location)
@@ -2052,6 +2053,7 @@ public let SessionHandler = ServerHandlerGroup(
                 let messageID: SessionMessageSchema.ID
                 let files: Bool?
             }
+            let loc = try ctx.requireLocation()
             let sessionID = try parseValidatedSessionID(try ctx.requireParam("sessionID"))
             let payload = try ctx.decodeJSONBody(StagePayload.self)
             do {
@@ -2059,12 +2061,16 @@ public let SessionHandler = ServerHandlerGroup(
                 if await ctx.runtime.sessionExecution.isActive(sessionID) {
                     throw SessionBusyError(sessionID: sessionID.rawValue, message: "Session is busy: \(sessionID.rawValue)")
                 }
+                let snapshotBridge: any CoreSessionSnapshotBridge =
+                    (loc.sessionRunner as? ServerLiveRuntime.LiveSessionRunner)?.snapshotBridge
+                    ?? CoreSessionLiveSnapshotBridge(service: loc.snapshot)
                 let revert = try await CoreSessionRevert.stage(
                     db: ctx.runtime.db,
                     bus: ctx.runtime.bus,
                     session: info,
                     messageID: payload.messageID,
-                    restoreFiles: payload.files ?? true
+                    restoreFiles: payload.files ?? true,
+                    snapshot: snapshotBridge
                 )
                 return ServerHTTPResponse.json(ServerDataWrapper(data: revert))
             } catch let e as CoreSessionErrors.NotFoundError {
@@ -2085,13 +2091,21 @@ public let SessionHandler = ServerHandlerGroup(
             groupIdentifier: "server.session",
             requiresSessionLocation: true
         ) { ctx in
+            let loc = try ctx.requireLocation()
             let sessionID = try parseValidatedSessionID(try ctx.requireParam("sessionID"))
             do {
                 let info = try ctx.runtime.session.get(sessionID)
                 if await ctx.runtime.sessionExecution.isActive(sessionID) {
                     throw SessionBusyError(sessionID: sessionID.rawValue, message: "Session is busy: \(sessionID.rawValue)")
                 }
-                try await CoreSessionRevert.clear(bus: ctx.runtime.bus, session: info)
+                let snapshotBridge: any CoreSessionSnapshotBridge =
+                    (loc.sessionRunner as? ServerLiveRuntime.LiveSessionRunner)?.snapshotBridge
+                    ?? CoreSessionLiveSnapshotBridge(service: loc.snapshot)
+                try await CoreSessionRevert.clear(
+                    bus: ctx.runtime.bus,
+                    session: info,
+                    snapshot: snapshotBridge
+                )
                 return ServerHTTPResponse.empty(statusCode: 204)
             } catch let e as CoreSessionErrors.NotFoundError {
                 throw missingSession(e)
@@ -2171,15 +2185,36 @@ public let SessionHandler = ServerHandlerGroup(
                     guard let parsed = SessionMessageSchema.ID(rawValue: rawTo) else {
                         throw InvalidRequestError(message: "Invalid to message ID", kind: "Query", field: "to")
                     }
-                    resolvedTo = parsed
+                    resolvedTo = resolveTurnEndMessageID(
+                        db: ctx.runtime.db,
+                        sessionID: sessionID,
+                        fromID: resolvedFrom,
+                        toID: parsed,
+                        explicitTo: true
+                    )
                 } else {
-                    resolvedTo = resolvedFrom
+                    resolvedTo = resolveTurnEndMessageID(
+                        db: ctx.runtime.db,
+                        sessionID: sessionID,
+                        fromID: resolvedFrom,
+                        toID: resolvedFrom,
+                        explicitTo: false
+                    )
                 }
+                let locRef = LocationSchema.Ref(
+                    directory: SchemaPrimitive.AbsolutePath(rawValue: info.location.directory),
+                    workspaceID: info.location.workspaceID
+                )
+                let loc = try await ctx.runtime.resolveLocation(locRef)
+                let snapshotBridge: any CoreSessionSnapshotBridge =
+                    (loc.sessionRunner as? ServerLiveRuntime.LiveSessionRunner)?.snapshotBridge
+                    ?? CoreSessionLiveSnapshotBridge(service: loc.snapshot)
                 let diffs = try await CoreSessionDiff.turn(
                     db: ctx.runtime.db,
                     session: info,
                     from: resolvedFrom,
-                    to: resolvedTo
+                    to: resolvedTo,
+                    snapshot: snapshotBridge
                 )
                 return ServerHTTPResponse.json(ServerDataWrapper(data: diffs))
             } catch let e as CoreSessionErrors.NotFoundError {
@@ -2692,6 +2727,70 @@ private func parseValidatedPtyID(_ raw: String) throws -> PtySchema.ID {
         throw InvalidRequestError(message: "Invalid PTY ID: \(raw)", kind: "Params", field: "ptyID")
     }
     return id
+}
+
+private func resolveTurnEndMessageID(
+    db: any SQLiteDatabase,
+    sessionID: SessionID,
+    fromID: SessionMessageSchema.ID,
+    toID: SessionMessageSchema.ID,
+    explicitTo: Bool
+) -> SessionMessageSchema.ID {
+    guard let fromRow = try? db.queryOne(
+        "SELECT `seq` FROM `session_message` WHERE `session_id` = ? AND `id` = ?",
+        parameters: [.text(sessionID.rawValue), .text(fromID.rawValue)]
+    ), let fromSeq = fromRow.int64("seq"),
+          let toRow = try? db.queryOne(
+              "SELECT `seq`, `type` FROM `session_message` WHERE `session_id` = ? AND `id` = ?",
+              parameters: [.text(sessionID.rawValue), .text(toID.rawValue)]
+          ), let toSeq = toRow.int64("seq"),
+          let toType = toRow.string("type"),
+          fromSeq <= toSeq
+    else {
+        return toID
+    }
+    if explicitTo && toType != "user" {
+        return toID
+    }
+
+    let hasIdle = (try? db.queryOne(
+        "SELECT 1 FROM `session_message` WHERE `session_id` = ? AND `type` = 'idle' LIMIT 1",
+        parameters: [.text(sessionID.rawValue)]
+    )) != nil
+    let boundaryType = hasIdle ? "idle" : "user"
+    let upperSeq = (try? db.queryOne(
+        """
+        SELECT `seq` FROM `session_message`
+        WHERE `session_id` = ? AND `type` = ? AND `seq` > ?
+        ORDER BY `seq` ASC LIMIT 1
+        """,
+        parameters: [.text(sessionID.rawValue), .text(boundaryType), .integer(toSeq)]
+    ))?.int64("seq")
+
+    let lastAssistantRow: SQLiteRow?
+    if let upperSeq {
+        lastAssistantRow = try? db.queryOne(
+            """
+            SELECT `id` FROM `session_message`
+            WHERE `session_id` = ? AND `type` = 'assistant' AND `seq` > ? AND `seq` < ?
+            ORDER BY `seq` DESC LIMIT 1
+            """,
+            parameters: [.text(sessionID.rawValue), .integer(toSeq), .integer(upperSeq)]
+        )
+    } else {
+        lastAssistantRow = try? db.queryOne(
+            """
+            SELECT `id` FROM `session_message`
+            WHERE `session_id` = ? AND `type` = 'assistant' AND `seq` > ?
+            ORDER BY `seq` DESC LIMIT 1
+            """,
+            parameters: [.text(sessionID.rawValue), .integer(toSeq)]
+        )
+    }
+    if let rawID = lastAssistantRow?.string("id"), let parsed = SessionMessageSchema.ID(rawValue: rawID) {
+        return parsed
+    }
+    return toID
 }
 
 private func isValidTimeZoneIdentifier(_ identifier: String) -> Bool {

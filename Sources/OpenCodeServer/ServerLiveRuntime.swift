@@ -1219,13 +1219,47 @@ public enum ServerLiveRuntime {
         ),
     ]
 
-    /// Seeds built-in integrations, providers, models, and merges providers/models/default-model
-    /// configured in `configEntries` (`opencode.json[c]`).
+    private static func loadCachedModelsDevSnapshots(
+        globalPaths: Global.Interface?,
+        fileSystem: (any OpenCodeFileSystem)?
+    ) async -> [CoreModel.ModelsDev.Snapshot] {
+        guard let globalPaths, let fileSystem else { return [] }
+        let cachePath = "\(globalPaths.cache.trimmingTrailingSlashes())/models.json"
+        guard await fileSystem.exists(at: cachePath),
+              let bytes = try? await fileSystem.readFile(at: cachePath),
+              let decoded = try? CoreModel.ModelsDev.decodeSnapshot(String(decoding: bytes, as: UTF8.self))
+        else {
+            return []
+        }
+        return decoded.compactMap { snap -> CoreModel.ModelsDev.Snapshot? in
+            if snap.info.id.rawValue == "azure-cognitive-services"
+                || snap.info.id.rawValue == "google-vertex-anthropic"
+            {
+                return nil
+            }
+            let filteredModels = snap.models.filter { model in
+                model.status != .deprecated
+                    && ((model.type ?? .chat) != .chat || CoreModel.Model.supportsText(model))
+            }
+            guard !filteredModels.isEmpty else { return nil }
+            return CoreModel.ModelsDev.Snapshot(
+                info: snap.info,
+                models: filteredModels,
+                environment: snap.environment
+            )
+        }
+    }
+
+    /// Seeds built-in integrations, providers, models, merges any cached `globalPaths.cache/models.json`
+    /// ModelsDev catalog at lower priority, and overlays providers/models/default-model configured in
+    /// `configEntries` (`opencode.json[c]`).
     public static func seedProvidersAndModels(
         integrations integrationService: any CoreIntegration.Integration.Interface,
         providers providerService: any CoreProvider.Provider.Interface,
         models modelService: any CoreModel.Model.Interface,
-        configEntries: [CoreConfigEntry]
+        configEntries: [CoreConfigEntry],
+        globalPaths: Global.Interface? = nil,
+        fileSystem: (any OpenCodeFileSystem)? = nil
     ) async throws {
         // Collect provider configs & default model from ordered config entries (later wins).
         var configuredProviders: [String: [ConfigProviderSchema.Info]] = [:]
@@ -1240,16 +1274,49 @@ public enum ServerLiveRuntime {
             }
         }
 
+        let cachedSnapshots = await loadCachedModelsDevSnapshots(
+            globalPaths: globalPaths,
+            fileSystem: fileSystem
+        )
+        let cachedByID: [String: CoreModel.ModelsDev.Snapshot] = Dictionary(
+            cachedSnapshots.map { ($0.info.id.rawValue, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+
         let builtinByID: [String: BuiltinProviderSpec] = Dictionary(
             uniqueKeysWithValues: builtinProviders.map { ($0.id.rawValue, $0) }
         )
 
-        // 1. Register built-in + custom integrations (with `.key` + `.env` auth methods)
+        // 1. Register cached ModelsDev + built-in + custom integrations (with `.key` + `.env` auth methods)
         let configProvidersSnapshot = configuredProviders
         _ = try await integrationService.transform { editor in
+            // 1a. Cached ModelsDev providers not in built-ins (lowest priority)
+            for snap in cachedSnapshots where builtinByID[snap.info.id.rawValue] == nil {
+                let intID = IntegrationID(rawValue: snap.info.id.rawValue)
+                editor.update(intID) { _ in
+                    IntegrationSchema.Ref(id: intID, name: snap.info.name, metadata: nil)
+                }
+                editor.updateMethod(.key(CoreIntegration.Integration.KeyImplementation(
+                    integrationID: intID,
+                    method: IntegrationSchema.KeyMethod(label: "API key")
+                )))
+                if !snap.environment.isEmpty {
+                    editor.updateMethod(.env(CoreIntegration.Integration.EnvImplementation(
+                        integrationID: intID,
+                        method: IntegrationSchema.EnvMethod(names: snap.environment)
+                    )))
+                }
+            }
+
+            // 1b. Built-in providers (higher priority than cached ModelsDev)
             for spec in builtinProviders {
                 let intID = IntegrationID(rawValue: spec.id.rawValue)
                 var envVars = spec.envVars
+                if let cachedEnv = cachedByID[spec.id.rawValue]?.environment {
+                    for name in cachedEnv where !envVars.contains(name) {
+                        envVars.append(name)
+                    }
+                }
                 if let cfgs = configProvidersSnapshot[spec.id.rawValue] {
                     for cfg in cfgs {
                         if let extraEnv = cfg.env {
@@ -1274,11 +1341,12 @@ public enum ServerLiveRuntime {
                 }
             }
 
-            // Custom config-declared providers
+            // 1c. Custom config-declared providers (highest priority)
             for (rawID, cfgs) in configProvidersSnapshot where builtinByID[rawID] == nil {
                 let intID = IntegrationID(rawValue: rawID)
-                let displayName = cfgs.compactMap(\.name).last ?? rawID
-                var envVars: [String] = []
+                let cached = cachedByID[rawID]
+                let displayName = cfgs.compactMap(\.name).last ?? cached?.info.name ?? rawID
+                var envVars = cached?.environment ?? []
                 for cfg in cfgs {
                     for name in cfg.env ?? [] where !envVars.contains(name) {
                         envVars.append(name)
@@ -1300,9 +1368,27 @@ public enum ServerLiveRuntime {
             }
         }
 
-        // 2. Register built-in providers (with `activation: .auto` so only credentialed/env-keyed
-        //    providers become available) and apply config provider/model overlays.
+        // 2. Register cached ModelsDev + built-in providers (with `activation: .auto` so only
+        //    credentialed/env-keyed providers become available) and apply config provider/model overlays.
         _ = try await providerService.transform { editor in
+            // 2a. Cached ModelsDev providers not in built-ins (lowest priority)
+            for snap in cachedSnapshots where builtinByID[snap.info.id.rawValue] == nil {
+                let info = ProviderSchema.Info(
+                    id: snap.info.id,
+                    canonical: snap.info.canonical,
+                    integrationID: IntegrationID(rawValue: snap.info.id.rawValue),
+                    name: snap.info.name,
+                    activation: .auto,
+                    package: snap.info.package,
+                    compatibility: snap.info.compatibility,
+                    settings: snap.info.settings,
+                    headers: snap.info.headers,
+                    body: snap.info.body
+                )
+                editor.add(info: info, models: snap.models)
+            }
+
+            // 2b. Built-in providers + any additional non-conflicting cached models for that provider
             for spec in builtinProviders {
                 var extra: [String: JSONValue] = [:]
                 if let baseURL = spec.baseURL {
@@ -1318,12 +1404,20 @@ public enum ServerLiveRuntime {
                     compatibility: spec.compatibility,
                     settings: settings
                 )
-                editor.add(info: info, models: spec.models)
+                var mergedModels = spec.models
+                if let cachedModels = cachedByID[spec.id.rawValue]?.models {
+                    let builtinModelIDs = Set(spec.models.map(\.id))
+                    for cachedModel in cachedModels where !builtinModelIDs.contains(cachedModel.id) {
+                        mergedModels.append(cachedModel)
+                    }
+                }
+                editor.add(info: info, models: mergedModels)
             }
 
             for (rawID, cfgs) in configProvidersSnapshot.sorted(by: { $0.key < $1.key }) {
                 let pid = ProviderSchema.ID(rawValue: rawID)
                 let isBuiltin = builtinByID[rawID] != nil
+                let hasCachedEnv = !(cachedByID[rawID]?.environment.isEmpty ?? true)
                 var currentInfo = editor.get(pid)?.provider ?? ProviderSchema.Info(
                     id: pid,
                     integrationID: IntegrationID(rawValue: rawID),
@@ -1373,7 +1467,7 @@ public enum ServerLiveRuntime {
                         return false
                     }()
                     let activation: ProviderSchema.Activation =
-                        (hasExplicitApiKey || (!isBuiltin && hasCustomBaseURL && (cfg.env?.isEmpty ?? true)))
+                        (hasExplicitApiKey || (!isBuiltin && !hasCachedEnv && hasCustomBaseURL && (cfg.env?.isEmpty ?? true)))
                         ? .enabled
                         : currentInfo.activation
 
@@ -1513,6 +1607,768 @@ public enum ServerLiveRuntime {
             }
             if let fallback = editor.list().first(where: { $0.enabled && CoreModel.Model.supportsText($0) }) {
                 editor.setDefault(providerID: fallback.providerID, modelID: fallback.id)
+            }
+        }
+    }
+
+    // MARK: - 2b. Built-In & Project/Global Custom Commands (`plugin/command.ts`, `config/plugin/command.ts`)
+
+    private static let promptInitialize = """
+    Create or update `AGENTS.md` for this repository.
+
+    The goal is a compact instruction file that helps future OpenCode sessions avoid mistakes and ramp up quickly. Every line should answer: "Would an agent likely miss this without help?" If not, leave it out.
+
+    User-provided focus or constraints (honor these):
+    $ARGUMENTS
+
+    ## How to investigate
+
+    Read the highest-value sources first:
+    - `README*`, root manifests, workspace config, lockfiles
+    - build, test, lint, formatter, typecheck, and codegen config
+    - CI workflows and pre-commit / task runner config
+    - existing instruction files (`AGENTS.md`, `CLAUDE.md`, `.cursor/rules/`, `.cursorrules`, `.github/copilot-instructions.md`)
+    - repo-local OpenCode config such as `opencode.json`
+
+    If architecture is still unclear after reading config and docs, inspect a small number of representative code files to find the real entrypoints, package boundaries, and execution flow. Prefer reading the files that explain how the system is wired together over random leaf files.
+
+    Prefer executable sources of truth over prose. If docs conflict with config or scripts, trust the executable source and only keep what you can verify.
+
+    ## What to extract
+
+    Look for the highest-signal facts for an agent working in this repo:
+    - exact developer commands, especially non-obvious ones
+    - how to run a single test, a single package, or a focused verification step
+    - required command order when it matters, such as `lint -> typecheck -> test`
+    - monorepo or multi-package boundaries, ownership of major directories, and the real app/library entrypoints
+    - framework or toolchain quirks: generated code, migrations, codegen, build artifacts, special env loading, dev servers, infra deploy flow
+    - testing quirks: fixtures, integration test prerequisites, snapshot workflows, required services, flaky or expensive suites
+    - important constraints from existing instruction files worth preserving
+
+    Good `AGENTS.md` content is usually hard-earned context that took reading multiple files to infer.
+
+    ## Questions
+
+    Only ask the user questions if the repo cannot answer something important. Use the `question` tool for one short batch at most.
+
+    Good questions:
+    - undocumented team conventions
+    - branch / PR / release expectations
+    - missing setup or test prerequisites that are known but not written down
+
+    Do not ask about anything the repo already makes clear.
+
+    ## Writing rules
+
+    Include only high-signal, repo-specific guidance such as:
+    - exact commands and shortcuts the agent would otherwise guess wrong
+    - architecture notes that are not obvious from filenames
+    - conventions that differ from language or framework defaults
+    - setup requirements, environment quirks, and operational gotchas
+    - references to existing instruction sources that matter
+
+    Exclude:
+    - generic software advice
+    - long tutorials or exhaustive file trees
+    - obvious language conventions
+    - speculative claims or anything you could not verify
+    - content better stored in another file referenced via `opencode.json` `instructions`
+
+    When in doubt, omit.
+
+    Prefer short sections and bullets. If the repo is simple, keep the file simple. If the repo is large, summarize the few structural facts that actually change how an agent should work.
+
+    If `AGENTS.md` already exists at `${path}`, improve it in place rather than rewriting blindly. Preserve verified useful guidance, delete fluff or stale claims, and reconcile it with the current codebase.
+    """
+
+    private static let promptReview = """
+    You are a code reviewer. Your job is to review code changes and provide actionable feedback.
+
+    ---
+
+    Input: $ARGUMENTS
+
+    ---
+
+    ## Determining What to Review
+
+    Based on the input provided, determine which type of review to perform:
+
+    1. **No arguments (default)**: Review all uncommitted changes
+       - Run: `git diff` for unstaged changes
+       - Run: `git diff --cached` for staged changes
+       - Run: `git status --short` to identify untracked (net new) files
+
+    2. **Commit hash** (40-char SHA or short hash): Review that specific commit
+       - Run: `git show $ARGUMENTS`
+
+    3. **Branch name**: Compare current branch to the specified branch
+       - Run: `git diff $ARGUMENTS...HEAD`
+
+    4. **PR URL or number** (contains "github.com" or "pull" or looks like a PR number): Review the pull request
+       - Run: `gh pr view $ARGUMENTS` to get PR context
+       - Run: `gh pr diff $ARGUMENTS` to get the diff
+
+    Use best judgement when processing input.
+
+    ---
+
+    ## Gathering Context
+
+    **Diffs alone are not enough.** After getting the diff, read the entire file(s) being modified to understand the full context. Code that looks wrong in isolation may be correct given surrounding logic—and vice versa.
+
+    - Use the diff to identify which files changed
+    - Use `git status --short` to identify untracked files, then read their full contents
+    - Read the full file to understand existing patterns, control flow, and error handling
+    - Check for existing style guide or conventions files (CONVENTIONS.md, AGENTS.md, .editorconfig, etc.)
+
+    ---
+
+    ## What to Look For
+
+    **Bugs** - Your primary focus.
+    - Logic errors, off-by-one mistakes, incorrect conditionals
+    - If-else guards: missing guards, incorrect branching, unreachable code paths
+    - Edge cases: null/empty/undefined inputs, error conditions, race conditions
+    - Security issues: injection, auth bypass, data exposure
+    - Broken error handling that swallows failures, throws unexpectedly or returns error types that are not caught.
+
+    **Structure** - Does the code fit the codebase?
+    - Does it follow existing patterns and conventions?
+    - Are there established abstractions it should use but doesn't?
+    - Excessive nesting that could be flattened with early returns or extraction
+
+    **Performance** - Only flag if obviously problematic.
+    - O(n²) on unbounded data, N+1 queries, blocking I/O on hot paths
+
+    **Behavior Changes** - If a behavioral change is introduced, raise it (especially if it's possibly unintentional).
+
+    ---
+
+    ## Before You Flag Something
+
+    **Be certain.** If you're going to call something a bug, you need to be confident it actually is one.
+
+    - Only review the changes - do not review pre-existing code that wasn't modified
+    - Don't flag something as a bug if you're unsure - investigate first
+    - Don't invent hypothetical problems - if an edge case matters, explain the realistic scenario where it breaks
+    - If you need more context to be sure, use the tools below to get it
+
+    **Don't be a zealot about style.** When checking code against conventions:
+
+    - Verify the code is *actually* in violation. Don't complain about else statements if early returns are already being used correctly.
+    - Some "violations" are acceptable when they're the simplest option. A `let` statement is fine if the alternative is convoluted.
+    - Excessive nesting is a legitimate concern regardless of other style choices.
+
+    ---
+
+    ## Tools
+
+    Use these to inform your review:
+
+    - **Explore agent** - Find how existing code handles similar problems. Check patterns, conventions, and prior art before claiming something doesn't fit.
+    - **Available documentation and code-search tools** - Verify correct usage of libraries/APIs before flagging something as wrong.
+    - **Web Search** - Research best practices if you're unsure about a pattern.
+
+    If you're uncertain about something and can't verify it with these tools, say "I'm not sure about X" rather than flagging it as a definite issue.
+
+    ---
+
+    ## Output
+
+    1. If there is a bug, be direct and clear about why it is a bug.
+    2. Clearly communicate severity of issues. Do not overstate severity.
+    3. Critiques should clearly and explicitly communicate the scenarios, environments, or inputs that are necessary for the bug to arise. The comment should immediately indicate that the issue's severity depends on these factors.
+    4. Your tone should be matter-of-fact and not accusatory or overly positive. It should read as a helpful AI assistant suggestion without sounding too much like a human reviewer.
+    5. Write so the reader can quickly understand the issue without reading too closely.
+    6. AVOID flattery, do not give any comments that are not helpful to the reader.
+    """
+
+    /// Parses command invocation arguments matching upstream `config/plugin/command.ts#parseArguments`.
+    internal static func parseCommandArguments(_ input: String) -> [String] {
+        var result: [String] = []
+        let chars = Array(input)
+        var i = 0
+        while i < chars.count {
+            while i < chars.count && chars[i].isWhitespace {
+                i += 1
+            }
+            guard i < chars.count else { break }
+
+            // Match `[Image N]` token literally (case-insensitive)
+            if chars[i] == "[" {
+                var j = i + 1
+                while j < chars.count && chars[j] != "]" {
+                    j += 1
+                }
+                if j < chars.count {
+                    let candidate = String(chars[i...j])
+                    let inner = candidate.dropFirst().dropLast()
+                    let parts = inner.split(whereSeparator: { $0.isWhitespace })
+                    if parts.count == 2,
+                       parts[0].lowercased() == "image",
+                       parts[1].allSatisfy({ $0.isASCII && $0.isNumber })
+                    {
+                        result.append(candidate)
+                        i = j + 1
+                        continue
+                    }
+                }
+            }
+
+            if chars[i] == "\"" || chars[i] == "'" {
+                let quote = chars[i]
+                i += 1
+                let start = i
+                while i < chars.count && chars[i] != quote {
+                    i += 1
+                }
+                result.append(String(chars[start..<i]))
+                if i < chars.count && chars[i] == quote {
+                    i += 1
+                }
+                continue
+            }
+
+            let start = i
+            while i < chars.count && !chars[i].isWhitespace && chars[i] != "\"" && chars[i] != "'" {
+                i += 1
+            }
+            if i > start {
+                result.append(String(chars[start..<i]))
+            }
+        }
+        return result
+    }
+
+    /// Evaluates a command template with `${path}`, `$ARGUMENTS`, positional `$1..$N`, and fallback append.
+    public static func evaluateCommandTemplate(
+        _ template: String,
+        arguments: String,
+        projectDirectory: String
+    ) -> String {
+        let withPath = template.replacing("${path}", with: projectDirectory)
+        let args = parseCommandArguments(arguments)
+
+        // Scan for `$1..$N` placeholders and `$ARGUMENTS`
+        let chars = Array(withPath)
+        var highestIndex = 0
+        var hasPositional = false
+        var hasArguments = false
+
+        var scan = 0
+        while scan < chars.count {
+            if chars[scan] == "$" {
+                let rest = String(chars[scan...])
+                if rest.hasPrefix("$ARGUMENTS") {
+                    hasArguments = true
+                    scan += "$ARGUMENTS".count
+                    continue
+                }
+                if scan + 1 < chars.count, chars[scan + 1] >= "1" && chars[scan + 1] <= "9" {
+                    var end = scan + 1
+                    while end < chars.count && chars[end].isASCII && chars[end].isNumber {
+                        end += 1
+                    }
+                    if let num = Int(String(chars[(scan + 1)..<end])) {
+                        hasPositional = true
+                        if num > highestIndex { highestIndex = num }
+                    }
+                    scan = end
+                    continue
+                }
+            }
+            scan += 1
+        }
+
+        var substituted = ""
+        substituted.reserveCapacity(withPath.count + arguments.count)
+        var idx = 0
+        while idx < chars.count {
+            if chars[idx] == "$" {
+                let rest = String(chars[idx...])
+                if rest.hasPrefix("$ARGUMENTS") {
+                    substituted.append(arguments.trimmingCharacters(in: .whitespacesAndNewlines))
+                    idx += "$ARGUMENTS".count
+                    continue
+                }
+                if idx + 1 < chars.count, chars[idx + 1] >= "1" && chars[idx + 1] <= "9" {
+                    var end = idx + 1
+                    while end < chars.count && chars[end].isASCII && chars[end].isNumber {
+                        end += 1
+                    }
+                    if let position = Int(String(chars[(idx + 1)..<end])) {
+                        let argIdx = position - 1
+                        if argIdx < args.count {
+                            if position == highestIndex {
+                                substituted.append(args[argIdx...].joined(separator: " "))
+                            } else {
+                                substituted.append(args[argIdx])
+                            }
+                        }
+                        idx = end
+                        continue
+                    }
+                }
+            }
+            substituted.append(chars[idx])
+            idx += 1
+        }
+
+        let trimmedInput = arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !hasPositional && !hasArguments && !trimmedInput.isEmpty {
+            return "\(substituted)\n\n\(trimmedInput)".trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return substituted.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func parseFrontmatterBool(_ value: JSONValue?) -> Bool? {
+        guard let value else { return nil }
+        switch value {
+        case .bool(let b): return b
+        case .int(let n): return n == 1 ? true : (n == 0 ? false : nil)
+        case .double(let d): return d == 1 ? true : (d == 0 ? false : nil)
+        case .string(let s):
+            switch s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "yes", "on", "1": return true
+            case "false", "no", "off", "0": return false
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    private static func parseFrontmatterModel(_ value: JSONValue?) -> ConfigModelSchema.Selection? {
+        guard let value else { return nil }
+        switch value {
+        case .string(let s):
+            return try? ConfigModelSchema.Selection.parse(s.trimmingCharacters(in: .whitespacesAndNewlines))
+        case .object(let obj):
+            guard case .string(let pid) = obj["providerID"],
+                  case .string(let mid) = obj["model"],
+                  !pid.isEmpty, !mid.isEmpty
+            else { return nil }
+            let variant: ModelSchema.VariantID? = {
+                if case .string(let v) = obj["variant"], !v.isEmpty {
+                    return ModelSchema.VariantID(rawValue: v)
+                }
+                return nil
+            }()
+            return ConfigModelSchema.Selection(
+                providerID: ProviderSchema.ID(rawValue: pid),
+                model: ModelSchema.ID(rawValue: mid),
+                variant: variant
+            )
+        default:
+            return nil
+        }
+    }
+
+    internal static func parseCommandMarkdown(_ content: String) -> ConfigCommandSchema.Info? {
+        guard let markdown = CoreConfigMarkdown.parseOption(content) else { return nil }
+        let description: String? = {
+            if case .string(let s) = markdown.data["description"] { return s }
+            return nil
+        }()
+        let agent: String? = {
+            if case .string(let s) = markdown.data["agent"], !s.isEmpty { return s }
+            return nil
+        }()
+        let model = parseFrontmatterModel(markdown.data["model"])
+        let subagent = parseFrontmatterBool(markdown.data["subagent"])
+        let subtask = parseFrontmatterBool(markdown.data["subtask"])
+        return ConfigCommandSchema.Info(
+            template: markdown.content.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: description,
+            agent: agent,
+            model: model,
+            subagent: subagent,
+            subtask: subtask
+        )
+    }
+
+    private static func joinPath(_ a: String, _ b: String) -> String {
+        if a == "/" { return "/\(b)" }
+        if a.hasSuffix("/") { return a + b }
+        return "\(a)/\(b)"
+    }
+
+    private static func dirname(_ path: String) -> String {
+        var p = path.replacing("\\", with: "/")
+        while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+        guard let slash = p.lastIndex(of: "/") else { return "." }
+        if slash == p.startIndex { return "/" }
+        return String(p[..<slash])
+    }
+
+    private static func basename(_ path: String) -> String {
+        var p = path.replacing("\\", with: "/")
+        while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+        guard let slash = p.lastIndex(of: "/") else { return p }
+        return String(p[p.index(after: slash)...])
+    }
+
+    private static func scanMarkdownCommands(
+        in commandsRoot: String,
+        fileSystem: any OpenCodeFileSystem
+    ) async -> [(name: String, info: ConfigCommandSchema.Info)] {
+        let normalizedRoot = serverResolvePath(base: "/", relative: commandsRoot)
+        guard await fileSystem.exists(at: normalizedRoot) else { return [] }
+        var filePaths: [String] = []
+        var queue: [(dir: String, depth: Int)] = [(normalizedRoot, 0)]
+        var idx = 0
+        while idx < queue.count {
+            let item = queue[idx]
+            idx += 1
+            guard let names = try? await fileSystem.readDirectory(at: item.dir) else { continue }
+            for name in names.sorted() where !name.hasPrefix(".") && !FSPathUtil.ignoredDirectories.contains(name) {
+                let child = joinPath(item.dir, name)
+                guard let st = try? await fileSystem.stat(at: child) else { continue }
+                if st.type == .file && name.hasSuffix(".md") {
+                    filePaths.append(child)
+                } else if st.type == .directory && item.depth < 6 {
+                    queue.append((child, item.depth + 1))
+                }
+            }
+        }
+        let prefix = normalizedRoot.hasSuffix("/") ? normalizedRoot : "\(normalizedRoot)/"
+        var parsed: [(name: String, info: ConfigCommandSchema.Info)] = []
+        for filepath in filePaths.sorted() {
+            guard let bytes = try? await fileSystem.readFile(at: filepath) else { continue }
+            let text = String(decoding: bytes, as: UTF8.self)
+            guard let info = parseCommandMarkdown(text) else { continue }
+            let rel = filepath.hasPrefix(prefix) ? String(filepath.dropFirst(prefix.count)) : basename(filepath)
+            let cleanRel = rel.replacing("\\", with: "/")
+            let cmdName = cleanRel.hasSuffix(".md") ? String(cleanRel.dropLast(3)) : cleanRel
+            guard !cmdName.isEmpty else { continue }
+            parsed.append((name: cmdName, info: info))
+        }
+        return parsed
+    }
+
+    /// Seeds built-in upstream commands (`init`, `review`), project/global custom command markdown files
+    /// (`.opencode/commands/*.md`, `.claude/commands/*.md`, `.agents/commands/*.md`,
+    /// `globalPaths.config/commands/*.md`, `~/.claude/commands/*.md`), and config-defined `commands`.
+    @discardableResult
+    public static func seedCommands(
+        into commandService: any CoreSubsystems.Command.Interface,
+        directory: String,
+        projectDirectory: String? = nil,
+        globalPaths: Global.Interface,
+        configEntries: [CoreConfigEntry],
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        sessionProvider: (@Sendable () -> CoreSession.Service?)? = nil,
+        agentService: (any CoreAgent.Agent.Interface)? = nil
+    ) async throws -> CoreState.Registration {
+        let effectiveProjectDir = projectDirectory ?? directory
+
+        // Collect candidate command folders in ascending precedence order (deduplicated).
+        var orderedBases: [String] = []
+        var seenBases: Set<String> = []
+        func appendBase(_ raw: String) {
+            let norm = serverResolvePath(base: "/", relative: raw)
+            if seenBases.insert(norm).inserted {
+                orderedBases.append(norm)
+            }
+        }
+
+        // 1. Global roots
+        appendBase(globalPaths.config)
+        appendBase(joinPath(globalPaths.home, ".claude"))
+        appendBase(joinPath(globalPaths.home, ".agents"))
+
+        // 2. Directory entries discovered in configEntries
+        for entry in configEntries {
+            if case .directory(let dir) = entry {
+                appendBase(dir.path.rawValue)
+            }
+        }
+
+        // 3. Project & location roots (higher precedence than global)
+        for rootDir in [effectiveProjectDir, directory] {
+            appendBase(joinPath(rootDir, ".claude"))
+            appendBase(joinPath(rootDir, ".agents"))
+            appendBase(joinPath(rootDir, ".opencode"))
+        }
+
+        // Scan markdown command files from each base's `command/` and `commands/` subdirectories.
+        var customCommands: [(name: String, info: ConfigCommandSchema.Info)] = []
+        for base in orderedBases {
+            for folder in ["command", "commands"] {
+                let sub = joinPath(base, folder)
+                let scanned = await scanMarkdownCommands(in: sub, fileSystem: fileSystem)
+                customCommands.append(contentsOf: scanned)
+            }
+        }
+
+        // Append config document `commands` (highest precedence, in entry order).
+        for entry in configEntries {
+            guard let cmds = entry.info?.commands else { continue }
+            for (name, cmdInfo) in cmds.sorted(by: { $0.key < $1.key }) {
+                customCommands.append((name: name, info: cmdInfo))
+            }
+        }
+
+        let resolvedCustom = customCommands
+        return try await commandService.transform { editor in
+            // Built-in `init` command (upstream `plugin/command.ts`)
+            editor.add(CoreSubsystems.Command.Definition(
+                name: "init",
+                description: "guided AGENTS.md setup",
+                execute: { invocation in
+                    guard let session = sessionProvider?() else { return }
+                    let rendered = evaluateCommandTemplate(
+                        promptInitialize,
+                        arguments: invocation.prompt.text,
+                        projectDirectory: effectiveProjectDir
+                    )
+                    _ = try await session.prompt(CoreSession.PromptRequest(
+                        sessionID: invocation.sessionID,
+                        input: CoreSessionPrompt.Input(
+                            text: rendered,
+                            files: invocation.prompt.files,
+                            agents: invocation.prompt.agents,
+                            skills: invocation.prompt.skills,
+                            delivery: invocation.delivery
+                        )
+                    ))
+                }
+            ))
+
+            // Built-in `review` command (upstream `plugin/command.ts`)
+            editor.add(CoreSubsystems.Command.Definition(
+                name: "review",
+                description: "review changes [commit|branch|pr], defaults to uncommitted",
+                execute: { invocation in
+                    guard let session = sessionProvider?() else { return }
+                    let rendered = evaluateCommandTemplate(
+                        promptReview,
+                        arguments: invocation.prompt.text,
+                        projectDirectory: effectiveProjectDir
+                    )
+                    _ = try await session.prompt(CoreSession.PromptRequest(
+                        sessionID: invocation.sessionID,
+                        input: CoreSessionPrompt.Input(
+                            text: rendered,
+                            files: invocation.prompt.files,
+                            agents: invocation.prompt.agents,
+                            skills: invocation.prompt.skills,
+                            delivery: invocation.delivery
+                        )
+                    ))
+                }
+            ))
+
+            // Custom markdown & config-defined commands
+            for (name, cmd) in resolvedCustom {
+                editor.add(CoreSubsystems.Command.Definition(
+                    name: name,
+                    description: cmd.description,
+                    execute: { invocation in
+                        guard let session = sessionProvider?() else { return }
+                        let rendered = evaluateCommandTemplate(
+                            cmd.template,
+                            arguments: invocation.prompt.text,
+                            projectDirectory: effectiveProjectDir
+                        )
+                        let agentID = cmd.agent.map(AgentSchema.ID.init(rawValue:))
+                        let commandAgent: AgentSchema.Info? = if let agentID, let agentService {
+                            await agentService.get(agentID)
+                        } else {
+                            nil
+                        }
+                        let resolvedModel: SessionSchema.ModelRef? = {
+                            if let m = cmd.model {
+                                return SessionSchema.ModelRef(
+                                    id: m.model.rawValue,
+                                    providerID: m.providerID.rawValue,
+                                    variant: m.variant?.rawValue
+                                )
+                            }
+                            if let m = commandAgent?.model {
+                                return SessionSchema.ModelRef(
+                                    id: m.id.rawValue,
+                                    providerID: m.providerID.rawValue,
+                                    variant: m.variant?.rawValue
+                                )
+                            }
+                            return nil
+                        }()
+                        let shouldSpawnSubagent = (cmd.subagent ?? cmd.subtask) ?? (commandAgent?.mode == .subagent)
+                        if shouldSpawnSubagent {
+                            let parent = try session.get(invocation.sessionID)
+                            let childAgent = agentID?.rawValue ?? parent.agent
+                            let childModel = resolvedModel ?? parent.model
+                            let child = try await session.create(CoreSession.CreateInput(
+                                parentID: parent.id,
+                                title: cmd.description ?? name,
+                                agent: childAgent,
+                                model: childModel
+                            ))
+                            _ = try await session.prompt(CoreSession.PromptRequest(
+                                sessionID: child.id,
+                                input: CoreSessionPrompt.Input(
+                                    text: "You are a subagent spawned by another session.\n\(rendered)",
+                                    files: invocation.prompt.files,
+                                    agents: invocation.prompt.agents,
+                                    skills: invocation.prompt.skills,
+                                    delivery: invocation.delivery
+                                )
+                            ))
+                            return
+                        }
+                        if let agentID {
+                            try await session.selectAgent(sessionID: invocation.sessionID, agent: agentID.rawValue)
+                        }
+                        if let resolvedModel {
+                            try await session.selectModel(sessionID: invocation.sessionID, model: resolvedModel)
+                        }
+                        _ = try await session.prompt(CoreSession.PromptRequest(
+                            sessionID: invocation.sessionID,
+                            input: CoreSessionPrompt.Input(
+                                text: rendered,
+                                files: invocation.prompt.files,
+                                agents: invocation.prompt.agents,
+                                skills: invocation.prompt.skills,
+                                delivery: invocation.delivery
+                            )
+                        ))
+                    }
+                ))
+            }
+        }
+    }
+
+    // MARK: - 2c. Project & Global Skill Discovery (`config/plugin/skill.ts`)
+
+    private static let maxSkillSiblingFiles = 50
+    private static let maxSkillSiblingBytes = 512 * 1024
+
+    private static func collectSiblingSkillFiles(
+        in skillDirectory: String,
+        fileSystem: any OpenCodeFileSystem
+    ) async -> [String: String] {
+        let normalizedRoot = serverResolvePath(base: "/", relative: skillDirectory)
+        let prefix = normalizedRoot.hasSuffix("/") ? normalizedRoot : "\(normalizedRoot)/"
+        var siblingFiles: [String: String] = [:]
+        var queue: [(dir: String, depth: Int)] = [(normalizedRoot, 0)]
+        var idx = 0
+        while idx < queue.count && siblingFiles.count < maxSkillSiblingFiles {
+            let item = queue[idx]
+            idx += 1
+            guard let names = try? await fileSystem.readDirectory(at: item.dir) else { continue }
+            for name in names.sorted() where !name.hasPrefix(".") && !FSPathUtil.ignoredDirectories.contains(name) {
+                if siblingFiles.count >= maxSkillSiblingFiles { break }
+                let child = joinPath(item.dir, name)
+                guard let st = try? await fileSystem.stat(at: child) else { continue }
+                if st.type == .file {
+                    if item.depth == 0 && name == "SKILL.md" { continue }
+                    if st.size > Int64(maxSkillSiblingBytes) { continue }
+                    guard let bytes = try? await fileSystem.readFile(at: child) else { continue }
+                    let rel = child.hasPrefix(prefix) ? String(child.dropFirst(prefix.count)) : name
+                    siblingFiles[rel.replacing("\\", with: "/")] = String(decoding: bytes, as: UTF8.self)
+                } else if st.type == .directory && item.depth < 4 {
+                    queue.append((child, item.depth + 1))
+                }
+            }
+        }
+        return siblingFiles
+    }
+
+    /// Discovers project & global skills from `.opencode/skills`, `.claude/skills`, `.agents/skills`,
+    /// `globalPaths.config/skills`, `~/.claude/skills`, `~/.agents/skills`, and config `skills` paths,
+    /// parsing YAML frontmatter and registering each skill with its sibling files into `skillService`.
+    @discardableResult
+    public static func seedSkills(
+        into skillService: any CoreSkill.Interface,
+        directory: String,
+        projectDirectory: String? = nil,
+        globalPaths: Global.Interface,
+        configEntries: [CoreConfigEntry],
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
+    ) async throws -> CoreState.Registration {
+        let effectiveProjectDir = projectDirectory ?? directory
+
+        var skillRoots: [String] = []
+        var seenRoots: Set<String> = []
+        func appendSkillRoot(_ raw: String) {
+            let norm = serverResolvePath(base: "/", relative: raw)
+            if seenRoots.insert(norm).inserted {
+                skillRoots.append(norm)
+            }
+        }
+        func appendSkillSubdirs(of base: String) {
+            appendSkillRoot(joinPath(base, "skill"))
+            appendSkillRoot(joinPath(base, "skills"))
+        }
+
+        // 1. Global skill directories
+        appendSkillSubdirs(of: globalPaths.config)
+        appendSkillSubdirs(of: joinPath(globalPaths.home, ".claude"))
+        appendSkillSubdirs(of: joinPath(globalPaths.home, ".agents"))
+
+        // 2. Directory entries from configEntries
+        for entry in configEntries {
+            if case .directory(let dir) = entry {
+                appendSkillSubdirs(of: dir.path.rawValue)
+            }
+        }
+
+        // 3. Project & location skill directories (higher precedence than global)
+        for rootDir in [effectiveProjectDir, directory] {
+            appendSkillSubdirs(of: joinPath(rootDir, ".claude"))
+            appendSkillSubdirs(of: joinPath(rootDir, ".agents"))
+            appendSkillSubdirs(of: joinPath(rootDir, ".opencode"))
+        }
+
+        // 4. Explicit local `skills` directory paths declared in config documents
+        for entry in configEntries {
+            guard let items = entry.info?.skills else { continue }
+            for item in items {
+                let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty || trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+                    continue
+                }
+                let expanded: String
+                if trimmed.hasPrefix("~/") {
+                    expanded = joinPath(globalPaths.home, String(trimmed.dropFirst(2)))
+                } else {
+                    expanded = serverResolvePath(base: directory, relative: trimmed)
+                }
+                appendSkillRoot(expanded)
+            }
+        }
+
+        var discovered: [(skill: SkillSchema.Info, files: [String: String])] = []
+        for root in skillRoots {
+            guard await fileSystem.exists(at: root) else { continue }
+            let scanned = await CoreConfigPlugin.SkillScan.scan(root: root, fileSystem: fileSystem)
+            for filepath in scanned {
+                guard let bytes = try? await fileSystem.readFile(at: filepath) else { continue }
+                let text = String(decoding: bytes, as: UTF8.self)
+                guard case .parsed(let skillInfo) = CoreConfigPlugin.SkillFile.parse(
+                    directory: root,
+                    filepath: filepath,
+                    content: text
+                ) else {
+                    continue
+                }
+                let siblings: [String: String]
+                if basename(filepath) == "SKILL.md" {
+                    let skillDir = dirname(filepath)
+                    siblings = await collectSiblingSkillFiles(in: skillDir, fileSystem: fileSystem)
+                } else {
+                    siblings = [:]
+                }
+                discovered.append((skill: skillInfo, files: siblings))
+            }
+        }
+
+        let resolvedSkills = discovered
+        return try await skillService.transform { editor in
+            for item in resolvedSkills {
+                editor.add(item.skill, files: item.files.isEmpty ? nil : item.files)
             }
         }
     }
@@ -2741,8 +3597,190 @@ public enum ServerLiveRuntime {
         return nil
     }
 
-    /// Builds a location-scoped `CoreSessionRunner.Service` wired to real agents, models,
-    /// credentials, built-in tools, and streaming `OpenCodeAI` wire protocols.
+    /// Location-scoped `CoreSessionContext.Interface` wrapper that delegates title selection
+    /// to the location's real `title` agent definition (including its system prompt & model overrides).
+    private final class LiveSessionContext: CoreSessionContext.Interface, Sendable {
+        let inner: CoreSessionContext.Service
+        let agentService: any CoreAgent.Agent.Interface
+
+        init(inner: CoreSessionContext.Service, agentService: any CoreAgent.Agent.Interface) {
+            self.inner = inner
+            self.agentService = agentService
+        }
+
+        var request: any CoreSessionModelRequest.Interface { inner.request }
+
+        func select(_ sessionID: SessionID) async throws -> CoreSessionContext.Selection {
+            try await inner.select(sessionID)
+        }
+
+        func load(_ selection: CoreSessionContext.Selection) async throws -> CoreSessionContext.Loaded {
+            try await inner.load(selection)
+        }
+
+        func resolveModel(
+            _ session: SessionSchema.Info,
+            kind: CoreSessionRunnerModel.RequestKind,
+            agent: String
+        ) async throws -> CoreSessionRunnerModel.Resolved {
+            try await inner.resolveModel(session, kind: kind, agent: agent)
+        }
+
+        func selectTitle(_ session: SessionSchema.Info) async throws -> CoreSessionContext.TitleSelection? {
+            let titleID = AgentSchema.ID(rawValue: "title")
+            let info = await agentService.get(titleID)
+            let systemPrompt = info?.system ?? ServerLiveRuntime.promptTitle
+            let modelRef = info?.model.map {
+                SessionSchema.ModelRef(
+                    id: $0.id.rawValue,
+                    providerID: $0.providerID.rawValue,
+                    variant: $0.variant?.rawValue
+                )
+            }
+            let titleAgent = CoreSessionModelRequest.AgentProfile(
+                id: titleID.rawValue,
+                system: systemPrompt,
+                maxSteps: info?.steps?.rawValue,
+                model: modelRef
+            )
+            guard let resolved = try? await resolveModel(session, kind: .title, agent: titleAgent.id) else {
+                return nil
+            }
+            let primary = (try? await resolveModel(session, kind: .primary, agent: session.agent ?? "build")) ?? resolved
+            return CoreSessionContext.TitleSelection(agent: titleAgent, primary: primary, selected: resolved)
+        }
+    }
+
+    /// Captures per-step workspace tree snapshots via `CoreSessionSnapshotBridge` and stamps
+    /// `{ start, end, files }` onto projected assistant step rows in SQLite so `GET /api/session/:id/diff`
+    /// and `POST /api/session/:id/revert/stage|clear|commit` operate on real tracked snapshots.
+    internal final class StepSnapshotTracker: Sendable {
+        struct PendingStep: Sendable {
+            let startSnapshot: String
+            let seqBefore: Int64
+        }
+
+        private let db: any SQLiteDatabase
+        let bridge: any CoreSessionSnapshotBridge
+        private let pending = Mutex<[SessionID: PendingStep]>([:])
+
+        init(db: any SQLiteDatabase, bridge: any CoreSessionSnapshotBridge) {
+            self.db = db
+            self.bridge = bridge
+        }
+
+        func beginStep(sessionID: SessionID) async {
+            if let previous = pending.withLock({ $0.removeValue(forKey: sessionID) }) {
+                await finalizeStep(sessionID: sessionID, step: previous)
+            }
+            guard let startSnap = try? await bridge.capture() else { return }
+            let seqBefore = latestMessageSeq(sessionID: sessionID)
+            pending.withLock { $0[sessionID] = PendingStep(startSnapshot: startSnap, seqBefore: seqBefore) }
+        }
+
+        func finishSession(sessionID: SessionID) async {
+            guard let step = pending.withLock({ $0.removeValue(forKey: sessionID) }) else { return }
+            await finalizeStep(sessionID: sessionID, step: step)
+        }
+
+        private func finalizeStep(sessionID: SessionID, step: PendingStep) async {
+            let endSnap = (try? await bridge.capture()) ?? step.startSnapshot
+            let changedFiles: [String]
+            if step.startSnapshot == endSnap {
+                changedFiles = []
+            } else if let liveBridge = bridge as? CoreSessionLiveSnapshotBridge,
+                      let relPaths = try? await liveBridge.service.files(CoreSnapshot.CompareInput(
+                          from: CoreSnapshot.ID(rawValue: step.startSnapshot),
+                          to: CoreSnapshot.ID(rawValue: endSnap)
+                      ))
+            {
+                changedFiles = relPaths.map(\.rawValue)
+            } else if let diffs = try? await bridge.diff(from: step.startSnapshot, to: endSnap, paths: nil) {
+                changedFiles = diffs.map(\.file)
+            } else {
+                changedFiles = []
+            }
+
+            let rows = (try? db.query(
+                """
+                SELECT `id`, `data` FROM `session_message`
+                WHERE `session_id` = ? AND `type` = 'assistant' AND `seq` > ?
+                ORDER BY `seq` ASC
+                """,
+                parameters: [.text(sessionID.rawValue), .integer(step.seqBefore)]
+            )) ?? []
+
+            let snapJSON: JSONValue = .object([
+                "start": .string(step.startSnapshot),
+                "end": .string(endSnap),
+                "files": .array(changedFiles.map { .string($0) }),
+            ])
+
+            for row in rows {
+                guard let msgID = row.string("id"),
+                      let rawData = row.string("data"),
+                      let decoded = try? ServerCodec.decode(JSONValue.self, from: rawData),
+                      case .object(var dict) = decoded
+                else { continue }
+                if dict["snapshot"] != nil && dict["snapshot"] != .null {
+                    continue
+                }
+                dict["snapshot"] = snapJSON
+                guard let encoded = try? ServerCodec.encodeString(JSONValue.object(dict)) else { continue }
+                _ = try? db.execute(
+                    "UPDATE `session_message` SET `data` = ? WHERE `id` = ? AND `session_id` = ?",
+                    parameters: [.text(encoded), .text(msgID), .text(sessionID.rawValue)]
+                )
+            }
+        }
+
+        private func latestMessageSeq(sessionID: SessionID) -> Int64 {
+            (try? db.queryScalar(
+                "SELECT coalesce(max(`seq`), 0) FROM `session_message` WHERE `session_id` = ?",
+                parameters: [.text(sessionID.rawValue)]
+            )?.int64Value) ?? 0
+        }
+    }
+
+    /// Location-scoped `CoreSessionRunner.Interface` implementation wrapping `CoreSessionRunner.Service`
+    /// with live per-step snapshot tracking (`CoreSessionLiveSnapshotBridge`) and live `CoreSessionTitle.Service`.
+    public final class LiveSessionRunner: CoreSessionRunner.Interface, Sendable {
+        public let inner: CoreSessionRunner.Service
+        public let snapshotBridge: (any CoreSessionSnapshotBridge)?
+        public let sessionTitle: CoreSessionTitle.Service
+        private let snapshotTracker: StepSnapshotTracker?
+
+        public var modelTransport: any CoreSessionModelTransport.Interface {
+            inner.modelTransport
+        }
+
+        internal init(
+            inner: CoreSessionRunner.Service,
+            snapshotBridge: (any CoreSessionSnapshotBridge)?,
+            sessionTitle: CoreSessionTitle.Service,
+            snapshotTracker: StepSnapshotTracker?
+        ) {
+            self.inner = inner
+            self.snapshotBridge = snapshotBridge
+            self.sessionTitle = sessionTitle
+            self.snapshotTracker = snapshotTracker
+        }
+
+        public func drain(_ input: CoreSessionRunner.DrainInput) async throws -> CoreSessionRunner.DrainResult {
+            do {
+                let result = try await inner.drain(input)
+                await snapshotTracker?.finishSession(sessionID: input.sessionID)
+                return result
+            } catch {
+                await snapshotTracker?.finishSession(sessionID: input.sessionID)
+                throw error
+            }
+        }
+    }
+
+    /// Builds a location-scoped `LiveSessionRunner` wired to real agents, models,
+    /// credentials, built-in tools, live `CoreSessionLiveSnapshotBridge` (when `snapshotService != nil`),
+    /// live `CoreSessionTitle.Service`, and streaming `OpenCodeAI` wire protocols.
     public static func makeSessionRunner(
         db: any SQLiteDatabase,
         bus: CoreBus.Service,
@@ -2756,26 +3794,38 @@ public enum ServerLiveRuntime {
         toolService: any CoreTool.Interface,
         httpTransport: any HTTPTransport,
         environment: any EnvironmentProviding,
+        snapshotService: (any CoreSnapshot.Interface)? = nil,
         isLocationClosed: @escaping @Sendable () -> Bool
-    ) -> CoreSessionRunner.Service {
+    ) -> LiveSessionRunner {
         let llmClient = makeLLMClient(transport: httpTransport)
         let modelTransport = CoreSessionModelTransport.Service()
         let modelRequest = CoreSessionModelRequest.Service(modelTransport: modelTransport)
+        let snapshotBridge: (any CoreSessionSnapshotBridge)? = snapshotService.map {
+            CoreSessionLiveSnapshotBridge(service: $0)
+        }
+        let snapshotTracker: StepSnapshotTracker? = snapshotBridge.map {
+            StepSnapshotTracker(db: db, bridge: $0)
+        }
 
         let runnerModel = CoreSessionRunnerModel.Service { session, availableFn, kind, agentID in
             let available = try await availableFn()
             let agentInfo = await agentService.get(AgentSchema.ID(rawValue: agentID))
 
             // Determine requested provider/model/variant in precedence order:
-            // 1. Session explicit selection
-            // 2. Agent explicit model
-            // 3. Model service default (config `model` or first credentialed flagship)
-            // 4. First available text-capable model
+            // 1. Title agent explicit model (for title generation)
+            // 2. Session explicit selection
+            // 3. Agent explicit model
+            // 4. Model service default (config `model` or first credentialed flagship)
+            // 5. First available text-capable model
             var targetProviderID: ProviderSchema.ID? = nil
             var targetModelID: ModelSchema.ID? = nil
             var targetVariant: String? = nil
 
-            if let sessionModel = session.model {
+            if kind == .title, let agentModel = agentInfo?.model {
+                targetProviderID = agentModel.providerID
+                targetModelID = agentModel.id
+                targetVariant = agentModel.variant?.rawValue
+            } else if let sessionModel = session.model {
                 targetProviderID = ProviderSchema.ID(rawValue: sessionModel.providerID)
                 targetModelID = ModelSchema.ID(rawValue: sessionModel.id)
                 targetVariant = sessionModel.variant
@@ -2928,7 +3978,8 @@ public enum ServerLiveRuntime {
                     model: modelRef
                 )
             },
-            selectTools: { _, agentProfile in
+            selectTools: { session, agentProfile in
+                await snapshotTracker?.beginStep(sessionID: session.id)
                 let agentInfo = await agentService.get(AgentSchema.ID(rawValue: agentProfile.id))
                 let ruleset = effectivePermissionRuleset(
                     agent: agentInfo,
@@ -2962,16 +4013,31 @@ public enum ServerLiveRuntime {
             }
         )
 
-        return CoreSessionRunner.Service(
+        let liveContext = LiveSessionContext(inner: sessionContext, agentService: agentService)
+        let sessionTitle = CoreSessionTitle.Service(
             db: db,
             bus: bus,
             store: sessionStore,
-            context: sessionContext,
+            context: liveContext,
+            llm: llmClient
+        )
+
+        let innerRunner = CoreSessionRunner.Service(
+            db: db,
+            bus: bus,
+            store: sessionStore,
+            context: liveContext,
             modelTransport: modelTransport,
             llm: llmClient,
             compaction: nil,
-            title: nil,
+            title: sessionTitle,
             isLocationClosed: isLocationClosed
+        )
+        return LiveSessionRunner(
+            inner: innerRunner,
+            snapshotBridge: snapshotBridge,
+            sessionTitle: sessionTitle,
+            snapshotTracker: snapshotTracker
         )
     }
 
@@ -2984,7 +4050,7 @@ public enum ServerLiveRuntime {
     public final class LiveSessionExecution: CoreSessionExecution.Interface, Sendable {
         public let inner: CoreSessionExecution.Service
         private let store: CoreSessionStore.Service
-        private let locations: CoreLocation.ServiceMap.Service
+        private let locationsProvider: @Sendable () -> CoreLocation.ServiceMap.Service?
 
         public init(
             inner: CoreSessionExecution.Service,
@@ -2993,7 +4059,17 @@ public enum ServerLiveRuntime {
         ) {
             self.inner = inner
             self.store = store
-            self.locations = locations
+            self.locationsProvider = { locations }
+        }
+
+        internal init(
+            inner: CoreSessionExecution.Service,
+            store: CoreSessionStore.Service,
+            locationsProvider: @escaping @Sendable () -> CoreLocation.ServiceMap.Service?
+        ) {
+            self.inner = inner
+            self.store = store
+            self.locationsProvider = locationsProvider
         }
 
         public func active() async -> Set<SessionID> {
@@ -3010,7 +4086,9 @@ public enum ServerLiveRuntime {
 
         public func wake(_ sessionID: SessionID) async {
             let hasAvailableModel: Bool = await {
-                guard let session = try? store.get(sessionID) else { return false }
+                guard let locations = locationsProvider(),
+                      let session = try? store.get(sessionID)
+                else { return false }
                 let locRef = LocationSchema.Ref(
                     directory: SchemaPrimitive.AbsolutePath(rawValue: session.location.directory),
                     workspaceID: session.location.workspaceID
