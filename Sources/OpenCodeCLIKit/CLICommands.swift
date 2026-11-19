@@ -262,7 +262,17 @@ public enum CLICommands {
                         )),
                     ]
                 )),
-                CLIFramework.Spec.make("models", options: CLIFramework.Spec.Options(description: "List all available models", globalFlags: serverFlags)),
+                CLIFramework.Spec.make("models", options: CLIFramework.Spec.Options(
+                    description: "List all available models",
+                    flags: [
+                        CLIFramework.Flag.boolean("verbose", default: false, description: "Use more verbose model output (includes metadata like costs)"),
+                        CLIFramework.Flag.boolean("refresh", default: false, description: "Refresh the models cache before listing"),
+                    ],
+                    arguments: [
+                        CLIFramework.Flag.ArgumentDefinition(name: "provider", description: "Provider ID to filter models by", optional: true),
+                    ],
+                    globalFlags: serverFlags
+                )),
                 CLIFramework.Spec.make("stats", options: CLIFramework.Spec.Options(
                     description: "Show shareable usage statistics",
                     flags: [
@@ -491,60 +501,61 @@ public enum CLICommands {
         }
 
         public static func run(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
-            let server = try await CLIServices.ServerConnection.resolve(
+            try await CLICommands.withResolvedServer(
                 CLIServices.ServerConnection.Args(mismatch: .ignore),
                 context: context
-            )
-            let endpoint = server.endpoint
-            let reqArgs = input.args("request")
-            let params = input.keyValueMap("param") ?? [:]
-            let resolved: ResolvedRequest
-            if let raw = rawRequest(reqArgs) {
-                resolved = raw
-            } else if reqArgs.count == 1 {
-                let openAPIURL = ClientURLBuilder.join(baseUrl: endpoint.url, path: "/openapi.json")
-                let resp = try await context.transport.send(
-                    HTTPRequest(method: "GET", url: openAPIURL, headers: OpenCodeClient.serviceHeaders(for: endpoint) ?? [:])
-                )
-                guard (200..<300).contains(resp.head.statusCode) else {
-                    throw CLIError("Failed to load OpenAPI document: HTTP \(resp.head.statusCode)")
+            ) { server, _ in
+                let endpoint = server.endpoint
+                let reqArgs = input.args("request")
+                let params = input.keyValueMap("param") ?? [:]
+                let resolved: ResolvedRequest
+                if let raw = rawRequest(reqArgs) {
+                    resolved = raw
+                } else if reqArgs.count == 1 {
+                    let openAPIURL = ClientURLBuilder.join(baseUrl: endpoint.url, path: "/openapi.json")
+                    let resp = try await context.transport.send(
+                        HTTPRequest(method: "GET", url: openAPIURL, headers: OpenCodeClient.serviceHeaders(for: endpoint) ?? [:])
+                    )
+                    guard (200..<300).contains(resp.head.statusCode) else {
+                        throw CLIError("Failed to load OpenAPI document: HTTP \(resp.head.statusCode)")
+                    }
+                    let doc = try JSONDecoder().decode(OpenAPIDocument.self, from: Data(resp.body))
+                    resolved = try resolveOperation(spec: doc, operationID: reqArgs[0], params: params)
+                } else {
+                    throw CLIError("Expected an operation name or an HTTP method and path")
                 }
-                let doc = try JSONDecoder().decode(OpenAPIDocument.self, from: Data(resp.body))
-                resolved = try resolveOperation(spec: doc, operationID: reqArgs[0], params: params)
-            } else {
-                throw CLIError("Expected an operation name or an HTTP method and path")
-            }
 
-            var headers = OpenCodeClient.serviceHeaders(for: endpoint) ?? [:]
-            for rawHeader in input.stringsList("header") {
-                guard let colon = rawHeader.firstIndex(of: ":"), colon != rawHeader.startIndex else {
-                    throw CLIError("Invalid header, expected name:value: \(rawHeader)")
+                var headers = OpenCodeClient.serviceHeaders(for: endpoint) ?? [:]
+                for rawHeader in input.stringsList("header") {
+                    guard let colon = rawHeader.firstIndex(of: ":"), colon != rawHeader.startIndex else {
+                        throw CLIError("Invalid header, expected name:value: \(rawHeader)")
+                    }
+                    let k = rawHeader[..<colon].trimmingCharacters(in: .whitespaces)
+                    let v = rawHeader[rawHeader.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                    headers[k] = v
                 }
-                let k = rawHeader[..<colon].trimmingCharacters(in: .whitespaces)
-                let v = rawHeader[rawHeader.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-                headers[k] = v
-            }
-            let bodyStr = input.string("data")
-            if bodyStr != nil && !headers.keys.contains(where: { $0.lowercased() == "content-type" }) {
-                headers["content-type"] = "application/json"
-            }
+                let bodyStr = input.string("data")
+                if bodyStr != nil && !headers.keys.contains(where: { $0.lowercased() == "content-type" }) {
+                    headers["content-type"] = "application/json"
+                }
 
-            let targetURL = ClientURLBuilder.join(baseUrl: endpoint.url, path: resolved.path)
-            let response = try await context.transport.send(
-                HTTPRequest(
-                    method: resolved.method,
-                    url: targetURL,
-                    headers: headers,
-                    body: bodyStr.map { Array($0.utf8) }
+                let targetURL = ClientURLBuilder.join(baseUrl: endpoint.url, path: resolved.path)
+                let response = try await context.transport.send(
+                    HTTPRequest(
+                        method: resolved.method,
+                        url: targetURL,
+                        headers: headers,
+                        body: bodyStr.map { Array($0.utf8) }
+                    )
                 )
-            )
-            let output = String(decoding: response.body, as: UTF8.self)
-            if !output.isEmpty {
-                context.io.writeStdout(output + (output.hasSuffix(context.io.eol) ? "" : context.io.eol))
-            }
-            if !(200..<300).contains(response.head.statusCode) {
-                context.io.writeStderr("HTTP \(response.head.statusCode)\(context.io.eol)")
-                context.exitCode.value = 1
+                let output = String(decoding: response.body, as: UTF8.self)
+                if !output.isEmpty {
+                    context.io.writeStdout(output + (output.hasSuffix(context.io.eol) ? "" : context.io.eol))
+                }
+                if !(200..<300).contains(response.head.statusCode) {
+                    context.io.writeStderr("HTTP \(response.head.statusCode)\(context.io.eol)")
+                    context.exitCode.value = 1
+                }
             }
         }
     }
@@ -887,52 +898,68 @@ public enum CLICommands {
                 )
             )
             let attempt = started.data
-            context.io.writeStderr("\(attempt.instructions)\(context.io.eol)")
-            context.io.writeStderr("\(attempt.url)\(context.io.eol)")
-            if context.io.isStdinTTY() && context.io.isStdoutTTY() {
-                await CLIUI.Prompt.openUrl(attempt.url)
-            }
-
-            if attempt.mode == .code {
-                try CLIUI.Prompt.requireInteractive("This login requires an interactive terminal to enter the authorization code", context: context)
-                let code = try await CLIUI.Prompt.backend(for: context).text(
-                    message: "Paste the authorization code",
-                    placeholder: nil,
-                    initialValue: nil,
-                    validate: { $0.isEmpty ? "Required" : nil }
-                )
-                try await client.integration.oauth.complete(
-                    IntegrationOauthCompleteInput(
-                        integrationID: integration.id.rawValue,
-                        attemptID: attempt.attemptID.rawValue,
-                        location: loc,
-                        code: code
-                    )
-                )
-                context.io.writeStderr("Connected to \(integration.name)\(context.io.eol)")
-                return
-            }
-
-            context.io.writeStderr("Waiting for authorization...\(context.io.eol)")
-            while true {
-                let response = try await client.integration.oauth.status(
-                    IntegrationOauthStatusInput(
-                        integrationID: integration.id.rawValue,
-                        attemptID: attempt.attemptID.rawValue,
-                        location: loc
-                    )
-                )
-                switch response.data {
-                case .pending:
-                    try await Task.sleep(for: .milliseconds(500))
-                case .complete:
-                    context.io.writeStderr("Connected to \(integration.name)\(context.io.eol)")
-                    return
-                case .failed(let message, _):
-                    throw CLIError(message)
-                case .expired:
-                    throw CLIError("Authorization expired")
+            var completed = false
+            do {
+                context.io.writeStderr("\(attempt.instructions)\(context.io.eol)")
+                context.io.writeStderr("\(attempt.url)\(context.io.eol)")
+                if context.io.isStdinTTY() && context.io.isStdoutTTY() {
+                    await CLIUI.Prompt.openUrl(attempt.url)
                 }
+
+                if attempt.mode == .code {
+                    try CLIUI.Prompt.requireInteractive("This login requires an interactive terminal to enter the authorization code", context: context)
+                    let code = try await CLIUI.Prompt.backend(for: context).text(
+                        message: "Paste the authorization code",
+                        placeholder: nil,
+                        initialValue: nil,
+                        validate: { $0.isEmpty ? "Required" : nil }
+                    )
+                    try await client.integration.oauth.complete(
+                        IntegrationOauthCompleteInput(
+                            integrationID: integration.id.rawValue,
+                            attemptID: attempt.attemptID.rawValue,
+                            location: loc,
+                            code: code
+                        )
+                    )
+                    completed = true
+                    context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
+                    return
+                }
+
+                context.io.writeStderr("Waiting for authorization...\(context.io.eol)")
+                while true {
+                    let response = try await client.integration.oauth.status(
+                        IntegrationOauthStatusInput(
+                            integrationID: integration.id.rawValue,
+                            attemptID: attempt.attemptID.rawValue,
+                            location: loc
+                        )
+                    )
+                    switch response.data {
+                    case .pending:
+                        try await Task.sleep(for: .milliseconds(500))
+                    case .complete:
+                        completed = true
+                        context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
+                        return
+                    case .failed(let message, _):
+                        throw CLIError(message)
+                    case .expired:
+                        throw CLIError("Authorization expired")
+                    }
+                }
+            } catch {
+                if !completed {
+                    try? await client.integration.oauth.cancel(
+                        IntegrationOauthCancelInput(
+                            integrationID: integration.id.rawValue,
+                            attemptID: attempt.attemptID.rawValue,
+                            location: loc
+                        )
+                    )
+                }
+                throw error
             }
         }
 
@@ -940,44 +967,45 @@ public enum CLICommands {
 
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
-                let client = try await createClient(context: context)
-                let integrations = (try await loadIntegrations(client, directory: context.cwd))
-                    .filter { !$0.connections.isEmpty }
-                if input.string("format") == "json" {
-                    let payload = integrations.map { integration -> JSONValue in
-                        let conns = (try? JSONEncoder().encode(integration.connections))
-                            .flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .array([])
-                        return .object([
-                            "id": .string(integration.id.rawValue),
-                            "name": .string(integration.name),
-                            "connections": conns,
-                        ])
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let integrations = (try await loadIntegrations(client, directory: context.cwd))
+                        .filter { !$0.connections.isEmpty }
+                    if input.string("format") == "json" {
+                        let payload = integrations.map { integration -> JSONValue in
+                            let conns = (try? JSONEncoder().encode(integration.connections))
+                                .flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) } ?? .array([])
+                            return .object([
+                                "id": .string(integration.id.rawValue),
+                                "name": .string(integration.name),
+                                "connections": conns,
+                            ])
+                        }
+                        context.io.writeStdout((try CLIPath.encodePrettyJSON(JSONValue.array(payload))) + context.io.eol)
+                        return
                     }
-                    context.io.writeStdout((try CLIPath.encodePrettyJSON(JSONValue.array(payload))) + context.io.eol)
-                    return
-                }
-                var rows: [(integration: String, source: String, type: String)] = []
-                for integration in integrations {
-                    for conn in integration.connections {
-                        switch conn {
-                        case .credential(let c):
-                            rows.append((integration.name, c.label, "stored"))
-                        case .env(let e):
-                            rows.append((integration.name, e.name, "environment"))
+                    var rows: [(integration: String, source: String, type: String)] = []
+                    for integration in integrations {
+                        for conn in integration.connections {
+                            switch conn {
+                            case .credential(let c):
+                                rows.append((integration.name, c.label, "stored"))
+                            case .env(let e):
+                                rows.append((integration.name, e.name, "environment"))
+                            }
                         }
                     }
+                    if rows.isEmpty {
+                        context.io.writeStdout("No authenticated integrations\(context.io.eol)")
+                        return
+                    }
+                    let width = (rows.map(\.integration.count).max() ?? 0) + 2
+                    let lines = rows.map { row in
+                        let col1 = row.integration.padding(toLength: width, withPad: " ", startingAt: 0)
+                        let col2 = row.source.padding(toLength: max(28, row.source.count + 1), withPad: " ", startingAt: 0)
+                        return "\(col1)\(col2)\(row.type)"
+                    }
+                    context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
                 }
-                if rows.isEmpty {
-                    context.io.writeStdout("No authenticated integrations\(context.io.eol)")
-                    return
-                }
-                let width = (rows.map(\.integration.count).max() ?? 0) + 2
-                let lines = rows.map { row in
-                    let col1 = row.integration.padding(toLength: width, withPad: " ", startingAt: 0)
-                    let col2 = row.source.padding(toLength: max(28, row.source.count + 1), withPad: " ", startingAt: 0)
-                    return "\(col1)\(col2)\(row.type)"
-                }
-                context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -992,74 +1020,109 @@ public enum CLICommands {
                 if target == nil {
                     try CLIUI.Prompt.requireInteractive("Pass an integration ID or name when running without an interactive terminal", context: context)
                 }
-                let client = try await createClient(context: context)
-                let loc = LocationQuery.LocationField(directory: context.cwd)
-                if let target, let url = URL(string: target), let scheme = url.scheme?.lowercased(), (scheme == "http" || scheme == "https") {
-                    try await client.integration.wellknown.add(
-                        ExperimentalIntegrationWellknownAddInput(location: loc, url: target)
-                    )
-                }
-                let integrations = try await loadIntegrations(client, directory: context.cwd)
-                let integration: IntegrationSchema.Info
-                if let target {
-                    integration = try resolveIntegration(integrations, target: target)
-                } else {
-                    let choices = loginChoices(integrations)
-                    if choices.isEmpty { throw CLIError("No authentication integrations are available") }
-                    let id = try await CLIUI.selectIntegration(choices, context: context)
-                    integration = try resolveIntegration(integrations, target: id)
-                }
-                let methods = connectMethods(integration)
-                guard !methods.isEmpty else {
-                    throw CLIError("\(integration.name) has no interactive login methods")
-                }
-                let method: ConnectMethod
-                if let methodArg {
-                    method = try resolveMethod(methods, target: methodArg)
-                } else if methods.count == 1 {
-                    method = methods[0]
-                } else {
-                    try CLIUI.Prompt.requireInteractive("Pass --method when running without an interactive terminal", context: context)
-                    let opts = methods.map { CLIUI.Prompt.SelectOption(value: $0.methodID, label: $0.label) }
-                    let chosen = try await CLIUI.Prompt.backend(for: context).select(
-                        message: "Select login method",
-                        options: opts,
-                        initialValue: opts.first?.value
-                    )
-                    method = try resolveMethod(methods, target: chosen)
-                }
-                let answer = try await answerForm(method.form, input: answers, context: context)
-                switch method {
-                case .key(let k):
-                    let keyVal = try await secret(k.label ?? "Enter your \(integration.name) API key", context: context)
-                    try await client.integration.connect.key(
-                        IntegrationConnectKeyInput(integrationID: integration.id.rawValue, location: loc, key: keyVal, answer: answer)
-                    )
-                case .external(let ext):
-                    try await client.integration.connect.external(
-                        IntegrationConnectExternalInput(integrationID: integration.id.rawValue, location: loc, methodID: ext.id.rawValue, answer: answer)
-                    )
-                case .oauth(let oauth):
-                    try await oauthLogin(client: client, integration: integration, method: oauth, answer: answer, context: context)
-                case .command(let cmd):
-                    let started = try await client.integration.command.connect(
-                        IntegrationCommandConnectInput(integrationID: integration.id.rawValue, location: loc, methodID: cmd.id.rawValue)
-                    )
-                    while true {
-                        let st = try await client.integration.command.status(
-                            IntegrationCommandStatusInput(integrationID: integration.id.rawValue, attemptID: started.data.attemptID.rawValue, location: loc)
+                context.io.writeStderr("┌ Connect an integration\(context.io.eol)")
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let loc = LocationQuery.LocationField(directory: context.cwd)
+                    if let target, let url = URL(string: target), let scheme = url.scheme?.lowercased(), (scheme == "http" || scheme == "https") {
+                        try await client.integration.wellknown.add(
+                            ExperimentalIntegrationWellknownAddInput(location: loc, url: target)
                         )
-                        switch st.data {
-                        case .pending:
-                            try await Task.sleep(for: .milliseconds(500))
-                        case .complete:
-                            return
-                        case .failed(let message, _):
-                            throw CLIError(message)
-                        case .expired:
-                            throw CLIError("Authentication expired")
+                    }
+                    let integrations = try await loadIntegrations(client, directory: context.cwd)
+                    let integration: IntegrationSchema.Info
+                    if let target {
+                        integration = try resolveIntegration(integrations, target: target)
+                    } else {
+                        let choices = loginChoices(integrations)
+                        if choices.isEmpty { throw CLIError("No authentication integrations are available") }
+                        let id = try await CLIUI.selectIntegration(choices, context: context)
+                        integration = try resolveIntegration(integrations, target: id)
+                    }
+                    let methods = connectMethods(integration)
+                    guard !methods.isEmpty else {
+                        throw CLIError("\(integration.name) has no interactive login methods")
+                    }
+                    let method: ConnectMethod
+                    if let methodArg {
+                        method = try resolveMethod(methods, target: methodArg)
+                    } else if methods.count == 1 {
+                        method = methods[0]
+                    } else {
+                        try CLIUI.Prompt.requireInteractive("Pass --method when running without an interactive terminal", context: context)
+                        let opts = methods.map { CLIUI.Prompt.SelectOption(value: $0.methodID, label: $0.label) }
+                        let chosen = try await CLIUI.Prompt.backend(for: context).select(
+                            message: "Select login method",
+                            options: opts,
+                            initialValue: opts.first?.value
+                        )
+                        method = try resolveMethod(methods, target: chosen)
+                    }
+                    let answer = try await answerForm(method.form, input: answers, context: context)
+                    switch method {
+                    case .key(let k):
+                        let keyVal = try await secret(k.label ?? "Enter your \(integration.name) API key", context: context)
+                        try await client.integration.connect.key(
+                            IntegrationConnectKeyInput(integrationID: integration.id.rawValue, location: loc, key: keyVal, answer: answer)
+                        )
+                        context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
+                    case .external(let ext):
+                        try await client.integration.connect.external(
+                            IntegrationConnectExternalInput(integrationID: integration.id.rawValue, location: loc, methodID: ext.id.rawValue, answer: answer)
+                        )
+                        context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
+                    case .oauth(let oauth):
+                        try await oauthLogin(client: client, integration: integration, method: oauth, answer: answer, context: context)
+                    case .command(let cmd):
+                        let started = try await client.integration.command.connect(
+                            IntegrationCommandConnectInput(integrationID: integration.id.rawValue, location: loc, methodID: cmd.id.rawValue)
+                        )
+                        var completed = false
+                        var printed = 0
+                        do {
+                            while true {
+                                let st = try await client.integration.command.status(
+                                    IntegrationCommandStatusInput(integrationID: integration.id.rawValue, attemptID: started.data.attemptID.rawValue, location: loc)
+                                )
+                                switch st.data {
+                                case .pending(let message, _):
+                                    if let message, let lastNewline = message.lastIndex(of: "\n") {
+                                        let endOffset = message.distance(from: message.startIndex, to: message.index(after: lastNewline))
+                                        if endOffset > printed {
+                                            let startIdx = message.index(message.startIndex, offsetBy: printed)
+                                            let endIdx = message.index(message.startIndex, offsetBy: endOffset)
+                                            let chunk = message[startIdx..<endIdx].trimmingCharacters(in: .whitespacesAndNewlines)
+                                            printed = endOffset
+                                            if !chunk.isEmpty {
+                                                context.io.writeStderr("\(chunk)\(context.io.eol)")
+                                            }
+                                        }
+                                    }
+                                    try await Task.sleep(for: .milliseconds(500))
+                                case .complete:
+                                    completed = true
+                                    context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
+                                    break
+                                case .failed(let message, _):
+                                    throw CLIError(message)
+                                case .expired:
+                                    throw CLIError("Authentication expired")
+                                }
+                                if completed { break }
+                            }
+                        } catch {
+                            if !completed {
+                                try? await client.integration.command.cancel(
+                                    IntegrationCommandCancelInput(
+                                        integrationID: integration.id.rawValue,
+                                        attemptID: started.data.attemptID.rawValue,
+                                        location: loc
+                                    )
+                                )
+                            }
+                            throw error
                         }
                     }
+                    context.io.writeStderr("└ Done\(context.io.eol)")
                 }
             }
         }
@@ -1074,12 +1137,15 @@ public enum CLICommands {
                 if cred == nil {
                     try CLIUI.Prompt.requireInteractive("Pass a credential ID or label when running without an interactive terminal", context: context)
                 }
-                let client = try await createClient(context: context)
-                let integrations = try await loadIntegrations(client, directory: context.cwd)
-                let integration = try await chooseIntegration(integrations, target: target, context: context)
-                let credID = try await chooseCredential(integration, action: "log out", target: cred, context: context)
-                try await client.credential.remove(CredentialRemoveInput(credentialID: credID))
-                context.io.writeStderr("Removed account from \(integration.name)\(context.io.eol)")
+                context.io.writeStderr("┌ Log out of an account\(context.io.eol)")
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let integrations = try await loadIntegrations(client, directory: context.cwd)
+                    let integration = try await chooseIntegration(integrations, target: target, context: context)
+                    let credID = try await chooseCredential(integration, action: "log out", target: cred, context: context)
+                    try await client.credential.remove(CredentialRemoveInput(credentialID: credID))
+                    context.io.writeStderr("◇ Removed account from \(integration.name)\(context.io.eol)")
+                    context.io.writeStderr("└ Done\(context.io.eol)")
+                }
             }
         }
 
@@ -1093,34 +1159,38 @@ public enum CLICommands {
                 if cred == nil {
                     try CLIUI.Prompt.requireInteractive("Pass a credential ID or label when running without an interactive terminal", context: context)
                 }
-                let client = try await createClient(context: context)
-                let integrations = try await loadIntegrations(client, directory: context.cwd)
-                let integration = try await chooseIntegration(integrations, target: target, context: context)
-                let credID = try await chooseCredential(integration, action: "switch to", target: cred, context: context)
-                try await client.credential.activate(CredentialActivateInput(credentialID: credID))
-                context.io.writeStderr("Switched account for \(integration.name)\(context.io.eol)")
+                context.io.writeStderr("┌ Switch account\(context.io.eol)")
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let integrations = try await loadIntegrations(client, directory: context.cwd)
+                    let integration = try await chooseIntegration(integrations, target: target, context: context)
+                    let credID = try await chooseCredential(integration, action: "switch to", target: cred, context: context)
+                    try await client.credential.activate(CredentialActivateInput(credentialID: credID))
+                    context.io.writeStderr("◇ Switched account for \(integration.name)\(context.io.eol)")
+                    context.io.writeStderr("└ Done\(context.io.eol)")
+                }
             }
         }
 
         public static func runExport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
-                let client = try await createClient(context: context)
-                let target = input.arg("target")
-                let integrationID: String?
-                if let target {
-                    let list = try await loadIntegrations(client, directory: context.cwd)
-                    integrationID = try resolveIntegration(list, target: target).id.rawValue
-                } else {
-                    integrationID = nil
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let target = input.arg("target")
+                    let integrationID: String?
+                    if let target {
+                        let list = try await loadIntegrations(client, directory: context.cwd)
+                        integrationID = try resolveIntegration(list, target: target).id.rawValue
+                    } else {
+                        integrationID = nil
+                    }
+                    let all = try await client.credential.list()
+                    let filtered = all.filter { entry in
+                        integrationID == nil || entry.integrationID.rawValue == integrationID
+                    }
+                    if context.io.isStdoutTTY() {
+                        context.io.writeStderr("Warning: the output contains secrets; redirect it to a file or pipe it to auth import\(context.io.eol)")
+                    }
+                    context.io.writeStdout((try CLIPath.encodePrettyJSON(filtered)) + context.io.eol)
                 }
-                let all = try await client.credential.list()
-                let filtered = all.filter { entry in
-                    integrationID == nil || entry.integrationID.rawValue == integrationID
-                }
-                if context.io.isStdoutTTY() {
-                    context.io.writeStderr("Warning: the output contains secrets; redirect it to a file or pipe it to auth import\(context.io.eol)")
-                }
-                context.io.writeStdout((try CLIPath.encodePrettyJSON(filtered)) + context.io.eol)
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -1141,33 +1211,34 @@ public enum CLICommands {
                     text = try await CLIUtil.readStdin(context: context)
                 }
                 let decoded = try JSONDecoder().decode([CredentialLegacySchema.Entry].self, from: Data(text.utf8))
-                let client = try await createClient(context: context)
-                let existing = try await client.credential.list()
-                let ids = Set(existing.map(\.id.rawValue))
-                let existingIntegrations = Set(existing.map(\.integrationID.rawValue))
-                var imported = 0
-                for legacy in decoded {
-                    let entry = legacy.entry
-                    if ids.contains(entry.id.rawValue) { continue }
-                    do {
-                        _ = try await client.credential.create(
-                            CredentialCreateInput(
-                                id: entry.id.rawValue,
-                                integrationID: entry.integrationID.rawValue,
-                                label: entry.label,
-                                value: entry.value,
-                                activate: entry.active && !existingIntegrations.contains(entry.integrationID.rawValue)
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let existing = try await client.credential.list()
+                    let ids = Set(existing.map(\.id.rawValue))
+                    let existingIntegrations = Set(existing.map(\.integrationID.rawValue))
+                    var imported = 0
+                    for legacy in decoded {
+                        let entry = legacy.entry
+                        if ids.contains(entry.id.rawValue) { continue }
+                        do {
+                            _ = try await client.credential.create(
+                                CredentialCreateInput(
+                                    id: entry.id.rawValue,
+                                    integrationID: entry.integrationID.rawValue,
+                                    label: entry.label,
+                                    value: entry.value,
+                                    activate: entry.active && !existingIntegrations.contains(entry.integrationID.rawValue)
+                                )
                             )
-                        )
-                        imported += 1
-                    } catch {
-                        if !isConflictError(error) { throw error }
+                            imported += 1
+                        } catch {
+                            if !isConflictError(error) { throw error }
+                        }
                     }
+                    let skipped = decoded.count - imported
+                    let noun = imported == 1 ? "credential" : "credentials"
+                    let skipSuffix = skipped > 0 ? ", skipped \(skipped) already present" : ""
+                    context.io.writeStderr("Imported \(imported) \(noun)\(skipSuffix)\(context.io.eol)")
                 }
-                let skipped = decoded.count - imported
-                let noun = imported == 1 ? "credential" : "credentials"
-                let skipSuffix = skipped > 0 ? ", skipped \(skipped) already present" : ""
-                context.io.writeStderr("Imported \(imported) \(noun)\(skipSuffix)\(context.io.eol)")
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -1426,27 +1497,27 @@ public enum CLICommands {
 
         public static func runAgents(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            await CLIServices.waitForPlugins(client, context.cwd)
-            let response = try await client.agent.list(
-                AgentListInput(location: LocationQuery.LocationField(directory: context.cwd))
-            )
-            let sorted = response.data.sorted { $0.id.rawValue < $1.id.rawValue }
-            context.io.writeStdout((try CLIPath.encodePrettyJSON(sorted)) + context.io.eol)
+            try await CLICommands.withResolvedServer(context: context) { _, client in
+                await CLIServices.waitForPlugins(client, context.cwd)
+                let response = try await client.agent.list(
+                    AgentListInput(location: LocationQuery.LocationField(directory: context.cwd))
+                )
+                let sorted = response.data.sorted { $0.id.rawValue < $1.id.rawValue }
+                context.io.writeStdout((try CLIPath.encodePrettyJSON(sorted)) + context.io.eol)
+            }
         }
 
         public static func runConfig(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            let entries = try await client.config.get(
-                ConfigGetInput(location: LocationQuery.LocationField(directory: context.cwd))
-            )
-            let data = try JSONEncoder().encode(entries)
-            let rawJSON = try JSONDecoder().decode(JSONValue.self, from: data)
-            let redacted = redactConfig(rawJSON)
-            context.io.writeStdout((try CLIPath.encodePrettyJSON(redacted)) + context.io.eol)
+            try await CLICommands.withResolvedServer(context: context) { _, client in
+                let entries = try await client.config.get(
+                    ConfigGetInput(location: LocationQuery.LocationField(directory: context.cwd))
+                )
+                let data = try JSONEncoder().encode(entries)
+                let rawJSON = try JSONDecoder().decode(JSONValue.self, from: data)
+                let redacted = redactConfig(rawJSON)
+                context.io.writeStdout((try CLIPath.encodePrettyJSON(redacted)) + context.io.eol)
+            }
         }
 
         public static func runHeapDump(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
@@ -1571,36 +1642,36 @@ public enum CLICommands {
 
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             _ = input
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            let response = try await client.mcp.list(
-                McpListInput(location: LocationQuery.LocationField(directory: context.cwd))
-            )
-            let servers = response.data.sorted { $0.name < $1.name }
-            if servers.isEmpty {
-                context.io.writeStdout("No MCP servers configured\(context.io.eol)")
-                return
-            }
-            let width = servers.map(\.name.count).max() ?? 0
-            let lines = servers.map { item -> String in
-                let icon: String
-                let desc: String
-                switch item.status {
-                case .connected:
-                    icon = "✓"; desc = "connected"
-                case .needsAuth:
-                    icon = "⚠"; desc = "needs authentication"
-                case .failed(let err):
-                    icon = "✗"; desc = "failed: \(err)"
-                case .disabled:
-                    icon = "○"; desc = "disabled"
-                case .pending:
-                    icon = "○"; desc = "pending"
+            try await CLICommands.withResolvedServer(context: context) { _, client in
+                let response = try await client.mcp.list(
+                    McpListInput(location: LocationQuery.LocationField(directory: context.cwd))
+                )
+                let servers = response.data.sorted { $0.name < $1.name }
+                if servers.isEmpty {
+                    context.io.writeStdout("No MCP servers configured\(context.io.eol)")
+                    return
                 }
-                let padded = item.name.padding(toLength: width, withPad: " ", startingAt: 0)
-                return "\(icon) \(padded)  \(desc)"
+                let width = servers.map(\.name.count).max() ?? 0
+                let lines = servers.map { item -> String in
+                    let icon: String
+                    let desc: String
+                    switch item.status {
+                    case .connected:
+                        icon = "✓"; desc = "connected"
+                    case .needsAuth:
+                        icon = "⚠"; desc = "needs authentication"
+                    case .failed(let err):
+                        icon = "✗"; desc = "failed: \(err)"
+                    case .disabled:
+                        icon = "○"; desc = "disabled"
+                    case .pending:
+                        icon = "○"; desc = "pending"
+                    }
+                    let padded = item.name.padding(toLength: width, withPad: " ", startingAt: 0)
+                    return "\(icon) \(padded)  \(desc)"
+                }
+                context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
             }
-            context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
         }
 
         public static func runAdd(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
@@ -1674,51 +1745,69 @@ public enum CLICommands {
                 if name == nil {
                     try CLIUI.Prompt.requireInteractive("Pass an MCP server name when running without an interactive terminal", context: context)
                 }
-                let server = try await CLIServices.ServerConnection.resolve(context: context)
-                let client = context.makeClient(endpoint: server.endpoint)
-                let integrations = try await Auth.loadIntegrations(client, directory: context.cwd)
-                let servers = try await client.mcp.list(
-                    McpListInput(location: LocationQuery.LocationField(directory: context.cwd))
-                )
-                let choices = mcpAuthChoices(servers: servers.data, integrations: integrations)
-                if name == nil && choices.isEmpty {
-                    context.io.writeStderr("No OAuth-capable MCP servers configured\(context.io.eol)")
-                    return
-                }
-                let targetServer = name.flatMap { n in servers.data.first(where: { $0.name == n }) }
-                if let name, targetServer == nil {
-                    throw CLIError("MCP server not found: \(name)")
-                }
-                let integrationID: String?
-                if let targetServer {
-                    integrationID = targetServer.integrationID?.rawValue
-                } else {
-                    integrationID = try await CLIUI.selectIntegration(choices, kind: "MCP server", context: context)
-                }
-                guard let integrationID,
-                      let integration = integrations.first(where: { $0.id.rawValue == integrationID }),
-                      let oauthMethod = integration.methods.compactMap({ m -> IntegrationSchema.OAuthMethod? in
-                          if case .oauth(let o) = m { return o }
-                          return nil
-                      }).first
-                else {
-                    throw CLIError("MCP server \"\(name ?? "")\" is not an OAuth-capable remote server")
-                }
-                let previous: [ConnectionSchema.CredentialInfo] = integration.connections.compactMap {
-                    if case .credential(let c) = $0 { return c }
-                    return nil
-                }
-                let answer = try await Auth.answerForm(oauthMethod.form, context: context)
-                try await Auth.oauthLogin(
-                    client: client,
-                    integration: integration,
-                    method: oauthMethod,
-                    answer: answer,
-                    label: previous.first?.label,
-                    context: context
-                )
-                for conn in previous {
-                    try await client.credential.remove(CredentialRemoveInput(credentialID: conn.id.rawValue))
+                context.io.writeStderr("┌ Authenticate an MCP server\(context.io.eol)")
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let integrations = try await Auth.loadIntegrations(client, directory: context.cwd)
+                    let servers = try await client.mcp.list(
+                        McpListInput(location: LocationQuery.LocationField(directory: context.cwd))
+                    )
+                    let choices = mcpAuthChoices(servers: servers.data, integrations: integrations)
+                    if name == nil && choices.isEmpty {
+                        context.io.writeStderr("No OAuth-capable MCP servers configured\(context.io.eol)")
+                        context.io.writeStderr("└ Done\(context.io.eol)")
+                        return
+                    }
+                    let targetServer = name.flatMap { n in servers.data.first(where: { $0.name == n }) }
+                    if let name, targetServer == nil {
+                        throw CLIError("MCP server not found: \(name)")
+                    }
+                    let integrationID: String?
+                    if let targetServer {
+                        integrationID = targetServer.integrationID?.rawValue
+                    } else {
+                        integrationID = try await CLIUI.selectIntegration(choices, kind: "MCP server", context: context)
+                    }
+                    guard let integrationID,
+                          let integration = integrations.first(where: { $0.id.rawValue == integrationID }),
+                          let oauthMethod = integration.methods.compactMap({ m -> IntegrationSchema.OAuthMethod? in
+                              if case .oauth(let o) = m { return o }
+                              return nil
+                          }).first
+                    else {
+                        throw CLIError("MCP server \"\(name ?? "")\" is not an OAuth-capable remote server")
+                    }
+                    if !integration.connections.isEmpty {
+                        let status = servers.data.first(where: { $0.integrationID == integration.id })?.status
+                        if case .needsAuth = status {
+                            context.io.writeStderr("\(integration.name) has expired credentials. Re-authenticating...\(context.io.eol)")
+                        } else if context.io.isStdinTTY() && context.io.isStdoutTTY() {
+                            let again = try await CLIUI.Prompt.backend(for: context).confirm(
+                                message: "\(integration.name) already has valid credentials. Re-authenticate?",
+                                initialValue: true
+                            )
+                            if !again {
+                                context.io.writeStderr("└ Cancelled\(context.io.eol)")
+                                return
+                            }
+                        }
+                    }
+                    let previous: [ConnectionSchema.CredentialInfo] = integration.connections.compactMap {
+                        if case .credential(let c) = $0 { return c }
+                        return nil
+                    }
+                    let answer = try await Auth.answerForm(oauthMethod.form, context: context)
+                    try await Auth.oauthLogin(
+                        client: client,
+                        integration: integration,
+                        method: oauthMethod,
+                        answer: answer,
+                        label: previous.first?.label,
+                        context: context
+                    )
+                    for conn in previous {
+                        try await client.credential.remove(CredentialRemoveInput(credentialID: conn.id.rawValue))
+                    }
+                    context.io.writeStderr("└ Done\(context.io.eol)")
                 }
             }
         }
@@ -1727,24 +1816,24 @@ public enum CLICommands {
             guard let name = input.arg("name") else {
                 throw CLIError("Missing required argument: name")
             }
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            guard let integration = try await resolveIntegration(client, name, context.cwd) else {
-                context.io.writeStdout("No stored credentials for \(name)\(context.io.eol)")
-                return
+            try await CLICommands.withResolvedServer(context: context) { _, client in
+                guard let integration = try await resolveIntegration(client, name, context.cwd) else {
+                    context.io.writeStdout("No stored credentials for \(name)\(context.io.eol)")
+                    return
+                }
+                let creds: [ConnectionSchema.CredentialInfo] = integration.connections.compactMap {
+                    if case .credential(let c) = $0 { return c }
+                    return nil
+                }
+                if creds.isEmpty {
+                    context.io.writeStdout("No stored credentials for \(name)\(context.io.eol)")
+                    return
+                }
+                for cred in creds {
+                    try await client.credential.remove(CredentialRemoveInput(credentialID: cred.id.rawValue))
+                }
+                context.io.writeStdout("Removed OAuth credentials for \(name)\(context.io.eol)")
             }
-            let creds: [ConnectionSchema.CredentialInfo] = integration.connections.compactMap {
-                if case .credential(let c) = $0 { return c }
-                return nil
-            }
-            if creds.isEmpty {
-                context.io.writeStdout("No stored credentials for \(name)\(context.io.eol)")
-                return
-            }
-            for cred in creds {
-                try await client.credential.remove(CredentialRemoveInput(credentialID: cred.id.rawValue))
-            }
-            context.io.writeStdout("Removed OAuth credentials for \(name)\(context.io.eol)")
         }
     }
 
@@ -1866,15 +1955,8 @@ public enum CLICommands {
             let client = context.makeClient(endpoint: endpoint)
             let urls: [String]
             if remoteFlag {
-                let route = (try await CLIServices.ServiceConfig.read(context: context)).remote?.route
-                let expectedHost = route != nil ? await CLIServices.RemoteTunnel.hostname(route!, context) : nil
-                let info = try await client.server.info()
-                guard let tunnel = info.urls.first(where: { candidate in
-                    guard let expectedHost, let h = URLComponents(string: candidate)?.host else { return false }
-                    return h == expectedHost
-                }) else {
-                    throw CLIError("Remote tunnel is not ready")
-                }
+                let maxWait: Duration = (context.environment is DictionaryEnvironment) ? .zero : .seconds(180)
+                let tunnel = try await remoteURL(client: client, context: context, maxWait: maxWait)
                 urls = [tunnel]
             } else if let validatedURL {
                 urls = [validatedURL]
@@ -1911,12 +1993,11 @@ public enum CLICommands {
                         "urls": .array(remoteURLs.map(JSONValue.string)),
                     ])
                 )
-                if let qrText = try? QR.renderUnicodeCompact(qrPayload, border: 2) {
-                    let indented = qrText.split(separator: "\n", omittingEmptySubsequences: false)
-                        .map { "  \($0)" }
-                        .joined(separator: context.io.eol)
-                    lines.append(indented)
-                }
+                let qrText = try QR.renderUnicodeCompact(qrPayload, border: 2)
+                let indented = qrText.split(separator: "\n", omittingEmptySubsequences: false)
+                    .map { "  \($0)" }
+                    .joined(separator: context.io.eol)
+                lines.append(indented)
             }
             lines.append("")
             context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
@@ -1924,7 +2005,7 @@ public enum CLICommands {
             if !remoteFlag && validatedURL == nil,
                let comps = URLComponents(string: endpoint.url),
                let host = comps.host,
-               ["localhost", "127.0.0.1", "::1"].contains(host),
+               ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host),
                let port = comps.port
             {
                 let sshNote = [
@@ -1936,6 +2017,41 @@ public enum CLICommands {
                     "",
                 ].joined(separator: context.io.eol) + context.io.eol
                 context.io.writeStderr(sshNote)
+            }
+        }
+
+        public static func remoteURL(
+            client: OpenCodeClient,
+            context: CLIContext = CLIContext.current,
+            maxWait: Duration = .seconds(180),
+            pollInterval: Duration = .seconds(1)
+        ) async throws -> String {
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: maxWait)
+            while true {
+                let route = (try await CLIServices.ServiceConfig.read(context: context)).remote?.route
+                let expectedHost = route != nil ? await CLIServices.RemoteTunnel.hostname(route!, context) : nil
+                let info = try await client.server.info()
+                if let expectedHost,
+                   let tunnel = info.urls.first(where: { candidate in
+                       guard let host = URLComponents(string: candidate)?.host else { return false }
+                       return host == expectedHost
+                   })
+                {
+                    return tunnel
+                }
+                if clock.now >= deadline {
+                    if maxWait == .zero {
+                        throw CLIError("Remote tunnel is not ready")
+                    }
+                    throw CLIError(
+                        [
+                            "Timed out waiting for the remote tunnel; run `opencode pair --remote` again to retry.",
+                            "Behind an HTTP proxy, give the background service its address with `opencode service set env HTTPS_PROXY <url>` (and `NO_PROXY` for hosts to reach directly).",
+                        ].joined(separator: context.io.eol)
+                    )
+                }
+                try await Task.sleep(for: pollInterval)
             }
         }
 
@@ -2078,11 +2194,18 @@ public enum CLICommands {
                 public let client: OpenCodeClient
                 public let location: LocationQuery.LocationField
                 public let items: [Item]
+                public let standaloneHandle: CLIServices.Standalone.Handle?
 
-                public init(client: OpenCodeClient, location: LocationQuery.LocationField, items: [Item]) {
+                public init(
+                    client: OpenCodeClient,
+                    location: LocationQuery.LocationField,
+                    items: [Item],
+                    standaloneHandle: CLIServices.Standalone.Handle? = nil
+                ) {
                     self.client = client
                     self.location = location
                     self.items = items
+                    self.standaloneHandle = standaloneHandle
                 }
             }
 
@@ -2196,9 +2319,12 @@ public enum CLICommands {
                 }
 
                 if let selected, items.isEmpty {
+                    if let handle = server.standaloneHandle {
+                        await handle.stop()
+                    }
                     throw CLIError("Plugin is not configured: \(selected)")
                 }
-                return InspectResult(client: client, location: loc, items: items)
+                return InspectResult(client: client, location: loc, items: items, standaloneHandle: server.standaloneHandle)
             }
         }
 
@@ -2272,34 +2398,34 @@ public enum CLICommands {
         }
 
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            let response = try await client.plugin.list(
-                PluginListInput(location: LocationQuery.LocationField(directory: context.cwd))
-            )
-            let info = try await context.configService.get()
-            let npm = context.npmService
-            var tuiList: [TUIPluginSummary] = []
-            for entry in info.plugins ?? [] {
-                let target: String
-                switch entry {
-                case .specifier(let s): target = s
-                case .configured(let pkg, _): target = pkg
-                }
-                if target.hasPrefix("-") || target == "*" || target.hasSuffix(".*") || target.hasPrefix("opencode.") { continue }
-                if NpmSpec.isInstallablePackage(target) {
-                    let resolved = await npm.resolve(target)
-                    let ep = await PluginContract.Host.resolve(PluginContract.Host.Target(directory: resolved.directory, name: resolved.name), fileSystem: context.fileSystem)
-                    if ep.tui != nil {
-                        tuiList.append(TUIPluginSummary(target: target, version: resolved.version))
+            try await CLICommands.withResolvedServer(context: context) { _, client in
+                let response = try await client.plugin.list(
+                    PluginListInput(location: LocationQuery.LocationField(directory: context.cwd))
+                )
+                let info = try await context.configService.get()
+                let npm = context.npmService
+                var tuiList: [TUIPluginSummary] = []
+                for entry in info.plugins ?? [] {
+                    let target: String
+                    switch entry {
+                    case .specifier(let s): target = s
+                    case .configured(let pkg, _): target = pkg
+                    }
+                    if target.hasPrefix("-") || target == "*" || target.hasSuffix(".*") || target.hasPrefix("opencode.") { continue }
+                    if NpmSpec.isInstallablePackage(target) {
+                        let resolved = await npm.resolve(target)
+                        let ep = await PluginContract.Host.resolve(PluginContract.Host.Target(directory: resolved.directory, name: resolved.name), fileSystem: context.fileSystem)
+                        if ep.tui != nil {
+                            tuiList.append(TUIPluginSummary(target: target, version: resolved.version))
+                        }
                     }
                 }
-            }
-            let output = format(plugins: response.data, tui: tuiList, builtin: input.bool("builtin"), eol: context.io.eol)
-            if output.isEmpty {
-                context.io.writeStdout("No plugins found\(context.io.eol)")
-            } else {
-                context.io.writeStdout(output + context.io.eol)
+                let output = format(plugins: response.data, tui: tuiList, builtin: input.bool("builtin"), eol: context.io.eol)
+                if output.isEmpty {
+                    context.io.writeStdout("No plugins found\(context.io.eol)")
+                } else {
+                    context.io.writeStdout(output + context.io.eol)
+                }
             }
         }
 
@@ -2343,6 +2469,11 @@ public enum CLICommands {
 
         public static func runCheck(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let result = try await Inventory.inspect(selected: input.arg("target"), context: context)
+            defer {
+                if let handle = result.standaloneHandle {
+                    Task { await handle.stop() }
+                }
+            }
             let formatted = Inventory.format(result.items, eol: context.io.eol)
             context.io.writeStdout((formatted.isEmpty ? "No package plugins found" : formatted) + context.io.eol)
             if result.items.contains(where: { $0.error != nil }) {
@@ -2352,6 +2483,11 @@ public enum CLICommands {
 
         public static func runUpdate(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             let result = try await Inventory.inspect(selected: input.arg("target"), context: context)
+            defer {
+                if let handle = result.standaloneHandle {
+                    Task { await handle.stop() }
+                }
+            }
             for item in result.items where item.error != nil {
                 context.io.writeStderr("Failed to check \(item.runtime.rawValue) plugin \"\(item.name)\": \(item.error!)\(context.io.eol)")
             }
@@ -2749,66 +2885,66 @@ public enum CLICommands {
                 if rangeCount > 1 {
                     throw CLIError("--days, --year, and --all cannot be combined")
                 }
-                let server = try await CLIServices.ServerConnection.resolve(context: context)
-                let client = context.makeClient(endpoint: server.endpoint)
-                let range = computeRange(days: days, year: year, all: all)
-                let projectID: String?
-                if project == "." {
-                    let loc = try await request(url: server.endpoint.url) { signal in
-                        try await client.location.get(
-                            LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd)),
+                try await CLICommands.withResolvedServer(context: context) { server, client in
+                    let range = computeRange(days: days, year: year, all: all)
+                    let projectID: String?
+                    if project == "." {
+                        let loc = try await request(url: server.endpoint.url) { signal in
+                            try await client.location.get(
+                                LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd)),
+                                options: RequestOptions(signal: signal)
+                            )
+                        }
+                        projectID = loc.project.id.rawValue
+                    } else {
+                        projectID = project
+                    }
+
+                    let showModels = input.bool("models")
+                    let showTools = input.bool("tools")
+                    let showCost = input.bool("cost")
+                    let showFull = input.bool("full")
+                    let asJson = input.bool("json")
+                    let details = showModels || showTools || showCost || showFull
+                    let toolsMode = (asJson || showTools || showFull) ? "detail" : (details ? "none" : "summary")
+                    let tz = TimeZone.current.identifier
+
+                    let stats = try await request(url: server.endpoint.url) { signal in
+                        try await client.experimental.session.stats(
+                            ExperimentalSessionStatsInput(
+                                from: range.from.map(Double.init),
+                                to: Double(range.to),
+                                project: projectID,
+                                timezone: tz,
+                                tools: toolsMode
+                            ),
                             options: RequestOptions(signal: signal)
                         )
                     }
-                    projectID = loc.project.id.rawValue
-                } else {
-                    projectID = project
-                }
 
-                let showModels = input.bool("models")
-                let showTools = input.bool("tools")
-                let showCost = input.bool("cost")
-                let showFull = input.bool("full")
-                let asJson = input.bool("json")
-                let details = showModels || showTools || showCost || showFull
-                let toolsMode = (asJson || showTools || showFull) ? "detail" : (details ? "none" : "summary")
-                let tz = TimeZone.current.identifier
-
-                let stats = try await request(url: server.endpoint.url) { signal in
-                    try await client.experimental.session.stats(
-                        ExperimentalSessionStatsInput(
-                            from: range.from.map(Double.init),
-                            to: Double(range.to),
-                            project: projectID,
-                            timezone: tz,
-                            tools: toolsMode
-                        ),
-                        options: RequestOptions(signal: signal)
-                    )
-                }
-
-                let output: String
-                if asJson {
-                    output = try CLIPath.encodePrettyJSON(stats)
-                } else {
-                    let scope = project == nil ? "all projects" : (project == "." ? "current project" : "selected project")
-                    let color = context.io.isStdoutTTY() && context.envVariable("NO_COLOR") == nil
-                    output = renderStats(
-                        stats,
-                        options: RenderOptions(
-                            label: range.label,
-                            scope: scope,
-                            models: showModels || showFull,
-                            tools: showTools || showFull,
-                            cost: showCost || showFull,
-                            limit: input.integer("limit") ?? 5,
-                            color: color,
-                            width: context.io.columns(),
-                            eol: context.io.eol
+                    let output: String
+                    if asJson {
+                        output = try CLIPath.encodePrettyJSON(stats)
+                    } else {
+                        let scope = project == nil ? "all projects" : (project == "." ? "current project" : "selected project")
+                        let color = context.io.isStdoutTTY() && context.envVariable("NO_COLOR") == nil
+                        output = renderStats(
+                            stats,
+                            options: RenderOptions(
+                                label: range.label,
+                                scope: scope,
+                                models: showModels || showFull,
+                                tools: showTools || showFull,
+                                cost: showCost || showFull,
+                                limit: input.integer("limit") ?? 5,
+                                color: color,
+                                width: context.io.columns(),
+                                eol: context.io.eol
+                            )
                         )
-                    )
+                    }
+                    context.io.writeStdout(output + context.io.eol)
                 }
-                context.io.writeStdout(output + context.io.eol)
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -2847,44 +2983,44 @@ public enum CLICommands {
     public enum Session {
         public static func runList(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {
             do {
-                let server = try await CLIServices.ServerConnection.resolve(context: context)
-                let client = context.makeClient(endpoint: server.endpoint)
-                let loc = try await client.location.get(
-                    LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd))
-                )
-                let limit = input.integer("max-count") ?? 100
-                let page = try await client.session.list(
-                    SessionListInput(limit: limit, order: .desc, project: loc.project.id.rawValue)
-                )
-                let format = input.string("format") ?? "table"
-                if format == "table" && page.data.isEmpty { return }
-                let output: String
-                if format == "json" {
-                    let payload = page.data.map { s -> JSONValue in
-                        .object([
-                            "id": .string(s.id.rawValue),
-                            "title": s.title.map(JSONValue.string) ?? .null,
-                            "updated": .int(s.time.updated),
-                            "created": .int(s.time.created),
-                            "projectId": .string(s.projectID.rawValue),
-                            "directory": .string(s.location.directory),
-                        ])
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let loc = try await client.location.get(
+                        LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd))
+                    )
+                    let limit = input.integer("max-count") ?? 100
+                    let page = try await client.session.list(
+                        SessionListInput(limit: limit, order: .desc, parentID: "null", project: loc.project.id.rawValue)
+                    )
+                    let format = input.string("format") ?? "table"
+                    if format == "table" && page.data.isEmpty { return }
+                    let output: String
+                    if format == "json" {
+                        let payload = page.data.map { s -> JSONValue in
+                            .object([
+                                "id": .string(s.id.rawValue),
+                                "title": s.title.map(JSONValue.string) ?? .null,
+                                "updated": .int(s.time.updated),
+                                "created": .int(s.time.created),
+                                "projectId": .string(s.projectID.rawValue),
+                                "directory": .string(s.location.directory),
+                            ])
+                        }
+                        output = try CLIPath.encodePrettyJSON(JSONValue.array(payload))
+                    } else {
+                        let formatter = DateFormatter()
+                        formatter.dateStyle = .short
+                        formatter.timeStyle = .medium
+                        output = page.data.map { s -> String in
+                            let title = (s.title ?? "Untitled session")
+                                .replacing("\r", with: " ")
+                                .replacing("\n", with: " ")
+                                .replacing("\t", with: " ")
+                            let updated = formatter.string(from: Date(timeIntervalSince1970: Double(s.time.updated) / 1_000.0))
+                            return "\(s.id.rawValue)\t\(title)\t\(updated)"
+                        }.joined(separator: context.io.eol)
                     }
-                    output = try CLIPath.encodePrettyJSON(JSONValue.array(payload))
-                } else {
-                    let formatter = DateFormatter()
-                    formatter.dateStyle = .short
-                    formatter.timeStyle = .medium
-                    output = page.data.map { s -> String in
-                        let title = (s.title ?? "Untitled session")
-                            .replacing("\r", with: " ")
-                            .replacing("\n", with: " ")
-                            .replacing("\t", with: " ")
-                        let updated = formatter.string(from: Date(timeIntervalSince1970: Double(s.time.updated) / 1_000.0))
-                        return "\(s.id.rawValue)\t\(title)\t\(updated)"
-                    }.joined(separator: context.io.eol)
+                    context.io.writeStdout(output + context.io.eol)
                 }
-                context.io.writeStdout(output + context.io.eol)
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -2896,10 +3032,10 @@ public enum CLICommands {
                 guard let sessionID = input.arg("sessionID") else {
                     throw CLIError("Missing required argument: sessionID")
                 }
-                let server = try await CLIServices.ServerConnection.resolve(context: context)
-                let client = context.makeClient(endpoint: server.endpoint)
-                try await client.session.remove(SessionRemoveInput(sessionID: sessionID))
-                context.io.writeStdout("Session \(sessionID) deleted\(context.io.eol)")
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    try await client.session.remove(SessionRemoveInput(sessionID: sessionID))
+                    context.io.writeStdout("Session \(sessionID) deleted\(context.io.eol)")
+                }
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -2912,44 +3048,52 @@ public enum CLICommands {
                 if requested == nil && !context.io.isStdinTTY() {
                     throw CLIError("Pass a session ID when running without an interactive terminal")
                 }
-                let server = try await CLIServices.ServerConnection.resolve(context: context)
-                let client = context.makeClient(endpoint: server.endpoint)
-                let sessionID: String
-                if let requested {
-                    sessionID = requested
-                } else {
-                    let loc = try await client.location.get(
-                        LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd))
-                    )
-                    let page = try await client.session.list(
-                        SessionListInput(limit: 50, order: .desc, directory: loc.directory.rawValue)
-                    )
-                    if page.data.isEmpty {
-                        context.io.writeStderr("No sessions found\(context.io.eol)")
-                        return
-                    }
-                    let opts = page.data.map { s in
-                        CLIUI.Prompt.SelectOption(
-                            value: s.id.rawValue,
-                            label: s.title ?? "Untitled session",
-                            hint: String(s.id.rawValue.suffix(8))
+                try await CLICommands.withResolvedServer(context: context) { _, client in
+                    let sessionID: String
+                    if let requested {
+                        sessionID = requested
+                    } else {
+                        context.io.writeStderr("┌ Export session\(context.io.eol)")
+                        let loc = try await client.location.get(
+                            LocationGetInput(location: LocationQuery.LocationField(directory: context.cwd))
                         )
-                    }
-                    do {
-                        sessionID = try await CLIUI.Prompt.backend(for: context).select(
-                            message: "Select session to export",
-                            options: opts,
-                            initialValue: opts.first?.value
+                        let page = try await client.session.list(
+                            SessionListInput(limit: 50, order: .desc, parentID: "null", directory: loc.directory.rawValue)
                         )
-                    } catch is CLIUI.Prompt.CancelledError {
-                        context.exitCode.value = 130
-                        return
+                        if page.data.isEmpty {
+                            context.io.writeStderr("No sessions found\(context.io.eol)")
+                            context.io.writeStderr("└ Done\(context.io.eol)")
+                            return
+                        }
+                        let formatter = DateFormatter()
+                        formatter.dateStyle = .short
+                        formatter.timeStyle = .medium
+                        let opts = page.data.map { s in
+                            let updated = formatter.string(from: Date(timeIntervalSince1970: Double(s.time.updated) / 1_000.0))
+                            return CLIUI.Prompt.SelectOption(
+                                value: s.id.rawValue,
+                                label: s.title ?? "Untitled session",
+                                hint: "\(updated) - \(s.id.rawValue.suffix(8))"
+                            )
+                        }
+                        do {
+                            sessionID = try await CLIUI.Prompt.backend(for: context).select(
+                                message: "Select session to export",
+                                options: opts,
+                                initialValue: opts.first?.value
+                            )
+                        } catch is CLIUI.Prompt.CancelledError {
+                            context.io.writeStderr("■ Cancelled\(context.io.eol)")
+                            context.exitCode.value = 130
+                            return
+                        }
+                        context.io.writeStderr("└ Exporting session...\(context.io.eol)")
                     }
+                    let exported = try await client.experimental.session.export(
+                        ExperimentalSessionExportInput(sessionID: sessionID, sanitize: input.bool("sanitize"))
+                    )
+                    context.io.writeStdout((try CLIPath.encodePrettyJSON(exported)) + context.io.eol)
                 }
-                let exported = try await client.experimental.session.export(
-                    ExperimentalSessionExportInput(sessionID: sessionID, sanitize: input.bool("sanitize"))
-                )
-                context.io.writeStdout((try CLIPath.encodePrettyJSON(exported)) + context.io.eol)
             } catch {
                 context.io.writeStderr(CLIUtil.errorMessage(error) + context.io.eol)
                 context.exitCode.value = 1
@@ -2959,44 +3103,50 @@ public enum CLICommands {
         public static func runImport(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
             guard let file = input.arg("file") else { throw CLIError("Missing required argument: file") }
             let rawText: String
-            if file.hasPrefix("http://") || file.hasPrefix("https://") {
-                let resp = try await context.transport.send(HTTPRequest(method: "GET", url: file))
-                guard (200..<300).contains(resp.head.statusCode) else {
-                    throw CLIError("Failed to fetch session data: HTTP \(resp.head.statusCode)")
+            do {
+                if file.hasPrefix("http://") || file.hasPrefix("https://") {
+                    let resp = try await context.transport.send(HTTPRequest(method: "GET", url: file))
+                    guard (200..<300).contains(resp.head.statusCode) else {
+                        throw CLIError("Failed to fetch session data: HTTP \(resp.head.statusCode)")
+                    }
+                    rawText = String(decoding: resp.body, as: UTF8.self)
+                } else {
+                    let bytes = try await context.fileSystem.readFile(at: CLIPath.resolve(context.cwd, file))
+                    rawText = String(decoding: bytes, as: UTF8.self)
                 }
-                rawText = String(decoding: resp.body, as: UTF8.self)
-            } else {
-                let bytes = try await context.fileSystem.readFile(at: CLIPath.resolve(context.cwd, file))
-                rawText = String(decoding: bytes, as: UTF8.self)
+            } catch let err as CLIError {
+                throw err
+            } catch {
+                throw CLIError("Failed to read session data: \(CLIUtil.errorMessage(error))")
             }
             guard let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(rawText.utf8)),
                   case .object(var bodyObj) = parsed
             else {
                 throw CLIError("Failed to read session data: invalid JSON object")
             }
-            let server = try await CLIServices.ServerConnection.resolve(context: context)
-            let client = context.makeClient(endpoint: server.endpoint)
-            let targetDir = input.string("directory").map { CLIPath.resolve(context.cwd, $0) } ?? context.cwd
-            let loc = try await client.location.get(
-                LocationGetInput(location: LocationQuery.LocationField(directory: targetDir))
-            )
-            bodyObj["location"] = .object(["directory": .string(loc.directory.rawValue)])
-            var headers = OpenCodeClient.serviceHeaders(for: server.endpoint) ?? [:]
-            headers["content-type"] = "application/json"
-            let url = ClientURLBuilder.join(baseUrl: server.endpoint.url, path: "/api/experimental/session/import")
-            let bodyBytes = Array((try CLIPath.encodeCompactJSON(JSONValue.object(bodyObj))).utf8)
-            let resp = try await context.transport.send(
-                HTTPRequest(method: "POST", url: url, headers: headers, body: bodyBytes)
-            )
-            if resp.head.statusCode == 409 {
-                context.io.writeStderr("Session already exists\(context.io.eol)")
-                return
+            try await CLICommands.withResolvedServer(context: context) { server, client in
+                let targetDir = input.string("directory").map { CLIPath.resolve(context.cwd, $0) } ?? context.cwd
+                let loc = try await client.location.get(
+                    LocationGetInput(location: LocationQuery.LocationField(directory: targetDir))
+                )
+                bodyObj["location"] = .object(["directory": .string(loc.directory.rawValue)])
+                var headers = OpenCodeClient.serviceHeaders(for: server.endpoint) ?? [:]
+                headers["content-type"] = "application/json"
+                let url = ClientURLBuilder.join(baseUrl: server.endpoint.url, path: "/api/experimental/session/import")
+                let bodyBytes = Array((try CLIPath.encodeCompactJSON(JSONValue.object(bodyObj))).utf8)
+                let resp = try await context.transport.send(
+                    HTTPRequest(method: "POST", url: url, headers: headers, body: bodyBytes)
+                )
+                if resp.head.statusCode == 409 {
+                    context.io.writeStderr("Session already exists\(context.io.eol)")
+                    return
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw CLIError("Failed to import session: HTTP \(resp.head.statusCode)")
+                }
+                let envelope = try JSONDecoder().decode(ClientDataEnvelope<SessionSchema.Info>.self, from: Data(resp.body))
+                context.io.writeStdout("Imported session: \(envelope.data.id.rawValue)\(context.io.eol)")
             }
-            guard (200..<300).contains(resp.head.statusCode) else {
-                throw CLIError("Failed to import session: HTTP \(resp.head.statusCode)")
-            }
-            let envelope = try JSONDecoder().decode(ClientDataEnvelope<SessionSchema.Info>.self, from: Data(resp.body))
-            context.io.writeStdout("Imported session: \(envelope.data.id.rawValue)\(context.io.eol)")
         }
     }
 
@@ -3338,28 +3488,69 @@ public enum CLICommands {
         await cleanup()
     }
 
-    public static func runModels(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
-        _ = input
-        let server = try await CLIServices.ServerConnection.resolve(context: context)
+    /// Resolves a server connection, runs `operation`, and guarantees any standalone
+    /// server handle is stopped before returning or throwing.
+    internal static func withResolvedServer<T>(
+        _ args: CLIServices.ServerConnection.Args = CLIServices.ServerConnection.Args(),
+        context: CLIContext,
+        _ operation: (CLIServices.ServerConnection.Resolved, OpenCodeClient) async throws -> T
+    ) async throws -> T {
+        let server = try await CLIServices.ServerConnection.resolve(args, context: context)
         let client = context.makeClient(endpoint: server.endpoint)
-        await CLIServices.waitForPlugins(client, context.cwd)
-        let response = try await client.model.list(
-            ModelListInput(location: LocationQuery.LocationField(directory: context.cwd))
-        )
-        let models = response.data
-            .map { "\($0.providerID)/\($0.id)" }
-            .sorted()
-        if !models.isEmpty {
-            context.io.writeStdout(models.joined(separator: context.io.eol) + context.io.eol)
+        do {
+            let result = try await operation(server, client)
+            if let handle = server.standaloneHandle {
+                await handle.stop()
+            }
+            return result
+        } catch {
+            if let handle = server.standaloneHandle {
+                await handle.stop()
+            }
+            throw error
+        }
+    }
+
+    public static func runModels(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
+        try await withResolvedServer(context: context) { _, client in
+            if input.bool("refresh") {
+                try await client.location.reload()
+            }
+            await CLIServices.waitForPlugins(client, context.cwd)
+            let response = try await client.model.list(
+                ModelListInput(location: LocationQuery.LocationField(directory: context.cwd))
+            )
+            let providerFilter = input.arg("provider")
+            let filtered = response.data.filter { model in
+                guard let providerFilter else { return true }
+                return model.providerID.rawValue.lowercased() == providerFilter.lowercased()
+            }
+            let sorted = filtered.sorted { lhs, rhs in
+                let lKey = "\(lhs.providerID.rawValue)/\(lhs.id.rawValue)"
+                let rKey = "\(rhs.providerID.rawValue)/\(rhs.id.rawValue)"
+                return lKey < rKey
+            }
+            if sorted.isEmpty { return }
+            if input.bool("verbose") {
+                var output = ""
+                for model in sorted {
+                    output += "\(model.providerID.rawValue)/\(model.id.rawValue)\(context.io.eol)"
+                    output += (try CLIPath.encodePrettyJSON(model)) + context.io.eol
+                }
+                context.io.writeStdout(output)
+            } else {
+                let lines = sorted.map { "\($0.providerID.rawValue)/\($0.id.rawValue)" }
+                context.io.writeStdout(lines.joined(separator: context.io.eol) + context.io.eol)
+            }
         }
     }
 
     public static func runReload(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         _ = input
-        let server = try await CLIServices.ServerConnection.resolve(context: context)
-        let client = context.makeClient(endpoint: server.endpoint)
-        try await client.location.reload()
-        context.io.writeStdout("Configuration reloaded\(context.io.eol)")
+        try await withResolvedServer(context: context) { _, client in
+            try await client.location.reload()
+            context.io.writeStdout("Configuration reloaded\(context.io.eol)")
+        }
     }
 
     public static func runUpgrade(_ input: CLIFramework.Runtime.Input, context: CLIContext) async {

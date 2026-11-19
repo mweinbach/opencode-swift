@@ -2409,6 +2409,28 @@ public enum CLIUI {
         guard !choices.isEmpty else {
             throw CLIError("No \(kind) selected")
         }
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+        if context.io.isStdinTTY() && context.io.isStdoutTTY(),
+           isatty(STDIN_FILENO) != 0,
+           isatty(STDOUT_FILENO) != 0
+        {
+            return try Prompt.DefaultTerminalBackend.withNoEchoRawMode(fd: STDIN_FILENO) {
+                try runInteractiveIntegrationPicker(
+                    choices: choices,
+                    kind: kind,
+                    columns: context.io.columns(),
+                    rows: context.io.rows(),
+                    eol: context.io.eol,
+                    nextKey: {
+                        Prompt.DefaultTerminalBackend.decodeTerminalKey { timeoutMs in
+                            Prompt.DefaultTerminalBackend.readPOSIXByte(fd: STDIN_FILENO, timeoutMs: timeoutMs)
+                        }
+                    },
+                    writeStderr: context.io.writeStderr
+                )
+            }
+        }
+        #endif
         context.io.writeStderr(
             renderIntegrationPickerFrame(
                 choices: choices,
@@ -2430,6 +2452,99 @@ public enum CLIUI {
         throw CLIError("No \(kind) selected")
     }
 
+    public static func runInteractiveIntegrationPicker(
+        choices: [IntegrationChoice],
+        kind: String = "integration",
+        columns: Int = 80,
+        rows: Int = 24,
+        eol: String = "\n",
+        nextKey: () -> Prompt.TerminalKey?,
+        writeStderr: (String) -> Void
+    ) throws -> String {
+        guard !choices.isEmpty else {
+            throw CLIError("No \(kind) selected")
+        }
+        var search = ""
+        var cursor = 0
+        var renderedLines = 0
+
+        writeStderr("\u{1B}[?25l")
+        defer { writeStderr("\u{1B}[?25h") }
+
+        while true {
+            let filtered = filterIntegrationChoices(choices, search: search)
+            if filtered.isEmpty {
+                cursor = 0
+            } else if cursor >= filtered.count {
+                cursor = filtered.count - 1
+            } else if cursor < 0 {
+                cursor = 0
+            }
+
+            let frame = renderIntegrationPickerFrame(
+                choices: choices,
+                search: search,
+                cursor: cursor,
+                kind: kind,
+                columns: columns,
+                rows: rows
+            )
+            let frameLines = frame.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            Prompt.DefaultTerminalBackend.redrawTerminalFrame(
+                lines: frameLines,
+                columns: columns,
+                previousLineCount: &renderedLines,
+                writeStderr: writeStderr
+            )
+
+            guard let key = nextKey() else {
+                Prompt.DefaultTerminalBackend.clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                writeStderr("■  Select \(kind)\(eol)")
+                throw Prompt.CancelledError()
+            }
+
+            switch key {
+            case .up:
+                if !filtered.isEmpty {
+                    cursor = (cursor - 1 + filtered.count) % filtered.count
+                }
+            case .down:
+                if !filtered.isEmpty {
+                    cursor = (cursor + 1) % filtered.count
+                }
+            case .enter:
+                if !filtered.isEmpty {
+                    let chosen = filtered[cursor]
+                    Prompt.DefaultTerminalBackend.clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                    writeStderr("◇  Select \(kind)\(eol)│  \(chosen.label)\(eol)")
+                    return chosen.value
+                }
+            case .escape, .ctrlC, .ctrlD:
+                Prompt.DefaultTerminalBackend.clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                writeStderr("■  Select \(kind)\(eol)")
+                throw Prompt.CancelledError()
+            case .backspace:
+                if !search.isEmpty {
+                    search.removeLast()
+                    cursor = 0
+                }
+            case .ctrlU:
+                if !search.isEmpty {
+                    search.removeAll()
+                    cursor = 0
+                }
+            case .space:
+                search.append(" ")
+                cursor = 0
+            case .character(let ch):
+                search.append(ch)
+                cursor = 0
+            case .left, .right, .tab:
+                break
+            }
+        }
+    }
+
     // MARK: Prompts (`packages/cli/src/ui/prompt.ts`)
 
     public enum Prompt {
@@ -2448,6 +2563,22 @@ public enum CLIUI {
                 self.label = label
                 self.hint = hint
             }
+        }
+
+        public enum TerminalKey: Equatable, Hashable, Sendable {
+            case up
+            case down
+            case left
+            case right
+            case enter
+            case space
+            case escape
+            case ctrlC
+            case ctrlD
+            case ctrlU
+            case backspace
+            case tab
+            case character(Character)
         }
 
         public protocol Backend: Sendable {
@@ -2495,9 +2626,27 @@ public enum CLIUI {
             }
 
             public func password(message: String, validate: (@Sendable (String) -> String?)?) async throws -> String {
-                guard let line = try await io.readStdinLine("\(message): ") else {
+                let line: String
+                #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                if io.isStdinTTY(), isatty(STDIN_FILENO) != 0 {
+                    line = try Self.readPOSIXPassword(
+                        prompt: "\(message): ",
+                        fd: STDIN_FILENO,
+                        writeStderr: io.writeStderr,
+                        eol: io.eol
+                    )
+                } else {
+                    guard let fallback = try await io.readStdinLine("\(message): ") else {
+                        throw CancelledError()
+                    }
+                    line = fallback
+                }
+                #else
+                guard let fallback = try await io.readStdinLine("\(message): ") else {
                     throw CancelledError()
                 }
+                line = fallback
+                #endif
                 if let err = validate?(line) {
                     throw CLIError(err)
                 }
@@ -2505,6 +2654,32 @@ public enum CLIUI {
             }
 
             public func select(message: String, options: [SelectOption], initialValue: String?) async throws -> String {
+                guard !options.isEmpty else {
+                    throw CancelledError()
+                }
+                #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                if io.isStdinTTY() && io.isStdoutTTY(),
+                   isatty(STDIN_FILENO) != 0,
+                   isatty(STDOUT_FILENO) != 0
+                {
+                    return try Self.withNoEchoRawMode(fd: STDIN_FILENO) {
+                        try Self.runInteractiveSelect(
+                            message: message,
+                            options: options,
+                            initialValue: initialValue,
+                            columns: io.columns(),
+                            rows: io.rows(),
+                            eol: io.eol,
+                            nextKey: {
+                                Self.decodeTerminalKey { timeoutMs in
+                                    Self.readPOSIXByte(fd: STDIN_FILENO, timeoutMs: timeoutMs)
+                                }
+                            },
+                            writeStderr: io.writeStderr
+                        )
+                    }
+                }
+                #endif
                 io.writeStderr("\(message)\n")
                 for (idx, opt) in options.enumerated() {
                     let hint = opt.hint.map { " (\($0))" } ?? ""
@@ -2530,6 +2705,34 @@ public enum CLIUI {
                 initialValues: [String]?,
                 required: Bool
             ) async throws -> [String] {
+                if options.isEmpty {
+                    if required { throw CLIError("At least one selection is required") }
+                    return []
+                }
+                #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                if io.isStdinTTY() && io.isStdoutTTY(),
+                   isatty(STDIN_FILENO) != 0,
+                   isatty(STDOUT_FILENO) != 0
+                {
+                    return try Self.withNoEchoRawMode(fd: STDIN_FILENO) {
+                        try Self.runInteractiveMultiselect(
+                            message: message,
+                            options: options,
+                            initialValues: initialValues,
+                            required: required,
+                            columns: io.columns(),
+                            rows: io.rows(),
+                            eol: io.eol,
+                            nextKey: {
+                                Self.decodeTerminalKey { timeoutMs in
+                                    Self.readPOSIXByte(fd: STDIN_FILENO, timeoutMs: timeoutMs)
+                                }
+                            },
+                            writeStderr: io.writeStderr
+                        )
+                    }
+                }
+                #endif
                 io.writeStderr("\(message) (comma-separated numbers)\n")
                 for (idx, opt) in options.enumerated() {
                     let hint = opt.hint.map { " (\($0))" } ?? ""
@@ -2544,15 +2747,603 @@ public enum CLIUI {
                     if required { throw CLIError("At least one selection is required") }
                     return []
                 }
+                var seen: Set<String> = []
                 var out: [String] = []
                 for token in trimmed.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) {
                     if let idx = Int(token), idx >= 1, idx <= options.count {
-                        out.append(options[idx - 1].value)
-                    } else if let match = options.first(where: { $0.value == token }) {
-                        out.append(match.value)
+                        let val = options[idx - 1].value
+                        if seen.insert(val).inserted { out.append(val) }
+                    } else if let match = options.first(where: { $0.value == token || $0.label.lowercased() == token.lowercased() }) {
+                        if seen.insert(match.value).inserted { out.append(match.value) }
                     }
                 }
+                if out.isEmpty && required {
+                    throw CLIError("At least one selection is required")
+                }
                 return out
+            }
+
+            // MARK: POSIX termios & Interactive TTY Helpers
+
+            #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+            /// Disables `ECHO`, `ECHONL`, `ICANON`, and `ISIG` on a copy of `original`
+            /// and configures single-byte blocking reads (`VMIN = 1, VTIME = 0`).
+            public static func makeNoEchoRawTermios(from original: termios) -> termios {
+                var raw = original
+                let mask = tcflag_t(ECHO) | tcflag_t(ECHONL) | tcflag_t(ICANON) | tcflag_t(ISIG)
+                raw.c_lflag &= ~mask
+                withUnsafeMutableBytes(of: &raw.c_cc) { ccBuffer in
+                    let vminIndex = Int(VMIN)
+                    let vtimeIndex = Int(VTIME)
+                    if vminIndex < ccBuffer.count { ccBuffer[vminIndex] = 1 }
+                    if vtimeIndex < ccBuffer.count { ccBuffer[vtimeIndex] = 0 }
+                }
+                return raw
+            }
+
+            /// Applies no-echo raw `termios` to `fd` for the duration of `body` and
+            /// unconditionally restores the original `termios` in `defer`.
+            public static func withNoEchoRawMode<T>(
+                fd: Int32 = STDIN_FILENO,
+                _ body: () throws -> T
+            ) throws -> T {
+                var oldTerm = termios()
+                guard tcgetattr(fd, &oldTerm) == 0 else {
+                    throw CLIError("Failed to read terminal attributes (errno \(errno))")
+                }
+                var rawTerm = makeNoEchoRawTermios(from: oldTerm)
+                guard tcsetattr(fd, TCSANOW, &rawTerm) == 0 else {
+                    throw CLIError("Failed to configure terminal mode (errno \(errno))")
+                }
+                defer {
+                    _ = tcsetattr(fd, TCSANOW, &oldTerm)
+                }
+                return try body()
+            }
+
+            /// Reads a masked password from POSIX TTY descriptor `fd`, restoring `termios` in `defer`.
+            public static func readPOSIXPassword(
+                prompt: String,
+                fd: Int32 = STDIN_FILENO,
+                writeStderr: (String) -> Void,
+                eol: String = "\n"
+            ) throws -> String {
+                try withNoEchoRawMode(fd: fd) {
+                    try readMaskedPassword(
+                        prompt: prompt,
+                        readByte: { timeoutMs in readPOSIXByte(fd: fd, timeoutMs: timeoutMs) },
+                        writeStderr: writeStderr,
+                        eol: eol
+                    )
+                }
+            }
+
+            internal static func readPOSIXByte(fd: Int32, timeoutMs: Int32? = nil) -> UInt8? {
+                while true {
+                    if let timeoutMs {
+                        var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                        let ready = poll(&pfd, 1, max(0, timeoutMs))
+                        if ready < 0 {
+                            if errno == EINTR { continue }
+                            return nil
+                        }
+                        if ready == 0 || (pfd.revents & Int16(POLLIN)) == 0 {
+                            return nil
+                        }
+                    }
+                    var byte: UInt8 = 0
+                    #if canImport(Darwin)
+                    let n = Darwin.read(fd, &byte, 1)
+                    #elseif canImport(Glibc)
+                    let n = Glibc.read(fd, &byte, 1)
+                    #elseif canImport(Musl)
+                    let n = Musl.read(fd, &byte, 1)
+                    #endif
+                    if n == 1 { return byte }
+                    if n < 0 && errno == EINTR { continue }
+                    return nil
+                }
+            }
+            #endif
+
+            /// Decodes a single terminal keypress (including CSI/SS3 arrow sequences and UTF-8 bytes)
+            /// from a byte reader closure.
+            public static func decodeTerminalKey(
+                readByte: (_ timeoutMs: Int32?) -> UInt8?
+            ) -> TerminalKey? {
+                while true {
+                    guard let byte = readByte(nil) else { return nil }
+                    switch byte {
+                    case 0x03: return .ctrlC
+                    case 0x04: return .ctrlD
+                    case 0x09: return .tab
+                    case 0x0A, 0x0D: return .enter
+                    case 0x0E: return .down
+                    case 0x10: return .up
+                    case 0x15: return .ctrlU
+                    case 0x20: return .space
+                    case 0x08, 0x7F: return .backspace
+                    case 0x1B:
+                        guard let next = readByte(25) else {
+                            return .escape
+                        }
+                        if next == 0x5B { // CSI: ESC [
+                            var finalByte: UInt8? = nil
+                            for _ in 0..<16 {
+                                guard let b = readByte(25) else { break }
+                                if b >= 0x40 && b <= 0x7E {
+                                    finalByte = b
+                                    break
+                                }
+                            }
+                            switch finalByte {
+                            case 0x41: return .up
+                            case 0x42: return .down
+                            case 0x43: return .right
+                            case 0x44: return .left
+                            default: continue
+                            }
+                        } else if next == 0x4F { // SS3: ESC O
+                            guard let b = readByte(25) else { return .escape }
+                            switch b {
+                            case 0x41: return .up
+                            case 0x42: return .down
+                            case 0x43: return .right
+                            case 0x44: return .left
+                            default: continue
+                            }
+                        } else {
+                            return .escape
+                        }
+                    case 0x21...0x7E:
+                        return .character(Character(UnicodeScalar(byte)))
+                    case 0xC0...0xFF:
+                        let expectedLen: Int
+                        if (byte & 0xE0) == 0xC0 {
+                            expectedLen = 2
+                        } else if (byte & 0xF0) == 0xE0 {
+                            expectedLen = 3
+                        } else if (byte & 0xF8) == 0xF0 {
+                            expectedLen = 4
+                        } else {
+                            continue
+                        }
+                        var utf8Bytes: [UInt8] = [byte]
+                        utf8Bytes.reserveCapacity(expectedLen)
+                        for _ in 1..<expectedLen {
+                            guard let cont = readByte(25) else { break }
+                            utf8Bytes.append(cont)
+                        }
+                        if let text = String(bytes: utf8Bytes, encoding: .utf8), let first = text.first {
+                            return .character(first)
+                        }
+                    default:
+                        continue
+                    }
+                }
+            }
+
+            /// Interactive char-by-char masked password loop (`*` echo, backspace, Ctrl+U, Ctrl+C/Esc cancel).
+            public static func readMaskedPassword(
+                prompt: String,
+                readByte: (_ timeoutMs: Int32?) -> UInt8?,
+                writeStderr: (String) -> Void,
+                eol: String = "\n"
+            ) throws -> String {
+                writeStderr(prompt)
+                var chars: [Character] = []
+                while true {
+                    guard let key = decodeTerminalKey(readByte: readByte) else {
+                        writeStderr(eol)
+                        throw CancelledError()
+                    }
+                    switch key {
+                    case .enter:
+                        writeStderr(eol)
+                        return String(chars)
+                    case .ctrlC, .escape:
+                        writeStderr(eol)
+                        throw CancelledError()
+                    case .ctrlD:
+                        writeStderr(eol)
+                        if chars.isEmpty {
+                            throw CancelledError()
+                        }
+                        return String(chars)
+                    case .backspace:
+                        if !chars.isEmpty {
+                            chars.removeLast()
+                            writeStderr("\u{08} \u{08}")
+                        }
+                    case .ctrlU:
+                        if !chars.isEmpty {
+                            let count = chars.count
+                            chars.removeAll()
+                            writeStderr(String(repeating: "\u{08} \u{08}", count: count))
+                        }
+                    case .space:
+                        chars.append(" ")
+                        writeStderr("*")
+                    case .character(let ch):
+                        chars.append(ch)
+                        writeStderr("*")
+                    case .up, .down, .left, .right, .tab:
+                        break
+                    }
+                }
+            }
+
+            public static func filterSelectOptions(
+                _ options: [SelectOption],
+                search: String
+            ) -> [SelectOption] {
+                guard !search.isEmpty else { return options }
+                let q = search.lowercased()
+                return options.filter { opt in
+                    opt.label.lowercased().contains(q)
+                        || opt.value.lowercased().contains(q)
+                        || (opt.hint?.lowercased().contains(q) == true)
+                }
+            }
+
+            public static func renderSelectFrame(
+                message: String,
+                options: [SelectOption],
+                cursor: Int,
+                search: String = "",
+                searchable: Bool = false,
+                rows: Int = 24,
+                errorMessage: String? = nil
+            ) -> [String] {
+                let maxItems = max(3, min(10, rows - (searchable ? 8 : 6)))
+                let safeCursor = options.isEmpty ? 0 : min(max(0, cursor), options.count - 1)
+                let start = min(max(0, safeCursor - min(2, maxItems - 1)), max(0, options.count - maxItems))
+                let visible = Array(options.dropFirst(start).prefix(maxItems))
+
+                var lines: [String] = [
+                    "◆  \(message)",
+                ]
+                if searchable {
+                    lines.append("│  Search: \(search)")
+                }
+                if visible.isEmpty {
+                    lines.append("│  No matches found")
+                } else {
+                    if start > 0 {
+                        lines.append("│  …")
+                    }
+                    for (idx, opt) in visible.enumerated() {
+                        let isActive = (start + idx) == safeCursor
+                        let marker = isActive ? "●" : "○"
+                        let hintText = opt.hint.map { " (\($0))" } ?? ""
+                        lines.append("│  \(marker) \(opt.label)\(hintText)")
+                    }
+                    if start + maxItems < options.count {
+                        lines.append("│  …")
+                    }
+                }
+                if let errorMessage {
+                    lines.append("│  ⚠ \(errorMessage)")
+                }
+                let footer = searchable
+                    ? "↑/↓ navigate • Type to filter • Enter confirm • Esc cancel"
+                    : "↑/↓ navigate • Enter confirm • Esc cancel"
+                lines.append("│  \(footer)")
+                lines.append("└")
+                return lines
+            }
+
+            public static func renderMultiselectFrame(
+                message: String,
+                options: [SelectOption],
+                cursor: Int,
+                selectedValues: Set<String>,
+                search: String = "",
+                searchable: Bool = false,
+                rows: Int = 24,
+                errorMessage: String? = nil
+            ) -> [String] {
+                let maxItems = max(3, min(10, rows - (searchable ? 8 : 6)))
+                let safeCursor = options.isEmpty ? 0 : min(max(0, cursor), options.count - 1)
+                let start = min(max(0, safeCursor - min(2, maxItems - 1)), max(0, options.count - maxItems))
+                let visible = Array(options.dropFirst(start).prefix(maxItems))
+
+                var lines: [String] = [
+                    "◆  \(message)",
+                ]
+                if searchable {
+                    lines.append("│  Search: \(search)")
+                }
+                if visible.isEmpty {
+                    lines.append("│  No matches found")
+                } else {
+                    if start > 0 {
+                        lines.append("│  …")
+                    }
+                    for (idx, opt) in visible.enumerated() {
+                        let isActive = (start + idx) == safeCursor
+                        let pointer = isActive ? "❯" : " "
+                        let box = selectedValues.contains(opt.value) ? "[✓]" : "[ ]"
+                        let hintText = opt.hint.map { " (\($0))" } ?? ""
+                        lines.append("│ \(pointer) \(box) \(opt.label)\(hintText)")
+                    }
+                    if start + maxItems < options.count {
+                        lines.append("│  …")
+                    }
+                }
+                if let errorMessage {
+                    lines.append("│  ⚠ \(errorMessage)")
+                }
+                let footer = searchable
+                    ? "↑/↓ navigate • Space toggle • Type to filter • Enter confirm • Esc cancel"
+                    : "↑/↓ navigate • Space toggle • Enter confirm • Esc cancel"
+                lines.append("│  \(footer)")
+                lines.append("└")
+                return lines
+            }
+
+            /// Runs the interactive arrow-key + live-filter single-select picker loop.
+            public static func runInteractiveSelect(
+                message: String,
+                options: [SelectOption],
+                initialValue: String? = nil,
+                columns: Int = 80,
+                rows: Int = 24,
+                eol: String = "\n",
+                nextKey: () -> TerminalKey?,
+                writeStderr: (String) -> Void
+            ) throws -> String {
+                guard !options.isEmpty else {
+                    throw CancelledError()
+                }
+                let searchable = options.count > 5
+                var search = ""
+                var cursor = initialValue.flatMap { target in
+                    options.firstIndex(where: { $0.value == target })
+                } ?? 0
+                var errorMessage: String? = nil
+                var renderedLines = 0
+
+                writeStderr("\u{1B}[?25l")
+                defer { writeStderr("\u{1B}[?25h") }
+
+                while true {
+                    let filtered = filterSelectOptions(options, search: search)
+                    if filtered.isEmpty {
+                        cursor = 0
+                    } else if cursor >= filtered.count {
+                        cursor = filtered.count - 1
+                    } else if cursor < 0 {
+                        cursor = 0
+                    }
+
+                    let frame = renderSelectFrame(
+                        message: message,
+                        options: filtered,
+                        cursor: cursor,
+                        search: search,
+                        searchable: searchable,
+                        rows: rows,
+                        errorMessage: errorMessage
+                    )
+                    redrawTerminalFrame(
+                        lines: frame,
+                        columns: columns,
+                        previousLineCount: &renderedLines,
+                        writeStderr: writeStderr
+                    )
+
+                    guard let key = nextKey() else {
+                        clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                        writeStderr("■  \(message)\(eol)")
+                        throw CancelledError()
+                    }
+                    errorMessage = nil
+
+                    switch key {
+                    case .up:
+                        if !filtered.isEmpty {
+                            cursor = (cursor - 1 + filtered.count) % filtered.count
+                        }
+                    case .down:
+                        if !filtered.isEmpty {
+                            cursor = (cursor + 1) % filtered.count
+                        }
+                    case .enter:
+                        if filtered.isEmpty {
+                            errorMessage = "No matching options"
+                        } else {
+                            let chosen = filtered[cursor]
+                            clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                            writeStderr("◇  \(message)\(eol)│  \(chosen.label)\(eol)")
+                            return chosen.value
+                        }
+                    case .escape, .ctrlC, .ctrlD:
+                        clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                        writeStderr("■  \(message)\(eol)")
+                        throw CancelledError()
+                    case .backspace:
+                        if searchable && !search.isEmpty {
+                            search.removeLast()
+                            cursor = 0
+                        }
+                    case .ctrlU:
+                        if searchable && !search.isEmpty {
+                            search.removeAll()
+                            cursor = 0
+                        }
+                    case .space:
+                        if searchable {
+                            search.append(" ")
+                            cursor = 0
+                        }
+                    case .character(let ch):
+                        if searchable {
+                            search.append(ch)
+                            cursor = 0
+                        } else if ch == "j", !filtered.isEmpty {
+                            cursor = (cursor + 1) % filtered.count
+                        } else if ch == "k", !filtered.isEmpty {
+                            cursor = (cursor - 1 + filtered.count) % filtered.count
+                        }
+                    case .left, .right, .tab:
+                        break
+                    }
+                }
+            }
+
+            /// Runs the interactive arrow-key + Space-toggle + live-filter multiselect picker loop.
+            public static func runInteractiveMultiselect(
+                message: String,
+                options: [SelectOption],
+                initialValues: [String]? = nil,
+                required: Bool = false,
+                columns: Int = 80,
+                rows: Int = 24,
+                eol: String = "\n",
+                nextKey: () -> TerminalKey?,
+                writeStderr: (String) -> Void
+            ) throws -> [String] {
+                if options.isEmpty {
+                    if required { throw CLIError("At least one selection is required") }
+                    return []
+                }
+                let searchable = options.count > 5
+                var search = ""
+                var selected = Set(initialValues ?? [])
+                var cursor = 0
+                var errorMessage: String? = nil
+                var renderedLines = 0
+
+                writeStderr("\u{1B}[?25l")
+                defer { writeStderr("\u{1B}[?25h") }
+
+                while true {
+                    let filtered = filterSelectOptions(options, search: search)
+                    if filtered.isEmpty {
+                        cursor = 0
+                    } else if cursor >= filtered.count {
+                        cursor = filtered.count - 1
+                    } else if cursor < 0 {
+                        cursor = 0
+                    }
+
+                    let frame = renderMultiselectFrame(
+                        message: message,
+                        options: filtered,
+                        cursor: cursor,
+                        selectedValues: selected,
+                        search: search,
+                        searchable: searchable,
+                        rows: rows,
+                        errorMessage: errorMessage
+                    )
+                    redrawTerminalFrame(
+                        lines: frame,
+                        columns: columns,
+                        previousLineCount: &renderedLines,
+                        writeStderr: writeStderr
+                    )
+
+                    guard let key = nextKey() else {
+                        clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                        writeStderr("■  \(message)\(eol)")
+                        throw CancelledError()
+                    }
+                    errorMessage = nil
+
+                    switch key {
+                    case .up:
+                        if !filtered.isEmpty {
+                            cursor = (cursor - 1 + filtered.count) % filtered.count
+                        }
+                    case .down:
+                        if !filtered.isEmpty {
+                            cursor = (cursor + 1) % filtered.count
+                        }
+                    case .space:
+                        if !filtered.isEmpty {
+                            let val = filtered[cursor].value
+                            if selected.contains(val) {
+                                selected.remove(val)
+                            } else {
+                                selected.insert(val)
+                            }
+                        }
+                    case .enter:
+                        let chosen = options.filter { selected.contains($0.value) }
+                        if required && chosen.isEmpty {
+                            errorMessage = "At least one selection is required"
+                        } else {
+                            let summary = chosen.isEmpty ? "none" : chosen.map(\.label).joined(separator: ", ")
+                            clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                            writeStderr("◇  \(message)\(eol)│  \(summary)\(eol)")
+                            return chosen.map(\.value)
+                        }
+                    case .escape, .ctrlC, .ctrlD:
+                        clearTerminalFrame(previousLineCount: &renderedLines, writeStderr: writeStderr)
+                        writeStderr("■  \(message)\(eol)")
+                        throw CancelledError()
+                    case .backspace:
+                        if searchable && !search.isEmpty {
+                            search.removeLast()
+                            cursor = 0
+                        }
+                    case .ctrlU:
+                        if searchable && !search.isEmpty {
+                            search.removeAll()
+                            cursor = 0
+                        }
+                    case .character(let ch):
+                        if searchable {
+                            search.append(ch)
+                            cursor = 0
+                        } else if ch == "j", !filtered.isEmpty {
+                            cursor = (cursor + 1) % filtered.count
+                        } else if ch == "k", !filtered.isEmpty {
+                            cursor = (cursor - 1 + filtered.count) % filtered.count
+                        }
+                    case .left, .right, .tab:
+                        break
+                    }
+                }
+            }
+
+            internal static func redrawTerminalFrame(
+                lines: [String],
+                columns: Int,
+                previousLineCount: inout Int,
+                writeStderr: (String) -> Void
+            ) {
+                let maxWidth = max(20, columns - 1)
+                let clipped = lines.map { line -> String in
+                    if line.count <= maxWidth { return line }
+                    return String(line.prefix(maxWidth - 1)) + "…"
+                }
+                var seq = ""
+                if previousLineCount > 0 {
+                    if previousLineCount > 1 {
+                        seq += "\u{1B}[\(previousLineCount - 1)A"
+                    }
+                    seq += "\r\u{1B}[J"
+                }
+                seq += clipped.joined(separator: "\n")
+                writeStderr(seq)
+                previousLineCount = clipped.count
+            }
+
+            internal static func clearTerminalFrame(
+                previousLineCount: inout Int,
+                writeStderr: (String) -> Void
+            ) {
+                guard previousLineCount > 0 else { return }
+                var seq = ""
+                if previousLineCount > 1 {
+                    seq += "\u{1B}[\(previousLineCount - 1)A"
+                }
+                seq += "\r\u{1B}[J"
+                writeStderr(seq)
+                previousLineCount = 0
             }
         }
 
