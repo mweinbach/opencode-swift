@@ -1,0 +1,62 @@
+[
+  {
+    "fn": "keymap/src/services/keys.ts#normalizeBindingTokenName",
+    "cases": [
+      { "name": "trims and lowercases", "args": ["  Leader  "] },
+      { "name": "empty fails", "args": ["   "], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#normalizeKeyName",
+    "cases": [
+      { "name": "trims and lowercases", "args": [" Return "] },
+      { "name": "empty fails", "args": [""], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#normalizeKeyStroke",
+    "cases": [
+      { "name": "defaults modifiers", "args": [{ "name": "A" }] },
+      { "name": "all modifiers", "args": [{ "name": "Escape", "ctrl": true, "shift": true, "meta": true, "super": true, "hyper": true }] },
+      { "name": "hyper false becomes null", "args": [{ "name": "x", "ctrl": true, "hyper": false }] },
+      { "name": "empty key fails", "args": [{ "name": "  " }], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#createKeyMatch",
+    "cases": [
+      { "name": "simple key", "args": [{ "name": "k" }] },
+      { "name": "ctrl+return", "args": [{ "name": "Return", "ctrl": true }] },
+      { "name": "full combo", "args": [{ "name": "p", "ctrl": true, "shift": true, "meta": false, "super": true, "hyper": true }] }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#createTextKeyMatch",
+    "cases": [
+      { "name": "trimmed text", "args": ["  hello  "] },
+      { "name": "empty fails", "args": ["   "], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#stringifyKeyStroke",
+    "cases": [
+      { "name": "return displays as enter", "args": [{ "name": "Return", "ctrl": true }] },
+      { "name": "modifier order ctrl+shift+meta+super+hyper", "args": [{ "name": "k", "hyper": true, "super": true, "meta": true, "shift": true, "ctrl": true }] },
+      { "name": "bare key", "args": [{ "name": "Tab" }] }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#stringifyKeySequence",
+    "cases": [
+      { "name": "default no separator", "args": [[{ "name": "x", "ctrl": true }, { "name": "c", "ctrl": true }]] },
+      { "name": "space separator", "args": [[{ "name": "g" }, { "name": "g" }], { "separator": " " }] }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/keys.ts#createKeySequencePart",
+    "cases": [
+      { "name": "auto display and match", "args": [{ "name": "Return", "ctrl": true }] },
+      { "name": "with custom display and tokenName", "args": [{ "name": "x", "ctrl": true }, { "display": "<leader>", "tokenName": " Leader " }] }
+    ]
+  }
+]

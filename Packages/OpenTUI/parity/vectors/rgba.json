@@ -1,0 +1,108 @@
+[
+  {
+    "fn": "core/src/lib/RGBA.ts#normalizeIndexedColorIndex",
+    "cases": [
+      { "name": "min 0", "args": [0] },
+      { "name": "ansi 15", "args": [15] },
+      { "name": "cube 196", "args": [196] },
+      { "name": "max 255", "args": [255] },
+      { "name": "negative rejected", "args": [-1], "compare": "expect_error" },
+      { "name": "overflow rejected", "args": [256], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#ansi256IndexToRgb",
+    "cases": [
+      { "name": "ansi 0 black", "args": [0] },
+      { "name": "ansi 1 maroon", "args": [1] },
+      { "name": "ansi 7 silver", "args": [7] },
+      { "name": "ansi 9 red", "args": [9] },
+      { "name": "ansi 15 white", "args": [15] },
+      { "name": "cube start 16", "args": [16] },
+      { "name": "cube red 196", "args": [196] },
+      { "name": "cube end 231", "args": [231] },
+      { "name": "gray start 232", "args": [232] },
+      { "name": "gray end 255", "args": [255] },
+      { "name": "out of bounds", "args": [300], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#RGBA.fromValues",
+    "cases": [
+      { "name": "opaque red", "args": [1, 0, 0, 1] },
+      { "name": "half transparent", "args": [0.5, 0.25, 0.75, 0.5] },
+      { "name": "clamping out of range", "args": [-0.5, 2.0, 0.0, 1.5] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#RGBA.fromInts",
+    "cases": [
+      { "name": "standard rgb", "args": [255, 128, 64] },
+      { "name": "with alpha", "args": [10, 20, 30, 128] },
+      { "name": "clamping", "args": [-5, 300, 127, 255] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#RGBA.fromIndex",
+    "cases": [
+      { "name": "indexed default palette", "args": [196] },
+      { "name": "indexed with custom snapshot", "args": [4, "#112233"] },
+      { "name": "invalid index", "args": [-2], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#RGBA.defaultForeground",
+    "cases": [
+      { "name": "default fg", "args": [] },
+      { "name": "default fg with snapshot", "args": ["#abcdef"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#RGBA.defaultBackground",
+    "cases": [
+      { "name": "default bg", "args": [] },
+      { "name": "default bg with snapshot", "args": ["#102030"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#hexToRgb",
+    "cases": [
+      { "name": "6-digit with hash", "args": ["#ff8800"] },
+      { "name": "6-digit without hash", "args": ["112233"] },
+      { "name": "3-digit shorthand", "args": ["#f80"] },
+      { "name": "4-digit shorthand with alpha", "args": ["#f80c"] },
+      { "name": "8-digit with alpha", "args": ["#11223380"] },
+      { "name": "invalid falls back to magenta", "args": ["#zzzzzz"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#rgbToHex",
+    "cases": [
+      { "name": "opaque omits alpha", "args": [255, 136, 0, 255] },
+      { "name": "translucent includes alpha", "args": [17, 34, 51, 128] },
+      { "name": "zero padded", "args": [0, 5, 15, 255] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#hsvToRgb",
+    "cases": [
+      { "name": "red 0deg", "args": [0, 1, 1] },
+      { "name": "yellow 60deg", "args": [60, 1, 1] },
+      { "name": "green 120deg", "args": [120, 1, 1] },
+      { "name": "cyan 180deg", "args": [180, 1, 1] },
+      { "name": "blue 240deg", "args": [240, 1, 1] },
+      { "name": "magenta 300deg", "args": [300, 1, 1] },
+      { "name": "desaturated mid", "args": [210, 0.5, 0.8] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/RGBA.ts#parseColor",
+    "cases": [
+      { "name": "transparent", "args": ["transparent"] },
+      { "name": "css named orange", "args": ["Orange"] },
+      { "name": "css brightcyan", "args": ["brightcyan"] },
+      { "name": "css grey alias", "args": ["grey"] },
+      { "name": "hex fallback", "args": ["#336699"] }
+    ]
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "fn": "core/src/ansi.ts#ANSI",
+    "cases": [
+      { "name": "switchToAlternateScreen", "args": ["switchToAlternateScreen"] },
+      { "name": "switchToMainScreen", "args": ["switchToMainScreen"] },
+      { "name": "reset", "args": ["reset"] },
+      { "name": "clearScreen", "args": ["clearScreen"] },
+      { "name": "scrollDown 5", "args": ["scrollDown", 5] },
+      { "name": "scrollIntoHistory 3", "args": ["scrollIntoHistory", 3] },
+      { "name": "scrollIntoHistory > 4000", "args": ["scrollIntoHistory", 4005] },
+      { "name": "moveCursor 10,20", "args": ["moveCursor", 10, 20] },
+      { "name": "moveCursorAndClear 2,4", "args": ["moveCursorAndClear", 2, 4] },
+      { "name": "setRgbBackground", "args": ["setRgbBackground", 12, 34, 56] }
+    ]
+  }
+]

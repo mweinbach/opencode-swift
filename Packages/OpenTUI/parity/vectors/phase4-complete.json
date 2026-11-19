@@ -1,0 +1,60 @@
+[
+  {
+    "fn": "qrcode/src/lib/qrcode.encoding.ts#shiftJisCodeForCharacter",
+    "cases": [
+      { "name": "ascii A", "args": ["A"] },
+      { "name": "kanji 茗", "args": ["茗"] },
+      { "name": "kanji 荷", "args": ["荷"] },
+      { "name": "hiragana あ", "args": ["あ"] },
+      { "name": "halfwidth katakana ｱ", "args": ["ｱ"] },
+      { "name": "unencodable emoji", "args": ["🚀"] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.encoding.ts#isKanjiModeShiftJisValue",
+    "cases": [
+      { "name": "lower kanji range start", "args": [33088] },
+      { "name": "lower kanji range end", "args": [40956] },
+      { "name": "upper kanji range start", "args": [57408] },
+      { "name": "ascii outside range", "args": [65] },
+      { "name": "gap outside range", "args": [41000] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.encoding.ts#encodingForKnownEci",
+    "cases": [
+      { "name": "iso-8859-1 (3)", "args": [3] },
+      { "name": "shift-jis (20)", "args": [20] },
+      { "name": "utf-8 (26)", "args": [26] },
+      { "name": "unknown ECI", "args": [99] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.ts#QrSegment.isKanji",
+    "cases": [
+      { "name": "pure kanji 茗荷", "args": ["茗荷"] },
+      { "name": "mixed kanji and ascii", "args": ["A茗"] },
+      { "name": "empty string", "args": [""] },
+      { "name": "emoji not kanji", "args": ["🚀"] }
+    ]
+  },
+  {
+    "fn": "core/src/audio-stream/icy/metadata.ts#parseIcyMetadata",
+    "cases": [
+      { "name": "title and url with nul padding", "args": ["StreamTitle='OpenTUI Radio';StreamUrl='https://opencode.ai';\u0000\u0000"] },
+      { "name": "empty nul payload", "args": ["\u0000\u0000\u0000"] },
+      { "name": "malformed payload", "args": ["not valid metadata"] }
+    ]
+  },
+  {
+    "fn": "keymap/src/html.ts#normalizeHtmlKeyName",
+    "cases": [
+      { "name": "Enter -> return", "args": ["Enter"] },
+      { "name": "ArrowUp -> up", "args": ["ArrowUp"] },
+      { "name": "Escape -> escape", "args": ["Escape"] },
+      { "name": "Space character", "args": [" "] },
+      { "name": "Function key F12", "args": ["F12"] },
+      { "name": "Uppercase letter A", "args": ["A"] }
+    ]
+  }
+]

@@ -1,0 +1,94 @@
+{
+  "generatedAt": "2026-11-19T04:04:59.379Z",
+  "upstream": {
+    "repository": "https://github.com/anomalyco/opentui.git",
+    "branch": "main",
+    "commit": "79eb7fccd1713f3040621c01161e088f8a68edf7",
+    "commitDate": "2026-11-18T14:10:12+01:00",
+    "commitSubject": "native: keep the Windows static library's CRT copies private (#2157)"
+  },
+  "swiftFiles": 141,
+  "parityAnnotations": 5679,
+  "differentialParity": {
+    "verifiedFunctions": 91,
+    "verifiedVectors": 383
+  },
+  "totals": {
+    "files": 292,
+    "lines": 169364,
+    "totalSymbols": 5679,
+    "totalFunctions": 3159,
+    "implementedSymbols": 5679,
+    "implementedFunctions": 3159
+  },
+  "danglingAnnotations": [],
+  "driftedAnnotations": [],
+  "purityViolations": [],
+  "packages": [
+    {
+      "package": "core",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier1-primitives",
+      "language": "ts",
+      "files": 125,
+      "lines": 66569,
+      "totalSymbols": 3777,
+      "totalFunctions": 2098,
+      "implementedSymbols": 3777,
+      "implementedFunctions": 2098,
+      "driftedSymbols": 0
+    },
+    {
+      "package": "keymap",
+      "swiftTarget": "OpenTUIKeymap",
+      "tier": "tier1-primitives",
+      "language": "ts",
+      "files": 66,
+      "lines": 13800,
+      "totalSymbols": 410,
+      "totalFunctions": 203,
+      "implementedSymbols": 410,
+      "implementedFunctions": 203,
+      "driftedSymbols": 0
+    },
+    {
+      "package": "native",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier2-engine",
+      "language": "zig",
+      "files": 80,
+      "lines": 78145,
+      "totalSymbols": 1372,
+      "totalFunctions": 799,
+      "implementedSymbols": 1372,
+      "implementedFunctions": 799,
+      "driftedSymbols": 0
+    },
+    {
+      "package": "qrcode",
+      "swiftTarget": "OpenTUIRenderables",
+      "tier": "tier4-extensions",
+      "language": "ts",
+      "files": 8,
+      "lines": 8891,
+      "totalSymbols": 57,
+      "totalFunctions": 42,
+      "implementedSymbols": 57,
+      "implementedFunctions": 42,
+      "driftedSymbols": 0
+    },
+    {
+      "package": "ssh",
+      "swiftTarget": "OpenTUITerminal",
+      "tier": "tier4-extensions",
+      "language": "ts",
+      "files": 13,
+      "lines": 1959,
+      "totalSymbols": 63,
+      "totalFunctions": 17,
+      "implementedSymbols": 63,
+      "implementedFunctions": 17,
+      "driftedSymbols": 0
+    }
+  ]
+}

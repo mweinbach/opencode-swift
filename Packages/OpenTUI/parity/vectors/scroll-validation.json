@@ -1,0 +1,109 @@
+[
+  {
+    "fn": "core/src/lib/scroll-chain.ts#wheelDirection",
+    "cases": [
+      { "name": "up unshifted", "args": ["up", false] },
+      { "name": "down unshifted", "args": ["down", false] },
+      { "name": "up shifted maps left", "args": ["up", true] },
+      { "name": "down shifted maps right", "args": ["down", true] },
+      { "name": "left unchanged when shifted", "args": ["left", true] },
+      { "name": "null returns null", "args": [null, false] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/scroll-acceleration.ts#MacOSScrollAccel.tick",
+    "cases": [
+      { "name": "single first tick", "args": [[1000]] },
+      { "name": "fast streak accelerates", "args": [[1000, 1020, 1040, 1060, 1080]] },
+      { "name": "ghostty <6ms duplicate debounced", "args": [[1000, 1002, 1020]] },
+      { "name": "gap >150ms resets streak", "args": [[1000, 1020, 1040, 1500]] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isValidPercentage",
+    "cases": [
+      { "name": "50%", "args": ["50%"] },
+      { "name": "12.5%", "args": ["12.5%"] },
+      { "name": "-10%", "args": ["-10%"] },
+      { "name": "bare percent", "args": ["%"] },
+      { "name": "non numeric", "args": ["abc%"] },
+      { "name": "number not string", "args": [50] },
+      { "name": "no percent sign", "args": ["50"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isMarginType",
+    "cases": [
+      { "name": "number", "args": [10] },
+      { "name": "auto", "args": ["auto"] },
+      { "name": "percentage", "args": ["25%"] },
+      { "name": "invalid string", "args": ["10px"] },
+      { "name": "null", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isPaddingType",
+    "cases": [
+      { "name": "number", "args": [4] },
+      { "name": "percentage", "args": ["10%"] },
+      { "name": "auto rejected", "args": ["auto"] },
+      { "name": "invalid", "args": ["wide"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isPositionType",
+    "cases": [
+      { "name": "number", "args": [0] },
+      { "name": "auto", "args": ["auto"] },
+      { "name": "percentage", "args": ["100%"] },
+      { "name": "invalid", "args": ["relative"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isPositionTypeType",
+    "cases": [
+      { "name": "relative", "args": ["relative"] },
+      { "name": "absolute", "args": ["absolute"] },
+      { "name": "static", "args": ["static"] },
+      { "name": "fixed rejected", "args": ["fixed"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isOverflowType",
+    "cases": [
+      { "name": "visible", "args": ["visible"] },
+      { "name": "hidden", "args": ["hidden"] },
+      { "name": "scroll", "args": ["scroll"] },
+      { "name": "auto rejected", "args": ["auto"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isDimensionType",
+    "cases": [
+      { "name": "number", "args": [80] },
+      { "name": "auto", "args": ["auto"] },
+      { "name": "percent", "args": ["50%"] },
+      { "name": "invalid", "args": ["fill"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+    "cases": [
+      { "name": "number", "args": [20] },
+      { "name": "auto", "args": ["auto"] },
+      { "name": "undefined allowed", "args": ["__undefined__"] },
+      { "name": "null rejected", "args": [null] },
+      { "name": "percent rejected", "args": ["50%"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/renderable.validations.ts#isSizeType",
+    "cases": [
+      { "name": "number", "args": [12] },
+      { "name": "percent", "args": ["75%"] },
+      { "name": "undefined allowed", "args": ["__undefined__"] },
+      { "name": "auto rejected", "args": ["auto"] },
+      { "name": "null rejected", "args": [null] }
+    ]
+  }
+]

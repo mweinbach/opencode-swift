@@ -1,0 +1,127 @@
+[
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseAlign",
+    "cases": [
+      { "name": "center", "args": ["center"] },
+      { "name": "flex-start", "args": ["flex-start"] },
+      { "name": "space-between", "args": ["space-between"] },
+      { "name": "uppercase normalized", "args": ["STRETCH"] },
+      { "name": "null default", "args": [null] },
+      { "name": "invalid fallback", "args": ["nope"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseAlignItems",
+    "cases": [
+      { "name": "center", "args": ["center"] },
+      { "name": "null defaults stretch", "args": [null] },
+      { "name": "invalid defaults stretch", "args": ["nope"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseAlignContent",
+    "cases": [
+      { "name": "space-around", "args": ["space-around"] },
+      { "name": "null defaults flex-start", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+    "cases": [
+      { "name": "border-box", "args": ["border-box"] },
+      { "name": "content-box", "args": ["content-box"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseDimension",
+    "cases": [
+      { "name": "width", "args": ["width"] },
+      { "name": "height", "args": ["height"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseDirection",
+    "cases": [
+      { "name": "ltr", "args": ["ltr"] },
+      { "name": "rtl", "args": ["rtl"] },
+      { "name": "inherit", "args": ["inherit"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseDisplay",
+    "cases": [
+      { "name": "flex", "args": ["flex"] },
+      { "name": "none", "args": ["none"] },
+      { "name": "contents", "args": ["contents"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseEdge",
+    "cases": [
+      { "name": "left", "args": ["left"] },
+      { "name": "horizontal", "args": ["horizontal"] },
+      { "name": "all", "args": ["all"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseFlexDirection",
+    "cases": [
+      { "name": "column", "args": ["column"] },
+      { "name": "row", "args": ["row"] },
+      { "name": "row-reverse", "args": ["row-reverse"] },
+      { "name": "column-reverse", "args": ["column-reverse"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseGutter",
+    "cases": [
+      { "name": "column", "args": ["column"] },
+      { "name": "row", "args": ["row"] },
+      { "name": "all", "args": ["all"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseJustify",
+    "cases": [
+      { "name": "flex-start", "args": ["flex-start"] },
+      { "name": "center", "args": ["center"] },
+      { "name": "space-evenly", "args": ["space-evenly"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseOverflow",
+    "cases": [
+      { "name": "visible", "args": ["visible"] },
+      { "name": "hidden", "args": ["hidden"] },
+      { "name": "scroll", "args": ["scroll"] },
+      { "name": "null default", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parsePositionType",
+    "cases": [
+      { "name": "static", "args": ["static"] },
+      { "name": "relative", "args": ["relative"] },
+      { "name": "absolute", "args": ["absolute"] },
+      { "name": "null defaults relative", "args": [null] },
+      { "name": "invalid defaults static", "args": ["fixed"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/yoga.options.ts#parseWrap",
+    "cases": [
+      { "name": "no-wrap", "args": ["no-wrap"] },
+      { "name": "wrap", "args": ["wrap"] },
+      { "name": "wrap-reverse", "args": ["wrap-reverse"] },
+      { "name": "null default", "args": [null] }
+    ]
+  }
+]

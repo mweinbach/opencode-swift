@@ -1,0 +1,27 @@
+[
+  {
+    "fn": "core/src/lib/render-geometry.ts#calculateRenderGeometry",
+    "cases": [
+      { "name": "alternate screen", "args": ["alternate-screen", 120, 40, 10] },
+      { "name": "main screen", "args": ["main-screen", 80, 24, 6] },
+      { "name": "split footer normal", "args": ["split-footer", 120, 40, 10] },
+      { "name": "split footer clamped to terminal height", "args": ["split-footer", 80, 8, 12] },
+      { "name": "negative dimensions clamped to 0", "args": ["split-footer", -10, -5, 4] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/validate-dir-name.ts#isValidDirectoryName",
+    "cases": [
+      { "name": "valid simple", "args": ["my-project_1"] },
+      { "name": "empty", "args": [""] },
+      { "name": "whitespace only", "args": ["   "] },
+      { "name": "windows reserved CON", "args": ["con"] },
+      { "name": "windows reserved LPT9", "args": ["LPT9"] },
+      { "name": "forbidden slash", "args": ["a/b"] },
+      { "name": "forbidden colon", "args": ["a:b"] },
+      { "name": "trailing dot", "args": ["folder."] },
+      { "name": "trailing space", "args": ["folder "] },
+      { "name": "dotdot", "args": [".."] }
+    ]
+  }
+]

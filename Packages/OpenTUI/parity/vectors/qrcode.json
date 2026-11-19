@@ -1,0 +1,44 @@
+[
+  {
+    "fn": "qrcode/src/lib/qrcode.ts#QrSegment.isNumeric",
+    "cases": [
+      { "name": "digits only", "args": ["0123456789"] },
+      { "name": "empty string", "args": [""] },
+      { "name": "contains letter", "args": ["123A"] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.ts#QrSegment.isAlphanumeric",
+    "cases": [
+      { "name": "valid alphanumeric", "args": ["HELLO WORLD $%*+-./:"] },
+      { "name": "lowercase rejected", "args": ["hello"] },
+      { "name": "empty", "args": [""] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.ts#encodeTextBytes",
+    "cases": [
+      { "name": "ascii utf-8", "args": ["hello", "utf-8"] },
+      { "name": "emoji utf-8", "args": ["🚀", "utf-8"] },
+      { "name": "iso-8859-1", "args": ["café", "iso-8859-1"] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.ts#QRCode.encodeText",
+    "cases": [
+      { "name": "numeric low", "args": ["01234567", "L"] },
+      { "name": "alphanumeric medium", "args": ["HELLO WORLD", "M"] },
+      { "name": "url quartile", "args": ["https://opencode.ai", "Q"] },
+      { "name": "unicode utf8 high", "args": ["Swift OpenTUI 🚀", "H"] },
+      { "name": "empty string low", "args": ["", "L"] }
+    ]
+  },
+  {
+    "fn": "qrcode/src/lib/qrcode.render.ts#matrixToTerminal",
+    "cases": [
+      { "name": "default quiet zone border 4", "args": ["HELLO", "M", 4, false] },
+      { "name": "inverted border 4", "args": ["OPENTUI", "L", 4, true] },
+      { "name": "border below minimum 4 rejected", "args": ["HELLO", "M", 2, false], "compare": "expect_error" }
+    ]
+  }
+]

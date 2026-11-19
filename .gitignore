@@ -1,0 +1,15 @@
+# Swift Package Manager & Xcode
+.build/
+.build-*/
+.swiftpm/
+Package.resolved
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.DS_Store
+
+# Upstream reference checkout (managed by scripts/sync-upstream.sh & upstream.lock.json)
+upstream/
+
+# Local parity scratch outputs
+.parity-tmp/

@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/anomalyco/opentui.git",
+  "branch": "main",
+  "commit": "79eb7fccd1713f3040621c01161e088f8a68edf7",
+  "commitDate": "2026-11-18T14:10:12+01:00",
+  "commitSubject": "native: keep the Windows static library's CRT copies private (#2157)",
+  "license": "MIT"
+}

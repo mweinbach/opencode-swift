@@ -1,0 +1,56 @@
+[
+  {
+    "fn": "core/src/lib/objects-in-viewport.ts#getObjectsInViewport",
+    "cases": [
+      {
+        "name": "empty viewport returns empty",
+        "args": [{ "x": 0, "y": 0, "width": 0, "height": 20 }, [{ "id": "a", "screenX": 0, "screenY": 0, "width": 10, "height": 5, "zIndex": 0 }], "column", 0, 1]
+      },
+      {
+        "name": "below minTriggerSize returns all unchanged",
+        "args": [
+          { "x": 0, "y": 100, "width": 80, "height": 20 },
+          [
+            { "id": "a", "screenX": 0, "screenY": 0, "width": 10, "height": 5, "zIndex": 2 },
+            { "id": "b", "screenX": 0, "screenY": 10, "width": 10, "height": 5, "zIndex": 1 }
+          ],
+          "column",
+          0,
+          16
+        ]
+      },
+      {
+        "name": "culls column and sorts by zIndex with spanning background",
+        "args": [
+          { "x": 0, "y": 20, "width": 80, "height": 10 },
+          [
+            { "id": "bg", "screenX": 0, "screenY": 0, "width": 80, "height": 50, "zIndex": -1 },
+            { "id": "top", "screenX": 0, "screenY": 2, "width": 40, "height": 5, "zIndex": 1 },
+            { "id": "mid_hi", "screenX": 0, "screenY": 22, "width": 40, "height": 4, "zIndex": 5 },
+            { "id": "mid_lo", "screenX": 0, "screenY": 24, "width": 40, "height": 4, "zIndex": 2 },
+            { "id": "off_x", "screenX": 200, "screenY": 25, "width": 10, "height": 4, "zIndex": 3 },
+            { "id": "bottom", "screenX": 0, "screenY": 60, "width": 40, "height": 4, "zIndex": 1 }
+          ],
+          "column",
+          0,
+          1
+        ]
+      },
+      {
+        "name": "culls row direction with padding",
+        "args": [
+          { "x": 20, "y": 0, "width": 10, "height": 20 },
+          [
+            { "id": "r0", "screenX": 0, "screenY": 0, "width": 5, "height": 10, "zIndex": 0 },
+            { "id": "r1", "screenX": 18, "screenY": 0, "width": 5, "height": 10, "zIndex": 1 },
+            { "id": "r2", "screenX": 25, "screenY": 0, "width": 5, "height": 10, "zIndex": 0 },
+            { "id": "r3", "screenX": 50, "screenY": 0, "width": 5, "height": 10, "zIndex": 0 }
+          ],
+          "row",
+          2,
+          1
+        ]
+      }
+    ]
+  }
+]

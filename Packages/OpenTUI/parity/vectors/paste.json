@@ -1,0 +1,23 @@
+[
+  {
+    "fn": "core/src/lib/paste.ts#decodePasteBytes",
+    "cases": [
+      { "name": "empty", "args": [[]] },
+      { "name": "plain ascii", "args": [[104, 101, 108, 108, 111]] },
+      { "name": "utf8 bom stripped by TextDecoder", "args": [[239, 187, 191, 97, 98]] },
+      { "name": "unicode emoji", "args": [[240, 159, 152, 128, 33]] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/paste.ts#stripAnsiSequences",
+    "cases": [
+      { "name": "plain text unchanged", "args": ["hello world"] },
+      { "name": "sgr color codes", "args": ["\u001b[31mred\u001b[0m plain"] },
+      { "name": "c1 8-bit csi", "args": ["a\u009b32mb\u009b0mc"] },
+      { "name": "osc hyperlink BEL terminated", "args": ["\u001b]8;;https://example.com\u0007click\u001b]8;;\u0007"] },
+      { "name": "osc ST terminated", "args": ["\u001b]0;title\u001b\\body"] },
+      { "name": "lone trailing ESC", "args": ["abc\u001b"] },
+      { "name": "truncated CSI", "args": ["before\u001b[31"] }
+    ]
+  }
+]

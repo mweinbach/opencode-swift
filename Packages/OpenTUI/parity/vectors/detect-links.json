@@ -1,0 +1,49 @@
+[
+  {
+    "fn": "core/src/lib/detect-links.ts#normalizeMarkdownLinkTarget",
+    "cases": [
+      { "name": "plain url", "args": ["https://example.com/docs"] },
+      { "name": "angle-bracketed url", "args": ["<https://example.com/a(b)>"] },
+      { "name": "leading trailing whitespace", "args": ["  https://example.com  "] },
+      { "name": "with title", "args": ["https://example.com \"Title\""] },
+      { "name": "escaped paren", "args": ["https://en.wikipedia.org/wiki/Swift_\\(programming_language\\)"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/detect-links.ts#detectLinks",
+    "cases": [
+      {
+        "name": "bare url with trailing period",
+        "args": [
+          [{ "text": "Visit https://example.com/docs." }],
+          "Visit https://example.com/docs.",
+          []
+        ]
+      },
+      {
+        "name": "bare url with balanced parens and outer parens",
+        "args": [
+          [{ "text": "(see https://en.wikipedia.org/wiki/Swift_(language))." }],
+          "(see https://en.wikipedia.org/wiki/Swift_(language)).",
+          []
+        ]
+      },
+      {
+        "name": "emoji prefix utf16 offset",
+        "args": [
+          [{ "text": "🚀 https://example.com/swift!" }],
+          "🚀 https://example.com/swift!",
+          []
+        ]
+      },
+      {
+        "name": "no urls unchanged",
+        "args": [
+          [{ "text": "just plain text" }],
+          "just plain text",
+          []
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "fn": "core/src/renderables/text-table-width.ts#allocateProportionalColumnWidths",
+    "cases": [
+      { "name": "fits completely without shrinking", "args": [[10, 20, 30], 100, 3] },
+      { "name": "clamps to minWidth when budget too small", "args": [[10, 20, 30], 9, 3] },
+      { "name": "sqrt proportional shrink", "args": [[10, 20, 30], 40, 3] },
+      { "name": "equal capacities round-robin remainder", "args": [[20, 20, 20], 35, 5] },
+      { "name": "asymmetric wide column dominates smoothly", "args": [[5, 8, 120], 50, 3] },
+      { "name": "single column clamped", "args": [[80], 25, 4] }
+    ]
+  }
+]

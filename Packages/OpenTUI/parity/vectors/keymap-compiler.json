@@ -1,0 +1,23 @@
+[
+  {
+    "fn": "keymap/src/services/primitives/command-normalization.ts#normalizeCommandName",
+    "cases": [
+      { "name": "trimmed command", "args": ["  session.new  "] },
+      { "name": "simple command", "args": ["quit"] },
+      { "name": "empty throws", "args": ["   "], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/compiler.ts#createCompilerService",
+    "cases": [
+      { "name": "single chord ctrl+c", "args": ["ctrl+c"] },
+      { "name": "multi-stroke chord ctrl+xctrl+s", "args": ["ctrl+xctrl+s"] },
+      { "name": "modifier aliases control+option+shift+enter", "args": ["control+option+shift+enter"] },
+      { "name": "two-letter sequence gg", "args": ["gg"] },
+      { "name": "named key ctrl+f12", "args": ["ctrl+f12"] },
+      { "name": "spaced chord ctrl + shift + a", "args": ["ctrl + shift + a"] },
+      { "name": "multiple key names with space rejected", "args": ["ctrl+x ctrl+s"], "compare": "expect_error" },
+      { "name": "empty string fails", "args": [""], "compare": "expect_error" }
+    ]
+  }
+]

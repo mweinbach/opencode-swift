@@ -1,0 +1,47 @@
+[
+  {
+    "fn": "core/src/lib/border.ts#isValidBorderStyle",
+    "cases": [
+      { "name": "single", "args": ["single"] },
+      { "name": "double", "args": ["double"] },
+      { "name": "rounded", "args": ["rounded"] },
+      { "name": "heavy", "args": ["heavy"] },
+      { "name": "invalid", "args": ["dashed"] },
+      { "name": "null", "args": [null] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/border.ts#parseBorderStyle",
+    "cases": [
+      { "name": "valid rounded", "args": ["rounded"] },
+      { "name": "invalid uses default single", "args": ["nope"] },
+      { "name": "invalid uses explicit fallback", "args": ["nope", "heavy"] },
+      { "name": "null uses fallback", "args": [null, "double"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/border.ts#getBorderFromSides",
+    "cases": [
+      { "name": "none returns false", "args": [{ "top": false, "right": false, "bottom": false, "left": false }] },
+      { "name": "top and bottom", "args": [{ "top": true, "right": false, "bottom": true, "left": false }] },
+      { "name": "all four sides", "args": [{ "top": true, "right": true, "bottom": true, "left": true }] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/border.ts#getBorderSides",
+    "cases": [
+      { "name": "true", "args": [true] },
+      { "name": "false", "args": [false] },
+      { "name": "left right only", "args": [["left", "right"]] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/border.ts#borderCharsToArray",
+    "cases": [
+      { "name": "single", "args": ["single"] },
+      { "name": "double", "args": ["double"] },
+      { "name": "rounded", "args": ["rounded"] },
+      { "name": "heavy", "args": ["heavy"] }
+    ]
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "fn": "core/src/types.ts#getBaseAttributes",
+    "cases": [
+      { "name": "zero", "args": [0] },
+      { "name": "base bits only", "args": [255] },
+      { "name": "strips upper link id bits", "args": [10761] }
+    ]
+  },
+  {
+    "fn": "core/src/utils.ts#createTextAttributes",
+    "cases": [
+      { "name": "empty", "args": [{}] },
+      { "name": "bold and underline", "args": [{ "bold": true, "underline": true }] },
+      { "name": "reverse aliases inverse", "args": [{ "reverse": true }] },
+      { "name": "all flags", "args": [{ "bold": true, "dim": true, "italic": true, "underline": true, "blink": true, "inverse": true, "hidden": true, "strikethrough": true }] }
+    ]
+  },
+  {
+    "fn": "core/src/utils.ts#attributesWithLink",
+    "cases": [
+      { "name": "link 0", "args": [1, 0] },
+      { "name": "bold underline link 42", "args": [9, 42] },
+      { "name": "max 24-bit link id", "args": [255, 16777215] }
+    ]
+  },
+  {
+    "fn": "core/src/utils.ts#getLinkId",
+    "cases": [
+      { "name": "no link", "args": [255] },
+      { "name": "link 42", "args": [10761] },
+      { "name": "max link", "args": [4294967295] }
+    ]
+  }
+]

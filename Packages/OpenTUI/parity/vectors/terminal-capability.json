@@ -1,0 +1,41 @@
+[
+  {
+    "fn": "core/src/lib/terminal-capability-detection.ts#isCapabilityResponse",
+    "cases": [
+      { "name": "DECRPM response", "args": ["\u001b[?2026;2$y"] },
+      { "name": "XTVersion DCS", "args": ["\u001bP>|ghostty 1.1.0\u001b\\"] },
+      { "name": "Kitty graphics OK", "args": ["\u001b_Gi=31337;OK\u001b\\"] },
+      { "name": "Kitty keyboard flags", "args": ["\u001b[?1u"] },
+      { "name": "DA1 response", "args": ["\u001b[?62;22c"] },
+      { "name": "normal key not capability", "args": ["a"] },
+      { "name": "arrow key not capability", "args": ["\u001b[A"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/terminal-capability-detection.ts#isExplicitWidthReport",
+    "cases": [
+      { "name": "explicit width cursor report col 2", "args": ["\u001b[1;2R"] },
+      { "name": "explicit width cursor report col 3", "args": ["\u001b[1;3R"] },
+      { "name": "non-first row CPR", "args": ["\u001b[5;10R"] },
+      { "name": "non-CPR", "args": ["\u001b[?1u"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/terminal-capability-detection.ts#isPixelResolutionResponse",
+    "cases": [
+      { "name": "valid pixel resolution", "args": ["\u001b[4;720;1280t"] },
+      { "name": "zero dimension", "args": ["\u001b[4;0;1280t"] },
+      { "name": "wrong mode", "args": ["\u001b[8;24;80t"] },
+      { "name": "plain text", "args": ["hello"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/terminal-capability-detection.ts#parsePixelResolution",
+    "cases": [
+      { "name": "1280x720", "args": ["\u001b[4;720;1280t"] },
+      { "name": "3840x2160", "args": ["\u001b[4;2160;3840t"] },
+      { "name": "invalid returns null", "args": ["\u001b[8;24;80t"] },
+      { "name": "overflow > int32 max returns null", "args": ["\u001b[4;2147483648;100t"] }
+    ]
+  }
+]

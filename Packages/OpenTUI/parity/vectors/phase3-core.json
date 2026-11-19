@@ -1,0 +1,101 @@
+[
+  {
+    "fn": "core/src/lib/keybinding.internal.ts#getKeyBindingKey",
+    "cases": [
+      { "name": "simple key", "args": [{ "name": "a" }] },
+      { "name": "ctrl+shift+k", "args": [{ "name": "k", "ctrl": true, "shift": true }] },
+      { "name": "all modifiers", "args": [{ "name": "return", "ctrl": true, "shift": true, "meta": true, "super": true }] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/keybinding.internal.ts#mergeKeyBindings",
+    "cases": [
+      {
+        "name": "custom overrides default chord",
+        "args": [
+          [
+            { "name": "a", "ctrl": true, "action": "select-all" },
+            { "name": "c", "ctrl": true, "action": "copy" }
+          ],
+          [
+            { "name": "a", "ctrl": true, "action": "line-home" },
+            { "name": "v", "ctrl": true, "action": "paste" }
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "core/src/lib/keybinding.internal.ts#keyBindingToString",
+    "cases": [
+      { "name": "plain enter", "args": [{ "name": "return", "action": "submit" }] },
+      { "name": "ctrl+meta+s", "args": [{ "name": "s", "ctrl": true, "meta": true, "action": "save" }] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/tree-sitter/resolve-ft.ts#extToFiletype",
+    "cases": [
+      { "name": "ts extension", "args": ["ts"] },
+      { "name": "tsx with dot", "args": [".tsx"] },
+      { "name": "swift extension", "args": ["swift"] },
+      { "name": "unknown extension", "args": ["notarealext"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/tree-sitter/resolve-ft.ts#pathToFiletype",
+    "cases": [
+      { "name": "typescript source path", "args": ["src/app/index.ts"] },
+      { "name": "Dockerfile basename", "args": ["deploy/Dockerfile"] },
+      { "name": "Makefile basename", "args": ["Makefile"] },
+      { "name": "unknown path", "args": ["README.unknownext"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/tree-sitter/resolve-ft.ts#infoStringToFiletype",
+    "cases": [
+      { "name": "fenced tsx with title", "args": ["tsx title=\"demo.tsx\""] },
+      { "name": "uppercase python", "args": ["PY"] },
+      { "name": "empty info string", "args": [""] },
+      { "name": "shell alias", "args": ["sh"] }
+    ]
+  },
+  {
+    "fn": "core/src/renderer-theme-mode.ts#RendererThemeMode.handleSequence",
+    "cases": [
+      { "name": "black osc11", "args": ["\u001b]11;rgb:0000/0000/0000\u0007"] },
+      { "name": "white osc11 ST", "args": ["\u001b]11;rgb:ffff/ffff/ffff\u001b\\"] },
+      { "name": "boundary brightness 128 dark", "args": ["\u001b]11;rgb:8080/8080/8080\u0007"] },
+      { "name": "boundary brightness 128.114 light", "args": ["\u001b]11;#808081\u0007"] },
+      { "name": "single digit hex light", "args": ["\u001b]11;rgb:8/8/8\u0007"] },
+      { "name": "dsr 997 notification", "args": ["\u001b[?997;1n"] },
+      { "name": "non-theme sequence", "args": ["hello"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/terminal-palette.ts#applyPaletteReplies",
+    "cases": [
+      { "name": "osc 4 and osc 10/11", "args": [16, "\u001b]4;1;rgb:ff00/0000/0000\u0007\u001b]10;#ffffff\u0007\u001b]11;rgb:1e1e/1e1e/1e1e\u001b\\"] },
+      { "name": "no palette reply", "args": [16, "plain text"] }
+    ]
+  },
+  {
+    "fn": "core/src/lib/terminal-palette.ts#buildTerminalPaletteSignature",
+    "cases": [
+      { "name": "empty default colors", "args": [null] },
+      { "name": "populated fg/bg and slot 0", "args": [{ "defaultForeground": "#ffffff", "defaultBackground": "#1e1e1e", "palette": ["#000000", "#ff0000"] }] }
+    ]
+  },
+  {
+    "fn": "core/src/animation/Timeline.ts#createTimeline",
+    "cases": [
+      { "name": "linear at 0, 250, 500, 1000", "args": ["linear", [0, 250, 500, 1000]] },
+      { "name": "inQuad at 0, 250, 500, 1000", "args": ["inQuad", [0, 250, 500, 1000]] },
+      { "name": "outQuad at 0, 250, 500, 1000", "args": ["outQuad", [0, 250, 500, 1000]] },
+      { "name": "inOutQuad at 0, 250, 500, 750, 1000", "args": ["inOutQuad", [0, 250, 500, 750, 1000]] },
+      { "name": "inExpo at 0, 250, 500, 750, 1000", "args": ["inExpo", [0, 250, 500, 750, 1000]] },
+      { "name": "outExpo at 0, 250, 500, 750, 1000", "args": ["outExpo", [0, 250, 500, 750, 1000]] },
+      { "name": "inOutSine at 0, 250, 500, 750, 1000", "args": ["inOutSine", [0, 250, 500, 750, 1000]] },
+      { "name": "outBounce at 0, 250, 500, 750, 1000", "args": ["outBounce", [0, 250, 500, 750, 1000]] }
+    ]
+  }
+]

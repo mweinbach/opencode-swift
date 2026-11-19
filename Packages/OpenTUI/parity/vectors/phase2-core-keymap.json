@@ -1,0 +1,24 @@
+[
+  {
+    "fn": "core/src/syntax-style.ts#convertThemeToStyles",
+    "cases": [
+      {
+        "name": "converts single and multi-scope theme entries",
+        "args": [[
+          { "scope": ["keyword", "keyword.control"], "style": { "foreground": "#ff5555", "bold": true } },
+          { "scope": ["comment"], "style": { "foreground": "gray", "italic": true, "dim": true } },
+          { "scope": ["markup.strikethrough"], "style": { "foreground": "#888888", "strikethrough": true } }
+        ]]
+      }
+    ]
+  },
+  {
+    "fn": "keymap/src/services/values.ts#sameCompiledData",
+    "cases": [
+      { "name": "equal nested objects different key order", "args": [{ "a": 1, "b": [2, true, "x"] }, { "b": [2, true, "x"], "a": 1 }] },
+      { "name": "different array order", "args": [[1, 2], [2, 1]] },
+      { "name": "different primitive values", "args": ["abc", "def"] },
+      { "name": "null equals null", "args": [null, null] }
+    ]
+  }
+]
