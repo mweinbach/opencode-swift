@@ -98,6 +98,20 @@ export const TRACKED_PACKAGES: readonly PackageSpec[] = [
     language: "ts",
     description: "Incremental streaming markdown parser",
   },
+  {
+    upstreamPackage: "latex",
+    swiftTarget: "OpenCodeTUI",
+    tier: "tier3-surfaces",
+    language: "ts",
+    description: "Built-in TUI LaTeX/math markdown rendering plugin",
+  },
+  {
+    upstreamPackage: "merman",
+    swiftTarget: "OpenCodeTUI",
+    tier: "tier3-surfaces",
+    language: "ts",
+    description: "Built-in TUI Mermaid ASCII/Unicode diagram rendering plugin",
+  },
 
   // Tier 4: Plugins, Persistent PTY Daemon, Codemode Sandbox
   {
@@ -106,6 +120,13 @@ export const TRACKED_PACKAGES: readonly PackageSpec[] = [
     tier: "tier4-extensions",
     language: "ts",
     description: "Plugin host contract, RPC hooks, storage, and permissions",
+  },
+  {
+    upstreamPackage: "plugin-browser",
+    swiftTarget: "OpenCodeCore",
+    tier: "tier4-extensions",
+    language: "ts",
+    description: "Chrome DevTools & browser automation built-in core plugin",
   },
   {
     upstreamPackage: "process-daemon",
@@ -131,9 +152,6 @@ export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
   "session-ui",
   "stories",
   "nav-menus",
-  "latex",
-  "merman",
-  "plugin-browser",
   "http-recorder",
   "httpapi-codegen",
   "simulation",
@@ -143,6 +161,11 @@ export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
   "identity",
   "plugins",
 ]
+
+export const EXEMPT_RUNTIME_DEPS: Readonly<Record<string, string>> = {
+  "@opencode/simulation": "Dev/test dynamic simulation driver (not active in normal production runs)",
+  "@opencode/ui": "Static audio .mp3 asset paths only (@opencode/ui/audio/*.mp3); web UI components are out of scope",
+}
 
 export type TargetPurity = "pure" | "portable" | "platform" | "host"
 

@@ -1,18 +1,27 @@
 import path from "path"
 import fs from "fs"
 import {
+  EXEMPT_RUNTIME_DEPS,
   FORBIDDEN_PURE_IMPORTS,
   OS_SPECIFIC_IMPORTS,
   OUT_OF_SCOPE_WEB_PACKAGES,
   SWIFT_TARGET_PURITY,
   TRACKED_PACKAGES,
 } from "./config.ts"
-import { isFunctionLikeKind, type UpstreamManifest, type UpstreamSymbol } from "./scanner.ts"
+import {
+  isFunctionLikeKind,
+  isUpstreamFunctionBodyEmpty,
+  verifyFileExportsWithTranspiler,
+  walkSourceFiles,
+  type UpstreamManifest,
+  type UpstreamSymbol,
+} from "./scanner.ts"
 
 export type ParityStatus = "implemented" | "partial" | "stub" | "adapted" | "excluded"
 
 const VALID_STATUSES = new Set<string>(["implemented", "adapted", "partial", "stub", "excluded"])
 const PINNED_HASH_RE = /^[0-9a-f]{12}$/
+const NON_CALLABLE_SWIFT_DECL_KINDS = new Set<string>(["struct", "enum", "protocol", "typealias", "class", "actor"])
 
 interface SwiftParityAnnotation {
   readonly upstreamId: string
@@ -23,6 +32,45 @@ interface SwiftParityAnnotation {
   readonly swiftLine: number
   readonly swiftTarget: string
   readonly swiftSymbol?: string
+  readonly swiftDeclKind?: string
+  readonly swiftDeclLine?: number
+  readonly swiftDeclOffset?: number
+}
+
+interface CompilerExportError {
+  readonly package: string
+  readonly file: string
+  readonly exportName: string
+  readonly rule: string
+}
+
+interface WorkspaceDepError {
+  readonly package: string
+  readonly dependencyField: "dependencies" | "optionalDependencies"
+  readonly dependencyName: string
+  readonly outOfScopePackage: string
+  readonly rule: string
+}
+
+interface SubstanceError {
+  readonly upstreamId: string
+  readonly upstreamKind: string
+  readonly swiftFile: string
+  readonly swiftLine: number
+  readonly swiftDeclLine?: number
+  readonly swiftDeclKind?: string
+  readonly swiftSymbol?: string
+  readonly rule: string
+}
+
+interface UnmappedSymbolEntry {
+  readonly id: string
+  readonly package: string
+  readonly file: string
+  readonly symbol: string
+  readonly kind: string
+  readonly line: number
+  readonly bodyHash: string
 }
 
 interface PurityViolation {
@@ -132,7 +180,15 @@ function walkSwiftFiles(dir: string): string[] {
 function findAnnotatedSwiftDeclaration(
   lines: readonly string[],
   annotationLineIndex: number,
-): { matched: boolean; symbol?: string; nextLineNumber?: number; nextCodeLine?: string } {
+): {
+  matched: boolean
+  symbol?: string
+  declKind?: string
+  declLineIndex?: number
+  declColOffset?: number
+  nextLineNumber?: number
+  nextCodeLine?: string
+} {
   let blockCommentDepth = 0
   let attrParenDepth = 0
 
@@ -214,6 +270,9 @@ function findAnnotatedSwiftDeclaration(
         return {
           matched: true,
           symbol: declMatch[2] || declMatch[1],
+          declKind: declMatch[1],
+          declLineIndex: j,
+          declColOffset: idx,
           nextLineNumber: j + 1,
           nextCodeLine: code.slice(0, 120),
         }
@@ -684,6 +743,506 @@ function checkTestImports(): TestImportViolation[] {
   return violations
 }
 
+// ============================================================================
+// Gate 9: Compiler Export Completeness Gate
+// ============================================================================
+
+function checkCompilerExportCompleteness(manifest: UpstreamManifest): CompilerExportError[] {
+  if (!fs.existsSync(UPSTREAM_PACKAGES_DIR)) return []
+
+  const manifestSymbolsByFile = new Map<string, Set<string>>()
+  for (const sym of manifest.symbols) {
+    const key = `${sym.package}/${sym.file}`
+    let set = manifestSymbolsByFile.get(key)
+    if (!set) {
+      set = new Set<string>()
+      manifestSymbolsByFile.set(key, set)
+    }
+    set.add(sym.symbol)
+  }
+
+  const errors: CompilerExportError[] = []
+  for (const pkg of TRACKED_PACKAGES) {
+    if (pkg.language !== "ts") continue
+    const pkgRoot = path.join(UPSTREAM_PACKAGES_DIR, pkg.upstreamPackage)
+    const srcRoot = path.join(pkgRoot, "src")
+    const files = walkSourceFiles(srcRoot, "ts")
+    for (const absPath of files) {
+      const relFile = path.relative(pkgRoot, absPath).split(path.sep).join("/")
+      const source = fs.readFileSync(absPath, "utf8")
+      const emitted = manifestSymbolsByFile.get(`${pkg.upstreamPackage}/${relFile}`) ?? new Set<string>()
+      const missed = verifyFileExportsWithTranspiler(absPath, source, emitted)
+      for (const exportName of missed) {
+        errors.push({
+          package: pkg.upstreamPackage,
+          file: relFile,
+          exportName,
+          rule: `Local export '${exportName}' emitted by Bun.Transpiler is missing from parity/upstream-manifest.json`,
+        })
+      }
+    }
+  }
+
+  return errors
+}
+
+// ============================================================================
+// Gate 10: Workspace Dependency Graph Gate
+// ============================================================================
+
+function checkWorkspaceDependencyGraph(): WorkspaceDepError[] {
+  if (!fs.existsSync(UPSTREAM_PACKAGES_DIR)) return []
+
+  // Map npm package names of OUT_OF_SCOPE_WEB_PACKAGES to their directory names
+  const outOfScopeNpmToDir = new Map<string, string>()
+  for (const dir of OUT_OF_SCOPE_WEB_PACKAGES) {
+    const pkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, dir, "package.json")
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as { name?: string }
+        if (parsed.name) outOfScopeNpmToDir.set(parsed.name, dir)
+      } catch {
+        // Ignore unreadable package.json
+      }
+    }
+    if (!outOfScopeNpmToDir.has(`@opencode/${dir}`)) {
+      outOfScopeNpmToDir.set(`@opencode/${dir}`, dir)
+    }
+  }
+
+  const errors: WorkspaceDepError[] = []
+  for (const pkg of TRACKED_PACKAGES) {
+    const pkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, pkg.upstreamPackage, "package.json")
+    if (!fs.existsSync(pkgJsonPath)) continue
+    const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
+      dependencies?: Record<string, string>
+      optionalDependencies?: Record<string, string>
+    }
+    for (const field of ["dependencies", "optionalDependencies"] as const) {
+      const deps = parsed[field]
+      if (!deps) continue
+      for (const depName of Object.keys(deps).sort()) {
+        const outDir = outOfScopeNpmToDir.get(depName)
+        if (!outDir) continue
+        if (Object.prototype.hasOwnProperty.call(EXEMPT_RUNTIME_DEPS, depName)) continue
+        errors.push({
+          package: pkg.upstreamPackage,
+          dependencyField: field,
+          dependencyName: depName,
+          outOfScopePackage: outDir,
+          rule: `Tracked package '${pkg.upstreamPackage}' has unexempted runtime ${field} edge '${depName}' into out-of-scope package '${outDir}'`,
+        })
+      }
+    }
+  }
+
+  return errors
+}
+
+// ============================================================================
+// Gate 11: Swift Implementation Substance Gate (Full Swift Lexer)
+// ============================================================================
+
+interface SwiftLexState {
+  parenDepth: number
+  bracketDepth: number
+  braceDepth: number
+  interpStack: Array<{ hashes: number; multiline: boolean; parenDepthAtOpen: number }>
+}
+
+function scanSwiftStringChunk(source: string, start: number, hashes: number, multiline: boolean, state: SwiftLexState): number {
+  const n = source.length
+  let i = start
+  while (i < n) {
+    if (source[i] === "\\") {
+      let k = i + 1
+      let matched = 0
+      while (matched < hashes && k < n && source[k] === "#") {
+        matched++
+        k++
+      }
+      if (matched === hashes) {
+        if (k < n && source[k] === "(") {
+          state.interpStack.push({ hashes, multiline, parenDepthAtOpen: state.parenDepth })
+          state.parenDepth++
+          return k + 1
+        }
+        i = k + 1
+        continue
+      }
+      i++
+      continue
+    }
+
+    if (multiline) {
+      if (source.slice(i, i + 3) === '"""') {
+        let k = i + 3
+        let matched = 0
+        while (matched < hashes && k < n && source[k] === "#") {
+          matched++
+          k++
+        }
+        if (matched === hashes) return k
+      }
+    } else {
+      if (source[i] === '"') {
+        let k = i + 1
+        let matched = 0
+        while (matched < hashes && k < n && source[k] === "#") {
+          matched++
+          k++
+        }
+        if (matched === hashes) return k
+      }
+    }
+    i++
+  }
+  return n
+}
+
+function stepSwiftLexer(
+  source: string,
+  i: number,
+  state: SwiftLexState,
+): { next: number; kind: "whitespace" | "comment" | "string" | "code" } {
+  const n = source.length
+  const ch = source[i]!
+
+  if (ch === " " || ch === "\t" || ch === "\r" || ch === "\n") {
+    return { next: i + 1, kind: "whitespace" }
+  }
+
+  // Single-line comment `// ...`
+  if (ch === "/" && source[i + 1] === "/") {
+    let j = i + 2
+    while (j < n && source[j] !== "\n") j++
+    return { next: j, kind: "comment" }
+  }
+
+  // Nested block comment `/* ... */`
+  if (ch === "/" && source[i + 1] === "*") {
+    let j = i + 2
+    let depth = 1
+    while (j < n && depth > 0) {
+      if (source[j] === "/" && source[j + 1] === "*") {
+        depth++
+        j += 2
+      } else if (source[j] === "*" && source[j + 1] === "/") {
+        depth--
+        j += 2
+      } else {
+        j++
+      }
+    }
+    return { next: j, kind: "comment" }
+  }
+
+  // Raw strings `#"..."#` / `#"""..."""#` and extended regex literals `#/.../#`
+  if (ch === "#") {
+    let j = i
+    while (j < n && source[j] === "#") j++
+    const hashes = j - i
+    if (source.slice(j, j + 3) === '"""') {
+      return { next: scanSwiftStringChunk(source, j + 3, hashes, true, state), kind: "string" }
+    }
+    if (source[j] === '"') {
+      return { next: scanSwiftStringChunk(source, j + 1, hashes, false, state), kind: "string" }
+    }
+    if (source[j] === "/") {
+      j++
+      while (j < n) {
+        if (source[j] === "/") {
+          let k = j + 1
+          let matched = 0
+          while (matched < hashes && k < n && source[k] === "#") {
+            matched++
+            k++
+          }
+          if (matched === hashes) return { next: k, kind: "string" }
+        }
+        j++
+      }
+      return { next: n, kind: "string" }
+    }
+  }
+
+  // Multiline string literal `"""..."""`
+  if (source.slice(i, i + 3) === '"""') {
+    return { next: scanSwiftStringChunk(source, i + 3, 0, true, state), kind: "string" }
+  }
+
+  // Normal string literal `"..."`
+  if (ch === '"') {
+    return { next: scanSwiftStringChunk(source, i + 1, 0, false, state), kind: "string" }
+  }
+
+  if (ch === "(") {
+    state.parenDepth++
+    return { next: i + 1, kind: "code" }
+  }
+  if (ch === ")") {
+    state.parenDepth = Math.max(0, state.parenDepth - 1)
+    if (
+      state.interpStack.length > 0 &&
+      state.parenDepth === state.interpStack[state.interpStack.length - 1]!.parenDepthAtOpen
+    ) {
+      const top = state.interpStack.pop()!
+      return { next: scanSwiftStringChunk(source, i + 1, top.hashes, top.multiline, state), kind: "string" }
+    }
+    return { next: i + 1, kind: "code" }
+  }
+  if (ch === "[") {
+    state.bracketDepth++
+    return { next: i + 1, kind: "code" }
+  }
+  if (ch === "]") {
+    state.bracketDepth = Math.max(0, state.bracketDepth - 1)
+    return { next: i + 1, kind: "code" }
+  }
+  if (ch === "{") {
+    state.braceDepth++
+    return { next: i + 1, kind: "code" }
+  }
+  if (ch === "}") {
+    state.braceDepth = Math.max(0, state.braceDepth - 1)
+    return { next: i + 1, kind: "code" }
+  }
+
+  return { next: i + 1, kind: "code" }
+}
+
+const SWIFT_NEXT_MEMBER_RE =
+  /^(?:\/\/\s*parity:|@|#|}|(?:(?:public|open|internal|private|fileprivate|package|static|class|final|override|mutating|nonmutating|nonisolated|required|convenience|async|lazy|weak|unowned)\s+)*(?:func|init|deinit|subscript|var|let|struct|enum|class|actor|protocol|typealias|associatedtype|extension|case)\b)/
+
+/**
+ * Extract the true body `{ ... }` of a Swift callable declaration starting at `declOffset`,
+ * skipping parameter-list `(...)` default closures (e.g. `= { [] }`), comments, strings, raw strings, and interpolations.
+ */
+function extractSwiftDeclarationBody(
+  source: string,
+  declOffset: number,
+  declKind: string,
+): { hasBody: boolean; isEmpty: boolean } {
+  const n = source.length
+  const state: SwiftLexState = { parenDepth: 0, bracketDepth: 0, braceDepth: 0, interpStack: [] }
+  let i = declOffset
+  let bodyOpen = -1
+
+  if (declKind === "let") {
+    // Only inspect closure literal initializers `let f: (...) -> ... = { ... }`
+    let sawAssign = false
+    while (i < n) {
+      const ch = source[i]!
+      const step = stepSwiftLexer(source, i, state)
+      if (step.kind === "whitespace" || step.kind === "comment") {
+        if (!sawAssign && ch === "\n" && state.parenDepth === 0 && state.bracketDepth === 0 && state.braceDepth === 0) {
+          const rest = source.slice(i + 1).trimStart()
+          if (SWIFT_NEXT_MEMBER_RE.test(rest)) return { hasBody: false, isEmpty: false }
+        }
+        i = step.next
+        continue
+      }
+      if (
+        !sawAssign &&
+        step.kind === "code" &&
+        ch === "=" &&
+        source[i + 1] !== "=" &&
+        state.parenDepth === 0 &&
+        state.bracketDepth === 0 &&
+        state.braceDepth === 0
+      ) {
+        sawAssign = true
+        i = step.next
+        continue
+      }
+      if (sawAssign) {
+        if (step.kind === "code" && ch === "{") {
+          bodyOpen = i
+          break
+        }
+        return { hasBody: false, isEmpty: false }
+      }
+      i = step.next
+    }
+  } else if (declKind === "var") {
+    // Inspect computed property `{ ... }` or closure initializer `= { ... }`
+    let sawAssign = false
+    while (i < n) {
+      const ch = source[i]!
+      const step = stepSwiftLexer(source, i, state)
+      if (step.kind === "whitespace" || step.kind === "comment") {
+        if (ch === "\n" && state.parenDepth === 0 && state.bracketDepth === 0 && state.braceDepth === 0) {
+          const rest = source.slice(i + 1).trimStart()
+          if (SWIFT_NEXT_MEMBER_RE.test(rest)) return { hasBody: false, isEmpty: false }
+        }
+        i = step.next
+        continue
+      }
+      if (
+        !sawAssign &&
+        step.kind === "code" &&
+        ch === "=" &&
+        source[i + 1] !== "=" &&
+        state.parenDepth === 0 &&
+        state.bracketDepth === 0 &&
+        state.braceDepth === 0
+      ) {
+        sawAssign = true
+        i = step.next
+        continue
+      }
+      if (sawAssign) {
+        if (step.kind === "code" && ch === "{") {
+          bodyOpen = i
+          break
+        }
+        return { hasBody: false, isEmpty: false }
+      }
+      if (step.kind === "code" && ch === "{" && state.parenDepth === 0 && state.bracketDepth === 0 && state.braceDepth === 1) {
+        bodyOpen = i
+        break
+      }
+      if (step.kind === "code" && ch === "}" && state.parenDepth === 0 && state.bracketDepth === 0 && state.braceDepth === 0) {
+        return { hasBody: false, isEmpty: false }
+      }
+      i = step.next
+    }
+  } else {
+    // `func`, `init`, `subscript`
+    let sawParamClose = false
+    let prevNonWsChar = ""
+    while (i < n) {
+      const ch = source[i]!
+      const prevParen = state.parenDepth
+      const prevBracket = state.bracketDepth
+      const prevBrace = state.braceDepth
+      const step = stepSwiftLexer(source, i, state)
+
+      if (step.kind === "code" && ch === ")" && prevParen === 1 && state.parenDepth === 0) {
+        sawParamClose = true
+      }
+
+      if (step.kind === "code" && ch === "{" && prevParen === 0 && prevBracket === 0 && prevBrace === 0) {
+        bodyOpen = i
+        break
+      }
+
+      if (step.kind === "code" && ch === "}" && prevParen === 0 && prevBracket === 0 && prevBrace === 0) {
+        return { hasBody: false, isEmpty: false }
+      }
+
+      if (
+        sawParamClose &&
+        step.kind === "whitespace" &&
+        ch === "\n" &&
+        state.parenDepth === 0 &&
+        state.bracketDepth === 0 &&
+        state.braceDepth === 0
+      ) {
+        if (prevNonWsChar !== ">" && prevNonWsChar !== "," && prevNonWsChar !== ":" && prevNonWsChar !== "&") {
+          const rest = source.slice(i + 1).trimStart()
+          if (SWIFT_NEXT_MEMBER_RE.test(rest)) {
+            return { hasBody: false, isEmpty: false }
+          }
+        }
+      }
+
+      if (step.kind === "code" || step.kind === "string") {
+        prevNonWsChar = ch
+      }
+      i = step.next
+    }
+  }
+
+  if (bodyOpen < 0) return { hasBody: false, isEmpty: false }
+
+  // Walk inside `{ ... }` from `bodyOpen + 1` until matching closing `}`
+  const bodyState: SwiftLexState = { parenDepth: 0, bracketDepth: 0, braceDepth: 1, interpStack: [] }
+  let j = bodyOpen + 1
+  let hasCodeToken = false
+
+  while (j < n && bodyState.braceDepth > 0) {
+    const ch = source[j]!
+    const prevBrace = bodyState.braceDepth
+    const step = stepSwiftLexer(source, j, bodyState)
+    if (step.kind === "whitespace" || step.kind === "comment") {
+      j = step.next
+      continue
+    }
+    if (step.kind === "code" && ch === "}" && prevBrace === 1 && bodyState.braceDepth === 0) {
+      return { hasBody: true, isEmpty: !hasCodeToken }
+    }
+    hasCodeToken = true
+    j = step.next
+  }
+
+  return { hasBody: true, isEmpty: !hasCodeToken }
+}
+
+function checkSwiftImplementationSubstance(
+  annotations: readonly SwiftParityAnnotation[],
+  symbolMap: ReadonlyMap<string, UpstreamSymbol>,
+  swiftFileContents: ReadonlyMap<string, string>,
+): SubstanceError[] {
+  const errors: SubstanceError[] = []
+  const upstreamFileCache = new Map<string, string>()
+
+  function isUpstreamBodyEmpty(sym: UpstreamSymbol): boolean {
+    if (!fs.existsSync(UPSTREAM_PACKAGES_DIR)) {
+      return sym.signature.trim().endsWith("{}")
+    }
+    const absPath = path.join(UPSTREAM_PACKAGES_DIR, sym.package, sym.file)
+    let src = upstreamFileCache.get(absPath)
+    if (src === undefined) {
+      if (!fs.existsSync(absPath)) return false
+      src = fs.readFileSync(absPath, "utf8")
+      upstreamFileCache.set(absPath, src)
+    }
+    return isUpstreamFunctionBodyEmpty(src, sym.line, sym.kind, sym.file.endsWith(".tsx"))
+  }
+
+  for (const ann of annotations) {
+    if (ann.status !== "implemented") continue
+    const upstream = symbolMap.get(ann.upstreamId)
+    if (!upstream || !isFunctionLikeKind(upstream.kind)) continue
+
+    if (ann.swiftDeclKind && NON_CALLABLE_SWIFT_DECL_KINDS.has(ann.swiftDeclKind)) {
+      errors.push({
+        upstreamId: ann.upstreamId,
+        upstreamKind: upstream.kind,
+        swiftFile: ann.swiftFile,
+        swiftLine: ann.swiftLine,
+        swiftDeclLine: ann.swiftDeclLine,
+        swiftDeclKind: ann.swiftDeclKind,
+        swiftSymbol: ann.swiftSymbol,
+        rule: `Implemented upstream function (${upstream.kind}) maps to non-callable Swift '${ann.swiftDeclKind}' declaration`,
+      })
+      continue
+    }
+
+    if (ann.swiftDeclKind && ann.swiftDeclOffset !== undefined) {
+      const swiftSrc = swiftFileContents.get(ann.swiftFile)
+      if (swiftSrc) {
+        const body = extractSwiftDeclarationBody(swiftSrc, ann.swiftDeclOffset, ann.swiftDeclKind)
+        if (body.hasBody && body.isEmpty && !isUpstreamBodyEmpty(upstream)) {
+          errors.push({
+            upstreamId: ann.upstreamId,
+            upstreamKind: upstream.kind,
+            swiftFile: ann.swiftFile,
+            swiftLine: ann.swiftLine,
+            swiftDeclLine: ann.swiftDeclLine,
+            swiftDeclKind: ann.swiftDeclKind,
+            swiftSymbol: ann.swiftSymbol,
+            rule: `Implemented upstream function (${upstream.kind}) maps to an empty Swift '{}' body while upstream implementation is non-empty`,
+          })
+        }
+      }
+    }
+  }
+
+  return errors
+}
+
 function scanSwiftAnnotationsAndPurity(): {
   annotations: SwiftParityAnnotation[]
   purityViolations: PurityViolation[]
@@ -691,6 +1250,7 @@ function scanSwiftAnnotationsAndPurity(): {
   unpinned: UnpinnedAnnotation[]
   orphans: OrphanAnnotation[]
   stubHygieneViolations: StubHygieneViolation[]
+  swiftFileContents: Map<string, string>
   swiftFileCount: number
   swiftPublicSymbolCount: number
 } {
@@ -701,6 +1261,7 @@ function scanSwiftAnnotationsAndPurity(): {
   const unpinned: UnpinnedAnnotation[] = []
   const orphans: OrphanAnnotation[] = []
   const stubHygieneViolations: StubHygieneViolation[] = []
+  const swiftFileContents = new Map<string, string>()
   let swiftPublicSymbolCount = 0
 
   const annotationRe = /^\s*\/\/\s*parity:\s*(\S+)(?:\s+\[([^\]]+)\])?/
@@ -714,7 +1275,15 @@ function scanSwiftAnnotationsAndPurity(): {
     const target = relFromSources[0] ?? "Unknown"
     const purity = SWIFT_TARGET_PURITY[target]
 
-    const lines = fs.readFileSync(absPath, "utf8").split("\n")
+    const source = fs.readFileSync(absPath, "utf8")
+    swiftFileContents.set(rel, source)
+    const lines = source.split("\n")
+    const lineOffsets: number[] = new Array(lines.length)
+    let runningOffset = 0
+    for (let li = 0; li < lines.length; li++) {
+      lineOffsets[li] = runningOffset
+      runningOffset += lines[li]!.length + 1
+    }
     let ifGuardDepth = 0
 
     for (let i = 0; i < lines.length; i++) {
@@ -821,6 +1390,11 @@ function scanSwiftAnnotationsAndPurity(): {
           })
         }
 
+        const swiftDeclOffset =
+          declCheck.declLineIndex !== undefined && declCheck.declColOffset !== undefined
+            ? lineOffsets[declCheck.declLineIndex]! + declCheck.declColOffset
+            : undefined
+
         annotations.push({
           upstreamId,
           status,
@@ -830,6 +1404,9 @@ function scanSwiftAnnotationsAndPurity(): {
           swiftLine: i + 1,
           swiftTarget: target,
           swiftSymbol: declCheck.symbol,
+          swiftDeclKind: declCheck.declKind,
+          swiftDeclLine: declCheck.declLineIndex !== undefined ? declCheck.declLineIndex + 1 : undefined,
+          swiftDeclOffset,
         })
       }
     }
@@ -842,6 +1419,7 @@ function scanSwiftAnnotationsAndPurity(): {
     unpinned,
     orphans,
     stubHygieneViolations,
+    swiftFileContents,
     swiftFileCount: files.length,
     swiftPublicSymbolCount,
   }
@@ -861,6 +1439,7 @@ const {
   unpinned,
   orphans,
   stubHygieneViolations,
+  swiftFileContents,
   swiftFileCount,
   swiftPublicSymbolCount,
 } = scanSwiftAnnotationsAndPurity()
@@ -868,6 +1447,9 @@ const {
 const untrackedUpstreamPackages = checkUntrackedUpstreamPackages()
 const dependencyLawViolations = checkPackageDependencyLaws()
 const testImportViolations = checkTestImports()
+const compilerExportErrors = checkCompilerExportCompleteness(manifest)
+const workspaceDepErrors = checkWorkspaceDependencyGraph()
+const substanceErrors = checkSwiftImplementationSubstance(annotations, symbolMap, swiftFileContents)
 
 const dangling: SwiftParityAnnotation[] = []
 const drifted: Array<{ annotation: SwiftParityAnnotation; currentHash: string }> = []
@@ -917,9 +1499,11 @@ interface PackageAudit {
   excludedSymbols: number
   unmappedSymbols: number
   driftedSymbols: number
+  unmappedIds: string[]
 }
 
 const unmappedSymbolIds: string[] = []
+const unmappedSymbolsList: UnmappedSymbolEntry[] = []
 const stubSymbolIds: string[] = []
 const partialSymbolIds: string[] = []
 const unimplementedFunctionIds: string[] = []
@@ -935,13 +1519,24 @@ for (const spec of TRACKED_PACKAGES) {
   let excludedSymbols = 0
   let unmappedSymbols = 0
   let driftedSymbols = 0
+  const pkgUnmappedIds: string[] = []
 
   for (const sym of pkgSymbols) {
     const ann = mappedById.get(sym.id)
     const isFn = isFunctionLikeKind(sym.kind)
     if (!ann) {
       unmappedSymbols++
+      pkgUnmappedIds.push(sym.id)
       unmappedSymbolIds.push(sym.id)
+      unmappedSymbolsList.push({
+        id: sym.id,
+        package: sym.package,
+        file: sym.file,
+        symbol: sym.symbol,
+        kind: sym.kind,
+        line: sym.line,
+        bodyHash: sym.bodyHash,
+      })
       if (isFn) unimplementedFunctionIds.push(sym.id)
       continue
     }
@@ -982,6 +1577,7 @@ for (const spec of TRACKED_PACKAGES) {
     excludedSymbols,
     unmappedSymbols,
     driftedSymbols,
+    unmappedIds: pkgUnmappedIds,
   })
 }
 
@@ -1047,6 +1643,9 @@ const report = {
     testImportViolations: testImportViolations.length,
     stubHygieneViolations: stubHygieneViolations.length,
     purityViolations: purityViolations.length,
+    compilerExportErrors: compilerExportErrors.length,
+    workspaceDepErrors: workspaceDepErrors.length,
+    substanceErrors: substanceErrors.length,
     unmappedSymbols: totals.unmappedSymbols,
     stubSymbols: totals.stubSymbols,
     partialSymbols: totals.partialSymbols,
@@ -1062,6 +1661,10 @@ const report = {
   testImportViolations,
   stubHygieneViolations,
   purityViolations,
+  compilerExportErrors,
+  workspaceDepErrors,
+  substanceErrors,
+  unmappedSymbolsList,
   packages: packageAudits,
 }
 
@@ -1098,6 +1701,9 @@ const mdLines: string[] = [
   `| Swift Testing / CLT cross-import violations | ${testImportViolations.length} |`,
   `| Production stub hygiene violations | ${stubHygieneViolations.length} |`,
   `| Cross-platform purity violations | ${purityViolations.length} |`,
+  `| Compiler export completeness errors | ${compilerExportErrors.length} |`,
+  `| Workspace dependency graph errors | ${workspaceDepErrors.length} |`,
+  `| Swift implementation substance errors | ${substanceErrors.length} |`,
   "",
   "## Package Parity Matrix",
   "",
@@ -1166,6 +1772,9 @@ console.log(`Dep law errors:    ${dependencyLawViolations.length}`)
 console.log(`CLT/XCTest errors: ${testImportViolations.length}`)
 console.log(`Stub hygiene errs: ${stubHygieneViolations.length}`)
 console.log(`Purity errors:     ${purityViolations.length}`)
+console.log(`Compiler exports:  ${compilerExportErrors.length}`)
+console.log(`Workspace deps:    ${workspaceDepErrors.length}`)
+console.log(`Substance errors:  ${substanceErrors.length}`)
 if (!noWrite) {
   console.log("Wrote parity/report.json and PARITY.md")
 }
@@ -1240,6 +1849,25 @@ if (purityViolations.length > 0) {
     console.error(`  ${v.file}:${v.line} [${v.target}] ${v.rule}`)
   }
 }
+if (compilerExportErrors.length > 0) {
+  console.error("\nCompiler export completeness errors (Gate 9):")
+  for (const e of compilerExportErrors) {
+    console.error(`  ${e.package}/${e.file}#${e.exportName}: ${e.rule}`)
+  }
+}
+if (workspaceDepErrors.length > 0) {
+  console.error("\nWorkspace dependency graph errors (Gate 10):")
+  for (const e of workspaceDepErrors) {
+    console.error(`  packages/${e.package} [${e.dependencyField}] -> ${e.dependencyName}: ${e.rule}`)
+  }
+}
+if (substanceErrors.length > 0) {
+  console.error("\nSwift implementation substance errors (Gate 11):")
+  for (const e of substanceErrors) {
+    const loc = e.swiftDeclLine ? `${e.swiftFile}:${e.swiftDeclLine}` : `${e.swiftFile}:${e.swiftLine}`
+    console.error(`  ${loc} [${e.swiftDeclKind ?? "unknown"} ${e.swiftSymbol ?? ""}] -> ${e.upstreamId}: ${e.rule}`)
+  }
+}
 
 const strictFailures: string[] = []
 if (strictMode) {
@@ -1278,6 +1906,9 @@ if (
   testImportViolations.length > 0 ||
   stubHygieneViolations.length > 0 ||
   purityViolations.length > 0 ||
+  compilerExportErrors.length > 0 ||
+  workspaceDepErrors.length > 0 ||
+  substanceErrors.length > 0 ||
   ((failOnDrift || strictMode) && drifted.length > 0) ||
   strictFailures.length > 0
 ) {
