@@ -56,30 +56,26 @@ public enum TUILogo {
 
 // MARK: - Attention & Audio (`packages/tui/src/attention*.ts`, `packages/tui/src/audio.ts`)
 
-/// Attention notifications, built-in sound paths, and OpenTUI PCM audio playback.
+/// Attention notifications, built-in bundled MP3 sound paths, and cross-platform native audio playback.
 public enum TUIAttention {
-    private static func resolveSoundPath(_ name: String) -> String {
-        let key = "@opencode/ui/audio/\(name)"
-        if let dir = SystemEnvironment.shared.variable("OPENCODE_NODE_ASSETS_DIR"), !dir.isEmpty {
-            return dir.hasSuffix("/") ? "\(dir)\(key)" : "\(dir)/\(key)"
-        }
-        return key
+    private static func resolveSoundPath(_ kind: TUIAttentionAudio.SoundKind) -> String {
+        TUIAttentionAudio.resolveAssetPath(for: kind)
     }
 
     // parity: tui/src/attention-sounds.node.ts#defaultSoundPath [status=adapted hash=0439840fefa5]
-    public static let defaultSoundPath: String = resolveSoundPath("bip-bop-01.mp3")
+    public static let defaultSoundPath: String = resolveSoundPath(.default)
 
     // parity: tui/src/attention-sounds.node.ts#questionSoundPath [status=adapted hash=89f2a2e593bf]
-    public static let questionSoundPath: String = resolveSoundPath("bip-bop-03.mp3")
+    public static let questionSoundPath: String = resolveSoundPath(.question)
 
     // parity: tui/src/attention-sounds.node.ts#permissionSoundPath [status=adapted hash=fc41f65e02e6]
-    public static let permissionSoundPath: String = resolveSoundPath("staplebops-06.mp3")
+    public static let permissionSoundPath: String = resolveSoundPath(.permission)
 
     // parity: tui/src/attention-sounds.node.ts#errorSoundPath [status=adapted hash=847e0190f52b]
-    public static let errorSoundPath: String = resolveSoundPath("nope-03.mp3")
+    public static let errorSoundPath: String = resolveSoundPath(.error)
 
     // parity: tui/src/attention-sounds.node.ts#subagentDoneSoundPath [status=adapted hash=82ca268612ce]
-    public static let subagentDoneSoundPath: String = resolveSoundPath("yup-01.mp3")
+    public static let subagentDoneSoundPath: String = resolveSoundPath(.subagentDone)
 
     /// Bundled attention sound asset paths matching `packages/tui/src/attention-sounds.bun.ts`.
     public enum BunSounds {
@@ -99,10 +95,18 @@ public enum TUIAttention {
         public static let subagentDoneSoundPath: String = TUIAttention.subagentDoneSoundPath
     }
 
+    /// Returns the resolved bundled `.mp3` path for `name` (mapping `.done` to `.default`).
+    public static func soundPath(for name: PluginTui.AttentionSoundName) -> String {
+        builtinSounds[name] ?? defaultSoundPath
+    }
+
     private struct AudioBox: @unchecked Sendable {
         var engine: Audio? = nil
         var attempted: Bool = false
         var cache: [String: AudioSound] = [:]
+        var nativePaths: [AudioSound: String] = [:]
+        var nextNativeSoundID: AudioSound = 0x8000_0001
+        var nextNativeVoiceID: AudioVoice = 0x8000_0001
     }
 
     private static let audioState = Mutex(AudioBox())
@@ -117,14 +121,29 @@ public enum TUIAttention {
         }
     }
 
-    /// Loads and caches an audio file into the shared OpenTUI `Audio` engine.
+    /// Loads and caches an audio file (native bundled/custom `.mp3` or OpenTUI PCM/WAV buffer).
     // parity: tui/src/audio.ts#loadSoundFile [status=adapted hash=57a70076b70f]
     public static func loadSoundFile(_ file: String) async -> AudioSound? {
-        guard let engine = getAudio() else { return nil }
         if let cached = audioState.withLock({ $0.cache[file] }) {
             return cached
         }
-        guard let bytes = try? await LocalFileSystem.shared.readFile(at: file),
+        let resolved = TUIAttentionAudio.resolveBundledFilePath(file)
+        guard let bytes = try? await LocalFileSystem.shared.readFile(at: resolved) else {
+            return nil
+        }
+        if TUIAttentionAudio.isValidMP3Data(bytes) {
+            return audioState.withLock { box in
+                if let existing = box.cache[file] {
+                    return existing
+                }
+                let handle = box.nextNativeSoundID
+                box.nextNativeSoundID &+= 1
+                box.nativePaths[handle] = resolved
+                box.cache[file] = handle
+                return handle
+            }
+        }
+        guard let engine = getAudio(),
               let sound = engine.loadSound(bytes)
         else {
             return nil
@@ -133,10 +152,24 @@ public enum TUIAttention {
         return sound
     }
 
-    /// Plays a loaded `AudioSound` on the shared OpenTUI `Audio` engine.
+    /// Plays a loaded `AudioSound` non-blockingly through the native player (for `.mp3`) or OpenTUI `Audio` engine.
     // parity: tui/src/audio.ts#play [status=adapted hash=a990c86aed20]
     @discardableResult
     public static func play(_ sound: AudioSound, options: AudioPlayOptions = AudioPlayOptions()) -> AudioVoice? {
+        if let nativePath = audioState.withLock({ $0.nativePaths[sound] }) {
+            let handle = TUIAttentionAudio.Player.shared.playNonBlocking(
+                filePath: nativePath,
+                volume: options.volume
+            )
+            guard handle.outcome.didTriggerFeedback else {
+                return nil
+            }
+            return audioState.withLock { box in
+                let voice = box.nextNativeVoiceID
+                box.nextNativeVoiceID &+= 1
+                return voice
+            }
+        }
         guard let engine = getAudio() else { return nil }
         if !engine.isStarted() {
             _ = engine.start()
@@ -144,14 +177,61 @@ public enum TUIAttention {
         return engine.play(sound, options: options)
     }
 
-    /// Disposes the shared OpenTUI `Audio` engine and clears cached sounds.
+    /// Resolves the real bundled (or overridden) `.mp3` path for `name` and plays it non-blockingly via `player`.
+    @discardableResult
+    public static func playSound(
+        _ name: PluginTui.AttentionSoundName = .default,
+        volume: Double? = nil,
+        overrides: TUIConfig.AttentionSoundPaths = [:],
+        player: TUIAttentionAudio.Player = .shared
+    ) -> TUIAttentionAudio.Player.PlaybackHandle {
+        var candidates: [String] = []
+        if let overridePath = overrides[name], !overridePath.isEmpty {
+            candidates.append(overridePath)
+        }
+        let builtin = soundPath(for: name)
+        if !candidates.contains(builtin) {
+            candidates.append(builtin)
+        }
+        var lastHandle = TUIAttentionAudio.Player.PlaybackHandle(outcome: .suppressed(.missingAsset))
+        for file in candidates {
+            let handle = player.playNonBlocking(filePath: file, volume: volume)
+            switch handle.outcome {
+            case .played, .bellFallback:
+                return handle
+            case .suppressed(.muted), .suppressed(.zeroVolume), .suppressed(.headless), .suppressed(.unsupportedPlatform):
+                return handle
+            case .unavailable:
+                return handle
+            case .suppressed(.missingAsset), .suppressed(.invalidAudioData):
+                lastHandle = handle
+            }
+        }
+        return lastHandle
+    }
+
+    /// Plays a bundled `TUIAttentionAudio.SoundKind` non-blockingly through `player`.
+    @discardableResult
+    public static func playSound(
+        kind: TUIAttentionAudio.SoundKind,
+        volume: Double? = nil,
+        player: TUIAttentionAudio.Player = .shared
+    ) -> TUIAttentionAudio.Player.PlaybackHandle {
+        player.playNonBlocking(kind: kind, volume: volume)
+    }
+
+    /// Disposes the shared OpenTUI `Audio` engine, cancels active native audio tasks, and clears cached sounds.
     // parity: tui/src/audio.ts#dispose [status=implemented hash=f26596009941]
     public static func dispose() {
+        TUIAttentionAudio.Player.shared.cancelAll()
         let engine: Audio? = audioState.withLock { box in
             let current = box.engine
             box.engine = nil
             box.attempted = false
             box.cache.removeAll()
+            box.nativePaths.removeAll()
+            box.nextNativeSoundID = 0x8000_0001
+            box.nextNativeVoiceID = 0x8000_0001
             return current
         }
         engine?.dispose()
@@ -203,6 +283,57 @@ public enum TUIAttention {
         ) {
             self.loadSoundFile = loadSoundFile
             self.play = play
+        }
+
+        /// Creates an isolated `AudioBackend` backed by a specific `TUIAttentionAudio.Player` instance
+        /// without mutating global audio state.
+        public static func native(
+            player: TUIAttentionAudio.Player = .shared,
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
+        ) -> AudioBackend {
+            struct HandleTable: Sendable {
+                var byPath: [String: AudioSound] = [:]
+                var byHandle: [AudioSound: String] = [:]
+                var nextSoundID: AudioSound = 1
+                var nextVoiceID: AudioVoice = 1
+            }
+            let table = Mutex(HandleTable())
+            return AudioBackend(
+                loadSoundFile: { file in
+                    if let cached = table.withLock({ $0.byPath[file] }) {
+                        return cached
+                    }
+                    let resolved = TUIAttentionAudio.resolveBundledFilePath(file)
+                    let status = await player.validateAudioFile(at: resolved, fileSystem: fileSystem)
+                    guard status == .valid else {
+                        return nil
+                    }
+                    return table.withLock { t in
+                        if let existing = t.byPath[file] {
+                            return existing
+                        }
+                        let handle = t.nextSoundID
+                        t.nextSoundID &+= 1
+                        t.byPath[file] = handle
+                        t.byHandle[handle] = resolved
+                        return handle
+                    }
+                },
+                play: { sound, options in
+                    guard let path = table.withLock({ $0.byHandle[sound] }) else {
+                        return nil
+                    }
+                    let playback = player.playNonBlocking(filePath: path, volume: options.volume)
+                    guard playback.outcome.didTriggerFeedback else {
+                        return nil
+                    }
+                    return table.withLock { t in
+                        let voice = t.nextVoiceID
+                        t.nextVoiceID &+= 1
+                        return voice
+                    }
+                }
+            )
         }
     }
 
@@ -433,6 +564,19 @@ public enum TUIAttention {
                 offBlur()
             }
         }
+    }
+
+    /// Convenience overload wiring `createTuiAttention` directly to an injectable `TUIAttentionAudio.Player`.
+    public static func createTuiAttention(
+        renderer: any AttentionRenderer,
+        config: TUIConfig.ResolvedAttention,
+        player: TUIAttentionAudio.Player
+    ) -> AttentionHost {
+        createTuiAttention(
+            renderer: renderer,
+            config: config,
+            audio: .native(player: player)
+        )
     }
 }
 
