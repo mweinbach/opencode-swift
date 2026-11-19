@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T04:49:54.389Z",
+  "generatedAt": "2026-11-19T05:37:51.147Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -8,9 +8,9 @@
     "commitSubject": "fix(core): reload config only when a config input changes (#62158)"
   },
   "swiftWorkspace": {
-    "swiftFiles": 71,
-    "publicSymbols": 5220,
-    "parityAnnotations": 1114
+    "swiftFiles": 99,
+    "publicSymbols": 14340,
+    "parityAnnotations": 4990
   },
   "differentialParity": {
     "verifiedFunctions": 57,
@@ -21,8 +21,8 @@
     "lines": 294330,
     "totalSymbols": 9404,
     "totalFunctions": 2443,
-    "implementedSymbols": 1114,
-    "implementedFunctions": 143
+    "implementedSymbols": 4990,
+    "implementedFunctions": 875
   },
   "danglingAnnotations": [],
   "driftedAnnotations": [],
@@ -81,8 +81,8 @@
       "lines": 36800,
       "totalSymbols": 1802,
       "totalFunctions": 418,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 1802,
+      "implementedFunctions": 418,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -111,8 +111,8 @@
       "lines": 17753,
       "totalSymbols": 1597,
       "totalFunctions": 88,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 1597,
+      "implementedFunctions": 88,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -186,8 +186,8 @@
       "lines": 2037,
       "totalSymbols": 75,
       "totalFunctions": 26,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 75,
+      "implementedFunctions": 26,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -201,8 +201,8 @@
       "lines": 4033,
       "totalSymbols": 46,
       "totalFunctions": 18,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 46,
+      "implementedFunctions": 18,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -231,8 +231,8 @@
       "lines": 12484,
       "totalSymbols": 356,
       "totalFunctions": 182,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 356,
+      "implementedFunctions": 182,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
