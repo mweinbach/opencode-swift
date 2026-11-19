@@ -3124,7 +3124,12 @@ public enum CLICommands {
             await preflight.fail("OpenCode update could not start the new background service")
             throw error
         }
-        defer { Task { await preflight.close() } }
+        defer {
+            Task { await preflight.close() }
+            if let standaloneHandle = server.standaloneHandle {
+                Task { await standaloneHandle.stop() }
+            }
+        }
 
         let requestedSession = input.string("session")
         let sessionExists: Bool
@@ -3145,6 +3150,8 @@ public enum CLICommands {
         } else {
             tuiReconnect = nil
         }
+        var tuiEnv = input.string("server") == nil ? CLIUtil.Env.session() : [:]
+        tuiEnv["OPENCODE_CWD"] = context.cwd
         let tuiInput = TUIApp.TuiInput(
             app: TUIContext.TuiApp(
                 name: context.envVariable("OPENCODE_CLIENT") ?? context.artifact,
@@ -3166,7 +3173,7 @@ public enum CLICommands {
                 auto: input.bool("auto") || input.bool("yolo") || input.bool("dangerously-skip-permissions")
             ),
             config: CLIConfig.TUIConfigAdapter(context.configService),
-            environment: input.string("server") == nil ? CLIUtil.Env.session() : [:],
+            environment: tuiEnv,
             terminalHandoff: { await preflight.finish() }
         )
 

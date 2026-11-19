@@ -14,6 +14,7 @@ import OpenCodeCore
 import OpenCodePlatform
 import OpenCodeProtocol
 import OpenCodeSchema
+import OpenCodeServer
 import OpenCodeTUI
 import OpenCodeUtil
 import OpenTUICore
@@ -1043,8 +1044,8 @@ public enum CLIServices {
             context: CLIContext = CLIContext.current
         ) async throws -> Handle {
             let password = CLIPath.randomBase64URL(bytes: 32)
-            // If an in-process server starter is injected (for tests or embedded hosts), use it directly.
-            if let starter = context.serverStarter {
+            // Use an injected starter or the in-process OpenCodeServer directly when no custom command is specified.
+            if let starter = context.serverStarter ?? (options.command == nil ? ServerProcess.defaultLoopbackStarter(context: context) : nil) {
                 let started = try await starter(
                     ServerProcess.StartRequest(
                         hostname: "127.0.0.1",
@@ -2533,150 +2534,62 @@ public enum CLIServices {
             return "http://\(formatted):\(port)"
         }
 
-        /// Lightweight POSIX TCP HTTP server fallback enabling standalone `opencode serve` before full Phase 4A integration.
-        private static func defaultLoopbackStarter(context: CLIContext) -> Starter {
+        /// Boots the full native `OpenCodeServer.ServerProcess` (all 173 protocol endpoints, SQLite, SSE, auth, CORS).
+        internal static func defaultLoopbackStarter(context: CLIContext) -> Starter {
             { request in
                 #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-                #if canImport(Darwin)
-                let serverFD = Darwin.socket(AF_INET, SOCK_STREAM, 0)
-                #elseif canImport(Glibc)
-                let serverFD = Glibc.socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
-                #else
-                let serverFD = Musl.socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
-                #endif
-                guard serverFD >= 0 else {
-                    throw CLIError("Failed to create server socket")
-                }
-                var reuse: Int32 = 1
-                _ = setsockopt(serverFD, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
-
-                var addr = sockaddr_in()
-                #if canImport(Darwin)
-                addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-                #endif
-                addr.sin_family = sa_family_t(AF_INET)
-                addr.sin_port = UInt16(request.port).bigEndian
-                let bindHost = request.hostname == "localhost" ? "127.0.0.1" : request.hostname
-                addr.sin_addr.s_addr = (bindHost == "0.0.0.0") ? INADDR_ANY : inet_addr(bindHost)
-
-                let bindStatus = withUnsafePointer(to: &addr) { ptr in
-                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                        bind(serverFD, sockPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
-                    }
-                }
-                guard bindStatus == 0 else {
-                    let err = errno
-                    close(serverFD)
-                    throw CLIError(err == EADDRINUSE ? "EADDRINUSE" : "Failed to bind \(request.hostname):\(request.port) (errno \(err))", code: err == EADDRINUSE ? "EADDRINUSE" : nil)
-                }
-                guard listen(serverFD, 64) == 0 else {
-                    close(serverFD)
-                    throw CLIError("Failed to listen on \(request.hostname):\(request.port)")
-                }
-
-                var boundAddr = sockaddr_in()
-                var boundLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-                _ = withUnsafeMutablePointer(to: &boundAddr) { ptr in
-                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                        getsockname(serverFD, sockPtr, &boundLen)
-                    }
-                }
-                let actualPort = Int(UInt16(bigEndian: boundAddr.sin_port))
-                let url = serviceURL(hostname: request.hostname, port: actualPort)
-                let expectedAuth = ClientHTTPHeaders.basicAuthorization(username: "opencode", password: request.password)
-                let running = Mutex(true)
-                let webMiddleware = try await WebUi.handler(context: context)
-                let pid = Int(context.currentPID)
-                let version = context.version
-                let tmpPath = context.globalPaths.tmp
-
-                let acceptTask = Task.detached {
-                    while running.withLock({ $0 }) {
-                        var clientAddr = sockaddr_in()
-                        var clientLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-                        let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
-                            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                                accept(serverFD, sockPtr, &clientLen)
-                            }
-                        }
-                        if clientFD < 0 {
-                            if !running.withLock({ $0 }) { break }
-                            continue
-                        }
-                        var buf = [UInt8](repeating: 0, count: 16_384)
-                        let n = recv(clientFD, &buf, buf.count, 0)
-                        if n > 0 {
-                            let rawReq = String(decoding: buf[0..<n], as: UTF8.self)
-                            let lines = rawReq.split(separator: "\r\n", omittingEmptySubsequences: false)
-                            let reqLine = lines.first?.split(separator: " ") ?? []
-                            let method = reqLine.count > 0 ? String(reqLine[0]) : "GET"
-                            let path = reqLine.count > 1 ? String(reqLine[1]) : "/"
-                            var headers: [String: String] = [:]
-                            for line in lines.dropFirst() {
-                                if line.isEmpty { break }
-                                if let colon = line.firstIndex(of: ":") {
-                                    let k = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
-                                    let v = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-                                    headers[k] = v
-                                }
-                            }
-                            let webReq = WebUi.WebRequest(method: method, url: path, headers: headers)
-                            let resp = (try? await webMiddleware(webReq) { req in
-                                if req.headers["authorization"] != expectedAuth {
-                                    return WebUi.WebResponse(status: 401, headers: ["content-type": "application/json"], body: Array("{\"error\":\"Unauthorized\"}".utf8))
-                                }
-                                let cleanPath = req.url.split(separator: "?").first.map(String.init) ?? req.url
-                                if cleanPath == "/api/info" {
-                                    let body = "{\"version\":\"\(version)\",\"pid\":\(pid),\"urls\":[\"\(url)\"],\"paths\":{\"tmp\":\"\(tmpPath)\"}}"
-                                    return WebUi.WebResponse(status: 200, headers: ["content-type": "application/json"], body: Array(body.utf8))
-                                }
-                                if cleanPath == "/api/pair" && req.method == "POST" {
-                                    let code = CLIPath.randomHex(bytes: 16)
-                                    let body = "{\"code\":\"\(code)\",\"expires_in\":300}"
-                                    return WebUi.WebResponse(status: 200, headers: ["content-type": "application/json"], body: Array(body.utf8))
-                                }
-                                if cleanPath == "/openapi.json" {
-                                    let body = "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"OpenCode API\",\"version\":\"\(version)\"},\"paths\":{}}"
-                                    return WebUi.WebResponse(status: 200, headers: ["content-type": "application/json"], body: Array(body.utf8))
-                                }
-                                return nil
-                            }) ?? WebUi.WebResponse(status: 500)
-
-                            var head = "HTTP/1.1 \(resp.status) OK\r\nContent-Length: \(resp.body.count)\r\nConnection: close\r\n"
-                            for (k, v) in resp.headers {
-                                head += "\(k): \(v)\r\n"
-                            }
-                            head += "\r\n"
-                            let responseBytes = Array(head.utf8) + resp.body
-                            responseBytes.withUnsafeBytes { raw in
-                                if let base = raw.baseAddress {
-                                    _ = send(clientFD, base, responseBytes.count, 0)
-                                }
-                            }
-                        }
-                        close(clientFD)
-                    }
-                }
-
+                let running = try await OpenCodeServer.ServerProcess.start(
+                    options: OpenCodeServer.ServerOptions(
+                        app: OpenCodeServer.ServerOptions.AppOptions(
+                            name: context.artifact,
+                            version: context.version,
+                            channel: context.channel
+                        ),
+                        hostname: request.hostname,
+                        port: request.port,
+                        password: request.password,
+                        cors: request.cors,
+                        database: CoreDatabaseStore.Options(path: request.databasePath)
+                    ),
+                    fileSystem: context.fileSystem,
+                    httpTransport: context.transport,
+                    environment: context.environment,
+                    defaultDirectory: context.cwd
+                )
+                let shutdownSignal = Mutex<CheckedContinuation<Void, Never>?>(nil)
+                let stopped = Mutex(false)
                 let shutdownFn: @Sendable () async -> Void = {
-                    let shouldClose = running.withLock { r -> Bool in
-                        if !r { return false }
-                        r = false
+                    let shouldStop = stopped.withLock { flag -> Bool in
+                        if flag { return false }
+                        flag = true
                         return true
                     }
-                    if shouldClose {
-                        _ = DarwinOrPosixShutdown(serverFD)
-                        close(serverFD)
-                        acceptTask.cancel()
+                    if shouldStop {
+                        await running.stop()
+                        if let cont = shutdownSignal.withLock({ c -> CheckedContinuation<Void, Never>? in
+                            let prev = c
+                            c = nil
+                            return prev
+                        }) {
+                            cont.resume()
+                        }
                     }
                 }
-
+                let url = serviceURL(hostname: running.address.host, port: running.address.port)
                 return StartedServer(
                     url: url,
-                    hostname: request.hostname,
-                    port: actualPort,
+                    hostname: running.address.host,
+                    port: running.address.port,
                     waitForShutdown: {
-                        await acceptTask.value
+                        if stopped.withLock({ $0 }) { return }
+                        await withCheckedContinuation { cont in
+                            let already = stopped.withLock { $0 }
+                            if already {
+                                cont.resume()
+                            } else {
+                                shutdownSignal.withLock { $0 = cont }
+                            }
+                        }
                     },
                     shutdown: shutdownFn
                 )
@@ -2999,18 +2912,6 @@ public enum CLIServices {
         }
     }
 }
-
-#if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-private func DarwinOrPosixShutdown(_ fd: Int32) -> Int32 {
-    #if canImport(Darwin)
-    return Darwin.shutdown(fd, SHUT_RDWR)
-    #elseif canImport(Glibc)
-    return Glibc.shutdown(fd, Int32(SHUT_RDWR))
-    #else
-    return Musl.shutdown(fd, Int32(SHUT_RDWR))
-    #endif
-}
-#endif
 
 // MARK: - Non-Interactive Run & Mini Interactive Runners (`packages/cli/src/run/*`, `mini.ts`, `mini-host.ts`)
 

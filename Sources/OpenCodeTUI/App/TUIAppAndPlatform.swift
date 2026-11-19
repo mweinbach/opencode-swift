@@ -1440,6 +1440,13 @@ public enum TUIApp {
             handoff.complete()
         }
         log(.info, "TUI initialized", ["channel": .string(input.app.channel), "version": .string(input.app.version)])
+        if PlatformTerminalBackend().isInteractiveTerminal {
+            return try await TUIInteractiveLoop.runInteractive(
+                input: input,
+                resolved: resolved,
+                initialRoute: initialRoute
+            )
+        }
         return RunResult(
             resolvedConfig: resolved,
             initialRoute: initialRoute,
