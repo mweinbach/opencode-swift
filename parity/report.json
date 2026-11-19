@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T04:22:19.162Z",
+  "generatedAt": "2026-11-19T04:49:54.389Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -8,21 +8,21 @@
     "commitSubject": "fix(core): reload config only when a config input changes (#62158)"
   },
   "swiftWorkspace": {
-    "swiftFiles": 54,
-    "publicSymbols": 731,
-    "parityAnnotations": 206
+    "swiftFiles": 71,
+    "publicSymbols": 5220,
+    "parityAnnotations": 1114
   },
   "differentialParity": {
-    "verifiedFunctions": 40,
-    "verifiedVectors": 235
+    "verifiedFunctions": 57,
+    "verifiedVectors": 484
   },
   "totals": {
     "files": 1708,
     "lines": 294330,
     "totalSymbols": 9404,
     "totalFunctions": 2443,
-    "implementedSymbols": 206,
-    "implementedFunctions": 113
+    "implementedSymbols": 1114,
+    "implementedFunctions": 143
   },
   "danglingAnnotations": [],
   "driftedAnnotations": [],
@@ -51,8 +51,8 @@
       "lines": 7315,
       "totalSymbols": 699,
       "totalFunctions": 22,
-      "implementedSymbols": 6,
-      "implementedFunctions": 3,
+      "implementedSymbols": 699,
+      "implementedFunctions": 22,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -66,8 +66,8 @@
       "lines": 5160,
       "totalSymbols": 215,
       "totalFunctions": 11,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 215,
+      "implementedFunctions": 11,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
