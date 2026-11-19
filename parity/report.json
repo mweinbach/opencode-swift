@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-19T06:31:46.826Z",
+  "generatedAt": "2026-11-19T08:26:14.546Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -8,9 +8,9 @@
     "commitSubject": "fix(core): reload config only when a config input changes (#62158)"
   },
   "swiftWorkspace": {
-    "swiftFiles": 134,
-    "publicSymbols": 23784,
-    "parityAnnotations": 7955
+    "swiftFiles": 155,
+    "publicSymbols": 29123,
+    "parityAnnotations": 9404
   },
   "differentialParity": {
     "verifiedFunctions": 57,
@@ -21,8 +21,8 @@
     "lines": 294330,
     "totalSymbols": 9404,
     "totalFunctions": 2443,
-    "implementedSymbols": 7955,
-    "implementedFunctions": 1591
+    "implementedSymbols": 9404,
+    "implementedFunctions": 2443
   },
   "danglingAnnotations": [],
   "driftedAnnotations": [],
@@ -126,8 +126,8 @@
       "lines": 680,
       "totalSymbols": 45,
       "totalFunctions": 12,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 45,
+      "implementedFunctions": 12,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -141,8 +141,8 @@
       "lines": 5303,
       "totalSymbols": 114,
       "totalFunctions": 35,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 114,
+      "implementedFunctions": 35,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -156,8 +156,8 @@
       "lines": 13210,
       "totalSymbols": 277,
       "totalFunctions": 144,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 277,
+      "implementedFunctions": 144,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,
@@ -171,8 +171,8 @@
       "lines": 66822,
       "totalSymbols": 1013,
       "totalFunctions": 661,
-      "implementedSymbols": 0,
-      "implementedFunctions": 0,
+      "implementedSymbols": 1013,
+      "implementedFunctions": 661,
       "partialSymbols": 0,
       "stubSymbols": 0,
       "excludedSymbols": 0,

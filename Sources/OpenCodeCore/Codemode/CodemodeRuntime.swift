@@ -1053,15 +1053,14 @@ public enum CodemodeEngine {
         ) -> [String: CodemodeLanguage.HostGlobalValue] {
             let stateLock = Mutex<(maxToolCalls: Int?, calls: [(name: String, key: String)])>((maxToolCalls, []))
 
-            @Sendable func syncMetadata() {
-                let snapshot = stateLock.withLock { $0 }
+            @Sendable func syncMetadataLocked(_ snapshot: (maxToolCalls: Int?, calls: [(name: String, key: String)])) {
                 let callsJson: [JSONValue] = snapshot.calls.map { .object(["name": .string($0.name), "key": .string($0.key)]) }
                 run.metadata = .object([
                     "maxToolCalls": snapshot.maxToolCalls.map { .int(Int64($0)) } ?? .null,
                     "calls": .array(callsJson),
                 ])
             }
-            syncMetadata()
+            stateLock.withLock { syncMetadataLocked($0) }
 
             @Sendable func admit(name: String, key: String, again: Bool) throws {
                 try stateLock.withLock { s in
@@ -1073,8 +1072,8 @@ public enum CodemodeEngine {
                         )
                     }
                     s.calls.append((name: name, key: key))
+                    syncMetadataLocked(s)
                 }
-                syncMetadata()
             }
 
             @Sendable func decodeArgs(name: String, tool: Tool.Definition, args: [CodemodeLanguage.Value]) throws -> JSONValue {
