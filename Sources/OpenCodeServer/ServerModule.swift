@@ -1739,6 +1739,10 @@ public final class ServerAppRuntime: Sendable {
                 await bus.emit(agentUpdatedDef, data: JSONValue.object([:]))
             })
             let hooksService = CorePlugin.Hooks.Service()
+            let integrationService = CoreIntegration.Integration.Service(
+                credentials: credential,
+                environment: capturedEnv
+            )
             let pluginHostEnv = CorePlugin.Host.Environment(
                 app: PluginContract.App(
                     name: capturedOptions.app?.name ?? "opencode",
@@ -1750,7 +1754,10 @@ public final class ServerAppRuntime: Sendable {
                 http: capturedHttp,
                 environment: capturedEnv,
                 fileSystem: capturedFs,
-                flags: flagService
+                flags: flagService,
+                bus: bus,
+                config: configService,
+                integrationService: integrationService
             )
             // The environment-bound initializer runs each plugin effect inside `Host.withRuntime`, so plugins
             // see this location's transport, environment, filesystem and flags (`Host.flagEnabled`).
@@ -1855,10 +1862,6 @@ public final class ServerAppRuntime: Sendable {
                 }
             )
             let formService = CoreIntegration.Form.Service()
-            let integrationService = CoreIntegration.Integration.Service(
-                credentials: credential,
-                environment: capturedEnv
-            )
             let providerService = CoreProvider.Provider.Service(integrations: integrationService)
             let modelService = CoreModel.Model.Service(providers: providerService)
             let modelResolver = CoreModel.Resolver.Service(

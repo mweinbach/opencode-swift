@@ -1584,12 +1584,84 @@ public enum CoreAutomation {
                 }
             }
 
+            let triggerTZ: String?
+            switch input.trigger {
+            case .at(let a): triggerTZ = a.tz
+            case .every(let e): triggerTZ = e.tz
+            case .cron(let c): triggerTZ = c.tz
+            case .event: triggerTZ = nil
+            }
+            let zone = try Self.resolveZone(triggerTZ ?? location.timezone)
+
             let now = clock()
-            let action: AutomationSchema.Action
             let isCode: Bool
+            if case .code = input.action { isCode = true } else { isCode = false }
+
+            let storedTrigger: AutomationSchema.Trigger
+            let nextDue: Int64?
+            switch input.trigger {
+            case .at(let at):
+                guard let parsed = Self.parseTime(at.at, zone: zone, now: now) else {
+                    throw InvalidError(reason: "Invalid time: \(at.at)")
+                }
+                if parsed <= now {
+                    throw InvalidError(reason: "Time is in the past: \(at.at)")
+                }
+                if Self.isRelativeTimeString(at.at) {
+                    storedTrigger = .at(AutomationSchema.At(at: Self.formatISO8601UTC(epochMs: parsed), tz: at.tz))
+                } else {
+                    storedTrigger = input.trigger
+                }
+                nextDue = parsed
+            case .every(let every):
+                guard let ms = AutomationSchema.durationMillis(every.every) else {
+                    throw InvalidError(reason: "Invalid duration: \(every.every)")
+                }
+                guard ms > 0 else {
+                    throw InvalidError(reason: "Duration must be positive: \(every.every)")
+                }
+                let minInterval = isCode ? Self.minCodeIntervalMs : Self.minPromptIntervalMs
+                if Int64(ms) < minInterval {
+                    throw InvalidError(reason: isCode ? "every must be at least 15 seconds" : "every must be at least 1 minute")
+                }
+                storedTrigger = input.trigger
+                nextDue = now + Int64(ms)
+            case .cron(let cron):
+                let parsedCron: Cron
+                do {
+                    parsedCron = try Cron.parse(cron.cron, timeZone: zone)
+                } catch {
+                    throw InvalidError(reason: error.message)
+                }
+                guard parsedCron.seconds.count == 1 else {
+                    throw InvalidError(reason: "cron must run at most once a minute")
+                }
+                guard let next = parsedCron.nextSlot(after: now) else {
+                    throw InvalidError(reason: "cron never runs: \(cron.cron)")
+                }
+                storedTrigger = input.trigger
+                nextDue = next
+            case .event:
+                storedTrigger = input.trigger
+                nextDue = nil
+            }
+
+            let expiresAt: Int64?
+            if let exp = input.expires {
+                guard let parsed = Self.parseTime(exp, zone: zone, now: now) else {
+                    throw InvalidError(reason: "Invalid time: \(exp)")
+                }
+                expiresAt = parsed
+            } else {
+                expiresAt = nil
+            }
+            if let exp = expiresAt, (nextDue ?? now) > exp {
+                throw InvalidError(reason: "The automation expires before it first runs")
+            }
+
+            let action: AutomationSchema.Action
             switch input.action {
             case .prompt(let p):
-                isCode = false
                 let target: AutomationSchema.Target
                 if let explicit = p.to {
                     target = explicit
@@ -1614,7 +1686,6 @@ public enum CoreAutomation {
                 }
                 action = .prompt(AutomationSchema.PromptAction(prompt: p.prompt, to: target))
             case .code(let c):
-                isCode = true
                 let codeAction = AutomationSchema.CodeAction(code: c.code, args: c.args)
                 if sessions != nil {
                     guard let owner else {
@@ -1624,7 +1695,7 @@ public enum CoreAutomation {
                         _ = try await Code.authorize(
                             owner: owner,
                             name: input.name,
-                            trigger: input.trigger,
+                            trigger: storedTrigger,
                             action: codeAction,
                             invocation: invocation,
                             agents: agents,
@@ -1641,57 +1712,6 @@ public enum CoreAutomation {
                 action = .code(codeAction)
             }
 
-            let storedTrigger: AutomationSchema.Trigger
-            let nextDue: Int64?
-            switch input.trigger {
-            case .at(let at):
-                guard let parsed = Self.parseTime(at.at, now: now) else {
-                    throw InvalidError(reason: "Invalid time: \(at.at)")
-                }
-                if parsed <= now {
-                    throw InvalidError(reason: "Time is in the past: \(at.at)")
-                }
-                if at.at.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("in ") {
-                    storedTrigger = .at(AutomationSchema.At(at: Self.formatISO8601UTC(epochMs: parsed), tz: at.tz))
-                } else {
-                    storedTrigger = input.trigger
-                }
-                nextDue = parsed
-            case .every(let every):
-                guard let ms = AutomationSchema.durationMillis(every.every), ms > 0 else {
-                    throw InvalidError(reason: "Invalid duration: \(every.every)")
-                }
-                let minInterval = isCode ? Self.minCodeIntervalMs : Self.minPromptIntervalMs
-                if Int64(ms) < minInterval {
-                    throw InvalidError(reason: isCode ? "every must be at least 15 seconds" : "every must be at least 1 minute")
-                }
-                storedTrigger = input.trigger
-                nextDue = now + Int64(ms)
-            case .cron(let cron):
-                let fields = cron.cron.split(whereSeparator: \.isWhitespace)
-                guard fields.count == 5 || fields.count == 6 else {
-                    throw InvalidError(reason: "Invalid cron expression: \(cron.cron)")
-                }
-                storedTrigger = input.trigger
-                nextDue = now + Self.minuteMs
-            case .event:
-                storedTrigger = input.trigger
-                nextDue = nil
-            }
-
-            let expiresAt: Int64?
-            if let exp = input.expires {
-                guard let parsed = Self.parseTime(exp, now: now) else {
-                    throw InvalidError(reason: "Invalid time: \(exp)")
-                }
-                expiresAt = parsed
-            } else {
-                expiresAt = nil
-            }
-            if let exp = expiresAt, (nextDue ?? now) > exp {
-                throw InvalidError(reason: "The automation expires before it first runs")
-            }
-
             let id = AutomationSchema.ID.create()
             let encoder = JSONEncoder()
             let triggerJSON = String(decoding: try encoder.encode(storedTrigger), as: UTF8.self)
@@ -1699,7 +1719,7 @@ public enum CoreAutomation {
             let eventPositionJSON: String? = try eventPosition.map {
                 String(decoding: try encoder.encode($0), as: UTF8.self)
             }
-            let tz = location.timezone ?? TimeZone.current.identifier
+            let tz = zone.stringValue
 
             _ = try db.execute(
                 """
@@ -1772,7 +1792,7 @@ public enum CoreAutomation {
             } else if row.nextDueAt == nil {
                 next = nil
             } else {
-                next = Self.computeNextDue(trigger: row.trigger, previousDueMs: row.nextDueAt, now: now) ?? row.nextDueAt
+                next = Self.computeNextDue(trigger: row.trigger, previousDueMs: row.nextDueAt, tz: row.tz, now: now) ?? row.nextDueAt
             }
             let isEvent: Bool
             if case .event = row.trigger { isEvent = true } else { isEvent = false }
@@ -2685,7 +2705,7 @@ public enum CoreAutomation {
                 patch.eventPosition = .some(EventPosition(agent: pos.agent, cursor: nextCursor, id: event.eventId))
                 return patch
             }
-            let next = Self.computeNextDue(trigger: row.trigger, previousDueMs: row.nextDueAt, now: ended)
+            let next = Self.computeNextDue(trigger: row.trigger, previousDueMs: row.nextDueAt, tz: row.tz, now: ended)
             if done || Self.isFinished(expiresAt: row.expiresAt, next: next) {
                 return SettlePatch(status: .done, nextDueAt: .some(nil))
             }
@@ -2887,9 +2907,18 @@ public enum CoreAutomation {
             return now > exp
         }
 
-        private static func computeNextDue(
+        public static func resolveZone(_ tz: String?) throws(InvalidError) -> CronTimeZone {
+            guard let tz else { return CronTimeZone.local() }
+            guard let zone = CronTimeZone.makeNamed(tz) else {
+                throw InvalidError(reason: "Unknown time zone: \(tz)")
+            }
+            return zone
+        }
+
+        public static func computeNextDue(
             trigger: AutomationSchema.Trigger,
             previousDueMs: Int64?,
+            tz: String? = nil,
             now: Int64
         ) -> Int64? {
             switch trigger {
@@ -2899,38 +2928,59 @@ public enum CoreAutomation {
                 guard let ms = AutomationSchema.durationMillis(every.every), ms > 0 else { return nil }
                 let step = Int64(ms)
                 let due = previousDueMs ?? now
-                let skipped = max(0, (now - due) / step) + 1
+                let skipped = CronCalendar.floorDiv(now - due, step) + 1
                 return due + skipped * step
-            case .cron:
-                return now + minuteMs
+            case .cron(let cron):
+                guard let parsed = try? Cron.parse(cron.cron, timeZoneString: tz ?? cron.tz) else {
+                    return nil
+                }
+                return parsed.nextSlot(after: now)
             }
         }
 
         private static func formatISO8601UTC(epochMs: Int64) -> String {
-            let seconds = Double(epochMs) / 1000.0
-            let date = Date(timeIntervalSince1970: seconds)
-            let fmt = ISO8601DateFormatter()
-            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return fmt.string(from: date)
+            let p = CronCalendar.partsUTC(epochMs: epochMs)
+            func pad2(_ n: Int) -> String { n < 10 ? "0\(n)" : "\(n)" }
+            func pad3(_ n: Int) -> String { n < 10 ? "00\(n)" : (n < 100 ? "0\(n)" : "\(n)") }
+            func pad4(_ n: Int64) -> String {
+                let s = String(n)
+                return s.count < 4 ? String(repeating: "0", count: 4 - s.count) + s : s
+            }
+            return "\(pad4(p.year))-\(pad2(p.month))-\(pad2(p.day))T\(pad2(p.hour)):\(pad2(p.minute)):\(pad2(p.second)).\(pad3(p.millisecond))Z"
+        }
+
+        private static func relativeDurationSuffix(_ raw: String) -> String? {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count >= 3 else { return nil }
+            let lower = trimmed.lowercased()
+            guard lower.hasPrefix("in") else { return nil }
+            let afterIn = trimmed.dropFirst(2)
+            guard let first = afterIn.first, first.isWhitespace else { return nil }
+            let rest = afterIn.trimmingCharacters(in: .whitespacesAndNewlines)
+            return rest.isEmpty ? nil : rest
+        }
+
+        private static func isRelativeTimeString(_ raw: String) -> Bool {
+            relativeDurationSuffix(raw) != nil
+        }
+
+        public static func parseTime(_ raw: String, zone: CronTimeZone, now: Int64) -> Int64? {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let durationStr = relativeDurationSuffix(trimmed) {
+                guard let delay = AutomationSchema.durationMillis(durationStr), delay > 0 else { return nil }
+                return now + Int64(delay)
+            }
+            if let instant = CronCalendar.parseOffsetInstant(trimmed) {
+                return instant
+            }
+            if let wall = CronCalendar.parseWallClockString(trimmed) {
+                return CronCalendar.resolveAdjustedWallMillis(wall, zone: zone, disambiguation: .compatible)
+            }
+            return nil
         }
 
         public static func parseTime(_ raw: String, now: Int64) -> Int64? {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.lowercased().hasPrefix("in ") {
-                let rest = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let delay = AutomationSchema.durationMillis(rest), delay > 0 else { return nil }
-                return now + Int64(delay)
-            }
-            let fmt = ISO8601DateFormatter()
-            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let d = fmt.date(from: trimmed) {
-                return Int64((d.timeIntervalSince1970 * 1_000.0).rounded())
-            }
-            fmt.formatOptions = [.withInternetDateTime]
-            if let d = fmt.date(from: trimmed) {
-                return Int64((d.timeIntervalSince1970 * 1_000.0).rounded())
-            }
-            return nil
+            parseTime(raw, zone: .utc, now: now)
         }
 
         private static func decodeRow(_ row: SQLiteRow) throws -> Row {
