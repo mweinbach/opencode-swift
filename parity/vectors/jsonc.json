@@ -1,0 +1,884 @@
+[
+  {
+    "fn": "jsonc-parser#modifyAndApply",
+    "description": "Surgical comment- and formatting-preserving JSONC edits (modify + applyEdits) verified against real jsonc-parser@3.3.1",
+    "cases": [
+      {
+        "name": "line comment before root object: replace existing key",
+        "args": [
+          "// Top-level config header\n{\n  \"shell\": \"/bin/bash\",\n  \"username\": \"alice\"\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comment after root object: insert new key",
+        "args": [
+          "{\n  \"username\": \"alice\"\n}\n// trailing comment\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: replace first key",
+        "args": [
+          "{\n  // primary shell\n  \"shell\": \"/bin/sh\",\n  // user identity\n  \"username\": \"alice\"\n}\n",
+          ["shell"],
+          { "value": "/bin/fish" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: replace middle key",
+        "args": [
+          "{\n  // first\n  \"a\": 1,\n  // middle\n  \"b\": 2,\n  // last\n  \"c\": 3\n}\n",
+          ["b"],
+          { "value": 42 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: insert new key at end",
+        "args": [
+          "{\n  // keep me\n  \"a\": 1,\n  // keep me too\n  \"b\": 2\n}\n",
+          ["c"],
+          { "value": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: remove first key",
+        "args": [
+          "{\n  // before first\n  \"a\": 1,\n  // before second\n  \"b\": 2\n}\n",
+          ["a"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: remove middle key",
+        "args": [
+          "{\n  \"a\": 1,\n  // middle comment\n  \"b\": 2,\n  // end comment\n  \"c\": 3\n}\n",
+          ["b"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "line comments inside object: remove last key",
+        "args": [
+          "{\n  // keep header\n  \"a\": 1,\n  \"b\": 2\n}\n",
+          ["b"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "inline trailing line comment on property: replace value",
+        "args": [
+          "{\n  \"shell\": \"/bin/bash\", // default login shell\n  \"snapshots\": true // keep snapshots\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "inline trailing line comment on last property: insert new key",
+        "args": [
+          "{\n  \"username\": \"alice\" // inline comment\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "block comment before root object: insert key",
+        "args": [
+          "/*\n * Managed OpenCode config\n */\n{\n  \"username\": \"alice\"\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "block comment after root object: replace key",
+        "args": [
+          "{\n  \"shell\": \"/bin/sh\"\n} /* end of file */\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "multiline block comment inside object: insert key",
+        "args": [
+          "{\n  /* multi\n     line\n     comment */\n  \"a\": 1\n}\n",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "inline block comment between colon and value: replace value",
+        "args": [
+          "{\n  \"a\": /* inline note */ 1,\n  \"b\": 2\n}\n",
+          ["a"],
+          { "value": 99 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "comment-like text inside string literal preserved untouched",
+        "args": [
+          "{\n  \"url\": \"https://example.com // not a comment /* nope */\",\n  \"shell\": \"/bin/sh\"\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "trailing comma in object: replace existing key",
+        "args": [
+          "{\n  \"a\": 1,\n  \"b\": 2,\n}\n",
+          ["b"],
+          { "value": 20 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "trailing comma in object: insert new key",
+        "args": [
+          "{\n  \"a\": 1,\n}\n",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "trailing comma in object: remove last key",
+        "args": [
+          "{\n  \"a\": 1,\n  \"b\": 2,\n}\n",
+          ["b"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "trailing comma in object: remove only key",
+        "args": [
+          "{\n  \"a\": 1,\n}\n",
+          ["a"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "trailing comma in nested object: insert nested key",
+        "args": [
+          "{\n  \"terminal\": {\n    \"title\": true,\n  },\n}\n",
+          ["terminal", "copy"],
+          { "value": "select" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "insert key into empty object {}",
+        "args": [
+          "{}",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "insert key into empty object with newline {}\\n",
+        "args": [
+          "{}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "insert deeply nested mcp server path into empty {}",
+        "args": [
+          "{}",
+          ["mcp", "servers", "linear"],
+          { "valueJson": "{\"type\":\"remote\",\"url\":\"https://mcp.linear.app/sse\"}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "insert deeply nested mcp server into existing mcp block without servers",
+        "args": [
+          "{\n  // MCP config\n  \"mcp\": {\n    \"timeout\": 5000\n  }\n}\n",
+          ["mcp", "servers", "local-fs"],
+          { "valueJson": "{\"type\":\"local\",\"command\":[\"npx\",\"-y\",\"@modelcontextprotocol/server-filesystem\",\"/tmp\"],\"environment\":{\"DEBUG\":\"1\"}}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "insert sibling mcp server preserving existing servers and comments",
+        "args": [
+          "{\n  \"mcp\": {\n    \"servers\": {\n      // existing\n      \"github\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.github.com\"\n      }\n    }\n  }\n}\n",
+          ["mcp", "servers", "linear"],
+          { "valueJson": "{\"type\":\"remote\",\"url\":\"https://mcp.linear.app\"}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "replace plugins array preserving comments and other keys",
+        "args": [
+          "{\n  // keep comment\n  \"plugins\": [\n    \"@acme/one\"\n  ],\n  \"username\": \"bob\"\n}\n",
+          ["plugins"],
+          { "value": ["@acme/one", "@acme/two"] },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "remove nested property terminal.copy_on_select preserving terminal.copy",
+        "args": [
+          "{\n  // Keep terminal comment\n  \"terminal\": {\n    \"copy\": \"select\",\n    \"copy_on_select\": true\n  }\n}\n",
+          ["terminal", "copy_on_select"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "remove only property in object",
+        "args": [
+          "{\n  \"shell\": \"/bin/zsh\"\n}\n",
+          ["shell"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "remove non-existent top-level property returns no edits",
+        "args": [
+          "{\n  \"username\": \"alice\"\n}\n",
+          ["shell"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "remove non-existent deeply nested property when parent missing throws",
+        "args": [
+          "{\n  \"username\": \"alice\"\n}\n",
+          ["mcp", "servers", "missing"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ],
+        "compare": "expect_error"
+      },
+      {
+        "name": "remove non-existent nested property when parent exists returns no edits",
+        "args": [
+          "{\n  \"mcp\": {\n    \"servers\": {}\n  }\n}\n",
+          ["mcp", "servers", "missing"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "set property to explicit null vs removal",
+        "args": [
+          "{\n  \"shell\": \"/bin/zsh\"\n}\n",
+          ["shell"],
+          { "value": null },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "replace primitive value with nested object",
+        "args": [
+          "{\n  \"theme\": \"dark\"\n}\n",
+          ["theme"],
+          { "valueJson": "{\"name\":\"opencode\",\"mode\":\"dark\"}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "replace object value with primitive boolean",
+        "args": [
+          "{\n  \"snapshots\": {\n    \"enabled\": true\n  }\n}\n",
+          ["snapshots"],
+          { "value": false },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "replace root document with empty path []",
+        "args": [
+          "{\"old\": 1}",
+          [],
+          { "valueJson": "{\"new\":true,\"count\":3}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "custom insertionIndex 0 in non-empty object",
+        "args": [
+          "{\n  \"b\": 2,\n  \"c\": 3\n}\n",
+          ["a"],
+          { "value": 1 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true }, "insertionIndex": 0 }
+        ]
+      },
+      {
+        "name": "custom insertionIndex 1 in middle of object",
+        "args": [
+          "{\n  \"a\": 1,\n  \"c\": 3\n}\n",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true }, "insertionIndex": 1 }
+        ]
+      },
+      {
+        "name": "duplicate keys in object: findNodeAtLocation matches first occurrence",
+        "args": [
+          "{\n  \"a\": 1,\n  \"a\": 2\n}\n",
+          ["a"],
+          { "value": 99 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: replace element at index 0",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+          ["items", 0],
+          { "value": "first" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: replace element at middle index 1",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+          ["items", 1],
+          { "value": "middle" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: append with index -1 into empty array",
+        "args": [
+          "{\n  \"items\": []\n}\n",
+          ["items", -1],
+          { "value": "first" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: append with index -1 into non-empty array",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\"\n  ]\n}\n",
+          ["items", -1],
+          { "value": "c" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: isArrayInsertion true at index 0",
+        "args": [
+          "{\n  \"items\": [\n    \"b\",\n    \"c\"\n  ]\n}\n",
+          ["items", 0],
+          { "value": "a" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true }, "isArrayInsertion": true }
+        ]
+      },
+      {
+        "name": "array: isArrayInsertion true at index 1",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"c\"\n  ]\n}\n",
+          ["items", 1],
+          { "value": "b" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true }, "isArrayInsertion": true }
+        ]
+      },
+      {
+        "name": "array: past-end index appends without isArrayInsertion",
+        "args": [
+          "{\n  \"items\": [\n    \"a\"\n  ]\n}\n",
+          ["items", 5],
+          { "value": "z" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: remove only element",
+        "args": [
+          "{\n  \"items\": [\n    \"only\"\n  ]\n}\n",
+          ["items", 0],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: remove first element",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+          ["items", 0],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: remove middle element",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+          ["items", 1],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: remove last element multiline",
+        "args": [
+          "{\n  \"items\": [\n    \"a\",\n    \"b\"\n  ]\n}\n",
+          ["items", 1],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: remove last element inline without formatting options",
+        "args": [
+          "[1, 2]",
+          [1],
+          { "remove": true },
+          {}
+        ]
+      },
+      {
+        "name": "array: trailing comma append with -1",
+        "args": [
+          "[\n  1,\n  2,\n]\n",
+          [-1],
+          { "value": 3 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "array: modify nested object property inside array element",
+        "args": [
+          "{\n  \"rules\": [\n    { \"action\": \"read\", \"effect\": \"allow\" },\n    { \"action\": \"write\", \"effect\": \"ask\" }\n  ]\n}\n",
+          ["rules", 1, "effect"],
+          { "value": "deny" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "create nested array inside missing path segment",
+        "args": [
+          "{}\n",
+          ["nested", 0, "name"],
+          { "value": "alpha" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "empty file: insert top-level key",
+        "args": [
+          "",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "empty file: set root value",
+        "args": [
+          "",
+          [],
+          { "valueJson": "{\"shell\":\"/bin/zsh\"}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "whitespace-only file: insert nested key",
+        "args": [
+          "   \n  \n",
+          ["a", "b"],
+          { "value": 1 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "comment-only file: insert key",
+        "args": [
+          "// empty config\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "empty file: delete throws",
+        "args": [
+          "",
+          ["shell"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ],
+        "compare": "expect_error"
+      },
+      {
+        "name": "CRLF document: replace value preserves CRLF",
+        "args": [
+          "{\r\n  // windows header\r\n  \"shell\": \"pwsh\",\r\n  \"username\": \"win\"\r\n}\r\n",
+          ["shell"],
+          { "value": "powershell" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "CRLF document: insert key uses CRLF",
+        "args": [
+          "{\r\n  \"username\": \"win\"\r\n}\r\n",
+          ["shell"],
+          { "value": "pwsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "CRLF document: remove key preserves CRLF",
+        "args": [
+          "{\r\n  \"a\": 1,\r\n  \"b\": 2\r\n}\r\n",
+          ["b"],
+          { "remove": true },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "CR-only document: insert key uses CR",
+        "args": [
+          "{\r  \"a\": 1\r}\r",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "single-line doc with explicit eol CRLF",
+        "args": [
+          "{}",
+          ["a"],
+          { "value": 1 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true, "eol": "\r\n" } }
+        ]
+      },
+      {
+        "name": "formatting: tabSize 4 with insertSpaces true",
+        "args": [
+          "{\n    \"a\": 1\n}\n",
+          ["b"],
+          { "valueJson": "{\"nested\":true}" },
+          { "formattingOptions": { "tabSize": 4, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "formatting: insertSpaces false uses tabs",
+        "args": [
+          "{\n\t\"a\": 1\n}\n",
+          ["b"],
+          { "valueJson": "{\"nested\":true}" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": false } }
+        ]
+      },
+      {
+        "name": "formatting: insertSpaces omitted defaults to tabs",
+        "args": [
+          "{\n\t\"a\": 1\n}\n",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2 } }
+        ]
+      },
+      {
+        "name": "formatting: tabSize omitted with insertSpaces true defaults to 4",
+        "args": [
+          "{\n    \"a\": 1\n}\n",
+          ["b"],
+          { "value": 2 },
+          { "formattingOptions": { "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "formatting: insertFinalNewline true on single-line root",
+        "args": [
+          "{}",
+          ["a"],
+          { "value": 1 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true, "insertFinalNewline": true } }
+        ]
+      },
+      {
+        "name": "formatting: no formattingOptions emits minimal unformatted edit",
+        "args": [
+          "{\"a\":1}",
+          ["b"],
+          { "value": 2 },
+          {}
+        ]
+      },
+      {
+        "name": "formatting: 4-space indented document edited with tabSize 2",
+        "args": [
+          "{\n    \"outer\": {\n        \"a\": 1\n    }\n}\n",
+          ["outer", "b"],
+          { "value": 2 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "unicode UTF-16: emoji in leading comment shifts UTF-16 offsets by 2 per emoji",
+        "args": [
+          "// 🚀🎉 config\n{\n  \"shell\": \"/bin/sh\"\n}\n",
+          ["shell"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "unicode UTF-16: emoji key and value replace and sibling insert",
+        "args": [
+          "{\n  \"🎉\": \"party 🥳\",\n  \"🚀\": 1\n}\n",
+          ["🚀"],
+          { "value": "launch 🚀🔥" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "unicode UTF-16: ZWJ family emoji key before inserted key",
+        "args": [
+          "{\n  \"👨‍👩‍👧‍👦\": \"family\"\n}\n",
+          ["next"],
+          { "value": "ok" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "unicode UTF-16: CJK keys, values, and comments",
+        "args": [
+          "{\n  // 日本語コメント\n  \"設定\": \"値\",\n  \"シェル\": \"/bin/bash\"\n}\n",
+          ["シェル"],
+          { "value": "/bin/zsh" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "unicode UTF-16: escaped surrogate pair key matches decoded emoji segment",
+        "args": [
+          "{\n  \"\\uD83D\\uDE00\": \"grin\",\n  \"other\": 1\n}\n",
+          ["😀"],
+          { "value": "smile 😊" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "special characters: quotes, backslashes, control chars, Windows path",
+        "args": [
+          "{\n  \"path\": \"old\"\n}\n",
+          ["path"],
+          { "value": "C:\\Users\\Alice\\bin\\\"quote\"\n\t\u0007" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "number formatting edge cases in value",
+        "args": [
+          "{\n  \"nums\": []\n}\n",
+          ["nums"],
+          { "valueJson": "[0,-0,1,-42,3.14159,1e21,0.0000001]" },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "malformed: missing closing brace still replaces existing key",
+        "args": [
+          "{\n  \"a\": 1,\n  \"b\": 2\n",
+          ["a"],
+          { "value": 10 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "malformed: unclosed block comment treated as empty document on insert",
+        "args": [
+          "/* unclosed comment",
+          ["a"],
+          { "value": 1 },
+          {}
+        ]
+      },
+      {
+        "name": "malformed: missing comma between properties still updates second key",
+        "args": [
+          "{\n  \"a\": 1\n  \"b\": 2\n}\n",
+          ["b"],
+          { "value": 3 },
+          { "formattingOptions": { "tabSize": 2, "insertSpaces": true } }
+        ]
+      },
+      {
+        "name": "error: add string key to array parent throws",
+        "args": [
+          "[1, 2, 3]",
+          ["key"],
+          { "value": 4 },
+          {}
+        ],
+        "compare": "expect_error"
+      },
+      {
+        "name": "error: add numeric index to object parent throws",
+        "args": [
+          "{\"a\": 1}",
+          [0],
+          { "value": 2 },
+          {}
+        ],
+        "compare": "expect_error"
+      },
+      {
+        "name": "error: add child to primitive parent throws",
+        "args": [
+          "{\"a\": 1}",
+          ["a", "b"],
+          { "value": 2 },
+          {}
+        ],
+        "compare": "expect_error"
+      },
+      {
+        "name": "error: remove out-of-bounds array index throws",
+        "args": [
+          "[1, 2]",
+          [5],
+          { "remove": true },
+          {}
+        ],
+        "compare": "expect_error"
+      }
+    ]
+  },
+  {
+    "fn": "jsonc-parser#parse",
+    "description": "Fault-tolerant JSONC parsing and exact UTF-16 error reporting verified against real jsonc-parser@3.3.1",
+    "cases": [
+      {
+        "name": "valid JSONC with comments and trailing commas allowed",
+        "args": [
+          "// header\n{\n  /* block */\n  \"a\": [1, 2,],\n  \"b\": \"ok\",\n}\n",
+          { "allowTrailingComma": true }
+        ]
+      },
+      {
+        "name": "trailing commas reported when allowTrailingComma is false",
+        "args": [
+          "{\"a\": 1,}",
+          { "allowTrailingComma": false }
+        ]
+      },
+      {
+        "name": "comments rejected when disallowComments is true",
+        "args": [
+          "// nope\n{\"a\": 1}",
+          { "disallowComments": true }
+        ]
+      },
+      {
+        "name": "empty string with allowEmptyContent false reports ValueExpected",
+        "args": [
+          "",
+          { "allowEmptyContent": false }
+        ]
+      },
+      {
+        "name": "empty string with allowEmptyContent true reports no errors",
+        "args": [
+          "",
+          { "allowEmptyContent": true }
+        ]
+      },
+      {
+        "name": "UTF-16 error offset after emoji and CJK",
+        "args": [
+          "{\"🚀日本\": 1, \"bad\": }",
+          { "allowTrailingComma": true }
+        ]
+      },
+      {
+        "name": "invalid unicode escape and invalid escape char",
+        "args": [
+          "{\"a\": \"\\u12G4\\q\"}",
+          { "allowTrailingComma": true }
+        ]
+      },
+      {
+        "name": "unclosed string, unclosed block comment, and invalid numbers",
+        "args": [
+          "[1., 1e+, \"unclosed\n/* unterminated",
+          { "allowTrailingComma": true }
+        ]
+      },
+      {
+        "name": "duplicate keys keep final value",
+        "args": [
+          "{\"k\": \"first\", \"k\": \"second\"}",
+          { "allowTrailingComma": true }
+        ]
+      },
+      {
+        "name": "trailing garbage after root object reports EndOfFileExpected",
+        "args": [
+          "{\"a\": 1} extra",
+          { "allowTrailingComma": true }
+        ]
+      }
+    ]
+  },
+  {
+    "fn": "jsonc-parser#format",
+    "description": "JSONC formatter verified against real jsonc-parser@3.3.1",
+    "cases": [
+      {
+        "name": "format compact JSONC with comments and 2-space indent",
+        "args": [
+          "{// c1\n\"a\":1,/* c2 */\"b\":[1,2]}",
+          null,
+          { "tabSize": 2, "insertSpaces": true }
+        ]
+      },
+      {
+        "name": "format with tabs and insertFinalNewline",
+        "args": [
+          "{\"a\":{\"b\":1}}",
+          null,
+          { "tabSize": 4, "insertSpaces": false, "insertFinalNewline": true }
+        ]
+      },
+      {
+        "name": "format with keepLines true preserves blank lines",
+        "args": [
+          "{\n  \"a\": 1,\n\n  \"b\": 2\n}\n",
+          null,
+          { "tabSize": 2, "insertSpaces": true, "keepLines": true }
+        ]
+      },
+      {
+        "name": "format sub-range inside indented object with emoji prefix",
+        "args": [
+          "{\n  \"🚀\": 1,\n  \"nested\": {\"x\":1,\"y\":2}\n}\n",
+          { "offset": 25, "length": 13 },
+          { "tabSize": 2, "insertSpaces": true }
+        ]
+      }
+    ]
+  }
+]

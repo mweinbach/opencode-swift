@@ -316,13 +316,16 @@ struct CLIConfigTests {
         #expect(migrated.mouse == false)
     }
 
-    @Test("CLIConfig.Service migrates legacy copy_on_select, merges env overlay, and persists updates")
+    @Test("CLIConfig.Service migrates legacy copy_on_select, merges env overlay, and persists surgical comment-preserving updates")
     func configServiceReadWriteAndMigrate() async throws {
         let initial = """
         {
           // legacy copy_on_select should migrate to terminal.copy = "select"
           "terminal": { "copy_on_select": true },
-          "keybinds": { "app_exit": "ctrl+q" },
+          "keybinds": {
+            "app_exit": "ctrl+q",
+            "app_heap_snapshot": "ctrl+h" /* keep orphan comment */
+          },
         }
         """
         let (ctx, _, fs) = CLITestFixtures.makeContext(
@@ -333,16 +336,87 @@ struct CLIConfigTests {
         let loaded = try await service.get()
         #expect(loaded.terminal?.copy == "select")
         #expect(loaded.keybinds?["app.exit"] == "ctrl+q")
+        #expect(loaded.keybinds?["app_heap_snapshot"] == nil)
         #expect(loaded.animations == false)
+
+        let afterMigrate = String(decoding: try await fs.readFile(at: service.path), as: UTF8.self)
+        #expect(afterMigrate.contains("// legacy copy_on_select should migrate to terminal.copy = \"select\""))
+        #expect(afterMigrate.contains("/* keep orphan comment */"))
+        #expect(!afterMigrate.contains("\"copy_on_select\""))
+        #expect(!afterMigrate.contains("\"app_heap_snapshot\""))
+        #expect(afterMigrate.contains("\"app.exit\": \"ctrl+q\""))
 
         let updated = try await service.update { draft in
             draft.mouse = false
         }
         #expect(updated.mouse == false)
-        #expect(updated.schema == CLIConfig.SchemaURL)
         let persisted = String(decoding: try await fs.readFile(at: service.path), as: UTF8.self)
-        #expect(persisted.contains("\"$schema\""))
-        #expect(persisted.contains("\"mouse\""))
+        #expect(persisted.contains("// legacy copy_on_select should migrate to terminal.copy = \"select\""))
+        #expect(persisted.contains("/* keep orphan comment */"))
+        #expect(persisted.contains("\"mouse\": false"))
+
+        // Creating a fresh cli.json (when none exists) includes the published `$schema`.
+        let (freshCtx, _, freshFs) = CLITestFixtures.makeContext()
+        let freshService = CLIConfig.Service(context: freshCtx)
+        let created = try await freshService.update { draft in
+            draft.animations = false
+        }
+        #expect(created.schema == CLIConfig.SchemaURL)
+        #expect(created.animations == false)
+        let createdText = String(decoding: try await freshFs.readFile(at: freshService.path), as: UTF8.self)
+        #expect(createdText.contains("\"$schema\": \"\(CLIConfig.SchemaURL)\""))
+        #expect(createdText.contains("\"animations\": false"))
+    }
+
+    @Test("CLICommands MCP add and Plugin add/remove preserve JSONC comments and formatting")
+    func mcpAndPluginWritesPreserveComments() async throws {
+        let initial = """
+        // User OpenCode config
+        {
+          /* keep me */
+          "username": "alice",
+          "plugins": [
+            "@acme/existing"
+          ]
+        }
+        """ + "\n"
+
+        // 1. Plugin add & remove on commented opencode.jsonc
+        let pluginFs = InMemoryFileSystem(initialFiles: [
+            "/home/tester/.config/opencode/opencode.jsonc": Array(initial.utf8),
+        ])
+        let cfg = "/home/tester/.config/opencode/opencode.jsonc"
+        #expect(try await CLICommands.Plugin.writePluginConfig(configPath: cfg, spec: "@acme/added", fileSystem: pluginFs) == true)
+        let afterAdd = String(decoding: try await pluginFs.readFile(at: cfg), as: UTF8.self)
+        #expect(afterAdd.contains("// User OpenCode config"))
+        #expect(afterAdd.contains("/* keep me */"))
+        #expect(afterAdd.contains("\"username\": \"alice\""))
+        #expect(afterAdd.contains("\"@acme/added\""))
+
+        #expect(try await CLICommands.Plugin.removePluginConfig(configPath: cfg, spec: "@acme/added", fileSystem: pluginFs) == true)
+        let afterRemove = String(decoding: try await pluginFs.readFile(at: cfg), as: UTF8.self)
+        #expect(afterRemove.contains("// User OpenCode config"))
+        #expect(afterRemove.contains("/* keep me */"))
+        #expect(afterRemove.contains("\"@acme/existing\""))
+        #expect(!afterRemove.contains("\"@acme/added\""))
+
+        // 2. MCP add on commented opencode.jsonc
+        let (mcpCtx, _, mcpFs) = CLITestFixtures.makeContext(
+            files: ["/work/opencode.jsonc": initial],
+            cwd: "/work"
+        )
+        let input = CLIFramework.Runtime.Input(
+            strings: ["url": "https://mcp.linear.app/sse"],
+            positionals: ["linear"],
+            namedArguments: ["name": ["linear"]]
+        )
+        try await CLICommands.MCP.runAdd(input, context: mcpCtx)
+        let afterMcp = String(decoding: try await mcpFs.readFile(at: "/work/opencode.jsonc"), as: UTF8.self)
+        #expect(afterMcp.contains("// User OpenCode config"))
+        #expect(afterMcp.contains("/* keep me */"))
+        #expect(afterMcp.contains("\"username\": \"alice\""))
+        #expect(afterMcp.contains("\"linear\""))
+        #expect(afterMcp.contains("https://mcp.linear.app/sse"))
     }
 }
 

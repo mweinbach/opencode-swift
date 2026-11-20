@@ -1329,6 +1329,7 @@ public final class ServerAppRuntime: Sendable {
         customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
         customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
         customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        logSink: (any LogSink)? = nil,
         configDebounce: Duration = CoreConfig.Service.defaultDebounce,
         instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
         instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
@@ -1719,6 +1720,7 @@ public final class ServerAppRuntime: Sendable {
                 credentials: credential,
                 wellKnown: wellKnown,
                 processes: configProcesses,
+                log: logSink,
                 debounce: configDebounce,
                 onUpdated: {
                     await bus.emit(

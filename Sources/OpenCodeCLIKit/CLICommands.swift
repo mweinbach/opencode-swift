@@ -1849,42 +1849,40 @@ public enum CLICommands {
                 throw CLIError("--header is only valid for remote MCP servers")
             }
 
-            var serverObj: [String: JSONValue]
+            var serverEntries: [(String, PureJSONValue)]
             if let url {
-                serverObj = ["type": .string("remote"), "url": .string(url)]
+                serverEntries = [("type", .string("remote")), ("url", .string(url))]
                 if let headers {
-                    serverObj["headers"] = .object(headers.mapValues(JSONValue.string))
+                    let sortedHeaders = headers.keys.sorted().map { ($0, PureJSONValue.string(headers[$0]!)) }
+                    serverEntries.append(("headers", .object(sortedHeaders)))
                 }
             } else {
-                serverObj = ["type": .string("local"), "command": .array(command.map(JSONValue.string))]
+                serverEntries = [("type", .string("local")), ("command", .array(command.map(PureJSONValue.string)))]
                 if let environment {
-                    serverObj["environment"] = .object(environment.mapValues(JSONValue.string))
+                    let sortedEnv = environment.keys.sorted().map { ($0, PureJSONValue.string(environment[$0]!)) }
+                    serverEntries.append(("environment", .object(sortedEnv)))
                 }
             }
 
             let baseDir = input.bool("global") ? context.globalPaths.config : context.cwd
             let configPath = await resolveConfigPath(baseDir, fileSystem: context.fileSystem)
-            var rootObj: [String: JSONValue] = [:]
-            if let bytes = try? await context.fileSystem.readFile(at: configPath),
-               let parsed = try? CoreConfigJSONC.parse(String(decoding: bytes, as: UTF8.self)),
-               case .object(let existing) = parsed
-            {
-                rootObj = existing
+            let text: String
+            do {
+                let bytes = try await context.fileSystem.readFile(at: configPath)
+                text = String(decoding: bytes, as: UTF8.self)
+            } catch PlatformError.notFound {
+                text = "{}"
             }
-            var mcpObj: [String: JSONValue] = {
-                if case .object(let m) = rootObj["mcp"] { return m }
-                return [:]
-            }()
-            var serversObj: [String: JSONValue] = {
-                if case .object(let s) = mcpObj["servers"] { return s }
-                return [:]
-            }()
-            serversObj[name] = .object(serverObj)
-            mcpObj["servers"] = .object(serversObj)
-            rootObj["mcp"] = .object(mcpObj)
-
-            let encoded = try CLIPath.encodePrettyJSON(JSONValue.object(rootObj)) + "\n"
-            try await context.fileSystem.writeFile(Array(encoded.utf8), to: configPath, createDirectories: true)
+            let edits = try JSONC.modify(
+                text,
+                path: [.key("mcp"), .key("servers"), .key(name)],
+                value: .object(serverEntries),
+                options: JSONC.ModificationOptions(
+                    formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                )
+            )
+            let updated = try JSONC.applyEdits(text, edits: edits)
+            try await context.fileSystem.writeFile(Array(updated.utf8), to: configPath, createDirectories: true)
             context.io.writeStdout("MCP server \"\(name)\" added to \(configPath)\(context.io.eol)")
         }
 
@@ -2234,18 +2232,19 @@ public enum CLICommands {
             fileSystem: any OpenCodeFileSystem = CLIContext.current.fileSystem
         ) async throws -> Bool {
             let text: String
-            if let bytes = try? await fileSystem.readFile(at: configPath) {
+            do {
+                let bytes = try await fileSystem.readFile(at: configPath)
                 text = String(decoding: bytes, as: UTF8.self)
-            } else {
+            } catch PlatformError.notFound {
                 text = "{}"
             }
-            guard let parsed = try? CoreConfigJSONC.parse(text),
-                  case .object(var root) = parsed
-            else {
+            var errors: [JSONC.ParseError] = []
+            let parsed = JSONC.parse(text, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+            guard errors.isEmpty, case .object(let entries)? = parsed else {
                 throw CLIError("Invalid global configuration: \(configPath)")
             }
-            var plugins: [JSONValue] = []
-            if let existing = root["plugins"] {
+            var plugins: [PureJSONValue] = []
+            if let existing = entries.last(where: { $0.0 == "plugins" })?.1 {
                 guard case .array(let arr) = existing else {
                     throw CLIError("Invalid plugins configuration: \(configPath)")
                 }
@@ -2255,8 +2254,16 @@ public enum CLICommands {
                 return false
             }
             plugins.append(.string(spec))
-            root["plugins"] = .array(plugins)
-            let updated = try CLIPath.encodePrettyJSON(JSONValue.object(root)) + "\n"
+            let edits = try JSONC.modify(
+                text,
+                path: [.key("plugins")],
+                value: .array(plugins),
+                options: JSONC.ModificationOptions(
+                    formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                )
+            )
+            var updated = try JSONC.applyEdits(text, edits: edits)
+            if updated.utf8.last != 0x0A { updated += "\n" }
             try await fileSystem.makeDirectory(at: CLIPath.dirname(configPath), recursive: true)
             let temp = configPath + ".tmp"
             try await fileSystem.writeFile(Array(updated.utf8), to: temp, createDirectories: true)
@@ -2271,17 +2278,20 @@ public enum CLICommands {
             spec: String,
             fileSystem: any OpenCodeFileSystem = CLIContext.current.fileSystem
         ) async throws -> Bool {
-            guard let bytes = try? await fileSystem.readFile(at: configPath) else {
+            let text: String
+            do {
+                let bytes = try await fileSystem.readFile(at: configPath)
+                text = String(decoding: bytes, as: UTF8.self)
+            } catch PlatformError.notFound {
                 return false
             }
-            let text = String(decoding: bytes, as: UTF8.self)
-            guard let parsed = try? CoreConfigJSONC.parse(text),
-                  case .object(var root) = parsed
-            else {
+            var errors: [JSONC.ParseError] = []
+            let parsed = JSONC.parse(text, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+            guard errors.isEmpty, case .object(let entries)? = parsed else {
                 throw CLIError("Invalid global configuration: \(configPath)")
             }
-            var plugins: [JSONValue] = []
-            if let existing = root["plugins"] {
+            var plugins: [PureJSONValue] = []
+            if let existing = entries.last(where: { $0.0 == "plugins" })?.1 {
                 guard case .array(let arr) = existing else {
                     throw CLIError("Invalid plugins configuration: \(configPath)")
                 }
@@ -2291,8 +2301,16 @@ public enum CLICommands {
                 return false
             }
             let remaining = plugins.filter { !matchesPluginEntry($0, spec: spec) }
-            root["plugins"] = .array(remaining)
-            let updated = try CLIPath.encodePrettyJSON(JSONValue.object(root)) + "\n"
+            let edits = try JSONC.modify(
+                text,
+                path: [.key("plugins")],
+                value: .array(remaining),
+                options: JSONC.ModificationOptions(
+                    formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                )
+            )
+            var updated = try JSONC.applyEdits(text, edits: edits)
+            if updated.utf8.last != 0x0A { updated += "\n" }
             let temp = configPath + ".tmp"
             try await fileSystem.writeFile(Array(updated.utf8), to: temp, createDirectories: true)
             try? await fileSystem.chmod(at: temp, mode: 0o600)
@@ -2300,13 +2318,17 @@ public enum CLICommands {
             return true
         }
 
-        private static func isPluginConfigured(_ plugins: [JSONValue], spec: String) -> Bool {
+        private static func isPluginConfigured(_ plugins: [PureJSONValue], spec: String) -> Bool {
             plugins.contains { matchesPluginEntry($0, spec: spec) }
         }
 
-        private static func matchesPluginEntry(_ entry: JSONValue, spec: String) -> Bool {
+        private static func matchesPluginEntry(_ entry: PureJSONValue, spec: String) -> Bool {
             if case .string(let s) = entry { return s == spec }
-            if case .object(let obj) = entry, case .string(let pkg) = obj["package"] { return pkg == spec }
+            if case .object(let entries) = entry,
+               case .string(let pkg)? = entries.last(where: { $0.0 == "package" })?.1
+            {
+                return pkg == spec
+            }
             return false
         }
 
