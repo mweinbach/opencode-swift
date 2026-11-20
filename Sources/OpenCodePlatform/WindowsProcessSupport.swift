@@ -656,7 +656,7 @@ internal final class WindowsPrivateSecurity: @unchecked Sendable {
         UnsafeMutablePointer<ULONG>?
     ) -> WindowsBool
 
-    private let descriptor: PSECURITY_DESCRIPTOR
+    internal let descriptor: PSECURITY_DESCRIPTOR
     let ownerSID: String
 
     private init(descriptor: PSECURITY_DESCRIPTOR, ownerSID: String) {
@@ -668,7 +668,7 @@ internal final class WindowsPrivateSecurity: @unchecked Sendable {
         _ = LocalFree(descriptor)
     }
 
-    private static func withAdvapi32<R>(_ body: (HMODULE) throws -> R) throws -> R {
+    internal static func withAdvapi32<R>(_ body: (HMODULE) throws -> R) throws -> R {
         let wideName = try WindowsProcessHelpers.encodeWideString("advapi32.dll")
         let module: HMODULE? = wideName.withUnsafeBufferPointer { ptr in
             LoadLibraryW(ptr.baseAddress)

@@ -80,9 +80,74 @@ internal func currentProcessID() -> UInt32 {
 
 extension ProcessDaemon {
     public enum Transport {
+        // MARK: - Shared Transport Contracts (`src/transport/mod.rs`)
+
+        /// Platform-neutral readiness returned by `StreamListener.waitForReadiness`.
+        public struct Readiness: Equatable, Hashable, Sendable {
+            public var connection: Bool
+            public var timedOut: Bool
+
+            public init(connection: Bool = false, timedOut: Bool = false) {
+                self.connection = connection
+                self.timedOut = timedOut
+            }
+        }
+
+        /// Platform-neutral wake channel shared by `Daemon.Control` and `StreamListener`.
+        public protocol WakeChannel: Sendable {
+            func notify()
+            func drain() -> Bool
+            func pending() -> Bool
+        }
+
+        /// Platform-neutral idempotent cancellation handle waking blocked reads and writes.
+        public protocol ConnectionCancellation: Sendable {
+            func cancel()
+        }
+
+        /// Platform-neutral peer disconnect monitor for subscriptions and `wait` calls.
+        public protocol ConnectionDisconnectMonitor: Sendable {
+            func disconnected() -> Bool
+            func finish()
+        }
+
+        /// Platform-neutral local full-duplex byte-stream connection shared by `Daemon.Server` and `TerminalClient`.
+        public protocol StreamConnection: ByteReader, ByteWriter, Sendable {
+            func closeConnection()
+            func set_read_timeout(_ timeoutMs: UInt64?) throws
+            func set_write_timeout(_ timeoutMs: UInt64?) throws
+            func makeCancellation() throws -> any ConnectionCancellation
+            func finish_response() throws
+            func makeDisconnectMonitor() throws -> any ConnectionDisconnectMonitor
+        }
+
+        /// Platform-neutral local byte-stream listener shared by `Daemon.Server`.
+        public protocol StreamListener: Sendable {
+            func acceptConnection() throws -> (any StreamConnection)?
+            func stop()
+            func waitForReadiness(wake: any WakeChannel, listen: Bool, timeoutMs: UInt64) throws -> Readiness
+        }
+
+        /// Connects to a registered daemon endpoint using the appropriate platform transport:
+        /// in-memory (`memory://`), verified Windows named pipe (`connect_to` checking server PID),
+        /// or Unix domain socket.
+        public static func connect(registration: ProcessDaemon.Registration) throws -> any StreamConnection {
+            if registration.socket.hasPrefix("memory://") {
+                return try Unix.Connection.connect(registration.socket)
+            }
+            #if os(Windows)
+            return try Windows.Connection.connect_to(registration.socket, serverPid: registration.pid)
+            #else
+            if WindowsNamedPipeHelpers.hasLocalPipePrefix(registration.socket) {
+                return try Windows.Connection.connect_to(registration.socket, serverPid: registration.pid)
+            }
+            return try Unix.Connection.connect(registration.socket)
+            #endif
+        }
+
         // MARK: - Retained Allocation Wrapper (`src/transport/retained.rs`)
 
-        // parity: process-daemon/src/transport/retained.rs#Retained [status=adapted hash=0bc8d24d73b0]
+        // parity: process-daemon/src/transport/retained.rs#Retained [status=implemented hash=0bc8d24d73b0]
         public final class Retained<T>: @unchecked Sendable {
             private let pointer: UnsafeMutablePointer<T>
 
@@ -435,7 +500,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/transport/unix.rs#Wake [status=implemented hash=5eebba101a48]
-            public final class Wake: @unchecked Sendable {
+            public final class Wake: WakeChannel, @unchecked Sendable {
                 internal let memoryWake = InMemoryWake()
                 #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
                 internal let readFD: Int32
@@ -531,7 +596,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/transport/unix.rs#Cancellation [status=implemented hash=9e280a403a28]
-            public final class Cancellation: @unchecked Sendable {
+            public final class Cancellation: ConnectionCancellation, @unchecked Sendable {
                 private let memory: InMemoryConnection?
                 private let fd: Int32
 
@@ -566,7 +631,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/transport/unix.rs#DisconnectMonitor [status=implemented hash=5070af6d997a]
-            public final class DisconnectMonitor: @unchecked Sendable {
+            public final class DisconnectMonitor: ConnectionDisconnectMonitor, @unchecked Sendable {
                 private let memory: InMemoryConnection?
                 private let dupFD: Int32
                 private let cond = PortableCondition()
@@ -640,7 +705,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/transport/unix.rs#Connection [status=implemented hash=f2a3741b7759]
-            public final class Connection: ByteReader, ByteWriter, @unchecked Sendable {
+            public final class Connection: StreamConnection, @unchecked Sendable {
                 internal let memory: InMemoryConnection?
                 private let fdLock = Mutex<Int32>(-1)
 
@@ -836,10 +901,18 @@ extension ProcessDaemon {
                 public func flush() throws {
                     try memory?.flush()
                 }
+
+                public func makeCancellation() throws -> any ConnectionCancellation {
+                    try cancellation()
+                }
+
+                public func makeDisconnectMonitor() throws -> any ConnectionDisconnectMonitor {
+                    try monitor_disconnect()
+                }
             }
 
             // parity: process-daemon/src/transport/unix.rs#Listener [status=implemented hash=b30e176ce446]
-            public final class Listener: @unchecked Sendable {
+            public final class Listener: StreamListener, @unchecked Sendable {
                 internal let memoryListener: InMemoryListener?
                 private let fdLock = Mutex<Int32>(-1)
 
@@ -975,6 +1048,22 @@ extension ProcessDaemon {
                     return Readiness(connection: false, timedOut: true)
                     #endif
                 }
+
+                public func acceptConnection() throws -> (any StreamConnection)? {
+                    try accept()
+                }
+
+                public func waitForReadiness(
+                    wake: any WakeChannel,
+                    listen: Bool,
+                    timeoutMs: UInt64
+                ) throws -> Transport.Readiness {
+                    guard let unixWake = wake as? Wake else {
+                        throw DaemonError("Unix listener requires a Unix Wake channel")
+                    }
+                    let ready = try wait(wake: unixWake, listen: listen, timeoutMs: timeoutMs)
+                    return Transport.Readiness(connection: ready.connection, timedOut: ready.timedOut)
+                }
             }
         }
 
@@ -993,25 +1082,35 @@ extension ProcessDaemon {
                 }
             }
 
-            // parity: process-daemon/src/transport/windows/security.rs#PrivateSecurity [status=adapted hash=2b382b90737d]
+            // parity: process-daemon/src/transport/windows/security.rs#PrivateSecurity [status=implemented hash=2b382b90737d]
             public final class PrivateSecurity: Sendable {
                 public let ownerSID: String
+                #if os(Windows)
+                internal let native: WindowsPrivateSecurity
+                #else
                 private let privateHandles = Mutex<Set<UInt64>>([])
+                #endif
 
+                #if os(Windows)
+                internal init(native: WindowsPrivateSecurity) {
+                    self.native = native
+                    self.ownerSID = native.ownerSID
+                }
+                #else
                 private init(ownerSID: String) {
                     self.ownerSID = ownerSID
                 }
+                #endif
 
-                // parity: process-daemon/src/transport/windows/security.rs#new [status=adapted hash=ff1eb2825459]
+                // parity: process-daemon/src/transport/windows/security.rs#new [status=implemented hash=ff1eb2825459]
                 public static func new() throws -> PrivateSecurity {
                     #if os(Windows)
-                    let sid = try WindowsPrivateSecurity.currentUserSID()
+                    return PrivateSecurity(native: try WindowsPrivateSecurity.create())
                     #elseif canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-                    let sid = "S-1-5-21-\(geteuid())"
+                    return PrivateSecurity(ownerSID: "S-1-5-21-\(geteuid())")
                     #else
-                    let sid = "S-1-5-21-1000"
+                    return PrivateSecurity(ownerSID: "S-1-5-21-1000")
                     #endif
-                    return PrivateSecurity(ownerSID: sid)
                 }
 
                 // parity: process-daemon/src/transport/windows/security.rs#attributes [status=adapted hash=b1ff5bcb9256]
@@ -1019,23 +1118,51 @@ extension ProcessDaemon {
                     SecurityAttributes(ownerSID: ownerSID, protectedDACL: true, inheritHandle: false)
                 }
 
-                // parity: process-daemon/src/transport/windows/security.rs#make_private [status=adapted hash=e602734fd892]
+                #if os(Windows)
+                internal func win32SecurityAttributes(inherit: Bool = false) -> SECURITY_ATTRIBUTES {
+                    native.securityAttributes(inherit: inherit)
+                }
+
+                internal func makePrivate(handle: HANDLE) throws {
+                    try native.makePrivate(handle: handle)
+                }
+
+                internal func checkPrivate(handle: HANDLE) throws {
+                    try native.checkPrivate(handle: handle)
+                }
+                #endif
+
+                // parity: process-daemon/src/transport/windows/security.rs#make_private [status=implemented hash=e602734fd892]
                 public func make_private(_ handle: UInt64) throws {
                     guard handle != 0 else {
                         throw DaemonError("invalid handle")
                     }
+                    #if os(Windows)
+                    guard let raw = HANDLE(bitPattern: UInt(truncatingIfNeeded: handle)) else {
+                        throw DaemonError("invalid handle")
+                    }
+                    try native.makePrivate(handle: raw)
+                    #else
                     privateHandles.withLock { _ = $0.insert(handle) }
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows/security.rs#check_private [status=adapted hash=d91efaf4df25]
+                // parity: process-daemon/src/transport/windows/security.rs#check_private [status=implemented hash=d91efaf4df25]
                 public func check_private(_ handle: UInt64) throws {
                     guard handle != 0 else {
                         throw DaemonError("PTY storage is not owned by the current user")
                     }
+                    #if os(Windows)
+                    guard let raw = HANDLE(bitPattern: UInt(truncatingIfNeeded: handle)) else {
+                        throw DaemonError("PTY storage is not owned by the current user")
+                    }
+                    try native.checkPrivate(handle: raw)
+                    #else
                     let isPrivate = privateHandles.withLock { $0.contains(handle) }
                     if !isPrivate {
                         throw DaemonError("unprotected PTY storage DACL")
                     }
+                    #endif
                 }
             }
         }
@@ -1043,11 +1170,33 @@ extension ProcessDaemon {
         // MARK: - Windows Named Pipe Transport (`src/transport/windows.rs`)
 
         public enum Windows {
-            public struct OwnedHandle: Equatable, Hashable, Sendable {
+            /// RAII-owned Windows kernel handle (`CloseHandle` on `deinit` under `#if os(Windows)`).
+            public final class OwnedHandle: Equatable, Hashable, @unchecked Sendable {
                 public let rawValue: UInt64
+                #if os(Windows)
+                internal let native: OwnedWinHandle?
+                #endif
+
+                #if os(Windows)
+                internal init(native: OwnedWinHandle) {
+                    self.native = native
+                    self.rawValue = UInt64(UInt(bitPattern: native.raw))
+                }
+                #endif
 
                 public init(rawValue: UInt64) {
                     self.rawValue = rawValue
+                    #if os(Windows)
+                    self.native = nil
+                    #endif
+                }
+
+                public static func == (lhs: OwnedHandle, rhs: OwnedHandle) -> Bool {
+                    lhs.rawValue == rhs.rawValue
+                }
+
+                public func hash(into hasher: inout Hasher) {
+                    hasher.combine(rawValue)
                 }
             }
 
@@ -1062,9 +1211,13 @@ extension ProcessDaemon {
                 }
             }
 
-            // parity: process-daemon/src/transport/windows.rs#Wake [status=adapted hash=5879aaaaadfc]
-            public struct Wake: Sendable {
+            // parity: process-daemon/src/transport/windows.rs#Wake [status=implemented hash=5879aaaaadfc]
+            public struct Wake: WakeChannel, Sendable {
+                #if !os(Windows)
                 internal let inner = InMemoryWake()
+                #endif
+
+                public init() {}
 
                 // parity: process-daemon/src/transport/windows.rs#new [status=implemented hash=736aa10cdfeb]
                 public static func new() throws -> Wake {
@@ -1073,31 +1226,85 @@ extension ProcessDaemon {
 
                 // parity: process-daemon/src/transport/windows.rs#notify [status=implemented hash=57abb45609c4]
                 public func notify() {
+                    #if !os(Windows)
                     inner.notify()
+                    #endif
                 }
 
                 // parity: process-daemon/src/transport/windows.rs#drain [status=implemented hash=96717229712d]
                 public func drain() -> Bool {
-                    inner.drain()
+                    #if os(Windows)
+                    return false
+                    #else
+                    return inner.drain()
+                    #endif
+                }
+
+                public func pending() -> Bool {
+                    #if os(Windows)
+                    return false
+                    #else
+                    return inner.pending()
+                    #endif
                 }
             }
 
-            // parity: process-daemon/src/transport/windows.rs#Cancellation [status=adapted hash=099c8548a8b7]
-            public final class Cancellation: Sendable {
+            // parity: process-daemon/src/transport/windows.rs#Cancellation [status=implemented hash=099c8548a8b7]
+            public final class Cancellation: ConnectionCancellation, Sendable {
+                #if os(Windows)
+                private let pipe: WindowsPipe
+
+                internal init(pipe: WindowsPipe) {
+                    self.pipe = pipe
+                }
+                #else
                 private let connection: InMemoryConnection
 
                 internal init(_ connection: InMemoryConnection) {
                     self.connection = connection
                 }
+                #endif
 
                 // parity: process-daemon/src/transport/windows.rs#cancel [status=implemented hash=f52203769d33]
                 public func cancel() {
+                    #if os(Windows)
+                    pipe.cancel()
+                    #else
                     connection.cancel()
+                    #endif
                 }
             }
 
-            // parity: process-daemon/src/transport/windows.rs#DisconnectMonitor [status=adapted hash=08f7320c73db]
-            public final class DisconnectMonitor: @unchecked Sendable {
+            // parity: process-daemon/src/transport/windows.rs#DisconnectMonitor [status=implemented hash=08f7320c73db]
+            public final class DisconnectMonitor: ConnectionDisconnectMonitor, @unchecked Sendable {
+                #if os(Windows)
+                private final class MonitorState: @unchecked Sendable {
+                    let cond = PortableCondition()
+                    var isDisconnected = false
+                    var threadExited = false
+                    var finished = false
+                }
+
+                private let cancellation: Cancellation
+                private let state = MonitorState()
+
+                internal init(pipe: WindowsPipe, cancellation: Cancellation) {
+                    self.cancellation = cancellation
+                    let shared = self.state
+                    Thread.detachNewThread {
+                        _ = try? Connection.readChunk(pipe: pipe, maxCount: 1, timeoutMs: nil)
+                        shared.cond.withLock {
+                            shared.isDisconnected = true
+                            shared.threadExited = true
+                            shared.cond.broadcast()
+                        }
+                    }
+                }
+
+                deinit {
+                    finish()
+                }
+                #else
                 private let connection: InMemoryConnection
                 private let cancellation: Cancellation
 
@@ -1105,88 +1312,356 @@ extension ProcessDaemon {
                     self.connection = connection
                     self.cancellation = cancellation
                 }
+                #endif
 
                 // parity: process-daemon/src/transport/windows.rs#disconnected [status=implemented hash=374a051ea03e]
                 public func disconnected() -> Bool {
-                    connection.isPeerClosed
+                    #if os(Windows)
+                    return state.cond.withLock { state.isDisconnected }
+                    #else
+                    return connection.isPeerClosed
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#finish [status=adapted hash=6cabad4407e2]
+                // parity: process-daemon/src/transport/windows.rs#finish [status=implemented hash=6cabad4407e2]
                 public func finish() {
-                    if !connection.waitForDisconnect(timeoutMs: 2_000) {
+                    #if os(Windows)
+                    let already = state.cond.withLock { () -> Bool in
+                        if state.finished { return true }
+                        state.finished = true
+                        return false
+                    }
+                    if already { return }
+                    let deadline = monotonicNowMs() &+ WindowsNamedPipeHelpers.completionTimeoutMs
+                    let sawDisconnect = state.cond.withLock { () -> Bool in
+                        while !state.isDisconnected {
+                            let now = monotonicNowMs()
+                            if now >= deadline { return false }
+                            _ = state.cond.wait(timeoutMs: deadline - now)
+                        }
+                        return true
+                    }
+                    if !sawDisconnect {
                         cancellation.cancel()
                     }
+                    state.cond.withLock {
+                        while !state.threadExited {
+                            _ = state.cond.wait(timeoutMs: 25)
+                        }
+                    }
+                    #else
+                    if !connection.waitForDisconnect(timeoutMs: WindowsNamedPipeHelpers.completionTimeoutMs) {
+                        cancellation.cancel()
+                    }
+                    #endif
                 }
             }
 
-            // parity: process-daemon/src/transport/windows.rs#Connection [status=adapted hash=84dbd09c584c]
-            public final class Connection: ByteReader, ByteWriter, Sendable {
+            // parity: process-daemon/src/transport/windows.rs#Connection [status=implemented hash=84dbd09c584c]
+            public final class Connection: StreamConnection, @unchecked Sendable {
+                #if os(Windows)
+                private let pipeState: Mutex<WindowsPipe?>
+                private let timeouts = Mutex<(readMs: UInt64?, writeMs: UInt64?)>((nil, nil))
+
+                internal init(pipe: WindowsPipe) {
+                    self.pipeState = Mutex(pipe)
+                }
+
+                deinit {
+                    closeConnection()
+                }
+
+                private func requirePipe() throws -> WindowsPipe {
+                    guard let pipe = pipeState.withLock({ $0 }) else {
+                        throw DaemonError("named pipe connection is closed")
+                    }
+                    return pipe
+                }
+
+                internal static func readChunk(
+                    pipe: WindowsPipe,
+                    maxCount: Int,
+                    timeoutMs: UInt64?
+                ) throws -> [UInt8] {
+                    let bounded = WindowsNamedPipeHelpers.chunkSize(remaining: maxCount)
+                    if bounded == 0 { return [] }
+                    var buffer = [UInt8](repeating: 0, count: bounded)
+                    do {
+                        let transferred: Int = try buffer.withUnsafeMutableBytes { rawBuf in
+                            guard let base = rawBuf.baseAddress else { return 0 }
+                            let operation = try WindowsPipeOperation(pipe: pipe)
+                            defer { operation.reapIfPending() }
+                            let ready = try operation.begin { handle, overlapped in
+                                ReadFile(handle, base, DWORD(bounded), nil, overlapped)
+                            }
+                            let count: UInt32
+                            if let ready {
+                                count = ready
+                            } else {
+                                count = try operation.wait(timeoutMs: timeoutMs)
+                            }
+                            return Int(count)
+                        }
+                        if transferred == 0 { return [] }
+                        if transferred == buffer.count { return buffer }
+                        return Array(buffer[0..<transferred])
+                    } catch let failure as WindowsOSFailure where WindowsNamedPipeHelpers.isPipeEofError(failure.code) {
+                        return []
+                    }
+                }
+
+                private static func writeChunk(
+                    pipe: WindowsPipe,
+                    bytes: [UInt8],
+                    offset: Int,
+                    count: Int,
+                    timeoutMs: UInt64?
+                ) throws -> Int {
+                    let bounded = WindowsNamedPipeHelpers.chunkSize(remaining: count)
+                    if bounded == 0 { return 0 }
+                    return try bytes.withUnsafeBytes { rawBuf in
+                        guard let base = rawBuf.baseAddress else { return 0 }
+                        let operation = try WindowsPipeOperation(pipe: pipe)
+                        defer { operation.reapIfPending() }
+                        let ready = try operation.begin { handle, overlapped in
+                            WriteFile(handle, base.advanced(by: offset), DWORD(bounded), nil, overlapped)
+                        }
+                        let written: UInt32
+                        if let ready {
+                            written = ready
+                        } else {
+                            written = try operation.wait(timeoutMs: timeoutMs)
+                        }
+                        return Int(written)
+                    }
+                }
+                #else
                 internal let inner: InMemoryConnection
 
                 internal init(inner: InMemoryConnection) {
                     self.inner = inner
                 }
+                #endif
 
-                // parity: process-daemon/src/transport/windows.rs#connect [status=adapted hash=39b1366ece1a]
-                public static func connect(_ endpoint: String) throws -> Connection {
-                    let normalized = try validateNamedPipeEndpoint(endpoint)
-                    let conn = try InMemoryHub.shared.connect(endpoint: normalized)
-                    return Connection(inner: conn)
+                public func closeConnection() {
+                    #if os(Windows)
+                    pipeState.withLock { $0 = nil }
+                    #else
+                    inner.close()
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#connect_to [status=adapted hash=4cc557475acc]
-                public static func connect_to(_ endpoint: String, serverPid: UInt32) throws -> Connection {
-                    let normalized = try validateNamedPipeEndpoint(endpoint)
-                    let conn = try InMemoryHub.shared.connect(endpoint: normalized, expectedServerPid: serverPid)
+                // parity: process-daemon/src/transport/windows.rs#connect [status=implemented hash=39b1366ece1a]
+                public static func connect(_ endpoint: String) throws -> Connection {
+                    let wideEndpoint = try WindowsNamedPipeHelpers.validateAndEncodeEndpoint(endpoint)
+                    #if os(Windows)
+                    let handle: OwnedWinHandle = try WindowsNamedPipeHelpers.connectWithBusyRetry(
+                        timeoutMs: WindowsNamedPipeHelpers.connectTimeoutMs,
+                        waitStepMs: WindowsNamedPipeHelpers.waitNamedPipeStepMs,
+                        nowMs: { monotonicNowMs() },
+                        attemptOpen: {
+                            let raw: HANDLE? = wideEndpoint.withUnsafeBufferPointer { ptr in
+                                CreateFileW(
+                                    ptr.baseAddress,
+                                    DWORD(GENERIC_READ) | DWORD(GENERIC_WRITE),
+                                    0,
+                                    nil,
+                                    DWORD(OPEN_EXISTING),
+                                    DWORD(WindowsNamedPipeHelpers.clientFlagsAndAttributes()),
+                                    nil
+                                )
+                            }
+                            if let raw, raw != INVALID_HANDLE_VALUE {
+                                return .connected(OwnedWinHandle(raw))
+                            }
+                            let err = GetLastError()
+                            if WindowsNamedPipeHelpers.isPipeBusyError(UInt32(err)) {
+                                return .busy
+                            }
+                            return .failed(WindowsOSFailure("CreateFileW(\(endpoint))", code: err))
+                        },
+                        waitPipe: { stepMs in
+                            wideEndpoint.withUnsafeBufferPointer { ptr in
+                                _ = WaitNamedPipeW(ptr.baseAddress, DWORD(stepMs))
+                            }
+                        }
+                    )
+                    return Connection(pipe: try WindowsPipe(handle: handle))
+                    #else
+                    _ = wideEndpoint
+                    let conn = try InMemoryHub.shared.connect(endpoint: endpoint)
                     return Connection(inner: conn)
+                    #endif
+                }
+
+                // parity: process-daemon/src/transport/windows.rs#connect_to [status=implemented hash=4cc557475acc]
+                public static func connect_to(_ endpoint: String, serverPid: UInt32) throws -> Connection {
+                    #if os(Windows)
+                    let conn = try connect(endpoint)
+                    let pipe = try conn.requirePipe()
+                    var pid: ULONG = 0
+                    guard GetNamedPipeServerProcessId(pipe.handle.raw, &pid) else {
+                        let err = WindowsOSFailure("GetNamedPipeServerProcessId")
+                        conn.closeConnection()
+                        throw err
+                    }
+                    do {
+                        try WindowsNamedPipeHelpers.verifyServerPid(actual: UInt32(pid), expected: serverPid)
+                    } catch {
+                        conn.closeConnection()
+                        throw error
+                    }
+                    return conn
+                    #else
+                    _ = try WindowsNamedPipeHelpers.validateAndEncodeEndpoint(endpoint)
+                    let conn = try InMemoryHub.shared.connect(endpoint: endpoint, expectedServerPid: serverPid)
+                    return Connection(inner: conn)
+                    #endif
                 }
 
                 // parity: process-daemon/src/transport/windows.rs#set_read_timeout [status=implemented hash=27a95d2e9f7e]
                 public func set_read_timeout(_ timeoutMs: UInt64?) {
+                    #if os(Windows)
+                    timeouts.withLock { $0.readMs = timeoutMs }
+                    #else
                     inner.setReadTimeoutMs(timeoutMs)
+                    #endif
                 }
 
                 // parity: process-daemon/src/transport/windows.rs#set_write_timeout [status=implemented hash=bd2eb22aab7b]
                 public func set_write_timeout(_ timeoutMs: UInt64?) {
+                    #if os(Windows)
+                    timeouts.withLock { $0.writeMs = timeoutMs }
+                    #else
                     inner.setWriteTimeoutMs(timeoutMs)
+                    #endif
                 }
 
                 // parity: process-daemon/src/transport/windows.rs#cancellation [status=implemented hash=cd2d7022052a]
                 public func cancellation() throws -> Cancellation {
-                    Cancellation(inner)
+                    #if os(Windows)
+                    return Cancellation(pipe: try requirePipe())
+                    #else
+                    return Cancellation(inner)
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#finish_response [status=adapted hash=8d05440b3b4e]
+                // parity: process-daemon/src/transport/windows.rs#finish_response [status=implemented hash=8d05440b3b4e]
                 public func finish_response() throws {
+                    #if os(Windows)
+                    let pipe = try requirePipe()
+                    let chunk: [UInt8]
+                    do {
+                        chunk = try Self.readChunk(
+                            pipe: pipe,
+                            maxCount: 1,
+                            timeoutMs: WindowsNamedPipeHelpers.completionTimeoutMs
+                        )
+                    } catch {
+                        pipe.cancel()
+                        throw error
+                    }
+                    if !chunk.isEmpty {
+                        throw DaemonError("unexpected data after request")
+                    }
+                    #else
                     inner.closeWrite()
-                    if !inner.waitForDisconnect(timeoutMs: 2_000) {
+                    if !inner.waitForDisconnect(timeoutMs: WindowsNamedPipeHelpers.completionTimeoutMs) {
                         inner.cancel()
                         throw DaemonError("named pipe response completion timed out")
                     }
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#monitor_disconnect [status=adapted hash=803aef4aac99]
+                // parity: process-daemon/src/transport/windows.rs#monitor_disconnect [status=implemented hash=803aef4aac99]
                 public func monitor_disconnect() throws -> DisconnectMonitor {
-                    DisconnectMonitor(connection: inner, cancellation: try cancellation())
+                    #if os(Windows)
+                    let pipe = try requirePipe()
+                    return DisconnectMonitor(pipe: pipe, cancellation: Cancellation(pipe: pipe))
+                    #else
+                    return DisconnectMonitor(connection: inner, cancellation: try cancellation())
+                    #endif
+                }
+
+                public func readSome(maxCount: Int) throws -> [UInt8] {
+                    #if os(Windows)
+                    let pipe = try requirePipe()
+                    let timeout = timeouts.withLock { $0.readMs }
+                    return try Self.readChunk(pipe: pipe, maxCount: maxCount, timeoutMs: timeout)
+                    #else
+                    return try inner.readSome(maxCount: maxCount)
+                    #endif
                 }
 
                 public func readExact(_ count: Int) throws -> [UInt8] {
-                    try inner.readExact(count)
+                    #if os(Windows)
+                    let pipe = try requirePipe()
+                    let timeout = timeouts.withLock { $0.readMs }
+                    return try WindowsNamedPipeHelpers.readExactLoop(count: count) { step in
+                        try Self.readChunk(pipe: pipe, maxCount: step, timeoutMs: timeout)
+                    }
+                    #else
+                    return try inner.readExact(count)
+                    #endif
                 }
 
                 public func writeAll(_ bytes: [UInt8]) throws {
+                    #if os(Windows)
+                    let pipe = try requirePipe()
+                    let timeout = timeouts.withLock { $0.writeMs }
+                    try WindowsNamedPipeHelpers.writeAllLoop(bytes: bytes) { offset, step in
+                        try Self.writeChunk(
+                            pipe: pipe,
+                            bytes: bytes,
+                            offset: offset,
+                            count: step,
+                            timeoutMs: timeout
+                        )
+                    }
+                    #else
                     try inner.writeAll(bytes)
+                    #endif
                 }
 
                 public func flush() throws {
+                    #if !os(Windows)
                     try inner.flush()
+                    #endif
+                }
+
+                public func makeCancellation() throws -> any ConnectionCancellation {
+                    try cancellation()
+                }
+
+                public func makeDisconnectMonitor() throws -> any ConnectionDisconnectMonitor {
+                    try monitor_disconnect()
                 }
             }
 
-            // parity: process-daemon/src/transport/windows.rs#Listener [status=adapted hash=1ca0b9a93a30]
-            public final class Listener: @unchecked Sendable {
+            // parity: process-daemon/src/transport/windows.rs#Listener [status=implemented hash=1ca0b9a93a30]
+            public final class Listener: StreamListener, @unchecked Sendable {
                 public let endpoint: String
                 private let security: WindowsSecurity.PrivateSecurity
+                #if os(Windows)
+                private struct State: Sendable {
+                    var pending: WindowsPendingConnection
+                    var stopped: Bool
+                }
+                private let endpointWide: [UInt16]
+                private let state: Mutex<State>
+
+                private init(
+                    endpoint: String,
+                    endpointWide: [UInt16],
+                    security: WindowsSecurity.PrivateSecurity,
+                    pending: WindowsPendingConnection
+                ) {
+                    self.endpoint = endpoint
+                    self.endpointWide = endpointWide
+                    self.security = security
+                    self.state = Mutex(State(pending: pending, stopped: false))
+                }
+                #else
                 private let inner: InMemoryListener
 
                 private init(endpoint: String, security: WindowsSecurity.PrivateSecurity, inner: InMemoryListener) {
@@ -1198,75 +1673,141 @@ extension ProcessDaemon {
                 deinit {
                     inner.release()
                 }
+                #endif
 
-                // parity: process-daemon/src/transport/windows.rs#bind [status=adapted hash=801308c5b63d]
+                // parity: process-daemon/src/transport/windows.rs#bind [status=implemented hash=801308c5b63d]
                 public static func bind(_ endpoint: String) throws -> Listener {
-                    let normalized = try validateNamedPipeEndpoint(endpoint)
+                    let wideEndpoint = try WindowsNamedPipeHelpers.validateAndEncodeEndpoint(endpoint)
                     let security = try WindowsSecurity.PrivateSecurity.new()
-                    let inner = try InMemoryHub.shared.bind(endpoint: normalized)
-                    return Listener(endpoint: normalized, security: security, inner: inner)
+                    #if os(Windows)
+                    // Fail closed if anyone already owns this name (FILE_FLAG_FIRST_PIPE_INSTANCE).
+                    let pending = try WindowsPendingConnection(
+                        endpointWide: wideEndpoint,
+                        security: security.native,
+                        first: true
+                    )
+                    return Listener(
+                        endpoint: endpoint,
+                        endpointWide: wideEndpoint,
+                        security: security,
+                        pending: pending
+                    )
+                    #else
+                    _ = wideEndpoint
+                    let inner = try InMemoryHub.shared.bind(endpoint: endpoint)
+                    return Listener(endpoint: endpoint, security: security, inner: inner)
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#accept [status=adapted hash=1ce9d74527ac]
+                // parity: process-daemon/src/transport/windows.rs#accept [status=implemented hash=1ce9d74527ac]
                 public func accept() throws -> Connection? {
-                    inner.accept().map(Connection.init(inner:))
+                    #if os(Windows)
+                    return try state.withLock { s -> Connection? in
+                        if s.stopped || !(try s.pending.ready()) {
+                            return nil
+                        }
+                        // Create the next instance BEFORE handing off the connected one so the
+                        // registered pipe name stays continuously owned even between short requests.
+                        let next = try WindowsPendingConnection(
+                            endpointWide: endpointWide,
+                            security: security.native,
+                            first: false
+                        )
+                        let previous = s.pending
+                        s.pending = next
+                        return Connection(pipe: previous.operation.pipe)
+                    }
+                    #else
+                    return inner.accept().map(Connection.init(inner:))
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#stop [status=adapted hash=c443d236cf59]
+                // parity: process-daemon/src/transport/windows.rs#stop [status=implemented hash=c443d236cf59]
                 public func stop() {
+                    #if os(Windows)
+                    // Stop accepting without releasing the pipe namespace; Listener stays alive
+                    // until registration removal finishes in Daemon.Server.serve.
+                    state.withLock { s in
+                        s.stopped = true
+                        s.pending.cancel()
+                    }
+                    #else
                     inner.stop()
+                    #endif
                 }
 
-                // parity: process-daemon/src/transport/windows.rs#wait [status=adapted hash=45d7c5a51d4d]
+                // parity: process-daemon/src/transport/windows.rs#wait [status=implemented hash=45d7c5a51d4d]
                 public func wait(wake: Wake, listen: Bool, timeoutMs: UInt64) throws -> Readiness {
-                    let pollMs = min(timeoutMs, 25)
+                    let pollMs = WindowsNamedPipeHelpers.listenerPollSleepMs(timeoutMs)
+                    #if os(Windows)
+                    _ = wake
+                    if pollMs > 0 {
+                        Sleep(DWORD(pollMs))
+                    }
+                    // `timedOut` stays false on Windows so the Unix missed-wake detector stays off.
+                    return Readiness(connection: listen, timedOut: false)
+                    #else
                     let r = inner.wait(wake: wake.inner, listen: listen, timeoutMs: pollMs)
                     return Readiness(connection: r.connection || listen, timedOut: false)
+                    #endif
+                }
+
+                public func acceptConnection() throws -> (any StreamConnection)? {
+                    try accept()
+                }
+
+                public func waitForReadiness(
+                    wake: any WakeChannel,
+                    listen: Bool,
+                    timeoutMs: UInt64
+                ) throws -> Transport.Readiness {
+                    let winWake = (wake as? Wake) ?? Wake()
+                    let ready = try wait(wake: winWake, listen: listen, timeoutMs: timeoutMs)
+                    return Transport.Readiness(connection: ready.connection, timedOut: ready.timedOut)
                 }
             }
 
+            #if !os(Windows)
             private static let nextSyntheticHandle = Mutex<UInt64>(1)
+            #endif
 
-            // parity: process-daemon/src/transport/windows.rs#event [status=adapted hash=d643fd9625c9]
+            // parity: process-daemon/src/transport/windows.rs#event [status=implemented hash=d643fd9625c9]
             public static func event() throws -> OwnedHandle {
+                #if os(Windows)
+                let ev = try OwnedWinHandle.makeManualResetEvent()
+                return OwnedHandle(native: ev)
+                #else
                 let id = nextSyntheticHandle.withLock { n -> UInt64 in
                     let cur = n
                     n &+= 1
                     return cur
                 }
                 return OwnedHandle(rawValue: id)
+                #endif
             }
 
             /// Returns a NUL-terminated UTF-16 copy of `value`, refusing embedded NULs.
             // parity: process-daemon/src/transport/windows.rs#wide [status=implemented hash=9c78dd4ea68b]
             public static func wide(_ value: String) throws -> [UInt16] {
-                var units = Array(value.utf16)
-                if units.contains(0) {
-                    throw DaemonError("path contains a NUL")
-                }
-                units.append(0)
-                return units
+                try WindowsNamedPipeHelpers.encodeWide(value)
             }
 
-            // parity: process-daemon/src/transport/windows.rs#owned_handle [status=adapted hash=6a7e3e050344]
+            // parity: process-daemon/src/transport/windows.rs#owned_handle [status=implemented hash=6a7e3e050344]
             public static func owned_handle(_ rawHandle: UInt64) throws -> OwnedHandle {
                 guard rawHandle != 0 && rawHandle != UInt64.max else {
                     throw DaemonError("invalid Windows handle")
                 }
+                #if os(Windows)
+                let ptr = HANDLE(bitPattern: UInt(truncatingIfNeeded: rawHandle))
+                let owned = try OwnedWinHandle.adopt(ptr, operation: "owned_handle")
+                return OwnedHandle(native: owned)
+                #else
                 return OwnedHandle(rawValue: rawHandle)
+                #endif
             }
 
             internal static func validateNamedPipeEndpoint(_ endpoint: String) throws -> String {
-                let prefix = #"\\.\pipe\opencode-pty-"#
-                guard endpoint.hasPrefix(prefix), endpoint.count > prefix.count else {
-                    throw DaemonError("expected a local opencode-pty named-pipe endpoint")
-                }
-                let suffix = endpoint.dropFirst(prefix.count)
-                for scalar in suffix.unicodeScalars {
-                    if scalar.value == 0 || scalar == "\\" || scalar == "/" {
-                        throw DaemonError("expected a local opencode-pty named-pipe endpoint")
-                    }
-                }
+                _ = try WindowsNamedPipeHelpers.validateAndEncodeEndpoint(endpoint)
                 return endpoint
             }
         }
@@ -1355,7 +1896,11 @@ extension ProcessDaemon {
 
         // parity: process-daemon/src/daemon.rs#registration_path [status=implemented hash=792b3a9db28b]
         public static func registration_path(_ directory: String) -> String {
-            joinPath(directory, ProcessDaemon.REGISTRATION_FILE)
+            #if os(Windows)
+            return WindowsNamedPipeHelpers.joinWindowsPath(directory, ProcessDaemon.REGISTRATION_FILE)
+            #else
+            return joinPath(directory, ProcessDaemon.REGISTRATION_FILE)
+            #endif
         }
 
         // parity: process-daemon/src/daemon.rs#read_registration [status=implemented hash=82cea8a4bcdf]
@@ -1383,6 +1928,12 @@ extension ProcessDaemon {
         // parity: process-daemon/src/daemon.rs#run [status=implemented hash=4500b50129ed]
         public static func run(_ directory: String) throws {
             try Server.run(directory)
+        }
+
+        /// Platform-neutral handle to a bound daemon runtime (`UnixRuntime.Runtime` or `WindowsRuntime.Runtime`).
+        public protocol RuntimeHandle: Sendable {
+            var registration: Registration { get }
+            func finish() throws
         }
 
         // MARK: - Daemon Control (`src/daemon/control.rs`)
@@ -1429,16 +1980,16 @@ extension ProcessDaemon {
             }
 
             private let state: Mutex<State>
-            private let wakeChannel: Transport.Unix.Wake
+            private let wakeChannel: any Transport.WakeChannel
             public let stats = Stats()
 
-            private init(wake: Transport.Unix.Wake, ownership: Ownership) {
+            private init(wake: any Transport.WakeChannel, ownership: Ownership) {
                 self.state = Mutex(State(ownership: ownership))
                 self.wakeChannel = wake
             }
 
             // parity: process-daemon/src/daemon/control.rs#new [status=implemented hash=0dda8aa1628b]
-            public static func new(wake: Transport.Unix.Wake, ownership: Ownership) -> Control {
+            public static func new(wake: any Transport.WakeChannel, ownership: Ownership) -> Control {
                 Control(wake: wake, ownership: ownership)
             }
 
@@ -1475,7 +2026,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/daemon/control.rs#wake [status=implemented hash=65daed4d3a19]
-            public func wake() -> Transport.Unix.Wake {
+            public func wake() -> any Transport.WakeChannel {
                 wakeChannel
             }
 
@@ -1550,6 +2101,12 @@ extension ProcessDaemon {
                 let effectiveNowMs = nowMs ?? currentUnixMs()
                 #if !os(WASI)
                 let fm = FileManager.default
+                #if os(Windows)
+                // Symlinks and Windows junctions are never followed or removed.
+                if WindowsRuntimePrimitives.isReparsePoint(path: directory) {
+                    return
+                }
+                #endif
                 let attrs = try fm.attributesOfItem(atPath: directory)
                 let fileType = attrs[.type] as? FileAttributeType
                 guard fileType == .typeDirectory else { return }
@@ -1566,7 +2123,12 @@ extension ProcessDaemon {
                         || name == ProcessDaemon.REGISTRATION_FILE
                         || (name.hasPrefix("service.") && name.hasSuffix(".tmp"))
                     if !known { return }
+                    #if os(Windows)
+                    let childPath = WindowsNamedPipeHelpers.joinWindowsPath(directory, name)
+                    if WindowsRuntimePrimitives.isReparsePoint(path: childPath) { return }
+                    #else
                     let childPath = joinPath(directory, name)
+                    #endif
                     let childAttrs = try fm.attributesOfItem(atPath: childPath)
                     if (childAttrs[.type] as? FileAttributeType) != .typeRegular {
                         return
@@ -1574,8 +2136,22 @@ extension ProcessDaemon {
                     files.append(childPath)
                 }
 
+                #if os(Windows)
+                let lockPath = WindowsNamedPipeHelpers.joinWindowsPath(directory, ProcessDaemon.LOCK_FILE)
+                var sweepLockHandle: OwnedWinHandle? = nil
+                switch WindowsRuntimePrimitives.tryAcquireSweepLock(lockPath: lockPath) {
+                case .acquired(let handle):
+                    sweepLockHandle = handle
+                case .missing:
+                    sweepLockHandle = nil
+                case .lockedByLiveDaemon:
+                    return
+                }
+                let hasLock = sweepLockHandle != nil
+                #else
                 let lockPath = joinPath(directory, ProcessDaemon.LOCK_FILE)
                 let hasLock = fm.fileExists(atPath: lockPath)
+                #endif
                 let registration = try? Daemon.read_registration(directory)
                 if !hasLock {
                     #if os(Windows)
@@ -1605,8 +2181,18 @@ extension ProcessDaemon {
                     return !lIsLock && rIsLock
                 }
                 for file in files {
+                    #if os(Windows)
+                    try withExtendedLifetime(sweepLockHandle) {
+                        try fm.removeItem(atPath: file)
+                    }
+                    #else
                     try fm.removeItem(atPath: file)
+                    #endif
                 }
+                #if os(Windows)
+                // Windows deletes an open lock file only after its last handle closes.
+                sweepLockHandle = nil
+                #endif
                 try fm.removeItem(atPath: directory)
                 #endif
             }
@@ -1645,7 +2231,7 @@ extension ProcessDaemon {
             }
 
             // parity: process-daemon/src/daemon/unix.rs#Runtime [status=implemented hash=c3d3d2a97989]
-            public final class Runtime: @unchecked Sendable {
+            public final class Runtime: RuntimeHandle, @unchecked Sendable {
                 public let registration: Registration
                 public let cleanup: Cleanup
                 private let lockFD: Int32
@@ -1817,21 +2403,54 @@ extension ProcessDaemon {
         // MARK: - Windows Daemon Runtime (`src/daemon/windows.rs`)
 
         public enum WindowsRuntime {
-            // parity: process-daemon/src/daemon/windows.rs#read_registration [status=adapted hash=962325816f53]
+            // parity: process-daemon/src/daemon/windows.rs#read_registration [status=implemented hash=962325816f53]
             public static func read_registration(_ directory: String) throws -> Registration {
-                #if os(WASI)
+                #if os(Windows)
+                let security = try WindowsPrivateSecurity.create()
+                let file: OwnedWinHandle
+                do {
+                    file = try WindowsRuntimePrimitives.openStorageHandle(
+                        path: Daemon.registration_path(directory),
+                        access: DWORD(GENERIC_READ) | DWORD(READ_CONTROL),
+                        creation: DWORD(OPEN_EXISTING),
+                        sharing: DWORD(FILE_SHARE_READ) | DWORD(FILE_SHARE_DELETE),
+                        security: security
+                    )
+                } catch {
+                    throw DaemonError("opencode-pty registration is unavailable: \(error)")
+                }
+                try WindowsRuntimePrimitives.checkStorageKind(file, expectDirectory: false)
+                try security.checkPrivate(handle: file.raw)
+                let bytes = try WindowsRuntimePrimitives.readFileBounded(
+                    file,
+                    maxBytes: WindowsNamedPipeHelpers.maxRegistrationBytes
+                )
+                try WindowsNamedPipeHelpers.validateRegistrationSize(bytes.count)
+                do {
+                    return try JSONDecoder().decode(Registration.self, from: Data(bytes))
+                } catch {
+                    throw DaemonError("invalid opencode-pty registration: \(error)")
+                }
+                #elseif os(WASI)
                 throw DaemonError("opencode-pty registration is unavailable")
                 #else
                 let path = Daemon.registration_path(directory)
-                let data = try Data(contentsOf: URL(fileURLWithPath: path))
-                if data.count > 16 * 1024 {
-                    throw DaemonError("PTY registration is too large")
+                let data: Data
+                do {
+                    data = try Data(contentsOf: URL(fileURLWithPath: path))
+                } catch {
+                    throw DaemonError("opencode-pty registration is unavailable: \(error)")
                 }
-                return try JSONDecoder().decode(Registration.self, from: data)
+                try WindowsNamedPipeHelpers.validateRegistrationSize(data.count)
+                do {
+                    return try JSONDecoder().decode(Registration.self, from: data)
+                } catch {
+                    throw DaemonError("invalid opencode-pty registration: \(error)")
+                }
                 #endif
             }
 
-            // parity: process-daemon/src/daemon/windows.rs#Cleanup [status=adapted hash=35f689406968]
+            // parity: process-daemon/src/daemon/windows.rs#Cleanup [status=implemented hash=35f689406968]
             public struct Cleanup: Sendable {
                 public let directory: String
                 public let instanceId: String
@@ -1841,34 +2460,126 @@ extension ProcessDaemon {
                     self.instanceId = instanceId
                 }
 
-                // parity: process-daemon/src/daemon/windows.rs#run [status=adapted hash=19e1bd2871b1]
+                // parity: process-daemon/src/daemon/windows.rs#run [status=implemented hash=19e1bd2871b1]
                 public func run() throws {
                     #if !os(WASI)
-                    if let current = try? read_registration(directory),
-                       current.instanceId == instanceId {
-                        try? FileManager.default.removeItem(atPath: Daemon.registration_path(directory))
+                    let current = try? read_registration(directory)
+                    if WindowsNamedPipeHelpers.shouldRemoveRegistrationOnCleanup(
+                        currentInstanceId: current?.instanceId,
+                        expectedInstanceId: instanceId
+                    ) {
+                        try FileManager.default.removeItem(atPath: Daemon.registration_path(directory))
                     }
                     #endif
                 }
             }
 
-            // parity: process-daemon/src/daemon/windows.rs#Runtime [status=adapted hash=1fdcc9c32d10]
-            public final class Runtime: Sendable {
+            // parity: process-daemon/src/daemon/windows.rs#Runtime [status=implemented hash=1fdcc9c32d10]
+            public final class Runtime: RuntimeHandle, @unchecked Sendable {
                 public let registration: Registration
                 public let cleanup: Cleanup
+                #if os(Windows)
+                private struct HeldState: Sendable {
+                    var lock: OwnedWinHandle?
+                    var directory: OwnedWinHandle?
+                }
+                private final class SweeperState: @unchecked Sendable {
+                    let cond = PortableCondition()
+                    var done = false
+                }
+                private let held: Mutex<HeldState>
+                private let sweeper = SweeperState()
 
+                private init(
+                    registration: Registration,
+                    cleanup: Cleanup,
+                    lock: OwnedWinHandle,
+                    directory: OwnedWinHandle
+                ) {
+                    self.registration = registration
+                    self.cleanup = cleanup
+                    self.held = Mutex(HeldState(lock: lock, directory: directory))
+                    let sweeper = self.sweeper
+                    let sweepDir = cleanup.directory
+                    Thread.detachNewThread {
+                        Sweep.stale_runtimes(sweepDir)
+                        sweeper.cond.withLock {
+                            sweeper.done = true
+                            sweeper.cond.broadcast()
+                        }
+                    }
+                }
+                #else
                 private init(registration: Registration, cleanup: Cleanup) {
                     self.registration = registration
                     self.cleanup = cleanup
                 }
+                #endif
 
-                // parity: process-daemon/src/daemon/windows.rs#bind [status=adapted hash=fc116fa71b29]
+                // parity: process-daemon/src/daemon/windows.rs#bind [status=implemented hash=fc116fa71b29]
                 public static func bind(_ directory: String) throws -> (Runtime, Transport.Windows.Listener) {
                     guard isAbsolutePath(directory) else {
                         throw DaemonError("PTY runtime directory must be an absolute path")
                     }
+                    #if os(Windows)
+                    let security = try WindowsPrivateSecurity.create()
+                    if let parent = WindowsNamedPipeHelpers.parentDirectory(of: directory) {
+                        try FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
+                    }
+                    try WindowsRuntimePrimitives.createPrivateDirectory(path: directory, security: security)
+                    let directoryHandle = try WindowsRuntimePrimitives.openStorageHandle(
+                        path: directory,
+                        access: DWORD(FILE_READ_ATTRIBUTES) | DWORD(FILE_TRAVERSE) | DWORD(READ_CONTROL) | DWORD(WRITE_DAC),
+                        creation: DWORD(OPEN_EXISTING),
+                        sharing: DWORD(FILE_SHARE_READ) | DWORD(FILE_SHARE_WRITE),
+                        security: security
+                    )
+                    try WindowsRuntimePrimitives.checkStorageKind(directoryHandle, expectDirectory: true)
+                    try security.makePrivate(handle: directoryHandle.raw)
+                    // All later paths come from the held handle, never the caller's path.
+                    let heldDir = try WindowsRuntimePrimitives.heldDirectoryPath(directoryHandle)
+                    let lockPath = WindowsNamedPipeHelpers.joinWindowsPath(heldDir, ProcessDaemon.LOCK_FILE)
+                    let lockHandle = try WindowsRuntimePrimitives.openStorageHandle(
+                        path: lockPath,
+                        access: DWORD(GENERIC_READ) | DWORD(GENERIC_WRITE) | DWORD(READ_CONTROL) | DWORD(WRITE_DAC),
+                        creation: DWORD(OPEN_ALWAYS),
+                        sharing: DWORD(FILE_SHARE_READ) | DWORD(FILE_SHARE_WRITE),
+                        security: security
+                    )
+                    try WindowsRuntimePrimitives.checkStorageKind(lockHandle, expectDirectory: false)
+                    try security.makePrivate(handle: lockHandle.raw)
+                    guard WindowsRuntimePrimitives.tryLockFileExclusive(lockHandle) else {
+                        throw DaemonError("another opencode-pty process already owns the service lock")
+                    }
+
                     let instanceId = ProcessDaemon.randomHex32()
-                    let pipeName = #"\\.\pipe\opencode-pty-\#(instanceId)"#
+                    let pipeName = WindowsNamedPipeHelpers.makeEndpoint(instanceId: instanceId)
+                    let registration = Registration(
+                        instanceId: instanceId,
+                        pid: currentProcessID(),
+                        protocolVersion: ProcessDaemon.PROTOCOL_VERSION,
+                        socket: pipeName,
+                        token: ProcessDaemon.randomHex32(),
+                        features: ProcessDaemon.features()
+                    )
+                    let listener = try Transport.Windows.Listener.bind(pipeName)
+                    try WindowsRuntimePrimitives.writeRegistrationAtomically(
+                        directory: heldDir,
+                        directoryHandle: directoryHandle,
+                        registration: registration,
+                        security: security
+                    )
+                    let cleanup = Cleanup(directory: heldDir, instanceId: instanceId)
+                    let runtime = Runtime(
+                        registration: registration,
+                        cleanup: cleanup,
+                        lock: lockHandle,
+                        directory: directoryHandle
+                    )
+                    return (runtime, listener)
+                    #else
+                    let instanceId = ProcessDaemon.randomHex32()
+                    let pipeName = WindowsNamedPipeHelpers.makeEndpoint(instanceId: instanceId)
                     let registration = Registration(
                         instanceId: instanceId,
                         pid: currentProcessID(),
@@ -1884,14 +2595,40 @@ extension ProcessDaemon {
                     #endif
                     let cleanup = Cleanup(directory: directory, instanceId: instanceId)
                     return (Runtime(registration: registration, cleanup: cleanup), listener)
+                    #endif
                 }
 
-                // parity: process-daemon/src/daemon/windows.rs#finish [status=adapted hash=241f92b01637]
+                // parity: process-daemon/src/daemon/windows.rs#finish [status=implemented hash=241f92b01637]
                 public func finish() throws {
+                    #if os(Windows)
+                    sweeper.cond.withLock {
+                        while !sweeper.done {
+                            _ = sweeper.cond.wait(timeoutMs: 25)
+                        }
+                    }
+                    var cleanupError: (any Error)? = nil
+                    do {
+                        try cleanup.run()
+                    } catch {
+                        cleanupError = error
+                    }
+                    // Release protected handles denying delete access before removing lock and directory.
+                    held.withLock { s in
+                        s.lock = nil
+                        s.directory = nil
+                    }
+                    let lockPath = WindowsNamedPipeHelpers.joinWindowsPath(cleanup.directory, ProcessDaemon.LOCK_FILE)
+                    try? FileManager.default.removeItem(atPath: lockPath)
+                    try? FileManager.default.removeItem(atPath: cleanup.directory)
+                    if let cleanupError {
+                        throw cleanupError
+                    }
+                    #else
                     try cleanup.run()
                     #if !os(WASI)
                     try? FileManager.default.removeItem(atPath: joinPath(cleanup.directory, ProcessDaemon.LOCK_FILE))
                     try? FileManager.default.removeItem(atPath: cleanup.directory)
+                    #endif
                     #endif
                 }
             }
@@ -1942,6 +2679,18 @@ extension ProcessDaemon {
 
             // parity: process-daemon/src/daemon/server.rs#run [status=implemented hash=92a43ce86240]
             public static func run(_ directory: String) throws {
+                #if os(Windows)
+                let wake = try Transport.Windows.Wake.new()
+                let (runtime, listener) = try WindowsRuntime.Runtime.bind(directory)
+                let control = Control.new(wake: wake, ownership: Ownership.new(nowMs: monotonicNowMs()))
+                try serve(
+                    runtime: runtime,
+                    listener: listener,
+                    control: control,
+                    service: TerminalService.new(),
+                    safetyNetMs: 2_000
+                )
+                #else
                 let blocked = try block()
                 let wake = try Transport.Unix.Wake.new()
                 let (runtime, listener) = try UnixRuntime.Runtime.bind(directory)
@@ -1954,9 +2703,10 @@ extension ProcessDaemon {
                     service: TerminalService.new(),
                     safetyNetMs: 2_000
                 )
+                #endif
             }
 
-            /// Handle for a running background daemon server (Unix socket or in-memory transport)
+            /// Handle for a running background daemon server (Unix socket, Windows named pipe, or in-memory transport)
             /// used for deterministic cross-platform client/server integration tests.
             public final class RunningInstance: @unchecked Sendable {
                 public let registration: Registration
@@ -1969,8 +2719,8 @@ extension ProcessDaemon {
                     registration: Registration,
                     control: Control,
                     service: TerminalService,
-                    runtime: UnixRuntime.Runtime,
-                    listener: Transport.Unix.Listener,
+                    runtime: any RuntimeHandle,
+                    listener: any Transport.StreamListener,
                     safetyNetMs: UInt64
                 ) {
                     self.registration = registration
@@ -2013,8 +2763,8 @@ extension ProcessDaemon {
                 }
             }
 
-            /// Starts a live daemon server on either an in-memory endpoint (cross-platform)
-            /// or a real Unix domain socket directory.
+            /// Starts a live daemon server on an in-memory endpoint (cross-platform),
+            /// a real Unix domain socket directory (macOS/Linux), or a real Windows named pipe (Windows).
             public static func startBackground(
                 directory: String? = nil,
                 useInMemoryEndpoint: Bool = true,
@@ -2024,11 +2774,54 @@ extension ProcessDaemon {
                 service: TerminalService = TerminalService.new()
             ) throws -> RunningInstance {
                 let effectiveDirectory = directory ?? "memory://test-\(ProcessDaemon.randomHex32())"
+                let forceInMemory = useInMemoryEndpoint || effectiveDirectory.hasPrefix("memory://")
+                let ownership = Ownership.with_timeouts(
+                    nowMs: monotonicNowMs(),
+                    acquireMs: acquireTimeoutMs,
+                    handoffMs: handoffTimeoutMs
+                )
+                #if os(Windows)
+                if !forceInMemory {
+                    let wake = try Transport.Windows.Wake.new()
+                    let (runtime, listener) = try WindowsRuntime.Runtime.bind(effectiveDirectory)
+                    let control = Control.new(wake: wake, ownership: ownership)
+                    return RunningInstance(
+                        registration: runtime.registration,
+                        control: control,
+                        service: service,
+                        runtime: runtime,
+                        listener: listener,
+                        safetyNetMs: safetyNetMs
+                    )
+                }
+                #endif
                 let wake = try Transport.Unix.Wake.new()
                 let (runtime, listener) = try UnixRuntime.Runtime.bind(
                     effectiveDirectory,
-                    useInMemoryEndpoint: useInMemoryEndpoint
+                    useInMemoryEndpoint: forceInMemory
                 )
+                let control = Control.new(wake: wake, ownership: ownership)
+                return RunningInstance(
+                    registration: runtime.registration,
+                    control: control,
+                    service: service,
+                    runtime: runtime,
+                    listener: listener,
+                    safetyNetMs: safetyNetMs
+                )
+            }
+
+            /// Starts a live background daemon server bound to a supplied `RuntimeHandle` and `StreamListener`
+            /// (allowing shared server/client transport contract tests on any host OS).
+            public static func startBackgroundWithTransport(
+                runtime: any RuntimeHandle,
+                listener: any Transport.StreamListener,
+                wake: any Transport.WakeChannel,
+                acquireTimeoutMs: UInt64 = 60_000,
+                handoffTimeoutMs: UInt64 = 60_000,
+                safetyNetMs: UInt64 = 50,
+                service: TerminalService = TerminalService.new()
+            ) -> RunningInstance {
                 let ownership = Ownership.with_timeouts(
                     nowMs: monotonicNowMs(),
                     acquireMs: acquireTimeoutMs,
@@ -2046,18 +2839,21 @@ extension ProcessDaemon {
             }
 
             internal static func serve(
-                runtime: UnixRuntime.Runtime,
-                listener: Transport.Unix.Listener,
+                runtime: any RuntimeHandle,
+                listener: any Transport.StreamListener,
                 control: Control,
                 service: TerminalService,
                 safetyNetMs: UInt64
             ) throws {
                 let registration = runtime.registration
-                let activeCancellations = Mutex<[Transport.Unix.Cancellation]>([])
-                let activeHandlers = Mutex<Int>(0)
+                struct HandlerRegistry: Sendable {
+                    var nextID: UInt64 = 1
+                    var active: [UInt64: any Transport.ConnectionCancellation] = [:]
+                }
+                let handlers = Mutex(HandlerRegistry())
                 let handlerCond = PortableCondition()
 
-                var ready = Transport.Unix.Readiness()
+                var ready = Transport.Readiness()
                 var last = OwnershipSnapshot()
 
                 do {
@@ -2071,15 +2867,19 @@ extension ProcessDaemon {
 
                         if ready.connection {
                             for _ in 0..<64 {
-                                guard let conn = try listener.accept() else { break }
-                                let cancel = try conn.cancellation()
-                                activeCancellations.withLock { $0.append(cancel) }
-                                activeHandlers.withLock { $0 += 1 }
+                                guard let conn = try listener.acceptConnection() else { break }
+                                let cancel = try conn.makeCancellation()
+                                let handlerID = handlers.withLock { reg -> UInt64 in
+                                    let id = reg.nextID
+                                    reg.nextID &+= 1
+                                    reg.active[id] = cancel
+                                    return id
+                                }
                                 #if !os(WASI)
                                 Thread.detachNewThread {
                                     defer {
                                         conn.closeConnection()
-                                        activeHandlers.withLock { $0 -= 1 }
+                                        handlers.withLock { _ = $0.active.removeValue(forKey: handlerID) }
                                         handlerCond.withLock { handlerCond.broadcast() }
                                         control.notify()
                                     }
@@ -2093,7 +2893,7 @@ extension ProcessDaemon {
                                 #else
                                 defer {
                                     conn.closeConnection()
-                                    activeHandlers.withLock { $0 -= 1 }
+                                    handlers.withLock { _ = $0.active.removeValue(forKey: handlerID) }
                                 }
                                 _ = try? handleConnection(
                                     stream: conn,
@@ -2110,35 +2910,43 @@ extension ProcessDaemon {
                         if let deadline = tick.deadlineMs {
                             timeout = min(timeout, deadline > now ? (deadline - now) : 0)
                         }
-                        ready = try listener.wait(wake: control.wake(), listen: true, timeoutMs: timeout)
+                        ready = try listener.waitForReadiness(wake: control.wake(), listen: true, timeoutMs: timeout)
                         control.stats.incrementIterations()
                     }
                 } catch {
                     control.request_stop()
                     listener.stop()
-                    for c in activeCancellations.withLock({ $0 }) { c.cancel() }
+                    for c in handlers.withLock({ Array($0.active.values) }) { c.cancel() }
                     service.shutdown()
-                    try? runtime.finish()
+                    // Keep listener alive until runtime.finish() removes service.json so the Windows
+                    // named-pipe namespace remains owned throughout registration cleanup.
+                    withExtendedLifetime(listener) {
+                        try? runtime.finish()
+                    }
                     throw error
                 }
 
                 control.request_stop()
                 listener.stop()
-                for c in activeCancellations.withLock({ $0 }) { c.cancel() }
+                for c in handlers.withLock({ Array($0.active.values) }) { c.cancel() }
                 service.shutdown()
                 // Wait briefly for handler threads to exit cleanly
                 let joinDeadline = monotonicNowMs() &+ 2_000
                 handlerCond.withLock {
-                    while activeHandlers.withLock({ $0 }) > 0 && monotonicNowMs() < joinDeadline {
+                    while !handlers.withLock({ $0.active.isEmpty }) && monotonicNowMs() < joinDeadline {
                         _ = handlerCond.wait(timeoutMs: 25)
                     }
                 }
-                try runtime.finish()
+                // Keep listener alive until runtime.finish() removes service.json so the Windows
+                // named-pipe namespace remains owned throughout registration cleanup.
+                try withExtendedLifetime(listener) {
+                    try runtime.finish()
+                }
             }
 
             /// Handles one protocol v9 client connection (request/response, owner, wait, or subscribe).
             public static func handleConnection(
-                stream: Transport.Unix.Connection,
+                stream: any Transport.StreamConnection,
                 service: TerminalService,
                 registration: Registration,
                 control: Control
@@ -2222,7 +3030,7 @@ extension ProcessDaemon {
             }
 
             private static func ownerConnection(
-                stream: Transport.Unix.Connection,
+                stream: any Transport.StreamConnection,
                 registration: Registration,
                 control: Control,
                 generation: UInt64
@@ -2269,7 +3077,7 @@ extension ProcessDaemon {
             }
 
             private static func streamSubscription(
-                stream: Transport.Unix.Connection,
+                stream: any Transport.StreamConnection,
                 service: TerminalService,
                 control: Control,
                 id: TerminalId,
@@ -2307,7 +3115,7 @@ extension ProcessDaemon {
                     )
                 )
 
-                let monitor = try stream.monitor_disconnect()
+                let monitor = try stream.makeDisconnectMonitor()
                 defer { monitor.finish() }
 
                 while !control.stopping() && !monitor.disconnected() {
@@ -2348,7 +3156,7 @@ extension ProcessDaemon {
             }
 
             private static func waitForExit(
-                stream: Transport.Unix.Connection,
+                stream: any Transport.StreamConnection,
                 service: TerminalService,
                 control: Control,
                 id: TerminalId
@@ -2360,7 +3168,7 @@ extension ProcessDaemon {
                     try sendResponse(stream, .error(message: String(describing: error)))
                     return
                 }
-                let monitor = try stream.monitor_disconnect()
+                let monitor = try stream.makeDisconnectMonitor()
                 defer { monitor.finish() }
 
                 while !control.stopping() && !monitor.disconnected() {
@@ -2379,7 +3187,7 @@ extension ProcessDaemon {
                 }
             }
 
-            private static func sendResponse(_ stream: Transport.Unix.Connection, _ response: Response) throws {
+            private static func sendResponse(_ stream: any Transport.StreamConnection, _ response: Response) throws {
                 try ProcessDaemon.write_frame(stream, value: response)
                 try stream.finish_response()
             }
