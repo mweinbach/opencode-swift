@@ -4156,20 +4156,32 @@ public enum TUIFeaturePlugin {
 
     // MARK: Prompt BTW, Footer & Goal (`src/feature-plugins/prompt/*`)
 
-    // parity: tui/src/feature-plugins/prompt/btw.tsx#Answer [status=adapted hash=f5e5aedfd205]
+    /// The `/btw` answer dialog. The answer is concealed Markdown with grid tables on the raised overlay; `markdown`
+    /// is the plugin block renderer (upstream `renderBlock={props.markdown()}`, e.g. Mermaid and LaTeX fences).
+    // parity: tui/src/feature-plugins/prompt/btw.tsx#Answer [status=adapted hash=d53a152ebe45]
     public static func Answer(
         ctx: any RenderContext,
         question: String,
         answer: String,
         copied: Bool = false,
         theme: ResolvedTheme,
+        syntax: SyntaxStyle? = nil,
+        markdown: MarkdownRenderBlockCallback? = nil,
         onCopy: (@Sendable () -> Void)? = nil,
         onClose: (@Sendable () -> Void)? = nil
     ) -> BoxRenderable {
         let surface = theme.surface(.dialog)
         let body = BoxRenderable(ctx: ctx, options: BoxOptions(width: .percent(100), flexDirection: .column, gap: .point(1)))
         body.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(question), fg: .rgba(surface.text.muted), wrapMode: .word)))
-        body.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(answer), fg: .rgba(surface.text.base), wrapMode: .word)))
+        body.add(MarkdownRenderable(ctx: ctx, options: MarkdownOptions(
+            content: answer,
+            syntaxStyle: syntax ?? generateSyntax(theme),
+            fg: .rgba(surface.markdown.text),
+            bg: .rgba(surface.background.raised.high),
+            conceal: true,
+            tableOptions: MarkdownTableOptions(style: .grid, cellPaddingX: 1),
+            renderBlock: markdown
+        )))
         return TUIPrimitive.DialogLayout(
             ctx: ctx,
             id: "btw-answer",
@@ -4191,7 +4203,21 @@ public enum TUIFeaturePlugin {
         )
     }
 
-    // parity: tui/src/feature-plugins/prompt/footer.tsx#PromptFooter [status=adapted hash=69f311fa922f]
+    /// `"3 subagents"`, or nil for none.
+    private static func busyLabel(_ count: Int, _ noun: String) -> String? {
+        count > 0 ? "\(count) \(noun)\(count == 1 ? "" : "s")" : nil
+    }
+
+    /// The live part of the prompt footer: what the session has running, in the picker's busy order (scripts,
+    /// subagents, shells).
+    public static func promptFooterLive(_ counts: TUIRoutes.BusyCounts) -> [String] {
+        [busyLabel(counts.scripts, "script"), busyLabel(counts.subagents, "subagent"), busyLabel(counts.shells, "shell")]
+            .compactMap { $0 }
+    }
+
+    /// The prompt footer. Clicking the live counts dispatches `session.child.first` through `onOpenChild` with the
+    /// tab the picker should open on: the first busy one (``TUIRoutes/busyTab(_:)``).
+    // parity: tui/src/feature-plugins/prompt/footer.tsx#PromptFooter [status=adapted hash=fb2d86185d4b]
     public static func PromptFooter(
         ctx: any RenderContext,
         usageText: String? = nil,
@@ -4200,17 +4226,34 @@ public enum TUIFeaturePlugin {
         shellCount: Int = 0,
         scriptCount: Int = 0,
         commandShortcut: String? = "ctrl+p",
-        theme: ResolvedTheme
+        childShortcut: String? = nil,
+        theme: ResolvedTheme,
+        onOpenChild: (@Sendable (String) -> Void)? = nil
     ) -> BoxRenderable {
         let row = BoxRenderable(ctx: ctx, options: BoxOptions(id: "prompt-footer", width: .percent(100), flexDirection: .row, justifyContent: .spaceBetween, gap: .point(2)))
-        var leftParts: [String] = []
-        // What the session has running, in the picker's busy order: scripts, subagents, shells.
-        if scriptCount > 0 { leftParts.append("\(scriptCount) script\(scriptCount == 1 ? "" : "s")") }
-        if subagentCount > 0 { leftParts.append("\(subagentCount) subagent\(subagentCount == 1 ? "" : "s")") }
-        if shellCount > 0 { leftParts.append("\(shellCount) shell\(shellCount == 1 ? "" : "s")") }
-        if let usageText, !usageText.isEmpty { leftParts.append(usageText) }
-        if let costText, !costText.isEmpty { leftParts.append(costText) }
-        row.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(leftParts.joined(separator: " · ")), fg: .rgba(theme.text.muted), wrapMode: TextWrapMode.none)))
+        let counts = TUIRoutes.BusyCounts(scripts: scriptCount, subagents: subagentCount, shells: shellCount)
+        let live = promptFooterLive(counts)
+        let status = [usageText, costText].compactMap { $0 }.filter { !$0.isEmpty }
+        let left = BoxRenderable(ctx: ctx, options: BoxOptions(minWidth: .point(0), flexShrink: 1, flexDirection: .row))
+        if !live.isEmpty {
+            let tab = TUIRoutes.busyTab(counts)
+            let liveBox = BoxRenderable(ctx: ctx, options: BoxOptions(
+                id: "prompt-footer-live",
+                flexShrink: 0,
+                flexDirection: .row,
+                onMouseUp: { _ in onOpenChild?(tab) }
+            ))
+            if let childShortcut, !childShortcut.isEmpty {
+                liveBox.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("\(childShortcut) "), fg: .rgba(theme.text.base), wrapMode: TextWrapMode.none)))
+            }
+            liveBox.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(live.joined(separator: " · ")), fg: .rgba(theme.text.muted), wrapMode: TextWrapMode.none)))
+            left.add(liveBox)
+        }
+        if !status.isEmpty {
+            let separator = live.isEmpty ? "" : " · "
+            left.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(separator + status.joined(separator: " · ")), fg: .rgba(theme.text.muted), wrapMode: TextWrapMode.none)))
+        }
+        row.add(left)
         if let commandShortcut, !commandShortcut.isEmpty {
             row.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string("\(commandShortcut) commands"), fg: .rgba(theme.text.muted), wrapMode: TextWrapMode.none)))
         }

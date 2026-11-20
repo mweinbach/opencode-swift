@@ -798,7 +798,142 @@ extension TUIComponent {
         }
     }
 
-    // parity: tui/src/component/prompt/autocomplete.tsx#Autocomplete [status=adapted hash=518ca1d95020]
+    /// A part the autocomplete inserts as a virtual chip.
+    public enum AutocompletePart: Equatable, Sendable {
+        case file(TUIPrompt.PromptFile, path: String? = nil)
+        case agent(PromptSchema.AgentAttachment)
+        case skill(PromptInputSchema.SkillAttachment)
+    }
+
+    /// What ``autocompleteInsertPart(_:index:text:part:prompt:styleId:typeId:hasSkill:)`` created: the chip's
+    /// extmark and, when the part was added to the prompt, its reference for `setExtmark`.
+    public struct AutocompleteInsertion: Equatable, Sendable {
+        public let extmarkId: Int
+        public let ref: TUIPrompt.PromptPartRef?
+        /// The file path to bump in frecency, for file parts.
+        public let frecencyPath: String?
+    }
+
+    private static func mentioned(_ mention: PromptSchema.PromptMention?, start: Int, end: Int, text: String) -> PromptSchema.PromptMention? {
+        mention.map { _ in PromptSchema.PromptMention(start: start, end: end, text: text) }
+    }
+
+    /// `insertPart`: replaces the cells from the trigger (`index`) to the cursor with `@text` (plus a space unless one
+    /// already follows), marks `@text` as a virtual chip carrying its part as ``TUIPrompt/ChipData`` so undo can
+    /// rebind a deleted chip, and adds the part to `prompt` with its mention moved onto the chip.
+    ///
+    /// A file already attached moves the existing part's mention instead of adding another; a skill already attached
+    /// is skipped. Returns nil when `hasSkill` rejects the skill.
+    public static func autocompleteInsertPart(
+        _ input: TextareaRenderable,
+        index: Int,
+        text: String,
+        part: AutocompletePart,
+        prompt: inout TUIPrompt.PromptInfo,
+        styleId: Int,
+        typeId: Int,
+        hasSkill: (String) -> Bool = { _ in false }
+    ) -> AutocompleteInsertion? {
+        if case .skill(let skill) = part, hasSkill(skill.id) { return nil }
+        let currentCursorOffset = input.cursorOffset
+        let needsSpace = input.getTextRange(startOffset: currentCursorOffset, endOffset: currentCursorOffset + 1) != " "
+        let prefix = "@"
+        let append = prefix + text + (needsSpace ? " " : "")
+
+        TUIPrompt.deleteCells(input, start: index, end: currentCursorOffset)
+        input.insertText(append)
+
+        let virtualText = prefix + text
+        let extmarkStart = index
+        let widthMethod: TextWidthMethod = input.ctx.widthMethod == .wcwidth ? .wcwidth : .unicode
+        let extmarkEnd = extmarkStart + measureEditText(virtualText, widthMethod: widthMethod)
+
+        // The part as the prompt stores it, with its mention on the chip. Upstream mutates the part object the mark's
+        // data points at, so the data sees the moved mention too, except for a file already attached.
+        var data = TUIPrompt.ChipData()
+        var ref: TUIPrompt.PromptPartRef?
+        var frecencyPath: String?
+        switch part {
+        case .file(let file, let path):
+            frecencyPath = path
+            if let existingIndex = prompt.files.firstIndex(where: { $0.uri == file.uri }) {
+                data = TUIPrompt.ChipData(file: file)
+                prompt.files[existingIndex].mention = mentioned(prompt.files[existingIndex].mention, start: extmarkStart, end: extmarkEnd, text: virtualText)
+            } else {
+                var value = file
+                value.mention = mentioned(file.mention, start: extmarkStart, end: extmarkEnd, text: virtualText)
+                data = TUIPrompt.ChipData(file: value)
+                prompt.files.append(value)
+                ref = TUIPrompt.PromptPartRef(type: .file, index: prompt.files.count - 1)
+            }
+        case .skill(let skill):
+            let value = PromptInputSchema.SkillAttachment(
+                id: skill.id,
+                mention: mentioned(skill.mention, start: extmarkStart, end: extmarkEnd, text: virtualText)
+            )
+            if prompt.skills.contains(where: { $0.id == skill.id }) {
+                data = TUIPrompt.ChipData(skill: skill)
+            } else {
+                data = TUIPrompt.ChipData(skill: value)
+                prompt.skills.append(value)
+                ref = TUIPrompt.PromptPartRef(type: .skill, index: prompt.skills.count - 1)
+            }
+        case .agent(let agent):
+            let value = PromptSchema.AgentAttachment(
+                name: agent.name,
+                mention: mentioned(agent.mention, start: extmarkStart, end: extmarkEnd, text: virtualText)
+            )
+            data = TUIPrompt.ChipData(agent: value)
+            prompt.agents.append(value)
+            ref = TUIPrompt.PromptPartRef(type: .agent, index: prompt.agents.count - 1)
+        }
+
+        let extmarkId = input.extmarks.create(ExtmarkOptions(
+            start: extmarkStart,
+            end: extmarkEnd,
+            virtual: true,
+            styleId: styleId,
+            data: data,
+            typeId: typeId
+        ))
+        return AutocompleteInsertion(extmarkId: extmarkId, ref: ref, frecencyPath: frecencyPath)
+    }
+
+    /// `insertDirectory`: replaces the cells from the trigger to the cursor with `directory`.
+    public static func autocompleteInsertDirectory(_ input: TextareaRenderable, index: Int, directory: String) {
+        TUIPrompt.deleteCells(input, start: index, end: input.cursorOffset)
+        input.insertText(directory)
+    }
+
+    /// `expandDirectory`: completes the selected directory in place. In directory mode the path replaces the token
+    /// with a trailing separator; in mention mode it becomes `@path/` so the mention keeps searching inside it.
+    public static func autocompleteExpandDirectory(
+        _ input: TextareaRenderable,
+        index: Int,
+        selected: String,
+        directoryMode: Bool,
+        separator: String = "/"
+    ) {
+        let displayText = String(selected.reversed().drop(while: { $0.isWhitespace }).reversed())
+        let selectedPath = displayText.hasPrefix("@") ? String(displayText.dropFirst()) : displayText
+        if directoryMode {
+            autocompleteInsertDirectory(input, index: index, directory: selectedPath.hasSuffix(separator) ? selectedPath : selectedPath + separator)
+            return
+        }
+        TUIPrompt.deleteCells(input, start: index, end: input.cursorOffset)
+        input.insertText("@" + selectedPath + "/")
+    }
+
+    /// `hide(true)` for a slash command: removes the typed `/token` and syncs the prompt text immediately.
+    public static func autocompleteRemoveCommandToken(_ input: TextareaRenderable, index: Int, prompt: inout TUIPrompt.PromptInfo) {
+        TUIPrompt.deleteCells(input, start: index, end: input.cursorOffset)
+        prompt.text = input.plainText
+    }
+
+    /// Renders the autocomplete menu. The textarea edits it makes on selection live in ``autocompleteInsertPart``,
+    /// ``autocompleteInsertDirectory``, ``autocompleteExpandDirectory`` and ``autocompleteRemoveCommandToken``, which
+    /// all delete the token through `deleteCells` so wide characters and tabs never split.
+    // parity: tui/src/component/prompt/autocomplete.tsx#Autocomplete [status=adapted hash=cc72b3762ef9]
     public static func Autocomplete(
         ctx: any RenderContext,
         options: [AutocompleteOption],

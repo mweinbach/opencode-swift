@@ -321,8 +321,8 @@ extension Merman {
         }
     }
 
-    /// Create an OpenTUI Markdown node renderer for fenced Mermaid diagrams.
-    // parity: merman/src/markdown.ts#createMermaidMarkdownRenderer [status=implemented hash=09acdbcabca7]
+    /// Create an OpenTUI Markdown block renderer (`renderBlock`) for fenced Mermaid diagrams.
+    // parity: merman/src/markdown.ts#createMermaidMarkdownRenderer [status=implemented hash=e5bb2f5dbe99]
     public static func createMermaidMarkdownRenderer(
         ctx: any RenderContext,
         options: MermaidMarkdownRendererOptions = MermaidMarkdownRendererOptions()
