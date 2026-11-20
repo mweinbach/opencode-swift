@@ -343,12 +343,100 @@ public enum CoreProvider {
                 try Service(database: SQLiteDatabaseFactory.open(path: ":memory:"))
             }
 
+            /// Decodes a stored SQLite credential `value` JSON blob cleanly, supporting both integer
+            /// and floating-point OAuth `expires` timestamps as well as legacy pre-v2.1 `configuration`
+            /// objects on key credentials (matching `credential-legacy.ts`).
+            public static func decodeStoredValue(_ rawJSON: String, fallbackMethodID: String? = nil) -> Value? {
+                guard let parsed = try? JSONDecoder().decode(JSONValue.self, from: Data(rawJSON.utf8)),
+                      case .object(let obj) = parsed,
+                      case .string(let typeStr) = obj["type"]
+                else { return nil }
+
+                let metadata: [String: JSONValue]?
+                if let rawMeta = obj["metadata"], rawMeta != .null {
+                    guard case .object(let dict) = rawMeta else { return nil }
+                    metadata = dict
+                } else {
+                    metadata = nil
+                }
+
+                switch typeStr {
+                case "oauth":
+                    let methodRaw: String?
+                    if case .string(let s) = obj["methodID"], !s.isEmpty {
+                        methodRaw = s
+                    } else if let fallback = fallbackMethodID, !fallback.isEmpty {
+                        methodRaw = fallback
+                    } else {
+                        methodRaw = nil
+                    }
+                    guard let methodRaw,
+                          case .string(let refresh) = obj["refresh"],
+                          case .string(let access) = obj["access"]
+                    else { return nil }
+
+                    let expiresInt: Int?
+                    switch obj["expires"] {
+                    case .int(let i) where i >= 0:
+                        expiresInt = Int(i)
+                    case .double(let d) where d.isFinite && d >= 0 && d < Double(Int.max):
+                        expiresInt = Int(d)
+                    default:
+                        expiresInt = nil
+                    }
+                    guard let expiresInt,
+                          let expires = SchemaPrimitive.NonNegativeInt(rawValue: expiresInt)
+                    else { return nil }
+
+                    return .oauth(OAuth(
+                        methodID: IntegrationMethodID(rawValue: methodRaw),
+                        refresh: refresh,
+                        access: access,
+                        expires: expires,
+                        metadata: metadata
+                    ))
+
+                case "key":
+                    guard case .string(let key) = obj["key"] else { return nil }
+                    let effectiveMetadata: [String: JSONValue]?
+                    if case .object(let config) = obj["configuration"] {
+                        var merged = metadata ?? [:]
+                        for (k, v) in config {
+                            merged[k] = v
+                        }
+                        effectiveMetadata = merged
+                    } else {
+                        effectiveMetadata = metadata
+                    }
+                    return .key(Key(key: key, metadata: effectiveMetadata))
+
+                case "external":
+                    let methodRaw: String?
+                    if case .string(let s) = obj["methodID"], !s.isEmpty {
+                        methodRaw = s
+                    } else if let fallback = fallbackMethodID, !fallback.isEmpty {
+                        methodRaw = fallback
+                    } else {
+                        methodRaw = nil
+                    }
+                    guard let methodRaw else { return nil }
+                    return .external(External(
+                        methodID: IntegrationMethodID(rawValue: methodRaw),
+                        metadata: metadata
+                    ))
+
+                default:
+                    return nil
+                }
+            }
+
             private static func decodeRow(_ row: SQLiteRow) -> Info? {
                 guard let idRaw = row.string("id"),
                       let integrationRaw = row.string("integration_id"),
+                      !integrationRaw.isEmpty,
                       let label = row.string("label"),
                       let valRaw = row.string("value"),
-                      let value = try? JSONDecoder().decode(Value.self, from: Data(valRaw.utf8))
+                      let value = Self.decodeStoredValue(valRaw, fallbackMethodID: row.string("method_id"))
                 else { return nil }
                 return Info(
                     id: ID(rawValue: idRaw),
@@ -2799,20 +2887,488 @@ public enum CoreModel {
     // MARK: - core/src/models-dev/v1.ts & core/src/models-dev.ts
 
     public enum ModelsDev {
-        private static func numericValue(_ value: JSONValue?) -> Double? {
+        public enum DecodeError: Swift.Error, Equatable, Sendable, CustomStringConvertible {
+            case invalidJSON(String)
+            case expectedObject
+
+            public var description: String {
+                switch self {
+                case .invalidJSON(let detail):
+                    return "Invalid ModelsDev catalog JSON: \(detail)"
+                case .expectedObject:
+                    return "Expected top-level JSON object for ModelsDev catalog"
+                }
+            }
+        }
+
+        public enum Event {
+            public static let refreshed = EventSchema.ephemeral(
+                type: ModelsDevSchema.Event.refreshed.type,
+                identifier: "ModelsDev.Refreshed",
+                data: EventSchema.EmptyData.self
+            )
+            public static let Refreshed = refreshed
+            public static let definitions: [SchemaPrimitive.EventDescriptor] = ModelsDevSchema.Event.definitions
+        }
+
+        private static func int64Value(_ value: JSONValue?) -> Int64? {
             switch value {
-            case .double(let d) where d.isFinite: return d
-            case .int(let i): return Double(i)
+            case .int(let i): return i
+            case .double(let d) where d.isFinite && d >= Double(Int64.min) && d < Double(Int64.max):
+                return Int64(d)
             default: return nil
             }
         }
 
-        private static func intValue(_ value: JSONValue?) -> Int? {
-            switch value {
-            case .int(let i): return Int(i)
-            case .double(let d) where d.isFinite: return Int(d)
-            default: return nil
+        /// Lightweight RFC 8259 JSON AST preserving exact object key insertion order.
+        /// Required because models.dev v2 `api`, `cache.write`, and multiplier objects are order-sensitive
+        /// (the first API entry is the model's default route).
+        private indirect enum OrderedJSON: Sendable {
+            case null
+            case bool(Bool)
+            case int(Int64)
+            case double(Double)
+            case string(String)
+            case array([OrderedJSON])
+            case object([(String, OrderedJSON)])
+
+            var doubleValue: Double? {
+                switch self {
+                case .double(let d) where d.isFinite: return d
+                case .int(let i): return Double(i)
+                default: return nil
+                }
             }
+
+            var intValue: Int? {
+                switch self {
+                case .int(let i): return Int(i)
+                case .double(let d) where d.isFinite: return Int(d)
+                default: return nil
+                }
+            }
+
+            var stringValue: String? {
+                if case .string(let s) = self { return s }
+                return nil
+            }
+
+            var boolValue: Bool? {
+                if case .bool(let b) = self { return b }
+                return nil
+            }
+
+            var arrayValue: [OrderedJSON]? {
+                if case .array(let arr) = self { return arr }
+                return nil
+            }
+
+            var objectValue: [(String, OrderedJSON)]? {
+                if case .object(let pairs) = self { return pairs }
+                return nil
+            }
+
+            func toJSONValue() -> JSONValue {
+                switch self {
+                case .null: return .null
+                case .bool(let b): return .bool(b)
+                case .int(let i): return .int(i)
+                case .double(let d): return .double(d)
+                case .string(let s): return .string(s)
+                case .array(let arr): return .array(arr.map { $0.toJSONValue() })
+                case .object(let pairs):
+                    var dict: [String: JSONValue] = [:]
+                    dict.reserveCapacity(pairs.count)
+                    for (k, v) in pairs {
+                        dict[k] = v.toJSONValue()
+                    }
+                    return .object(dict)
+                }
+            }
+
+            static func fromJSONValue(_ value: JSONValue) -> OrderedJSON {
+                switch value {
+                case .null: return .null
+                case .bool(let b): return .bool(b)
+                case .int(let i): return .int(i)
+                case .double(let d): return .double(d)
+                case .string(let s): return .string(s)
+                case .array(let arr): return .array(arr.map(fromJSONValue))
+                case .object(let dict):
+                    return .object(dict.sorted(by: { $0.key < $1.key }).map { ($0.key, fromJSONValue($0.value)) })
+                }
+            }
+
+            static func parse(_ text: String) throws -> OrderedJSON {
+                let bytes = Array(text.utf8)
+                var parser = Parser(bytes: bytes)
+                let root = try parser.parseRoot()
+                return root
+            }
+
+            private struct Parser {
+                let bytes: [UInt8]
+                let count: Int
+                var pos: Int = 0
+
+                init(bytes: [UInt8]) {
+                    self.bytes = bytes
+                    self.count = bytes.count
+                    // Strip UTF-8 BOM if present
+                    if count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
+                        self.pos = 3
+                    }
+                }
+
+                mutating func parseRoot() throws -> OrderedJSON {
+                    skipWhitespace()
+                    guard pos < count else {
+                        throw DecodeError.invalidJSON("Empty input")
+                    }
+                    let val = try parseValue(depth: 0)
+                    skipWhitespace()
+                    guard pos == count else {
+                        throw DecodeError.invalidJSON("Unexpected trailing data at byte \(pos)")
+                    }
+                    return val
+                }
+
+                mutating func skipWhitespace() {
+                    while pos < count {
+                        let b = bytes[pos]
+                        if b == 0x20 || b == 0x09 || b == 0x0A || b == 0x0D {
+                            pos += 1
+                        } else {
+                            break
+                        }
+                    }
+                }
+
+                mutating func parseValue(depth: Int) throws -> OrderedJSON {
+                    guard depth < 256 else {
+                        throw DecodeError.invalidJSON("Maximum nesting depth exceeded")
+                    }
+                    skipWhitespace()
+                    guard pos < count else {
+                        throw DecodeError.invalidJSON("Unexpected end of input")
+                    }
+                    switch bytes[pos] {
+                    case 0x7B: // {
+                        return try parseObject(depth: depth + 1)
+                    case 0x5B: // [
+                        return try parseArray(depth: depth + 1)
+                    case 0x22: // "
+                        return .string(try parseString())
+                    case 0x74: // t
+                        try expectLiteral([0x74, 0x72, 0x75, 0x65]) // true
+                        return .bool(true)
+                    case 0x66: // f
+                        try expectLiteral([0x66, 0x61, 0x6C, 0x73, 0x65]) // false
+                        return .bool(false)
+                    case 0x6E: // n
+                        try expectLiteral([0x6E, 0x75, 0x6C, 0x6C]) // null
+                        return .null
+                    case 0x2D, 0x30...0x39: // - or 0-9
+                        return try parseNumber()
+                    default:
+                        throw DecodeError.invalidJSON("Unexpected byte \(bytes[pos]) at offset \(pos)")
+                    }
+                }
+
+                mutating func expectLiteral(_ expected: [UInt8]) throws {
+                    guard pos + expected.count <= count else {
+                        throw DecodeError.invalidJSON("Unexpected end of input")
+                    }
+                    for i in 0..<expected.count {
+                        if bytes[pos + i] != expected[i] {
+                            throw DecodeError.invalidJSON("Invalid literal at offset \(pos)")
+                        }
+                    }
+                    pos += expected.count
+                }
+
+                mutating func parseObject(depth: Int) throws -> OrderedJSON {
+                    pos += 1 // skip '{'
+                    skipWhitespace()
+                    var pairs: [(String, OrderedJSON)] = []
+                    if pos < count && bytes[pos] == 0x7D { // '}'
+                        pos += 1
+                        return .object(pairs)
+                    }
+                    while true {
+                        skipWhitespace()
+                        guard pos < count && bytes[pos] == 0x22 else {
+                            throw DecodeError.invalidJSON("Expected string key at offset \(pos)")
+                        }
+                        let key = try parseString()
+                        skipWhitespace()
+                        guard pos < count && bytes[pos] == 0x3A else { // ':'
+                            throw DecodeError.invalidJSON("Expected ':' at offset \(pos)")
+                        }
+                        pos += 1
+                        let value = try parseValue(depth: depth)
+                        pairs.append((key, value))
+                        skipWhitespace()
+                        guard pos < count else {
+                            throw DecodeError.invalidJSON("Unterminated object")
+                        }
+                        let next = bytes[pos]
+                        if next == 0x2C { // ','
+                            pos += 1
+                        } else if next == 0x7D { // '}'
+                            pos += 1
+                            return .object(pairs)
+                        } else {
+                            throw DecodeError.invalidJSON("Expected ',' or '}' at offset \(pos)")
+                        }
+                    }
+                }
+
+                mutating func parseArray(depth: Int) throws -> OrderedJSON {
+                    pos += 1 // skip '['
+                    skipWhitespace()
+                    var items: [OrderedJSON] = []
+                    if pos < count && bytes[pos] == 0x5D { // ']'
+                        pos += 1
+                        return .array(items)
+                    }
+                    while true {
+                        let item = try parseValue(depth: depth)
+                        items.append(item)
+                        skipWhitespace()
+                        guard pos < count else {
+                            throw DecodeError.invalidJSON("Unterminated array")
+                        }
+                        let next = bytes[pos]
+                        if next == 0x2C { // ','
+                            pos += 1
+                        } else if next == 0x5D { // ']'
+                            pos += 1
+                            return .array(items)
+                        } else {
+                            throw DecodeError.invalidJSON("Expected ',' or ']' at offset \(pos)")
+                        }
+                    }
+                }
+
+                mutating func parseString() throws -> String {
+                    pos += 1 // skip opening '"'
+                    let start = pos
+                    while pos < count {
+                        let b = bytes[pos]
+                        if b == 0x22 { // '"'
+                            let end = pos
+                            pos += 1
+                            return String(decoding: bytes[start..<end], as: UTF8.self)
+                        }
+                        if b == 0x5C { // '\\'
+                            return try parseEscapedString(prefixStart: start)
+                        }
+                        if b < 0x20 {
+                            throw DecodeError.invalidJSON("Unescaped control character at offset \(pos)")
+                        }
+                        pos += 1
+                    }
+                    throw DecodeError.invalidJSON("Unterminated string")
+                }
+
+                mutating func parseEscapedString(prefixStart: Int) throws -> String {
+                    var out: [UInt8] = Array(bytes[prefixStart..<pos])
+                    while pos < count {
+                        let b = bytes[pos]
+                        if b == 0x22 { // '"'
+                            pos += 1
+                            return String(decoding: out, as: UTF8.self)
+                        }
+                        if b == 0x5C { // '\\'
+                            pos += 1
+                            guard pos < count else {
+                                throw DecodeError.invalidJSON("Unterminated escape sequence")
+                            }
+                            let esc = bytes[pos]
+                            pos += 1
+                            switch esc {
+                            case 0x22: out.append(0x22) // "
+                            case 0x5C: out.append(0x5C) // \
+                            case 0x2F: out.append(0x2F) // /
+                            case 0x62: out.append(0x08) // \b
+                            case 0x66: out.append(0x0C) // \f
+                            case 0x6E: out.append(0x0A) // \n
+                            case 0x72: out.append(0x0D) // \r
+                            case 0x74: out.append(0x09) // \t
+                            case 0x75: // \uXXXX
+                                let unit = try parseHex4()
+                                let scalar: Unicode.Scalar
+                                if (0xD800...0xDBFF).contains(unit) {
+                                    guard pos + 6 <= count && bytes[pos] == 0x5C && bytes[pos + 1] == 0x75 else {
+                                        throw DecodeError.invalidJSON("Unpaired high surrogate at offset \(pos)")
+                                    }
+                                    pos += 2
+                                    let low = try parseHex4()
+                                    guard (0xDC00...0xDFFF).contains(low) else {
+                                        throw DecodeError.invalidJSON("Invalid low surrogate at offset \(pos)")
+                                    }
+                                    let combined = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00)
+                                    guard let s = Unicode.Scalar(combined) else {
+                                        throw DecodeError.invalidJSON("Invalid Unicode scalar")
+                                    }
+                                    scalar = s
+                                } else if (0xDC00...0xDFFF).contains(unit) {
+                                    throw DecodeError.invalidJSON("Unpaired low surrogate at offset \(pos)")
+                                } else {
+                                    guard let s = Unicode.Scalar(unit) else {
+                                        throw DecodeError.invalidJSON("Invalid Unicode scalar")
+                                    }
+                                    scalar = s
+                                }
+                                for u8 in scalar.utf8 {
+                                    out.append(u8)
+                                }
+                            default:
+                                throw DecodeError.invalidJSON("Invalid escape character at offset \(pos - 1)")
+                            }
+                        } else if b < 0x20 {
+                            throw DecodeError.invalidJSON("Unescaped control character at offset \(pos)")
+                        } else {
+                            out.append(b)
+                            pos += 1
+                        }
+                    }
+                    throw DecodeError.invalidJSON("Unterminated string")
+                }
+
+                mutating func parseHex4() throws -> UInt32 {
+                    guard pos + 4 <= count else {
+                        throw DecodeError.invalidJSON("Incomplete unicode escape")
+                    }
+                    var value: UInt32 = 0
+                    for _ in 0..<4 {
+                        let b = bytes[pos]
+                        pos += 1
+                        let digit: UInt32
+                        if b >= 0x30 && b <= 0x39 {
+                            digit = UInt32(b - 0x30)
+                        } else if b >= 0x41 && b <= 0x46 {
+                            digit = UInt32(b - 0x41 + 10)
+                        } else if b >= 0x61 && b <= 0x66 {
+                            digit = UInt32(b - 0x61 + 10)
+                        } else {
+                            throw DecodeError.invalidJSON("Invalid hex digit in unicode escape")
+                        }
+                        value = (value << 4) | digit
+                    }
+                    return value
+                }
+
+                mutating func parseNumber() throws -> OrderedJSON {
+                    let start = pos
+                    var isNegative = false
+                    if bytes[pos] == 0x2D { // '-'
+                        isNegative = true
+                        pos += 1
+                    }
+                    guard pos < count else {
+                        throw DecodeError.invalidJSON("Incomplete number")
+                    }
+                    var intAccum: UInt64 = 0
+                    var intOverflow = false
+                    if bytes[pos] == 0x30 { // '0'
+                        pos += 1
+                        if pos < count && bytes[pos] >= 0x30 && bytes[pos] <= 0x39 {
+                            throw DecodeError.invalidJSON("Leading zero in number at offset \(start)")
+                        }
+                    } else if bytes[pos] >= 0x31 && bytes[pos] <= 0x39 {
+                        while pos < count && bytes[pos] >= 0x30 && bytes[pos] <= 0x39 {
+                            let d = UInt64(bytes[pos] - 0x30)
+                            if !intOverflow {
+                                let (mul, o1) = intAccum.multipliedReportingOverflow(by: 10)
+                                let (add, o2) = mul.addingReportingOverflow(d)
+                                if o1 || o2 {
+                                    intOverflow = true
+                                } else {
+                                    intAccum = add
+                                }
+                            }
+                            pos += 1
+                        }
+                    } else {
+                        throw DecodeError.invalidJSON("Invalid number at offset \(start)")
+                    }
+
+                    var isFloat = false
+                    if pos < count && bytes[pos] == 0x2E { // '.'
+                        isFloat = true
+                        pos += 1
+                        let fracStart = pos
+                        while pos < count && bytes[pos] >= 0x30 && bytes[pos] <= 0x39 {
+                            pos += 1
+                        }
+                        guard pos > fracStart else {
+                            throw DecodeError.invalidJSON("Missing fraction digits at offset \(start)")
+                        }
+                    }
+                    if pos < count && (bytes[pos] == 0x65 || bytes[pos] == 0x45) { // 'e' or 'E'
+                        isFloat = true
+                        pos += 1
+                        if pos < count && (bytes[pos] == 0x2B || bytes[pos] == 0x2D) {
+                            pos += 1
+                        }
+                        let expStart = pos
+                        while pos < count && bytes[pos] >= 0x30 && bytes[pos] <= 0x39 {
+                            pos += 1
+                        }
+                        guard pos > expStart else {
+                            throw DecodeError.invalidJSON("Missing exponent digits at offset \(start)")
+                        }
+                    }
+
+                    if !isFloat && !intOverflow {
+                        if isNegative {
+                            if intAccum == 0 {
+                                return .int(0)
+                            }
+                            if intAccum == UInt64(Int64.max) + 1 {
+                                return .int(Int64.min)
+                            }
+                            if intAccum <= UInt64(Int64.max) {
+                                return .int(-Int64(intAccum))
+                            }
+                        } else if intAccum <= UInt64(Int64.max) {
+                            return .int(Int64(intAccum))
+                        }
+                    }
+
+                    let slice = String(decoding: bytes[start..<pos], as: UTF8.self)
+                    guard let doubleVal = Double(slice), doubleVal.isFinite else {
+                        throw DecodeError.invalidJSON("Invalid floating-point number '\(slice)'")
+                    }
+                    return .double(doubleVal)
+                }
+            }
+        }
+
+        private static func field(_ pairs: [(String, OrderedJSON)]?, _ key: String) -> OrderedJSON? {
+            guard let pairs else { return nil }
+            for (k, v) in pairs.reversed() {
+                if k == key { return v }
+            }
+            return nil
+        }
+
+        private static func stringField(_ pairs: [(String, OrderedJSON)]?, _ key: String) -> String? {
+            field(pairs, key)?.stringValue
+        }
+
+        private static func boolField(_ pairs: [(String, OrderedJSON)]?, _ key: String) -> Bool? {
+            field(pairs, key)?.boolValue
+        }
+
+        private static func objectField(_ pairs: [(String, OrderedJSON)]?, _ key: String) -> [(String, OrderedJSON)]? {
+            field(pairs, key)?.objectValue
+        }
+
+        private static func arrayField(_ pairs: [(String, OrderedJSON)]?, _ key: String) -> [OrderedJSON]? {
+            field(pairs, key)?.arrayValue
         }
 
         public enum V1 {
@@ -2918,9 +3474,9 @@ public enum CoreModel {
                     guard case .object(let prov) = value,
                           case .string(let pid) = prov["id"],
                           case .string(let pname) = prov["name"],
-                          case .string(let npm) = prov["npm"],
                           case .object(let rawModels) = prov["models"]
                     else { continue }
+                    let npm: String = if case .string(let n) = prov["npm"] { n } else { "" }
                     let envArr = prov["env"] ?? .array([])
                     let provApi: String = { if case .string(let a) = prov["api"] { return a } else { return "" } }()
                     var convertedModels: [String: JSONValue] = [:]
@@ -2932,7 +3488,8 @@ public enum CoreModel {
                         var modelProv: [String: JSONValue]? = nil
                         if case .object(let p) = m["provider"] { modelProv = p }
                         var mNpm = npm
-                        if case .string(let n) = modelProv?["npm"] { mNpm = n }
+                        if case .string(let n) = modelProv?["npm"], !n.isEmpty { mNpm = n }
+                        guard !mNpm.isEmpty else { continue }
                         var mApi = provApi
                         if case .string(let a) = modelProv?["api"] { mApi = a }
                         var shape: String? = nil
@@ -2992,6 +3549,7 @@ public enum CoreModel {
                         }
                         convertedModels[mid] = .object(converted)
                     }
+                    guard !convertedModels.isEmpty else { continue }
                     out[key] = .object([
                         "id": .string(pid),
                         "name": .string(pname),
@@ -3036,6 +3594,57 @@ public enum CoreModel {
             Hash.sha256(text)
         }
 
+        /// Amazon Bedrock catalog IDs that require cross-region inference profiles and cannot be called directly.
+        public static let bedrockProfileOnlyIDs: Set<String> = [
+            "amazon.nova-2-lite-v1:0",
+            "anthropic.claude-fable-5",
+            "anthropic.claude-fable-5-1",
+            "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "anthropic.claude-haiku-5-5",
+            "anthropic.claude-opus-4-1-20250805-v1:0",
+            "anthropic.claude-opus-4-5-20251101-v1:0",
+            "anthropic.claude-opus-4-7",
+            "anthropic.claude-opus-4-8",
+            "anthropic.claude-opus-5",
+            "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "anthropic.claude-sonnet-5",
+            "anthropic.claude-sonnet-5-5",
+            "deepseek.r1-v1:0",
+            "meta.llama4-maverick-17b-instruct-v1:0",
+            "meta.llama4-scout-17b-instruct-v1:0",
+            "mistral.pixtral-large-2502-v1:0",
+            "writer.palmyra-x4-v1:0",
+            "writer.palmyra-x5-v1:0",
+        ]
+
+        /// Filters decoded snapshots matching upstream `plugin/models-dev.ts`:
+        /// removes deprecated provider aliases (`azure-cognitive-services`, `google-vertex-anthropic`),
+        /// deprecated models, non-text chat models, Amazon Bedrock profile-only models, and empty providers.
+        public static func filterSnapshots(_ data: [Snapshot]) -> [Snapshot] {
+            data
+                .filter { snap in
+                    snap.info.id.rawValue != "azure-cognitive-services"
+                        && snap.info.id.rawValue != "google-vertex-anthropic"
+                }
+                .compactMap { snap -> Snapshot? in
+                    let filteredModels = snap.models.filter { model in
+                        let effectiveID = model.modelID.rawValue.isEmpty ? model.id.rawValue : model.modelID.rawValue
+                        return model.status != .deprecated
+                            && ((model.type ?? .chat) != .chat || Model.supportsText(model))
+                            && !(snap.info.id == .amazonBedrock && bedrockProfileOnlyIDs.contains(effectiveID))
+                    }
+                    guard !filteredModels.isEmpty else { return nil }
+                    return Snapshot(info: snap.info, models: filteredModels, environment: snap.environment)
+                }
+        }
+
+        private static let supportedModelTypes: Set<String> = ["chat", "decision", "image", "video"]
+
+        private static let compatiblePackages: Set<String> = [
+            "@opencode/ai/providers/openai-compatible",
+            "@opencode/ai/providers/anthropic-compatible",
+        ]
+
         private static let buildsOwnURL: Set<String> = [
             "@opencode/ai/providers/amazon-bedrock",
             "@opencode/ai/providers/azure/chat",
@@ -3063,12 +3672,12 @@ public enum CoreModel {
             return raw
         }
 
-        private static func decodeModalities(_ value: JSONValue?) -> [String] {
-            guard case .array(let items) = value else { return ["text"] }
+        private static func decodeModalities(_ value: OrderedJSON?) -> [String] {
+            guard let items = value?.arrayValue else { return ["text"] }
             var seen: Set<String> = []
             var out: [String] = []
             for item in items {
-                guard case .string(let s) = item, !s.isEmpty else { continue }
+                guard let s = item.stringValue, !s.isEmpty else { continue }
                 let norm = normalizeModality(s)
                 if seen.insert(norm).inserted {
                     out.append(norm)
@@ -3077,24 +3686,22 @@ public enum CoreModel {
             return out.isEmpty ? ["text"] : out
         }
 
-        private static func decodeReasoning(_ value: JSONValue?) -> ConfigProviderSchema.Reasoning {
-            guard case .object(let obj) = value,
-                  case .bool(true) = obj["supported"]
+        private static func decodeReasoning(_ value: OrderedJSON?) -> ConfigProviderSchema.Reasoning {
+            guard let obj = value?.objectValue,
+                  boolField(obj, "supported") == true
             else {
                 return .unsupported
             }
-            let toggle: Bool? = if case .bool(let b) = obj["toggle"] { b } else { nil }
-            let effort: [String]? = {
-                guard case .array(let arr) = obj["effort"] else { return nil }
-                return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
-            }()
-            let budget: ConfigProviderSchema.ReasoningBudget? = {
-                guard case .object(let bObj) = obj["budget"] else { return nil }
-                return ConfigProviderSchema.ReasoningBudget(
-                    min: intValue(bObj["min"]),
-                    max: intValue(bObj["max"])
+            let toggle = boolField(obj, "toggle")
+            let effort: [String]? = arrayField(obj, "effort").map { arr in
+                arr.compactMap(\.stringValue)
+            }
+            let budget: ConfigProviderSchema.ReasoningBudget? = objectField(obj, "budget").map { bObj in
+                ConfigProviderSchema.ReasoningBudget(
+                    min: field(bObj, "min")?.intValue,
+                    max: field(bObj, "max")?.intValue
                 )
-            }()
+            }
             return .supported(toggle: toggle, effort: effort, budget: budget)
         }
 
@@ -3166,45 +3773,46 @@ public enum CoreModel {
             return money
         }
 
-        private static func extractCacheWrite(_ cacheVal: JSONValue?) -> Double? {
-            guard case .object(let cache) = cacheVal else { return nil }
-            func firstWrite(_ raw: JSONValue?) -> Double? {
-                if let n = numericValue(raw) { return n }
-                if case .object(let map) = raw {
-                    if let fiveMin = numericValue(map["5m"]) { return fiveMin }
-                    for key in map.keys.sorted() {
-                        if let n = numericValue(map[key]) { return n }
+        private static func extractCacheWrite(_ cacheVal: OrderedJSON?) -> Double? {
+            guard let cache = cacheVal?.objectValue else { return nil }
+            func firstWrite(_ raw: OrderedJSON?) -> Double? {
+                guard let raw else { return nil }
+                if let n = raw.doubleValue { return n }
+                if let pairs = raw.objectValue {
+                    // Preserves JSON insertion order (matching JS `Object.values(write)[0]`).
+                    for (_, val) in pairs {
+                        if let n = val.doubleValue { return n }
                     }
                 }
                 return nil
             }
-            if let direct = firstWrite(cache["write"]) { return direct }
-            if case .object(let explicit) = cache["explicit"] {
-                return firstWrite(explicit["write"])
+            if let direct = firstWrite(field(cache, "write")) { return direct }
+            if let explicit = objectField(cache, "explicit") {
+                return firstWrite(field(explicit, "write"))
             }
             return nil
         }
 
-        private static func decodeCost(_ raw: JSONValue?) -> [ModelSchema.Cost] {
+        private static func decodeCost(_ raw: OrderedJSON?) -> [ModelSchema.Cost] {
             let zeroCost = [ModelSchema.Cost(input: .zero, output: .zero, cache: ModelSchema.Cost.Cache(read: .zero, write: .zero))]
-            guard case .object(let obj) = raw else { return zeroCost }
+            guard let obj = raw?.objectValue else { return zeroCost }
 
             // Direct v2 shape: `cost.text.{input, output}`
-            if case .object(let text) = obj["text"],
-               case .object(let textIn) = text["input"],
-               case .object(let textOut) = text["output"] {
-                let inUnit: String? = if case .string(let u) = textIn["unit"] { u } else { nil }
-                let outUnit: String? = if case .string(let u) = textOut["unit"] { u } else { nil }
+            if let text = objectField(obj, "text"),
+               let textIn = objectField(text, "input"),
+               let textOut = objectField(text, "output") {
+                let inUnit = stringField(textIn, "unit")
+                let outUnit = stringField(textOut, "unit")
                 guard (inUnit == nil || inUnit == "token"), (outUnit == nil || outUnit == "token") else {
                     return zeroCost
                 }
-                let baseIn = makeUSD(numericValue(textIn["price"]))
-                let baseOut = makeUSD(numericValue(textOut["price"]))
+                let baseIn = makeUSD(field(textIn, "price")?.doubleValue)
+                let baseOut = makeUSD(field(textOut, "price")?.doubleValue)
                 let baseCacheRead: MoneySchema.USDPerMillionTokens = {
-                    if case .object(let c) = textIn["cache"] { return makeUSD(numericValue(c["read"])) }
+                    if let c = objectField(textIn, "cache") { return makeUSD(field(c, "read")?.doubleValue) }
                     return .zero
                 }()
-                let baseCacheWrite = makeUSD(extractCacheWrite(textIn["cache"]))
+                let baseCacheWrite = makeUSD(extractCacheWrite(field(textIn, "cache")))
                 let base = ModelSchema.Cost(
                     tier: nil,
                     input: baseIn,
@@ -3215,17 +3823,17 @@ public enum CoreModel {
                 var tierOrder: [Int] = []
                 var tiers: [Int: ModelSchema.Cost] = [:]
 
-                func contextTierSize(_ whenVal: JSONValue?) -> Int? {
-                    guard case .object(let when) = whenVal, when.count == 1,
-                          case .object(let ctx) = when["context"]
+                func contextTierSize(_ whenVal: OrderedJSON?) -> Int? {
+                    guard let when = whenVal?.objectValue, when.count == 1,
+                          let ctx = objectField(when, "context")
                     else { return nil }
-                    return intValue(ctx["gt"]) ?? intValue(ctx["gte"])
+                    return field(ctx, "gt")?.intValue ?? field(ctx, "gte")?.intValue
                 }
 
-                if case .array(let inOverrides) = textIn["overrides"] {
+                if let inOverrides = arrayField(textIn, "overrides") {
                     for ovVal in inOverrides {
-                        guard case .object(let ov) = ovVal,
-                              let size = contextTierSize(ov["when"])
+                        guard let ov = ovVal.objectValue,
+                              let size = contextTierSize(field(ov, "when"))
                         else { continue }
                         let existing = tiers[size] ?? ModelSchema.Cost(
                             tier: ModelSchema.Cost.Tier(size: size),
@@ -3234,13 +3842,14 @@ public enum CoreModel {
                             cache: base.cache
                         )
                         if tiers[size] == nil { tierOrder.append(size) }
-                        let ovPrice = numericValue(ov["price"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.input
+                        let ovPrice = field(ov, "price")?.doubleValue.flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.input
                         let ovCacheRead: MoneySchema.USDPerMillionTokens = {
-                            if case .object(let c) = ov["cache"], let r = numericValue(c["read"]),
+                            if let c = objectField(ov, "cache"),
+                               let r = field(c, "read")?.doubleValue,
                                let m = MoneySchema.USDPerMillionTokens(rawValue: r) { return m }
                             return existing.cache.read
                         }()
-                        let ovCacheWrite = extractCacheWrite(ov["cache"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.cache.write
+                        let ovCacheWrite = extractCacheWrite(field(ov, "cache")).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.cache.write
                         tiers[size] = ModelSchema.Cost(
                             tier: ModelSchema.Cost.Tier(size: size),
                             input: ovPrice,
@@ -3250,10 +3859,10 @@ public enum CoreModel {
                     }
                 }
 
-                if case .array(let outOverrides) = textOut["overrides"] {
+                if let outOverrides = arrayField(textOut, "overrides") {
                     for ovVal in outOverrides {
-                        guard case .object(let ov) = ovVal,
-                              let size = contextTierSize(ov["when"])
+                        guard let ov = ovVal.objectValue,
+                              let size = contextTierSize(field(ov, "when"))
                         else { continue }
                         let existing = tiers[size] ?? ModelSchema.Cost(
                             tier: ModelSchema.Cost.Tier(size: size),
@@ -3262,7 +3871,7 @@ public enum CoreModel {
                             cache: base.cache
                         )
                         if tiers[size] == nil { tierOrder.append(size) }
-                        let ovPrice = numericValue(ov["price"]).flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.output
+                        let ovPrice = field(ov, "price")?.doubleValue.flatMap(MoneySchema.USDPerMillionTokens.init(rawValue:)) ?? existing.output
                         tiers[size] = ModelSchema.Cost(
                             tier: ModelSchema.Cost.Tier(size: size),
                             input: existing.input,
@@ -3276,13 +3885,13 @@ public enum CoreModel {
             }
 
             // Flat cost fallback (`{ input, output, cache_read, cache_write }`)
-            if numericValue(obj["input"]) != nil || numericValue(obj["output"]) != nil {
+            if field(obj, "input")?.doubleValue != nil || field(obj, "output")?.doubleValue != nil {
                 return [ModelSchema.Cost(
-                    input: makeUSD(numericValue(obj["input"])),
-                    output: makeUSD(numericValue(obj["output"])),
+                    input: makeUSD(field(obj, "input")?.doubleValue),
+                    output: makeUSD(field(obj, "output")?.doubleValue),
                     cache: ModelSchema.Cost.Cache(
-                        read: makeUSD(numericValue(obj["cache_read"])),
-                        write: makeUSD(numericValue(obj["cache_write"]))
+                        read: makeUSD(field(obj, "cache_read")?.doubleValue),
+                        write: makeUSD(field(obj, "cache_write")?.doubleValue)
                     )
                 )]
             }
@@ -3290,50 +3899,50 @@ public enum CoreModel {
             return zeroCost
         }
 
-        private static func factorAt(_ factor: JSONValue, path: [String]) -> Double {
-            var node: JSONValue? = factor
+        private static func factorAt(_ factor: OrderedJSON, path: [String]) -> Double {
+            var node: OrderedJSON? = factor
             for key in path {
                 guard let current = node else { return 1 }
-                if let n = numericValue(current) { return n }
-                if case .object(let map) = current {
-                    node = map[key]
+                if let n = current.doubleValue { return n }
+                if let pairs = current.objectValue {
+                    node = field(pairs, key)
                 } else {
                     return 1
                 }
             }
             guard let leaf = node else { return 1 }
-            if let n = numericValue(leaf) { return n }
-            if case .object(let map) = leaf {
-                for key in map.keys.sorted() {
-                    if let n = numericValue(map[key]) { return n }
+            if let n = leaf.doubleValue { return n }
+            if let pairs = leaf.objectValue {
+                for (_, val) in pairs {
+                    if let n = val.doubleValue { return n }
                 }
             }
             return 1
         }
 
         private static func modeCost(
-            modelCostRaw: JSONValue?,
+            modelCostRaw: OrderedJSON?,
             baseCost: [ModelSchema.Cost],
             modeName: String,
-            modeObj: [String: JSONValue]
+            modeObj: [(String, OrderedJSON)]
         ) -> [ModelSchema.Cost] {
             guard let baseDefault = baseCost.first else { return baseCost }
             let baseTiers = Array(baseCost.dropFirst())
-            if let explicitModeCost = modeObj["cost"], explicitModeCost != .null {
+            if let explicitModeCost = field(modeObj, "cost"), case .object = explicitModeCost {
                 let decoded = decodeCost(explicitModeCost)
                 if let first = decoded.first { return [first] + baseTiers }
             }
-            let tierName: String = if case .string(let s) = modeObj["service_tier"] { s } else { modeName }
-            guard case .object(let rawCostObj) = modelCostRaw,
-                  case .array(let multipliers) = rawCostObj["multipliers"]
+            let tierName = stringField(modeObj, "service_tier") ?? modeName
+            guard let rawCostObj = modelCostRaw?.objectValue,
+                  let multipliers = arrayField(rawCostObj, "multipliers")
             else { return baseCost }
-            var matchedFactor: JSONValue? = nil
+            var matchedFactor: OrderedJSON? = nil
             for mVal in multipliers {
-                guard case .object(let mObj) = mVal,
-                      case .object(let when) = mObj["when"], when.count == 1,
-                      case .object(let st) = when["service_tier"],
-                      case .string(let eq) = st["equals"], eq == tierName,
-                      let factor = mObj["factor"]
+                guard let mObj = mVal.objectValue,
+                      let when = objectField(mObj, "when"), when.count == 1,
+                      let st = objectField(when, "service_tier"),
+                      let eq = stringField(st, "equals"), eq == tierName,
+                      let factor = field(mObj, "factor")
                 else { continue }
                 matchedFactor = factor
                 break
@@ -3355,102 +3964,247 @@ public enum CoreModel {
             return [scaledDefault] + baseTiers
         }
 
-        // parity: core/src/models-dev.ts#decodeSnapshot [status=implemented hash=3365142ba603]
-        public static func decodeSnapshot(_ text: String) throws -> [Snapshot] {
-            let raw = try JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8))
-            let v2 = V1.isV1(raw) ? V1.toV2(raw) : raw
+        private static func mostCommon(order: [String], counts: [String: Int]) -> String? {
+            var bestKey: String?
+            var bestCount = 0
+            for key in order {
+                let count = counts[key] ?? 0
+                if bestKey == nil || count > bestCount {
+                    bestKey = key
+                    bestCount = count
+                }
+            }
+            return bestKey
+        }
+
+        private static func loadableOpencodeAI(_ raw: String?) -> String? {
+            guard let raw, !raw.isEmpty,
+                  let name = CoreProvider.AISDKNative.packageName(raw)
+            else { return nil }
+            if !name.hasPrefix("@opencode/ai/") || CoreProvider.Provider.builtinPackages.contains(name) {
+                return raw
+            }
+            return nil
+        }
+
+        /// Heuristic priority used ONLY when decoding an already-parsed unordered `[String: JSONValue]` dictionary
+        /// (e.g. a KV cache row whose `body` was stored as a JSON object rather than raw JSON text).
+        private static func unorderedAPIRank(protoKey: String, apiObj: [(String, OrderedJSON)]) -> Int {
+            let sdk = objectField(apiObj, "sdk")
+            let oc = loadableOpencodeAI(stringField(sdk, "opencodeai"))
+            if let oc {
+                let isGeneric = compatiblePackages.contains(oc)
+                if !isGeneric {
+                    // Prefer provider-native responses over chat for OpenAI / Azure / Cloudflare.
+                    if protoKey == "responses" && (oc.contains("/openai/") || oc.contains("/azure/")) {
+                        return 0
+                    }
+                    // Prefer root provider packages (e.g. `/anthropic`, `/google`, `/openrouter`, `/amazon-bedrock`).
+                    let components = oc.split(separator: "/")
+                    if components.count == 4 { // @opencode / ai / providers / <name>
+                        return 1
+                    }
+                    if protoKey == "messages" || protoKey == "generate-content" || protoKey == "converse" || protoKey == "cohere-chat" {
+                        return 2
+                    }
+                    if protoKey == "responses" {
+                        return 3
+                    }
+                    if protoKey == "chat-completions" {
+                        return 4
+                    }
+                    return 5
+                }
+                return 6
+            }
+            if stringField(sdk, "aisdk") != nil {
+                return 7
+            }
+            return 8
+        }
+
+        private struct RoutedSource {
+            let modelObj: [(String, OrderedJSON)]
+            let id: String
+            let name: String
+            let typeStr: String
+            let package: String
+            let baseURL: String?
+            let apiObj: [(String, OrderedJSON)]
+        }
+
+        private static func decodeV2Pairs(
+            _ v2Pairs: [(String, OrderedJSON)],
+            preserveAPIOrder: Bool
+        ) -> [Snapshot] {
             var snapshots: [Snapshot] = []
-            for (_, value) in v2.sorted(by: { $0.key < $1.key }) {
-                guard case .object(let prov) = value,
-                      case .string(let pidStr) = prov["id"],
-                      case .string(let pname) = prov["name"],
-                      case .object(let rawModels) = prov["models"]
+            snapshots.reserveCapacity(v2Pairs.count)
+
+            for (_, value) in v2Pairs {
+                guard let prov = value.objectValue,
+                      let pidStr = stringField(prov, "id"), !pidStr.isEmpty,
+                      let pname = stringField(prov, "name"),
+                      let rawModels = objectField(prov, "models")
                 else { continue }
                 let pid = ProviderSchema.ID(rawValue: pidStr)
-                let env: [String] = {
-                    guard case .array(let arr) = prov["env"] else { return [] }
-                    return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
-                }()
-                var builtModels: [ModelSchema.Info] = []
+                let env: [String] = arrayField(prov, "env")?.compactMap(\.stringValue) ?? []
+
+                // Pass 1: route every model in source order and compute provider-level defaults.
+                var routed: [RoutedSource] = []
+                routed.reserveCapacity(rawModels.count)
                 var pkgCounts: [String: Int] = [:]
+                var pkgOrder: [String] = []
                 var urlCounts: [String: Int] = [:]
+                var urlOrder: [String] = []
                 var allHaveBaseURL = true
 
-                for (_, mVal) in rawModels.sorted(by: { $0.key < $1.key }) {
-                    guard case .object(let m) = mVal,
-                          case .string(let mid) = m["id"],
-                          case .string(let mname) = m["name"]
+                for (_, mVal) in rawModels {
+                    guard let m = mVal.objectValue,
+                          let mid = stringField(m, "id"), !mid.isEmpty,
+                          let mname = stringField(m, "name")
                     else { continue }
-                    let modelTypeStr: String = if case .string(let t) = m["type"] { t } else { "chat" }
-                    let modelType = ModelSchema.ModelType(rawValue: modelTypeStr)
+                    let modelTypeStr = stringField(m, "type") ?? "chat"
+                    guard supportedModelTypes.contains(modelTypeStr) else { continue }
 
-                    var chosenPkg: String?
-                    var chosenApiObj: [String: JSONValue]?
-                    if case .object(let apiMap) = m["api"] {
-                        for (protoKey, apiVal) in apiMap.sorted(by: { $0.key < $1.key }) {
-                            guard case .object(let apiObj) = apiVal, case .object(let sdk) = apiObj["sdk"] else { continue }
-                            if case .string(let rawOc) = sdk["opencodeai"],
-                               let normOc = CoreProvider.AISDKNative.packageName(rawOc),
-                               CoreProvider.Provider.builtinPackages.contains(normOc) {
-                                if modelTypeStr == "chat" || normOc.hasSuffix("/\(modelTypeStr)s") {
-                                    chosenPkg = normOc
-                                    chosenApiObj = apiObj
-                                    break
-                                }
-                            }
-                            if modelTypeStr == "chat", case .string(let ai) = sdk["aisdk"] {
-                                let shape: String? = protoKey == "responses" ? "responses" : (protoKey == "chat-completions" ? "completions" : nil)
-                                chosenPkg = CoreProvider.AISDKNative.native(npm: ai, providerID: pidStr, modelID: mid, shape: shape)
-                                    ?? CoreProvider.AISDKNative.aisdk(ai)
-                                chosenApiObj = apiObj
-                                break
+                    var apiEntries: [(protoKey: String, apiObj: [(String, OrderedJSON)])] = []
+                    switch field(m, "api") {
+                    case .object(let apiPairs):
+                        for (protoKey, apiVal) in apiPairs {
+                            if let apiObj = apiVal.objectValue {
+                                apiEntries.append((protoKey, apiObj))
                             }
                         }
+                    case .array(let apiList):
+                        for item in apiList {
+                            if let apiObj = item.objectValue {
+                                let protoKey = stringField(apiObj, "protocol")
+                                    ?? stringField(apiObj, "id")
+                                    ?? stringField(apiObj, "type")
+                                    ?? ""
+                                apiEntries.append((protoKey, apiObj))
+                            }
+                        }
+                    default:
+                        break
                     }
-                    guard let pkg = chosenPkg else { continue }
+
+                    if !preserveAPIOrder && apiEntries.count > 1 {
+                        apiEntries.sort { lhs, rhs in
+                            let lRank = unorderedAPIRank(protoKey: lhs.protoKey, apiObj: lhs.apiObj)
+                            let rRank = unorderedAPIRank(protoKey: rhs.protoKey, apiObj: rhs.apiObj)
+                            if lRank != rRank { return lRank < rRank }
+                            return lhs.protoKey < rhs.protoKey
+                        }
+                    }
+
+                    var chosenProto: String?
+                    var chosenApiObj: [(String, OrderedJSON)]?
+                    var chosenOpencodeAI: String?
+                    for (protoKey, apiObj) in apiEntries {
+                        guard let sdk = objectField(apiObj, "sdk") else { continue }
+                        let opencodeAI = loadableOpencodeAI(stringField(sdk, "opencodeai"))
+                        let aisdk = stringField(sdk, "aisdk")
+                        if modelTypeStr == "chat" {
+                            if opencodeAI != nil || (aisdk != nil && !aisdk!.isEmpty) {
+                                chosenProto = protoKey
+                                chosenApiObj = apiObj
+                                chosenOpencodeAI = opencodeAI
+                                break
+                            }
+                        } else if let oc = opencodeAI, oc.hasSuffix("/\(modelTypeStr)s") {
+                            chosenProto = protoKey
+                            chosenApiObj = apiObj
+                            chosenOpencodeAI = oc
+                            break
+                        }
+                    }
+
+                    guard let protoKey = chosenProto, let apiObj = chosenApiObj else { continue }
+                    let chosenPkg: String?
+                    if let oc = chosenOpencodeAI {
+                        chosenPkg = oc
+                    } else if let sdk = objectField(apiObj, "sdk"),
+                              let ai = stringField(sdk, "aisdk"), !ai.isEmpty {
+                        let shape: String? = protoKey == "responses" ? "responses" : (protoKey == "chat-completions" ? "completions" : nil)
+                        chosenPkg = CoreProvider.AISDKNative.native(npm: ai, providerID: pidStr, modelID: mid, shape: shape)
+                            ?? CoreProvider.AISDKNative.aisdk(ai)
+                    } else {
+                        chosenPkg = nil
+                    }
+                    guard let pkg = chosenPkg, !pkg.isEmpty else { continue }
+
+                    if pkgCounts[pkg] == nil { pkgOrder.append(pkg) }
                     pkgCounts[pkg, default: 0] += 1
 
                     let routeBaseURL: String? = {
                         guard !buildsOwnURL.contains(pkg),
-                              case .string(let u) = chosenApiObj?["base_url"],
+                              let u = stringField(apiObj, "base_url"),
                               !u.isEmpty
                         else { return nil }
                         return u
                     }()
                     if let routeBaseURL {
+                        if urlCounts[routeBaseURL] == nil { urlOrder.append(routeBaseURL) }
                         urlCounts[routeBaseURL, default: 0] += 1
                     } else {
                         allHaveBaseURL = false
                     }
 
-                    let limitObj: [String: JSONValue]? = if case .object(let l) = m["limit"] { l } else { nil }
-                    let ctx = intValue(limitObj?["context"]) ?? 0
-                    let inputLimit = intValue(limitObj?["input"])
-                    let out = intValue(limitObj?["output"]) ?? 0
-                    let fam: ModelSchema.Family? = { if case .string(let f) = m["family"] { return ModelSchema.Family(rawValue: f) } else { return nil } }()
+                    routed.append(RoutedSource(
+                        modelObj: m,
+                        id: mid,
+                        name: mname,
+                        typeStr: modelTypeStr,
+                        package: pkg,
+                        baseURL: routeBaseURL,
+                        apiObj: apiObj
+                    ))
+                }
 
-                    let capsObj: [String: JSONValue]? = if case .object(let c) = m["capabilities"] { c } else { nil }
+                guard !routed.isEmpty,
+                      let defaultPkg = mostCommon(order: pkgOrder, counts: pkgCounts)
+                else { continue }
+                let defaultBaseURL: String? = allHaveBaseURL ? mostCommon(order: urlOrder, counts: urlCounts) : nil
+
+                // Pass 2: materialize models using provider defaults (only storing model-level package/baseURL overrides).
+                var builtModels: [ModelSchema.Info] = []
+                builtModels.reserveCapacity(routed.count)
+
+                for src in routed {
+                    let m = src.modelObj
+                    let mid = src.id
+                    let mname = src.name
+                    let modelType = ModelSchema.ModelType(rawValue: src.typeStr)
+                    let limitObj = objectField(m, "limit")
+                    let ctx = field(limitObj, "context")?.intValue ?? 0
+                    let inputLimit = field(limitObj, "input")?.intValue
+                    let out = field(limitObj, "output")?.intValue ?? 0
+                    let fam: ModelSchema.Family? = {
+                        if let f = stringField(m, "family"), !f.isEmpty { return ModelSchema.Family(rawValue: f) }
+                        return nil
+                    }()
+
+                    let capsObj = objectField(m, "capabilities")
                     let toolsSupported: Bool = {
-                        if case .object(let tools) = capsObj?["tools"],
-                           case .bool(let b) = tools["supported"] { return b }
+                        if let tools = objectField(capsObj, "tools"),
+                           let b = boolField(tools, "supported") { return b }
                         return false
                     }()
-                    let temperatureSupported: Bool? = if case .bool(let b) = capsObj?["temperature"] { b } else { nil }
+                    let temperatureSupported = boolField(capsObj, "temperature")
                     let freeformFormats: [ToolSchema.FreeformFormat]? = {
-                        guard case .object(let apiCaps) = chosenApiObj?["capabilities"],
-                              case .object(let apiTools) = apiCaps["tools"],
-                              case .array(let arr) = apiTools["freeform"]
+                        guard let apiCaps = objectField(src.apiObj, "capabilities"),
+                              let apiTools = objectField(apiCaps, "tools"),
+                              let arr = arrayField(apiTools, "freeform")
                         else { return nil }
                         let parsed = arr.compactMap { item -> ToolSchema.FreeformFormat? in
-                            if case .string(let s) = item { return ToolSchema.FreeformFormat(rawValue: s) }
-                            return nil
+                            item.stringValue.flatMap(ToolSchema.FreeformFormat.init(rawValue:))
                         }
                         return parsed.isEmpty ? nil : parsed
                     }()
 
-                    let modalitiesObj: [String: JSONValue]? = if case .object(let mod) = m["modalities"] { mod } else { nil }
-                    let inputModalities = decodeModalities(modalitiesObj?["input"])
-                    let outputModalities = decodeModalities(modalitiesObj?["output"])
+                    let modalitiesObj = objectField(m, "modalities")
+                    let inputModalities = decodeModalities(field(modalitiesObj, "input"))
+                    let outputModalities = decodeModalities(field(modalitiesObj, "output"))
                     let capabilities = ModelSchema.Capabilities(
                         tools: toolsSupported,
                         freeform: freeformFormats,
@@ -3460,39 +4214,45 @@ public enum CoreModel {
                     )
 
                     let compatibility: ModelCompatibilitySchema.Compatibility? = {
-                        guard case .object(let comp) = chosenApiObj?["compatibility"] else { return nil }
-                        let rf: ModelCompatibilitySchema.ReasoningField? = if case .string(let s) = comp["reasoning_field"], !s.isEmpty {
-                            ModelCompatibilitySchema.ReasoningField(rawValue: s)
-                        } else { nil }
-                        let mtf: ModelCompatibilitySchema.MaxTokensField? = if case .string(let s) = comp["max_tokens_field"] {
-                            ModelCompatibilitySchema.MaxTokensField(rawValue: s)
-                        } else { nil }
-                        let mi: ModelCompatibilitySchema.MediaInput? = if case .string(let s) = comp["media_input"] {
-                            ModelCompatibilitySchema.MediaInput(rawValue: s)
-                        } else { nil }
+                        guard let comp = objectField(src.apiObj, "compatibility") else { return nil }
+                        let rf: ModelCompatibilitySchema.ReasoningField? = {
+                            if let s = stringField(comp, "reasoning_field"), !s.isEmpty {
+                                return ModelCompatibilitySchema.ReasoningField(rawValue: s)
+                            }
+                            return nil
+                        }()
+                        let mtf = stringField(comp, "max_tokens_field").flatMap(ModelCompatibilitySchema.MaxTokensField.init(rawValue:))
+                        let mi = stringField(comp, "media_input").flatMap(ModelCompatibilitySchema.MediaInput.init(rawValue:))
                         if rf == nil && mtf == nil && mi == nil { return nil }
                         return ModelCompatibilitySchema.Compatibility(reasoningField: rf, maxTokensField: mtf, mediaInput: mi)
                     }()
 
-                    let releaseDateStr: String = if case .string(let s) = m["release_date"] { s } else { "" }
+                    let releaseDateStr = stringField(m, "release_date") ?? ""
                     let releasedMs = parseReleaseDateMs(releaseDateStr)
-                    let baseCost = decodeCost(m["cost"])
+                    let rawCost = field(m, "cost")
+                    let baseCost = decodeCost(rawCost)
                     let status: ModelSchema.Info.Status = {
-                        if case .string(let s) = m["status"], let parsed = ModelSchema.Info.Status(rawValue: s) {
+                        if let s = stringField(m, "status"),
+                           let parsed = ModelSchema.Info.Status(rawValue: s),
+                           parsed == .alpha || parsed == .beta || parsed == .deprecated {
                             return parsed
                         }
                         return .active
                     }()
+
+                    let modelPackage: String? = src.package != defaultPkg ? src.package : nil
                     let modelSettings: ModelSchema.Settings? = {
                         var extra: [String: JSONValue] = [:]
-                        if let routeBaseURL { extra["baseURL"] = .string(routeBaseURL) }
-                        if pkg == "@opencode/ai/providers/openai-compatible" || pkg == "@opencode/ai/providers/anthropic-compatible" {
+                        if let routeBaseURL = src.baseURL, routeBaseURL != defaultBaseURL {
+                            extra["baseURL"] = .string(routeBaseURL)
+                        }
+                        if compatiblePackages.contains(src.package) {
                             extra["provider"] = .string(pidStr)
                         }
                         return extra.isEmpty ? nil : ModelSchema.Settings(extra: extra)
                     }()
 
-                    let baseModel = ModelSchema.Info(
+                    let baseModelForVariants = ModelSchema.Info(
                         id: ModelSchema.ID(rawValue: mid),
                         modelID: ModelSchema.ID(rawValue: mid),
                         providerID: pid,
@@ -3500,7 +4260,7 @@ public enum CoreModel {
                         family: fam,
                         name: mname,
                         compatibility: compatibility,
-                        package: pkg,
+                        package: src.package,
                         settings: modelSettings,
                         capabilities: capabilities,
                         variants: [],
@@ -3510,40 +4270,47 @@ public enum CoreModel {
                         enabled: true,
                         limit: ModelSchema.Info.Limit(context: ctx, input: inputLimit, output: out)
                     )
-                    let reasoning = decodeReasoning(capsObj?["reasoning"])
-                    let variants = CoreModel.Variant.resolve(baseModel, supports: CoreModel.Variant.supports(reasoning))
+                    let reasoning = decodeReasoning(field(capsObj, "reasoning"))
+                    let variants = CoreModel.Variant.resolve(baseModelForVariants, supports: CoreModel.Variant.supports(reasoning))
                     let fullModel = ModelSchema.Info(
-                        id: baseModel.id,
-                        modelID: baseModel.modelID,
-                        providerID: baseModel.providerID,
-                        type: baseModel.type,
-                        family: baseModel.family,
-                        name: baseModel.name,
-                        compatibility: baseModel.compatibility,
-                        package: baseModel.package,
-                        settings: baseModel.settings,
-                        capabilities: baseModel.capabilities,
+                        id: baseModelForVariants.id,
+                        modelID: baseModelForVariants.modelID,
+                        providerID: baseModelForVariants.providerID,
+                        type: baseModelForVariants.type,
+                        family: baseModelForVariants.family,
+                        name: baseModelForVariants.name,
+                        compatibility: baseModelForVariants.compatibility,
+                        package: modelPackage,
+                        settings: baseModelForVariants.settings,
+                        capabilities: baseModelForVariants.capabilities,
                         variants: variants,
-                        time: baseModel.time,
-                        cost: baseModel.cost,
-                        status: baseModel.status,
-                        enabled: baseModel.enabled,
-                        limit: baseModel.limit
+                        time: baseModelForVariants.time,
+                        cost: baseModelForVariants.cost,
+                        status: baseModelForVariants.status,
+                        enabled: baseModelForVariants.enabled,
+                        limit: baseModelForVariants.limit
                     )
                     builtModels.append(fullModel)
 
-                    if case .object(let exp) = m["experimental"], case .object(let modes) = exp["modes"] {
-                        for (modeName, modeVal) in modes.sorted(by: { $0.key < $1.key }) {
-                            guard case .object(let modeObj) = modeVal else { continue }
+                    if let exp = objectField(m, "experimental"), let modes = objectField(exp, "modes") {
+                        for (modeName, modeVal) in modes {
+                            guard let modeObj = modeVal.objectValue else { continue }
                             let titleMode = modeName.prefix(1).uppercased() + modeName.dropFirst()
-                            let mCost = modeCost(modelCostRaw: m["cost"], baseCost: baseCost, modeName: modeName, modeObj: modeObj)
+                            let mCost = modeCost(modelCostRaw: rawCost, baseCost: baseCost, modeName: modeName, modeObj: modeObj)
                             let mHeaders: [String: String]? = {
-                                guard case .object(let h) = modeObj["headers"] else { return nil }
+                                guard let h = objectField(modeObj, "headers") else { return nil }
                                 var dict: [String: String] = [:]
-                                for (k, v) in h { if case .string(let s) = v { dict[k] = s } }
+                                for (k, v) in h {
+                                    if let s = v.stringValue { dict[k] = s }
+                                }
                                 return dict.isEmpty ? nil : dict
                             }()
-                            let mBody: [String: JSONValue]? = if case .object(let b) = modeObj["body"] { b } else { nil }
+                            let mBody: [String: JSONValue]? = {
+                                guard let b = field(modeObj, "body"),
+                                      case .object(let dict) = b.toJSONValue()
+                                else { return nil }
+                                return dict
+                            }()
                             builtModels.append(ModelSchema.Info(
                                 id: ModelSchema.ID(rawValue: "\(mid)-\(modeName)"),
                                 modelID: fullModel.modelID,
@@ -3567,10 +4334,7 @@ public enum CoreModel {
                         }
                     }
                 }
-                guard !builtModels.isEmpty,
-                      let defaultPkg = pkgCounts.max(by: { $0.value < $1.value })?.key
-                else { continue }
-                let defaultBaseURL: String? = allHaveBaseURL ? urlCounts.max(by: { $0.value < $1.value })?.key : nil
+
                 let providerSettings: ProviderSchema.Settings? = defaultBaseURL.map {
                     ProviderSchema.Settings(extra: ["baseURL": .string($0)])
                 }
@@ -3583,6 +4347,37 @@ public enum CoreModel {
             return snapshots
         }
 
+        private static func decodeSnapshot(catalogObject: [String: JSONValue]) -> [Snapshot] {
+            let v2 = V1.isV1(catalogObject) ? V1.toV2(catalogObject) : catalogObject
+            let orderedPairs: [(String, OrderedJSON)] = v2
+                .sorted(by: { $0.key < $1.key })
+                .map { ($0.key, OrderedJSON.fromJSONValue($0.value)) }
+            return decodeV2Pairs(orderedPairs, preserveAPIOrder: false)
+        }
+
+        // parity: core/src/models-dev.ts#decodeSnapshot [status=implemented hash=3365142ba603]
+        public static func decodeSnapshot(_ text: String) throws -> [Snapshot] {
+            let root = try OrderedJSON.parse(text)
+            guard case .object(let rootPairs) = root else {
+                throw DecodeError.expectedObject
+            }
+            let isV1Catalog = rootPairs.contains { _, val in
+                if let prov = val.objectValue, stringField(prov, "npm") != nil { return true }
+                return false
+            }
+            if isV1Catalog {
+                guard case .object(let rawDict) = root.toJSONValue() else {
+                    throw DecodeError.expectedObject
+                }
+                let converted = V1.toV2(rawDict)
+                let v2Pairs: [(String, OrderedJSON)] = converted
+                    .sorted(by: { $0.key < $1.key })
+                    .map { ($0.key, OrderedJSON.fromJSONValue($0.value)) }
+                return decodeV2Pairs(v2Pairs, preserveAPIOrder: true)
+            }
+            return decodeV2Pairs(rootPairs, preserveAPIOrder: true)
+        }
+
         // parity: core/src/models-dev.ts#Interface [status=implemented hash=08a58c77c944]
         public protocol Interface: Sendable {
             func get() async throws -> [Snapshot]
@@ -3592,50 +4387,423 @@ public enum CoreModel {
         // parity: core/src/models-dev.ts#Service [status=implemented hash=e6f82121971f]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/ModelsDev"
+            public static let defaultSource = "https://models.opencode.ai"
+            public static let fallbackV1URL = "https://models.dev/api.json"
+            public static let defaultTTLMs: Int64 = 5 * 60 * 1_000
+            public static let defaultTimeoutMs: Int64 = 10_000
+            public static let defaultUserAgent = "opencode/2.3.2"
+
+            private struct CacheState: Sendable {
+                var snapshots: [Snapshot]?
+                var updatedAt: Int64?
+                var digest: String?
+                var etag: String?
+                var backgroundRefreshRunning: Bool = false
+            }
+
+            private struct CacheMeta: Sendable {
+                let updatedAt: Int64
+                let digest: String?
+                let etag: String?
+            }
+
+            private struct KVHit: Sendable {
+                let snapshots: [Snapshot]
+                let updatedAt: Int64
+                let digest: String?
+            }
+
+            private struct DiskHit: Sendable {
+                let snapshots: [Snapshot]
+                let updatedAt: Int64?
+                let digest: String
+            }
+
+            private enum FetchOutcome: Sendable {
+                case notModified(etag: String?)
+                case fetched(text: String, snapshots: [Snapshot], etag: String?)
+                case failed
+            }
+
+            private actor RefreshLock {
+                private var inFlight: Task<Void, Never>?
+
+                func run(_ operation: @escaping @Sendable () async -> Void) async {
+                    while let existing = inFlight {
+                        await existing.value
+                    }
+                    let task = Task { await operation() }
+                    inFlight = task
+                    await task.value
+                    inFlight = nil
+                }
+            }
+
             private let options: Options
             private let http: any HTTPTransport
             private let fileSystem: any OpenCodeFileSystem
             private let kv: any CoreKV.Interface
-            private let cachedSnapshots = Mutex<[Snapshot]?>(nil)
+            private let bus: CoreBus.Service?
+            private let cacheFilePath: String?
+            private let userAgent: String
+            private let ttlMs: Int64
+            private let requestTimeoutMs: Int64
+            private let nowMs: @Sendable () -> Int64
+            private let cacheState = Mutex(CacheState())
+            private let refreshLock = RefreshLock()
 
             public init(
                 options: Options = Options(),
                 http: any HTTPTransport,
                 fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
-                kv: any CoreKV.Interface
+                kv: any CoreKV.Interface,
+                bus: CoreBus.Service? = nil,
+                cacheFilePath: String? = nil,
+                userAgent: String = Service.defaultUserAgent,
+                ttlMs: Int64 = Service.defaultTTLMs,
+                requestTimeoutMs: Int64 = Service.defaultTimeoutMs,
+                nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() }
             ) {
                 self.options = options
                 self.http = http
                 self.fileSystem = fileSystem
                 self.kv = kv
+                self.bus = bus
+                self.cacheFilePath = cacheFilePath
+                self.userAgent = userAgent
+                self.ttlMs = max(0, ttlMs)
+                self.requestTimeoutMs = max(1, requestTimeoutMs)
+                self.nowMs = nowMs
+            }
+
+            private var source: String {
+                if let url = options.url, !url.isEmpty { return url }
+                return Self.defaultSource
+            }
+
+            private var shouldFetch: Bool {
+                options.fetch ?? true
+            }
+
+            private var catalogKVKey: String {
+                if source == Self.defaultSource { return "models-dev:v2:catalog" }
+                return "models-dev:v2:catalog:\(Hash.fast(source))"
+            }
+
+            private var metaKVKey: String {
+                "\(catalogKVKey):meta"
+            }
+
+            private func isStale(updatedAt: Int64?) -> Bool {
+                guard let updatedAt, updatedAt > 0 else { return true }
+                return nowMs() - updatedAt >= ttlMs
+            }
+
+            private func loadMetaFromKV() async -> CacheMeta? {
+                let raw: JSONValue?
+                if let metaVal = try? await kv.get(metaKVKey) {
+                    raw = metaVal
+                } else if let catVal = try? await kv.get(catalogKVKey) {
+                    raw = catVal
+                } else {
+                    raw = nil
+                }
+                guard case .object(let obj) = raw,
+                      let updatedAt = ModelsDev.int64Value(obj["updatedAt"])
+                else { return nil }
+                let digest: String? = if case .string(let d) = obj["digest"], !d.isEmpty { d } else { nil }
+                let etag: String? = if case .string(let e) = obj["etag"], !e.isEmpty { e } else { nil }
+                return CacheMeta(updatedAt: updatedAt, digest: digest, etag: etag)
+            }
+
+            private func loadFromKV() async -> KVHit? {
+                guard let raw = try? await kv.get(catalogKVKey) else { return nil }
+                guard case .object(let obj) = raw,
+                      let updatedAt = ModelsDev.int64Value(obj["updatedAt"]),
+                      let bodyVal = obj["body"]
+                else {
+                    try? await kv.remove(catalogKVKey)
+                    try? await kv.remove(metaKVKey)
+                    return nil
+                }
+                let digest: String? = if case .string(let d) = obj["digest"], !d.isEmpty { d } else { nil }
+                switch bodyVal {
+                case .string(let rawText):
+                    guard let snapshots = try? ModelsDev.decodeSnapshot(rawText) else {
+                        try? await kv.remove(catalogKVKey)
+                        try? await kv.remove(metaKVKey)
+                        return nil
+                    }
+                    return KVHit(
+                        snapshots: snapshots,
+                        updatedAt: updatedAt,
+                        digest: digest ?? ModelsDev.bodyDigest(rawText)
+                    )
+                case .object(let catalogDict):
+                    let snapshots = ModelsDev.decodeSnapshot(catalogObject: catalogDict)
+                    return KVHit(snapshots: snapshots, updatedAt: updatedAt, digest: digest)
+                default:
+                    try? await kv.remove(catalogKVKey)
+                    try? await kv.remove(metaKVKey)
+                    return nil
+                }
+            }
+
+            private func loadFromDiskCache() async -> DiskHit? {
+                guard let path = cacheFilePath, !path.isEmpty,
+                      await fileSystem.exists(at: path),
+                      let bytes = try? await fileSystem.readFile(at: path)
+                else { return nil }
+                let text = String(decoding: bytes, as: UTF8.self)
+                guard let snapshots = try? ModelsDev.decodeSnapshot(text) else { return nil }
+                let mtime = (try? await fileSystem.stat(at: path))?.modifiedAtMs
+                let updatedAt: Int64? = (mtime ?? 0) > 0 ? mtime : nil
+                return DiskHit(snapshots: snapshots, updatedAt: updatedAt, digest: ModelsDev.bodyDigest(text))
+            }
+
+            private func writeMeta(updatedAt: Int64, digest: String?, etag: String?) async {
+                var metaObj: [String: JSONValue] = ["updatedAt": .int(updatedAt)]
+                if let digest, !digest.isEmpty { metaObj["digest"] = .string(digest) }
+                if let etag, !etag.isEmpty { metaObj["etag"] = .string(etag) }
+                try? await kv.set(metaKVKey, value: .object(metaObj))
+            }
+
+            private func writeCache(text: String, updatedAt: Int64, digest: String, etag: String?) async {
+                // Best-effort KV write (matching upstream's exact `models-dev:v2:catalog` + `:meta` schema).
+                try? await kv.set(catalogKVKey, value: .object([
+                    "updatedAt": .int(updatedAt),
+                    "digest": .string(digest),
+                    "body": .string(text),
+                ]))
+                await writeMeta(updatedAt: updatedAt, digest: digest, etag: etag)
+
+                // Best-effort disk cache write when configured.
+                if let path = cacheFilePath, !path.isEmpty {
+                    try? await fileSystem.writeFile(Array(text.utf8), to: path, createDirectories: true)
+                }
+            }
+
+            private func sendWithTimeout(_ request: HTTPRequest) async throws -> HTTPResponse {
+                let timeoutMs = requestTimeoutMs
+                let transport = http
+                return try await withThrowingTaskGroup(of: HTTPResponse.self) { group in
+                    group.addTask {
+                        try await transport.send(request)
+                    }
+                    group.addTask {
+                        try await Task.sleep(for: .milliseconds(timeoutMs))
+                        throw PlatformError.ioFailure("ModelsDev HTTP request timed out after \(timeoutMs)ms")
+                    }
+                    defer { group.cancelAll() }
+                    guard let first = try await group.next() else {
+                        throw PlatformError.ioFailure("ModelsDev HTTP request cancelled")
+                    }
+                    return first
+                }
+            }
+
+            private func fetchSingle(url: String, etag: String?) async -> FetchOutcome {
+                var headers: [String: String] = [
+                    "user-agent": userAgent,
+                    "accept": "application/json",
+                ]
+                if let etag, !etag.isEmpty {
+                    headers["if-none-match"] = etag
+                }
+                let request = HTTPRequest(method: "GET", url: url, headers: headers)
+                guard let resp = try? await sendWithTimeout(request) else {
+                    return .failed
+                }
+                let responseEtag = resp.head.headers.first(where: { $0.key.lowercased() == "etag" })?.value
+                if etag != nil && resp.head.statusCode == 304 {
+                    return .notModified(etag: responseEtag)
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    return .failed
+                }
+                let text = String(decoding: resp.body, as: UTF8.self)
+                guard let parsed = try? ModelsDev.decodeSnapshot(text) else {
+                    return .failed
+                }
+                return .fetched(text: text, snapshots: parsed, etag: responseEtag)
+            }
+
+            private func fetchCatalogWithFallback(etag: String?) async -> FetchOutcome {
+                let base = source.hasSuffix("/") ? String(source.dropLast()) : source
+                let primaryURL = "\(base)\(ModelsDev.catalogPath)"
+                let primary = await fetchSingle(url: primaryURL, etag: etag)
+                switch primary {
+                case .notModified, .fetched:
+                    return primary
+                case .failed:
+                    let fallbackURL = source == Self.defaultSource
+                        ? Self.fallbackV1URL
+                        : "\(base)/api.json"
+                    return await fetchSingle(url: fallbackURL, etag: etag)
+                }
+            }
+
+            private func scheduleBackgroundRefresh() {
+                let shouldStart = cacheState.withLock { s -> Bool in
+                    guard !s.backgroundRefreshRunning else { return false }
+                    s.backgroundRefreshRunning = true
+                    return true
+                }
+                guard shouldStart else { return }
+                Task { [self] in
+                    defer {
+                        self.cacheState.withLock { $0.backgroundRefreshRunning = false }
+                    }
+                    await self.refresh(force: false)
+                }
             }
 
             public func get() async throws -> [Snapshot] {
-                if let cached = cachedSnapshots.withLock({ $0 }) { return cached }
-                if let file = options.file, let bytes = try? await fileSystem.readFile(at: file) {
-                    let parsed = try ModelsDev.decodeSnapshot(String(decoding: bytes, as: UTF8.self))
-                    cachedSnapshots.withLock { $0 = parsed }
-                    return parsed
+                // Explicit `options.file` takes precedence over KV/disk cache and network.
+                if let file = options.file {
+                    if let cached = cacheState.withLock({ $0.snapshots }) {
+                        return cached
+                    }
+                    if let bytes = try? await fileSystem.readFile(at: file) {
+                        let text = String(decoding: bytes, as: UTF8.self)
+                        let parsed = try ModelsDev.decodeSnapshot(text)
+                        cacheState.withLock { s in
+                            s.snapshots = parsed
+                            s.updatedAt = nowMs()
+                            s.digest = ModelsDev.bodyDigest(text)
+                        }
+                        return parsed
+                    }
+                    if !shouldFetch { return [] }
                 }
-                if options.fetch == false { return [] }
+
+                // 1. Fast path: in-memory cache with non-blocking stale-while-revalidate.
+                let mem = cacheState.withLock { ($0.snapshots, $0.updatedAt) }
+                if let snapshots = mem.0 {
+                    if shouldFetch && isStale(updatedAt: mem.1) {
+                        scheduleBackgroundRefresh()
+                    }
+                    return snapshots
+                }
+
+                // 2. SQLite KV cache (`models-dev:v2:catalog` + `:meta`) with SWR.
+                if let kvHit = await loadFromKV() {
+                    let meta = await loadMetaFromKV()
+                    let effectiveUpdatedAt = max(kvHit.updatedAt, meta?.updatedAt ?? 0)
+                    let effectiveDigest = kvHit.digest ?? meta?.digest
+                    let effectiveEtag = meta?.etag
+                    cacheState.withLock { s in
+                        if s.snapshots == nil {
+                            s.snapshots = kvHit.snapshots
+                            s.updatedAt = effectiveUpdatedAt
+                            s.digest = effectiveDigest
+                            s.etag = effectiveEtag
+                        }
+                    }
+                    if shouldFetch && isStale(updatedAt: effectiveUpdatedAt) {
+                        scheduleBackgroundRefresh()
+                    }
+                    return kvHit.snapshots
+                }
+
+                // 3. Disk cache (`cacheFilePath`, e.g. `~/.cache/opencode/models.json`) with SWR.
+                if let diskHit = await loadFromDiskCache() {
+                    let meta = await loadMetaFromKV()
+                    let maxTs = max(diskHit.updatedAt ?? 0, meta?.updatedAt ?? 0)
+                    let effectiveUpdatedAt: Int64? = maxTs > 0 ? maxTs : nil
+                    let effectiveEtag = meta?.etag
+                    cacheState.withLock { s in
+                        if s.snapshots == nil {
+                            s.snapshots = diskHit.snapshots
+                            s.updatedAt = effectiveUpdatedAt
+                            s.digest = diskHit.digest
+                            s.etag = effectiveEtag
+                        }
+                    }
+                    if shouldFetch && isStale(updatedAt: effectiveUpdatedAt) {
+                        scheduleBackgroundRefresh()
+                    }
+                    return diskHit.snapshots
+                }
+
+                // 4. Cold start: no cached catalog available.
+                guard shouldFetch else { return [] }
                 await refresh(force: true)
-                return cachedSnapshots.withLock { $0 ?? [] }
+                return cacheState.withLock { $0.snapshots ?? [] }
             }
 
             public func refresh(force: Bool = false) async {
-                _ = force
-                let source = options.url ?? "https://models.opencode.ai"
-                let url = "\(source)\(ModelsDev.catalogPath)"
-                guard let resp = try? await http.send(HTTPRequest(method: "GET", url: url, headers: ["accept": "application/json"])),
-                      (200..<300).contains(resp.head.statusCode)
-                else { return }
-                let text = String(decoding: resp.body, as: UTF8.self)
-                guard let parsed = try? ModelsDev.decodeSnapshot(text) else { return }
-                cachedSnapshots.withLock { $0 = parsed }
-                try? await kv.set("models-dev:v2:catalog:meta", value: .object([
-                    "updatedAt": .int(Flock.currentEpochMs()),
-                    "digest": .string(ModelsDev.bodyDigest(text)),
-                ]))
+                await refreshLock.run { [self] in
+                    await self.performRefresh(force: force)
+                }
+            }
+
+            private func performRefresh(force: Bool) async {
+                let kvMeta = await loadMetaFromKV()
+                let mem = cacheState.withLock { ($0.updatedAt, $0.digest, $0.etag) }
+                let storedUpdatedAt: Int64? = {
+                    switch (kvMeta?.updatedAt, mem.0) {
+                    case let (a?, b?): return max(a, b)
+                    case let (a?, nil): return a
+                    case let (nil, b?): return b
+                    case (nil, nil): return nil
+                    }
+                }()
+                let previousDigest = kvMeta?.digest ?? mem.1
+                let storedEtag = kvMeta?.etag ?? mem.2
+
+                if !force, let updatedAt = storedUpdatedAt, !isStale(updatedAt: updatedAt) {
+                    return
+                }
+
+                let etagToSend = force ? nil : storedEtag
+                let outcome = await fetchCatalogWithFallback(etag: etagToSend)
+                let now = nowMs()
+
+                switch outcome {
+                case .notModified(let responseEtag):
+                    let nextEtag = responseEtag ?? storedEtag
+                    cacheState.withLock { s in
+                        s.updatedAt = now
+                        s.etag = nextEtag
+                    }
+                    await writeMeta(updatedAt: now, digest: previousDigest, etag: nextEtag)
+
+                case .fetched(let text, let parsed, let responseEtag):
+                    let digest = ModelsDev.bodyDigest(text)
+                    let nextEtag = responseEtag ?? storedEtag
+                    let digestChanged = previousDigest != digest
+
+                    if !force && !digestChanged && previousDigest != nil {
+                        cacheState.withLock { s in
+                            if s.snapshots == nil { s.snapshots = parsed }
+                            s.updatedAt = now
+                            s.digest = digest
+                            s.etag = nextEtag
+                        }
+                        await writeMeta(updatedAt: now, digest: digest, etag: nextEtag)
+                        return
+                    }
+
+                    cacheState.withLock { s in
+                        s.snapshots = parsed
+                        s.updatedAt = now
+                        s.digest = digest
+                        s.etag = nextEtag
+                    }
+                    await writeCache(text: text, updatedAt: now, digest: digest, etag: nextEtag)
+
+                    if digestChanged, let bus {
+                        await bus.emit(
+                            ModelsDev.Event.refreshed,
+                            data: EventSchema.EmptyData(),
+                            options: CoreBus.PublishOptions(global: true)
+                        )
+                    }
+
+                case .failed:
+                    break
+                }
             }
         }
 
@@ -3648,7 +4816,16 @@ public enum CoreModel {
                     }
                 let fs = deps.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) ?? LocalFileSystem.shared
                 let kv = try deps.get(CoreKV.Service.serviceKey, as: CoreKV.Service.self) ?? CoreKV.Service.inMemory()
-                return LayerNode.Output([Service.serviceKey: Service(options: options, http: http, fileSystem: fs, kv: kv)])
+                let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self)
+                return LayerNode.Output([
+                    Service.serviceKey: Service(
+                        options: options,
+                        http: http,
+                        fileSystem: fs,
+                        kv: kv,
+                        bus: bus
+                    ),
+                ])
             }
         }
 
@@ -3657,7 +4834,7 @@ public enum CoreModel {
             AppNode.makeGlobalNode(
                 Service.serviceKey,
                 layer(options),
-                [LayerNodePlatform.httpClient, LayerNodePlatform.filesystem, CoreKV.node]
+                [LayerNodePlatform.httpClient, LayerNodePlatform.filesystem, CoreKV.node, CoreBus.node]
             )
         }
 
