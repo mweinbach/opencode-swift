@@ -1636,7 +1636,9 @@ public enum CoreConfigDiscovery {
             return json
         }
         let filtered = obj.filter { !preferenceMetadataKeys.contains($0.key) }
-        guard let encoded = try? JSONEncoder().encode(JSONValue.object(filtered)) else {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        guard let encoded = try? encoder.encode(JSONValue.object(filtered)) else {
             return json
         }
         return String(decoding: encoded, as: UTF8.self)
@@ -1756,7 +1758,7 @@ public enum CoreConfigDiscovery {
         }
         var preferencesPath: SchemaPrimitive.AbsolutePath? = nil
         if globalEnabled && isDefaultSystem && platform == .macOS {
-            let user = environment.variable("USER") ?? "user"
+            let user = environment.variable("USER") ?? environment.variable("LOGNAME") ?? "user"
             for candidate in preferencePaths(user: user) {
                 if await fsUtil.isFile(candidate.rawValue) {
                     preferencesPath = candidate
@@ -2056,12 +2058,18 @@ public enum CoreConfig {
         func emitChange(_ update: WatchUpdate) async
     }
 
-    // parity: core/src/config.ts#Service [status=adapted hash=ea89ce8a8b6d]
+    // parity: core/src/config.ts#Service [status=implemented hash=ea89ce8a8b6d]
     public final class Service: Interface, Sendable {
         public static let serviceKey = "@opencode/Config"
 
         /// Trailing-edge debounce window for config reload bursts (upstream: `Stream.debounce("100 millis")`).
         public static let defaultDebounce: Duration = .milliseconds(100)
+
+        /// Periodic refresh interval for WellKnown config sources (upstream: `Effect.sleep("10 minutes")`).
+        public static let defaultWellKnownRefreshInterval: Duration = .seconds(600)
+
+        /// Timeout for macOS MDM managed preferences conversion via `plutil` (upstream: `timeout: "10 seconds"`).
+        public static let preferencesPlutilTimeoutMs: Int = 10_000
 
         private struct WatchEntry: Sendable {
             let generation: UInt64
@@ -2080,6 +2088,9 @@ public enum CoreConfig {
             var nextWatchGeneration: UInt64 = 1
             var debounceTask: Task<Void, Never>?
             var debounceGeneration: UInt64 = 0
+            var credentialSwitchedTask: Task<Void, Never>?
+            var wellKnownUpdatedTask: Task<Void, Never>?
+            var wellKnownRefreshTask: Task<Void, Never>?
             var reloadInProgress: Bool = false
             var pendingReloadAfterCurrent: Bool = false
             var reloadCount: Int = 0
@@ -2123,7 +2134,12 @@ public enum CoreConfig {
         private let watcher: (any CoreFilesystem.Watcher.Interface)?
         private let bus: (any CoreBus.Interface)?
         private let location: OpenCodeLocation?
+        private let credentials: (any CoreProvider.Credential.Interface)?
+        private let wellKnown: (any CoreIntegration.WellKnown.Interface)?
+        private let processes: (any AppProcess.Interface)?
         private let debounce: Duration
+        private let wellKnownRefreshInterval: Duration
+        private let clock: any Clock<Duration>
         private let onUpdated: (@Sendable () async -> Void)?
         private let state: Mutex<State>
         private let reloadLock = SerialGate()
@@ -2139,10 +2155,16 @@ public enum CoreConfig {
             watcher: (any CoreFilesystem.Watcher.Interface)? = nil,
             bus: (any CoreBus.Interface)? = nil,
             location: OpenCodeLocation? = nil,
+            credentials: (any CoreProvider.Credential.Interface)? = nil,
+            wellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
+            processes: (any AppProcess.Interface)? = nil,
             debounce: Duration = CoreConfig.Service.defaultDebounce,
+            wellKnownRefreshInterval: Duration = CoreConfig.Service.defaultWellKnownRefreshInterval,
+            clock: any Clock<Duration> = ContinuousClock(),
             onUpdated: (@Sendable () async -> Void)? = nil
         ) async {
             let resolvedGlobal = globalPaths ?? Global.make(environment: environment, os: platform)
+            let resolvedLocation = location ?? OpenCodeLocation(directory: directory)
             self.directory = directory
             self.options = options
             self.globalPaths = resolvedGlobal
@@ -2151,8 +2173,13 @@ public enum CoreConfig {
             self.platform = platform
             self.watcher = watcher
             self.bus = bus
-            self.location = location ?? OpenCodeLocation(directory: directory)
+            self.location = resolvedLocation
+            self.credentials = credentials
+            self.wellKnown = wellKnown
+            self.processes = processes
             self.debounce = debounce
+            self.wellKnownRefreshInterval = wellKnownRefreshInterval
+            self.clock = clock
             self.onUpdated = onUpdated
 
             let discovered = await CoreConfigDiscovery.discover(
@@ -2169,10 +2196,94 @@ public enum CoreConfig {
                 options: options,
                 globalPaths: resolvedGlobal,
                 integrations: [],
+                credentials: credentials,
+                wellKnown: wellKnown,
+                processes: processes,
                 fileSystem: fileSystem,
                 environment: environment
             )
             self.state = Mutex(State(sources: discovered, entries: loaded.entries, isInput: loaded.isInput))
+
+            // Start eager bus subscriptions (`Credential.Event.Switched`, `WellKnown.Event.Updated`) and the
+            // periodic 10-minute `WellKnown` manifest/remote-config refresh timer scoped to this service lifecycle.
+            if let wellKnown {
+                let credTask: Task<Void, Never>?
+                let wkUpdatedTask: Task<Void, Never>?
+                if let bus {
+                    let credStream = bus.subscribe(
+                        types: [CredentialSchema.Event.switched.type],
+                        location: resolvedLocation
+                    )
+                    credTask = Task { [weak self] in
+                        for await event in credStream {
+                            if Task.isCancelled { break }
+                            guard let self else { break }
+                            guard case .object(let obj) = event.data,
+                                  case .string(let rawIntegrationID) = obj["integrationID"]
+                            else { continue }
+                            let switchedIntegrationID = IntegrationID(rawValue: rawIntegrationID)
+                            let knownEntries = (try? await wellKnown.entries()) ?? []
+                            if knownEntries.contains(where: { $0.integrationID == switchedIntegrationID }) {
+                                await self.reload()
+                            }
+                        }
+                    }
+
+                    let wkStream = bus.subscribe(
+                        types: [CoreIntegration.WellKnown.Event.updated.type],
+                        location: resolvedLocation
+                    )
+                    wkUpdatedTask = Task { [weak self] in
+                        for await _ in wkStream {
+                            if Task.isCancelled { break }
+                            guard let self else { break }
+                            await self.reload()
+                        }
+                    }
+                } else {
+                    credTask = nil
+                    wkUpdatedTask = nil
+                }
+
+                let refreshInterval = self.wellKnownRefreshInterval
+                let timerClock = self.clock
+                let wellKnownPublishesToBus: Bool = {
+                    guard bus != nil else { return false }
+                    if let concrete = wellKnown as? CoreIntegration.WellKnown.Service {
+                        return concrete.hasBus
+                    }
+                    return true
+                }()
+                let wkRefreshTask = Task { [weak self] in
+                    while !Task.isCancelled {
+                        do {
+                            try await Self.sleep(timerClock, for: refreshInterval)
+                        } catch {
+                            break
+                        }
+                        if Task.isCancelled { break }
+                        guard let self else { break }
+                        if self.state.withLock({ $0.closed }) { break }
+                        if wellKnown.snapshot().isEmpty { continue }
+                        let changed = (try? await wellKnown.refresh()) ?? false
+                        if Task.isCancelled || self.state.withLock({ $0.closed }) { break }
+                        if !changed || !wellKnownPublishesToBus {
+                            await self.reload()
+                        }
+                    }
+                }
+
+                let cancelIfClosed: [Task<Void, Never>] = state.withLock { s in
+                    if s.closed {
+                        return [credTask, wkUpdatedTask, wkRefreshTask].compactMap { $0 }
+                    }
+                    s.credentialSwitchedTask = credTask
+                    s.wellKnownUpdatedTask = wkUpdatedTask
+                    s.wellKnownRefreshTask = wkRefreshTask
+                    return []
+                }
+                for task in cancelIfClosed { task.cancel() }
+            }
 
             if watcher != nil {
                 state.withLock { $0.reloadInProgress = true }
@@ -2192,23 +2303,21 @@ public enum CoreConfig {
         }
 
         deinit {
-            let (debounceTask, watchTasks, subs): (
-                Task<Void, Never>?,
-                [Task<Void, Never>],
-                [AsyncStream<WatchUpdate>.Continuation]
-            ) = state.withLock { s in
+            let (tasks, subs): ([Task<Void, Never>], [AsyncStream<WatchUpdate>.Continuation]) = state.withLock { s in
                 s.closed = true
                 s.pendingReloadAfterCurrent = false
-                let d = s.debounceTask
-                s.debounceTask = nil
-                let tasks = s.watched.values.map(\.task)
+                var allTasks: [Task<Void, Never>] = []
+                if let d = s.debounceTask { allTasks.append(d); s.debounceTask = nil }
+                if let c = s.credentialSwitchedTask { allTasks.append(c); s.credentialSwitchedTask = nil }
+                if let u = s.wellKnownUpdatedTask { allTasks.append(u); s.wellKnownUpdatedTask = nil }
+                if let r = s.wellKnownRefreshTask { allTasks.append(r); s.wellKnownRefreshTask = nil }
+                allTasks.append(contentsOf: s.watched.values.map(\.task))
                 s.watched.removeAll()
                 let continuations = Array(s.subscribers.values)
                 s.subscribers.removeAll()
-                return (d, tasks, continuations)
+                return (allTasks, continuations)
             }
-            debounceTask?.cancel()
-            for task in watchTasks { task.cancel() }
+            for task in tasks { task.cancel() }
             for sub in subs { sub.finish() }
         }
 
@@ -2220,6 +2329,26 @@ public enum CoreConfig {
         /// Number of currently attached config filesystem watch tasks.
         public var activeWatchCount: Int {
             state.withLock { $0.watched.count }
+        }
+
+        /// Whether the periodic WellKnown refresh timer task is currently active.
+        public var isWellKnownRefreshTimerActive: Bool {
+            state.withLock { $0.wellKnownRefreshTask != nil }
+        }
+
+        /// Number of active background lifecycle tasks (watches, bus subscriptions, debounce & WellKnown refresh timers).
+        public var activeBackgroundTaskCount: Int {
+            state.withLock { s in
+                s.watched.count
+                    + (s.debounceTask != nil ? 1 : 0)
+                    + (s.credentialSwitchedTask != nil ? 1 : 0)
+                    + (s.wellKnownUpdatedTask != nil ? 1 : 0)
+                    + (s.wellKnownRefreshTask != nil ? 1 : 0)
+            }
+        }
+
+        private static func sleep<C: Clock>(_ clock: C, for duration: C.Duration) async throws {
+            try await clock.sleep(for: duration)
         }
 
         public func entries() async -> [CoreConfigEntry] {
@@ -2261,25 +2390,23 @@ public enum CoreConfig {
             }
         }
 
-        /// Stops all config watches, pending debounce timers, and raw change streams for this Location.
+        /// Stops all config watches, bus subscriptions, periodic refresh and debounce timers, and raw change streams.
         public func close() async {
-            let (debounceTask, watchTasks, subs): (
-                Task<Void, Never>?,
-                [Task<Void, Never>],
-                [AsyncStream<WatchUpdate>.Continuation]
-            ) = state.withLock { s in
+            let (tasks, subs): ([Task<Void, Never>], [AsyncStream<WatchUpdate>.Continuation]) = state.withLock { s in
                 s.closed = true
                 s.pendingReloadAfterCurrent = false
-                let d = s.debounceTask
-                s.debounceTask = nil
-                let tasks = s.watched.values.map(\.task)
+                var allTasks: [Task<Void, Never>] = []
+                if let d = s.debounceTask { allTasks.append(d); s.debounceTask = nil }
+                if let c = s.credentialSwitchedTask { allTasks.append(c); s.credentialSwitchedTask = nil }
+                if let u = s.wellKnownUpdatedTask { allTasks.append(u); s.wellKnownUpdatedTask = nil }
+                if let r = s.wellKnownRefreshTask { allTasks.append(r); s.wellKnownRefreshTask = nil }
+                allTasks.append(contentsOf: s.watched.values.map(\.task))
                 s.watched.removeAll()
                 let continuations = Array(s.subscribers.values)
                 s.subscribers.removeAll()
-                return (d, tasks, continuations)
+                return (allTasks, continuations)
             }
-            debounceTask?.cancel()
-            for task in watchTasks { task.cancel() }
+            for task in tasks { task.cancel() }
             for sub in subs { sub.finish() }
         }
 
@@ -2393,6 +2520,9 @@ public enum CoreConfig {
                 options: options,
                 globalPaths: globalPaths,
                 integrations: orderedIntegrations,
+                credentials: credentials,
+                wellKnown: wellKnown,
+                processes: processes,
                 fileSystem: fileSystem,
                 environment: environment
             )
@@ -2519,6 +2649,7 @@ public enum CoreConfig {
 
         private func requestReload() {
             let delay = self.debounce
+            let timerClock = self.clock
             let previousTask: Task<Void, Never>? = state.withLock { s in
                 guard !s.closed else { return nil }
                 if s.reloadInProgress {
@@ -2530,7 +2661,7 @@ public enum CoreConfig {
                 let generation = s.debounceGeneration
                 s.debounceTask = Task { [weak self] in
                     do {
-                        try await Task.sleep(for: delay)
+                        try await Self.sleep(timerClock, for: delay)
                     } catch {
                         return
                     }
@@ -2623,12 +2754,175 @@ public enum CoreConfig {
             return out
         }
 
+        private static func resolvePreferencesProcesses(
+            _ injected: (any AppProcess.Interface)?
+        ) -> (any AppProcess.Interface)? {
+            if let injected {
+                return injected
+            }
+            #if os(macOS)
+            return AppProcess.Service()
+            #else
+            return nil
+            #endif
+        }
+
+        private static func loadPreferences(
+            _ plist: SchemaPrimitive.AbsolutePath,
+            references: inout Set<String>,
+            home: String,
+            processes: (any AppProcess.Interface)?,
+            fileSystem: any OpenCodeFileSystem,
+            environment: any EnvironmentProviding
+        ) async -> [CoreConfigEntry] {
+            guard let effectiveProcesses = resolvePreferencesProcesses(processes) else {
+                return []
+            }
+            let spec = ProcessSpec(
+                executable: "plutil",
+                arguments: ["-convert", "json", "-o", "-", plist.rawValue],
+                stdin: []
+            )
+            let runResult: AppProcess.RunResult
+            do {
+                let raw = try await effectiveProcesses.run(
+                    spec,
+                    options: AppProcess.RunOptions(timeoutMs: preferencesPlutilTimeoutMs)
+                )
+                runResult = try AppProcess.requireSuccess(raw)
+            } catch {
+                return []
+            }
+            references.insert(plist.rawValue)
+            let rawJSON = String(decoding: runResult.stdout, as: UTF8.self)
+            let stripped = CoreConfigDiscovery.stripPreferenceMetadata(rawJSON)
+            let sub = await CoreConfigVariable.substitute(
+                CoreConfigVariable.SubstituteInput(
+                    source: .virtual(source: plist.rawValue, dir: CoreConfigDiscovery.dirname(plist.rawValue)),
+                    text: stripped,
+                    home: home,
+                    environment: environment
+                ),
+                fileSystem: fileSystem
+            )
+            references.formUnion(sub.references)
+            guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { return [] }
+            return [.document(ConfigSchema.Document(path: plist, info: info))]
+        }
+
+        private static func loadWellKnownEntry(
+            _ entry: CoreIntegration.WellKnown.Entry,
+            references: inout Set<String>,
+            home: String,
+            credentials: (any CoreProvider.Credential.Interface)?,
+            wellKnown: any CoreIntegration.WellKnown.Interface,
+            fileSystem: any OpenCodeFileSystem,
+            environment: any EnvironmentProviding
+        ) async -> [CoreConfigIntegration.WellKnownDocument] {
+            let auth = entry.manifest.auth
+            let credential = (try? await credentials?.list(entry.integrationID))?.last
+            let variables: [String: String]?
+            if let auth, let credential, case .key(let keyValue) = credential.value {
+                variables = [auth.env: keyValue.key]
+            } else {
+                variables = nil
+            }
+            // Logging out drops the saved remote config, so the source supplies nothing until a fresh fetch succeeds.
+            guard let variables else {
+                try? await wellKnown.clearCached(origin: entry.origin)
+                return []
+            }
+            // A failed refresh keeps the last resolved config so remote providers and allowlists do not disappear.
+            let configs: [CoreIntegration.WellKnown.Config]
+            do {
+                configs = try await wellKnown.resolve(entry: entry, variables: variables)
+            } catch {
+                configs = (try? await wellKnown.cached(origin: entry.origin)) ?? []
+            }
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.withoutEscapingSlashes]
+            var docs: [CoreConfigIntegration.WellKnownDocument] = []
+            for config in configs {
+                guard let data = try? encoder.encode(JSONValue.object(config)) else { continue }
+                let rawText = String(decoding: data, as: UTF8.self)
+                let sub = await CoreConfigVariable.substitute(
+                    CoreConfigVariable.SubstituteInput(
+                        source: .virtual(source: entry.origin, dir: entry.origin),
+                        text: rawText,
+                        env: variables,
+                        home: home,
+                        environment: environment
+                    ),
+                    fileSystem: fileSystem
+                )
+                references.formUnion(sub.references)
+                guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { continue }
+                docs.append(CoreConfigIntegration.WellKnownDocument(
+                    path: nil,
+                    info: info,
+                    integrationID: entry.integrationID
+                ))
+            }
+            return docs
+        }
+
+        private static func loadWellKnown(
+            references: inout Set<String>,
+            home: String,
+            credentials: (any CoreProvider.Credential.Interface)?,
+            wellKnown: (any CoreIntegration.WellKnown.Interface)?,
+            fileSystem: any OpenCodeFileSystem,
+            environment: any EnvironmentProviding
+        ) async -> [(integrationID: IntegrationID, documents: [CoreConfigIntegration.WellKnownDocument])] {
+            guard let wellKnown else { return [] }
+            let entries = (try? await wellKnown.entries()) ?? []
+            var out: [(integrationID: IntegrationID, documents: [CoreConfigIntegration.WellKnownDocument])] = []
+            for entry in entries {
+                let docs = await loadWellKnownEntry(
+                    entry,
+                    references: &references,
+                    home: home,
+                    credentials: credentials,
+                    wellKnown: wellKnown,
+                    fileSystem: fileSystem,
+                    environment: environment
+                )
+                out.append((integrationID: entry.integrationID, documents: docs))
+            }
+            return out
+        }
+
+        // `integration.use` decides whether an integration may supply anything. Only managed policies can withhold the
+        // documents an integration delivers, so a project file can never strip the Console document carrying org policy.
+        // A withheld document keeps its policies, so denying an integration never lifts the restrictions it carries.
+        private static func supplies(
+            lockdown: [CoreManagedPolicy.Statement],
+            integrationID: IntegrationID,
+            connection: ConnectionSchema.Info? = nil,
+            credentials: (any CoreProvider.Credential.Interface)?
+        ) async -> Bool {
+            let stored: CoreProvider.Credential.Info?
+            if case .credential(let credInfo) = connection {
+                stored = try? await credentials?.get(credInfo.id)
+            } else {
+                stored = nil
+            }
+            let resource = CoreManagedPolicy.integrationResource(
+                integrationID.rawValue,
+                account: stored.flatMap { CoreManagedPolicy.account($0.value) }
+            )
+            return CoreManagedPolicy.decision(lockdown, action: .integrationUse, resource: resource) != .deny
+        }
+
         private static func loadAll(
             sources: CoreConfigDiscovery.Sources,
             directory: String,
             options: Options?,
             globalPaths: Global.Interface,
             integrations: [CoreConfigIntegration.Document],
+            credentials: (any CoreProvider.Credential.Interface)?,
+            wellKnown: (any CoreIntegration.WellKnown.Interface)?,
+            processes: (any AppProcess.Interface)?,
             fileSystem: any OpenCodeFileSystem,
             environment: any EnvironmentProviding
         ) async -> (entries: [CoreConfigEntry], isInput: @Sendable (String) -> Bool) {
@@ -2678,13 +2972,25 @@ public enum CoreConfig {
                 }
             }
 
-            // Managed settings & split managed policies (exact upstream precedence).
+            // Managed settings load last so they override everything, and MDM preferences outrank
+            // the system directory as in V1. Policies evaluate in reverse load order, so managed
+            // policies split off and load first to keep final file-based authority.
             var managedRaw: [CoreConfigEntry] = []
             if let sys = sources.system, sys.present {
                 managedRaw.append(contentsOf: await loadDirectory(
                     sys.path,
                     references: &references,
                     home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                ))
+            }
+            if let prefs = sources.preferences {
+                managedRaw.append(contentsOf: await loadPreferences(
+                    prefs,
+                    references: &references,
+                    home: home,
+                    processes: processes,
                     fileSystem: fileSystem,
                     environment: environment
                 ))
@@ -2760,11 +3066,60 @@ public enum CoreConfig {
                 ))
             }
 
-            let integrationEntries = integrations.map { CoreConfigEntry.integration($0) }
+            let lockdown = CoreManagedPolicy.statements(managedPolicies)
+            var integrationEntries: [CoreConfigEntry] = []
+            for document in integrations {
+                let allowed = await supplies(
+                    lockdown: lockdown,
+                    integrationID: document.integrationID,
+                    connection: document.connection,
+                    credentials: credentials
+                )
+                if allowed {
+                    integrationEntries.append(.integration(document))
+                } else {
+                    integrationEntries.append(.integration(CoreConfigIntegration.Document(
+                        path: document.path,
+                        info: ConfigSchema.Info(policies: document.info.policies),
+                        integrationID: document.integrationID,
+                        connection: document.connection,
+                        organization: document.organization
+                    )))
+                }
+            }
+
+            let loadedWellKnown = await loadWellKnown(
+                references: &references,
+                home: home,
+                credentials: credentials,
+                wellKnown: wellKnown,
+                fileSystem: fileSystem,
+                environment: environment
+            )
+            var wellKnownEntries: [CoreConfigEntry] = []
+            for item in loadedWellKnown {
+                let allowed = await supplies(
+                    lockdown: lockdown,
+                    integrationID: item.integrationID,
+                    credentials: credentials
+                )
+                if allowed {
+                    wellKnownEntries.append(contentsOf: item.documents.map { .wellKnown($0) })
+                } else {
+                    wellKnownEntries.append(contentsOf: item.documents.map { doc in
+                        .wellKnown(CoreConfigIntegration.WellKnownDocument(
+                            path: doc.path,
+                            info: ConfigSchema.Info(policies: doc.info.policies),
+                            integrationID: doc.integrationID
+                        ))
+                    })
+                }
+            }
 
             var result: [CoreConfigEntry] = []
             result.append(contentsOf: managedPolicies)
             result.append(contentsOf: integrationEntries)
+            result.append(contentsOf: wellKnownEntries)
             result.append(contentsOf: globalEntries)
             result.append(contentsOf: explicitDocs)
             result.append(contentsOf: directDocs)
@@ -2875,7 +3230,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#layer [status=adapted hash=880f93656adb]
+    // parity: core/src/config.ts#layer [status=implemented hash=880f93656adb]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, scope in
             let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
@@ -2883,6 +3238,14 @@ public enum CoreConfig {
             let locationSvc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
             let watcher = deps.get(CoreFilesystem.Watcher.Service.serviceKey, as: (any CoreFilesystem.Watcher.Interface).self)
             let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+            let credentials = deps.get(CoreProvider.Credential.Service.serviceKey, as: (any CoreProvider.Credential.Interface).self)
+            let wellKnown = deps.get(CoreIntegration.WellKnown.Service.serviceKey, as: (any CoreIntegration.WellKnown.Interface).self)
+            #if os(macOS)
+            let processes: (any AppProcess.Interface)? = deps.get(AppProcess.Service.serviceKey, as: (any AppProcess.Interface).self)
+                ?? AppProcess.Service()
+            #else
+            let processes: (any AppProcess.Interface)? = nil
+            #endif
             let directory = locationSvc?.info.directory.rawValue
                 ?? deps.get("@opencode/Location.directory", as: String.self)
                 ?? "/"
@@ -2896,7 +3259,10 @@ public enum CoreConfig {
                 fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared,
                 watcher: watcher,
                 bus: bus,
-                location: locRoute
+                location: locRoute,
+                credentials: credentials,
+                wellKnown: wellKnown,
+                processes: processes
             )
             scope.addFinalizer {
                 await service.close()
@@ -2905,15 +3271,24 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#configured [status=adapted hash=667800e459ad]
+    // parity: core/src/config.ts#configured [status=implemented hash=667800e459ad]
     public static func configured(_ options: Options? = nil) -> LayerNode.Provider {
         AppNode.makeLocationNode(
             Service.serviceKey,
             layer(options),
-            [CoreFilesystem.Watcher.node, CoreBus.node, FSUtil.node, Global.node]
+            [
+                CoreFilesystem.Watcher.node,
+                CoreBus.node,
+                FSUtil.node,
+                Global.node,
+                CoreLocation.Location.node,
+                CoreProvider.Credential.node,
+                CoreIntegration.WellKnown.node,
+                AppProcess.node,
+            ]
         )
     }
 
-    // parity: core/src/config.ts#node [status=adapted hash=aea3814ebc3b]
+    // parity: core/src/config.ts#node [status=implemented hash=aea3814ebc3b]
     public static let node: LayerNode.Provider = configured()
 }
