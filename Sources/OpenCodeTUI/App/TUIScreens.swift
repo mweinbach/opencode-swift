@@ -1008,9 +1008,10 @@ public enum TUIScreens {
                                 }
                                 .padding(top: 1, left: 3)
                             } else {
-                                for item in state.messages {
+                                for (index, item) in state.messages.enumerated() {
                                     buildTranscriptItem(
                                         item,
+                                        endsAssistantTurn: isAssistantTurnEnd(at: index, in: state),
                                         state: state,
                                         theme: theme,
                                         syntaxStyle: syntaxStyle,
@@ -1137,8 +1138,28 @@ public enum TUIScreens {
         )
     }
 
+    private static func isAssistantTurnEnd(at index: Int, in state: TUIInteractiveState) -> Bool {
+        guard state.messages.indices.contains(index),
+              case .assistant(_, _, _, _, let completed, _) = state.messages[index],
+              completed
+        else {
+            return false
+        }
+        let nextIndex = index + 1
+        if nextIndex < state.messages.count {
+            switch state.messages[nextIndex] {
+            case .user, .system:
+                return true
+            case .assistant:
+                return false
+            }
+        }
+        return !state.sessionStatus.isRunning
+    }
+
     private static func buildTranscriptItem(
         _ item: TUITranscriptItem,
+        endsAssistantTurn: Bool,
         state: TUIInteractiveState,
         theme: ResolvedTheme,
         syntaxStyle: SyntaxStyle,
@@ -1171,7 +1192,7 @@ public enum TUIScreens {
                 .flexShrink(0)
             )
 
-        case .assistant(let id, _, _, let parts, let completed, let error):
+        case .assistant(let id, let agentName, let modelLabel, let parts, let completed, let error):
             return AnyTUIView(
                 VStack(spacing: 1) {
                     for part in parts {
@@ -1187,6 +1208,16 @@ public enum TUIScreens {
                     if let error, !error.isEmpty {
                         TUIText("Error: \(error)", fg: .rgba(theme.text.feedback.error.base), wrapMode: .word)
                             .padding(left: 3)
+                    }
+                    if endsAssistantTurn {
+                        buildAssistantTurnFooter(
+                            id: id,
+                            agentName: agentName,
+                            modelLabel: modelLabel,
+                            state: state,
+                            theme: theme,
+                            agentColor: agentColor
+                        )
                     }
                 }
                 .key("msg-assistant-\(id)")
@@ -1208,6 +1239,108 @@ public enum TUIScreens {
                 .flexShrink(0)
             )
         }
+    }
+
+    private static func buildAssistantTurnFooter(
+        id: String,
+        agentName: String?,
+        modelLabel: String?,
+        state: TUIInteractiveState,
+        theme: ResolvedTheme,
+        agentColor: RGBA
+    ) -> AnyTUIView {
+        let trimmedAgent = agentName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let resolvedAgentName = trimmedAgent.isEmpty
+            ? state.activeAgent.displayName
+            : TUIUtil.titlecase(trimmedAgent)
+        let loweredAgent = resolvedAgentName.lowercased()
+        let matchedAgent = state.agents.first {
+            $0.name.lowercased() == loweredAgent || $0.id.lowercased() == loweredAgent
+        }
+        let glyphColor = matchedAgent.map { state.agentColor(for: $0, theme: theme) } ?? agentColor
+
+        var chunks: [TextChunk] = [
+            TextChunk(text: "▣ ", fg: glyphColor),
+            TextChunk(text: resolvedAgentName, fg: theme.text.base),
+        ]
+        if let trimmedModel = modelLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmedModel.isEmpty {
+            chunks.append(TextChunk(text: " · \(trimmedModel)", fg: theme.text.muted))
+        }
+
+        return AnyTUIView(
+            TUIText(
+                StyledText(chunks: chunks),
+                wrapMode: TextWrapMode.none,
+                truncate: true
+            )
+            .key("msg-assistant-footer-\(id)")
+            .padding(left: 3)
+            .width(.percent(100))
+            .flexShrink(0)
+        )
+    }
+
+    private enum ToolDisplayStyle {
+        case compactInline(label: String)
+        case shellBlock
+        case editBlock(label: String)
+        case generic
+    }
+
+    private static func toolDisplayStyle(for name: String) -> ToolDisplayStyle {
+        switch name.lowercased() {
+        case "read", "fs_read":
+            return .compactInline(label: "Read")
+        case "glob":
+            return .compactInline(label: "Glob")
+        case "grep":
+            return .compactInline(label: "Grep")
+        case "search":
+            return .compactInline(label: "Search")
+        case "list", "ls":
+            return .compactInline(label: "List")
+        case "webfetch":
+            return .compactInline(label: "Webfetch")
+        case "websearch":
+            return .compactInline(label: "Websearch")
+        case "skill":
+            return .compactInline(label: "Skill")
+        case "todowrite", "todo":
+            return .compactInline(label: "Todos")
+        case "question":
+            return .compactInline(label: "Question")
+        case "shell", "bash", "exec":
+            return .shellBlock
+        case "edit":
+            return .editBlock(label: "Edit")
+        case "write":
+            return .editBlock(label: "Write")
+        case "patch", "apply_patch":
+            return .editBlock(label: "Patch")
+        default:
+            return .generic
+        }
+    }
+
+    private static func trimEdgeNewlines(_ text: String) -> String {
+        var start = text.startIndex
+        var end = text.endIndex
+        while start < end && (text[start] == "\n" || text[start] == "\r") {
+            start = text.index(after: start)
+        }
+        while end > start {
+            let prev = text.index(before: end)
+            if text[prev] == "\n" || text[prev] == "\r" {
+                end = prev
+            } else {
+                break
+            }
+        }
+        return String(text[start..<end])
+    }
+
+    private static func isDiffPreviewLine(_ line: String) -> Bool {
+        line.hasPrefix("@@") || line.hasPrefix("+") || line.hasPrefix("-")
     }
 
     private static func buildAssistantPart(
@@ -1287,34 +1420,284 @@ public enum TUIScreens {
             )
 
         case .tool(let id, let name, let status, let summary, let outputPreview, let error):
-            let icon = toolIcon(for: name, status: status, spinnerTick: state.spinnerTick)
-            let iconColor: RGBA
-            switch status {
-            case .streaming, .running:
-                iconColor = agentColor
-            case .completed:
-                iconColor = theme.text.muted
-            case .error:
-                iconColor = theme.text.feedback.error.base
-            }
-            let textColor = status == .error ? theme.text.feedback.error.base : theme.text.muted
+            return buildToolPart(
+                id: id,
+                name: name,
+                status: status,
+                summary: summary,
+                outputPreview: outputPreview,
+                error: error,
+                state: state,
+                theme: theme,
+                agentColor: agentColor
+            )
+        }
+    }
+
+    private static func buildToolPart(
+        id: String,
+        name: String,
+        status: TUIToolRunStatus,
+        summary: String,
+        outputPreview: String?,
+        error: String?,
+        state: TUIInteractiveState,
+        theme: ResolvedTheme,
+        agentColor: RGBA
+    ) -> AnyTUIView {
+        let icon = toolIcon(for: name, status: status, spinnerTick: state.spinnerTick)
+        let isRunning = status == .streaming || status == .running
+        let isError = status == .error
+        let iconColor: RGBA = isRunning
+            ? agentColor
+            : (isError ? theme.text.feedback.error.base : theme.text.muted)
+        let trimmedSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        switch toolDisplayStyle(for: name) {
+        case .compactInline(let label):
+            let rowColor = isError ? theme.text.feedback.error.base : theme.text.muted
             var chunks: [TextChunk] = [
                 TextChunk(text: "\(icon) ", fg: iconColor),
-                TextChunk(text: name, fg: status == .error ? theme.text.feedback.error.base : theme.text.base),
+                TextChunk(text: label, fg: rowColor),
             ]
-            if !summary.isEmpty {
-                chunks.append(TextChunk(text: " \(summary)", fg: textColor))
+            if !trimmedSummary.isEmpty {
+                chunks.append(TextChunk(text: " \(trimmedSummary)", fg: rowColor))
+            }
+            return AnyTUIView(
+                VStack(spacing: 0) {
+                    TUIText(StyledText(chunks: chunks), wrapMode: TextWrapMode.none, truncate: true)
+                        .width(.percent(100))
+                    if isError, let error, !error.isEmpty {
+                        TUIText(error, fg: .rgba(theme.text.feedback.error.base), wrapMode: .word)
+                            .padding(left: 2)
+                            .width(.percent(100))
+                    }
+                }
+                .key("part-tool-\(id)")
+                .padding(left: 3)
+                .width(.percent(100))
+                .flexShrink(0)
+            )
+
+        case .shellBlock:
+            let cardBg = theme.background.raised.base
+            let rawCommand = trimmedSummary.hasPrefix("$ ")
+                ? String(trimmedSummary.dropFirst(2))
+                : trimmedSummary
+            let rawOutput = outputPreview?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let maxLines = 10
+            let maxChars = maxLines * max(20, state.cols - 12)
+            let commandHeaderInput = rawCommand.isEmpty ? "" : "$ \(rawCommand)"
+            let collapsed = TUIUtil.collapseShellOutput(
+                input: commandHeaderInput,
+                output: rawOutput,
+                maxLines: maxLines,
+                maxChars: maxChars
+            )
+
+            let headerChunks: [TextChunk]
+            if rawCommand.isEmpty {
+                if isRunning {
+                    headerChunks = [
+                        TextChunk(text: "\(icon) ", fg: agentColor, bg: cardBg),
+                        TextChunk(text: "Writing command…", fg: theme.text.muted, bg: cardBg),
+                    ]
+                } else {
+                    headerChunks = [
+                        TextChunk(text: "$", fg: isError ? theme.text.feedback.error.base : theme.text.muted, bg: cardBg),
+                    ]
+                }
+            } else if isRunning {
+                headerChunks = [
+                    TextChunk(text: "\(icon) ", fg: agentColor, bg: cardBg),
+                    TextChunk(text: collapsed.input, fg: theme.text.base, bg: cardBg),
+                ]
+            } else {
+                headerChunks = [
+                    TextChunk(
+                        text: collapsed.input,
+                        fg: isError ? theme.text.feedback.error.base : theme.text.base,
+                        bg: cardBg
+                    ),
+                ]
             }
 
+            return AnyTUIView(
+                TUIBox(
+                    border: false,
+                    backgroundColor: .rgba(cardBg),
+                    shouldFill: true
+                ) {
+                    TUIText(
+                        StyledText(chunks: headerChunks),
+                        bg: .rgba(cardBg),
+                        wrapMode: .word
+                    )
+                    .width(.percent(100))
+                    if !collapsed.output.isEmpty {
+                        TUIText(
+                            collapsed.output,
+                            fg: .rgba(theme.text.muted),
+                            bg: .rgba(cardBg),
+                            wrapMode: .word
+                        )
+                        .width(.percent(100))
+                    }
+                    if let error, !error.isEmpty {
+                        TUIText(
+                            error,
+                            fg: .rgba(theme.text.feedback.error.base),
+                            bg: .rgba(cardBg),
+                            wrapMode: .word
+                        )
+                        .width(.percent(100))
+                    }
+                }
+                .key("part-tool-\(id)")
+                .flexDirection(.column)
+                .alignItems(.stretch)
+                .gap(1)
+                .padding(top: 1, right: 2, bottom: 1, left: 2)
+                .margin(left: 1)
+                .flexShrink(0)
+            )
+
+        case .editBlock(let label):
+            let rawPreview = outputPreview.map(trimEdgeNewlines) ?? ""
+            let allPreviewLines = rawPreview.isEmpty
+                ? []
+                : rawPreview.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            let hasDiffLines = allPreviewLines.contains(where: isDiffPreviewLine)
+
+            if hasDiffLines {
+                let cardBg = theme.background.raised.base
+                let maxDiffLines = 12
+                let visibleDiffLines = Array(allPreviewLines.prefix(maxDiffLines))
+                let overflowCount = max(0, allPreviewLines.count - visibleDiffLines.count)
+
+                var headerChunks: [TextChunk] = [
+                    TextChunk(text: "\(icon) ", fg: iconColor, bg: cardBg),
+                    TextChunk(
+                        text: label,
+                        fg: isError ? theme.text.feedback.error.base : theme.text.base,
+                        bg: cardBg
+                    ),
+                ]
+                if !trimmedSummary.isEmpty {
+                    headerChunks.append(
+                        TextChunk(
+                            text: " \(trimmedSummary)",
+                            fg: isError ? theme.text.feedback.error.base : theme.text.muted,
+                            bg: cardBg
+                        )
+                    )
+                }
+
+                return AnyTUIView(
+                    TUIBox(
+                        border: false,
+                        backgroundColor: .rgba(cardBg),
+                        shouldFill: true
+                    ) {
+                        TUIText(
+                            StyledText(chunks: headerChunks),
+                            bg: .rgba(cardBg),
+                            wrapMode: TextWrapMode.none,
+                            truncate: true
+                        )
+                        .margin(bottom: 1)
+                        .width(.percent(100))
+
+                        for diffLine in visibleDiffLines {
+                            buildDiffPreviewLine(diffLine, theme: theme, cardBg: cardBg)
+                        }
+                        if overflowCount > 0 {
+                            TUIText(
+                                "… (\(overflowCount) more \(overflowCount == 1 ? "line" : "lines"))",
+                                fg: .rgba(theme.text.muted),
+                                bg: .rgba(cardBg),
+                                wrapMode: TextWrapMode.none,
+                                truncate: true
+                            )
+                            .width(.percent(100))
+                        }
+
+                        if let error, !error.isEmpty {
+                            TUIText(
+                                error,
+                                fg: .rgba(theme.text.feedback.error.base),
+                                bg: .rgba(cardBg),
+                                wrapMode: .word
+                            )
+                            .margin(top: 1)
+                            .width(.percent(100))
+                        }
+                    }
+                    .key("part-tool-\(id)")
+                    .flexDirection(.column)
+                    .alignItems(.stretch)
+                    .padding(top: 1, right: 2, bottom: 1, left: 2)
+                    .margin(left: 1)
+                    .flexShrink(0)
+                )
+            }
+
+            let rowColor = isError ? theme.text.feedback.error.base : theme.text.muted
+            var chunks: [TextChunk] = [
+                TextChunk(text: "\(icon) ", fg: iconColor),
+                TextChunk(text: label, fg: isError ? theme.text.feedback.error.base : theme.text.base),
+            ]
+            if !trimmedSummary.isEmpty {
+                chunks.append(TextChunk(text: " \(trimmedSummary)", fg: rowColor))
+            }
             return AnyTUIView(
                 VStack(spacing: 0) {
                     TUIText(StyledText(chunks: chunks), wrapMode: TextWrapMode.none, truncate: true)
                         .width(.percent(100))
                     if let error, !error.isEmpty {
-                        TUIText("  \(error)", fg: .rgba(theme.text.feedback.error.base), wrapMode: .word)
+                        TUIText(error, fg: .rgba(theme.text.feedback.error.base), wrapMode: .word)
+                            .padding(left: 2)
                             .width(.percent(100))
-                    } else if let preview = outputPreview, !preview.isEmpty {
-                        TUIText(preview, fg: .rgba(theme.text.faint), wrapMode: .word)
+                    }
+                }
+                .key("part-tool-\(id)")
+                .padding(left: 3)
+                .width(.percent(100))
+                .flexShrink(0)
+            )
+
+        case .generic:
+            let textColor = isError ? theme.text.feedback.error.base : theme.text.muted
+            var chunks: [TextChunk] = [
+                TextChunk(text: "\(icon) ", fg: iconColor),
+                TextChunk(text: name, fg: isError ? theme.text.feedback.error.base : theme.text.base),
+            ]
+            if !trimmedSummary.isEmpty {
+                chunks.append(TextChunk(text: " \(trimmedSummary)", fg: textColor))
+            }
+            let previewText: String?
+            if status == .completed,
+               let rawPreview = outputPreview?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !rawPreview.isEmpty {
+                let collapsed = TUIUtil.collapseToolOutput(
+                    rawPreview,
+                    maxLines: 4,
+                    maxChars: 4 * max(20, state.cols - 8)
+                )
+                previewText = collapsed.output
+            } else {
+                previewText = nil
+            }
+            return AnyTUIView(
+                VStack(spacing: 0) {
+                    TUIText(StyledText(chunks: chunks), wrapMode: TextWrapMode.none, truncate: true)
+                        .width(.percent(100))
+                    if let error, !error.isEmpty {
+                        TUIText(error, fg: .rgba(theme.text.feedback.error.base), wrapMode: .word)
+                            .padding(left: 2)
+                            .width(.percent(100))
+                    } else if let previewText, !previewText.isEmpty {
+                        TUIText(previewText, fg: .rgba(theme.text.faint), wrapMode: .word)
                             .padding(left: 2)
                             .width(.percent(100))
                     }
@@ -1327,6 +1710,41 @@ public enum TUIScreens {
         }
     }
 
+    private static func buildDiffPreviewLine(
+        _ line: String,
+        theme: ResolvedTheme,
+        cardBg: RGBA
+    ) -> AnyTUIView {
+        let fg: RGBA
+        let bg: RGBA
+        if line.hasPrefix("@@") {
+            fg = theme.diff.text.hunkHeader
+            bg = cardBg
+        } else if line.hasPrefix("+++") || line.hasPrefix("---") {
+            fg = theme.text.muted
+            bg = cardBg
+        } else if line.hasPrefix("+") {
+            fg = theme.diff.text.added
+            bg = theme.diff.background.added
+        } else if line.hasPrefix("-") {
+            fg = theme.diff.text.removed
+            bg = theme.diff.background.removed
+        } else {
+            fg = theme.diff.text.context
+            bg = cardBg
+        }
+        return AnyTUIView(
+            TUIText(
+                line,
+                fg: .rgba(fg),
+                bg: .rgba(bg),
+                wrapMode: TextWrapMode.none,
+                truncate: true
+            )
+            .width(.percent(100))
+        )
+    }
+
     public static func toolIcon(for name: String, status: TUIToolRunStatus, spinnerTick: Int) -> String {
         if status == .streaming || status == .running {
             return spinnerFrames[spinnerTick % spinnerFrames.count]
@@ -1335,16 +1753,20 @@ public enum TUIScreens {
             return "✗"
         }
         switch name.lowercased() {
-        case "read", "fs_read":
-            return "⚙"
+        case "read", "fs_read", "list", "ls", "skill", "question":
+            return "→"
         case "edit", "write", "patch", "apply_patch":
-            return "✎"
+            return "←"
         case "shell", "bash", "exec":
             return "$"
         case "glob", "grep", "search":
-            return "⌕"
+            return "✱"
         case "webfetch", "websearch":
             return "◈"
+        case "todowrite", "todo":
+            return "⚙"
+        case "subagent", "task", "execute":
+            return "✓"
         default:
             return "⚙"
         }
