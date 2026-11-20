@@ -785,6 +785,8 @@ struct PlatformPhase2Tests {
         let handoff = try owner1.prepareHandoff()
         let owner2 = try client.claimOwnership(ticket: handoff.ticket)
         owner1.releaseOwnership() // old owner disconnect must NOT stop daemon!
+        PlatformPhase2Helper.sleepMs(100)
+
 
         // Ping verifies protocol v9 & registration match
         let pong = try client.ping()
