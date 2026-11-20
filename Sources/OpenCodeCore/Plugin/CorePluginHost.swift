@@ -1137,6 +1137,7 @@ public enum CorePlugin {
             spawner: (any ProcessSpawner)? = nil,
             fileSystem: (any OpenCodeFileSystem)? = nil,
             modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
+            flags: (any CoreFlag.Interface)? = nil,
             operation: () async throws -> T
         ) async rethrows -> T {
             try await $currentHTTPTransportOverride.withValue(http ?? currentHTTPTransportOverride) {
@@ -1144,7 +1145,9 @@ public enum CorePlugin {
                     try await $currentProcessSpawnerOverride.withValue(spawner ?? currentProcessSpawnerOverride) {
                         try await $currentFileSystemOverride.withValue(fileSystem ?? currentFileSystemOverride) {
                             try await $currentModelsDevOverride.withValue(modelsDev ?? currentModelsDevOverride) {
-                                try await operation()
+                                try await $currentFlagsOverride.withValue(flags ?? currentFlagsOverride) {
+                                    try await operation()
+                                }
                             }
                         }
                     }
@@ -7324,6 +7327,17 @@ public enum CorePlugin {
                 tokenSource != "none" || apiKeySource != nil
             }
 
+            /// How to log in, naming the Claude config folder that needs it when there is one.
+            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#loginMessage [status=implemented hash=4a83ab13f6d8]
+            public static func loginMessage(_ configDir: String?) -> String {
+                guard let configDir else { return "Claude Code is not logged in. Run `claude auth login` in a terminal." }
+                #if os(Windows)
+                return "Claude Code is not logged in. Run `$env:CLAUDE_CONFIG_DIR = \"\(configDir)\"; claude auth login` in PowerShell."
+                #else
+                return "Claude Code is not logged in. Run `CLAUDE_CONFIG_DIR=\"\(configDir)\" claude auth login` in a terminal."
+                #endif
+            }
+
             // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#run [status=adapted hash=e1f57a4615bb]
             public static func run(probe: @Sendable () async throws -> Result) async throws -> Result {
                 do {
@@ -7354,13 +7368,15 @@ public enum CorePlugin {
         }
 
         public enum IO {
-            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#Interface [status=adapted hash=6b304eb2cf16]
+            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#Interface [status=adapted hash=751ac69171c5]
             public struct Interface: Sendable {
                 public let which: @Sendable () -> String?
+                // Before our isolation settings
                 public let env: @Sendable () -> [String: String]
-                public let sessionExists: @Sendable (String) async -> Bool
-                public let fork: @Sendable (String, String) async -> Fork.Result?
-                public let remove: @Sendable (String) async -> Void
+                /// Whether Claude Code has a transcript for the session, in `configDir` when given.
+                public let sessionExists: @Sendable (_ sessionID: String, _ configDir: String?) async -> Bool
+                public let fork: @Sendable (_ sessionID: String, _ messageID: String, _ configDir: String?) async -> Fork.Result?
+                public let remove: @Sendable (_ sessionID: String, _ configDir: String?) async -> Void
                 public let probe: @Sendable () async throws -> Probe.Result
 
                 public init(
@@ -7372,11 +7388,16 @@ public enum CorePlugin {
                         return ProcessInfo.processInfo.environment
                         #endif
                     },
-                    sessionExists: @escaping @Sendable (String) async -> Bool = { _ in false },
-                    fork: @escaping @Sendable (String, String) async -> Fork.Result? = { sessionID, messageID in
-                        await Fork.create(sessionID: sessionID, messageID: messageID)
+                    sessionExists: @escaping @Sendable (_ sessionID: String, _ configDir: String?) async -> Bool = { sessionID, configDir in
+                        guard let configDir else { return false }
+                        return await IO.transcriptExists(sessionID: sessionID, configDir: configDir)
                     },
-                    remove: @escaping @Sendable (String) async -> Void = { _ in },
+                    fork: @escaping @Sendable (_ sessionID: String, _ messageID: String, _ configDir: String?) async -> Fork.Result? = { sessionID, messageID, _ in
+                        await helpers.fork(sessionID, messageID)
+                    },
+                    remove: @escaping @Sendable (_ sessionID: String, _ configDir: String?) async -> Void = { sessionID, _ in
+                        await helpers.remove(sessionID)
+                    },
                     probe: @escaping @Sendable () async throws -> Probe.Result = {
                         Probe.Result(version: nil, tokenSource: "none", apiKeySource: nil, models: [])
                     }
@@ -7390,7 +7411,34 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#real [status=adapted hash=5039a7782ec4]
+            /// Looks for the transcript the way the SDK does: `<configDir>/projects/*/<sessionID>.jsonl`, non-empty.
+            public static func transcriptExists(
+                sessionID: String,
+                configDir: String,
+                fileSystem: any OpenCodeFileSystem = Host.currentFileSystem
+            ) async -> Bool {
+                let projects = PluginContract.joinPath(configDir, "projects")
+                let folders = (try? await fileSystem.readDirectory(at: projects)) ?? []
+                for folder in folders {
+                    let file = PluginContract.joinPath(PluginContract.joinPath(projects, folder), "\(sessionID).jsonl")
+                    if let stat = try? await fileSystem.stat(at: file), stat.size > 0 { return true }
+                }
+                return false
+            }
+
+            /// The SDK's session helpers, which take no folder and read `CLAUDE_CONFIG_DIR` from the environment.
+            public struct Helpers: Sendable {
+                public let fork: @Sendable (_ sessionID: String, _ messageID: String) async -> Fork.Result?
+                public let remove: @Sendable (_ sessionID: String) async -> Void
+            }
+
+            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#helpers [status=adapted hash=18ab0ce35490]
+            public static let helpers = Helpers(
+                fork: { sessionID, messageID in await Fork.create(sessionID: sessionID, messageID: messageID) },
+                remove: { _ in }
+            )
+
+            // parity: core/src/plugin/provider/claude-agent/claude/io.ts#real [status=adapted hash=9b27c2282dbd]
             public static let real = Interface()
         }
 
@@ -7401,6 +7449,50 @@ public enum CorePlugin {
                 if let apiKey, !apiKey.isEmpty { env["ANTHROPIC_API_KEY"] = apiKey }
                 if let baseURL, !baseURL.isEmpty { env["ANTHROPIC_BASE_URL"] = baseURL }
                 return env
+            }
+
+            /// The process's working directory, which `path.resolve` resolves relative paths from.
+            public static var processDirectory: String {
+                #if os(WASI)
+                return "/"
+                #else
+                return FileManager.default.currentDirectoryPath
+                #endif
+            }
+
+            /// The configured Claude config folders, as absolute paths. Claude Code does not expand `~`, so a configDir
+            /// like `~/.claude-work` would point inside the project; an absolute path also means Claude Code and our own
+            /// transcript lookups agree on the folder.
+            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#configDirs [status=implemented hash=ce1c8d997dee]
+            public static func configDirs(_ value: JSONValue?, home: String? = Host.currentEnvironment.homeDirectory, cwd: String = QueryOptions.processDirectory) -> [String] {
+                let items: [JSONValue]
+                switch value {
+                case .array(let list): items = list
+                case .some(let single): items = [single]
+                case .none: items = []
+                }
+                return items.compactMap { item -> String? in
+                    guard case .string(let raw) = item else { return nil }
+                    let dir = raw.hasPrefix("~/") && home != nil ? PluginContract.joinPath(home!, String(raw.dropFirst(2))) : raw
+                    return CoreConfigDiscovery.resolvePath(base: cwd, relative: dir)
+                }
+            }
+
+            /// Claude Code keeps its state in `~/.claude.json` only while `CLAUDE_CONFIG_DIR` is unset. Naming the default
+            /// folder moves that to `~/.claude/.claude.json`, which can hold an older model list, so the default folder is
+            /// used by not naming it.
+            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#withoutDefaultFolder [status=implemented hash=be33992b9713]
+            public static func withoutDefaultFolder(
+                _ connection: [String: String],
+                io: IO.Interface,
+                home: String? = Host.currentEnvironment.homeDirectory
+            ) -> [String: String] {
+                guard let home, connection["CLAUDE_CONFIG_DIR"] == PluginContract.joinPath(home, ".claude") else { return connection }
+                // With the variable already set for opencode, leaving it out would run that folder instead.
+                if io.env()["CLAUDE_CONFIG_DIR"] != nil { return connection }
+                var rest = connection
+                rest.removeValue(forKey: "CLAUDE_CONFIG_DIR")
+                return rest
             }
 
             // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#base [status=adapted hash=beecd3e161f5]
@@ -7463,19 +7555,58 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#Interface [status=adapted hash=03a0fba49a11]
+            /// A turn for Claude Code: the chat, the side call's or fork's source, the connection environment (with the
+            /// account's `CLAUDE_CONFIG_DIR`), and where its SDK messages go.
+            public struct RunRequest: Sendable {
+                public let sessionID: String?
+                public let sourceID: String?
+                public let model: String
+                public let connection: [String: String]?
+                public let emit: @Sendable (ErrorMapper.SDKMessage) -> Void
+
+                public init(
+                    sessionID: String?,
+                    sourceID: String? = nil,
+                    model: String,
+                    connection: [String: String]? = nil,
+                    emit: @escaping @Sendable (ErrorMapper.SDKMessage) -> Void
+                ) {
+                    self.sessionID = sessionID
+                    self.sourceID = sourceID
+                    self.model = model
+                    self.connection = connection
+                    self.emit = emit
+                }
+
+                public func with(connection: [String: String]?, emit: @escaping @Sendable (ErrorMapper.SDKMessage) -> Void) -> RunRequest {
+                    RunRequest(sessionID: sessionID, sourceID: sourceID, model: model, connection: connection, emit: emit)
+                }
+            }
+
+            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#Interface [status=adapted hash=111364934eff]
             public protocol Interface: Sendable {
                 func activeCount() async -> Int
                 func closeAll() async
+                /// OpenCode stopped running the session, so a turn still waiting for tool results will not get them.
+                func idle(_ sessionID: String) async
+                /// OpenCode deleted the session, so nothing can resume it.
+                func remove(_ sessionID: String) async
             }
 
             public actor Registry: Interface {
                 private var sessions: [String: SessionProcess.Interface] = [:]
+                private let records: Sync.RecordStore?
 
-                public init() {}
+                public init(records: Sync.RecordStore? = nil) {
+                    self.records = records
+                }
 
                 public func activeCount() async -> Int {
                     sessions.count
+                }
+
+                public func attach(_ sessionID: String, process: SessionProcess.Interface) {
+                    sessions[sessionID] = process
                 }
 
                 public func closeAll() async {
@@ -7485,11 +7616,28 @@ public enum CorePlugin {
                         await session.close()
                     }
                 }
+
+                public func idle(_ sessionID: String) async {
+                    _ = sessionID
+                }
+
+                public func remove(_ sessionID: String) async {
+                    if let entry = sessions.removeValue(forKey: sessionID) { await entry.close() }
+                    try? await records?.remove(sessionID)
+                }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#registry [status=implemented hash=cc326c5851ed]
-            public static func registry() -> Registry {
-                Registry()
+            // parity: core/src/plugin/provider/claude-agent/claude/sessions.ts#registry [status=adapted hash=729f4efec5b4]
+            public static func registry(records: Sync.RecordStore? = nil) -> Registry {
+                Registry(records: records)
+            }
+
+            /// A new Claude process that is not logged in fails before the prompt is sent, because Claude Code's own error
+            /// does not say which folder needs a login.
+            public static func requireLogin(_ probe: Probe.Result, configDir: String?) throws {
+                if !Probe.isLoggedIn(tokenSource: probe.tokenSource, apiKeySource: probe.apiKeySource) {
+                    throw Probe.ProbeError(message: Probe.loginMessage(configDir))
+                }
             }
         }
 
@@ -7511,12 +7659,32 @@ public enum CorePlugin {
             public actor Tracker: Interface {
                 private var state: State = .idle
                 private let io: IO.Interface
+                private let connection: @Sendable () async -> [String: String]
+                private let configDirs: @Sendable () async -> [String]
 
-                public init(io: IO.Interface) {
+                public init(
+                    io: IO.Interface,
+                    connection: @escaping @Sendable () async -> [String: String] = { [:] },
+                    configDirs: @escaping @Sendable () async -> [String] = { [] }
+                ) {
                     self.io = io
+                    self.connection = connection
+                    self.configDirs = configDirs
                 }
 
                 public func current() async -> State { state }
+
+                /// A chat's startup report. A model with its own configDir runs another account, which must not replace
+                /// the provider's login, prices and models; every folder in the provider's list is its own, so those
+                /// follow the folder a chat last started on.
+                public func report(_ next: State, configDir: String?) async {
+                    if case .ready = next {
+                        let own = ([await connection()] + (await configDirs()).map { ["CLAUDE_CONFIG_DIR": $0] })
+                            .map { QueryOptions.withoutDefaultFolder($0, io: io)["CLAUDE_CONFIG_DIR"] }
+                        if !own.contains(where: { $0 == configDir }) { return }
+                    }
+                    state = next
+                }
 
                 public func refresh() async -> State {
                     do {
@@ -7533,28 +7701,122 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#make [status=implemented hash=d044658a37eb]
-            public static func make(io: IO.Interface = IO.real) -> Tracker {
-                Tracker(io: io)
+            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#make [status=adapted hash=e68f236b4250]
+            public static func make(
+                io: IO.Interface = IO.real,
+                connection: @escaping @Sendable () async -> [String: String] = { [:] },
+                configDirs: @escaping @Sendable () async -> [String] = { [] }
+            ) -> Tracker {
+                Tracker(io: io, connection: connection, configDirs: configDirs)
             }
         }
 
         // MARK: claude-agent/language-model/*
 
         public enum ErrorMapper {
-            // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-error.ts#make [status=implemented hash=08c51c16c454]
-            public static func make() -> @Sendable (_ isError: Bool, _ status: Int?, _ resultText: String) -> String? {
-                { isError, status, resultText in
-                    let httpError = status.map { $0 >= 400 } ?? false
-                    if !isError && !httpError { return nil }
-                    let cleaned = resultText.replacing("Please run /login", with: "Run `claude auth login` in a terminal")
-                    if let status, status >= 500 {
-                        let head = status == 529 ? "Anthropic is overloaded (529)." : "Anthropic returned HTTP \(status)."
-                        return head + " Claude Code exhausted its retries. Try again shortly."
+            /// The Claude Agent SDK messages the error mapper and account rotation read.
+            public enum SDKMessage: Equatable, Sendable {
+                public struct RateLimitInfo: Equatable, Sendable {
+                    public let status: String
+                    public let rateLimitType: String?
+                    /// Seconds since the epoch.
+                    public let resetsAt: Double?
+
+                    public init(status: String, rateLimitType: String? = nil, resetsAt: Double? = nil) {
+                        self.status = status
+                        self.rateLimitType = rateLimitType
+                        self.resetsAt = resetsAt
                     }
-                    if !cleaned.isEmpty { return cleaned }
-                    if let status { return "Claude Code could not finish its reply (HTTP \(status))" }
-                    return "Claude Code could not finish its reply"
+                }
+
+                public struct Result: Equatable, Sendable {
+                    /// "success" or the error subtype.
+                    public let subtype: String
+                    public let isError: Bool
+                    public let apiErrorStatus: Int?
+                    public let result: String
+                    public let errors: [String]
+
+                    public init(subtype: String, isError: Bool = false, apiErrorStatus: Int? = nil, result: String = "", errors: [String] = []) {
+                        self.subtype = subtype
+                        self.isError = isError
+                        self.apiErrorStatus = apiErrorStatus
+                        self.result = result
+                        self.errors = errors
+                    }
+                }
+
+                case rateLimitEvent(RateLimitInfo)
+                case assistant(parentToolUseID: String?, error: String?)
+                case streamEvent
+                case result(Result)
+                case other(String)
+            }
+
+            /// A failed request; `limited` when a subscription or rate limit refused it.
+            // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-error.ts#Failure [status=implemented hash=ea76e0da1a9d]
+            public struct Failure: Swift.Error, Equatable, Sendable, CustomStringConvertible {
+                public let message: String
+                public let limited: Bool
+
+                public init(_ message: String, limited: Bool) {
+                    self.message = message
+                    self.limited = limited
+                }
+
+                public var description: String { message }
+            }
+
+            private struct Diagnostics: Sendable {
+                var code: String?
+                var rejected: SDKMessage.RateLimitInfo?
+            }
+
+            /// Keeps request-local diagnostics until the terminal result. A usage warning alone is not a failed request,
+            /// and Claude Code owns any retries before this result.
+            // parity: core/src/plugin/provider/claude-agent/language-model/claude-agent-error.ts#make [status=implemented hash=4249cb333806]
+            public static func make() -> @Sendable (SDKMessage) -> Failure? {
+                let state = Mutex(Diagnostics())
+                return { message in
+                    switch message {
+                    case .rateLimitEvent(let info):
+                        state.withLock { $0.rejected = info.status == "rejected" ? info : nil }
+                        return nil
+                    case .assistant(let parent, let error):
+                        if parent == nil, let error { state.withLock { $0.code = error } }
+                        return nil
+                    case .streamEvent, .other:
+                        return nil
+                    case .result(let result):
+                        let diagnostics = state.withLock { $0 }
+                        let status = result.subtype == "success" ? result.apiErrorStatus : nil
+                        let httpError = status.map { $0 >= 400 } ?? false
+                        if result.subtype == "success" && !result.isError && !httpError { return nil }
+                        let text = (result.subtype == "success" ? result.result : result.errors.joined(separator: "\n"))
+                            .replacing("Please run /login", with: "Run `claude auth login` in a terminal")
+                        let failure: String
+                        if let status, status >= 500 {
+                            failure = (status == 529 ? "Anthropic is overloaded (529)." : "Anthropic returned HTTP \(status).")
+                                + " Claude Code exhausted its retries. Try again shortly."
+                        } else {
+                            failure = text
+                        }
+                        let limited = diagnostics.code == "rate_limit" || (diagnostics.rejected != nil && status == 429)
+                        let window = diagnostics.rejected?.rateLimitType?.replacing("_", with: " ")
+                        let limit = limited && failure.isEmpty
+                            ? "Claude Code subscription limit reached\(window.map { " (\($0))" } ?? "")."
+                            : failure
+                        let reset: String
+                        if limited, let resetsAt = diagnostics.rejected?.resetsAt {
+                            reset = " Resets at \(CoreTool.formatToolISO8601UTC(epochMillis: Int64(resetsAt * 1000)))."
+                        } else {
+                            reset = ""
+                        }
+                        let combined = limit + reset
+                        if !combined.isEmpty { return Failure(combined, limited: limited) }
+                        if let status { return Failure("Claude Code could not finish its reply (HTTP \(status))", limited: limited) }
+                        return Failure("Claude Code could not finish its reply", limited: limited)
+                    }
                 }
             }
         }
@@ -7942,36 +8204,56 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/sync/record.ts#Storage [status=implemented hash=9beb38b0d6b2]
+            // parity: core/src/plugin/provider/claude-agent/sync/record.ts#Storage [status=implemented hash=a570d8faa59b]
             public struct RecordStorage: Sendable {
                 public let get: @Sendable (String) async throws -> JSONValue?
                 public let set: @Sendable (String, Record) async throws -> Void
+                public let remove: @Sendable (String) async throws -> Void
+                /// The keys with `prefix`.
+                public let scan: @Sendable (_ prefix: String) async throws -> [String]
 
                 public init(
                     get: @escaping @Sendable (String) async throws -> JSONValue?,
-                    set: @escaping @Sendable (String, Record) async throws -> Void
+                    set: @escaping @Sendable (String, Record) async throws -> Void,
+                    remove: @escaping @Sendable (String) async throws -> Void = { _ in },
+                    scan: @escaping @Sendable (_ prefix: String) async throws -> [String] = { _ in [] }
                 ) {
                     self.get = get
                     self.set = set
+                    self.remove = remove
+                    self.scan = scan
                 }
             }
 
             public struct RecordStore: Sendable {
-                public let get: @Sendable (String) async -> Record?
-                public let set: @Sendable (String, Record) async throws -> Void
+                public let get: @Sendable (_ sessionID: String, _ configDir: String?) async -> Record?
+                public let set: @Sendable (_ sessionID: String, _ record: Record, _ configDir: String?) async throws -> Void
+                /// Drops the chat's record in every config folder.
+                public let remove: @Sendable (_ sessionID: String) async throws -> Void
             }
 
-            // parity: core/src/plugin/provider/claude-agent/sync/record.ts#make [status=implemented hash=fc365f4dcc35]
+            /// Each Claude config folder has its own transcripts, so a chat keeps one record per folder.
+            public static func recordKey(_ sessionID: String, configDir: String? = nil) -> String {
+                configDir.map { "sessions/\(sessionID):\($0)" } ?? "sessions/\(sessionID)"
+            }
+
+            // parity: core/src/plugin/provider/claude-agent/sync/record.ts#make [status=implemented hash=ca1cbae19bd0]
             public static func makeRecordStore(_ storage: RecordStorage) -> RecordStore {
                 RecordStore(
-                    get: { sessionID in
-                        guard let raw = try? await storage.get("sessions/\(sessionID)"),
+                    get: { sessionID, configDir in
+                        guard let raw = try? await storage.get(recordKey(sessionID, configDir: configDir)),
                               let data = try? JSONEncoder().encode(raw)
                         else { return nil }
                         return try? JSONDecoder().decode(Record.self, from: data)
                     },
-                    set: { sessionID, record in
-                        try await storage.set("sessions/\(sessionID)", record)
+                    set: { sessionID, record, configDir in
+                        try await storage.set(recordKey(sessionID, configDir: configDir), record)
+                    },
+                    remove: { sessionID in
+                        try await storage.remove(recordKey(sessionID))
+                        for key in try await storage.scan("\(recordKey(sessionID)):") {
+                            try await storage.remove(key)
+                        }
                     }
                 )
             }
@@ -8157,8 +8439,19 @@ public enum CorePlugin {
 
         // MARK: claude-agent/{aisdk,instructions,integration,provider,session,index}.ts
 
-        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=965cfd96d8d5]
+        /// Builds the language model's `run`: each request goes through `Accounts`, which picks the account folder
+        /// from the provider's (or model's) `configDir` setting and rotates on a limit.
+        public static func accountRun(
+            settings: [String: JSONValue],
+            accounts: Accounts.Interface
+        ) -> @Sendable (Sessions.RunRequest) async throws -> Void {
+            let configDirs = QueryOptions.configDirs(settings["configDir"])
+            return { request in try await accounts.run(request, configDirs: configDirs) }
+        }
+
+        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=6a7b58c91241]
         public static func registerAISDK(ctx: PluginEffect.Context, sessions: any Sessions.Interface) async {
+            // The Claude Agent SDK language model is not hosted here; `accountRun` is what its `sdk` hook builds.
             _ = (ctx, sessions)
         }
 
@@ -8174,7 +8467,100 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/claude-agent/provider.ts#register [status=adapted hash=e1e113dace9f]
+        /// A model as the provider's saved catalog keeps it.
+        public struct CatalogModel: Equatable, Hashable, Sendable, Codable {
+            public let id: String
+            public let name: String?
+            public let efforts: [String]
+            public let contextWindow: Int?
+            public let resolvedModel: String?
+            public let hidden: Bool?
+
+            public init(id: String, name: String?, efforts: [String], contextWindow: Int? = nil, resolvedModel: String? = nil, hidden: Bool? = nil) {
+                self.id = id
+                self.name = name
+                self.efforts = efforts
+                self.contextWindow = contextWindow
+                self.resolvedModel = resolvedModel
+                self.hidden = hidden
+            }
+
+            func with(id: String? = nil, hidden: Bool?) -> CatalogModel {
+                CatalogModel(id: id ?? self.id, name: name, efforts: efforts, contextWindow: contextWindow, resolvedModel: resolvedModel, hidden: hidden)
+            }
+        }
+
+        /// A model as Claude Code lists it.
+        public struct ListedModel: Equatable, Hashable, Sendable, Codable {
+            public let value: String
+            public let displayName: String?
+            public let supportedEffortLevels: [String]?
+            public let contextWindow: Int?
+            public let resolvedModel: String?
+
+            public init(value: String, displayName: String?, supportedEffortLevels: [String]? = nil, contextWindow: Int? = nil, resolvedModel: String? = nil) {
+                self.value = value
+                self.displayName = displayName
+                self.supportedEffortLevels = supportedEffortLevels
+                self.contextWindow = contextWindow
+                self.resolvedModel = resolvedModel
+            }
+        }
+
+        /// Merges Claude Code's model list into the saved catalog. Claude Code lists a model under whatever name the
+        /// chat was started with, and each account caches its own list, while a chat or the config may hold any ID that
+        /// was ever listed. So no ID is dropped (a dropped one is kept hidden), and a model already offered under one ID
+        /// keeps it when Claude Code lists it under another. Context windows only come from the full check, so a chat's
+        /// startup report keeps the saved ones.
+        public static func fromClaude(_ models: [ListedModel], saved: [CatalogModel]) -> [CatalogModel] {
+            // "default" follows Claude Code's own default, which can change under a running opencode session
+            let listed = models.filter { $0.value != "default" }
+            var order: [String] = []
+            var result: [String: CatalogModel] = [:]
+            func set(_ model: CatalogModel) {
+                if result[model.id] == nil { order.append(model.id) }
+                result[model.id] = model
+            }
+            for model in listed {
+                let own = saved.first { $0.id == model.value }
+                let offered: CatalogModel? = own.map { !($0.hidden ?? false) } == true ? nil : saved.first { item in
+                    !(item.hidden ?? false)
+                        && item.resolvedModel != nil
+                        && item.resolvedModel == model.resolvedModel
+                        // An alias that is still listed has moved to another version, and this row is the old one
+                        && !listed.contains { $0.value == item.id }
+                }
+                let entry = CatalogModel(
+                    id: model.value,
+                    name: model.displayName,
+                    efforts: model.supportedEffortLevels ?? [],
+                    contextWindow: model.contextWindow ?? (offered ?? own)?.contextWindow,
+                    resolvedModel: model.resolvedModel
+                )
+                if let offered { set(entry.with(id: offered.id, hidden: nil)) }
+                set(offered != nil ? entry.with(hidden: true) : entry)
+            }
+            for model in saved where result[model.id] == nil {
+                set(model.with(hidden: true))
+            }
+            return order.compactMap { result[$0] }
+        }
+
+        /// The models whose context window still needs the full check: listed, visible, and not yet checked.
+        public static func uncheckedModels(_ models: [CatalogModel], checked: Set<String>) -> [CatalogModel] {
+            models.filter { !($0.hidden ?? false) && $0.contextWindow == nil && !checked.contains($0.id) }
+        }
+
+        /// The Claude config folders the provider's settings name.
+        // parity: core/src/plugin/provider/claude-agent/provider.ts#configDirs [status=adapted hash=f1be45724f25]
+        public static func configDirs(ctx: PluginEffect.Context) async -> [String] {
+            guard let providers = try? await ctx.provider.list(),
+                  let provider = providers.data.first(where: { $0.id == ProviderID })
+            else { return [] }
+            return QueryOptions.configDirs(provider.settings?.extra["configDir"])
+        }
+
+        // parity: core/src/plugin/provider/claude-agent/provider.ts#register [status=adapted hash=a08588732db3]
         public static func registerProvider(ctx: PluginEffect.Context) async {
             _ = await ctx.provider.transform { editor in
                 let info = ProviderSchema.Info(
@@ -8200,7 +8586,7 @@ public enum CorePlugin {
             _ = ctx
         }
 
-        // parity: core/src/plugin/provider/claude-agent/index.ts#make [status=implemented hash=4f5c80d4910f]
+        // parity: core/src/plugin/provider/claude-agent/index.ts#make [status=adapted hash=26a1167fd514]
         public static func make(
             io: IO.Interface = IO.real,
             registry: any Sessions.Interface = Sessions.registry()
@@ -8208,6 +8594,25 @@ public enum CorePlugin {
             PluginEffect.define(
                 PluginEffect.Plugin(id: ID) { ctx in
                     _ = io
+                    // A finished run idles its Claude session; a deleted session also drops its records and account.
+                    let events = ctx.event.subscribe([
+                        "session.execution.succeeded",
+                        "session.execution.failed",
+                        "session.execution.interrupted",
+                        "session.deleted",
+                    ])
+                    let watcher = Task {
+                        for await event in events {
+                            guard case .string(let sessionID) = event.data["sessionID"] else { continue }
+                            if event.type != "session.deleted" {
+                                await registry.idle(sessionID)
+                                continue
+                            }
+                            await registry.remove(sessionID)
+                            try? await ctx.storage.remove(Accounts.key(sessionID))
+                        }
+                    }
+                    ctx.addFinalizer { watcher.cancel() }
                     await registerIntegration(ctx: ctx)
                     await registerProvider(ctx: ctx)
                     await registerInstructions(ctx: ctx)
