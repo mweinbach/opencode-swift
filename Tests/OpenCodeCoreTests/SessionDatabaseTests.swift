@@ -10,7 +10,7 @@ import OpenCodeUtil
 struct SessionDatabaseTests {
     // MARK: - 1. Database Schema, WAL Store & Migrations
 
-    @Test("SQLite bootstrap creates all 23 schema tables and migrations are idempotent")
+    @Test("SQLite bootstrap creates all 24 schema tables and migrations are idempotent")
     func databaseBootstrapAndIdempotentMigrations() async throws {
         let path = SessionDatabaseHelper.makeTempDBPath(prefix: "opencode-wal-test")
         defer { SessionDatabaseHelper.cleanupTempDB(at: path) }
@@ -33,7 +33,7 @@ struct SessionDatabaseTests {
             "account", "account_state", "automation", "blob", "blob_ref",
             "control_account", "credential", "event", "event_sequence",
             "instruction_blob", "instruction_entry", "instruction_state",
-            "job", "kv", "migration", "permission", "project", "project_directory",
+            "job", "kv", "machine", "migration", "permission", "project", "project_directory",
             "session_inbox", "session_message", "session_part", "session_v2",
             "workspace", "worktree",
         ] {

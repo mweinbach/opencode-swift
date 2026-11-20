@@ -317,13 +317,13 @@ struct CoreGapCompletionsTests {
 
     // MARK: - Database Migrations, schemaBootstrap & Drizzle Query Builders
 
-    @Test("Database migrations registry contains all 62 canonical definitions and executes real SQL")
+    @Test("Database migrations registry contains all 64 canonical definitions and executes real SQL")
     func databaseMigrationsAndSchemaBootstrap() throws {
         let all = CoreDatabaseMigration.migrations
-        #expect(all.count == 62)
-        #expect(Set(all.map(\.id)).count == 62)
+        #expect(all.count == 64)
+        #expect(Set(all.map(\.id)).count == 64)
         #expect(all.first?.id == "20260127222353_familiar_lady_ursula")
-        #expect(all.last?.id == "20261116213417_automation_active_index")
+        #expect(all.last?.id == "20261120004954_machine-key")
         #expect(CoreDatabaseMigration.Migrations.m_20260823191254_nullable_workspace_binding.foreignKeys == false)
 
         // Fresh DB bootstrap via schemaBootstrap

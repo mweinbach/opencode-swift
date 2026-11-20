@@ -510,6 +510,17 @@ extension CoreDatabaseMigration {
             "CREATE INDEX `automation_active_idx` ON `automation` (`next_due_at`) WHERE \"automation\".\"status\" = 'active';",
         ])
 
+        // parity: core/src/database/migration/20261119211416_machine.ts#default [status=implemented hash=9a1c9ba070b8]
+        public static let m_20261119211416_machine = sqlMigration(id: "20261119211416_machine", statements: [
+            "CREATE TABLE `machine` ( `id` text PRIMARY KEY, `time_created` integer NOT NULL );",
+        ])
+
+        // parity: core/src/database/migration/20261120004954_machine-key.ts#default [status=implemented hash=9daf45dbd4a2]
+        public static let m_20261120004954_machine_key = sqlMigration(id: "20261120004954_machine-key", statements: [
+            "ALTER TABLE `machine` ADD `key` text;",
+            "CREATE UNIQUE INDEX `machine_key_idx` ON `machine` (`key`);",
+        ])
+
         public static let all: [Migration] = [
             m_20260127222353_familiar_lady_ursula,
             m_20260211171708_add_project_commands,
@@ -573,6 +584,8 @@ extension CoreDatabaseMigration {
             m_20261116043204_automation,
             m_20261116181958_automation_event_position,
             m_20261116213417_automation_active_index,
+            m_20261119211416_machine,
+            m_20261120004954_machine_key,
         ]
     }
 }
