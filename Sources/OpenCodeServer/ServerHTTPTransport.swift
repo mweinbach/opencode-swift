@@ -690,8 +690,10 @@ public final class POSIXHTTPServer: Sendable {
 
     private func serveConnection(_ fd: Int32) async {
         defer {
-            activeFDs.withLock { _ = $0.remove(fd) }
-            Self.closeFD(fd)
+            let shouldClose = activeFDs.withLock { $0.remove(fd) != nil }
+            if shouldClose {
+                Self.closeFD(fd)
+            }
         }
 
         var buffer: [UInt8] = []

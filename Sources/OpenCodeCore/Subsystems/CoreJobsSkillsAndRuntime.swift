@@ -3368,6 +3368,7 @@ public enum CoreJob {
         public let notificationID: String
         public let recovery: RecoveryModels.Recovery
         public let status: Status
+        public let title: String?
         public let output: String?
         public let error: String?
 
@@ -3376,6 +3377,7 @@ public enum CoreJob {
             notificationID: String,
             recovery: RecoveryModels.Recovery,
             status: Status,
+            title: String? = nil,
             output: String? = nil,
             error: String? = nil
         ) {
@@ -3383,6 +3385,7 @@ public enum CoreJob {
             self.notificationID = notificationID
             self.recovery = recovery
             self.status = status
+            self.title = title
             self.output = output
             self.error = error
         }
@@ -4119,6 +4122,7 @@ public enum CoreJob {
                     notificationID: notifID,
                     recovery: recovery,
                     status: status,
+                    title: row.string("title"),
                     output: row.string("output"),
                     error: row.string("error")
                 )
@@ -4214,6 +4218,254 @@ public enum CoreJob {
                 return parent == sessionID || child == sessionID
             }
             return recovery.ownerSessionID == sessionID
+        }
+    }
+
+    /// Concrete bridge adapting `CoreJob.Service` into `CoreSessionJobTypes.JobBridge` for
+    /// `CoreSessionRestart`, `CoreSessionBackground`, and subagent outbox recovery.
+    public final class SessionBridge: CoreSessionJobTypes.JobBridge, Sendable {
+        public let service: Service
+        private let db: any SQLiteDatabase
+
+        public init(service: Service, database: any SQLiteDatabase) {
+            self.service = service
+            self.db = database
+        }
+
+        private static func mapStatus(_ status: Status) -> CoreSessionJobTypes.Status {
+            switch status {
+            case .running: return .running
+            case .completed: return .completed
+            case .error: return .error
+            case .cancelled: return .cancelled
+            }
+        }
+
+        private static func mapKind(_ kind: JobSchema.Kind) -> CoreSessionJobTypes.Kind {
+            switch kind {
+            case .codemode: return .codemode
+            case .shell: return .shell
+            case .image: return .image
+            case .video: return .video
+            case .subagent: return .subagent
+            }
+        }
+
+        private static func mapOutstanding(_ item: RecoveryModels.OutstandingItem) -> CoreSessionJobTypes.OutstandingItem {
+            switch item {
+            case .codemode(let sid, let jid):
+                return .codemode(jobID: jid, sessionID: sid)
+            case .shell(let sid, let shid, let cmd):
+                return .shell(sessionID: sid, shellID: shid, command: cmd)
+            case .image(let sid, let path, let model):
+                return .image(sessionID: sid, path: path, model: model)
+            case .video(let sid, let path):
+                return .video(sessionID: sid, path: path)
+            case .subagent(let sid, let cid, let agent, let desc):
+                return .subagent(sessionID: sid, childSessionID: cid, agent: agent, description: desc)
+            }
+        }
+
+        private static func mapOutstandingBack(_ item: CoreSessionJobTypes.OutstandingItem) -> RecoveryModels.OutstandingItem {
+            switch item {
+            case .codemode(let jid, let sid):
+                return .codemode(sessionID: sid, jobID: jid)
+            case .shell(let sid, let shid, let cmd):
+                return .shell(sessionID: sid, shellID: shid, command: cmd)
+            case .image(let sid, let path, let model):
+                return .image(sessionID: sid, path: path, model: model)
+            case .video(let sid, let path):
+                return .video(sessionID: sid, path: path)
+            case .subagent(let sid, let cid, let agent, let desc):
+                return .subagent(sessionID: sid, childSessionID: cid, agent: agent, description: desc)
+            }
+        }
+
+        private static func mapRecovery(_ rec: RecoveryModels.Recovery) -> CoreSessionJobTypes.Recovery {
+            switch rec {
+            case .codemode(let sid, let jid):
+                return .codemode(jobID: jid, sessionID: sid)
+            case .shell(let sid, let shid, let cmd):
+                return .shell(sessionID: sid, shellID: shid, command: cmd)
+            case .image(let sid, let path, let model):
+                return .image(sessionID: sid, path: path, model: model)
+            case .video(let sid, let path, let videoID):
+                return .video(sessionID: sid, path: path, videoID: videoID)
+            case .subagent(let parent, let child, let agent, let desc, let outstanding):
+                return .subagent(CoreSessionJobTypes.SubagentRecovery(
+                    parentSessionID: parent,
+                    childSessionID: child,
+                    agent: agent,
+                    description: desc,
+                    outstanding: outstanding?.map(mapOutstanding)
+                ))
+            }
+        }
+
+        private static func mapSubagentRecoveryBack(_ sub: CoreSessionJobTypes.SubagentRecovery) -> RecoveryModels.Recovery {
+            .subagent(
+                parentSessionID: sub.parentSessionID,
+                childSessionID: sub.childSessionID,
+                agent: sub.agent,
+                description: sub.description,
+                outstanding: sub.outstanding?.map(mapOutstandingBack)
+            )
+        }
+
+        public func currentGeneration(_ sessionID: SessionID) async -> CoreSessionJobTypes.GenerationInfo? {
+            guard let g = await service.currentGeneration(sessionID.rawValue) else { return nil }
+            return CoreSessionJobTypes.GenerationInfo(generation: g.generation, running: g.running)
+        }
+
+        public func prepareSubagentReport(
+            _ sessionID: SessionID,
+            boundGeneration: Int?
+        ) async -> CoreSessionJobTypes.ReportPreparation {
+            let prep = await service.prepareSubagentReport(id: sessionID.rawValue, boundGeneration: boundGeneration)
+            guard case .background(let notifRaw, let rec, _) = prep,
+                  case .subagent(let parent, let child, let agent, let desc, let outstanding) = rec,
+                  let notifID = SessionMessageSchema.ID(rawValue: notifRaw)
+            else {
+                return .none
+            }
+            return .background(
+                notificationID: notifID,
+                recovery: CoreSessionJobTypes.SubagentRecovery(
+                    parentSessionID: parent,
+                    childSessionID: child,
+                    agent: agent,
+                    description: desc,
+                    outstanding: outstanding?.map(Self.mapOutstanding)
+                )
+            )
+        }
+
+        public func recordOutbox(_ report: CoreSessionJobTypes.SubagentOutboxReport) throws {
+            let now = Flock.currentEpochMs()
+            let rec = Self.mapSubagentRecoveryBack(report.recovery)
+            let recJSON = String(decoding: try JSONEncoder().encode(rec), as: UTF8.self)
+            let statusStr = report.status.rawValue
+            try db.transaction {
+                let existing = try db.queryOne(
+                    "SELECT notification_id FROM job WHERE notification_id = ?",
+                    parameters: [.text(report.notificationID.rawValue)]
+                )
+                if existing != nil {
+                    _ = try db.execute(
+                        "UPDATE job SET status = ?, output = ?, error = ?, title = ?, time_updated = ? WHERE notification_id = ?",
+                        parameters: [
+                            .text(statusStr),
+                            report.output.map(SQLiteValue.text) ?? .null,
+                            report.error.map(SQLiteValue.text) ?? .null,
+                            .text(report.recovery.description),
+                            .integer(now),
+                            .text(report.notificationID.rawValue),
+                        ]
+                    )
+                } else {
+                    _ = try db.execute(
+                        """
+                        INSERT INTO job (notification_id, id, session_id, child_session_id, kind, title, status, output, error, recovery, time_created, time_updated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        parameters: [
+                            .text(report.notificationID.rawValue),
+                            .text(report.recovery.childSessionID.rawValue),
+                            .text(report.recovery.parentSessionID.rawValue),
+                            .text(report.recovery.childSessionID.rawValue),
+                            .text(JobSchema.Kind.subagent.rawValue),
+                            .text(report.recovery.description),
+                            .text(statusStr),
+                            report.output.map(SQLiteValue.text) ?? .null,
+                            report.error.map(SQLiteValue.text) ?? .null,
+                            .text(recJSON),
+                            .integer(now),
+                            .integer(now),
+                        ]
+                    )
+                }
+            }
+        }
+
+        public func completeBackground(_ notificationID: SessionMessageSchema.ID) async throws {
+            try await service.completeBackground(notificationID.rawValue)
+        }
+
+        public func cancel(_ sessionID: SessionID) async {
+            _ = await service.cancel(sessionID.rawValue)
+        }
+
+        public func isCancelled(_ sessionID: SessionID) async -> Bool {
+            await service.isCancelled(sessionID.rawValue)
+        }
+
+        public func get(_ sessionID: SessionID) async -> CoreSessionJobTypes.BackgroundJobInfo? {
+            guard let info = await service.get(sessionID.rawValue) else { return nil }
+            return CoreSessionJobTypes.BackgroundJobInfo(
+                id: info.id,
+                sessionID: sessionID,
+                kind: .subagent,
+                status: Self.mapStatus(info.status),
+                title: info.title,
+                output: info.output,
+                error: info.error,
+                notificationID: info.notificationID.flatMap { SessionMessageSchema.ID(rawValue: $0) }
+            )
+        }
+
+        public func liveStatus(_ jobID: String) async -> CoreSessionJobTypes.Status? {
+            guard let info = await service.get(jobID) else { return nil }
+            return Self.mapStatus(info.status)
+        }
+
+        public func runningBackground() async -> [CoreSessionJobTypes.Recovery] {
+            let items = (try? await service.runningBackground()) ?? []
+            return items.map(Self.mapRecovery)
+        }
+
+        public func backgroundJobs() async -> [CoreSessionJobTypes.BackgroundJobInfo] {
+            let pending = (try? await service.pendingBackground()) ?? []
+            return pending.map { item in
+                CoreSessionJobTypes.BackgroundJobInfo(
+                    id: item.id,
+                    sessionID: item.recovery.ownerSessionID,
+                    kind: Self.mapKind(item.recovery.kind),
+                    status: Self.mapStatus(item.status),
+                    title: item.title,
+                    output: item.output,
+                    error: item.error,
+                    notificationID: SessionMessageSchema.ID(rawValue: item.notificationID),
+                    recovery: Self.mapRecovery(item.recovery)
+                )
+            }
+        }
+
+        public func startSubagent(
+            recovery: CoreSessionJobTypes.SubagentRecovery,
+            notificationID: SessionMessageSchema.ID?,
+            run: @escaping @Sendable () async throws -> String
+        ) async throws -> CoreSessionJobTypes.BackgroundJobInfo {
+            let mapped = Self.mapSubagentRecoveryBack(recovery)
+            let info = try await service.start(StartInput(
+                id: recovery.childSessionID.rawValue,
+                type: "subagent",
+                title: recovery.description,
+                recovery: mapped,
+                notificationID: notificationID?.rawValue,
+                background: true,
+                run: run
+            ))
+            return CoreSessionJobTypes.BackgroundJobInfo(
+                id: info.id,
+                sessionID: recovery.parentSessionID,
+                kind: .subagent,
+                status: Self.mapStatus(info.status),
+                title: info.title,
+                output: info.output,
+                error: info.error,
+                notificationID: info.notificationID.flatMap { SessionMessageSchema.ID(rawValue: $0) },
+                recovery: .subagent(recovery)
+            )
         }
     }
 

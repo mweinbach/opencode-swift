@@ -1294,6 +1294,7 @@ public final class ServerAppRuntime: Sendable {
         customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
         customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
         workerdProfile: Bool = false,
+        videoGenerationPollIntervalMs: UInt64? = nil,
         onLocationBoot: LocationCustomizer? = nil
     ) async throws -> ServerAppRuntime {
         let scope = LayerNode.ResourceScope()
@@ -1362,18 +1363,50 @@ public final class ServerAppRuntime: Sendable {
                 ? ServerUnsupportedBlobStore()
                 : CoreBlobStore.Service(globalPaths: globalPaths, fileSystem: fileSystem)
         )
-        let videoGeneration: any CoreIntegration.VideoGeneration.Interface = customVideoGeneration ?? (
-            workerdProfile
-                ? ServerUnsupportedVideoGeneration()
-                : CoreIntegration.VideoGeneration.Service(
-                    start: { _, _ in
-                        throw CoreIntegration.Generate.UnavailableError(message: "Video generation provider not configured", service: "video")
-                    },
-                    get: { id in
-                        throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
+        let resolvedDefaultDir = defaultDirectory ?? ServerHostInfo.currentWorkingDirectory()
+        // Weak indirection box avoids retain cycles between process-global session/video/automation
+        // services and location-scoped tool environments while letting built-in tools receive
+        // real `session`, `sessionMove`, `videoGeneration`, and `automation` instances directly.
+        let locationsBox = LateBoundLocationMap()
+
+        let videoGeneration: any CoreIntegration.VideoGeneration.Interface
+        if let customVideoGeneration {
+            videoGeneration = customVideoGeneration
+        } else if workerdProfile {
+            videoGeneration = ServerUnsupportedVideoGeneration()
+        } else {
+            let pollInterval = videoGenerationPollIntervalMs ?? CoreIntegration.VideoGeneration.INTERVAL_MS
+            let liveVideo = CoreIntegration.VideoGeneration.Service(
+                database: db,
+                kv: kv,
+                blobs: blobStore,
+                defaultLocation: {
+                    if await fileSystem.exists(at: globalPaths.config) {
+                        return LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: globalPaths.config))
                     }
-                )
-        )
+                    return LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: resolvedDefaultDir))
+                },
+                resolveGenerate: { ref in
+                    guard let locations = locationsBox.value else {
+                        throw CoreIntegration.Generate.UnavailableError(message: "Location service map is not ready", service: "video")
+                    }
+                    let canonical = CoreLocation.ServiceMap.canonical(ref)
+                    let out = try await locations.get(canonical)
+                    guard let bundle = ServerLocationBundle.from(out) else {
+                        throw CoreIntegration.Generate.UnavailableError(
+                            message: "Location services unavailable for \(ref.directory.rawValue)",
+                            service: "video"
+                        )
+                    }
+                    return bundle.generate
+                },
+                intervalMs: pollInterval
+            )
+            scope.addFinalizer {
+                await liveVideo.close()
+            }
+            videoGeneration = liveVideo
+        }
         let job = try CoreJob.Service(database: db, bus: bus)
         let ptyTicket = CorePty.Ticket.make()
         let persistentPty: any CorePty.Persistent.Interface = customPersistentPty ?? CorePty.Persistent.Service(
@@ -1396,7 +1429,6 @@ public final class ServerAppRuntime: Sendable {
             paths: ServerInfo.Paths(tmp: globalPaths.tmp)
         )
         let authConfig = ServerAuth.Info(password: options.password, username: "opencode")
-        let resolvedDefaultDir = defaultDirectory ?? ServerHostInfo.currentWorkingDirectory()
 
         let locationActivity = CoreLocation.Activity.Service()
         let capturedConfigOpts = options.config
@@ -1447,11 +1479,6 @@ public final class ServerAppRuntime: Sendable {
             workerdProfile: workerdProfile
         )
 
-        // Weak indirection box avoids retain cycles between process-global session/automation
-        // services and location-scoped tool environments while letting built-in tools receive
-        // real `session`, `sessionMove`, and `automation` instances directly.
-        let locationsBox = LateBoundLocationMap()
-
         // Process-global live SessionExecution wired to Location-scoped LiveSessionRunner.
         let coreSessionExecution = CoreSessionExecution.Service(
             db: db,
@@ -1489,12 +1516,6 @@ public final class ServerAppRuntime: Sendable {
             execution: sessionExecution,
             fileSystem: fileSystem
         )
-        let sessionRestart = CoreSessionRestart.Service(
-            db: db,
-            store: sessionStore,
-            execution: sessionExecution,
-            bus: bus
-        )
         let appVersion = options.app?.version ?? "unknown"
         let session = CoreSession.Service(
             db: db,
@@ -1505,6 +1526,32 @@ public final class ServerAppRuntime: Sendable {
             environment: sessionEnv,
             fileSystem: fileSystem,
             version: appVersion
+        )
+        let jobBridge = CoreJob.SessionBridge(service: job, database: db)
+        let restartResolveFS: (@Sendable (LocationSchema.Ref) async throws -> any OpenCodeFileSystem)?
+        if workerdProfile {
+            restartResolveFS = nil
+        } else {
+            restartResolveFS = { (ref: LocationSchema.Ref) async throws -> any OpenCodeFileSystem in
+                guard let locations = locationsBox.value else {
+                    throw CoreFilesystem.DirectoryNotFoundError(directory: ref.directory)
+                }
+                let canonical = CoreLocation.ServiceMap.canonical(ref)
+                _ = try await locations.get(canonical)
+                return fileSystem
+            }
+        }
+        let sessionRestart = CoreSessionRestart.Service(
+            db: db,
+            store: sessionStore,
+            execution: sessionExecution,
+            bus: bus,
+            jobs: jobBridge,
+            sessions: session,
+            jobService: job,
+            videoGeneration: workerdProfile ? nil : videoGeneration,
+            blobStore: workerdProfile ? nil : blobStore,
+            resolveLocationFileSystem: restartResolveFS
         )
 
         let automation = try CoreAutomation.Service(
@@ -1695,7 +1742,8 @@ public final class ServerAppRuntime: Sendable {
             let modelResolver = CoreModel.Resolver.Service(
                 providers: providerService,
                 models: modelService,
-                integrations: integrationService
+                integrations: integrationService,
+                dependencies: CoreModel.Resolver.Dependencies(environment: capturedEnv)
             )
             let mcpService = CoreMCP.Registry.Service(
                 directory: dirPath,
@@ -1707,7 +1755,12 @@ public final class ServerAppRuntime: Sendable {
                 integrations: integrationService,
                 http: capturedHttp
             )
-            let generateService = CoreIntegration.Generate.Service(resolver: modelResolver)
+            let generateService = CoreIntegration.Generate.Service(
+                resolver: modelResolver,
+                models: modelService,
+                http: capturedHttp,
+                environment: capturedEnv
+            )
             let voiceService = CoreIntegration.Voice.Service(integrations: integrationService)
             let artifactService = CoreArtifact.Service(
                 directory: dirPath,
@@ -1817,9 +1870,40 @@ public final class ServerAppRuntime: Sendable {
                 model: modelService,
                 provider: providerService,
                 agent: agentService,
-                generate: generateService
+                generate: generateService,
+                videoGeneration: videoGeneration,
+                blobStore: blobStore,
+                jobs: job,
+                config: configService
             )
-            _ = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+            let initialBuiltinsReg = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+            let builtinsRegBox = Mutex<CoreFilesystem.LocationWatcherPolicy.Registration?>(initialBuiltinsReg)
+            let refreshBuiltins: @Sendable () async -> Void = {
+                let next = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+                let prev = builtinsRegBox.withLock { box -> CoreFilesystem.LocationWatcherPolicy.Registration? in
+                    let old = box
+                    box = next
+                    return old
+                }
+                prev?.dispose()
+                await toolService.reload()
+            }
+            let modelUpdatedStream = bus.subscribe(types: [ModelSchema.Event.updated.type])
+            let modelWatchTask = Task {
+                for await _ in modelUpdatedStream {
+                    if Task.isCancelled { break }
+                    await refreshBuiltins()
+                }
+            }
+            locScope.addFinalizer {
+                modelWatchTask.cancel()
+                let reg = builtinsRegBox.withLock { box -> CoreFilesystem.LocationWatcherPolicy.Registration? in
+                    let old = box
+                    box = nil
+                    return old
+                }
+                reg?.dispose()
+            }
 
             // core/src/session/context.ts: the Location's instruction services, combined per Session step.
             let instructionDiscovery = CoreInstruction.Discovery.Service(options: CoreInstruction.Discovery.Options(
@@ -1945,6 +2029,7 @@ public final class ServerAppRuntime: Sendable {
                     await providerService.reload()
                     await modelService.reload()
                 }
+                await refreshBuiltins()
             }
             return bundle.layerOutput
         }

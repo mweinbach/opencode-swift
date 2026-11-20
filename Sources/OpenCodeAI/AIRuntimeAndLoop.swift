@@ -6430,6 +6430,28 @@ public enum AIVideo {
 
         public var modelDescriptor: AIRoute.MediaRoute.ModelDescriptor { model.descriptor }
 
+        public func withMerged(
+            providerOptions: AISchema.ProviderOptions?,
+            http: AISchema.HttpOptions?
+        ) -> VideoRequest {
+            VideoRequest(
+                model: model,
+                prompt: prompt,
+                start: start,
+                end: end,
+                references: references,
+                duration: duration,
+                aspect: aspect,
+                resolution: resolution,
+                sound: sound,
+                providerOptions: providerOptions,
+                headers: headers,
+                timeout: timeout,
+                http: http,
+                fetch: fetch
+            )
+        }
+
         public init(
             model: VideoModel,
             prompt: String,

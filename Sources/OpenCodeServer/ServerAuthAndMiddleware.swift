@@ -1125,6 +1125,7 @@ public func createRoutes(
     customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
     customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
     workerdProfile: Bool = false,
+    videoGenerationPollIntervalMs: UInt64? = nil,
     onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
 ) async throws -> ServerRouter {
     _ = overrides
@@ -1143,6 +1144,7 @@ public func createRoutes(
         customPluginUpdate: customPluginUpdate,
         customWellKnown: customWellKnown,
         workerdProfile: workerdProfile,
+        videoGenerationPollIntervalMs: videoGenerationPollIntervalMs,
         onLocationBoot: onLocationBoot
     )
     return ServerRouter(runtime: runtime)
@@ -1205,6 +1207,7 @@ public enum ServerFetch {
         public let defaultDirectory: String?
         public let databaseClient: (any SQLiteDatabase)?
         public let workerdProfile: Bool
+        public let videoGenerationPollIntervalMs: UInt64?
         public let onLocationBoot: ServerAppRuntime.LocationCustomizer?
 
         public init(
@@ -1216,6 +1219,7 @@ public enum ServerFetch {
             defaultDirectory: String? = nil,
             databaseClient: (any SQLiteDatabase)? = nil,
             workerdProfile: Bool = false,
+            videoGenerationPollIntervalMs: UInt64? = nil,
             onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
         ) {
             self.overrides = overrides
@@ -1226,6 +1230,7 @@ public enum ServerFetch {
             self.defaultDirectory = defaultDirectory
             self.databaseClient = databaseClient
             self.workerdProfile = workerdProfile
+            self.videoGenerationPollIntervalMs = videoGenerationPollIntervalMs
             self.onLocationBoot = onLocationBoot
         }
     }
@@ -1266,6 +1271,7 @@ public enum ServerFetch {
             defaultDirectory: boot.defaultDirectory,
             databaseClient: boot.databaseClient,
             workerdProfile: boot.workerdProfile,
+            videoGenerationPollIntervalMs: boot.videoGenerationPollIntervalMs,
             onLocationBoot: boot.onLocationBoot
         )
         let restart = router.runtime.sessionRestart

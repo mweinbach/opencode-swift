@@ -208,6 +208,7 @@ extension CoreTool {
             public let videoID: GenerateSchema.VideoID
             public let path: String
             public let title: String?
+            public let notify: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)?
 
             public init(
                 jobs: any CoreJob.Interface,
@@ -219,7 +220,8 @@ extension CoreTool {
                 sessionID: SessionID,
                 videoID: GenerateSchema.VideoID,
                 path: String,
-                title: String? = nil
+                title: String? = nil,
+                notify: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)? = nil
             ) {
                 self.jobs = jobs
                 self.sessions = sessions
@@ -231,12 +233,13 @@ extension CoreTool {
                 self.videoID = videoID
                 self.path = path
                 self.title = title
+                self.notify = notify
             }
         }
 
         /// Wait for a video the server is generating, then copy each of its videos from the blob store into the
         /// workspace, as a background Job; when the job settles, post its completion notice to the session.
-        // parity: core/src/tool/plugin/video-generate.ts#track [status=adapted hash=87f7ca87aca8]
+        // parity: core/src/tool/plugin/video-generate.ts#track [status=implemented hash=87f7ca87aca8]
         public static func track(_ input: TrackInput) async throws {
             let run: @Sendable () async throws -> String = {
                 do {
@@ -275,6 +278,7 @@ extension CoreTool {
                 type: name,
                 title: input.title ?? input.path,
                 metadata: ["sessionID": .string(input.sessionID.rawValue), "path": .string(input.path)],
+                recovery: .video(sessionID: input.sessionID, path: input.path, videoID: videoID.rawValue),
                 notificationID: input.notificationID.rawValue,
                 background: true,
                 run: run,
@@ -291,7 +295,7 @@ extension CoreTool {
                 case .error: body = info.error ?? "Video request failed for \(input.path)."
                 default: body = "Video request for \(input.path) was cancelled."
                 }
-                _ = try? await input.sessions?.synthetic(CoreSessionSynthetic.Request(
+                let syntheticReq = CoreSessionSynthetic.Request(
                     sessionID: input.sessionID,
                     id: input.notificationID,
                     text: notice(id: videoID.rawValue, state: state, body: body),
@@ -302,13 +306,24 @@ extension CoreTool {
                         "state": .string(state),
                         "path": .string(input.path),
                     ]
-                ))
-                try? await jobs.completeBackground(input.notificationID.rawValue)
+                )
+                do {
+                    if let notify = input.notify {
+                        try await notify(syntheticReq)
+                    } else if let sessions = input.sessions {
+                        _ = try await sessions.synthetic(syntheticReq)
+                    }
+                    try? await jobs.completeBackground(input.notificationID.rawValue)
+                } catch is CoreSessionErrors.NotFoundError {
+                    try? await jobs.completeBackground(input.notificationID.rawValue)
+                } catch {
+                    // Leave the job row intact so a later restart sweep can deliver the outcome.
+                }
             }
         }
 
         /// Whether the tool registers: the `video_generate` flag is on and some video model is available.
-        static func enabled(_ env: BuiltinEnvironment) async -> Bool {
+        public static func enabled(_ env: BuiltinEnvironment) async -> Bool {
             guard await env.flags.enabled(.videoGenerate) else { return false }
             guard env.videoGeneration != nil, env.blobStore != nil, env.jobs != nil, let models = env.model else { return false }
             let available = (try? await models.available(types: [.video])) ?? []
@@ -321,10 +336,29 @@ extension CoreTool {
             return nil
         }
 
+        private static func configuredModel(_ entries: [CoreConfigEntry]) -> ConfigModelSchema.Selection? {
+            for entry in entries.reversed() {
+                if let selection = entry.info?.experimental?.videoGenerate?.options?.model {
+                    return selection
+                }
+            }
+            return nil
+        }
+
         private static func resolveModel(_ value: String?, sessionID: SessionID, env: BuiltinEnvironment) async throws -> ModelSchema.Info {
             let available = (try? await env.model?.available(types: [.video])) ?? []
             guard let value else {
-                // `experimental.video_generate.model` is not in this port's config schema yet, so the pick is automatic.
+                if let entries = await env.config?.entries(), let configured = configuredModel(entries) {
+                    let match = available.first { item in
+                        item.providerID == configured.providerID && item.id == configured.model
+                    }
+                    guard let model = match else {
+                        throw AISchema.ToolFailure(
+                            message: "Configured video model \"\(configured.providerID.rawValue)/\(configured.model.rawValue)\" is not an available video model."
+                        )
+                    }
+                    return model
+                }
                 let providerID = sessionProvider(env, sessionID)
                 guard let model = available.first(where: { $0.providerID == providerID }) ?? available.first else {
                     throw AISchema.ToolFailure(message: "No video model is available.")

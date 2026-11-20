@@ -4370,7 +4370,31 @@ public enum AIRoute {
             var http: AISchema.HttpOptions? { get }
             var providerOptions: AISchema.ProviderOptions? { get }
             var fetch: (any HTTPTransport)? { get }
+            func withMerged(providerOptions: AISchema.ProviderOptions?, http: AISchema.HttpOptions?) -> Self
         }
+
+        /// Transient read-retry policy for queued media status/result GET requests (upstream `READ_RETRY`).
+        public struct ReadRetryConfig: Equatable, Hashable, Sendable {
+            public let maxRetries: Int
+            public let initialDelayMs: Double
+            public let maxDelayMs: Double
+            public let jitter: Bool
+
+            public init(
+                maxRetries: Int = 8,
+                initialDelayMs: Double = 1_000,
+                maxDelayMs: Double = 30_000,
+                jitter: Bool = true
+            ) {
+                self.maxRetries = maxRetries
+                self.initialDelayMs = initialDelayMs
+                self.maxDelayMs = maxDelayMs
+                self.jitter = jitter
+            }
+        }
+
+        @TaskLocal
+        public static var readRetryConfig = ReadRetryConfig()
 
         // parity: ai/src/route/media.ts#ModelInput [status=implemented hash=c4ea6ac5e550]
         public struct ModelInput: Sendable {
@@ -4598,9 +4622,10 @@ public enum AIRoute {
             guard let body else { return ("", headers, nil) }
             switch body {
             case .json(let obj, _):
+                let sanitized = AIUtils.sanitizeSurrogates(.object(obj))
                 let text: String
                 do {
-                    text = try AIUtils.encodeJson(.object(obj))
+                    text = try AIUtils.encodeJson(sanitized)
                 } catch {
                     throw AISchema.AIError(reason: .invalidRequest(AISchema.InvalidRequestError(
                         message: "Failed to encode JSON body: \(error)"
@@ -4670,10 +4695,55 @@ public enum AIRoute {
             return AIEndpoint.setQueryParams(url, query: pairs)
         }
 
+        private static func effectivePort(_ url: URL) -> Int? {
+            if let port = url.port { return port }
+            switch url.scheme?.lowercased() {
+            case "http": return 80
+            case "https": return 443
+            default: return nil
+            }
+        }
+
         private static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
             lhs.scheme?.lowercased() == rhs.scheme?.lowercased()
                 && lhs.host?.lowercased() == rhs.host?.lowercased()
-                && lhs.port == rhs.port
+                && effectivePort(lhs) == effectivePort(rhs)
+        }
+
+        private static func retryAfterMs(from error: AISchema.AIError) -> Double? {
+            switch error.reason {
+            case .rateLimit(let r): return r.retryAfterMs.map(Double.init)
+            case .providerInternal(let p): return p.retryAfterMs.map(Double.init)
+            default: return nil
+            }
+        }
+
+        private static func sendWithReadRetry(
+            _ operation: @Sendable () async throws -> AIRequestExecutor.ExecutorResponse
+        ) async throws -> AIRequestExecutor.ExecutorResponse {
+            let cfg = readRetryConfig
+            var attempt = 0
+            while true {
+                do {
+                    return try await operation()
+                } catch let error as AISchema.AIError {
+                    guard attempt < cfg.maxRetries, AIErrorClassifier.isRetryable(error) else {
+                        throw error
+                    }
+                    let exp = min(cfg.maxDelayMs, cfg.initialDelayMs * pow(2.0, Double(attempt)))
+                    let baseDelay = cfg.jitter ? exp * Double.random(in: 0.5...1.0) : exp
+                    let delayMs: Double
+                    if let hint = retryAfterMs(from: error), hint.isFinite, hint > 0 {
+                        delayMs = max(baseDelay, hint)
+                    } else {
+                        delayMs = baseDelay
+                    }
+                    if delayMs > 0 {
+                        try await Task.sleep(for: .milliseconds(delayMs))
+                    }
+                    attempt += 1
+                }
+            }
         }
 
         // parity: ai/src/route/media.ts#inline [status=implemented hash=fb3ae58105e1]
@@ -4744,17 +4814,19 @@ public enum AIRoute {
             ) -> AIGeneration.Route<Response> {
                 let getOp: @Sendable (String) async throws -> AIRequestExecutor.ExecutorResponse = { path in
                     let url = try makeURL(for: path, exchange: exchange)
-                    return try await sendRequest(
-                        auth: comp.auth,
-                        method: .GET,
-                        url: url,
-                        headers: exchange.headers ?? [:],
-                        httpOptions: exchange.http,
-                        body: nil,
-                        timeout: exchange.timeout,
-                        fetch: exchange.fetch,
-                        execute: execute
-                    )
+                    return try await sendWithReadRetry {
+                        try await sendRequest(
+                            auth: comp.auth,
+                            method: .GET,
+                            url: url,
+                            headers: exchange.headers ?? [:],
+                            httpOptions: exchange.http,
+                            body: nil,
+                            timeout: exchange.timeout,
+                            fetch: exchange.fetch,
+                            execute: execute
+                        )
+                    }
                 }
 
                 let credentialsOp: @Sendable (String) async throws -> MediaProtocol.DownloadCredentials = { rawUrl in
@@ -4843,10 +4915,15 @@ public enum AIRoute {
                         request.modelDescriptor.transport,
                         AISchema.TransportOptions(headers: request.headers, timeout: request.timeout, http: request.http)
                     )
+                    let mergedProviderOptions = AISchema.mergeProviderOptions(
+                        request.modelDescriptor.providerOptions,
+                        request.providerOptions
+                    )
+                    let resolvedRequest = request.withMerged(providerOptions: mergedProviderOptions, http: merged.http)
                     let exchange = Exchange(headers: merged.headers, timeout: merged.timeout, http: merged.http, fetch: request.fetch)
                     let prepared: Request
                     if let prepare = proto.prepare {
-                        prepared = try await prepare(request) { path, body in
+                        prepared = try await prepare(resolvedRequest) { path, body in
                             let url = try makeURL(for: path, exchange: exchange)
                             return try await sendRequest(
                                 auth: comp.auth,
@@ -4861,7 +4938,7 @@ public enum AIRoute {
                             )
                         }
                     } else {
-                        prepared = request
+                        prepared = resolvedRequest
                     }
                     let body = try await proto.startBodyFrom(prepared)
                     var url = try AIEndpoint.render(comp.endpoint, input: AIEndpoint.EndpointInput(request: prepared, body: body))

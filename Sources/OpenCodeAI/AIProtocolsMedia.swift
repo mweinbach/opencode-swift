@@ -1658,9 +1658,13 @@ extension AIProtocols {
             hailuoProtocol.makeModel(input)
         }
 
-        private static func isHailuo(_ id: String) -> Bool {
+        internal static func isHailuo(_ id: String) -> Bool {
             let lower = id.lowercased()
-            return lower.contains("hailuo") || lower.hasPrefix("t2v-") || lower.hasPrefix("i2v-") || lower.hasPrefix("s2v-")
+            return lower.hasPrefix("minimax-hailuo-")
+                || lower.hasPrefix("t2v-01")
+                || lower.hasPrefix("i2v-01")
+                || lower.hasPrefix("s2v-01")
+                || lower.hasPrefix("video-01")
         }
 
         // parity: ai/src/protocols/minimax-video.ts#model [status=implemented hash=dc08017272f5]
