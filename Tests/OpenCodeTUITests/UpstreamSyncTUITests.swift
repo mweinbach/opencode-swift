@@ -131,23 +131,23 @@ struct UpstreamSyncComposerTests {
 
     @Test("ownedJobs follows a subagent job to its child when the child's parent is not loaded")
     func ownedJobs() throws {
-        let parents = ["child": "session"]
+        let parents = ["ses_child": "ses_session"]
         let jobs = [
-            try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_grandchild","sessionID":"grandchild","status":"running","time":{"started":1}}"#),
-            try UpstreamSyncTUIHelper.job(#"{"kind":"subagent","id":"sub_nested","sessionID":"child","childSessionID":"grandchild","agent":"general","description":"Nested","status":"running","time":{"started":1}}"#),
+            try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_grandchild","sessionID":"ses_grandchild","status":"running","time":{"started":1}}"#),
+            try UpstreamSyncTUIHelper.job(#"{"kind":"subagent","id":"sub_nested","sessionID":"ses_child","childSessionID":"ses_grandchild","agent":"general","description":"Nested","status":"running","time":{"started":1}}"#),
         ]
         let ids = { (session: String) in
             TUIUtil.ownedJobs(jobs, sessionID: session, parentID: { parents[$0] }).map { TUIUtil.JobFields($0).id }
         }
-        #expect(ids("child") == ["sub_nested"])
-        #expect(ids("session") == ["sub_nested"])
-        #expect(ids("grandchild") == ["cm_grandchild", "sub_nested"])
+        #expect(ids("ses_child") == ["sub_nested"])
+        #expect(ids("ses_session") == ["sub_nested"])
+        #expect(ids("ses_grandchild") == ["cm_grandchild", "sub_nested"])
     }
 
     @Test("scriptLabel names a script by its first line of code, then its title")
     func scriptLabel() throws {
-        let job = try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_1","sessionID":"session","status":"running","time":{"started":1}}"#)
-        let titled = try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_1","sessionID":"session","status":"running","title":"Build","time":{"started":1}}"#)
+        let job = try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_1","sessionID":"ses_session","status":"running","time":{"started":1}}"#)
+        let titled = try UpstreamSyncTUIHelper.job(#"{"kind":"codemode","id":"cm_1","sessionID":"ses_session","status":"running","title":"Build","time":{"started":1}}"#)
         let messages = [try UpstreamSyncTUIHelper.executeMessage(code: "\n  // Build both\r\nawait 1", jobID: "cm_1")]
         #expect(TUIUtil.scriptLabel(messages, job: job) == "// Build both")
         #expect(TUIUtil.scriptLabel([], job: titled) == "Build")

@@ -22,7 +22,7 @@ enum UpstreamSyncTUIHelper {
           "content": [
             {
               "type": "tool", "id": "part_1", "name": "execute", "time": { "created": 1 },
-              "state": { "status": "completed", "input": { "code": \(codeJSON) }, "content": [], "metadata": { "jobID": "\(jobID)" } }
+              "state": { "status": "completed", "input": { "code": \(codeJSON) }, "content": [{ "type": "text", "text": "moved to background" }], "metadata": { "jobID": "\(jobID)" } }
             }
           ]
         }

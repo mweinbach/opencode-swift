@@ -7,9 +7,10 @@ import OpenTUICore
 
 @Suite("TUI Theme Tokens, Defaults, Resolution & V1 Migration")
 struct ThemeSuite {
-    @Test("Built-in opencode default theme resolves all semantic roles in light and dark modes")
+    // The previous default theme is now "opencode-classic" (upstream test/theme/v2/* switched to getOpenCodeClassicTheme).
+    @Test("Built-in opencode-classic theme resolves all semantic roles in light and dark modes")
     func builtInOpencodeLightAndDark() throws {
-        let doc = ThemeDefaults.opencode
+        let doc = ThemeDefaults.opencodeClassic
         #expect(themeModes(doc) == [.light, .dark])
         #expect(supportsThemeMode(doc, mode: .light))
         #expect(supportsThemeMode(doc, mode: .dark))
@@ -119,12 +120,13 @@ struct ThemeSuite {
         let lightDialog = light.surface(.dialog)
         #expect(lightDialog.background.base == RGBA.fromHex("#fafafa")) // $hue.neutral.800
         #expect(lightDialog.background.raised.high == RGBA.fromHex("#f2f2f2")) // $hue.neutral.700
-        #expect(lightDialog.background.action.primary.hovered == RGBA.fromHex("#dddddd")) // $hue.neutral.600
+        // Upstream lightened the new theme's light grays (500 #cfcfcf -> #e6e6e6, 600 #dddddd -> #eeeeee).
+        #expect(lightDialog.background.action.primary.hovered == RGBA.fromHex("#eeeeee")) // $hue.neutral.600
     }
 
     @Test("Hue step helpers (source, increase, decrease) navigate and clamp hue scales")
     func hueStepHelpers() throws {
-        let dark = try resolveThemeDocument(ThemeDefaults.opencode, mode: .dark)
+        let dark = try resolveThemeDocument(ThemeDefaults.opencodeClassic, mode: .dark)
         let textColor = dark.text.base // #eeeeee -> neutral.200
         let src = try #require(dark.source(textColor))
         #expect(src.hue == "neutral")
@@ -156,7 +158,7 @@ struct ThemeSuite {
 
     @Test("Single-mode custom theme falls back to available mode")
     func singleModeFallback() throws {
-        let darkOnly = ThemeDocument(base: ThemeDefaults.opencode.base, light: nil, dark: ThemeDefaults.opencode.dark)
+        let darkOnly = ThemeDocument(base: ThemeDefaults.opencodeClassic.base, light: nil, dark: ThemeDefaults.opencodeClassic.dark)
         #expect(themeModes(darkOnly) == [.dark])
         #expect(!supportsThemeMode(darkOnly, mode: .light))
         let selected = try selectThemeMode(darkOnly, mode: .light)
