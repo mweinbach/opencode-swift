@@ -1004,7 +1004,9 @@ extension ProcessDaemon {
 
                 // parity: process-daemon/src/transport/windows/security.rs#new [status=adapted hash=ff1eb2825459]
                 public static func new() throws -> PrivateSecurity {
-                    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                    #if os(Windows)
+                    let sid = try WindowsPrivateSecurity.currentUserSID()
+                    #elseif canImport(Darwin) || canImport(Glibc) || canImport(Musl)
                     let sid = "S-1-5-21-\(geteuid())"
                     #else
                     let sid = "S-1-5-21-1000"
@@ -1576,14 +1578,27 @@ extension ProcessDaemon {
                 let hasLock = fm.fileExists(atPath: lockPath)
                 let registration = try? Daemon.read_registration(directory)
                 if !hasLock {
+                    #if os(Windows)
+                    guard let registration, !WindowsRuntime.process_exists(registration.pid) else {
+                        return
+                    }
+                    #else
                     guard let registration, !UnixRuntime.process_exists(registration.pid) else {
                         return
                     }
+                    #endif
                 }
+                #if os(Windows)
+                try WindowsRuntime.remove_stale_endpoint(
+                    canonicalDirectory: URL(fileURLWithPath: directory).resolvingSymlinksInPath().path,
+                    registration: registration
+                )
+                #else
                 try UnixRuntime.remove_stale_endpoint(
                     canonicalDirectory: URL(fileURLWithPath: directory).resolvingSymlinksInPath().path,
                     registration: registration
                 )
+                #endif
                 files.sort { lhs, rhs in
                     let lIsLock = lhs.hasSuffix(ProcessDaemon.LOCK_FILE)
                     let rIsLock = rhs.hasSuffix(ProcessDaemon.LOCK_FILE)
@@ -1881,9 +1896,13 @@ extension ProcessDaemon {
                 }
             }
 
-            // parity: process-daemon/src/daemon/windows.rs#process_exists [status=adapted hash=9afe7f8a2791]
+            // parity: process-daemon/src/daemon/windows.rs#process_exists [status=implemented hash=9afe7f8a2791]
             public static func process_exists(_ pid: UInt32) -> Bool {
-                UnixRuntime.process_exists(pid)
+                #if os(Windows)
+                return WindowsProcessPrimitives.processExists(pid: pid)
+                #else
+                return UnixRuntime.process_exists(pid)
+                #endif
             }
 
             // parity: process-daemon/src/daemon/windows.rs#remove_stale_endpoint [status=implemented hash=c5339f929225]
