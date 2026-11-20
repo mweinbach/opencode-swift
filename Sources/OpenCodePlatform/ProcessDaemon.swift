@@ -2600,7 +2600,7 @@ extension ProcessDaemon {
         }
         #endif
 
-        #if os(macOS) || os(Linux)
+        #if !os(WASI)
         private static func openPipeOutputFile(at path: String) throws -> FileHandle {
             #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
             let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o666)

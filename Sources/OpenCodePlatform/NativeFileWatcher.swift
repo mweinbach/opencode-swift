@@ -1945,12 +1945,12 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
             )
         }
 
-        guard let ioEv = CreateEventW(nil, WindowsBool(true), WindowsBool(false), nil) else {
+        guard let ioEv = CreateEventW(nil, true, false, nil) else {
             let err = Int32(bitPattern: GetLastError())
             _ = CloseHandle(dir)
             throw NativeFileWatcherError.osFailure("CreateEventW(io) failed", errno: err)
         }
-        guard let stopEv = CreateEventW(nil, WindowsBool(true), WindowsBool(false), nil) else {
+        guard let stopEv = CreateEventW(nil, true, false, nil) else {
             let err = Int32(bitPattern: GetLastError())
             _ = CloseHandle(ioEv)
             _ = CloseHandle(dir)
@@ -2044,14 +2044,14 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
                         dir,
                         rawBuf.baseAddress,
                         DWORD(rawBuf.count),
-                        WindowsBool(recursive),
+                        recursive,
                         Self.notifyFilter,
                         nil,
                         &overlapped,
                         nil
                     )
                 }
-                if !issued.boolValue {
+                if !issued {
                     let err = GetLastError()
                     if err != DWORD(ERROR_IO_PENDING) {
                         break
@@ -2073,7 +2073,7 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
             let waitResult = WaitForMultipleObjects(
                 DWORD(handles.count),
                 &handles,
-                WindowsBool(false),
+                false,
                 waitTimeout
             )
 
@@ -2081,7 +2081,7 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
                 if ioPending {
                     _ = CancelIoEx(dir, &overlapped)
                     var ignoredBytes: DWORD = 0
-                    _ = GetOverlappedResult(dir, &overlapped, &ignoredBytes, WindowsBool(true))
+                    _ = GetOverlappedResult(dir, &overlapped, &ignoredBytes, true)
                 }
                 break
             }
@@ -2089,7 +2089,7 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
             if waitResult == DWORD(WAIT_OBJECT_0) + 1 {
                 ioPending = false
                 var bytesTransferred: DWORD = 0
-                if GetOverlappedResult(dir, &overlapped, &bytesTransferred, WindowsBool(false)).boolValue,
+                if GetOverlappedResult(dir, &overlapped, &bytesTransferred, false),
                    bytesTransferred > 0
                 {
                     let pushed = parseNotifyBuffer(buffer, byteCount: Int(bytesTransferred))

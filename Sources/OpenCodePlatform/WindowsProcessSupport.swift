@@ -1267,7 +1267,7 @@ internal enum WindowsProcessPrimitives {
     /// checks the process object with zero-timeout `WaitForSingleObject`, treating `ERROR_ACCESS_DENIED` as live.
     static func processExists(pid: UInt32) -> Bool {
         guard pid > 0 else { return false }
-        guard let raw = OpenProcess(SYNCHRONIZE, false, DWORD(pid)),
+        guard let raw = OpenProcess(DWORD(SYNCHRONIZE), false, DWORD(pid)),
               raw != INVALID_HANDLE_VALUE else {
             return UInt32(GetLastError()) == WindowsProcessHelpers.errorAccessDenied
         }

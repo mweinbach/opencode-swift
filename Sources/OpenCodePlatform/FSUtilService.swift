@@ -260,7 +260,8 @@ public enum FSUtil {
     // parity: util/src/fs-util.ts#FSUtil.normalizePath [status=implemented hash=eb634425e254]
     public static func normalizePath(_ p: String) -> String {
         #if os(Windows)
-        return resolve(p)
+        let win = FSPathUtil.windowsPath(p)
+        return URL(fileURLWithPath: win).standardizedFileURL.path
         #else
         return p
         #endif

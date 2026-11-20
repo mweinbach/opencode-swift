@@ -696,7 +696,7 @@ extension WindowsPrivateSecurity {
 }
 
 /// Shared named-pipe handle + manual-reset cancellation event, equivalent to Rust `Arc<Pipe>`.
-internal final class WindowsPipe: @unchecked Sendable {
+internal final class WindowsNamedPipeHandle: @unchecked Sendable {
     let handle: OwnedWinHandle
     let cancelled: OwnedWinHandle
 
@@ -715,12 +715,12 @@ internal final class WindowsPipe: @unchecked Sendable {
 /// `OVERLAPPED`, event, or returning control past a borrowed I/O buffer.
 /// Mirrors `upstream/src/transport/windows.rs#Operation`.
 internal final class WindowsPipeOperation: @unchecked Sendable {
-    let pipe: WindowsPipe
+    let pipe: WindowsNamedPipeHandle
     private let overlapped: ProcessDaemon.Transport.Retained<OVERLAPPED>
     private let event: OwnedWinHandle
     private var pending: Bool = false
 
-    init(pipe: WindowsPipe) throws {
+    init(pipe: WindowsNamedPipeHandle) throws {
         if pipe.cancelled.isSignalled() {
             throw ProcessDaemon.DaemonError("named pipe operation cancelled")
         }
@@ -821,7 +821,7 @@ internal final class WindowsPendingConnection: @unchecked Sendable {
             )
         }
         let owned = try OwnedWinHandle.adopt(rawHandle, operation: "CreateNamedPipeW")
-        let pipe = try WindowsPipe(handle: owned)
+        let pipe = try WindowsNamedPipeHandle(handle: owned)
         let operation = try WindowsPipeOperation(pipe: pipe)
         let connected: Bool
         do {

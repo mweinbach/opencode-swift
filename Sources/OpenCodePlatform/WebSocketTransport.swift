@@ -766,7 +766,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
 
     @discardableResult
     private func writeMaskedFrame(opcode: UInt8, payload: [UInt8]) -> Bool {
-        var mask: [UInt8] = [
+        let mask: [UInt8] = [
             UInt8.random(in: 0...255),
             UInt8.random(in: 0...255),
             UInt8.random(in: 0...255),
@@ -791,7 +791,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         for i in 0..<payload.count {
             frame.append(payload[i] ^ mask[i & 3])
         }
-        return writeLock.withLock { Self.writeAll(fd: fd, bytes: frame) }
+        return writeLock.withLock { _ in Self.writeAll(fd: fd, bytes: frame) }
     }
 
     private struct RawFrame {
