@@ -1889,31 +1889,141 @@ private struct RegExpParser {
 
     private func unionVSet(_ a: ClassSetValue, _ b: ClassSetValue) -> ClassSetValue {
         let ranges = RegExpUnicodeData.normalizeRanges(a.ranges + b.ranges)
-        let strings = deduplicateStrings(a.strings + b.strings)
+        let strings: [[UInt32]]
+        if a.strings.isEmpty {
+            strings = b.strings
+        } else if b.strings.isEmpty {
+            strings = a.strings
+        } else {
+            strings = deduplicateStrings(a.strings + b.strings)
+        }
         return ClassSetValue(ranges: ranges, strings: strings, mayContainStrings: a.mayContainStrings || b.mayContainStrings)
     }
 
     private func intersectVSet(_ a: ClassSetValue, _ b: ClassSetValue) -> ClassSetValue {
         let ranges = RegExpUnicodeData.intersectRanges(a.ranges, b.ranges)
-        let bSet = Set(b.strings)
-        let strings = a.strings.filter { bSet.contains($0) }
-        return ClassSetValue(ranges: ranges, strings: deduplicateStrings(strings), mayContainStrings: !strings.isEmpty)
+        let strings: [[UInt32]]
+        if a.strings.isEmpty || b.strings.isEmpty {
+            strings = []
+        } else {
+            let bSet = Set(b.strings)
+            strings = deduplicateStrings(a.strings.filter { bSet.contains($0) })
+        }
+        return ClassSetValue(ranges: ranges, strings: strings, mayContainStrings: a.mayContainStrings && b.mayContainStrings)
     }
 
     private func subtractVSet(_ a: ClassSetValue, _ b: ClassSetValue) -> ClassSetValue {
         let ranges = RegExpUnicodeData.subtractRanges(a.ranges, b.ranges)
-        let bSet = Set(b.strings)
-        let strings = a.strings.filter { !bSet.contains($0) }
-        return ClassSetValue(ranges: ranges, strings: deduplicateStrings(strings), mayContainStrings: !strings.isEmpty)
+        let strings: [[UInt32]]
+        if a.strings.isEmpty || b.strings.isEmpty {
+            strings = a.strings
+        } else {
+            let bSet = Set(b.strings)
+            strings = deduplicateStrings(a.strings.filter { !bSet.contains($0) })
+        }
+        return ClassSetValue(ranges: ranges, strings: strings, mayContainStrings: a.mayContainStrings)
     }
 }
 
 // MARK: - Bytecode Compiler
 
+private struct MultiStringTrie: Sendable {
+    struct Edge: Sendable {
+        let cp: UInt32
+        let child: Int
+    }
+
+    struct Node: Sendable {
+        let isTerminal: Bool
+        let edgeStart: Int
+        let edgeCount: Int
+    }
+
+    let nodes: [Node]
+    let edges: [Edge]
+    let rootMinCP: UInt32
+    let rootMaxCP: UInt32
+
+    static func build(strings: [[UInt32]], ignoreCase: Bool, backward: Bool) -> MultiStringTrie? {
+        if strings.isEmpty { return nil }
+        struct BuilderNode {
+            var isTerminal: Bool = false
+            var edges: [Edge] = []
+        }
+        var builder: [BuilderNode] = [BuilderNode()]
+        builder.reserveCapacity(min(strings.count * 2, 8192))
+
+        for seq in strings {
+            if seq.count < 2 { continue }
+            var nodeIdx = 0
+            let count = seq.count
+            for step in 0..<count {
+                let rawCP = backward ? seq[count - 1 - step] : seq[step]
+                let cp = ignoreCase ? RegExpUnicodeData.canonicalizeUnicode(rawCP) : rawCP
+                var lo = 0
+                var hi = builder[nodeIdx].edges.count
+                while lo < hi {
+                    let mid = (lo + hi) >> 1
+                    if builder[nodeIdx].edges[mid].cp < cp { lo = mid + 1 } else { hi = mid }
+                }
+                if lo < builder[nodeIdx].edges.count && builder[nodeIdx].edges[lo].cp == cp {
+                    nodeIdx = builder[nodeIdx].edges[lo].child
+                } else {
+                    let newIdx = builder.count
+                    builder.append(BuilderNode())
+                    builder[nodeIdx].edges.insert(Edge(cp: cp, child: newIdx), at: lo)
+                    nodeIdx = newIdx
+                }
+            }
+            builder[nodeIdx].isTerminal = true
+        }
+
+        guard !builder[0].edges.isEmpty else { return nil }
+        var flatNodes: [Node] = []
+        flatNodes.reserveCapacity(builder.count)
+        var totalEdges = 0
+        for b in builder { totalEdges += b.edges.count }
+        var flatEdges: [Edge] = []
+        flatEdges.reserveCapacity(totalEdges)
+
+        for b in builder {
+            let start = flatEdges.count
+            flatEdges.append(contentsOf: b.edges)
+            flatNodes.append(Node(isTerminal: b.isTerminal, edgeStart: start, edgeCount: b.edges.count))
+        }
+
+        let rootEdges = builder[0].edges
+        return MultiStringTrie(
+            nodes: flatNodes,
+            edges: flatEdges,
+            rootMinCP: rootEdges[0].cp,
+            rootMaxCP: rootEdges[rootEdges.count - 1].cp
+        )
+    }
+
+    @inline(__always)
+    func findChild(node: Node, cp: UInt32) -> Int? {
+        var lo = node.edgeStart
+        var hi = lo + node.edgeCount - 1
+        while lo <= hi {
+            let mid = (lo + hi) >> 1
+            let edge = edges[mid]
+            if cp < edge.cp {
+                hi = mid - 1
+            } else if cp > edge.cp {
+                lo = mid + 1
+            } else {
+                return edge.child
+            }
+        }
+        return nil
+    }
+}
+
 private struct CompiledCharClass: Sendable {
     let ranges: [CPRange]
-    /// Multi-codepoint strings (length >= 2), sorted by code-point length descending.
-    let multiStrings: [[UInt32]]
+    /// Compact flat trie of multi-codepoint strings (length >= 2), oriented forward or backward to match op direction.
+    let trie: MultiStringTrie?
     /// True if empty string `""` is part of this v-mode class (e.g. `[\q{}]`).
     let matchesEmpty: Bool
     let ignoreCase: Bool
@@ -2030,9 +2140,9 @@ private struct RegExpCompiler {
                 if s.isEmpty { matchesEmpty = true }
                 else if s.count >= 2 { multi.append(s) }
             }
-            multi.sort { $0.count > $1.count }
+            let trie = MultiStringTrie.build(strings: multi, ignoreCase: ic, backward: backward)
             let idx = charClasses.count
-            charClasses.append(CompiledCharClass(ranges: ranges, multiStrings: multi, matchesEmpty: matchesEmpty, ignoreCase: ic))
+            charClasses.append(CompiledCharClass(ranges: ranges, trie: trie, matchesEmpty: matchesEmpty, ignoreCase: ic))
             ops.append(.charClass(idx: idx, backward: backward))
 
         case .anchorStart(let multiline):
@@ -2107,7 +2217,6 @@ private struct RegExpVM {
         case choice(pc: Int, pos: Int)
         case undoCapture(slot: Int, oldStart: Int, oldEnd: Int)
         case undoLoop(reg: Int, oldCount: Int, oldStart: Int)
-        case charClassNext(classIdx: Int, stage: UInt8, idx: Int, pos: Int, nextPC: Int, backward: Bool)
     }
 
     let program: CompiledProgram
@@ -2184,35 +2293,34 @@ private struct RegExpVM {
         return ECMAScriptRegExp.isASCIIWord(UInt32(u))
     }
 
-    private func matchCodePointSequence(
-        _ seq: [UInt32],
-        at pos: Int,
+    /// Walks `trie` from `startPos` (forward or backward), appending all matching end positions
+    /// to `out` in strictly increasing code-point length order (shortest match first, longest last).
+    private func collectTrieMatches(
+        _ trie: MultiStringTrie,
+        at startPos: Int,
         ignoreCase: Bool,
-        backward: Bool
-    ) -> Int? {
-        var cur = pos
-        if backward {
-            for cp in seq.reversed() {
-                guard let (ch, prev) = readBackward(cur) else { return nil }
-                if ignoreCase {
-                    if canonicalize(ch) != canonicalize(cp) { return nil }
-                } else if ch != cp {
-                    return nil
-                }
-                cur = prev
+        backward: Bool,
+        into out: inout [Int]
+    ) {
+        var curPos = startPos
+        var nodeIdx = 0
+        while true {
+            guard let (rawCP, nextPos) = backward ? readBackward(curPos) : readForward(curPos) else {
+                break
             }
-        } else {
-            for cp in seq {
-                guard let (ch, next) = readForward(cur) else { return nil }
-                if ignoreCase {
-                    if canonicalize(ch) != canonicalize(cp) { return nil }
-                } else if ch != cp {
-                    return nil
-                }
-                cur = next
+            let cp = ignoreCase ? canonicalize(rawCP) : rawCP
+            if nodeIdx == 0 && (cp < trie.rootMinCP || cp > trie.rootMaxCP) {
+                break
+            }
+            guard let nextNode = trie.findChild(node: trie.nodes[nodeIdx], cp: cp) else {
+                break
+            }
+            curPos = nextPos
+            nodeIdx = nextNode
+            if trie.nodes[nodeIdx].isTerminal {
+                out.append(curPos)
             }
         }
-        return cur
     }
 
     private func matchBackrefSlice(
@@ -2307,6 +2415,7 @@ private struct RegExpVM {
         var loopCounts = Array(repeating: 0, count: sub.loopCount)
         var loopStarts = Array(repeating: -1, count: sub.loopCount)
         var stack: [BacktrackEntry] = []
+        var charClassCandidates: [Int] = []
         var choiceDepth = 0
 
         var pc = 0
@@ -2327,87 +2436,7 @@ private struct RegExpVM {
                     pc = nextPC
                     pos = savedPos
                     return true
-                case .charClassNext(let classIdx, let stage, let idx, let savedPos, let nextPC, let backward):
-                    choiceDepth -= 1
-                    if tryCharClassStage(
-                        classIdx: classIdx,
-                        stage: stage,
-                        idx: idx,
-                        pos: savedPos,
-                        nextPC: nextPC,
-                        backward: backward,
-                        newPC: &pc,
-                        newPos: &pos
-                    ) {
-                        return true
-                    }
                 }
-            }
-            return false
-        }
-
-        /// Attempts matching a v-mode/classic char class starting at `(stage, idx)`:
-        /// - stage 0: multi-codepoint strings `multiStrings[idx...]`
-        /// - stage 1: single code point in `ranges`
-        /// - stage 2: empty string (if `matchesEmpty`)
-        func tryCharClassStage(
-            classIdx: Int,
-            stage startStage: UInt8,
-            idx startIdx: Int,
-            pos curPos: Int,
-            nextPC: Int,
-            backward: Bool,
-            newPC: inout Int,
-            newPos: inout Int
-        ) -> Bool {
-            let cc = program.charClasses[classIdx]
-            var stage = startStage
-            var idx = startIdx
-
-            if stage == 0 {
-                while idx < cc.multiStrings.count {
-                    let s = cc.multiStrings[idx]
-                    idx += 1
-                    if let matchedPos = matchCodePointSequence(s, at: curPos, ignoreCase: cc.ignoreCase, backward: backward) {
-                        // Push continuation for remaining alternatives
-                        if idx < cc.multiStrings.count {
-                            stack.append(.charClassNext(classIdx: classIdx, stage: 0, idx: idx, pos: curPos, nextPC: nextPC, backward: backward))
-                            choiceDepth += 1
-                        } else if !cc.ranges.isEmpty {
-                            stack.append(.charClassNext(classIdx: classIdx, stage: 1, idx: 0, pos: curPos, nextPC: nextPC, backward: backward))
-                            choiceDepth += 1
-                        } else if cc.matchesEmpty {
-                            stack.append(.charClassNext(classIdx: classIdx, stage: 2, idx: 0, pos: curPos, nextPC: nextPC, backward: backward))
-                            choiceDepth += 1
-                        }
-                        newPC = nextPC
-                        newPos = matchedPos
-                        return true
-                    }
-                }
-                stage = 1
-            }
-
-            if stage == 1 {
-                if !cc.ranges.isEmpty {
-                    let read: (cp: UInt32, nextPos: Int)? = backward ? readBackward(curPos) : readForward(curPos)
-                    if let (ch, afterPos) = read, RegExpUnicodeData.contains(cc.ranges, ch) {
-                        if cc.matchesEmpty {
-                            stack.append(.charClassNext(classIdx: classIdx, stage: 2, idx: 0, pos: curPos, nextPC: nextPC, backward: backward))
-                            choiceDepth += 1
-                        }
-                        newPC = nextPC
-                        newPos = afterPos
-                        return true
-                    }
-                }
-                stage = 2
-            }
-
-            if stage == 2 && cc.matchesEmpty {
-                newPC = nextPC
-                newPos = curPos
-                return true
             }
             return false
         }
@@ -2457,7 +2486,7 @@ private struct RegExpVM {
             case .charClass(let idx, let backward):
                 let cc = program.charClasses[idx]
                 // Fast path for normal classes without v-mode strings
-                if cc.multiStrings.isEmpty && !cc.matchesEmpty {
+                if cc.trie == nil && !cc.matchesEmpty {
                     let read = backward ? readBackward(pos) : readForward(pos)
                     if let (ch, nextPos) = read, RegExpUnicodeData.contains(cc.ranges, ch) {
                         pos = nextPos
@@ -2466,19 +2495,34 @@ private struct RegExpVM {
                     }
                     if !backtrack() { return nil }
                 } else {
-                    if tryCharClassStage(
-                        classIdx: idx,
-                        stage: 0,
-                        idx: 0,
-                        pos: pos,
-                        nextPC: pc + 1,
-                        backward: backward,
-                        newPC: &pc,
-                        newPos: &pos
-                    ) {
+                    // ECMA-262 §22.2.2.9 priority order: longest multi-codepoint string -> shorter
+                    // multi-codepoint strings -> single code point in `ranges` -> empty string.
+                    // Collect candidates from lowest to highest priority, push all lower-priority
+                    // choices onto the backtrack stack (LIFO), and take the highest-priority match.
+                    charClassCandidates.removeAll(keepingCapacity: true)
+                    if cc.matchesEmpty {
+                        charClassCandidates.append(pos)
+                    }
+                    if !cc.ranges.isEmpty {
+                        let read = backward ? readBackward(pos) : readForward(pos)
+                        if let (ch, afterPos) = read, RegExpUnicodeData.contains(cc.ranges, ch) {
+                            charClassCandidates.append(afterPos)
+                        }
+                    }
+                    if let trie = cc.trie {
+                        collectTrieMatches(trie, at: pos, ignoreCase: cc.ignoreCase, backward: backward, into: &charClassCandidates)
+                    }
+                    guard let bestPos = charClassCandidates.popLast() else {
+                        if !backtrack() { return nil }
                         continue
                     }
-                    if !backtrack() { return nil }
+                    let nextPC = pc + 1
+                    for altPos in charClassCandidates {
+                        stack.append(.choice(pc: nextPC, pos: altPos))
+                        choiceDepth += 1
+                    }
+                    pos = bestPos
+                    pc = nextPC
                 }
 
             case .anchorStart(let multiline):

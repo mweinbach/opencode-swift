@@ -240,6 +240,106 @@ struct CodemodeRegExpEngineTests {
         #expect(try testMatch(#"^\p{RGI_Emoji_Flag_Sequence}$"#, "v", "🇺🇸") == true)
     }
 
+    @Test("ES2025 v-mode RGI_Emoji_ZWJ_Sequence, RGI_Emoji, longest-first backtracking, lookbehind, and set operations")
+    func rgiEmojiZWJSequencesAndSetOps() throws {
+        // Families, professions, gendered, multi-skin-tone, directional, and Unicode 15.1–17.0 ZWJ sequences
+        let validZWJ = [
+            "👨‍👩‍👧", "👨‍👩‍👧‍👦", "👩‍👩‍👧‍👧", "🧑‍🧑‍🧒‍🧒", "👨‍❤️‍💋‍👨",
+            "👩‍💻", "👨🏽‍🔬", "🧑‍🚀", "👩🏻‍🚒", "👨🏿‍⚕️",
+            "🏃‍♀️", "🏋🏽‍♂️", "🧙🏿‍♀️",
+            "👩🏻‍🤝‍👨🏿", "👨🏼‍❤️‍👨🏾",
+            "\u{1F3C3}\u{200D}\u{2640}\u{FE0F}\u{200D}\u{27A1}\u{FE0F}", // 🏃‍♀️‍➡️
+            "\u{1F46F}\u{1F3FB}\u{200D}\u{2640}\u{FE0F}",               // Unicode 17.0 skin-tone bunny ears woman
+            "\u{1F93C}\u{1F3FD}\u{200D}\u{2642}\u{FE0F}",               // Unicode 17.0 skin-tone men wrestling
+            "🏳️‍🌈", "🏴‍☠️",
+            "\u{1F426}\u{200D}\u{1F525}",                               // 🐦‍🔥 phoenix
+            "\u{1F34B}\u{200D}\u{1F7E9}",                               // 🍋‍🟩 lime
+            "\u{1F642}\u{200D}\u{2195}\u{FE0F}",                        // 🙂‍↕️ head shaking vertically
+        ]
+        let reZWJ = try ECMAScriptRegExp(pattern: #"^\p{RGI_Emoji_ZWJ_Sequence}$"#, flags: "v")
+        let reRGI = try ECMAScriptRegExp(pattern: #"^\p{RGI_Emoji}$"#, flags: "v")
+        for seq in validZWJ {
+            #expect(try reZWJ.exec(in: units(seq)) != nil, "Expected RGI_Emoji_ZWJ_Sequence to match \(seq)")
+            #expect(try reRGI.exec(in: units(seq)) != nil, "Expected RGI_Emoji to match \(seq)")
+        }
+
+        // Negative cases: non-RGI ZWJ sequences, missing FE0F, non-ZWJ emojis, U+1F46A + modifier
+        let invalidBoth = [
+            "😀\u{200D}😀",
+            "👨\u{200D}👩",
+            "🏳\u{200D}🌈",
+            "🏃\u{200D}♀",
+            "👨\u{1F3FB}\u{200D}👩\u{1F3FC}\u{200D}👧",
+            "🇺🇸\u{200D}🇯🇵",
+            "\u{200D}",
+            "\u{1F46A}\u{1F3FB}",
+        ]
+        for s in invalidBoth {
+            #expect(try reZWJ.exec(in: units(s)) == nil)
+            #expect(try reRGI.exec(in: units(s)) == nil)
+        }
+        for nonZwjRgi in ["😀", "🇺🇸", "👍🏽", "1\u{FE0F}\u{20E3}", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"] {
+            #expect(try reZWJ.exec(in: units(nonZwjRgi)) == nil)
+            #expect(try reRGI.exec(in: units(nonZwjRgi)) != nil)
+        }
+
+        // Longest-first matching and multi-level backtracking
+        #expect(try execStrings(#"\p{RGI_Emoji_ZWJ_Sequence}"#, "v", "👨‍👩‍👧‍👦") == ["👨‍👩‍👧‍👦"])
+        #expect(try execStrings(#"\p{RGI_Emoji_ZWJ_Sequence}\u200D👦"#, "v", "👨‍👩‍👧‍👦") == ["👨‍👩‍👧‍👦"])
+        #expect(try execStrings(#"\p{RGI_Emoji}\u200D👩"#, "v", "👨‍👩‍👧") == ["👨‍👩"])
+        #expect(try execStrings(#"\p{RGI_Emoji}\u200D💻"#, "v", "👩🏽‍💻") == ["👩🏽‍💻"])
+        #expect(try execStrings(#"\p{RGI_Emoji}\u{1F3FD}\u200D💻"#, "v", "👩🏽‍💻") == ["👩🏽‍💻"])
+        #expect(try execStrings(#"^(\p{RGI_Emoji}+)(\u200D👦)$"#, "v", "👨‍👩‍👧‍👦") == ["👨‍👩‍👧‍👦", "👨‍👩‍👧", "\u{200D}👦"])
+
+        let runnerRight = "\u{1F3C3}\u{200D}\u{2640}\u{FE0F}\u{200D}\u{27A1}\u{FE0F}"
+        #expect(try execStrings(#"\p{RGI_Emoji}"#, "v", runnerRight) == [runnerRight])
+        #expect(try execStrings(#"\p{RGI_Emoji}\u200D\u27A1\uFE0F"#, "v", runnerRight) == [runnerRight])
+        #expect(try execStrings(#"\p{RGI_Emoji}\u200D\u2640\uFE0F"#, "v", runnerRight) == ["\u{1F3C3}\u{200D}\u{2640}\u{FE0F}"])
+
+        // Lookbehind with ZWJ sequences and backtracking
+        let lb1 = try ECMAScriptRegExp(pattern: #"(?<=\p{RGI_Emoji_ZWJ_Sequence})!"#, flags: "v")
+        #expect(try lb1.exec(in: units("👨‍👩‍👧‍👦!"))?.range == 11..<12)
+        let lb2 = try ECMAScriptRegExp(pattern: #"(?<=\p{RGI_Emoji_ZWJ_Sequence})\u200D👦"#, flags: "v")
+        #expect(try lb2.exec(in: units("👨‍👩‍👧‍👦"))?.range == 8..<11)
+        #expect(try execStrings(#"(?<=(.)\p{RGI_Emoji})!"#, "v", "👨‍👩‍👧!") == ["!", "\u{200D}"])
+
+        // v-mode set operations (subtraction, intersection, union, nested, /iv, /dv)
+        #expect(try testMatch(#"^[\p{RGI_Emoji}--\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "👨‍👩‍👧") == false)
+        #expect(try testMatch(#"^[\p{RGI_Emoji}--\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "🇺🇸") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji}--\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "😀") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji}&&\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "👨‍👩‍👧") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji}&&\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "😀") == false)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}&&\q{👨‍👩‍👧|😀}]$"#, "v", "👨‍👩‍👧") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}&&\q{👨‍👩‍👧|😀}]$"#, "v", "😀") == false)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}--\q{👨‍👩‍👧}]$"#, "v", "👨‍👩‍👧") == false)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}--\q{👨‍👩‍👧}]$"#, "v", "👨‍👩‍👧‍👦") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}\p{RGI_Emoji_Flag_Sequence}]$"#, "v", "🇺🇸") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}\p{RGI_Emoji_Flag_Sequence}]$"#, "v", "👩🏽‍💻") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}\q{abc}]$"#, "iv", "ABC") == true)
+        #expect(try testMatch(#"^[\p{RGI_Emoji_ZWJ_Sequence}\q{abc}]$"#, "iv", "👨‍👩‍👧") == true)
+
+        // UTF-16 match indices with d + v flags
+        let reDV = try ECMAScriptRegExp(pattern: #"(?<fam>\p{RGI_Emoji_ZWJ_Sequence})"#, flags: "dv")
+        let dvMatch = try #require(try reDV.exec(in: units("x👨‍👩‍👧‍👦y")))
+        #expect(dvMatch.range == 1..<12)
+        #expect(dvMatch.namedCaptures["fam"] == 1..<12)
+
+        // Strict v-mode MayContainStrings & u-mode syntax errors
+        expectSyntaxError(#"\p{RGI_Emoji_ZWJ_Sequence}"#, "u")
+        expectSyntaxError(#"\P{RGI_Emoji_ZWJ_Sequence}"#, "v")
+        expectSyntaxError(#"\P{RGI_Emoji}"#, "v")
+        expectSyntaxError(#"[^\p{RGI_Emoji_ZWJ_Sequence}]"#, "v")
+        expectSyntaxError(#"[^\p{RGI_Emoji}]"#, "v")
+        expectSyntaxError(#"[^\p{RGI_Emoji_ZWJ_Sequence}--\p{RGI_Emoji_ZWJ_Sequence}]"#, "v")
+        expectSyntaxError(#"[^\p{RGI_Emoji_ZWJ_Sequence}&&\q{ab}]"#, "v")
+        expectSyntaxError(#"[^\q{ab}&&\q{cd}]"#, "v")
+        expectSyntaxError(#"[^\q{ab}--\q{ab}]"#, "v")
+        // Valid negated intersections/subtractions where MayContainStrings is false
+        #expect(try testMatch(#"^[^\p{RGI_Emoji_ZWJ_Sequence}&&\p{ASCII}]$"#, "v", "a") == true)
+        #expect(try testMatch(#"^[^[a-z]--\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "a") == false)
+        #expect(try testMatch(#"^[^[a-z]--\p{RGI_Emoji_ZWJ_Sequence}]$"#, "v", "A") == true)
+    }
+
     // MARK: - Unicode Property Escapes
 
     @Test("Unicode General_Category, Script, Script_Extensions, and Binary Properties")
