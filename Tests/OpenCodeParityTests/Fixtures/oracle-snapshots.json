@@ -1,7 +1,7 @@
 {
-  "upstreamCommit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
-  "generatedAt": "2026-11-20T03:28:34.529Z",
-  "vectorCount": 1102,
+  "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
+  "generatedAt": "2026-11-20T19:08:52.789Z",
+  "vectorCount": 1107,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -8414,6 +8414,46 @@
       "expectedValue": "---\r\ntitle: |-\n  A: B\r\n---\r\nBody\r\n"
     },
     {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "valid flow sequence untouched",
+      "args": [
+        "---\ntags: [a, \"b: c\"]\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ntags: [a, \"b: c\"]\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "multi-line flow collection kept until it closes",
+      "args": [
+        "---\ntags: [\nnot: a key,\n]\ntitle: A: B\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ntags: [\nnot: a key,\n]\ntitle: |-\n  A: B\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "valid plain scalar with colon untouched",
+      "args": [
+        "---\nurl: http://example.com/a:b\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\nurl: http://example.com/a:b\n---\nBody\n"
+    },
+    {
+      "fn": "core/src/config/markdown.ts#sanitize",
+      "name": "flow mapping with trailing text rewritten",
+      "args": [
+        "---\ndescription: {Tag} Handles foo\n---\nBody\n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "---\ndescription: |-\n  {Tag} Handles foo\n---\nBody\n"
+    },
+    {
       "fn": "core/src/managed-policy.ts#decision",
       "name": "empty policies defaults to allow",
       "args": [
@@ -8532,7 +8572,15 @@
           "source": "default"
         },
         "full_codemode": {
-          "enabled": false,
+          "enabled": true,
+          "source": "default"
+        },
+        "home_memory": {
+          "enabled": true,
+          "source": "default"
+        },
+        "machines": {
+          "enabled": true,
           "source": "default"
         },
         "mcp_events": {
@@ -8541,6 +8589,14 @@
         },
         "media_blob": {
           "enabled": true,
+          "source": "default"
+        },
+        "recommended_api": {
+          "enabled": true,
+          "source": "default"
+        },
+        "sqlite_fts": {
+          "enabled": false,
           "source": "default"
         },
         "todo": {
@@ -8581,11 +8637,27 @@
           "enabled": false,
           "source": "default"
         },
+        "home_memory": {
+          "enabled": false,
+          "source": "default"
+        },
+        "machines": {
+          "enabled": false,
+          "source": "default"
+        },
         "mcp_events": {
           "enabled": false,
           "source": "default"
         },
         "media_blob": {
+          "enabled": false,
+          "source": "default"
+        },
+        "recommended_api": {
+          "enabled": false,
+          "source": "default"
+        },
+        "sqlite_fts": {
           "enabled": false,
           "source": "default"
         },
@@ -8628,6 +8700,14 @@
           "enabled": false,
           "source": "default"
         },
+        "home_memory": {
+          "enabled": false,
+          "source": "default"
+        },
+        "machines": {
+          "enabled": false,
+          "source": "default"
+        },
         "mcp_events": {
           "enabled": false,
           "source": "default"
@@ -8635,6 +8715,14 @@
         "media_blob": {
           "enabled": false,
           "source": "env"
+        },
+        "recommended_api": {
+          "enabled": false,
+          "source": "default"
+        },
+        "sqlite_fts": {
+          "enabled": false,
+          "source": "default"
         },
         "todo": {
           "enabled": true,
@@ -8672,8 +8760,16 @@
           "source": "env"
         },
         "full_codemode": {
-          "enabled": false,
-          "source": "default"
+          "enabled": true,
+          "source": "env"
+        },
+        "home_memory": {
+          "enabled": true,
+          "source": "env"
+        },
+        "machines": {
+          "enabled": true,
+          "source": "env"
         },
         "mcp_events": {
           "enabled": true,
@@ -8682,6 +8778,14 @@
         "media_blob": {
           "enabled": true,
           "source": "env"
+        },
+        "recommended_api": {
+          "enabled": true,
+          "source": "env"
+        },
+        "sqlite_fts": {
+          "enabled": false,
+          "source": "default"
         },
         "todo": {
           "enabled": false,
@@ -8722,11 +8826,27 @@
           "enabled": false,
           "source": "default"
         },
+        "home_memory": {
+          "enabled": false,
+          "source": "default"
+        },
+        "machines": {
+          "enabled": false,
+          "source": "default"
+        },
         "mcp_events": {
           "enabled": false,
           "source": "default"
         },
         "media_blob": {
+          "enabled": false,
+          "source": "default"
+        },
+        "recommended_api": {
+          "enabled": false,
+          "source": "default"
+        },
+        "sqlite_fts": {
           "enabled": false,
           "source": "default"
         },
@@ -8777,8 +8897,16 @@
           "source": "config"
         },
         "full_codemode": {
-          "enabled": false,
-          "source": "default"
+          "enabled": true,
+          "source": "config"
+        },
+        "home_memory": {
+          "enabled": true,
+          "source": "config"
+        },
+        "machines": {
+          "enabled": true,
+          "source": "config"
         },
         "mcp_events": {
           "enabled": true,
@@ -8787,6 +8915,14 @@
         "media_blob": {
           "enabled": true,
           "source": "config"
+        },
+        "recommended_api": {
+          "enabled": true,
+          "source": "config"
+        },
+        "sqlite_fts": {
+          "enabled": false,
+          "source": "default"
         },
         "todo": {
           "enabled": true,
@@ -8834,6 +8970,14 @@
           "enabled": false,
           "source": "default"
         },
+        "home_memory": {
+          "enabled": false,
+          "source": "default"
+        },
+        "machines": {
+          "enabled": false,
+          "source": "default"
+        },
         "mcp_events": {
           "enabled": false,
           "source": "default"
@@ -8841,6 +8985,14 @@
         "media_blob": {
           "enabled": true,
           "source": "env"
+        },
+        "recommended_api": {
+          "enabled": false,
+          "source": "default"
+        },
+        "sqlite_fts": {
+          "enabled": false,
+          "source": "default"
         },
         "todo": {
           "enabled": false,
@@ -9298,6 +9450,17 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": "600:1isj1k5:1isj1k5:1isj1k5:1isj1k5:1isj1k5"
+    },
+    {
+      "fn": "util/src/encode.ts#sampledChecksum",
+      "name": "sampled window covers the tail",
+      "args": [
+        "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijXYZ",
+        4000
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "4203:1judsr1:1judsr1:1lyzdwv:qeau7i:qeau7i"
     },
     {
       "fn": "util/src/execute-output.ts#formatExecuteOutput",
@@ -10003,7 +10166,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe568000012uh9VwiHxkGd4A"
+      "expectedValue": "bcfe56800001bTdGlHmXIcPraK"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10014,7 +10177,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe568000028E6rljpmMXIofg"
+      "expectedValue": "bcfe56800002z1X3OwU3s9cy9d"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10025,7 +10188,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffezofuaco9i7n4SD"
+      "expectedValue": "4301a97feffewFKRyisan4UJUp"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10036,7 +10199,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffddeZkCrquxyInS4"
+      "expectedValue": "4301a97feffdKRJEWySYALlU3h"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10044,7 +10207,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1f6ffac94001C3PlonvW5TDAf8"
+      "expectedValue": "1fa5c908c0012kr9OzCl55A8H1"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10052,7 +10215,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e0900536bffd9xDFnopm1Jwpn1"
+      "expectedValue": "e05a36f73ffdW2RJ6o19xWMYvZ"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10060,7 +10223,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "ecdc4857-86b5-4522-a3f4-e62f836b47b8"
+      "expectedValue": "8a7d12d6-2a70-4d70-a517-76718a754ad4"
     },
     {
       "fn": "latex/src/render.ts#renderLatexToString",

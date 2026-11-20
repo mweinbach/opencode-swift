@@ -191,7 +191,8 @@ struct MachineFormatsTests {
             let initial = list[0].initial(json)
             #expect(initial?.hasPrefix("Other machines are available: cpu, gpu.\nName one in a path, as in cpu:/work/file,") == true)
             let changed = list[0].changed(.array([.string("cpu")]), json)
-            #expect(changed == "New machines are available in addition to those previously listed:\ncpu, gpu")
+            // Instructions.listUpdate diffs the machine names by key, so only the newly added name is listed.
+            #expect(changed == "New machines are available in addition to those previously listed:\ngpu")
             #expect(list[0].removed(json) == "Other machines are no longer available. Do not use any previously listed machine.")
         } else {
             // A flag registry without `machines` reads as off.

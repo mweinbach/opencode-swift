@@ -427,8 +427,11 @@ struct ServerFullParityTests {
         let session = try await harness.client.session.create(SessionCreateInput(title: "Tool Dependency Test"))
         let bundle = try await harness.resolveBundle()
 
+        // Denying `execute` turns Code Mode off, so the opencode.* tools are direct tools this test can call
+        // (with Code Mode available they live inside `execute`, as upstream places them).
         let allowAll: PermissionSchema.Ruleset = [
             PermissionSchema.Rule(action: "*", resource: "*", effect: .allow),
+            PermissionSchema.Rule(action: "execute", resource: "*", effect: .deny),
         ]
         let snap = await bundle.tool.snapshot(permissions: allowAll)
 

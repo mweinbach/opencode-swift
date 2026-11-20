@@ -435,8 +435,18 @@ if (!hasUpstreamNodeModules) {
         exports: { minimatch: () => false },
         loader: "object",
       }))
+      // Faithful enough for upstream's frontmatter checks: parse the YAML block (Bun's YAML parser throws on
+      // invalid YAML such as an unquoted `key: a: b`, as gray-matter's js-yaml does), so code that relies on
+      // `matter()` throwing (core/src/config/markdown.ts#isValidYaml) behaves as it does upstream.
       build.module("gray-matter", () => ({
-        exports: { default: () => ({ data: {}, content: "" }) },
+        exports: {
+          default: (input: string) => {
+            const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/.exec(input)
+            if (!m) return { data: {}, content: input }
+            const data = m[1]!.trim() === "" ? {} : (Bun.YAML.parse(m[1]!) ?? {})
+            return { data, content: m[2] ?? "" }
+          },
+        },
         loader: "object",
       }))
       build.module("jsonc-parser", () => ({
