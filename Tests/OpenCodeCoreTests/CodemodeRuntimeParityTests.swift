@@ -151,8 +151,10 @@ struct CodemodeRuntimeParityTests {
           keys: Object.keys(e), toStringGetter: named.toString(),
         };
         """)
-        #expect(dict["first"] == .string("Custom: boom"))
-        #expect(dict["fixed"] == .string("Custom: boom"))
+        // Upstream psychoscript v0.1.2: the header is formatted on first read (later `name` edits don't
+        // change it) and `new Error` captures the construction site as a program frame.
+        #expect(dict["first"] == .string("Custom: boom\n    at <program>:1:11"))
+        #expect(dict["fixed"] == .string("Custom: boom\n    at <program>:1:11"))
         #expect(dict["runtimeHead"] == .string("TypeError: Cannot read properties of null (reading 'x')."))
         #expect(dict["runtimeFrame"] == .bool(true))
         #expect(dict["replaced"] == .string("replaced"))
