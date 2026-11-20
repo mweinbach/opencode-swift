@@ -826,6 +826,7 @@ public let CredentialHandler = ServerHandlerGroup(
                     active: false,
                     value: created.value
                 )
+            await ctx.runtime.reloadCatalogsIfNeeded(for: created.integrationID)
             await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.json(ServerDataWrapper(data: entry))
         },
@@ -851,7 +852,11 @@ public let CredentialHandler = ServerHandlerGroup(
         ) { ctx in
             let rawID = try ctx.requireParam("credentialID")
             let id = CredentialSchema.ID(rawValue: rawID)
+            let existing = try await ctx.runtime.credential.get(id)
             try await ctx.runtime.credential.activate(id)
+            if let existing {
+                await ctx.runtime.reloadCatalogsIfNeeded(for: existing.integrationID)
+            }
             await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
@@ -863,7 +868,11 @@ public let CredentialHandler = ServerHandlerGroup(
         ) { ctx in
             let rawID = try ctx.requireParam("credentialID")
             let id = CredentialSchema.ID(rawValue: rawID)
+            let existing = try await ctx.runtime.credential.get(id)
             try await ctx.runtime.credential.remove(id)
+            if let existing {
+                await ctx.runtime.reloadCatalogsIfNeeded(for: existing.integrationID)
+            }
             await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
@@ -1510,6 +1519,7 @@ public let IntegrationHandler = ServerHandlerGroup(
             } catch {
                 throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
             }
+            await ctx.runtime.reloadCatalogsIfNeeded(for: integrationID)
             await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
@@ -1543,6 +1553,7 @@ public let IntegrationHandler = ServerHandlerGroup(
             } catch {
                 throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
             }
+            await ctx.runtime.reloadCatalogsIfNeeded(for: integrationID)
             await emitIntegrationCatalogUpdated(ctx.runtime.bus)
             return ServerHTTPResponse.empty(statusCode: 204)
         },
@@ -1563,6 +1574,23 @@ public let IntegrationHandler = ServerHandlerGroup(
             let integrationID = IntegrationID(rawValue: rawID)
             try await requireConnectable(integrationID, loc)
             let payload = try ctx.decodeJSONBody(OAuthPayload.self)
+            if ctx.runtime.oauthManager.supports(integrationID: integrationID, methodID: payload.methodID) {
+                do {
+                    let attempt = try await ctx.runtime.oauthManager.connect(
+                        integrationID: integrationID,
+                        methodID: payload.methodID,
+                        answer: payload.answer ?? [:],
+                        label: payload.label
+                    )
+                    return ServerHTTPResponse.json(response(location: loc, data: attempt))
+                } catch let authErr as CoreIntegration.Integration.AuthorizationError {
+                    throw InvalidRequestError(message: authErr.message, kind: "integration_authorization")
+                } catch let protoErr as any ProtocolError {
+                    throw protoErr
+                } catch {
+                    throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
+                }
+            }
             let attempt = loc.integrationAttempts.createOAuth(
                 integrationID: integrationID,
                 methodID: payload.methodID,
@@ -1581,12 +1609,16 @@ public let IntegrationHandler = ServerHandlerGroup(
             let rawID = try ctx.requireParam("integrationID")
             let rawAttempt = try ctx.requireParam("attemptID")
             let integrationID = IntegrationID(rawValue: rawID)
+            let attemptID = IntegrationSchema.AttemptID(rawValue: rawAttempt)
             guard try await loc.integration.get(integrationID) != nil else {
                 throw IntegrationNotFoundError(integrationID: rawID, message: "Integration not found: \(rawID)")
             }
+            if let liveStatus = ctx.runtime.oauthManager.status(integrationID: integrationID, attemptID: attemptID) {
+                return ServerHTTPResponse.json(response(location: loc, data: liveStatus))
+            }
             guard let status = loc.integrationAttempts.oauthStatus(
                 integrationID: integrationID,
-                attemptID: IntegrationSchema.AttemptID(rawValue: rawAttempt)
+                attemptID: attemptID
             ) else {
                 throw IntegrationAttemptNotFoundError(
                     integrationID: rawID,
@@ -1608,13 +1640,41 @@ public let IntegrationHandler = ServerHandlerGroup(
             let rawID = try ctx.requireParam("integrationID")
             let rawAttempt = try ctx.requireParam("attemptID")
             let integrationID = IntegrationID(rawValue: rawID)
+            let attemptID = IntegrationSchema.AttemptID(rawValue: rawAttempt)
             guard try await loc.integration.get(integrationID) != nil else {
                 throw IntegrationNotFoundError(integrationID: rawID, message: "Integration not found: \(rawID)")
             }
             let payload = try ctx.decodeOptionalJSONBody(CompletePayload.self) ?? CompletePayload(code: nil)
+            if ctx.runtime.oauthManager.hasAttempt(integrationID: integrationID, attemptID: attemptID) {
+                do {
+                    try await ctx.runtime.oauthManager.complete(
+                        integrationID: integrationID,
+                        attemptID: attemptID,
+                        code: payload.code
+                    )
+                    return ServerHTTPResponse.empty(statusCode: 204)
+                } catch is CoreIntegration.Integration.CodeRequiredError {
+                    throw InvalidRequestError(
+                        message: "Authorization code is required",
+                        kind: "integration_code_required"
+                    )
+                } catch let missing as CoreIntegration.Integration.AttemptNotFoundError {
+                    throw IntegrationAttemptNotFoundError(
+                        integrationID: missing.integrationID.rawValue,
+                        attemptID: missing.attemptID.rawValue,
+                        message: "OAuth attempt not found: \(missing.attemptID.rawValue)"
+                    )
+                } catch let authErr as CoreIntegration.Integration.AuthorizationError {
+                    throw InvalidRequestError(message: authErr.message, kind: "integration_authorization")
+                } catch let protoErr as any ProtocolError {
+                    throw protoErr
+                } catch {
+                    throw InvalidRequestError(message: String(describing: error), kind: "integration_authorization")
+                }
+            }
             let entry = try loc.integrationAttempts.completeOAuth(
                 integrationID: integrationID,
-                attemptID: IntegrationSchema.AttemptID(rawValue: rawAttempt),
+                attemptID: attemptID,
                 code: payload.code
             )
             _ = try await ctx.runtime.credential.create(
@@ -1642,9 +1702,12 @@ public let IntegrationHandler = ServerHandlerGroup(
             let loc = try ctx.requireLocation()
             let rawID = try ctx.requireParam("integrationID")
             let rawAttempt = try ctx.requireParam("attemptID")
+            let integrationID = IntegrationID(rawValue: rawID)
+            let attemptID = IntegrationSchema.AttemptID(rawValue: rawAttempt)
+            await ctx.runtime.oauthManager.cancel(integrationID: integrationID, attemptID: attemptID)
             loc.integrationAttempts.cancelOAuth(
-                integrationID: IntegrationID(rawValue: rawID),
-                attemptID: IntegrationSchema.AttemptID(rawValue: rawAttempt)
+                integrationID: integrationID,
+                attemptID: attemptID
             )
             return ServerHTTPResponse.empty(statusCode: 204)
         },
@@ -1840,6 +1903,7 @@ public let LocationHandler = ServerHandlerGroup(
             groupIdentifier: "server.location"
         ) { ctx in
             do {
+                await ctx.runtime.forceRefreshCatalogs()
                 try await CoreLocation.ServiceMap.reload(ctx.runtime.locations)
                 return ServerHTTPResponse.empty(statusCode: 204)
             } catch is CancellationError {

@@ -805,7 +805,7 @@ public enum ServerLiveRuntime {
         ),
         BuiltinProviderSpec(
             id: .opencode,
-            name: "OpenCode",
+            name: "OpenCode Console",
             envVars: ["OPENCODE_API_KEY"],
             package: "@opencode/ai/providers/openai-compatible",
             baseURL: "https://opencode.ai/zen/v1",
@@ -881,7 +881,7 @@ public enum ServerLiveRuntime {
         BuiltinProviderSpec(
             id: ProviderSchema.ID(rawValue: "github-copilot"),
             name: "GitHub Copilot",
-            envVars: ["GITHUB_TOKEN"],
+            envVars: ["COPILOT_GITHUB_TOKEN", "GITHUB_TOKEN"],
             package: "@opencode/ai/providers/github-copilot",
             baseURL: "https://api.githubcopilot.com",
             compatibility: nil,
@@ -1195,6 +1195,73 @@ public enum ServerLiveRuntime {
             ]
         ),
         BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "poe"),
+            name: "Poe",
+            envVars: ["POE_API_KEY"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "https://api.poe.com/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "claude-sonnet-4.6",
+                    providerID: ProviderSchema.ID(rawValue: "poe"),
+                    name: "Claude Sonnet 4.6 (Poe)",
+                    family: "claude-sonnet",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 200_000,
+                    output: 64_000,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2026, 2, 17)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "digitalocean"),
+            name: "DigitalOcean",
+            envVars: ["DIGITALOCEAN_API_KEY"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "https://inference.do-ai.run/v1",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "llama3.3-instruct-70b",
+                    providerID: ProviderSchema.ID(rawValue: "digitalocean"),
+                    name: "Llama 3.3 Instruct 70B",
+                    family: "llama",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 128_000,
+                    output: 8_192,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2025, 1, 1),
+                    inputModalities: ["text"]
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
+            id: ProviderSchema.ID(rawValue: "gitlab"),
+            name: "GitLab Duo",
+            envVars: ["GITLAB_TOKEN"],
+            package: "@opencode/ai/providers/openai-compatible",
+            baseURL: "https://gitlab.com/api/v4/ai/llm/proxy",
+            compatibility: nil,
+            models: [
+                makeModel(
+                    id: "duo-chat",
+                    providerID: ProviderSchema.ID(rawValue: "gitlab"),
+                    name: "GitLab Duo Chat",
+                    family: "duo",
+                    package: "@opencode/ai/providers/openai-compatible",
+                    context: 200_000,
+                    output: 16_384,
+                    inputCost: 0,
+                    outputCost: 0,
+                    released: (2025, 6, 1)
+                ),
+            ]
+        ),
+        BuiltinProviderSpec(
             id: ProviderSchema.ID(rawValue: "lmstudio"),
             name: "LM Studio (Local)",
             envVars: ["LMSTUDIO_API_KEY"],
@@ -1219,19 +1286,160 @@ public enum ServerLiveRuntime {
         ),
     ]
 
-    private static func loadCachedModelsDevSnapshots(
-        globalPaths: Global.Interface?,
-        fileSystem: (any OpenCodeFileSystem)?
-    ) async -> [CoreModel.ModelsDev.Snapshot] {
-        guard let globalPaths, let fileSystem else { return [] }
-        let cachePath = "\(globalPaths.cache.trimmingTrailingSlashes())/models.json"
-        guard await fileSystem.exists(at: cachePath),
-              let bytes = try? await fileSystem.readFile(at: cachePath),
-              let decoded = try? CoreModel.ModelsDev.decodeSnapshot(String(decoding: bytes, as: UTF8.self))
-        else {
+    /// Registrations returned by `seedProvidersAndModels` so custom background plugin tests can dispose them cleanly.
+    public struct ProviderSeedRegistrations: Sendable {
+        public let integrations: CoreState.Registration
+        public let providers: CoreState.Registration
+        public let models: CoreState.Registration
+
+        public func dispose() async {
+            await integrations.dispose()
+            await providers.dispose()
+            await models.dispose()
+        }
+    }
+
+    private final class TimeoutRace<T: Sendable>: Sendable {
+        private struct Inner: Sendable {
+            var settled = false
+            var continuation: CheckedContinuation<T?, Never>?
+            var workTask: Task<Void, Never>?
+            var timerTask: Task<Void, Never>?
+        }
+        private let box = Mutex(Inner())
+
+        func finish(_ value: T?) {
+            let (cont, work, timer) = box.withLock { inner -> (CheckedContinuation<T?, Never>?, Task<Void, Never>?, Task<Void, Never>?) in
+                guard !inner.settled else { return (nil, nil, nil) }
+                inner.settled = true
+                let c = inner.continuation
+                let w = inner.workTask
+                let t = inner.timerTask
+                inner.continuation = nil
+                inner.workTask = nil
+                inner.timerTask = nil
+                return (c, w, t)
+            }
+            work?.cancel()
+            timer?.cancel()
+            cont?.resume(returning: value)
+        }
+
+        func start(
+            continuation: CheckedContinuation<T?, Never>,
+            milliseconds: Int64,
+            operation: @escaping @Sendable () async throws -> T
+        ) {
+            let alreadySettled = box.withLock { inner -> Bool in
+                if inner.settled { return true }
+                inner.continuation = continuation
+                return false
+            }
+            if alreadySettled {
+                continuation.resume(returning: nil)
+                return
+            }
+            let work = Task {
+                let result = try? await operation()
+                self.finish(result)
+            }
+            let timer = Task {
+                try? await Task.sleep(for: .milliseconds(milliseconds))
+                self.finish(nil)
+            }
+            let shouldCancel = box.withLock { inner -> Bool in
+                if inner.settled { return true }
+                inner.workTask = work
+                inner.timerTask = timer
+                return false
+            }
+            if shouldCancel {
+                work.cancel()
+                timer.cancel()
+            }
+        }
+    }
+
+    /// Runs `operation` with a hard millisecond deadline, returning `nil` immediately on expiry
+    /// and cancelling the underlying operation task.
+    internal static func withHTTPTimeout<T: Sendable>(
+        milliseconds: Int64,
+        operation: @escaping @Sendable () async throws -> T
+    ) async -> T? {
+        let race = TimeoutRace<T>()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                race.start(continuation: continuation, milliseconds: milliseconds, operation: operation)
+            }
+        } onCancel: {
+            race.finish(nil)
+        }
+    }
+
+    // MARK: - 2a. Live & Cached ModelsDev Catalog
+
+    public static let modelsDevCatalogKVKey = "models-dev:v2:catalog"
+    public static let modelsDevMetaKVKey = "models-dev:v2:catalog:meta"
+    private static let modelsDevStaleMs: Int64 = 3_600_000
+
+    private static let decodedDiskCache = Mutex<[String: [CoreModel.ModelsDev.Snapshot]]>([:])
+    private static let decodedTextCache = Mutex<[String: [CoreModel.ModelsDev.Snapshot]]>([:])
+    private static let decodeLocks = CoreSubsystems.Effect.KeyedMutex<String>()
+
+    private static func decodeAndFilterCached(text: String) -> [CoreModel.ModelsDev.Snapshot] {
+        let key = "\(text.utf8.count):\(CoreModel.ModelsDev.bodyDigest(text))"
+        if let hit = decodedTextCache.withLock({ $0[key] }) {
+            return hit
+        }
+        guard let decoded = try? CoreModel.ModelsDev.decodeSnapshot(text), !decoded.isEmpty else {
             return []
         }
-        return decoded.compactMap { snap -> CoreModel.ModelsDev.Snapshot? in
+        let filtered = filterModelsDevSnapshots(decoded)
+        decodedTextCache.withLock { cache in
+            if cache.count > 16 { cache.removeAll() }
+            cache[key] = filtered
+        }
+        return filtered
+    }
+
+    private static func decodeDiskCacheFile(
+        at cachePath: String,
+        fileSystem: any OpenCodeFileSystem
+    ) async -> [CoreModel.ModelsDev.Snapshot] {
+        guard await fileSystem.exists(at: cachePath) else { return [] }
+        // Fast stat-keyed memoization for real disk files (avoids re-reading & re-decoding an 11MB+ models.json across locations)
+        if !(fileSystem is InMemoryFileSystem),
+           let st = try? await fileSystem.stat(at: cachePath),
+           st.type == .file
+        {
+            let statKey = "\(cachePath)|\(st.size)|\(st.modifiedAtMs)"
+            if let hit = decodedDiskCache.withLock({ $0[statKey] }) {
+                return hit
+            }
+            return await decodeLocks.withLock(statKey) {
+                if let hit = decodedDiskCache.withLock({ $0[statKey] }) {
+                    return hit
+                }
+                guard let bytes = try? await fileSystem.readFile(at: cachePath) else { return [] }
+                let text = String(decoding: bytes, as: UTF8.self)
+                let filtered = decodeAndFilterCached(text: text)
+                if !filtered.isEmpty {
+                    decodedDiskCache.withLock { cache in
+                        if cache.count > 16 { cache.removeAll() }
+                        cache[statKey] = filtered
+                    }
+                }
+                return filtered
+            }
+        }
+        guard let bytes = try? await fileSystem.readFile(at: cachePath) else { return [] }
+        return decodeAndFilterCached(text: String(decoding: bytes, as: UTF8.self))
+    }
+
+    private static func filterModelsDevSnapshots(
+        _ decoded: [CoreModel.ModelsDev.Snapshot]
+    ) -> [CoreModel.ModelsDev.Snapshot] {
+        decoded.compactMap { snap -> CoreModel.ModelsDev.Snapshot? in
             if snap.info.id.rawValue == "azure-cognitive-services"
                 || snap.info.id.rawValue == "google-vertex-anthropic"
             {
@@ -1250,21 +1458,882 @@ public enum ServerLiveRuntime {
         }
     }
 
-    /// Seeds built-in integrations, providers, models, merges any cached `globalPaths.cache/models.json`
-    /// ModelsDev catalog at lower priority, and overlays providers/models/default-model configured in
-    /// `configEntries` (`opencode.json[c]`).
+    private static func modelsDevCacheFilePath(
+        globalPaths: Global.Interface?,
+        options: CoreModel.ModelsDev.Options?
+    ) -> String? {
+        if let explicit = options?.file, !explicit.isEmpty {
+            return explicit
+        }
+        guard let globalPaths else { return nil }
+        return "\(globalPaths.cache.trimmingTrailingSlashes())/models.json"
+    }
+
+    /// Returns `true` when the ModelsDev catalog cache is absent or older than 1 hour.
+    public static func isModelsDevCacheColdOrStale(
+        kv: CoreKV.Service,
+        globalPaths: Global.Interface?,
+        fileSystem: any OpenCodeFileSystem,
+        options: CoreModel.ModelsDev.Options?
+    ) async -> Bool {
+        let now = Flock.currentEpochMs()
+        if let meta = try? await kv.get(modelsDevMetaKVKey),
+           case .object(let obj) = meta
+        {
+            let updatedAt: Int64? = switch obj["updatedAt"] {
+            case .int(let i): i
+            case .double(let d): Int64(d)
+            default: nil
+            }
+            if let updatedAt {
+                if now - updatedAt >= modelsDevStaleMs {
+                    return true
+                }
+                let hasKV = (try? await kv.get(modelsDevCatalogKVKey)) != nil
+                let cacheFile = modelsDevCacheFilePath(globalPaths: globalPaths, options: options)
+                let hasDisk = if let cacheFile { await fileSystem.exists(at: cacheFile) } else { false }
+                return !(hasKV || hasDisk)
+            }
+        }
+        // When KV meta has not been written yet (e.g., fresh :memory: DB with warm disk cache),
+        // honor the on-disk `<cache>/models.json` modification time so fresh caches avoid redundant fetches.
+        if !(fileSystem is InMemoryFileSystem),
+           let cacheFile = modelsDevCacheFilePath(globalPaths: globalPaths, options: options),
+           let st = try? await fileSystem.stat(at: cacheFile),
+           st.type == .file, st.size > 2,
+           st.modifiedAtMs > 0,
+           now - st.modifiedAtMs < modelsDevStaleMs
+        {
+            return false
+        }
+        return true
+    }
+
+    /// Fetches the live ModelsDev v2 catalog, persists it to KV (`models-dev:v2:catalog` + `:meta`)
+    /// and disk (`<cache>/models.json`), refreshes `modelsDev`, and returns `true` if catalog content changed.
+    @discardableResult
+    public static func refreshModelsDevCatalog(
+        modelsDev: CoreModel.ModelsDev.Service?,
+        kv: CoreKV.Service?,
+        fileSystem: (any OpenCodeFileSystem)?,
+        httpTransport: (any HTTPTransport)?,
+        globalPaths: Global.Interface?,
+        options: CoreModel.ModelsDev.Options?
+    ) async -> Bool {
+        guard let httpTransport else { return false }
+        let source = (options?.url ?? "https://models.opencode.ai").trimmingTrailingSlashes()
+        let url = "\(source)\(CoreModel.ModelsDev.catalogPath)"
+        let response = await withHTTPTimeout(milliseconds: 10_000) {
+            try await httpTransport.send(HTTPRequest(
+                method: "GET",
+                url: url,
+                headers: ["accept": "application/json"]
+            ))
+        }
+        guard let response, (200..<300).contains(response.head.statusCode) else {
+            return false
+        }
+        let text = String(decoding: response.body, as: UTF8.self)
+        let parsed = decodeAndFilterCached(text: text)
+        guard !parsed.isEmpty else {
+            return false
+        }
+        let digest = CoreModel.ModelsDev.bodyDigest(text)
+        var previousDigest: String? = nil
+        if let kv, let meta = try? await kv.get(modelsDevMetaKVKey),
+           case .object(let obj) = meta, case .string(let d) = obj["digest"]
+        {
+            previousDigest = d
+        }
+        if let kv {
+            try? await kv.set(modelsDevCatalogKVKey, value: .string(text))
+            try? await kv.set(modelsDevMetaKVKey, value: .object([
+                "updatedAt": .int(Flock.currentEpochMs()),
+                "digest": .string(digest),
+            ]))
+        }
+        if let fileSystem, let cachePath = modelsDevCacheFilePath(globalPaths: globalPaths, options: options) {
+            try? await fileSystem.writeFile(Array(text.utf8), to: cachePath, createDirectories: true)
+            if let modelsDev {
+                _ = try? await modelsDev.get()
+            }
+        }
+        return previousDigest != digest
+    }
+
+    private static func loadModelsDevSnapshots(
+        modelsDev: CoreModel.ModelsDev.Service?,
+        kv: CoreKV.Service?,
+        globalPaths: Global.Interface?,
+        fileSystem: (any OpenCodeFileSystem)?,
+        httpTransport: (any HTTPTransport)?,
+        options: CoreModel.ModelsDev.Options?,
+        allowLiveNetwork: Bool,
+        syncFetchOnColdCache: Bool,
+        forceRefresh: Bool
+    ) async -> [CoreModel.ModelsDev.Snapshot] {
+        // 1. If forceRefresh requested and network is allowed, fetch live first so KV & disk cache update.
+        if forceRefresh && allowLiveNetwork {
+            _ = await refreshModelsDevCatalog(
+                modelsDev: modelsDev,
+                kv: kv,
+                fileSystem: fileSystem,
+                httpTransport: httpTransport,
+                globalPaths: globalPaths,
+                options: options
+            )
+        }
+
+        // 2. Check KV cache (`models-dev:v2:catalog`)
+        if let kv, let raw = try? await kv.get(modelsDevCatalogKVKey),
+           case .string(let text) = raw
+        {
+            let decoded = decodeAndFilterCached(text: text)
+            if !decoded.isEmpty { return decoded }
+        }
+
+        // 3. Check disk cache (`<globalPaths.cache>/models.json` or `options.file`)
+        if let fileSystem, let cachePath = modelsDevCacheFilePath(globalPaths: globalPaths, options: options) {
+            let decoded = await decodeDiskCacheFile(at: cachePath, fileSystem: fileSystem)
+            if !decoded.isEmpty { return decoded }
+        }
+
+        // 4. Explicit synchronous fetch requested on cold cache (`options.models?.fetch == true`): fetch live now
+        if allowLiveNetwork && syncFetchOnColdCache {
+            _ = await refreshModelsDevCatalog(
+                modelsDev: modelsDev,
+                kv: kv,
+                fileSystem: fileSystem,
+                httpTransport: httpTransport,
+                globalPaths: globalPaths,
+                options: options
+            )
+            if let kv, let raw = try? await kv.get(modelsDevCatalogKVKey),
+               case .string(let text) = raw
+            {
+                let decoded = decodeAndFilterCached(text: text)
+                if !decoded.isEmpty { return decoded }
+            }
+        }
+
+        return []
+    }
+
+    // MARK: - 2b. OpenCode Console Live Sync (`opencode.ts`)
+
+    private struct ConsoleSyncResult: Sendable {
+        let document: CoreConfigIntegration.Document
+        let instructions: [(id: String, content: String)]
+        let skills: [(skill: SkillSchema.Info, files: [String: String])]
+    }
+
+    private struct ConsoleInstructionsResponse: Decodable {
+        struct Item: Decodable { let id: String; let content: String }
+        let instructions: [Item]
+    }
+
+    private struct ConsoleSkillsResponse: Decodable {
+        struct Item: Decodable { let slug: String; let version: String }
+        let skills: [Item]
+    }
+
+    private struct ConsoleSkillBundleResponse: Decodable {
+        struct FileItem: Decodable { let path: String; let content: String }
+        let slug: String
+        let files: [FileItem]
+    }
+
+    private struct ConsoleErrorTag: Decodable {
+        let _tag: String?
+        let orgId: String?
+        let connectionId: String?
+    }
+
+    private static func fetchConsoleSync(
+        connection: CoreIntegration.Connection.Info,
+        credentialValue: CredentialSchema.Value,
+        credentialID: CredentialSchema.ID?,
+        integrationService: any CoreIntegration.Integration.Interface,
+        httpTransport: any HTTPTransport,
+        oauthManager: ServerLiveOAuthManager?,
+        userAgent: String
+    ) async -> ConsoleSyncResult? {
+        var effectiveValue = credentialValue
+        if case .oauth(let oauth) = effectiveValue, let credentialID, let oauthManager {
+            let nowMs = Flock.currentEpochMs()
+            if oauth.expires.rawValue > 0 && Int64(oauth.expires.rawValue) <= nowMs + 60_000 {
+                if let refreshed = try? await oauthManager.refreshToken(
+                    credentialID: credentialID,
+                    integrationID: IntegrationID(rawValue: "opencode")
+                ) {
+                    effectiveValue = .oauth(refreshed)
+                }
+            }
+        }
+
+        let opencodeID = IntegrationID(rawValue: "opencode")
+        let server = CoreProvider.ConsoleAccess.server(effectiveValue).trimmingTrailingSlashes()
+        var mutableHeaders = CoreProvider.ConsoleAccess.headers(effectiveValue)
+        mutableHeaders["accept"] = "application/json"
+        mutableHeaders["user-agent"] = userAgent
+        let headers = mutableHeaders
+
+        let response = await withHTTPTimeout(milliseconds: 5_000) {
+            try await httpTransport.send(HTTPRequest(
+                method: "GET",
+                url: "\(server)/api/v2/config",
+                headers: headers
+            ))
+        }
+        guard let response else { return nil }
+
+        if response.head.statusCode == 404 {
+            await integrationService.setConnectionStatus(integrationID: opencodeID, connection: connection, status: nil)
+            return nil
+        }
+        if response.head.statusCode == 401 {
+            if let tagged = try? ServerCodec.decode(ConsoleErrorTag.self, from: response.body),
+               tagged._tag == "Unauthorized"
+            {
+                await integrationService.setConnectionStatus(
+                    integrationID: opencodeID,
+                    connection: connection,
+                    status: CoreIntegration.Connection.Status(
+                        status: .needsAuth,
+                        message: "Reconnect OpenCode Console to continue"
+                    )
+                )
+            }
+            return nil
+        }
+        if response.head.statusCode == 403 {
+            if let tagged = try? ServerCodec.decode(ConsoleErrorTag.self, from: response.body),
+               tagged._tag == "SsoRequired", let connID = tagged.connectionId
+            {
+                let orgName: String? = {
+                    switch effectiveValue {
+                    case .oauth(let o): if case .string(let s) = o.metadata?["orgName"] { return s }
+                    case .key(let k): if case .string(let s) = k.metadata?["orgName"] { return s }
+                    case .external: break
+                    }
+                    return nil
+                }()
+                let ssoURL = "\(server)/auth/sso/\(ServerParsedURL.encodeURIComponent(connID))/start?redirectTo=%2F"
+                await integrationService.setConnectionStatus(
+                    integrationID: opencodeID,
+                    connection: connection,
+                    status: CoreIntegration.Connection.Status(
+                        status: .needsAuth,
+                        message: "Sign in with SSO again to use \(orgName ?? "your OpenCode Console organization")",
+                        url: ssoURL
+                    )
+                )
+            }
+            return nil
+        }
+        guard (200..<300).contains(response.head.statusCode),
+              let remote = try? ServerCodec.decode(CoreConfigIntegration.Remote.self, from: response.body)
+        else {
+            return nil
+        }
+
+        await integrationService.setConnectionStatus(integrationID: opencodeID, connection: connection, status: nil)
+
+        let orgName: String? = {
+            switch effectiveValue {
+            case .oauth(let o): if case .string(let s) = o.metadata?["orgName"] { return s }
+            case .key(let k): if case .string(let s) = k.metadata?["orgName"] { return s }
+            case .external: break
+            }
+            return nil
+        }()
+
+        let document = CoreConfigIntegration.make(CoreConfigIntegration.MakeInput(
+            integrationID: opencodeID,
+            connection: connection,
+            organization: orgName,
+            info: remote
+        ))
+
+        var instructions: [(id: String, content: String)] = []
+        var skills: [(skill: SkillSchema.Info, files: [String: String])] = []
+
+        if ServerHeaders.value(in: response.head.headers, for: "x-opencode-instructions-skills") != nil {
+            if let instrResp = await withHTTPTimeout(milliseconds: 5_000, operation: {
+                try await httpTransport.send(HTTPRequest(method: "GET", url: "\(server)/api/v2/instructions", headers: headers))
+            }), (200..<300).contains(instrResp.head.statusCode),
+               let parsed = try? ServerCodec.decode(ConsoleInstructionsResponse.self, from: instrResp.body)
+            {
+                instructions = parsed.instructions.map { ($0.id, $0.content) }
+            }
+
+            if let skillsResp = await withHTTPTimeout(milliseconds: 5_000, operation: {
+                try await httpTransport.send(HTTPRequest(method: "GET", url: "\(server)/api/v2/skills", headers: headers))
+            }), (200..<300).contains(skillsResp.head.statusCode),
+               let listed = try? ServerCodec.decode(ConsoleSkillsResponse.self, from: skillsResp.body)
+            {
+                for item in listed.skills {
+                    let slug = item.slug
+                    guard !slug.isEmpty, !slug.contains(".."), !slug.contains("/") else { continue }
+                    let encodedSlug = ServerParsedURL.encodeURIComponent(slug)
+                    guard let bundleResp = await withHTTPTimeout(milliseconds: 5_000, operation: {
+                        try await httpTransport.send(HTTPRequest(
+                            method: "GET",
+                            url: "\(server)/api/v2/skills/\(encodedSlug)",
+                            headers: headers
+                        ))
+                    }), (200..<300).contains(bundleResp.head.statusCode),
+                          let bundle = try? ServerCodec.decode(ConsoleSkillBundleResponse.self, from: bundleResp.body),
+                          let main = bundle.files.first(where: { $0.path == "SKILL.md" }),
+                          case .parsed(let parsedSkill) = CoreConfigPlugin.SkillFile.parse(
+                              directory: "/\(slug)",
+                              filepath: "/\(slug)/SKILL.md",
+                              content: main.content
+                          )
+                    else { continue }
+                    var siblings: [String: String] = [:]
+                    for file in bundle.files where file.path != "SKILL.md" {
+                        siblings[file.path] = file.content
+                    }
+                    skills.append((skill: parsedSkill, files: siblings))
+                }
+            }
+        }
+
+        return ConsoleSyncResult(document: document, instructions: instructions, skills: skills)
+    }
+
+    // MARK: - 2c. Live ChatGPT / Codex Model Discovery (`chatgpt.ts`)
+
+    private struct CodexModelsResponse: Decodable {
+        struct ReasoningLevel: Decodable {
+            let effort: String
+        }
+        struct RemoteModel: Decodable {
+            let slug: String
+            let display_name: String?
+            let visibility: String?
+            let supported_in_api: Bool?
+            let context_window: Int?
+            let max_output_tokens: Int?
+            let input_modalities: [String]?
+            let supported_reasoning_levels: [ReasoningLevel]?
+        }
+        struct DataItem: Decodable {
+            let id: String
+            let name: String?
+        }
+        let models: [RemoteModel]?
+        let data: [DataItem]?
+    }
+
+    private struct ChatGPTDiscoveryResult: Sendable {
+        let models: [ModelSchema.Info]
+        let connection: CoreIntegration.Connection.Info
+        let accountID: String?
+    }
+
+    private static func fetchChatGPTCodexModels(
+        connection: CoreIntegration.Connection.Info,
+        oauth: CredentialSchema.OAuth,
+        credentialID: CredentialSchema.ID?,
+        existingModels: [ModelSchema.Info],
+        httpTransport: any HTTPTransport,
+        oauthManager: ServerLiveOAuthManager?,
+        userAgent: String
+    ) async -> ChatGPTDiscoveryResult? {
+        var effectiveOAuth = oauth
+        if let credentialID, let oauthManager {
+            let nowMs = Flock.currentEpochMs()
+            if effectiveOAuth.expires.rawValue > 0 && Int64(effectiveOAuth.expires.rawValue) <= nowMs + 60_000 {
+                if let refreshed = try? await oauthManager.refreshToken(
+                    credentialID: credentialID,
+                    integrationID: IntegrationID(rawValue: "openai")
+                ) {
+                    effectiveOAuth = refreshed
+                }
+            }
+        }
+        let accountID: String? = if case .string(let acct) = effectiveOAuth.metadata?["accountID"], !acct.isEmpty {
+            acct
+        } else {
+            nil
+        }
+        var mutableHeaders: [String: String] = [
+            "accept": "application/json",
+            "authorization": "Bearer \(effectiveOAuth.access)",
+            "user-agent": userAgent,
+            "originator": "opencode",
+        ]
+        if let accountID {
+            mutableHeaders["chatgpt-account-id"] = accountID
+        }
+        let headers = mutableHeaders
+        let response = await withHTTPTimeout(milliseconds: 5_000) {
+            try await httpTransport.send(HTTPRequest(
+                method: "GET",
+                url: ServerLiveOAuth.chatGPTCodexModelsURL,
+                headers: headers
+            ))
+        }
+        guard let response, (200..<300).contains(response.head.statusCode),
+              let decoded = try? ServerCodec.decode(CodexModelsResponse.self, from: response.body)
+        else {
+            return nil
+        }
+
+        let existingByID: [String: ModelSchema.Info] = Dictionary(
+            existingModels.map { ($0.modelID.rawValue, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var derived: [ModelSchema.Info] = []
+        if let remoteModels = decoded.models {
+            for item in remoteModels {
+                if let vis = item.visibility, vis != "list" { continue }
+                if item.supported_in_api == false { continue }
+                let previous = existingByID[item.slug]
+                let mid = ModelSchema.ID(rawValue: item.slug)
+                let inputMods: [String] = {
+                    if let mods = item.input_modalities {
+                        let filtered = mods.filter { $0 == "text" || $0 == "image" }
+                        if !filtered.isEmpty { return filtered }
+                    }
+                    return previous?.capabilities.input ?? ["text", "image"]
+                }()
+                let variants: [ModelSchema.Variant] = {
+                    if let levels = item.supported_reasoning_levels, !levels.isEmpty {
+                        return levels.map { lvl in
+                            ModelSchema.Variant(
+                                id: ModelSchema.VariantID(rawValue: lvl.effort),
+                                settings: ModelSchema.VariantSettings(extra: ["reasoningEffort": .string(lvl.effort)])
+                            )
+                        }
+                    }
+                    return previous?.variants ?? []
+                }()
+                let context = item.context_window ?? previous?.limit.context ?? 400_000
+                let output = item.max_output_tokens ?? previous?.limit.output ?? 128_000
+                derived.append(ModelSchema.Info(
+                    id: mid,
+                    modelID: mid,
+                    providerID: .openai,
+                    canonical: previous?.canonical,
+                    type: .chat,
+                    family: previous?.family ?? ModelSchema.Family(rawValue: "gpt"),
+                    name: item.display_name ?? previous?.name ?? item.slug,
+                    compatibility: previous?.compatibility,
+                    package: previous?.package ?? "@opencode/ai/providers/openai",
+                    settings: previous?.settings,
+                    headers: previous?.headers,
+                    body: previous?.body,
+                    capabilities: ModelSchema.Capabilities(
+                        tools: previous?.capabilities.tools ?? true,
+                        input: inputMods,
+                        output: ["text"],
+                        temperature: previous?.capabilities.temperature ?? true
+                    ),
+                    variants: variants,
+                    time: previous?.time ?? ModelSchema.Info.Time(released: 0),
+                    cost: [],
+                    status: .active,
+                    enabled: true,
+                    limit: ModelSchema.Info.Limit(context: context, output: output)
+                ))
+            }
+        } else if let dataItems = decoded.data {
+            for item in dataItems where !item.id.isEmpty {
+                let previous = existingByID[item.id]
+                let mid = ModelSchema.ID(rawValue: item.id)
+                derived.append(ModelSchema.Info(
+                    id: mid,
+                    modelID: mid,
+                    providerID: .openai,
+                    type: .chat,
+                    family: previous?.family ?? ModelSchema.Family(rawValue: "gpt"),
+                    name: item.name ?? previous?.name ?? item.id,
+                    package: previous?.package ?? "@opencode/ai/providers/openai",
+                    capabilities: previous?.capabilities ?? ModelSchema.Capabilities(tools: true, input: ["text", "image"], output: ["text"]),
+                    variants: previous?.variants ?? [],
+                    time: previous?.time ?? ModelSchema.Info.Time(released: 0),
+                    cost: [],
+                    status: .active,
+                    enabled: true,
+                    limit: previous?.limit ?? ModelSchema.Info.Limit(context: 400_000, output: 128_000)
+                ))
+            }
+        }
+        guard !derived.isEmpty else { return nil }
+        return ChatGPTDiscoveryResult(models: derived, connection: connection, accountID: accountID)
+    }
+
+    // MARK: - 2d. Live GitHub Copilot Model Discovery (`github-copilot.ts`)
+
+    private struct CopilotDiscoveryResult: Sendable {
+        let baseURL: String
+        let snapshot: CoreModel.CopilotModels.Snapshot
+        let connection: CoreIntegration.Connection.Info
+    }
+
+    private static func fetchCopilotLiveModels(
+        connection: CoreIntegration.Connection.Info,
+        oauth: CredentialSchema.OAuth,
+        httpTransport: any HTTPTransport,
+        userAgent: String
+    ) async -> CopilotDiscoveryResult? {
+        let baseURL = ServerLiveOAuth.copilotBaseURL(oauth.metadata)
+        let token = oauth.access.isEmpty ? oauth.refresh : oauth.access
+        guard !token.isEmpty else { return nil }
+        let headers: [String: String] = [
+            "accept": "application/json",
+            "authorization": "Bearer \(token)",
+            "user-agent": userAgent,
+            "x-github-api-version": ServerLiveOAuth.copilotApiVersion,
+            "copilot-integration-id": "vscode-chat",
+            "openai-intent": "conversation-edits",
+            "editor-version": "vscode/1.99.0",
+        ]
+        guard let snap = await withHTTPTimeout(milliseconds: 5_000, operation: {
+            try await CoreModel.CopilotModels.load(http: httpTransport, baseURL: baseURL, headers: headers)
+        }), !snap.isEmpty else {
+            return nil
+        }
+        return CopilotDiscoveryResult(baseURL: baseURL, snapshot: snap, connection: connection)
+    }
+
+    // MARK: - 2e. Live Local Model Discovery (Ollama / LM Studio / vLLM, 400ms fast probe)
+
+    private struct DiscoveredLocalProvider: Sendable {
+        let id: ProviderSchema.ID
+        let name: String
+        let baseURL: String
+        let models: [ModelSchema.Info]
+    }
+
+    private struct OllamaTagsResponse: Decodable {
+        struct Details: Decodable { let family: String? }
+        struct Entry: Decodable {
+            let name: String?
+            let model: String?
+            let details: Details?
+        }
+        let models: [Entry]
+    }
+
+    private struct OpenAIModelsListResponse: Decodable {
+        struct Entry: Decodable {
+            let id: String
+            let owned_by: String?
+            let max_model_len: Int?
+        }
+        let data: [Entry]?
+    }
+
+    private struct LMStudioNativeModelsResponse: Decodable {
+        struct Entry: Decodable {
+            let key: String
+            let display_name: String?
+            let architecture: String?
+            let max_context_length: Int?
+            let type: String?
+        }
+        let models: [Entry]?
+    }
+
+    private static func probeLocalModels(
+        httpTransport: any HTTPTransport,
+        configuredProviders: [String: [ConfigProviderSchema.Info]]
+    ) async -> [DiscoveredLocalProvider] {
+        func configuredOrigin(for providerID: String, defaultOrigin: String) -> (origin: String, baseURL: String) {
+            if let cfgs = configuredProviders[providerID] {
+                for cfg in cfgs.reversed() {
+                    if case .string(let raw) = cfg.settings?.extra["baseURL"], !raw.isEmpty {
+                        let trimmed = raw.trimmingTrailingSlashes()
+                        var origin = trimmed
+                        if origin.hasSuffix("/v1") { origin = String(origin.dropLast(3)) }
+                        else if origin.hasSuffix("/api") { origin = String(origin.dropLast(4)) }
+                        return (origin.trimmingTrailingSlashes(), trimmed)
+                    }
+                }
+            }
+            return (defaultOrigin, "\(defaultOrigin)/v1")
+        }
+
+        let ollamaTarget = configuredOrigin(for: "ollama", defaultOrigin: "http://127.0.0.1:11434")
+        let lmstudioTarget = configuredOrigin(for: "lmstudio", defaultOrigin: "http://127.0.0.1:1234")
+        let vllmTarget = configuredOrigin(for: "vllm", defaultOrigin: "http://127.0.0.1:8000")
+
+        return await withTaskGroup(of: DiscoveredLocalProvider?.self) { group in
+            // 1. Ollama: GET 127.0.0.1:11434/api/tags
+            group.addTask {
+                guard let resp = await withHTTPTimeout(milliseconds: 400, operation: {
+                    try await httpTransport.send(HTTPRequest(
+                        method: "GET",
+                        url: "\(ollamaTarget.origin)/api/tags",
+                        headers: ["accept": "application/json"]
+                    ))
+                }), (200..<300).contains(resp.head.statusCode),
+                      let parsed = try? ServerCodec.decode(OllamaTagsResponse.self, from: resp.body)
+                else { return nil }
+                let pid = ProviderSchema.ID(rawValue: "ollama")
+                let models: [ModelSchema.Info] = parsed.models.compactMap { entry in
+                    let id = (entry.model?.isEmpty == false ? entry.model : entry.name) ?? ""
+                    guard !id.isEmpty else { return nil }
+                    return makeModel(
+                        id: id,
+                        providerID: pid,
+                        name: (entry.name?.isEmpty == false ? entry.name! : id),
+                        family: entry.details?.family ?? "ollama",
+                        package: "@opencode/ai/providers/openai-compatible",
+                        context: 131_072,
+                        output: 16_384,
+                        inputCost: 0,
+                        outputCost: 0,
+                        released: (2025, 1, 1),
+                        inputModalities: ["text"]
+                    )
+                }
+                guard !models.isEmpty else { return nil }
+                return DiscoveredLocalProvider(id: pid, name: "Ollama", baseURL: ollamaTarget.baseURL, models: models)
+            }
+
+            // 2. LM Studio: GET 127.0.0.1:1234/v1/models
+            group.addTask {
+                guard let resp = await withHTTPTimeout(milliseconds: 400, operation: {
+                    try await httpTransport.send(HTTPRequest(
+                        method: "GET",
+                        url: "\(lmstudioTarget.origin)/v1/models",
+                        headers: ["accept": "application/json"]
+                    ))
+                }), (200..<300).contains(resp.head.statusCode)
+                else { return nil }
+                let pid = ProviderSchema.ID(rawValue: "lmstudio")
+                var models: [ModelSchema.Info] = []
+                if let openai = try? ServerCodec.decode(OpenAIModelsListResponse.self, from: resp.body),
+                   let data = openai.data, !data.isEmpty
+                {
+                    models = data.compactMap { entry in
+                        guard !entry.id.isEmpty else { return nil }
+                        return makeModel(
+                            id: entry.id,
+                            providerID: pid,
+                            name: entry.id,
+                            family: "lmstudio",
+                            package: "@opencode/ai/providers/openai-compatible",
+                            context: entry.max_model_len ?? 131_072,
+                            output: 16_384,
+                            inputCost: 0,
+                            outputCost: 0,
+                            released: (2025, 1, 1),
+                            inputModalities: ["text"]
+                        )
+                    }
+                } else if let native = try? ServerCodec.decode(LMStudioNativeModelsResponse.self, from: resp.body),
+                          let items = native.models, !items.isEmpty
+                {
+                    models = items.compactMap { entry in
+                        guard !entry.key.isEmpty else { return nil }
+                        return makeModel(
+                            id: entry.key,
+                            providerID: pid,
+                            name: entry.display_name ?? entry.key,
+                            family: entry.architecture ?? "lmstudio",
+                            package: "@opencode/ai/providers/openai-compatible",
+                            context: entry.max_context_length ?? 131_072,
+                            output: 16_384,
+                            inputCost: 0,
+                            outputCost: 0,
+                            released: (2025, 1, 1),
+                            inputModalities: ["text"]
+                        )
+                    }
+                }
+                guard !models.isEmpty else { return nil }
+                return DiscoveredLocalProvider(id: pid, name: "LM Studio", baseURL: lmstudioTarget.baseURL, models: models)
+            }
+
+            // 3. vLLM: GET 127.0.0.1:8000/v1/models
+            group.addTask {
+                guard let resp = await withHTTPTimeout(milliseconds: 400, operation: {
+                    try await httpTransport.send(HTTPRequest(
+                        method: "GET",
+                        url: "\(vllmTarget.origin)/v1/models",
+                        headers: ["accept": "application/json"]
+                    ))
+                }), (200..<300).contains(resp.head.statusCode),
+                      let openai = try? ServerCodec.decode(OpenAIModelsListResponse.self, from: resp.body),
+                      let data = openai.data, !data.isEmpty
+                else { return nil }
+                let pid = ProviderSchema.ID(rawValue: "vllm")
+                let models: [ModelSchema.Info] = data.compactMap { entry in
+                    guard !entry.id.isEmpty else { return nil }
+                    return makeModel(
+                        id: entry.id,
+                        providerID: pid,
+                        name: entry.id,
+                        family: "vllm",
+                        package: "@opencode/ai/providers/openai-compatible",
+                        context: entry.max_model_len ?? 131_072,
+                        output: 16_384,
+                        inputCost: 0,
+                        outputCost: 0,
+                        released: (2025, 1, 1),
+                        inputModalities: ["text"]
+                    )
+                }
+                guard !models.isEmpty else { return nil }
+                return DiscoveredLocalProvider(id: pid, name: "vLLM", baseURL: vllmTarget.baseURL, models: models)
+            }
+
+            var out: [DiscoveredLocalProvider] = []
+            for await item in group {
+                if let item { out.append(item) }
+            }
+            return out.sorted { $0.id.rawValue < $1.id.rawValue }
+        }
+    }
+
+    /// Helper applying a single `ConfigProviderSchema.ModelConfig` onto an existing or default `ModelSchema.Info`.
+    private static func overlayModelConfig(
+        rawProviderID: String,
+        providerInfo: ProviderSchema.Info,
+        modelKey: String,
+        modelCfg: ConfigProviderSchema.ModelConfig,
+        existing: ModelSchema.Info?
+    ) -> ModelSchema.Info {
+        let pid = providerInfo.id
+        let mid = ModelSchema.ID(rawValue: modelKey)
+        let base = existing ?? ModelSchema.Info.default(providerID: pid, id: mid)
+        let modelPkg = CoreProvider.AISDKNative.rewrite(
+            specifier: modelCfg.package ?? base.package ?? providerInfo.package,
+            providerID: rawProviderID,
+            canonical: providerInfo.canonical?.rawValue,
+            modelID: (modelCfg.modelID ?? base.modelID).rawValue
+        ).package ?? providerInfo.package
+
+        let mergedCaps = CoreModel.Model.mergeCapabilities(
+            tools: modelCfg.capabilities?.tools,
+            freeform: modelCfg.capabilities?.freeform,
+            input: modelCfg.capabilities?.input,
+            output: modelCfg.capabilities?.output,
+            temperature: modelCfg.capabilities?.temperature,
+            base: base.capabilities
+        )
+        let resolvedLimit = ModelSchema.Info.Limit(
+            context: modelCfg.limit?.context ?? base.limit.context,
+            input: modelCfg.limit?.input ?? base.limit.input,
+            output: modelCfg.limit?.output ?? base.limit.output
+        )
+        let resolvedCost: [ModelSchema.Cost] = {
+            guard let costVal = modelCfg.cost else { return base.cost }
+            let items: [ConfigProviderSchema.Cost] = switch costVal {
+            case .single(let c): [c]
+            case .tiered(let arr): arr
+            }
+            return items.map { item in
+                ModelSchema.Cost(
+                    tier: item.tier.map { ModelSchema.Cost.Tier(size: $0.size) },
+                    input: item.input,
+                    output: item.output,
+                    cache: ModelSchema.Cost.Cache(
+                        read: item.cache?.read ?? .zero,
+                        write: item.cache?.write ?? .zero
+                    )
+                )
+            }
+        }()
+        let mergedModelExtra = CoreProvider.AISDKNative.mergeOverlay(
+            base.settings?.extra,
+            modelCfg.settings?.extra
+        ) ?? [:]
+        let mergedModelSettings = ModelSchema.Settings(
+            compaction: modelCfg.settings?.compaction ?? base.settings?.compaction,
+            cache: modelCfg.settings?.cache ?? base.settings?.cache,
+            encoding: modelCfg.settings?.encoding ?? base.settings?.encoding,
+            extra: mergedModelExtra
+        )
+        let released = modelCfg.releaseDate != nil ? parseReleaseDate(modelCfg.releaseDate) : base.time.released
+        var updatedModel = ModelSchema.Info(
+            id: mid,
+            modelID: modelCfg.modelID ?? base.modelID,
+            providerID: pid,
+            canonical: providerInfo.canonical ?? base.canonical,
+            type: modelCfg.type ?? base.type ?? .chat,
+            family: modelCfg.family ?? base.family,
+            name: modelCfg.name ?? base.name,
+            compatibility: modelCfg.compatibility ?? base.compatibility,
+            package: modelPkg,
+            settings: mergedModelSettings,
+            headers: CoreProvider.AISDKNative.mergeHeaders(base.headers, modelCfg.headers),
+            body: CoreProvider.AISDKNative.mergeOverlay(base.body, modelCfg.body),
+            capabilities: mergedCaps,
+            variants: base.variants,
+            time: ModelSchema.Info.Time(released: released),
+            cost: resolvedCost,
+            status: base.status,
+            enabled: modelCfg.disabled.map { !$0 } ?? base.enabled,
+            limit: resolvedLimit
+        )
+        if let explicitVariants = modelCfg.variants {
+            let converted = explicitVariants.map {
+                ModelSchema.Variant(id: $0.id, settings: $0.settings, headers: $0.headers, body: $0.body)
+            }
+            updatedModel = ModelSchema.Info(
+                id: updatedModel.id, modelID: updatedModel.modelID, providerID: updatedModel.providerID,
+                canonical: updatedModel.canonical, type: updatedModel.type, family: updatedModel.family,
+                name: updatedModel.name, compatibility: updatedModel.compatibility, package: updatedModel.package,
+                settings: updatedModel.settings, headers: updatedModel.headers, body: updatedModel.body,
+                capabilities: updatedModel.capabilities, variants: converted, time: updatedModel.time,
+                cost: updatedModel.cost, status: updatedModel.status, enabled: updatedModel.enabled,
+                limit: updatedModel.limit
+            )
+        } else if let reasoning = modelCfg.capabilities?.reasoning {
+            let supports = CoreModel.Variant.supports(reasoning)
+            let resolvedVariants = supports.isEmpty ? [] : CoreModel.Variant.resolve(updatedModel, supports: supports)
+            updatedModel = ModelSchema.Info(
+                id: updatedModel.id, modelID: updatedModel.modelID, providerID: updatedModel.providerID,
+                canonical: updatedModel.canonical, type: updatedModel.type, family: updatedModel.family,
+                name: updatedModel.name, compatibility: updatedModel.compatibility, package: updatedModel.package,
+                settings: updatedModel.settings, headers: updatedModel.headers, body: updatedModel.body,
+                capabilities: updatedModel.capabilities, variants: resolvedVariants, time: updatedModel.time,
+                cost: updatedModel.cost, status: updatedModel.status, enabled: updatedModel.enabled,
+                limit: updatedModel.limit
+            )
+        }
+        return updatedModel
+    }
+
+    /// Seeds ALL 7 real OAuth methods, live/cached ModelsDev catalog (300+ providers, 1,000+ models),
+    /// built-in providers, live OpenCode Console workspace config & free public Zen fallback,
+    /// live ChatGPT Codex models, live GitHub Copilot models, live local models (Ollama/LM Studio/vLLM),
+    /// and user/project config overlays.
+    @discardableResult
     public static func seedProvidersAndModels(
         integrations integrationService: any CoreIntegration.Integration.Interface,
         providers providerService: any CoreProvider.Provider.Interface,
         models modelService: any CoreModel.Model.Interface,
         configEntries: [CoreConfigEntry],
         globalPaths: Global.Interface? = nil,
-        fileSystem: (any OpenCodeFileSystem)? = nil
-    ) async throws {
-        // Collect provider configs & default model from ordered config entries (later wins).
+        fileSystem: (any OpenCodeFileSystem)? = nil,
+        configService: (any CoreConfig.Interface)? = nil,
+        skillService: (any CoreSkill.Interface)? = nil,
+        credentialService: CoreProvider.Credential.Service? = nil,
+        modelsDev: CoreModel.ModelsDev.Service? = nil,
+        kv: CoreKV.Service? = nil,
+        httpTransport: (any HTTPTransport)? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        oauthManager: ServerLiveOAuthManager? = nil,
+        modelsDevOptions: CoreModel.ModelsDev.Options? = nil,
+        allowLiveNetwork: Bool = false,
+        syncFetchOnColdCache: Bool = false,
+        forceRefresh: Bool = false,
+        userAgent: String = "opencode/2.0.0"
+    ) async throws -> ProviderSeedRegistrations {
+        // Collect provider configs & default model from ordered non-integration config entries (later wins).
         var configuredProviders: [String: [ConfigProviderSchema.Info]] = [:]
         var configuredDefaultModel: ConfigModelSchema.Selection? = nil
         for entry in configEntries {
+            if case .integration = entry { continue }
             guard let info = entry.info else { continue }
             if let modelSel = info.model {
                 configuredDefaultModel = modelSel
@@ -1274,12 +2343,20 @@ public enum ServerLiveRuntime {
             }
         }
 
-        let cachedSnapshots = await loadCachedModelsDevSnapshots(
+        // Load ModelsDev snapshots from KV (`models-dev:v2:catalog`) + disk `<cache>/models.json` + live fetch when allowed.
+        let catalogSnapshots = await loadModelsDevSnapshots(
+            modelsDev: modelsDev,
+            kv: kv,
             globalPaths: globalPaths,
-            fileSystem: fileSystem
+            fileSystem: fileSystem,
+            httpTransport: httpTransport,
+            options: modelsDevOptions,
+            allowLiveNetwork: allowLiveNetwork,
+            syncFetchOnColdCache: syncFetchOnColdCache,
+            forceRefresh: forceRefresh
         )
-        let cachedByID: [String: CoreModel.ModelsDev.Snapshot] = Dictionary(
-            cachedSnapshots.map { ($0.info.id.rawValue, $0) },
+        let catalogByID: [String: CoreModel.ModelsDev.Snapshot] = Dictionary(
+            catalogSnapshots.map { ($0.info.id.rawValue, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
 
@@ -1287,11 +2364,11 @@ public enum ServerLiveRuntime {
             uniqueKeysWithValues: builtinProviders.map { ($0.id.rawValue, $0) }
         )
 
-        // 1. Register cached ModelsDev + built-in + custom integrations (with `.key` + `.env` auth methods)
+        // 1. Register ModelsDev + built-in + 7 real OAuth methods + custom integrations.
         let configProvidersSnapshot = configuredProviders
-        _ = try await integrationService.transform { editor in
-            // 1a. Cached ModelsDev providers not in built-ins (lowest priority)
-            for snap in cachedSnapshots where builtinByID[snap.info.id.rawValue] == nil {
+        let integrationReg = try await integrationService.transform { editor in
+            // 1a. All ModelsDev providers (300+ providers, lowest priority)
+            for snap in catalogSnapshots where builtinByID[snap.info.id.rawValue] == nil {
                 let intID = IntegrationID(rawValue: snap.info.id.rawValue)
                 editor.update(intID) { _ in
                     IntegrationSchema.Ref(id: intID, name: snap.info.name, metadata: nil)
@@ -1308,21 +2385,19 @@ public enum ServerLiveRuntime {
                 }
             }
 
-            // 1b. Built-in providers (higher priority than cached ModelsDev)
+            // 1b. Built-in providers (preserve display names, merge env vars without hiding ModelsDev env vars)
             for spec in builtinProviders {
                 let intID = IntegrationID(rawValue: spec.id.rawValue)
                 var envVars = spec.envVars
-                if let cachedEnv = cachedByID[spec.id.rawValue]?.environment {
+                if let cachedEnv = catalogByID[spec.id.rawValue]?.environment {
                     for name in cachedEnv where !envVars.contains(name) {
                         envVars.append(name)
                     }
                 }
                 if let cfgs = configProvidersSnapshot[spec.id.rawValue] {
                     for cfg in cfgs {
-                        if let extraEnv = cfg.env {
-                            for name in extraEnv where !envVars.contains(name) {
-                                envVars.append(name)
-                            }
+                        for name in cfg.env ?? [] where !envVars.contains(name) {
+                            envVars.append(name)
                         }
                     }
                 }
@@ -1341,10 +2416,13 @@ public enum ServerLiveRuntime {
                 }
             }
 
-            // 1c. Custom config-declared providers (highest priority)
+            // 1c. Register ALL 7 real upstream OAuth methods
+            ServerLiveOAuth.registerAllOAuthMethods(into: editor, environment: environment)
+
+            // 1d. Custom config-declared providers (highest priority)
             for (rawID, cfgs) in configProvidersSnapshot where builtinByID[rawID] == nil {
                 let intID = IntegrationID(rawValue: rawID)
-                let cached = cachedByID[rawID]
+                let cached = catalogByID[rawID]
                 let displayName = cfgs.compactMap(\.name).last ?? cached?.info.name ?? rawID
                 var envVars = cached?.environment ?? []
                 for cfg in cfgs {
@@ -1368,11 +2446,163 @@ public enum ServerLiveRuntime {
             }
         }
 
-        // 2. Register cached ModelsDev + built-in providers (with `activation: .auto` so only
-        //    credentialed/env-keyed providers become available) and apply config provider/model overlays.
-        _ = try await providerService.transform { editor in
-            // 2a. Cached ModelsDev providers not in built-ins (lowest priority)
-            for snap in cachedSnapshots where builtinByID[snap.info.id.rawValue] == nil {
+        // 2. Inspect active connections for OpenCode Console, OpenAI ChatGPT OAuth, and GitHub Copilot OAuth.
+        let opencodeID = IntegrationID(rawValue: "opencode")
+        let openaiID = IntegrationID(rawValue: "openai")
+        let copilotID = IntegrationID(rawValue: "github-copilot")
+
+        let activeOpencodeConn = try? await integrationService.activeConnection(opencodeID)
+        let activeOpenAIConn = try? await integrationService.activeConnection(openaiID)
+        let activeCopilotConn = try? await integrationService.activeConnection(copilotID)
+
+        // Helper extracting stored credential ID + value for an active connection
+        func resolveActiveCred(
+            _ conn: CoreIntegration.Connection.Info?
+        ) async -> (id: CredentialSchema.ID?, value: CredentialSchema.Value)? {
+            guard let conn else { return nil }
+            let credID: CredentialSchema.ID? = if case .credential(let c) = conn { c.id } else { nil }
+            if let credID, let credService = credentialService,
+               let stored = try? await credService.get(credID)
+            {
+                return (credID, stored.value)
+            }
+            if let resolved = try? await integrationService.resolveConnection(conn) {
+                return (credID, resolved)
+            }
+            return nil
+        }
+
+        let opencodeCred = await resolveActiveCred(activeOpencodeConn)
+        let openAICred = await resolveActiveCred(activeOpenAIConn)
+        let copilotCred = await resolveActiveCred(activeCopilotConn)
+
+        // 3. Perform live provider discovery concurrently when live network is allowed.
+        var consoleSync: ConsoleSyncResult? = nil
+        var chatGPTDiscovery: ChatGPTDiscoveryResult? = nil
+        var copilotDiscovery: CopilotDiscoveryResult? = nil
+        var localDiscovered: [DiscoveredLocalProvider] = []
+
+        if allowLiveNetwork, let httpTransport {
+            let existingOpenAIModels: [ModelSchema.Info] = {
+                var merged = builtinByID["openai"]?.models ?? []
+                let ids = Set(merged.map(\.id))
+                for m in catalogByID["openai"]?.models ?? [] where !ids.contains(m.id) {
+                    merged.append(m)
+                }
+                return merged
+            }()
+
+            async let consoleTask: ConsoleSyncResult? = {
+                guard let conn = activeOpencodeConn, let cred = opencodeCred else { return nil }
+                if case .external = cred.value { return nil }
+                return await fetchConsoleSync(
+                    connection: conn,
+                    credentialValue: cred.value,
+                    credentialID: cred.id,
+                    integrationService: integrationService,
+                    httpTransport: httpTransport,
+                    oauthManager: oauthManager,
+                    userAgent: userAgent
+                )
+            }()
+
+            async let chatGPTTask: ChatGPTDiscoveryResult? = {
+                guard let conn = activeOpenAIConn,
+                      let cred = openAICred,
+                      case .oauth(let oauth) = cred.value,
+                      oauth.methodID == ServerLiveOAuth.chatGPTMethodID
+                        || oauth.methodID.rawValue == "chatgpt-browser"
+                        || oauth.methodID.rawValue == "chatgpt-headless"
+                else { return nil }
+                return await fetchChatGPTCodexModels(
+                    connection: conn,
+                    oauth: oauth,
+                    credentialID: cred.id,
+                    existingModels: existingOpenAIModels,
+                    httpTransport: httpTransport,
+                    oauthManager: oauthManager,
+                    userAgent: userAgent
+                )
+            }()
+
+            async let copilotTask: CopilotDiscoveryResult? = {
+                guard let conn = activeCopilotConn,
+                      let cred = copilotCred,
+                      case .oauth(let oauth) = cred.value
+                else { return nil }
+                return await fetchCopilotLiveModels(
+                    connection: conn,
+                    oauth: oauth,
+                    httpTransport: httpTransport,
+                    userAgent: userAgent
+                )
+            }()
+
+            async let localTask: [DiscoveredLocalProvider] = probeLocalModels(
+                httpTransport: httpTransport,
+                configuredProviders: configProvidersSnapshot
+            )
+
+            consoleSync = await consoleTask
+            chatGPTDiscovery = await chatGPTTask
+            copilotDiscovery = await copilotTask
+            localDiscovered = await localTask
+        }
+
+        // Layer Console remote config into configService (policies, MCP, providers) and register Console skills
+        if let consoleSync {
+            await configService?.integration(opencodeID, document: consoleSync.document)
+            if let skillService, !consoleSync.skills.isEmpty {
+                let consoleSkills = consoleSync.skills
+                _ = try? await skillService.transform { editor in
+                    for item in consoleSkills {
+                        editor.add(item.skill, files: item.files.isEmpty ? nil : item.files)
+                    }
+                }
+            }
+        } else if activeOpencodeConn == nil {
+            await configService?.integration(opencodeID, document: nil)
+        }
+
+        // Compute OpenCode Console free public Zen fallback condition (matching upstream `opencode.ts:482-507`)
+        let disableFreeModels = ["1", "true"].contains(
+            (environment.variable("OPENCODE_DISABLE_FREE_MODELS") ?? "").lowercased()
+        )
+        let hasOpencodeEnvKey = !(environment.variable("OPENCODE_API_KEY") ?? "").isEmpty
+        let hasOpencodeConfigKey: Bool = {
+            for cfg in configProvidersSnapshot["opencode"] ?? [] {
+                if case .string(let k) = cfg.settings?.extra["apiKey"], !k.isEmpty, k != "public" {
+                    return true
+                }
+            }
+            return false
+        }()
+        let hasOpencodeKey = hasOpencodeEnvKey || activeOpencodeConn != nil || hasOpencodeConfigKey
+
+        let activeChatGPTOAuth: CredentialSchema.OAuth? = {
+            guard let cred = openAICred, case .oauth(let o) = cred.value else { return nil }
+            if o.methodID == ServerLiveOAuth.chatGPTMethodID
+                || o.methodID.rawValue == "chatgpt-browser"
+                || o.methodID.rawValue == "chatgpt-headless"
+            {
+                return o
+            }
+            return nil
+        }()
+        let activeCopilotOAuth: CredentialSchema.OAuth? = {
+            guard let cred = copilotCred, case .oauth(let o) = cred.value else { return nil }
+            return o
+        }()
+
+        let finalConsoleSync = consoleSync
+        let finalChatGPTDiscovery = chatGPTDiscovery
+        let finalCopilotDiscovery = copilotDiscovery
+        let finalLocalDiscovered = localDiscovered
+
+        // 4. Register ModelsDev + built-in + Console + ChatGPT + Copilot + Local + Config providers & models.
+        let providerReg = try await providerService.transform { editor in
+            // 4a. All ModelsDev providers not in built-ins (lowest priority)
+            for snap in catalogSnapshots where builtinByID[snap.info.id.rawValue] == nil {
                 let info = ProviderSchema.Info(
                     id: snap.info.id,
                     canonical: snap.info.canonical,
@@ -1388,24 +2618,38 @@ public enum ServerLiveRuntime {
                 editor.add(info: info, models: snap.models)
             }
 
-            // 2b. Built-in providers + any additional non-conflicting cached models for that provider
+            // 4b. Built-in providers merged cleanly with ALL live/cached ModelsDev models for that provider
             for spec in builtinProviders {
-                var extra: [String: JSONValue] = [:]
+                let catalogSnap = catalogByID[spec.id.rawValue]
+                var extra = catalogSnap?.info.settings?.extra ?? [:]
                 if let baseURL = spec.baseURL {
                     extra["baseURL"] = .string(baseURL)
                 }
-                let settings = extra.isEmpty ? nil : ProviderSchema.Settings(extra: extra)
+                let settings = extra.isEmpty ? catalogSnap?.info.settings : ProviderSchema.Settings(
+                    timeout: catalogSnap?.info.settings?.timeout,
+                    headerTimeout: catalogSnap?.info.settings?.headerTimeout,
+                    chunkTimeout: catalogSnap?.info.settings?.chunkTimeout,
+                    compaction: catalogSnap?.info.settings?.compaction,
+                    cache: catalogSnap?.info.settings?.cache,
+                    transport: catalogSnap?.info.settings?.transport,
+                    encoding: catalogSnap?.info.settings?.encoding,
+                    tls: catalogSnap?.info.settings?.tls,
+                    extra: extra
+                )
                 let info = ProviderSchema.Info(
                     id: spec.id,
+                    canonical: catalogSnap?.info.canonical,
                     integrationID: IntegrationID(rawValue: spec.id.rawValue),
                     name: spec.name,
                     activation: .auto,
                     package: spec.package,
-                    compatibility: spec.compatibility,
-                    settings: settings
+                    compatibility: spec.compatibility ?? catalogSnap?.info.compatibility,
+                    settings: settings,
+                    headers: catalogSnap?.info.headers,
+                    body: catalogSnap?.info.body
                 )
                 var mergedModels = spec.models
-                if let cachedModels = cachedByID[spec.id.rawValue]?.models {
+                if let cachedModels = catalogSnap?.models {
                     let builtinModelIDs = Set(spec.models.map(\.id))
                     for cachedModel in cachedModels where !builtinModelIDs.contains(cachedModel.id) {
                         mergedModels.append(cachedModel)
@@ -1414,10 +2658,241 @@ public enum ServerLiveRuntime {
                 editor.add(info: info, models: mergedModels)
             }
 
+            // 4c. OpenCode Console live workspace providers & custom models (matching `ConfigProviderPlugin.integrate`)
+            if let sync = finalConsoleSync {
+                for (rawID, provCfg) in (sync.document.info.providers ?? [:]).sorted(by: { $0.key < $1.key }) {
+                    let pid = ProviderSchema.ID(rawValue: rawID)
+                    let existing = editor.get(pid)
+                    let source: CoreProvider.Provider.Definition? = {
+                        let sourceID = provCfg.canonical ?? existing?.provider.canonical ?? pid
+                        return editor.get(sourceID)
+                    }()
+                    let baseInfo = existing?.provider ?? source?.provider ?? ProviderSchema.Info(
+                        id: pid,
+                        integrationID: opencodeID,
+                        name: provCfg.name ?? rawID,
+                        activation: .enabled,
+                        package: provCfg.package ?? "@opencode/ai/providers/openai-compatible"
+                    )
+                    let rewritten = CoreProvider.AISDKNative.rewrite(
+                        specifier: provCfg.package ?? baseInfo.package,
+                        providerID: rawID,
+                        canonical: (provCfg.canonical ?? baseInfo.canonical)?.rawValue,
+                        settings: provCfg.settings?.extra,
+                        headers: provCfg.headers,
+                        body: provCfg.body
+                    )
+                    let mergedExtra = CoreProvider.AISDKNative.mergeOverlay(
+                        baseInfo.settings?.extra,
+                        rewritten.settings ?? provCfg.settings?.extra
+                    ) ?? [:]
+                    let mergedSettings = ProviderSchema.Settings(
+                        timeout: provCfg.settings?.timeout ?? baseInfo.settings?.timeout,
+                        headerTimeout: provCfg.settings?.headerTimeout ?? baseInfo.settings?.headerTimeout,
+                        chunkTimeout: provCfg.settings?.chunkTimeout ?? baseInfo.settings?.chunkTimeout,
+                        compaction: provCfg.settings?.compaction ?? baseInfo.settings?.compaction,
+                        cache: provCfg.settings?.cache ?? baseInfo.settings?.cache,
+                        transport: provCfg.settings?.transport ?? baseInfo.settings?.transport,
+                        encoding: provCfg.settings?.encoding ?? baseInfo.settings?.encoding,
+                        tls: provCfg.settings?.tls ?? baseInfo.settings?.tls,
+                        extra: mergedExtra
+                    )
+                    let mergedInfo = ProviderSchema.Info(
+                        id: pid,
+                        canonical: provCfg.canonical ?? baseInfo.canonical,
+                        integrationID: opencodeID,
+                        name: provCfg.name ?? baseInfo.name,
+                        activation: .enabled,
+                        package: rewritten.package ?? baseInfo.package,
+                        compatibility: provCfg.compatibility ?? baseInfo.compatibility,
+                        settings: mergedSettings,
+                        headers: CoreProvider.AISDKNative.mergeHeaders(baseInfo.headers, rewritten.headers ?? provCfg.headers),
+                        body: CoreProvider.AISDKNative.mergeOverlay(baseInfo.body, rewritten.body ?? provCfg.body)
+                    )
+                    var mergedModels = existing?.models ?? [:]
+                    for (modelKey, modelCfg) in provCfg.models ?? [:] {
+                        let baseModel = mergedModels[ModelSchema.ID(rawValue: modelKey)]
+                            ?? source?.models[modelCfg.modelID ?? ModelSchema.ID(rawValue: modelKey)]
+                            ?? source?.models[ModelSchema.ID(rawValue: modelKey)]
+                        let updated = overlayModelConfig(
+                            rawProviderID: rawID,
+                            providerInfo: mergedInfo,
+                            modelKey: modelKey,
+                            modelCfg: modelCfg,
+                            existing: baseModel
+                        )
+                        mergedModels[updated.id] = updated
+                    }
+                    editor.add(
+                        info: mergedInfo,
+                        models: Array(mergedModels.values),
+                        sourceConnection: sync.document.connection
+                    )
+                }
+            }
+
+            // 4d. OpenCode Console signed-out free public Zen fallback (`opencode.ts:482-491`)
+            if !hasOpencodeKey && !disableFreeModels, let existing = editor.get(.opencode) {
+                var extra = existing.provider.settings?.extra ?? [:]
+                if extra["apiKey"] == nil {
+                    extra["apiKey"] = .string("public")
+                }
+                let updatedSettings = ProviderSchema.Settings(
+                    timeout: existing.provider.settings?.timeout,
+                    headerTimeout: existing.provider.settings?.headerTimeout,
+                    chunkTimeout: existing.provider.settings?.chunkTimeout,
+                    compaction: existing.provider.settings?.compaction,
+                    cache: existing.provider.settings?.cache,
+                    transport: existing.provider.settings?.transport,
+                    encoding: existing.provider.settings?.encoding,
+                    tls: existing.provider.settings?.tls,
+                    extra: extra
+                )
+                let updatedProvider = ProviderSchema.Info(
+                    id: existing.provider.id,
+                    canonical: existing.provider.canonical,
+                    integrationID: existing.provider.integrationID,
+                    name: existing.provider.name,
+                    activation: .enabled,
+                    package: existing.provider.package,
+                    compatibility: existing.provider.compatibility,
+                    settings: updatedSettings,
+                    headers: existing.provider.headers,
+                    body: existing.provider.body
+                )
+                editor.add(info: updatedProvider, models: Array(existing.models.values))
+            }
+
+            // 4e. Live ChatGPT / Codex models merged onto `openai` provider
+            if let chatGPT = finalChatGPTDiscovery, let existing = editor.get(.openai) {
+                var headers = existing.provider.headers ?? [:]
+                headers["originator"] = "opencode"
+                if let acct = chatGPT.accountID {
+                    headers["chatgpt-account-id"] = acct
+                }
+                let updatedProvider = ProviderSchema.Info(
+                    id: existing.provider.id,
+                    canonical: existing.provider.canonical,
+                    integrationID: existing.provider.integrationID,
+                    name: existing.provider.name,
+                    activation: existing.provider.activation,
+                    package: existing.provider.package,
+                    compatibility: existing.provider.compatibility,
+                    settings: existing.provider.settings,
+                    headers: headers,
+                    body: existing.provider.body
+                )
+                var mergedMap = existing.models
+                for discovered in chatGPT.models {
+                    mergedMap[discovered.id] = discovered
+                }
+                editor.add(
+                    info: updatedProvider,
+                    models: Array(mergedMap.values),
+                    sourceConnection: chatGPT.connection
+                )
+            } else if let oauth = activeChatGPTOAuth, let existing = editor.get(.openai) {
+                var headers = existing.provider.headers ?? [:]
+                headers["originator"] = "opencode"
+                if case .string(let acct) = oauth.metadata?["accountID"], !acct.isEmpty {
+                    headers["chatgpt-account-id"] = acct
+                }
+                editor.update(.openai) { prov in
+                    ProviderSchema.Info(
+                        id: prov.id, canonical: prov.canonical, integrationID: prov.integrationID,
+                        name: prov.name, activation: prov.activation, package: prov.package,
+                        compatibility: prov.compatibility, settings: prov.settings,
+                        headers: headers, body: prov.body
+                    )
+                }
+            }
+
+            // 4f. Live GitHub Copilot models & `CoreModel.CopilotModels.routeFor` routing
+            if let existing = editor.get(.githubCopilot) {
+                let copilotRoot = finalCopilotDiscovery?.baseURL
+                    ?? activeCopilotOAuth.map { ServerLiveOAuth.copilotBaseURL($0.metadata) }
+                    ?? "https://api.githubcopilot.com"
+                var extra = existing.provider.settings?.extra ?? [:]
+                extra["baseURL"] = .string(copilotRoot)
+                let updatedProvider = ProviderSchema.Info(
+                    id: existing.provider.id,
+                    canonical: existing.provider.canonical,
+                    integrationID: existing.provider.integrationID,
+                    name: existing.provider.name,
+                    activation: existing.provider.activation,
+                    package: existing.provider.package,
+                    compatibility: existing.provider.compatibility,
+                    settings: ProviderSchema.Settings(extra: extra),
+                    headers: existing.provider.headers,
+                    body: existing.provider.body
+                )
+                if let live = finalCopilotDiscovery {
+                    let derivedMap = CoreModel.CopilotModels.derive(
+                        baseURL: live.baseURL,
+                        remote: live.snapshot,
+                        existing: Array(existing.models.values)
+                    )
+                    var list = Array(derivedMap.values)
+                    if let auto = CoreModel.CopilotModels.autoModel(baseURL: live.baseURL, remote: live.snapshot) {
+                        list.append(auto)
+                    }
+                    editor.add(info: updatedProvider, models: list, sourceConnection: live.connection)
+                } else {
+                    let routedModels: [ModelSchema.Info] = existing.models.values.map { model in
+                        let advertised: CoreModel.CopilotModels.Endpoint? = {
+                            if model.package == "@opencode/ai/providers/anthropic" { return .messages }
+                            if model.package == "@opencode/ai/providers/openai" { return .responses }
+                            return nil
+                        }()
+                        let route = CoreModel.CopilotModels.routeFor(
+                            modelID: model.modelID.rawValue,
+                            advertised: advertised,
+                            root: copilotRoot
+                        )
+                        var mExtra = model.settings?.extra ?? [:]
+                        mExtra["baseURL"] = .string(route.baseURL)
+                        return ModelSchema.Info(
+                            id: model.id, modelID: model.modelID, providerID: model.providerID,
+                            canonical: model.canonical, type: model.type, family: model.family,
+                            name: model.name, compatibility: model.compatibility, package: route.package,
+                            settings: ModelSchema.Settings(
+                                compaction: model.settings?.compaction,
+                                cache: model.settings?.cache,
+                                encoding: model.settings?.encoding,
+                                extra: mExtra
+                            ),
+                            headers: model.headers, body: model.body,
+                            capabilities: model.capabilities, variants: model.variants,
+                            time: model.time, cost: model.cost, status: model.status,
+                            enabled: model.enabled, limit: model.limit
+                        )
+                    }
+                    editor.add(info: updatedProvider, models: routedModels)
+                }
+            }
+
+            // 4g. Live Local Models (Ollama, LM Studio, vLLM) registered with `activation: .enabled`
+            for local in finalLocalDiscovered {
+                let info = ProviderSchema.Info(
+                    id: local.id,
+                    integrationID: nil,
+                    name: local.name,
+                    activation: .enabled,
+                    package: "@opencode/ai/providers/openai-compatible",
+                    settings: ProviderSchema.Settings(extra: [
+                        "baseURL": .string(local.baseURL),
+                        "provider": .string(local.id.rawValue),
+                        "apiKey": .string(""),
+                    ])
+                )
+                editor.add(info: info, models: local.models)
+            }
+
+            // 4h. User & project `opencode.json[c]` provider/model overlays (highest priority)
             for (rawID, cfgs) in configProvidersSnapshot.sorted(by: { $0.key < $1.key }) {
                 let pid = ProviderSchema.ID(rawValue: rawID)
                 let isBuiltin = builtinByID[rawID] != nil
-                let hasCachedEnv = !(cachedByID[rawID]?.environment.isEmpty ?? true)
+                let hasCachedEnv = !(catalogByID[rawID]?.environment.isEmpty ?? true)
                 var currentInfo = editor.get(pid)?.provider ?? ProviderSchema.Info(
                     id: pid,
                     integrationID: IntegrationID(rawValue: rawID),
@@ -1454,8 +2929,6 @@ public enum ServerLiveRuntime {
                     let mergedHeaders = CoreProvider.AISDKNative.mergeHeaders(currentInfo.headers, rewritten.headers ?? cfg.headers)
                     let mergedBody = CoreProvider.AISDKNative.mergeOverlay(currentInfo.body, rewritten.body ?? cfg.body)
 
-                    // Enable custom providers directly when apiKey is explicitly provided in settings
-                    // or when a custom non-builtin provider declares a baseURL with no env requirement.
                     let hasExplicitApiKey: Bool = {
                         if case .string(let k) = mergedExtra["apiKey"], !k.isEmpty { return true }
                         if case .bool(false) = mergedExtra["apiKey"] { return true }
@@ -1486,104 +2959,14 @@ public enum ServerLiveRuntime {
 
                     for (modelKey, modelCfg) in cfg.models ?? [:] {
                         let mid = ModelSchema.ID(rawValue: modelKey)
-                        let base = currentModels[mid] ?? ModelSchema.Info.default(providerID: pid, id: mid)
-                        let modelPkg = CoreProvider.AISDKNative.rewrite(
-                            specifier: modelCfg.package ?? base.package ?? currentInfo.package,
-                            providerID: rawID,
-                            canonical: currentInfo.canonical?.rawValue,
-                            modelID: (modelCfg.modelID ?? base.modelID).rawValue
-                        ).package ?? currentInfo.package
-
-                        let mergedCaps = CoreModel.Model.mergeCapabilities(
-                            tools: modelCfg.capabilities?.tools,
-                            freeform: modelCfg.capabilities?.freeform,
-                            input: modelCfg.capabilities?.input,
-                            output: modelCfg.capabilities?.output,
-                            temperature: modelCfg.capabilities?.temperature,
-                            base: base.capabilities
+                        let updated = overlayModelConfig(
+                            rawProviderID: rawID,
+                            providerInfo: currentInfo,
+                            modelKey: modelKey,
+                            modelCfg: modelCfg,
+                            existing: currentModels[mid]
                         )
-                        let resolvedLimit = ModelSchema.Info.Limit(
-                            context: modelCfg.limit?.context ?? base.limit.context,
-                            input: modelCfg.limit?.input ?? base.limit.input,
-                            output: modelCfg.limit?.output ?? base.limit.output
-                        )
-                        let resolvedCost: [ModelSchema.Cost] = {
-                            guard let costVal = modelCfg.cost else { return base.cost }
-                            let items: [ConfigProviderSchema.Cost] = switch costVal {
-                            case .single(let c): [c]
-                            case .tiered(let arr): arr
-                            }
-                            return items.map { item in
-                                ModelSchema.Cost(
-                                    tier: item.tier.map { ModelSchema.Cost.Tier(size: $0.size) },
-                                    input: item.input,
-                                    output: item.output,
-                                    cache: ModelSchema.Cost.Cache(
-                                        read: item.cache?.read ?? .zero,
-                                        write: item.cache?.write ?? .zero
-                                    )
-                                )
-                            }
-                        }()
-                        let mergedModelExtra = CoreProvider.AISDKNative.mergeOverlay(
-                            base.settings?.extra,
-                            modelCfg.settings?.extra
-                        ) ?? [:]
-                        let mergedModelSettings = ModelSchema.Settings(
-                            compaction: modelCfg.settings?.compaction ?? base.settings?.compaction,
-                            cache: modelCfg.settings?.cache ?? base.settings?.cache,
-                            encoding: modelCfg.settings?.encoding ?? base.settings?.encoding,
-                            extra: mergedModelExtra
-                        )
-                        let released = modelCfg.releaseDate != nil ? parseReleaseDate(modelCfg.releaseDate) : base.time.released
-                        var updatedModel = ModelSchema.Info(
-                            id: mid,
-                            modelID: modelCfg.modelID ?? base.modelID,
-                            providerID: pid,
-                            canonical: currentInfo.canonical ?? base.canonical,
-                            type: modelCfg.type ?? base.type ?? .chat,
-                            family: modelCfg.family ?? base.family,
-                            name: modelCfg.name ?? base.name,
-                            compatibility: modelCfg.compatibility ?? base.compatibility,
-                            package: modelPkg,
-                            settings: mergedModelSettings,
-                            headers: CoreProvider.AISDKNative.mergeHeaders(base.headers, modelCfg.headers),
-                            body: CoreProvider.AISDKNative.mergeOverlay(base.body, modelCfg.body),
-                            capabilities: mergedCaps,
-                            variants: base.variants,
-                            time: ModelSchema.Info.Time(released: released),
-                            cost: resolvedCost,
-                            status: base.status,
-                            enabled: modelCfg.disabled.map { !$0 } ?? base.enabled,
-                            limit: resolvedLimit
-                        )
-                        if let explicitVariants = modelCfg.variants {
-                            let converted = explicitVariants.map {
-                                ModelSchema.Variant(id: $0.id, settings: $0.settings, headers: $0.headers, body: $0.body)
-                            }
-                            updatedModel = ModelSchema.Info(
-                                id: updatedModel.id, modelID: updatedModel.modelID, providerID: updatedModel.providerID,
-                                canonical: updatedModel.canonical, type: updatedModel.type, family: updatedModel.family,
-                                name: updatedModel.name, compatibility: updatedModel.compatibility, package: updatedModel.package,
-                                settings: updatedModel.settings, headers: updatedModel.headers, body: updatedModel.body,
-                                capabilities: updatedModel.capabilities, variants: converted, time: updatedModel.time,
-                                cost: updatedModel.cost, status: updatedModel.status, enabled: updatedModel.enabled,
-                                limit: updatedModel.limit
-                            )
-                        } else if let reasoning = modelCfg.capabilities?.reasoning {
-                            let supports = CoreModel.Variant.supports(reasoning)
-                            let resolvedVariants = supports.isEmpty ? [] : CoreModel.Variant.resolve(updatedModel, supports: supports)
-                            updatedModel = ModelSchema.Info(
-                                id: updatedModel.id, modelID: updatedModel.modelID, providerID: updatedModel.providerID,
-                                canonical: updatedModel.canonical, type: updatedModel.type, family: updatedModel.family,
-                                name: updatedModel.name, compatibility: updatedModel.compatibility, package: updatedModel.package,
-                                settings: updatedModel.settings, headers: updatedModel.headers, body: updatedModel.body,
-                                capabilities: updatedModel.capabilities, variants: resolvedVariants, time: updatedModel.time,
-                                cost: updatedModel.cost, status: updatedModel.status, enabled: updatedModel.enabled,
-                                limit: updatedModel.limit
-                            )
-                        }
-                        currentModels[mid] = updatedModel
+                        currentModels[mid] = updated
                     }
                 }
 
@@ -1591,10 +2974,44 @@ public enum ServerLiveRuntime {
             }
         }
 
-        // 3. Configure default model selection (honors user config `model` first, then
-        //    first configured provider with a valid credential in deterministic priority order).
+        // 5. Model transforms: signed-out OpenCode paid model gating (`opencode.ts:492-507`),
+        //    Copilot chat-alias hiding, and default model selection.
         let finalConfiguredDefault = configuredDefaultModel
-        _ = try await modelService.transform { editor in
+        let modelReg = try await modelService.transform { editor in
+            // 5a. When signed out of OpenCode Console, disable paid models (cost.input > 0) while keeping free models enabled
+            if !hasOpencodeKey && !disableFreeModels {
+                for model in editor.list(providerID: .opencode) {
+                    if model.cost.contains(where: { $0.input.rawValue > 0 }) {
+                        editor.update(providerID: .opencode, modelID: model.id) { draft in
+                            ModelSchema.Info(
+                                id: draft.id, modelID: draft.modelID, providerID: draft.providerID,
+                                canonical: draft.canonical, type: draft.type, family: draft.family,
+                                name: draft.name, compatibility: draft.compatibility, package: draft.package,
+                                settings: draft.settings, headers: draft.headers, body: draft.body,
+                                capabilities: draft.capabilities, variants: draft.variants, time: draft.time,
+                                cost: draft.cost, status: draft.status, enabled: false, limit: draft.limit
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 5b. Hide Copilot's conflicting chat-only alias (`github-copilot.ts:301-307`)
+            let chatAliasID = ModelSchema.ID(rawValue: "gpt-5-chat-latest")
+            if editor.get(providerID: .githubCopilot, modelID: chatAliasID) != nil {
+                editor.update(providerID: .githubCopilot, modelID: chatAliasID) { draft in
+                    ModelSchema.Info(
+                        id: draft.id, modelID: draft.modelID, providerID: draft.providerID,
+                        canonical: draft.canonical, type: draft.type, family: draft.family,
+                        name: draft.name, compatibility: draft.compatibility, package: draft.package,
+                        settings: draft.settings, headers: draft.headers, body: draft.body,
+                        capabilities: draft.capabilities, variants: draft.variants, time: draft.time,
+                        cost: draft.cost, status: draft.status, enabled: false, limit: draft.limit
+                    )
+                }
+            }
+
+            // 5c. Default model selection (user config first, then deterministic preferred flagship, then first enabled text model)
             if let configured = finalConfiguredDefault {
                 editor.setDefault(providerID: configured.providerID, modelID: configured.model)
                 return
@@ -1609,6 +3026,12 @@ public enum ServerLiveRuntime {
                 editor.setDefault(providerID: fallback.providerID, modelID: fallback.id)
             }
         }
+
+        return ProviderSeedRegistrations(
+            integrations: integrationReg,
+            providers: providerReg,
+            models: modelReg
+        )
     }
 
     // MARK: - 2b. Built-In & Project/Global Custom Commands (`plugin/command.ts`, `config/plugin/command.ts`)
@@ -2628,6 +4051,14 @@ public enum ServerLiveRuntime {
             case none
         }
         let mode: AuthMode
+        let extraHeaders: [String: String]
+        let baseURLOverride: String?
+
+        init(mode: AuthMode, extraHeaders: [String: String] = [:], baseURLOverride: String? = nil) {
+            self.mode = mode
+            self.extraHeaders = extraHeaders
+            self.baseURLOverride = baseURLOverride
+        }
     }
 
     internal struct LiveRouteConfig: Sendable {
@@ -3554,11 +4985,13 @@ public enum ServerLiveRuntime {
     }
 
     /// Resolves credentials for a provider from `integrationService` (SQLite `credential` table + env vars)
-    /// and provider config settings (`apiKey`).
+    /// and provider config settings (`apiKey`), automatically refreshing expired OAuth tokens via
+    /// `ServerLiveOAuthManager.refreshToken(...)` (locked per credential ID) and attaching provider-specific headers.
     private static func resolveCredential(
         for provider: ProviderSchema.Info,
         integrations: any CoreIntegration.Integration.Interface,
-        environment: any EnvironmentProviding
+        environment: any EnvironmentProviding,
+        oauthManager: ServerLiveOAuthManager? = nil
     ) async -> ResolvedCredential? {
         let intID = provider.integrationID ?? IntegrationID(rawValue: provider.id.rawValue)
         if let activeConn = try? await integrations.activeConnection(intID),
@@ -3566,9 +4999,58 @@ public enum ServerLiveRuntime {
         {
             switch value {
             case .key(let k) where !k.key.isEmpty:
-                return ResolvedCredential(mode: .apiKey(k.key))
-            case .oauth(let o) where !o.access.isEmpty:
-                return ResolvedCredential(mode: .bearerOAuth(o.access))
+                var extraHeaders: [String: String] = [:]
+                if intID.rawValue == "opencode",
+                   case .string(let orgID) = k.metadata?["orgID"], !orgID.isEmpty
+                {
+                    extraHeaders["x-org-id"] = orgID
+                }
+                return ResolvedCredential(mode: .apiKey(k.key), extraHeaders: extraHeaders)
+            case .oauth(var o) where !o.access.isEmpty:
+                if case .credential(let credInfo) = activeConn,
+                   let oauthManager
+                {
+                    let nowMs = Flock.currentEpochMs()
+                    if o.expires.rawValue > 0 && Int64(o.expires.rawValue) <= nowMs + 60_000 {
+                        if let refreshed = try? await oauthManager.refreshToken(
+                            credentialID: credInfo.id,
+                            integrationID: intID
+                        ) {
+                            o = refreshed
+                        }
+                    }
+                }
+                var extraHeaders: [String: String] = [:]
+                var baseURLOverride: String? = nil
+                switch intID.rawValue {
+                case "opencode":
+                    if case .string(let orgID) = o.metadata?["orgID"], !orgID.isEmpty {
+                        extraHeaders["x-org-id"] = orgID
+                    }
+                case "openai":
+                    if o.methodID == ServerLiveOAuth.chatGPTMethodID
+                        || o.methodID.rawValue == "chatgpt-browser"
+                        || o.methodID.rawValue == "chatgpt-headless"
+                    {
+                        extraHeaders["originator"] = "opencode"
+                        if case .string(let accountID) = o.metadata?["accountID"], !accountID.isEmpty {
+                            extraHeaders["chatgpt-account-id"] = accountID
+                        }
+                    }
+                case "github-copilot":
+                    extraHeaders["copilot-integration-id"] = "vscode-chat"
+                    extraHeaders["openai-intent"] = "conversation-edits"
+                    extraHeaders["editor-version"] = "vscode/1.99.0"
+                    extraHeaders["x-github-api-version"] = ServerLiveOAuth.copilotApiVersion
+                    baseURLOverride = ServerLiveOAuth.copilotBaseURL(o.metadata)
+                default:
+                    break
+                }
+                return ResolvedCredential(
+                    mode: .bearerOAuth(o.access),
+                    extraHeaders: extraHeaders,
+                    baseURLOverride: baseURLOverride
+                )
             case .key, .oauth, .external:
                 break
             }
@@ -3778,36 +5260,18 @@ public enum ServerLiveRuntime {
         }
     }
 
-    /// Builds a location-scoped `LiveSessionRunner` wired to real agents, models,
-    /// credentials, built-in tools, live `CoreSessionLiveSnapshotBridge` (when `snapshotService != nil`),
-    /// live `CoreSessionTitle.Service`, and streaming `OpenCodeAI` wire protocols.
-    public static func makeSessionRunner(
-        db: any SQLiteDatabase,
-        bus: CoreBus.Service,
-        sessionStore: CoreSessionStore.Service,
-        sessionInstructions: CoreSessionInstructionEntry.Service,
+    /// Builds a location-scoped `CoreSessionRunnerModel.Service` with live credential resolution,
+    /// automatic OAuth token refresh (locked per credential ID via `ServerLiveOAuthManager`),
+    /// and provider-specific wire headers (`x-org-id`, `ChatGPT-Account-ID`, Copilot headers).
+    public static func makeModelResolver(
         agentService: any CoreAgent.Agent.Interface,
-        configService: any CoreConfig.Interface,
         integrationService: any CoreIntegration.Integration.Interface,
         providerService: any CoreProvider.Provider.Interface,
         modelService: any CoreModel.Model.Interface,
-        toolService: any CoreTool.Interface,
-        httpTransport: any HTTPTransport,
         environment: any EnvironmentProviding,
-        snapshotService: (any CoreSnapshot.Interface)? = nil,
-        isLocationClosed: @escaping @Sendable () -> Bool
-    ) -> LiveSessionRunner {
-        let llmClient = makeLLMClient(transport: httpTransport)
-        let modelTransport = CoreSessionModelTransport.Service()
-        let modelRequest = CoreSessionModelRequest.Service(modelTransport: modelTransport)
-        let snapshotBridge: (any CoreSessionSnapshotBridge)? = snapshotService.map {
-            CoreSessionLiveSnapshotBridge(service: $0)
-        }
-        let snapshotTracker: StepSnapshotTracker? = snapshotBridge.map {
-            StepSnapshotTracker(db: db, bridge: $0)
-        }
-
-        let runnerModel = CoreSessionRunnerModel.Service { session, availableFn, kind, agentID in
+        oauthManager: ServerLiveOAuthManager? = nil
+    ) -> CoreSessionRunnerModel.Service {
+        CoreSessionRunnerModel.Service { session, availableFn, kind, agentID in
             let available = try await availableFn()
             let agentInfo = await agentService.get(AgentSchema.ID(rawValue: agentID))
 
@@ -3852,7 +5316,12 @@ public enum ServerLiveRuntime {
 
             if let modelInfo = chosenModel,
                let providerInfo = await providerService.get(modelInfo.providerID),
-               let cred = await resolveCredential(for: providerInfo, integrations: integrationService, environment: environment)
+               let cred = await resolveCredential(
+                   for: providerInfo,
+                   integrations: integrationService,
+                   environment: environment,
+                   oauthManager: oauthManager
+               )
             {
                 let effectivePackage = modelInfo.package ?? providerInfo.package
                 let protoKind = detectProtocolKind(package: effectivePackage, providerID: providerInfo.id.rawValue)
@@ -3874,7 +5343,9 @@ public enum ServerLiveRuntime {
                     if case .string(let u) = settings["base_url"], !u.isEmpty { return u }
                     return nil
                 }()
-                let baseURL = configuredBaseURL ?? defaultBaseURL(for: providerInfo.id.rawValue, protocolKind: protoKind)
+                let baseURL = configuredBaseURL
+                    ?? cred.baseURLOverride
+                    ?? defaultBaseURL(for: providerInfo.id.rawValue, protocolKind: protoKind)
 
                 // Strip non-wire settings (`baseURL`, `base_url`, `apiKey`, `provider`) before sending providerOptions.
                 let wireSettings = settings.filter { key, _ in
@@ -3882,6 +5353,9 @@ public enum ServerLiveRuntime {
                 }
 
                 var mergedHeaders = CoreProvider.AISDKNative.mergeHeaders(providerInfo.headers, modelInfo.headers) ?? [:]
+                if !cred.extraHeaders.isEmpty {
+                    mergedHeaders = CoreProvider.AISDKNative.mergeHeaders(mergedHeaders, cred.extraHeaders) ?? mergedHeaders
+                }
                 if let varHeaders = matchedVariant?.headers {
                     mergedHeaders = CoreProvider.AISDKNative.mergeHeaders(mergedHeaders, varHeaders) ?? mergedHeaders
                 }
@@ -3950,6 +5424,46 @@ public enum ServerLiveRuntime {
                 capabilities: ModelSchema.Capabilities.default()
             )
         }
+    }
+
+    /// Builds a location-scoped `LiveSessionRunner` wired to real agents, models,
+    /// credentials, built-in tools, live `CoreSessionLiveSnapshotBridge` (when `snapshotService != nil`),
+    /// live `CoreSessionTitle.Service`, and streaming `OpenCodeAI` wire protocols.
+    public static func makeSessionRunner(
+        db: any SQLiteDatabase,
+        bus: CoreBus.Service,
+        sessionStore: CoreSessionStore.Service,
+        sessionInstructions: CoreSessionInstructionEntry.Service,
+        agentService: any CoreAgent.Agent.Interface,
+        configService: any CoreConfig.Interface,
+        integrationService: any CoreIntegration.Integration.Interface,
+        providerService: any CoreProvider.Provider.Interface,
+        modelService: any CoreModel.Model.Interface,
+        toolService: any CoreTool.Interface,
+        httpTransport: any HTTPTransport,
+        environment: any EnvironmentProviding,
+        snapshotService: (any CoreSnapshot.Interface)? = nil,
+        oauthManager: ServerLiveOAuthManager? = nil,
+        isLocationClosed: @escaping @Sendable () -> Bool
+    ) -> LiveSessionRunner {
+        let llmClient = makeLLMClient(transport: httpTransport)
+        let modelTransport = CoreSessionModelTransport.Service()
+        let modelRequest = CoreSessionModelRequest.Service(modelTransport: modelTransport)
+        let snapshotBridge: (any CoreSessionSnapshotBridge)? = snapshotService.map {
+            CoreSessionLiveSnapshotBridge(service: $0)
+        }
+        let snapshotTracker: StepSnapshotTracker? = snapshotBridge.map {
+            StepSnapshotTracker(db: db, bridge: $0)
+        }
+
+        let runnerModel = makeModelResolver(
+            agentService: agentService,
+            integrationService: integrationService,
+            providerService: providerService,
+            modelService: modelService,
+            environment: environment,
+            oauthManager: oauthManager
+        )
 
         let sessionContext = CoreSessionContext.Service(
             db: db,

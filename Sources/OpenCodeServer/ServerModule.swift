@@ -1019,8 +1019,14 @@ public final class ServerAppRuntime: Sendable {
     public let locationActivity: CoreLocation.Activity.Service
     public let instance: CoreLocation.Instance.Service
     public let serverInfo: ServerInfo.Service
+    public let modelsDev: CoreModel.ModelsDev.Service
+    public let oauthManager: ServerLiveOAuthManager
+    public let allowLiveNetwork: Bool
+    public let modelsDevOptions: CoreModel.ModelsDev.Options
     public let defaultDirectory: String
     public let scope: LayerNode.ResourceScope
+    private let backgroundRefreshTask = Mutex<Task<Void, Never>?>(nil)
+    private let isClosed = Mutex(false)
 
     public init(
         options: ServerOptions,
@@ -1059,6 +1065,10 @@ public final class ServerAppRuntime: Sendable {
         locationActivity: CoreLocation.Activity.Service,
         instance: CoreLocation.Instance.Service,
         serverInfo: ServerInfo.Service,
+        modelsDev: CoreModel.ModelsDev.Service? = nil,
+        oauthManager: ServerLiveOAuthManager? = nil,
+        allowLiveNetwork: Bool = false,
+        modelsDevOptions: CoreModel.ModelsDev.Options? = nil,
         defaultDirectory: String,
         scope: LayerNode.ResourceScope
     ) {
@@ -1100,8 +1110,80 @@ public final class ServerAppRuntime: Sendable {
         self.locationActivity = locationActivity
         self.instance = instance
         self.serverInfo = serverInfo
+        let effectiveModelsOpts = modelsDevOptions ?? options.models ?? CoreModel.ModelsDev.Options(
+            file: "\(global.cache)/models.json",
+            fetch: allowLiveNetwork
+        )
+        self.modelsDevOptions = effectiveModelsOpts
+        self.allowLiveNetwork = allowLiveNetwork
+        self.modelsDev = modelsDev ?? CoreModel.ModelsDev.Service(
+            options: effectiveModelsOpts,
+            http: httpTransport,
+            fileSystem: fileSystem,
+            kv: kv
+        )
+        self.oauthManager = oauthManager ?? ServerLiveOAuthManager(
+            credential: credential,
+            httpTransport: httpTransport,
+            kv: kv,
+            bus: bus
+        )
         self.defaultDirectory = defaultDirectory
         self.scope = scope
+    }
+
+    /// Force-refreshes the live ModelsDev catalog (when live network is enabled) prior to location reload.
+    public func forceRefreshCatalogs() async {
+        guard allowLiveNetwork else { return }
+        _ = await ServerLiveRuntime.refreshModelsDevCatalog(
+            modelsDev: modelsDev,
+            kv: kv,
+            fileSystem: fileSystem,
+            httpTransport: httpTransport,
+            globalPaths: global,
+            options: modelsDevOptions
+        )
+    }
+
+    /// Reloads active locations when a credential affecting remote/free catalog discovery changes.
+    internal func reloadCatalogsIfNeeded(for integrationID: IntegrationID) async {
+        let dynamicCatalogIntegrations: Set<String> = ["opencode", "openai", "github-copilot"]
+        guard dynamicCatalogIntegrations.contains(integrationID.rawValue) else { return }
+        guard !locations.keys().isEmpty else { return }
+        try? await CoreLocation.ServiceMap.reload(locations)
+    }
+
+    /// Schedules a non-blocking background ModelsDev catalog refresh when the cache is cold or stale.
+    internal func startBackgroundModelsDevRefreshIfNeeded() {
+        guard allowLiveNetwork else { return }
+        let alreadyStarted = backgroundRefreshTask.withLock { $0 != nil }
+        guard !alreadyStarted else { return }
+        let task = Task(priority: .utility) { [self] in
+            let needsRefresh = await ServerLiveRuntime.isModelsDevCacheColdOrStale(
+                kv: kv,
+                globalPaths: global,
+                fileSystem: fileSystem,
+                options: modelsDevOptions
+            )
+            guard needsRefresh, !Task.isCancelled, !isClosed.withLock({ $0 }) else { return }
+            let changed = await ServerLiveRuntime.refreshModelsDevCatalog(
+                modelsDev: modelsDev,
+                kv: kv,
+                fileSystem: fileSystem,
+                httpTransport: httpTransport,
+                globalPaths: global,
+                options: modelsDevOptions
+            )
+            guard changed, !Task.isCancelled, !isClosed.withLock({ $0 }) else { return }
+            if !locations.keys().isEmpty {
+                try? await CoreLocation.ServiceMap.reload(locations)
+            }
+            let empty = JSONValue.object([:])
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: IntegrationSchema.Event.updated.type), data: empty)
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ProviderSchema.Event.updated.type), data: empty)
+            await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ModelSchema.Event.updated.type), data: empty)
+        }
+        backgroundRefreshTask.withLock { $0 = task }
     }
 
     /// Resolves and boots the `ServerLocationBundle` for `ref`, mapping missing directories to `LocationNotFoundError`.
@@ -1131,10 +1213,17 @@ public final class ServerAppRuntime: Sendable {
                 message: "Location not found: \(canonical.directory.rawValue)"
             )
         }
+        startBackgroundModelsDevRefreshIfNeeded()
         return bundle
     }
 
     public func close() async {
+        isClosed.withLock { $0 = true }
+        backgroundRefreshTask.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+        await oauthManager.close()
         let activeSessions = await sessionExecution.active()
         if let liveExec = sessionExecution as? ServerLiveRuntime.LiveSessionExecution {
             for sid in activeSessions {
@@ -1282,6 +1371,43 @@ public final class ServerAppRuntime: Sendable {
         let capturedEnv = environment
         let capturedGlobal = globalPaths
         let capturedOptions = options
+
+        let allowLiveNetwork: Bool = {
+            if let explicitFetch = options.models?.fetch { return explicitFetch }
+            if workerdProfile || fileSystem is InMemoryFileSystem { return false }
+            return true
+        }()
+        let explicitSyncFetch = (options.models?.fetch == true)
+        let trimmedCacheDir: String = {
+            var s = globalPaths.cache
+            while s.count > 1 && s.hasSuffix("/") { s.removeLast() }
+            return s
+        }()
+        let modelsCachePath = options.models?.file ?? "\(trimmedCacheDir)/models.json"
+        let effectiveModelsOptions = CoreModel.ModelsDev.Options(
+            url: options.models?.url,
+            file: modelsCachePath,
+            fetch: allowLiveNetwork,
+            snapshot: options.models?.snapshot
+        )
+        let modelsDev = CoreModel.ModelsDev.Service(
+            options: effectiveModelsOptions,
+            http: httpTransport,
+            fileSystem: fileSystem,
+            kv: kv
+        )
+        let appName = options.app?.name ?? "opencode"
+        let appVersionForUA = options.app?.version ?? "2.0.0"
+        let userAgent = "\(appName)/\(appVersionForUA)"
+        let oauthManager = ServerLiveOAuthManager(
+            credential: credential,
+            httpTransport: httpTransport,
+            kv: kv,
+            bus: bus,
+            environment: environment,
+            userAgent: userAgent,
+            workerdProfile: workerdProfile
+        )
 
         // Weak indirection box avoids retain cycles between process-global session/automation
         // services and location-scoped tool environments while letting built-in tools receive
@@ -1590,21 +1716,35 @@ public final class ServerAppRuntime: Sendable {
                 configEntries: configEntries,
                 fileSystem: capturedFs
             )
-            try await ServerLiveRuntime.seedProvidersAndModels(
+            let defaultProviderRegs = try await ServerLiveRuntime.seedProvidersAndModels(
                 integrations: integrationService,
                 providers: providerService,
                 models: modelService,
                 configEntries: configEntries,
                 globalPaths: capturedGlobal,
-                fileSystem: capturedFs
+                fileSystem: capturedFs,
+                configService: configService,
+                skillService: skillService,
+                credentialService: credential,
+                modelsDev: modelsDev,
+                kv: kv,
+                httpTransport: capturedHttp,
+                environment: capturedEnv,
+                oauthManager: oauthManager,
+                modelsDevOptions: effectiveModelsOptions,
+                allowLiveNetwork: allowLiveNetwork,
+                syncFetchOnColdCache: explicitSyncFetch,
+                forceRefresh: false,
+                userAgent: userAgent
             )
             let emptyEventPayload = JSONValue.object([:])
             await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: IntegrationSchema.Event.updated.type), data: emptyEventPayload)
             await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ProviderSchema.Event.updated.type), data: emptyEventPayload)
             await bus.emit(EventSchema.EphemeralDefinition<JSONValue>(type: ModelSchema.Event.updated.type), data: emptyEventPayload)
+            let latestConfigEntries = await configService.entries()
             await ServerLiveRuntime.seedConfiguredMcpServers(
                 into: mcpService,
-                configEntries: configEntries
+                configEntries: latestConfigEntries
             )
 
             let toolService = CoreTool.Service()
@@ -1651,6 +1791,7 @@ public final class ServerAppRuntime: Sendable {
                 httpTransport: capturedHttp,
                 environment: capturedEnv,
                 snapshotService: capturedWorkerd ? nil : snapshotService,
+                oauthManager: oauthManager,
                 isLocationClosed: { closedFlag.withLock { $0 } }
             )
 
@@ -1703,16 +1844,25 @@ public final class ServerAppRuntime: Sendable {
                 await onLocationBoot(bundle)
                 if pluginService.didReplaceWithCustomBackgroundPlugins {
                     await defaultAgentsReg.dispose()
+                    await defaultProviderRegs.dispose()
                     await agentService.reload()
+                    await integrationService.reload()
+                    await providerService.reload()
+                    await modelService.reload()
                 }
             }
             return bundle.layerOutput
         }
         locationsBox.bind(locations)
 
+        oauthManager.setOnCredentialActivated { _ in
+            guard let activeLocations = locationsBox.value, !activeLocations.keys().isEmpty else { return }
+            try? await CoreLocation.ServiceMap.reload(activeLocations)
+        }
+
         let instance = CoreLocation.Instance.Service(locations: locations)
 
-        return ServerAppRuntime(
+        let runtime = ServerAppRuntime(
             options: options,
             authConfig: authConfig,
             global: globalPaths,
@@ -1749,9 +1899,14 @@ public final class ServerAppRuntime: Sendable {
             locationActivity: locationActivity,
             instance: instance,
             serverInfo: serverInfo,
+            modelsDev: modelsDev,
+            oauthManager: oauthManager,
+            allowLiveNetwork: allowLiveNetwork,
+            modelsDevOptions: effectiveModelsOptions,
             defaultDirectory: resolvedDefaultDir,
             scope: scope
         )
+        return runtime
     }
 }
 
