@@ -612,7 +612,7 @@ struct SessionDatabaseTests {
             db: harness.db,
             store: harness.store,
             models: modelsSvc,
-            selectTools: { _, _ in
+            selectTools: { _, _, _ in
                 CoreSessionModelRequest.ToolSnapshot(
                     definitions: [
                         .tool(AISchema.ToolDefinition(

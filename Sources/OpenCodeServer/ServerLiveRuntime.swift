@@ -3445,17 +3445,18 @@ public enum ServerLiveRuntime {
 
     internal static func parseCommandMarkdown(_ content: String) -> ConfigCommandSchema.Info? {
         guard let markdown = CoreConfigMarkdown.parseOption(content) else { return nil }
+        let data = CoreConfigMarkdown.joinLegacyVariant(markdown.data)
         let description: String? = {
-            if case .string(let s) = markdown.data["description"] { return s }
+            if case .string(let s) = data["description"] { return s }
             return nil
         }()
         let agent: String? = {
-            if case .string(let s) = markdown.data["agent"], !s.isEmpty { return s }
+            if case .string(let s) = data["agent"], !s.isEmpty { return s }
             return nil
         }()
-        let model = parseFrontmatterModel(markdown.data["model"])
-        let subagent = parseFrontmatterBool(markdown.data["subagent"])
-        let subtask = parseFrontmatterBool(markdown.data["subtask"])
+        let model = parseFrontmatterModel(data["model"])
+        let subagent = parseFrontmatterBool(data["subagent"])
+        let subtask = parseFrontmatterBool(data["subtask"])
         return ConfigCommandSchema.Info(
             template: markdown.content.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
@@ -5547,7 +5548,7 @@ public enum ServerLiveRuntime {
                     model: modelRef
                 )
             },
-            selectTools: { session, agentProfile in
+            selectTools: { session, agentProfile, _ in
                 await snapshotTracker?.beginStep(sessionID: session.id)
                 let agentInfo = await agentService.get(AgentSchema.ID(rawValue: agentProfile.id))
                 let ruleset = effectivePermissionRuleset(

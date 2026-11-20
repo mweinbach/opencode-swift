@@ -37,6 +37,32 @@ public enum AIProtocols {
     public protocol IncrementalStreamDecoder: Sendable {
         mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
         mutating func finish() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+        /// Marks a request boundary inside one logical response (a continuation request), without adding another
+        /// logical step or finish. Decoders of single-request protocols ignore it.
+        mutating func beginNextRequest() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent]
+    }
+
+    /// A transport that may continue one logical response across several HTTP requests
+    /// (upstream route `transport` with a resumable `execute`).
+    public struct ChatContinuation: Sendable {
+        /// Starts tracking one logical response from its first request body and route label.
+        public let makeSession: @Sendable (_ body: [String: JSONValue], _ label: String) -> any ChatContinuationSession
+
+        public init(makeSession: @escaping @Sendable (_ body: [String: JSONValue], _ label: String) -> any ChatContinuationSession) {
+            self.makeSession = makeSession
+        }
+    }
+
+    /// Per-response continuation state: watches each response's raw stream and decides, at its end, whether the
+    /// next request continues it.
+    public protocol ChatContinuationSession: Sendable {
+        /// Observes raw response bytes; true once the response's terminal event arrived and reading can stop.
+        mutating func observe(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> Bool
+        /// Whether a transport failure that ended the current response may be resumed from a checkpoint.
+        func canResume(after error: any Error) -> Bool
+        /// After a response ends (`dropped` is the transport failure that ended it early), the body of the request
+        /// that continues it, or nil when the response is complete or has no safe checkpoint.
+        mutating func next(dropped: (any Error)?) throws -> [String: JSONValue]?
     }
 
     /// Fallback decoder for custom `ChatProtocolSpec` instances that only provide a batch `parseStream`.
@@ -567,6 +593,8 @@ public enum AIProtocols {
         public let defaultHeaders: [String: String]
         public let defaultProviderOptions: [String: JSONValue]
         public let auth: AIProtocolUtils.AuthStrategy
+        /// A resumable transport that may continue one logical response across requests; nil for plain SSE.
+        public let continuation: ChatContinuation?
 
         public init(
             id: String,
@@ -577,7 +605,8 @@ public enum AIProtocols {
             path: String,
             defaultHeaders: [String: String] = [:],
             defaultProviderOptions: [String: JSONValue] = [:],
-            auth: AIProtocolUtils.AuthStrategy = .none
+            auth: AIProtocolUtils.AuthStrategy = .none,
+            continuation: ChatContinuation? = nil
         ) {
             self.id = id
             self.provider = provider
@@ -588,6 +617,7 @@ public enum AIProtocols {
             self.defaultHeaders = defaultHeaders
             self.defaultProviderOptions = defaultProviderOptions
             self.auth = auth
+            self.continuation = continuation
         }
 
         public init(
@@ -599,7 +629,8 @@ public enum AIProtocols {
             pathBuilder: @escaping @Sendable (AIProtocolUtils.LLMRequest, [String: JSONValue]) -> String,
             defaultHeaders: [String: String] = [:],
             defaultProviderOptions: [String: JSONValue] = [:],
-            auth: AIProtocolUtils.AuthStrategy = .none
+            auth: AIProtocolUtils.AuthStrategy = .none,
+            continuation: ChatContinuation? = nil
         ) {
             self.id = id
             self.provider = provider
@@ -610,6 +641,7 @@ public enum AIProtocols {
             self.defaultHeaders = defaultHeaders
             self.defaultProviderOptions = defaultProviderOptions
             self.auth = auth
+            self.continuation = continuation
         }
 
         public func with(
@@ -635,7 +667,8 @@ public enum AIProtocols {
                 pathBuilder: self.pathBuilder,
                 defaultHeaders: mergedHeaders,
                 defaultProviderOptions: mergedOptions,
-                auth: auth ?? self.auth
+                auth: auth ?? self.auth,
+                continuation: self.continuation
             )
         }
 
@@ -643,13 +676,8 @@ public enum AIProtocols {
             "anthropic-messages", "alibaba-messages", "meta-messages", "zai-messages",
         ]
 
-        public func prepareHTTPRequest(
-            for request: AIProtocolUtils.LLMRequest,
-            baseURLOverride: String? = nil,
-            extraHeaders: [String: String] = [:],
-            timestampEpochSeconds: Int64? = nil,
-            clock: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
-        ) throws -> HTTPRequest {
+        /// The request's provider options merged over the route defaults.
+        private func effective(_ request: AIProtocolUtils.LLMRequest) -> AIProtocolUtils.LLMRequest {
             var effectiveRequest = request
             if !defaultProviderOptions.isEmpty {
                 effectiveRequest.providerOptions = AIProtocolUtils.JSONCodec.mergeObjects(
@@ -657,10 +685,28 @@ public enum AIProtocols {
                     request.providerOptions
                 )
             }
-            var body = try `protocol`.buildBody(effectiveRequest)
+            return effectiveRequest
+        }
+
+        /// The JSON body of the first request for `request`, with the caller's `http.body` overlay applied.
+        public func requestBody(for request: AIProtocolUtils.LLMRequest) throws -> [String: JSONValue] {
+            var body = try `protocol`.buildBody(effective(request))
             if let overlay = request.http?.body {
                 body = AIProtocolUtils.JSONCodec.mergeObjects(body, overlay)
             }
+            return body
+        }
+
+        public func prepareHTTPRequest(
+            for request: AIProtocolUtils.LLMRequest,
+            body bodyOverride: [String: JSONValue]? = nil,
+            baseURLOverride: String? = nil,
+            extraHeaders: [String: String] = [:],
+            timestampEpochSeconds: Int64? = nil,
+            clock: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970) }
+        ) throws -> HTTPRequest {
+            let effectiveRequest = effective(request)
+            let body = try bodyOverride ?? requestBody(for: request)
             let base = (baseURLOverride ?? request.model.baseURL ?? defaultBaseURL ?? "")
                 .trimmingTrailingSlashes()
             let path = pathBuilder(effectiveRequest, body)
@@ -705,37 +751,56 @@ public enum AIProtocols {
             return AsyncThrowingStream { continuation in
                 let task = Task {
                     do {
-                        let httpRequest = try routeSpec.prepareHTTPRequest(
-                            for: request,
-                            baseURLOverride: baseURLOverride,
-                            extraHeaders: extraHeaders,
-                            timestampEpochSeconds: timestampEpochSeconds,
-                            clock: clock
-                        )
-                        let response = try await transport.stream(httpRequest)
-                        if response.head.statusCode >= 400 {
-                            var errorBytes: [UInt8] = []
-                            for try await chunk in response.chunks {
-                                errorBytes.append(contentsOf: chunk)
-                            }
-                            let bodyText = String(decoding: errorBytes, as: UTF8.self)
-                            throw AIRequestExecutor.httpFailure(
-                                message: AIErrorClassifier.providerErrorMessage(bodyText)
-                                    ?? "Provider request failed with HTTP \(response.head.statusCode)",
-                                url: httpRequest.url,
-                                status: response.head.statusCode,
-                                responseHeaders: response.head.headers,
-                                responseBody: bodyText
-                            )
-                        }
+                        var body = try routeSpec.requestBody(for: request)
+                        var session = routeSpec.continuation?.makeSession(body, "\(request.model.provider)/\(routeSpec.id)")
                         var decoder = routeSpec.`protocol`.makeDecoder(for: request)
-                        for try await chunk in response.chunks {
-                            try Task.checkCancellation()
-                            if chunk.isEmpty { continue }
-                            let produced = try decoder.feed(chunk)
-                            for event in produced {
+                        while true {
+                            let httpRequest = try routeSpec.prepareHTTPRequest(
+                                for: request,
+                                body: body,
+                                baseURLOverride: baseURLOverride,
+                                extraHeaders: extraHeaders,
+                                timestampEpochSeconds: timestampEpochSeconds,
+                                clock: clock
+                            )
+                            let response = try await transport.stream(httpRequest)
+                            if response.head.statusCode >= 400 {
+                                var errorBytes: [UInt8] = []
+                                for try await chunk in response.chunks {
+                                    errorBytes.append(contentsOf: chunk)
+                                }
+                                let bodyText = String(decoding: errorBytes, as: UTF8.self)
+                                throw AIRequestExecutor.httpFailure(
+                                    message: AIErrorClassifier.providerErrorMessage(bodyText)
+                                        ?? "Provider request failed with HTTP \(response.head.statusCode)",
+                                    url: httpRequest.url,
+                                    status: response.head.statusCode,
+                                    responseHeaders: response.head.headers,
+                                    responseBody: bodyText
+                                )
+                            }
+                            var dropped: (any Error)? = nil
+                            do {
+                                for try await chunk in response.chunks {
+                                    try Task.checkCancellation()
+                                    if chunk.isEmpty { continue }
+                                    let produced = try decoder.feed(chunk)
+                                    for event in produced {
+                                        continuation.yield(event)
+                                    }
+                                    if try session?.observe(chunk) == true { break }
+                                }
+                            } catch {
+                                guard let current = session, current.canResume(after: error) else { throw error }
+                                dropped = error
+                            }
+                            guard var current = session else { break }
+                            guard let nextBody = try current.next(dropped: dropped) else { break }
+                            session = current
+                            for event in try decoder.beginNextRequest() {
                                 continuation.yield(event)
                             }
+                            body = nextBody
                         }
                         let trailing = try decoder.finish()
                         for event in trailing {
@@ -831,9 +896,10 @@ public enum AIProtocols {
                                     defaultCompatibility: defaultCompatibility,
                                     defaultCapabilities: defaultCapabilities
                                 )
-                                let httpRequest = try routeSpec.prepareHTTPRequest(
-                                    for: protoReq,
-                                    clock: clock
+                                var body = try routeSpec.requestBody(for: protoReq)
+                                var session = routeSpec.continuation?.makeSession(
+                                    body,
+                                    "\(request.model.provider.rawValue)/\(routeSpec.id)"
                                 )
                                 let executor: AIRequestExecutor.RequestExecutorService = transport.map {
                                     AIRequestExecutor.layer(transport: $0)
@@ -846,20 +912,43 @@ public enum AIProtocols {
                                     ),
                                     timeout: request.timeout
                                 )
-                                let response = try await execFn(httpRequest, middleware)
-                                httpContext = AIRequestExecutor.responseHttp(response)
 
                                 var decoder = routeSpec.`protocol`.makeDecoder(for: protoReq)
                                 var sawFinish = false
-                                for try await chunk in AIRequestExecutor.responseStream(response) {
-                                    try Task.checkCancellation()
-                                    if chunk.isEmpty { continue }
-                                    let produced = try decoder.feed(chunk)
-                                    for ev in produced {
+                                while true {
+                                    let httpRequest = try routeSpec.prepareHTTPRequest(
+                                        for: protoReq,
+                                        body: body,
+                                        clock: clock
+                                    )
+                                    let response = try await execFn(httpRequest, middleware)
+                                    if httpContext == nil { httpContext = AIRequestExecutor.responseHttp(response) }
+                                    var dropped: (any Error)? = nil
+                                    do {
+                                        for try await chunk in AIRequestExecutor.responseStream(response) {
+                                            try Task.checkCancellation()
+                                            if chunk.isEmpty { continue }
+                                            let produced = try decoder.feed(chunk)
+                                            for ev in produced {
+                                                let schemaEvent = AIProtocols.toSchemaEvent(ev)
+                                                if schemaEvent.isFinish { sawFinish = true }
+                                                continuation.yield(schemaEvent)
+                                            }
+                                            if try session?.observe(chunk) == true { break }
+                                        }
+                                    } catch {
+                                        guard let current = session, current.canResume(after: error) else { throw error }
+                                        dropped = error
+                                    }
+                                    guard var current = session else { break }
+                                    guard let nextBody = try current.next(dropped: dropped) else { break }
+                                    session = current
+                                    for ev in try decoder.beginNextRequest() {
                                         let schemaEvent = AIProtocols.toSchemaEvent(ev)
                                         if schemaEvent.isFinish { sawFinish = true }
                                         continuation.yield(schemaEvent)
                                     }
+                                    body = nextBody
                                 }
                                 let trailing = try decoder.finish()
                                 for ev in trailing {
@@ -5418,6 +5507,23 @@ public enum AIProtocols {
 
     public enum GoogleInteractions {
         public static let adapterID = "google-interactions"
+        static let CONTINUATION = "requires_continuation"
+        /// Matches Google's GenAI SDKs (Python, JS, and Go).
+        static let MAX_STREAM_RECONNECTS_WITHOUT_PROGRESS = 3
+
+        /// https://aistudio.google.com/docs/document-processing#office-documents
+        static let officeDocumentMimeTypes: Set<String> = [
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+            "application/vnd.oasis.opendocument.text",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.oasis.opendocument.presentation",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.oasis.opendocument.spreadsheet",
+        ]
 
         // parity: ai/src/protocols/google-interactions.ts#DEFAULT_BASE_URL [status=implemented hash=ae7b30027e03]
         public static let DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -5429,29 +5535,34 @@ public enum AIProtocols {
             public var thinkingLevel: String?
             public var thinkingSummaries: String?
             public var serviceTier: String?
+            public var safetySettings: [AIProtocolUtils.GeminiGenerateContent.SafetySetting]?
 
             public init(
                 previousInteractionId: String? = nil,
                 store: Bool? = nil,
                 thinkingLevel: String? = nil,
                 thinkingSummaries: String? = nil,
-                serviceTier: String? = nil
+                serviceTier: String? = nil,
+                safetySettings: [AIProtocolUtils.GeminiGenerateContent.SafetySetting]? = nil
             ) {
                 self.previousInteractionId = previousInteractionId
                 self.store = store
                 self.thinkingLevel = thinkingLevel
                 self.thinkingSummaries = thinkingSummaries
                 self.serviceTier = serviceTier
+                self.safetySettings = safetySettings
             }
         }
 
         // parity: ai/src/protocols/google-interactions.ts#ProviderOptionsInput [status=implemented hash=b8c6e72d7d57]
         public typealias ProviderOptionsInput = OptionsInput
 
-        // parity: ai/src/protocols/google-interactions.ts#mediaContent [status=implemented hash=402a7fa32a64]
+        // parity: ai/src/protocols/google-interactions.ts#mediaContent [status=implemented hash=3cb12bfe832f]
         public static func mediaContent(_ asset: AIProtocolUtils.MediaAsset) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
             let kind = asset.kind
-            guard kind == .image || kind == .audio || kind == .video || asset.mediaType == "application/pdf" || asset.mediaType == "text/csv" else {
+            guard kind == .image || kind == .audio || kind == .video || asset.mediaType == "application/pdf"
+                || asset.mediaType == "text/csv" || officeDocumentMimeTypes.contains(asset.mediaType)
+            else {
                 throw AIProtocolUtils.ProviderShared.invalidRequest("Google Interactions does not support \(asset.mediaType) document input")
             }
             let typeStr: String = (kind == .image || kind == .audio || kind == .video) ? kind.rawValue : "document"
@@ -5467,6 +5578,18 @@ public enum AIProtocols {
             }
             let inline = try AIProtocolUtils.ProviderShared.requireInlineMedia(route: "Google Interactions", asset: asset)
             return ["type": .string(typeStr), "data": .string(inline.base64), "mime_type": .string(inline.mime)]
+        }
+
+        /// `safetySettings` provider options in the Interactions wire shape: the category without its
+        /// `HARM_CATEGORY_` prefix and the threshold, both lowercased.
+        static func safetySettings(_ value: JSONValue?) -> [JSONValue]? {
+            guard let settings = AIProtocolUtils.JSONCodec.arrayValue(value) else { return nil }
+            return settings.compactMap { item -> JSONValue? in
+                guard let setting = AIProtocolUtils.GeminiGenerateContent.SafetySetting(json: item) else { return nil }
+                var category = setting.category
+                if category.hasPrefix("HARM_CATEGORY_") { category.removeFirst("HARM_CATEGORY_".count) }
+                return .object(["type": .string(category.lowercased()), "threshold": .string(setting.threshold.lowercased())])
+            }
         }
 
         public static func fromRequest(_ request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
@@ -5518,6 +5641,7 @@ public enum AIProtocols {
                 "model": .string(request.model.id),
                 "input": .array(inputSteps),
                 "stream": .bool(true),
+                // Full-history replay need not create retained provider resources. Continuation callers opt in to storage.
                 "store": .bool(AIProtocolUtils.JSONCodec.boolValue(opts["store"]) ?? false),
                 "generation_config": .object(genConfig),
             ]
@@ -5530,6 +5654,9 @@ public enum AIProtocols {
             if let tier = AIProtocolUtils.JSONCodec.stringValue(opts["serviceTier"]) {
                 body["service_tier"] = .string(tier)
             }
+            if let safety = safetySettings(opts["safetySettings"]) {
+                body["safety_settings"] = .array(safety)
+            }
             if !flattened.tools.isEmpty {
                 body["tools"] = .array(flattened.tools.map { t in
                     .object(["type": .string("function"), "name": .string(t.name), "description": .string(t.description), "parameters": .object(t.inputSchema)])
@@ -5538,11 +5665,134 @@ public enum AIProtocols {
             return body
         }
 
+        // MARK: Stream Parsing
+
+        /// The usage counters of one Interactions request (`RawUsage`).
+        struct RawUsage: Equatable, Sendable {
+            let raw: [String: JSONValue]
+
+            init?(_ value: JSONValue?) {
+                guard let raw = AIProtocolUtils.JSONCodec.objectValue(value) else { return nil }
+                self.raw = raw
+            }
+
+            func number(_ key: String) -> Double? { AIProtocolUtils.JSONCodec.doubleValue(raw[key]) }
+            var input: Double? { number("total_input_tokens") }
+            var cached: Double? { number("total_cached_tokens") }
+            var output: Double? { number("total_output_tokens") }
+            var thought: Double? { number("total_thought_tokens") }
+            var total: Double? { number("total_tokens") }
+            var rawPrompt: Double? { number("raw_prompt_token") }
+        }
+
+        /// Maps the usage of a logical call that may span continuation requests: input and context come from the
+        /// first request, output and reasoning sum across requests, and re-billed input stays in provider metadata.
+        static func mapUsage(_ usage: RawUsage?, key: String, continued: [RawUsage?]) -> AIProtocolUtils.Usage? {
+            if usage == nil && continued.allSatisfy({ $0 == nil }) { return nil }
+            let first = continued.isEmpty ? usage : continued[0]
+            let hops = continued + [usage]
+            func sum(_ field: (RawUsage) -> Double?) -> Double? {
+                AIProtocolUtils.ProviderShared.sumTokens(hops.map { $0.flatMap(field) })
+            }
+            let input = first?.input
+            let cached = first?.cached
+            let reasoning = sum(\.thought)
+            let text = sum(\.output)
+            let output: Double? = continued.isEmpty
+                ? text.map { $0 + (reasoning ?? 0) }
+                : AIProtocolUtils.ProviderShared.sumTokens(text, reasoning)
+            let metadata: [String: JSONValue]
+            if continued.isEmpty {
+                metadata = usage?.raw ?? [:]
+            } else {
+                var summed: [String: JSONValue] = ["requests": .int(Int64(hops.count))]
+                func put(_ name: String, _ value: Double?) { if let value { summed[name] = .double(value) } }
+                put("total_input_tokens", sum(\.input))
+                put("total_cached_tokens", sum(\.cached))
+                put("total_output_tokens", text)
+                put("total_thought_tokens", reasoning)
+                put("total_tokens", sum(\.total))
+                metadata = summed
+            }
+            return AIProtocolUtils.Usage(
+                inputTokens: input,
+                outputTokens: output,
+                contextTokens: first?.rawPrompt ?? input,
+                nonCachedInputTokens: AIProtocolUtils.ProviderShared.subtractTokens(input, cached),
+                cacheReadInputTokens: cached,
+                reasoningTokens: reasoning,
+                totalTokens: continued.isEmpty
+                    ? usage?.total
+                    : AIProtocolUtils.ProviderShared.totalTokens(input, output, nil),
+                providerMetadata: [key: metadata]
+            )
+        }
+
+        private static let recoverableCodes: Set<String> = [
+            "MALFORMED_FUNCTION_CALL", "MALFORMED_TOOL_CALL", "UNEXPECTED_TOOL_CALL", "MALFORMED_RESPONSE",
+        ]
+        private static let invalidOutputCodes: Set<String> = ["MISSING_THOUGHT_SIGNATURE", "TOO_MANY_TOOL_CALLS", "NO_IMAGE"]
+
+        static func failureReason(
+            route: String,
+            code: String?,
+            message: String,
+            data: JSONValue?,
+            rawBody: String
+        ) -> AIProtocolUtils.ProtocolError {
+            let normalized = code?.trimmingCharacters(in: .whitespaces).uppercased().replacing("-", with: "_")
+            if let normalized, recoverableCodes.contains(normalized) {
+                return AIProtocolUtils.ProtocolError(kind: .invalidProviderOutput, message: message, route: route, body: rawBody, classification: "incomplete-stream")
+            }
+            if let normalized, invalidOutputCodes.contains(normalized) {
+                return AIProtocolUtils.ProtocolError(kind: .invalidProviderOutput, message: message, route: route, body: rawBody)
+            }
+            if let normalized, normalized == "CONTENT_BLOCKED" || AIProtocolUtils.GeminiGenerateContent.contentFiltered(normalized) {
+                return AIProtocolUtils.ProtocolError(kind: .contentPolicy, message: message, route: route, body: rawBody)
+            }
+            let kind: AIProtocolUtils.ProtocolErrorKind
+            switch AIErrorClassifier.classifyProviderFailure(AIErrorClassifier.ProviderFailure(message: message, rawBody: rawBody, data: data)) {
+            case .contentPolicy: kind = .contentPolicy
+            case .rateLimit, .quotaExceeded: kind = .rateLimit
+            case .authentication: kind = .authentication
+            case .invalidRequest: kind = .invalidRequest
+            case .unsupportedOperation: kind = .unsupportedOperation
+            case .transport, .timeout: kind = .transport
+            case .invalidProviderOutput: kind = .invalidProviderOutput
+            case .unknownProvider: kind = .unknownProvider
+            case .providerInternal: kind = .providerInternal
+            }
+            return AIProtocolUtils.ProtocolError(kind: kind, message: message, route: route, body: rawBody)
+        }
+
         public struct StreamDecoder: IncrementalStreamDecoder, Sendable {
+            private struct Step: Sendable {
+                var type: String
+                var signature: String?
+            }
+
             private var sse = AIProtocolUtils.SSEParser()
             private var lifecycle = AIProtocolUtils.Lifecycle.initial()
+            private let route: String
+            private let metadataKey: String
+            private var hop = 0
+            private var hasToolCalls = false
+            private var usage: RawUsage?
+            private var continuedUsage: [RawUsage?] = []
+            private var steps: [Int: Step] = [:]
+            private var tools: AIProtocolUtils.ToolStream.State<Int> = AIProtocolUtils.ToolStream.empty()
 
-            public init() {}
+            public init(route: String = "google/\(adapterID)", metadataKey: String = "google") {
+                self.route = route
+                self.metadataKey = metadataKey
+            }
+
+            public init(request: AIProtocolUtils.LLMRequest) {
+                self.init(
+                    route: "\(request.model.provider)/\(request.model.routeID)",
+                    metadataKey: request.model.providerMetadataKey ?? request.model.provider
+                )
+            }
 
             public mutating func feed(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
                 try process(sse.feed(bytes))
@@ -5552,55 +5802,435 @@ public enum AIProtocols {
                 try process(sse.finish())
             }
 
+            /// A request boundary: closes the open blocks and pending tool calls of the request that ended, keeps its
+            /// usage for the logical call, and starts the next request's block ids at a new hop.
+            public mutating func beginNextRequest() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
+                var events = try AIProtocolUtils.ToolStream.finishAll(route: adapterID, tools: tools).events
+                for index in steps.keys.sorted() {
+                    guard let step = steps[index] else { continue }
+                    let id = blockID(index)
+                    if step.type == "thought" {
+                        lifecycle = AIProtocolUtils.Lifecycle.reasoningEnd(lifecycle, events: &events, id: id, providerMetadata: metadata(step))
+                    }
+                    if step.type == "model_output" {
+                        lifecycle = AIProtocolUtils.Lifecycle.textEnd(lifecycle, events: &events, id: id)
+                    }
+                }
+                hop += 1
+                steps = [:]
+                tools = AIProtocolUtils.ToolStream.empty()
+                continuedUsage.append(usage)
+                usage = nil
+                // A dropped stream may have buffered a partial frame; the next request starts a fresh stream.
+                sse = AIProtocolUtils.SSEParser()
+                return events
+            }
+
+            private func blockID(_ index: Int) -> String { hop == 0 ? String(index) : "\(hop):\(index)" }
+
+            private func metadata(_ step: Step) -> AIProtocolUtils.ProviderMetadata {
+                [metadataKey: ["interactionSignature": step.signature.map(JSONValue.string) ?? .null]]
+            }
+
             private mutating func process(_ frames: [AIProtocolUtils.SSEFrame]) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
                 var events: [AIProtocolUtils.LLMEvent] = []
                 for frame in frames {
                     let trimmed = frame.data.trimmingASCIIWhitespace()
                     if trimmed.isEmpty || trimmed == ": keepalive" { continue }
-                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid Google Interactions SSE JSON")
+                    let decoded = try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid \(route) stream event")
                     guard let obj = AIProtocolUtils.JSONCodec.objectValue(decoded),
                           let evType = AIProtocolUtils.JSONCodec.stringValue(obj["event_type"]) else { continue }
-                    if evType == "step.delta", let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"]),
-                       AIProtocolUtils.JSONCodec.stringValue(delta["type"]) == "text",
-                       let text = AIProtocolUtils.JSONCodec.stringValue(delta["text"]) {
-                        let idx = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
-                        lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: "text-\(idx)", text: text)
-                    } else if evType == "interaction.completed" {
-                        let interaction = AIProtocolUtils.JSONCodec.objectValue(obj["interaction"])
-                        let status = AIProtocolUtils.JSONCodec.stringValue(interaction?["status"])
-                        let norm: AIProtocolUtils.FinishReason = status == "completed" ? .stop : .unknown
-                        lifecycle = AIProtocolUtils.Lifecycle.finish(lifecycle, events: &events, reason: AIProtocolUtils.FinishReasonDetails(normalized: norm, raw: status))
-                    } else if evType == "error" {
-                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Google Interactions stream error", body: frame.data)
-                    }
+                    try step(evType, obj, raw: frame.data, events: &events)
                 }
                 return events
+            }
+
+            private mutating func step(
+                _ type: String,
+                _ obj: [String: JSONValue],
+                raw: String,
+                events: inout [AIProtocolUtils.LLMEvent]
+            ) throws(AIProtocolUtils.ProtocolError) {
+                let index = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
+                switch type {
+                case "step.start":
+                    guard let stepObj = AIProtocolUtils.JSONCodec.objectValue(obj["step"]) else {
+                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Invalid \(route) stream event", body: raw)
+                    }
+                    try onStart(index, stepObj, raw: raw, events: &events)
+                case "step.delta":
+                    guard let delta = AIProtocolUtils.JSONCodec.objectValue(obj["delta"]) else {
+                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Invalid \(route) stream event", body: raw)
+                    }
+                    try onDelta(index, delta, raw: raw, events: &events)
+                case "step.stop":
+                    try onStop(index, events: &events)
+                case "interaction.status_update":
+                    usage = RawUsage(obj["usage"]) ?? usage
+                case "interaction.created":
+                    break
+                case "error":
+                    let detail = AIProtocolUtils.JSONCodec.objectValue(obj["error"])
+                    let code = AIProtocolUtils.JSONCodec.stringValue(detail?["code"]) ?? AIProtocolUtils.JSONCodec.stringValue(detail?["error_type"])
+                    let detailMessage = AIProtocolUtils.JSONCodec.stringValue(detail?["message"])?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let message = (detailMessage?.isEmpty == false ? detailMessage : nil)
+                        ?? AIErrorClassifier.providerErrorMessage(raw)
+                        ?? "Google Interactions stream error"
+                    throw failureReason(route: route, code: code, message: message, data: obj["error"], rawBody: raw)
+                case "interaction.completed":
+                    let interaction = AIProtocolUtils.JSONCodec.objectValue(obj["interaction"]) ?? [:]
+                    let status = AIProtocolUtils.JSONCodec.stringValue(interaction["status"]) ?? ""
+                    if status == CONTINUATION {
+                        usage = RawUsage(interaction["usage"]) ?? usage
+                        return
+                    }
+                    if status == "failed" || status == "cancelled" {
+                        let errors = AIProtocolUtils.JSONCodec.arrayValue(interaction["errors"])?.compactMap(AIProtocolUtils.JSONCodec.objectValue) ?? []
+                        let messages = errors.compactMap { AIProtocolUtils.JSONCodec.stringValue($0["message"]) }
+                            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                        let coded = errors.first { AIProtocolUtils.JSONCodec.stringValue($0["code"]) != nil }
+                        throw failureReason(
+                            route: route,
+                            code: coded.flatMap { AIProtocolUtils.JSONCodec.stringValue($0["code"]) },
+                            message: messages.isEmpty ? "Google Interactions \(status)" : messages.joined(separator: "\n"),
+                            // The first coded error decides the classification; every message stays visible.
+                            data: coded.map(JSONValue.object) ?? .object(interaction),
+                            rawBody: raw
+                        )
+                    }
+                    guard ["completed", "requires_action", "incomplete"].contains(status) else {
+                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Unexpected terminal Interactions status: \(status)", body: raw)
+                    }
+                    let pending = try AIProtocolUtils.ToolStream.finishAll(route: adapterID, tools: tools)
+                    events.append(contentsOf: pending.events)
+                    tools = pending.tools
+                    let normalized: AIProtocolUtils.FinishReason =
+                        status == "requires_action" || (status == "completed" && hasToolCalls)
+                            ? .toolCalls
+                            : status == "incomplete" ? .length : .stop
+                    var meta: [String: JSONValue] = [:]
+                    if let id = AIProtocolUtils.JSONCodec.stringValue(interaction["id"]) { meta["interactionId"] = .string(id) }
+                    lifecycle = AIProtocolUtils.Lifecycle.finish(
+                        lifecycle,
+                        events: &events,
+                        reason: AIProtocolUtils.FinishReasonDetails(normalized: normalized, raw: status),
+                        usage: mapUsage(RawUsage(interaction["usage"]) ?? usage, key: metadataKey, continued: continuedUsage),
+                        providerMetadata: [metadataKey: meta]
+                    )
+                default:
+                    // Google may add stream event types; unknown types are ignored.
+                    break
+                }
+            }
+
+            private mutating func onStart(
+                _ index: Int,
+                _ stepObj: [String: JSONValue],
+                raw: String,
+                events: inout [AIProtocolUtils.LLMEvent]
+            ) throws(AIProtocolUtils.ProtocolError) {
+                let type = AIProtocolUtils.JSONCodec.stringValue(stepObj["type"]) ?? ""
+                let step = Step(type: type, signature: AIProtocolUtils.JSONCodec.stringValue(stepObj["signature"]))
+                lifecycle = AIProtocolUtils.Lifecycle.stepStart(lifecycle, events: &events)
+                let id = blockID(index)
+                switch type {
+                case "thought":
+                    lifecycle = AIProtocolUtils.Lifecycle.reasoningStart(lifecycle, events: &events, id: id, providerMetadata: metadata(step))
+                    for part in AIProtocolUtils.JSONCodec.arrayValue(stepObj["summary"]) ?? [] {
+                        guard let text = AIProtocolUtils.JSONCodec.stringValue(AIProtocolUtils.JSONCodec.objectValue(part)?["text"]) else { continue }
+                        lifecycle = AIProtocolUtils.Lifecycle.reasoningDelta(lifecycle, events: &events, id: id, text: text)
+                    }
+                case "model_output":
+                    lifecycle = AIProtocolUtils.Lifecycle.textStart(lifecycle, events: &events, id: id)
+                    for part in AIProtocolUtils.JSONCodec.arrayValue(stepObj["content"]) ?? [] {
+                        let item = AIProtocolUtils.JSONCodec.objectValue(part) ?? [:]
+                        let partType = AIProtocolUtils.JSONCodec.stringValue(item["type"]) ?? ""
+                        guard partType == "text" else {
+                            throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Unsupported Interactions output: \(partType)", body: raw)
+                        }
+                        if let text = AIProtocolUtils.JSONCodec.stringValue(item["text"]), !text.isEmpty {
+                            lifecycle = AIProtocolUtils.Lifecycle.textDelta(lifecycle, events: &events, id: id, text: text)
+                        }
+                    }
+                case "function_call":
+                    guard let callID = AIProtocolUtils.JSONCodec.stringValue(stepObj["id"]), !callID.isEmpty,
+                          let name = AIProtocolUtils.JSONCodec.stringValue(stepObj["name"]), !name.isEmpty else {
+                        throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Interactions function call lacks id or name", body: raw)
+                    }
+                    let arguments = AIProtocolUtils.JSONCodec.objectValue(stepObj["arguments"])
+                    let input = (arguments?.isEmpty == false) ? AIProtocolUtils.JSONCodec.encodeObject(arguments ?? [:]) : ""
+                    tools = AIProtocolUtils.ToolStream.start(tools, key: index, tool: AIProtocolUtils.ToolStream.PendingTool(
+                        id: callID,
+                        name: name,
+                        input: input,
+                        providerMetadata: metadata(step)
+                    ))
+                    events.append(.toolInputStart(id: callID, name: name, providerMetadata: metadata(step)))
+                    hasToolCalls = true
+                default:
+                    throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Unsupported Interactions step: \(type)", body: raw)
+                }
+                steps[index] = step
+            }
+
+            private mutating func onDelta(
+                _ index: Int,
+                _ delta: [String: JSONValue],
+                raw: String,
+                events: inout [AIProtocolUtils.LLMEvent]
+            ) throws(AIProtocolUtils.ProtocolError) {
+                guard var step = steps[index] else {
+                    throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Interactions delta without step.start", body: raw)
+                }
+                let type = AIProtocolUtils.JSONCodec.stringValue(delta["type"]) ?? ""
+                if type == "text", step.type == "model_output" {
+                    lifecycle = AIProtocolUtils.Lifecycle.textDelta(
+                        lifecycle, events: &events, id: blockID(index), text: AIProtocolUtils.JSONCodec.stringValue(delta["text"]) ?? ""
+                    )
+                    return
+                }
+                if type == "thought_summary", step.type == "thought" {
+                    let text = AIProtocolUtils.JSONCodec.stringValue(AIProtocolUtils.JSONCodec.objectValue(delta["content"])?["text"]) ?? ""
+                    lifecycle = AIProtocolUtils.Lifecycle.reasoningDelta(lifecycle, events: &events, id: blockID(index), text: text)
+                    return
+                }
+                if type == "thought_signature" {
+                    step.signature = AIProtocolUtils.JSONCodec.stringValue(delta["signature"])
+                    steps[index] = step
+                    if let tool = tools[index] {
+                        tools[index] = AIProtocolUtils.ToolStream.PendingTool(
+                            id: tool.id,
+                            name: tool.name,
+                            namespace: tool.namespace,
+                            input: tool.input,
+                            providerExecuted: tool.providerExecuted,
+                            providerMetadata: metadata(step)
+                        )
+                    }
+                    return
+                }
+                if type == "arguments_delta", step.type == "function_call" {
+                    let result = AIProtocolUtils.ToolStream.appendExisting(
+                        route: adapterID,
+                        tools: tools,
+                        key: index,
+                        text: AIProtocolUtils.JSONCodec.stringValue(delta["arguments"]) ?? "",
+                        missingToolMessage: "Interactions arguments without function call"
+                    )
+                    switch result {
+                    case .ok(let outcome):
+                        tools = outcome.tools
+                        events.append(contentsOf: outcome.events)
+                    case .error(let error):
+                        throw error
+                    }
+                    return
+                }
+                throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Unsupported Interactions delta: \(type)", body: raw)
+            }
+
+            private mutating func onStop(_ index: Int, events: inout [AIProtocolUtils.LLMEvent]) throws(AIProtocolUtils.ProtocolError) {
+                guard let step = steps[index] else {
+                    throw AIProtocolUtils.ProviderShared.eventError(adapterID, "Interactions step.stop without step.start")
+                }
+                if step.type == "thought" {
+                    lifecycle = AIProtocolUtils.Lifecycle.reasoningEnd(lifecycle, events: &events, id: blockID(index), providerMetadata: metadata(step))
+                    return
+                }
+                if step.type == "model_output" {
+                    lifecycle = AIProtocolUtils.Lifecycle.textEnd(lifecycle, events: &events, id: blockID(index))
+                    return
+                }
+                let result = try AIProtocolUtils.ToolStream.finish(route: adapterID, tools: tools, key: index)
+                tools = result.tools
+                events.append(contentsOf: result.events)
             }
         }
 
         public static func parseSSEStream(_ bytes: [UInt8], request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
-            _ = request
-            var decoder = StreamDecoder()
+            var decoder = StreamDecoder(request: request)
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/google-interactions.ts#protocol [status=implemented hash=100386490bae]
+        // MARK: Transport
+
+        /// The first request of one logical call: its prepared HTTP request and the body continuations reuse.
+        // parity: ai/src/protocols/google-interactions.ts#Prepared [status=adapted hash=9d01b04624ac]
+        public struct Prepared: Sendable {
+            public let http: HTTPRequest?
+            public let body: [String: JSONValue]
+
+            public init(http: HTTPRequest? = nil, body: [String: JSONValue]) {
+                self.http = http
+                self.body = body
+            }
+        }
+
+        /// Where a continuation resumes: its checkpoint token, the interaction that owns it, and reconnects since
+        /// the last progress.
+        struct Resume: Sendable {
+            let token: String
+            let owner: String?
+            let reconnectsWithoutProgress: Int
+            let lastError: String?
+        }
+
+        /// Follows one logical response across requests. A response that ends at a safe checkpoint (a continuation
+        /// token with no output since it, no tool call cut mid-arguments) continues with `continuation_token`;
+        /// a stored interaction continues by id instead of resending its input.
+        public struct ContinuationSession: ChatContinuationSession {
+            private let prepared: Prepared
+            private let label: String
+            private var resume: Resume?
+            private var sse = AIProtocolUtils.SSEParser()
+            private var token: String?
+            private var owner: String?
+            private var status: String?
+            private var contentSinceToken = false
+            private var terminal = false
+            private var pendingTools: Set<Int> = []
+
+            public init(prepared: Prepared, label: String) {
+                self.prepared = prepared
+                self.label = label
+            }
+
+            public mutating func observe(_ bytes: [UInt8]) throws(AIProtocolUtils.ProtocolError) -> Bool {
+                for frame in sse.feed(bytes) {
+                    let trimmed = frame.data.trimmingASCIIWhitespace()
+                    if trimmed.isEmpty || trimmed == ": keepalive" { continue }
+                    guard let obj = AIProtocolUtils.JSONCodec.objectValue(
+                        try AIProtocolUtils.ProviderShared.parseJson(route: adapterID, input: trimmed, message: "Invalid \(label) stream event")
+                    ), let type = AIProtocolUtils.JSONCodec.stringValue(obj["event_type"]) else { continue }
+                    let index = AIProtocolUtils.JSONCodec.intValue(obj["index"]) ?? 0
+                    switch type {
+                    case "interaction.created":
+                        owner = AIProtocolUtils.JSONCodec.stringValue(AIProtocolUtils.JSONCodec.objectValue(obj["interaction"])?["id"])
+                    case "interaction.status_update":
+                        status = AIProtocolUtils.JSONCodec.stringValue(obj["status"])
+                        owner = AIProtocolUtils.JSONCodec.stringValue(obj["interaction_id"]) ?? owner
+                        if let next = AIProtocolUtils.JSONCodec.stringValue(obj["continuation_token"]), !next.isEmpty, next != token {
+                            token = next
+                            contentSinceToken = false
+                        }
+                    case "interaction.completed":
+                        let interaction = AIProtocolUtils.JSONCodec.objectValue(obj["interaction"]) ?? [:]
+                        terminal = true
+                        status = AIProtocolUtils.JSONCodec.stringValue(interaction["status"])
+                        owner = AIProtocolUtils.JSONCodec.stringValue(interaction["id"]) ?? owner
+                        if let next = AIProtocolUtils.JSONCodec.stringValue(interaction["continuation_token"]), !next.isEmpty {
+                            token = next
+                            contentSinceToken = false
+                        }
+                        return true
+                    case "step.start":
+                        let step = AIProtocolUtils.JSONCodec.objectValue(obj["step"]) ?? [:]
+                        if AIProtocolUtils.JSONCodec.stringValue(step["type"]) == "function_call" { pendingTools.insert(index) }
+                        if pendingTools.contains(index)
+                            || !(AIProtocolUtils.JSONCodec.arrayValue(step["content"]) ?? []).isEmpty
+                            || !(AIProtocolUtils.JSONCodec.arrayValue(step["summary"]) ?? []).isEmpty
+                            || AIProtocolUtils.JSONCodec.stringValue(step["signature"]) != nil {
+                            contentSinceToken = true
+                        }
+                    case "step.delta":
+                        contentSinceToken = true
+                    case "step.stop":
+                        if pendingTools.remove(index) != nil { contentSinceToken = true }
+                    default:
+                        break
+                    }
+                }
+                return false
+            }
+
+            public func canResume(after error: any Error) -> Bool {
+                // A dropped connection may resume from the last checkpoint; a timeout or a decode failure may not.
+                guard let transport = error as? HTTPTransportError, case .networkFailure(let detail) = transport else { return false }
+                let lowered = detail.lowercased()
+                return !lowered.contains("timed out") && !lowered.contains("timeout")
+            }
+
+            public mutating func next(dropped: (any Error)?) throws -> [String: JSONValue]? {
+                let needsContinuation = status == CONTINUATION
+                let resumable = needsContinuation || (!terminal && (status == nil || status == "in_progress"))
+                let newToken = token != resume?.token
+                // An interrupted tool call may carry arguments across the checkpoint. Don't finalize it on EOF.
+                if let token, resumable, !contentSinceToken, terminal || pendingTools.isEmpty, !needsContinuation || newToken {
+                    let reconnects = newToken ? 0 : (resume?.reconnectsWithoutProgress ?? 0) + 1
+                    let lastError = dropped.map { String(describing: $0) } ?? (newToken ? nil : resume?.lastError)
+                    if reconnects > MAX_STREAM_RECONNECTS_WITHOUT_PROGRESS {
+                        guard let lastError else { return nil }
+                        throw AISchema.AIError(reason: .invalidProviderOutput(AISchema.InvalidProviderOutputError(
+                            message: lastError,
+                            classification: .incompleteStream,
+                            route: label
+                        )))
+                    }
+                    let next = Resume(
+                        token: token,
+                        owner: newToken ? owner : resume?.owner,
+                        reconnectsWithoutProgress: reconnects,
+                        lastError: lastError
+                    )
+                    resume = next
+                    // The next response starts at the checkpoint.
+                    sse = AIProtocolUtils.SSEParser()
+                    owner = nil
+                    status = nil
+                    contentSinceToken = false
+                    terminal = false
+                    pendingTools = []
+                    return Self.continuationBody(prepared.body, resume: next)
+                }
+                if let dropped { throw dropped }
+                if terminal && needsContinuation && token == nil {
+                    throw AIProtocols.toProtocolError(
+                        AIProtocolUtils.ProviderShared.eventError(label, "Google Interactions continued without a token")
+                    )
+                }
+                // No safe checkpoint. Leave EOF for the route's incomplete-stream check.
+                return nil
+            }
+
+            static func continuationBody(_ body: [String: JSONValue], resume: Resume) -> [String: JSONValue] {
+                var next = body
+                next["continuation_token"] = .string(resume.token)
+                if AIProtocolUtils.JSONCodec.boolValue(body["store"]) == true, let owner = resume.owner {
+                    next.removeValue(forKey: "input")
+                    next["previous_interaction_id"] = .string(owner)
+                }
+                return next
+            }
+        }
+
+        /// Server-sent JSON events, continued across requests at Google's continuation checkpoints and after a
+        /// dropped stream (at most `MAX_STREAM_RECONNECTS_WITHOUT_PROGRESS` reconnects without progress).
+        // parity: ai/src/protocols/google-interactions.ts#transport [status=adapted hash=3f338ac8a9ca]
+        public static let transport = ChatContinuation { body, label in
+            ContinuationSession(prepared: Prepared(body: body), label: label)
+        }
+
+        /// The stream event union also carries request boundaries (`NextRequest`, via `beginNextRequest`), and
+        /// `interaction.completed` is terminal only when it doesn't require continuation.
+        // parity: ai/src/protocols/google-interactions.ts#protocol [status=implemented hash=0c30702154f0]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
+            sanitizer: "gemini",
             buildBody: fromRequest,
             parseStream: parseSSEStream,
-            makeStreamDecoder: { _ in StreamDecoder() }
+            makeStreamDecoder: { request in StreamDecoder(request: request) }
         )
 
-        // parity: ai/src/protocols/google-interactions.ts#route [status=implemented hash=2d73e49254a0]
+        // parity: ai/src/protocols/google-interactions.ts#route [status=implemented hash=1372d6a960df]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "google",
             providerMetadataKey: "google",
             protocol: `protocol`,
             defaultBaseURL: DEFAULT_BASE_URL,
-            path: "/interactions"
+            path: "/interactions",
+            continuation: transport
         )
     }
 
@@ -6561,4 +7191,8 @@ private extension String {
         while s.hasSuffix("/") { s.removeLast() }
         return s
     }
+}
+
+extension AIProtocols.IncrementalStreamDecoder {
+    public mutating func beginNextRequest() throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] { [] }
 }

@@ -19,11 +19,15 @@ public enum ConfigFlagSchema {
         case videoGenerate = "video_generate"
         case consoleWatches = "console_watches"
         case mcpEvents = "mcp_events"
+        case recommendedApi = "recommended_api"
         case fullCodemode = "full_codemode"
+        case machines
+        case homeMemory = "home_memory"
+        case sqliteFts = "sqlite_fts"
     }
 
     /// Registry mapping each feature flag key to its human-readable description.
-    // parity: schema/src/config/flag.ts#registry [status=implemented hash=9abbe7f406ab]
+    // parity: schema/src/config/flag.ts#registry [status=implemented hash=5f92f1319d3a]
     public static let registry: [Key: String] = [
         .todo:
             "Enable the experimental todowrite tool. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=todo or experimental.todo: true.",
@@ -34,18 +38,26 @@ public enum ConfigFlagSchema {
         .artifacts:
             "Enable experimental artifacts backed by pluggable providers.",
         .videoGenerate:
-            "Enable the experimental video generation API.",
+            "Enable experimental video generation: the HTTP API that starts a video job and stores the result, and the agent tool that saves the videos into the workspace.",
         .consoleWatches:
             "Watch Slack threads, GitHub pull requests, issues, commits and Actions runs, and the workspace's MCP servers' events through OpenCode Console, and wake sessions when they change.",
         .mcpEvents:
             "Enable experimental MCP Events, a draft MCP extension: declare support to MCP servers and read the events of servers that offer them.",
+        .recommendedApi:
+            "Use each model's recommended API from models.dev instead of the first API it lists.",
         .fullCodemode:
-            "Enable the full Code Mode work in progress. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=full_codemode or experimental.full_codemode: true.",
+            "Enable the full Code Mode work in progress.",
+        .machines:
+            "Let a tool path name a machine, as in gpu:/work/train.py, and act on that machine's files and processes.",
+        .homeMemory:
+            "Give sessions in the home folder a persistent memory/, docs/ and scripts/ workspace the agent can use freely, tidied by a daily maintenance session that reads the day's home-folder conversations.",
+        .sqliteFts:
+            "Build an SQLite full-text index of session titles and message text, once, in the background. It covers every session in the database and starts while any loaded location enables it; SQLite keeps it current from then on, also after this is turned off. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=sqlite_fts or experimental.sqlite_fts: true.",
     ]
 
     /// Flags that require explicit opt-in across every build channel (skipped by `all` and `all_flags`).
-    // parity: schema/src/config/flag.ts#optInOnly [status=implemented hash=cdad59fd4508]
-    public static let optInOnly: Set<Key> = [.todo, .fullCodemode]
+    // parity: schema/src/config/flag.ts#optInOnly [status=implemented hash=f25eeb087d38]
+    public static let optInOnly: Set<Key> = [.todo, .sqliteFts]
 
     /// Legacy flag names mapped to their canonical flag key.
     // parity: schema/src/config/flag.ts#aliases [status=implemented hash=40e4d64669eb]
@@ -838,6 +850,54 @@ public enum ConfigExperimentalSchema {
         }
     }
 
+    /// Settings for the experimental_video_generate tool; an object turns `video_generate` on.
+    public struct VideoGenerateOptions: Equatable, Hashable, Sendable, Codable {
+        /// Default model when the agent doesn't choose one, as providerID/modelID.
+        public let model: ConfigModelSchema.Selection?
+
+        public init(model: ConfigModelSchema.Selection? = nil) {
+            self.model = model
+        }
+    }
+
+    /// `experimental.video_generate`: the flag also takes settings; an object turns it on.
+    public enum VideoGenerate: Equatable, Hashable, Sendable, Codable {
+        case enabled(Bool)
+        case configured(VideoGenerateOptions)
+
+        /// The flag value: an object turns the flag on.
+        public var isEnabled: Bool {
+            switch self {
+            case .enabled(let flag): return flag
+            case .configured: return true
+            }
+        }
+
+        public var options: VideoGenerateOptions? {
+            if case .configured(let options) = self { return options }
+            return nil
+        }
+
+        public init(from decoder: Decoder) throws {
+            let single = try decoder.singleValueContainer()
+            if let flag = try? single.decode(Bool.self) {
+                self = .enabled(flag)
+            } else {
+                self = .configured(try single.decode(VideoGenerateOptions.self))
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var single = encoder.singleValueContainer()
+            switch self {
+            case .enabled(let flag):
+                try single.encode(flag)
+            case .configured(let options):
+                try single.encode(options)
+            }
+        }
+    }
+
     public enum ImageGenerate: Equatable, Hashable, Sendable, Codable {
         case enabled(Bool)
         case configured(ImageGenerateOptions)
@@ -899,7 +959,7 @@ public enum ConfigExperimentalSchema {
         }
     }
 
-    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=b1c1008367eb]
+    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=fb471acd943c]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let portableShellScanner: Bool?
         public let codemodeVM: Bool?
@@ -908,11 +968,17 @@ public enum ConfigExperimentalSchema {
         public let mediaBlob: Bool?
         public let automations: Bool?
         public let artifacts: Bool?
-        public let videoGenerate: Bool?
+        public let videoGenerate: VideoGenerate?
         public let consoleWatches: Bool?
         public let mcpEvents: Bool?
+        public let recommendedApi: Bool?
         public let fullCodemode: Bool?
+        public let machines: Bool?
+        public let homeMemory: Bool?
+        public let sqliteFts: Bool?
         public let schedules: Bool?
+        /// Write each assistant part as its own session_part row instead of rewriting the whole message on every
+        /// event. Defaults to true; set false to fall back to whole-message writes.
         public let partRows: Bool?
         public let imageGenerate: ImageGenerate?
         public let subagentDepth: SchemaPrimitive.NonNegativeInt?
@@ -927,10 +993,14 @@ public enum ConfigExperimentalSchema {
             mediaBlob: Bool? = nil,
             automations: Bool? = nil,
             artifacts: Bool? = nil,
-            videoGenerate: Bool? = nil,
+            videoGenerate: VideoGenerate? = nil,
             consoleWatches: Bool? = nil,
             mcpEvents: Bool? = nil,
+            recommendedApi: Bool? = nil,
             fullCodemode: Bool? = nil,
+            machines: Bool? = nil,
+            homeMemory: Bool? = nil,
+            sqliteFts: Bool? = nil,
             schedules: Bool? = nil,
             partRows: Bool? = nil,
             imageGenerate: ImageGenerate? = nil,
@@ -948,7 +1018,11 @@ public enum ConfigExperimentalSchema {
             self.videoGenerate = videoGenerate
             self.consoleWatches = consoleWatches
             self.mcpEvents = mcpEvents
+            self.recommendedApi = recommendedApi
             self.fullCodemode = fullCodemode
+            self.machines = machines
+            self.homeMemory = homeMemory
+            self.sqliteFts = sqliteFts
             self.schedules = schedules
             self.partRows = partRows
             self.imageGenerate = imageGenerate
@@ -963,10 +1037,14 @@ public enum ConfigExperimentalSchema {
             case .mediaBlob: return mediaBlob
             case .automations: return automations
             case .artifacts: return artifacts
-            case .videoGenerate: return videoGenerate
+            case .videoGenerate: return videoGenerate?.isEnabled
             case .consoleWatches: return consoleWatches
             case .mcpEvents: return mcpEvents
+            case .recommendedApi: return recommendedApi
             case .fullCodemode: return fullCodemode
+            case .machines: return machines
+            case .homeMemory: return homeMemory
+            case .sqliteFts: return sqliteFts
             }
         }
 
@@ -981,7 +1059,11 @@ public enum ConfigExperimentalSchema {
             case videoGenerate = "video_generate"
             case consoleWatches = "console_watches"
             case mcpEvents = "mcp_events"
+            case recommendedApi = "recommended_api"
             case fullCodemode = "full_codemode"
+            case machines
+            case homeMemory = "home_memory"
+            case sqliteFts = "sqlite_fts"
             case schedules
             case partRows = "part_rows"
             case imageGenerate = "image_generate"

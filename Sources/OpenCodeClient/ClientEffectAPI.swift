@@ -1242,7 +1242,8 @@ public enum EffectClient {
         public typealias RpcCallOperation = @Sendable (RpcCallInput) async throws -> RpcCallOutput
         // parity: client/src/effect/api/api.ts#RpcApi [status=implemented hash=2e00db4cf5b2]
         public typealias RpcApi = RpcClientAPI
-        // parity: client/src/effect/api/api.ts#EventSubscribeInput [status=implemented hash=629667134685]
+        /// `types` takes any server event type, including `experimental.job.updated`.
+        // parity: client/src/effect/api/api.ts#EventSubscribeInput [status=implemented hash=e916039a2006]
         public typealias EventSubscribeInput = PromiseInputTypes.EventSubscribeInput
         // parity: client/src/effect/api/api.ts#EventSubscribeOutput [status=implemented hash=1018d0124b49]
         public typealias EventSubscribeOutput = OpenCodeProtocol.OpenCodeEvent
@@ -1422,7 +1423,14 @@ public enum EffectClient {
         public typealias ExperimentalJobListOutput = [JobSchema.Info]
         // parity: client/src/effect/api/api.ts#ExperimentalJobListOperation [status=implemented hash=dafb3609e811]
         public typealias ExperimentalJobListOperation = @Sendable (ExperimentalJobListInput?) async throws -> ExperimentalJobListOutput
-        // parity: client/src/effect/api/api.ts#ExperimentalApi [status=implemented hash=6263928a277e]
+        // parity: client/src/effect/api/api.ts#ExperimentalJobCancelInput [status=implemented hash=0cfccab209ce]
+        public typealias ExperimentalJobCancelInput = PromiseInputTypes.ExperimentalJobCancelInput
+        // parity: client/src/effect/api/api.ts#ExperimentalJobCancelOutput [status=implemented hash=3ca7b13e8938]
+        public typealias ExperimentalJobCancelOutput = ClientEmptyResponse
+        // parity: client/src/effect/api/api.ts#ExperimentalJobCancelOperation [status=implemented hash=219488dbb8af]
+        public typealias ExperimentalJobCancelOperation = @Sendable (ExperimentalJobCancelInput) async throws -> Void
+        /// `job` offers `list` and `cancel`.
+        // parity: client/src/effect/api/api.ts#ExperimentalApi [status=implemented hash=e85ab6ec7928]
         public typealias ExperimentalApi = ExperimentalClientAPI
         // parity: client/src/effect/api/api.ts#ShellListInput [status=implemented hash=0f4202e34c0b]
         public typealias ShellListInput = PromiseInputTypes.ShellListInput

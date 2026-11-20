@@ -356,7 +356,7 @@ public let holdLocation: @Sendable (
 // MARK: - 5. Experimental & Persistent PTY Group Handler (server/src/handlers/persistent-pty.ts)
 
 /// Handlers for `server.experimental` composing media, blob, job, artifacts, automation, and persistentPty routes.
-// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=09378bf9fe0b]
+// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=51d38380c696]
 public let PersistentPtyHandler: ServerHandlerGroup = {
     let artifact = makeArtifact()
     let job = makeJob()
@@ -389,6 +389,7 @@ public let PersistentPtyHandler: ServerHandlerGroup = {
             ServerRoute(method: .get, pathTemplate: "/api/experimental/blob/:id", endpointName: "blob.get", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.blob.get", handler: blobGet),
             // Jobs
             ServerRoute(method: .get, pathTemplate: "/api/experimental/job", endpointName: "job.list", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.job.list", handler: job.list),
+            ServerRoute(method: .post, pathTemplate: "/api/experimental/job/:id/cancel", endpointName: "job.cancel", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.job.cancel", handler: job.cancel),
             // Artifacts
             ServerRoute(method: .get, pathTemplate: "/api/experimental/artifacts/providers", endpointName: "artifacts.providers", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.artifacts.providers", handler: artifact.providers),
             ServerRoute(method: .get, pathTemplate: "/api/experimental/artifacts", endpointName: "artifacts.list", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.artifacts.list", handler: artifact.list),

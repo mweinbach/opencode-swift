@@ -2056,7 +2056,9 @@ public enum GenerateSchema {
         }
     }
 
-    // parity: schema/src/generate.ts#VideoErrorReason [status=implemented hash=f4c57e1d93e1]
+    /// failed: the provider failed the job. cancelled: the provider cancelled it. expired: the provider expired it.
+    /// unknown: the provider gave no result in time.
+    // parity: schema/src/generate.ts#VideoErrorReason [status=implemented hash=500b377a0272]
     public enum VideoErrorReason: String, Equatable, Hashable, Sendable, Codable {
         case failed
         case cancelled

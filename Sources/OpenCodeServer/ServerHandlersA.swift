@@ -779,7 +779,7 @@ public let ConfigHandler = ServerHandlerGroup(
 // MARK: - 8. Credential Handler (server/src/handlers/credential.ts)
 
 /// Handlers for `server.credential` (CRUD + activation + managed policy check against global config location).
-// parity: server/src/handlers/credential.ts#CredentialHandler [status=implemented hash=b59e19ef6d14]
+// parity: server/src/handlers/credential.ts#CredentialHandler [status=implemented hash=2d18032a6706]
 public let CredentialHandler = ServerHandlerGroup(
     groupIdentifier: "server.credential",
     routes: [
@@ -869,7 +869,14 @@ public let CredentialHandler = ServerHandlerGroup(
             let rawID = try ctx.requireParam("credentialID")
             let id = CredentialSchema.ID(rawValue: rawID)
             let existing = try await ctx.runtime.credential.get(id)
-            try await ctx.runtime.credential.remove(id)
+            // Removal goes through Integration so a sign-in method can revoke the credential remotely first.
+            // The global config directory always exists.
+            let globalRef = LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: ctx.runtime.global.config))
+            if let globalLoc = try? await ctx.runtime.resolveLocation(globalRef) {
+                try await globalLoc.integration.removeCredential(id)
+            } else {
+                try await ctx.runtime.credential.remove(id)
+            }
             if let existing {
                 await ctx.runtime.reloadCatalogsIfNeeded(for: existing.integrationID)
             }
@@ -1251,7 +1258,10 @@ private func matchesFileIfRange(_ ifRange: String?, etag: String, lastModified: 
 // MARK: - 13. Generate Handler (server/src/handlers/generate.ts)
 
 /// Handlers for `server.generate` (`text`, `textLegacy`, `image`, `decisions`, `video.create`, `video.get`).
-// parity: server/src/handlers/generate.ts#GenerateHandler [status=implemented hash=1a0df1289629]
+// `video.create`: upstream converts the wire request with `Generate.videoInput` (base64 `start`/`end`/`references`
+// become media) because `VideoGeneration.start` takes a `Generate.VideoInput`. This port's
+// `VideoGeneration.Interface.start` still takes the wire `VideoRequest`, so that conversion belongs to its implementation.
+// parity: server/src/handlers/generate.ts#GenerateHandler [status=implemented hash=b05170353594]
 public let GenerateHandler = ServerHandlerGroup(
     groupIdentifier: "server.generate",
     routes: [
@@ -1797,86 +1807,97 @@ public let IntegrationHandler = ServerHandlerGroup(
 
 public struct ServerJobHandlers: Sendable {
     public let list: @Sendable (ServerRouteContext) async throws -> ServerHTTPResponse
+    public let cancel: @Sendable (ServerRouteContext) async throws -> ServerHTTPResponse
 }
 
-/// Builds `job.list` handler for the `server.experimental` group.
-// parity: server/src/handlers/job.ts#makeJob [status=implemented hash=8c1b836b1298]
+/// Builds the `job.list` and `job.cancel` handlers for the `server.experimental` group.
+// parity: server/src/handlers/job.ts#makeJob [status=implemented hash=3a9895e2ca2f]
 public let makeJob: @Sendable () -> ServerJobHandlers = {
     ServerJobHandlers(
-        list: { ctx in
-            let sessionID: SessionID? = try ctx.request.query("sessionID").map { raw in
-                do { return try SessionID(validating: raw) } catch {
-                    throw InvalidRequestError(message: "Invalid session ID", field: "sessionID")
-                }
-            }
-            if let sessionID {
-                do {
-                    _ = try ctx.runtime.session.get(sessionID)
-                } catch let e as CoreSessionErrors.NotFoundError {
-                    throw missingSession(e)
-                }
-            }
-            let kind: JobSchema.Kind? = try ctx.request.query("kind").map { raw in
-                guard let parsed = JobSchema.Kind(rawValue: raw) else {
-                    throw InvalidRequestError(message: "Invalid job kind: \(raw)", kind: "Query", field: "kind")
-                }
-                return parsed
-            }
-            let status: JobSchema.Status? = try ctx.request.query("status").map { raw in
-                guard let parsed = JobSchema.Status(rawValue: raw) else {
-                    throw InvalidRequestError(message: "Invalid job status: \(raw)", kind: "Query", field: "status")
-                }
-                return parsed
-            }
-            let descendants = try parseBoolQuery(ctx.request.query("descendants")) ?? false
-            let allRows = try await ctx.runtime.job.backgroundJobs()
-
-            var ancestorSet: Set<SessionID>? = nil
-            if let sessionID {
-                var allowed: Set<SessionID> = [sessionID]
-                if descendants {
-                    var frontier: [SessionID] = [sessionID]
-                    while !frontier.isEmpty {
-                        let current = frontier.removeFirst()
-                        let children = (try? ctx.runtime.sessionStore.list(
-                            CoreSessionStore.ListInput(parentID: .session(current))
-                        )) ?? []
-                        for child in children where allowed.insert(child.id).inserted {
-                            frontier.append(child.id)
-                        }
-                    }
-                }
-                ancestorSet = allowed
-            }
-
-            let items: [JobSchema.Info] = allRows.filter { row in
-                let rowSessionID: SessionID
-                let rowKind: JobSchema.Kind
-                let rowStatus: JobSchema.Status
-                switch row {
-                case .shell(let s):
-                    rowSessionID = s.sessionID; rowKind = .shell; rowStatus = s.status
-                case .subagent(let s):
-                    rowSessionID = s.sessionID; rowKind = .subagent; rowStatus = s.status
-                case .image(let s):
-                    rowSessionID = s.sessionID; rowKind = .image; rowStatus = s.status
-                case .codemode(let s):
-                    rowSessionID = s.sessionID; rowKind = .codemode; rowStatus = s.status
-                }
-                if let allowed = ancestorSet, !allowed.contains(rowSessionID) {
-                    return false
-                }
-                if let kind, rowKind != kind {
-                    return false
-                }
-                if let status, rowStatus != status {
-                    return false
-                }
-                return true
-            }
-            return ServerHTTPResponse.json(ServerDataWrapper(data: items))
+        list: { ctx in try await jobList(ctx) },
+        cancel: { ctx in
+            // Cancelling a job that already finished (or never existed) does nothing.
+            let id = try ctx.requireParam("id")
+            _ = await ctx.runtime.job.cancel(id)
+            return ServerHTTPResponse.empty(statusCode: 204)
         }
     )
+}
+
+private func jobList(_ ctx: ServerRouteContext) async throws -> ServerHTTPResponse {
+    let sessionID: SessionID? = try ctx.request.query("sessionID").map { raw in
+        do { return try SessionID(validating: raw) } catch {
+            throw InvalidRequestError(message: "Invalid session ID", field: "sessionID")
+        }
+    }
+    if let sessionID {
+        do {
+            _ = try ctx.runtime.session.get(sessionID)
+        } catch let e as CoreSessionErrors.NotFoundError {
+            throw missingSession(e)
+        }
+    }
+    let kind: JobSchema.Kind? = try ctx.request.query("kind").map { raw in
+        guard let parsed = JobSchema.Kind(rawValue: raw) else {
+            throw InvalidRequestError(message: "Invalid job kind: \(raw)", kind: "Query", field: "kind")
+        }
+        return parsed
+    }
+    let status: JobSchema.Status? = try ctx.request.query("status").map { raw in
+        guard let parsed = JobSchema.Status(rawValue: raw) else {
+            throw InvalidRequestError(message: "Invalid job status: \(raw)", kind: "Query", field: "status")
+        }
+        return parsed
+    }
+    let descendants = try parseBoolQuery(ctx.request.query("descendants")) ?? false
+    let allRows = try await ctx.runtime.job.backgroundJobs()
+
+    var ancestorSet: Set<SessionID>? = nil
+    if let sessionID {
+        var allowed: Set<SessionID> = [sessionID]
+        if descendants {
+            var frontier: [SessionID] = [sessionID]
+            while !frontier.isEmpty {
+                let current = frontier.removeFirst()
+                let children = (try? ctx.runtime.sessionStore.list(
+                    CoreSessionStore.ListInput(parentID: .session(current))
+                )) ?? []
+                for child in children where allowed.insert(child.id).inserted {
+                    frontier.append(child.id)
+                }
+            }
+        }
+        ancestorSet = allowed
+    }
+
+    let items: [JobSchema.Info] = allRows.filter { row in
+        let rowSessionID: SessionID
+        let rowKind: JobSchema.Kind
+        let rowStatus: JobSchema.Status
+        switch row {
+        case .shell(let s):
+            rowSessionID = s.sessionID; rowKind = .shell; rowStatus = s.status
+        case .subagent(let s):
+            rowSessionID = s.sessionID; rowKind = .subagent; rowStatus = s.status
+        case .image(let s):
+            rowSessionID = s.sessionID; rowKind = .image; rowStatus = s.status
+        case .video(let s):
+            rowSessionID = s.sessionID; rowKind = .video; rowStatus = s.status
+        case .codemode(let s):
+            rowSessionID = s.sessionID; rowKind = .codemode; rowStatus = s.status
+        }
+        if let allowed = ancestorSet, !allowed.contains(rowSessionID) {
+            return false
+        }
+        if let kind, rowKind != kind {
+            return false
+        }
+        if let status, rowStatus != status {
+            return false
+        }
+        return true
+    }
+    return ServerHTTPResponse.json(ServerDataWrapper(data: items))
 }
 
 // MARK: - 16. Location Handler (server/src/handlers/location.ts)

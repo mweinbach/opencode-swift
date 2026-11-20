@@ -1186,6 +1186,7 @@ public enum EventManifestSchema {
         .ephemeral(type: "shell.created"),
         .ephemeral(type: "shell.exited"),
         .ephemeral(type: "shell.deleted"),
+        .ephemeral(type: "experimental.job.updated"),
         .ephemeral(type: "form.created"),
         .ephemeral(type: "form.replied"),
         .ephemeral(type: "form.cancelled"),
@@ -1193,7 +1194,7 @@ public enum EventManifestSchema {
         .ephemeral(type: "artifact.updated"),
     ])
 
-    /// Ordered inventory of all 98 public server event definitions.
+    /// Ordered inventory of all 99 public server event definitions.
     // parity: schema/src/event-manifest.ts#ServerDefinitions [status=implemented hash=36396993e596]
     public static let ServerDefinitions: [EventSchema.Definition] = EventSchema.inventory(
         foundationDefinitions

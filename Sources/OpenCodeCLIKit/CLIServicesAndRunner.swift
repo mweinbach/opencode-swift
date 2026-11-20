@@ -3077,7 +3077,77 @@ public enum CLIRun {
     private static let permissionRejectedFeedback =
         "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
 
-    // parity: cli/src/run/noninteractive.ts#runNonInteractivePrompt [status=implemented hash=28f4b5f5f913]
+    /// Sessions that background jobs of a non-interactive run own, learned from the job list.
+    final class NonInteractiveJobSessions: Sendable {
+        private let ids = Mutex<Set<String>>([])
+        func insert(_ id: String) { _ = ids.withLock { $0.insert(id) } }
+        var all: [String] { ids.withLock { Array($0) } }
+    }
+
+    /// Background work this run started that is still going: listed jobs, or quiet-looking sessions of the tree
+    /// that still have queued input or an active execution. Nil once the tree is quiet.
+    static func nonInteractiveBackground(
+        _ input: NonInteractivePromptInput,
+        since: Double,
+        jobSessions: NonInteractiveJobSessions,
+        owns: @Sendable (String) async -> Bool
+    ) async -> [JobSchema.Info]? {
+        let jobs = (try? await input.client.experimental.job.list(
+            ExperimentalJobListInput(sessionID: input.sessionID, descendants: true)
+        )) ?? []
+        let running = jobs.filter { $0.cliStartedAt >= since }
+        for job in running {
+            jobSessions.insert(job.cliSessionID)
+            if case .subagent(let subagent) = job { jobSessions.insert(subagent.childSessionID.rawValue) }
+        }
+        if !running.isEmpty { return running }
+        for sessionID in jobSessions.all {
+            let inbox = (try? await input.client.session.inbox.list(SessionInboxListInput(sessionID: sessionID))) ?? []
+            if !inbox.isEmpty { return running }
+        }
+        let active = (try? await input.client.session.active()) ?? [:]
+        for sessionID in active.keys where await owns(sessionID) {
+            return running
+        }
+        return nil
+    }
+
+    /// Cancelling: interrupt the session and the background work it started, then wait until the tree is quiet.
+    /// Image, video and Code Mode jobs can't be cancelled through the API, so waiting on them would only hold the exit.
+    static func cancelNonInteractiveRun(
+        _ input: NonInteractivePromptInput,
+        since: Double,
+        jobSessions: NonInteractiveJobSessions,
+        owns: @Sendable (String) async -> Bool
+    ) async {
+        let running = await nonInteractiveBackground(input, since: since, jobSessions: jobSessions, owns: owns) ?? []
+        _ = try? await input.client.session.interrupt(SessionInterruptInput(sessionID: input.sessionID))
+        for job in running {
+            switch job {
+            case .shell(let shell):
+                _ = try? await input.client.shell.remove(
+                    ShellRemoveInput(id: shell.shellID, location: LocationQuery.LocationField(directory: input.directory))
+                )
+            case .subagent(let subagent):
+                _ = try? await input.client.session.interrupt(SessionInterruptInput(sessionID: subagent.childSessionID.rawValue))
+            case .image, .video, .codemode:
+                break
+            }
+        }
+        while true {
+            _ = try? await input.client.experimental.session.wait(ExperimentalSessionWaitInput(sessionID: input.sessionID))
+            guard let pending = await nonInteractiveBackground(input, since: since, jobSessions: jobSessions, owns: owns) else {
+                return
+            }
+            if !pending.isEmpty && pending.allSatisfy(\.cliUncancellable) { return }
+            // A wake can still start after the interrupt (the notice each cancelled job queues), so interrupt every
+            // execution that starts until the tree is quiet.
+            _ = try? await input.client.session.interrupt(SessionInterruptInput(sessionID: input.sessionID))
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+
+    // parity: cli/src/run/noninteractive.ts#runNonInteractivePrompt [status=implemented hash=0241eff5b182]
     public static func runNonInteractivePrompt(
         _ input: NonInteractivePromptInput,
         context: CLIContext = CLIContext.current
@@ -3096,7 +3166,7 @@ public enum CLIRun {
         let ownedCache = Mutex<[String: Bool]>([input.sessionID: true])
         let formFailure = Mutex<String?>(nil)
 
-        func ownsSession(_ sessionID: String) async -> Bool {
+        @Sendable func ownsSession(_ sessionID: String) async -> Bool {
             if let cached = ownedCache.withLock({ $0[sessionID] }) { return cached }
             let result: Bool
             if let info = try? await input.client.session.get(SessionGetInput(sessionID: sessionID)),
@@ -3196,7 +3266,7 @@ public enum CLIRun {
             consumerTask.cancel()
         }
 
-        _ = try await input.client.session.prompt(
+        let admitted = try await input.client.session.prompt(
             SessionPromptInput(
                 sessionID: input.sessionID,
                 id: messageID.rawValue,
@@ -3205,11 +3275,12 @@ public enum CLIRun {
                 delivery: .steer
             )
         )
-
+        let since = Double(admitted.time.created)
+        let jobSessions = NonInteractiveJobSessions()
         // Wait for session execution to finish
         try await input.client.experimental.session.wait(ExperimentalSessionWaitInput(sessionID: input.sessionID))
         if input.signal.isAborted {
-            _ = try? await input.client.session.interrupt(SessionInterruptInput(sessionID: input.sessionID))
+            await cancelNonInteractiveRun(input, since: since, jobSessions: jobSessions, owns: ownsSession)
             return
         }
 
@@ -4139,5 +4210,35 @@ private func DarwinOrPosixOpenReadOnly(_ path: String) -> Int32 {
 private extension Character {
     var isASCIIWholeNumber: Bool {
         unicodeScalars.count == 1 && unicodeScalars.first!.value >= 0x30 && unicodeScalars.first!.value <= 0x39
+    }
+}
+
+extension JobSchema.Info {
+    fileprivate var cliStartedAt: Double {
+        switch self {
+        case .shell(let v): return v.time.started
+        case .subagent(let v): return v.time.started
+        case .image(let v): return v.time.started
+        case .video(let v): return v.time.started
+        case .codemode(let v): return v.time.started
+        }
+    }
+
+    fileprivate var cliSessionID: String {
+        switch self {
+        case .shell(let v): return v.sessionID.rawValue
+        case .subagent(let v): return v.sessionID.rawValue
+        case .image(let v): return v.sessionID.rawValue
+        case .video(let v): return v.sessionID.rawValue
+        case .codemode(let v): return v.sessionID.rawValue
+        }
+    }
+
+    /// Image, video and Code Mode jobs can't be cancelled through the API.
+    fileprivate var cliUncancellable: Bool {
+        switch self {
+        case .image, .video, .codemode: return true
+        case .shell, .subagent: return false
+        }
     }
 }

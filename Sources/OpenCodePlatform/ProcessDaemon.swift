@@ -1713,7 +1713,9 @@ extension ProcessDaemon {
             return info
         }
 
-        // parity: process-daemon/src/service.rs#list [status=implemented hash=1e25ce8a5997]
+        // `list` and `get` read each actor's cached info. A concurrent `terminate` may stop the actor of a
+        // handle already taken here; its cached info is then final and must not fail the whole listing.
+        // parity: process-daemon/src/service.rs#list [status=implemented hash=2f48e881f93b]
         public func list(_ mode: ProcessMode) throws -> [ProcessInfo] {
             let matching = registry.withLock { reg -> [SessionActor] in
                 reg.sessions.values
@@ -1723,7 +1725,7 @@ extension ProcessDaemon {
             return matching.map { $0.currentInfo() }
         }
 
-        // parity: process-daemon/src/service.rs#get [status=implemented hash=9b07e699d08a]
+        // parity: process-daemon/src/service.rs#get [status=implemented hash=0a1d5c2786c6]
         public func get(_ id: TerminalId) throws -> ProcessInfo {
             try requireHandle(id).currentInfo()
         }

@@ -62,7 +62,7 @@ public enum CoreFlag {
     /// Resolves every feature flag using exact precedence:
     /// `OPENCODE_FLAGS` (`key` / `-key` / alias / `all`) -> `experimental.<key>` (latest `experimental` doc)
     /// -> `experimental.all_flags: true` (latest doc setting `all_flags`) -> channel default (`local`/`dev`).
-    /// Opt-in-only flags (`todo`, `full_codemode`) skip both `all` wildcards and default to `false` on every channel.
+    /// Opt-in-only flags (`todo`, `sqlite_fts`) skip both `all` wildcards and default to `false` on every channel.
     // parity: core/src/flag.ts#resolve [status=implemented hash=6b90cf1c5c3c]
     public static func resolve(_ input: ResolveInput) -> [Key: State] {
         var envMap: [String: Bool] = [:]

@@ -1635,11 +1635,12 @@ public enum ShellSchema {
 // MARK: - src/job.ts
 
 public enum JobSchema {
-    // parity: schema/src/job.ts#Kind [status=implemented hash=2b23ec43ef21]
+    // parity: schema/src/job.ts#Kind [status=implemented hash=9f8c2201ba9d]
     public enum Kind: String, Equatable, Hashable, Sendable, Codable {
         case shell
         case subagent
         case image
+        case video
         case codemode
     }
 
@@ -1871,6 +1872,64 @@ public enum JobSchema {
         }
     }
 
+    // parity: schema/src/job.ts#Video [status=implemented hash=97f135343e1c]
+    public struct Video: Equatable, Hashable, Sendable, Codable {
+        public let id: String
+        public let sessionID: SessionID
+        public let status: Status
+        public let title: String?
+        public let time: Time
+        public let path: String
+
+        public init(
+            id: String,
+            sessionID: SessionID,
+            status: Status,
+            title: String? = nil,
+            time: Time,
+            path: String
+        ) {
+            self.id = id
+            self.sessionID = sessionID
+            self.status = status
+            self.title = title
+            self.time = time
+            self.path = path
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try SchemaPrimitive.decodeRequiredLiteral("video", from: container, forKey: .kind)
+            self.id = try container.decode(String.self, forKey: .id)
+            self.sessionID = try container.decode(SessionID.self, forKey: .sessionID)
+            self.status = try container.decode(Status.self, forKey: .status)
+            self.title = try container.decodeIfPresent(String.self, forKey: .title)
+            self.time = try container.decode(Time.self, forKey: .time)
+            self.path = try container.decode(String.self, forKey: .path)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("video", forKey: .kind)
+            try container.encode(id, forKey: .id)
+            try container.encode(sessionID, forKey: .sessionID)
+            try container.encode(status, forKey: .status)
+            try container.encodeIfPresent(title, forKey: .title)
+            try container.encode(time, forKey: .time)
+            try container.encode(path, forKey: .path)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind
+            case id
+            case sessionID
+            case status
+            case title
+            case time
+            case path
+        }
+    }
+
     // parity: schema/src/job.ts#CodeMode [status=implemented hash=29778a517ecd]
     public struct CodeMode: Equatable, Hashable, Sendable, Codable {
         public let id: String
@@ -1923,11 +1982,12 @@ public enum JobSchema {
         }
     }
 
-    // parity: schema/src/job.ts#Info [status=implemented hash=46bdda2823ac]
+    // parity: schema/src/job.ts#Info [status=implemented hash=821c60d1c642]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         case shell(Shell)
         case subagent(Subagent)
         case image(Image)
+        case video(Video)
         case codemode(CodeMode)
 
         enum TagKeys: String, CodingKey {
@@ -1944,6 +2004,8 @@ public enum JobSchema {
                 self = .subagent(try Subagent(from: decoder))
             case "image":
                 self = .image(try Image(from: decoder))
+            case "video":
+                self = .video(try Video(from: decoder))
             case "codemode":
                 self = .codemode(try CodeMode(from: decoder))
             default:
@@ -1960,9 +2022,18 @@ public enum JobSchema {
             case .shell(let v): try v.encode(to: encoder)
             case .subagent(let v): try v.encode(to: encoder)
             case .image(let v): try v.encode(to: encoder)
+            case .video(let v): try v.encode(to: encoder)
             case .codemode(let v): try v.encode(to: encoder)
             }
         }
+    }
+
+    /// A background job started, moved to the background, or ended.
+    /// Experimental: may change without compatibility guarantees.
+    // parity: schema/src/job.ts#Event [status=implemented hash=e7550d251b3a]
+    public enum Event {
+        public static let updated = SchemaPrimitive.EventDescriptor.ephemeral(type: "experimental.job.updated")
+        public static let definitions: [SchemaPrimitive.EventDescriptor] = [updated]
     }
 }
 

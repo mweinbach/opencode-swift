@@ -1352,8 +1352,13 @@ public enum ServerProcess {
         }
     }
 
+    /// A long-running application service loop the server process starts once its router exists and stops with the
+    /// server (upstream `Automation.Service.run` and the one-time `SessionSearchBuild.Service.run`, forked into the
+    /// application scope from any server process).
+    public typealias ApplicationRun = @Sendable (ServerAppRuntime) async -> Void
+
     /// Starts the real HTTP/1.1 + SSE + WebSocket TCP server process with startup/ready/stopping lifecycle dispatch.
-    // parity: server/src/process.ts#start [status=adapted hash=55e935f9a28c]
+    // parity: server/src/process.ts#start [status=adapted hash=0c0df8b5813a]
     public static func start(
         options: ServerOptions,
         lifecycle: (any Lifecycle)? = nil,
@@ -1364,7 +1369,8 @@ public enum ServerProcess {
         environment: any EnvironmentProviding = SystemEnvironment.shared,
         globalOverrides: Global.Overrides? = nil,
         defaultDirectory: String? = nil,
-        onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
+        onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil,
+        applicationRuns: [ApplicationRun] = []
     ) async throws -> RunningServer {
         guard let password = options.password, !password.isEmpty else {
             throw InvalidRequestError(message: "Missing server password")
@@ -1450,6 +1456,20 @@ public enum ServerProcess {
                     try? await restart.resumeSuspendedSessions()
                 }
             }
+            // Application-scoped service loops run from any server process; they stop with the server.
+            let runtime = router.runtime
+            let runs = applicationRuns.map { run in Task.detached { await run(runtime) } }
+            let previousCleanup = cleanupHook
+            let stopRuns: (@Sendable () async -> Void)?
+            if runs.isEmpty {
+                stopRuns = previousCleanup
+            } else {
+                let cancelRuns: @Sendable () async -> Void = {
+                    for run in runs { run.cancel() }
+                    await previousCleanup?()
+                }
+                stopRuns = cancelRuns
+            }
             routerBox.withLock { $0 = router }
             status.ready()
             return RunningServer(
@@ -1458,7 +1478,7 @@ public enum ServerProcess {
                 router: router,
                 status: status,
                 handler: finalHandler,
-                cleanupHook: cleanupHook
+                cleanupHook: stopRuns
             )
         } catch {
             status.fail()

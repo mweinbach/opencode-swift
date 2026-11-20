@@ -1778,11 +1778,11 @@ public enum CoreSessionStore {
         }
 
         public func messages(_ input: MessagesInput) throws -> [SessionMessageSchema.Info] {
-            try CoreSessionHistory.decodeMessageRows(db, rows: try messageRows(input))
+            try CoreSessionHistory.decodeMessageRows(db, rows: try messageRows(input)).map(CoreSessionLiveToolMetadata.overlay)
         }
 
         public func messagesWithRefs(_ input: MessagesInput) throws -> [SessionMessageSchema.MediaInfo] {
-            try CoreSessionHistory.decodeMessageRowsWithRefs(db, rows: try messageRows(input))
+            try CoreSessionHistory.decodeMessageRowsWithRefs(db, rows: try messageRows(input)).map(CoreSessionLiveToolMetadata.overlay)
         }
 
         public func context(_ sessionID: SessionID) throws -> [SessionMessageSchema.Info] {
@@ -1828,7 +1828,7 @@ public enum CoreSessionStore {
             ) else { return nil }
             let parsed = try CoreSessionHistory.parseMessageRow(raw)
             guard let msg = try CoreSessionHistory.decodeMessageRows(db, rows: [parsed]).first else { return nil }
-            return (parsed.sessionID, msg)
+            return (parsed.sessionID, CoreSessionLiveToolMetadata.overlay(msg))
         }
 
         public func messageWithRefs(_ messageID: SessionMessageSchema.ID) throws -> (sessionID: SessionID, message: SessionMessageSchema.MediaInfo)? {
@@ -1838,7 +1838,7 @@ public enum CoreSessionStore {
             ) else { return nil }
             let parsed = try CoreSessionHistory.parseMessageRow(raw)
             guard let msg = try CoreSessionHistory.decodeMessageRowsWithRefs(db, rows: [parsed]).first else { return nil }
-            return (parsed.sessionID, msg)
+            return (parsed.sessionID, CoreSessionLiveToolMetadata.overlay(msg))
         }
 
         public func listSuspended() throws -> [SessionID] {
@@ -2501,7 +2501,9 @@ public enum CoreSessionProjector {
         public let partRowsEnabled: Bool
         public let mediaBlobEnabled: Bool
 
-        public init(partRowsEnabled: Bool = false, mediaBlobEnabled: Bool = false) {
+        /// Part rows are on unless a config sets `experimental.part_rows: false`, which keeps the whole-message
+        /// write path as an escape hatch.
+        public init(partRowsEnabled: Bool = true, mediaBlobEnabled: Bool = false) {
             self.partRowsEnabled = partRowsEnabled
             self.mediaBlobEnabled = mediaBlobEnabled
         }

@@ -2559,6 +2559,26 @@ public enum AIProtocolUtils {
     // MARK: - GeminiGenerateContent (packages/ai/src/protocols/utils/gemini-generate-content.ts — 12 symbols)
 
     public enum GeminiGenerateContent {
+        /// A Gemini safety setting; known categories are `HARM_CATEGORY_*` and known thresholds include
+        /// `BLOCK_LOW_AND_ABOVE`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_ONLY_HIGH`, `BLOCK_NONE` and `OFF`, but any string is kept.
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#SafetySetting [status=implemented hash=3dbc2d17d49c]
+        public struct SafetySetting: Equatable, Hashable, Sendable, Codable {
+            public let category: String
+            public let threshold: String
+
+            public init(category: String, threshold: String) {
+                self.category = category
+                self.threshold = threshold
+            }
+
+            public init?(json: JSONValue) {
+                guard let obj = JSONCodec.objectValue(json),
+                      let category = JSONCodec.stringValue(obj["category"]),
+                      let threshold = JSONCodec.stringValue(obj["threshold"]) else { return nil }
+                self.init(category: category, threshold: threshold)
+            }
+        }
+
         public struct UsageMetadata: Equatable, Hashable, Sendable, Codable {
             public let promptTokenCount: Double?
             public let candidatesTokenCount: Double?

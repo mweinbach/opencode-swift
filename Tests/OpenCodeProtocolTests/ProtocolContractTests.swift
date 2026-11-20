@@ -251,7 +251,7 @@ struct ProtocolContractTests {
         #expect(isOpenCodeEvent(type: "rpc.") == true)
         #expect(isOpenCodeEvent(type: "session.created") == true)
         #expect(isOpenCodeEvent(type: "message.updated") == false)
-        #expect(OpenCodeEvent.serverEventTypeList.count == 98)
+        #expect(OpenCodeEvent.serverEventTypeList.count == 99)
 
         let event = OpenCodeEvent(id: "evt_1", type: "server.connected")
         #expect(isOpenCodeEvent(event) == true)

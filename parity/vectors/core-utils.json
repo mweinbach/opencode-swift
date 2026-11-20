@@ -93,7 +93,11 @@
       { "name": "comments and indented lines preserved", "args": ["---\n# comment: ignored\nname: simple\n  nested: keep:me\n---\nBody\n"] },
       { "name": "block scalar markers untouched", "args": ["---\ndescription: |\n  keep: this\n---\nBody\n"] },
       { "name": "multiple keys with unicode and emoji colons", "args": ["---\ntitle: 🚀 Deploy: prod\ndescription: [日本語] テスト\nsafe: plain\n---\nBody\n"] },
-      { "name": "crlf frontmatter delimiters supported", "args": ["---\r\ntitle: A: B\r\n---\r\nBody\r\n"] }
+      { "name": "crlf frontmatter delimiters supported", "args": ["---\r\ntitle: A: B\r\n---\r\nBody\r\n"] },
+      { "name": "valid flow sequence untouched", "args": ["---\ntags: [a, \"b: c\"]\n---\nBody\n"] },
+      { "name": "multi-line flow collection kept until it closes", "args": ["---\ntags: [\nnot: a key,\n]\ntitle: A: B\n---\nBody\n"] },
+      { "name": "valid plain scalar with colon untouched", "args": ["---\nurl: http://example.com/a:b\n---\nBody\n"] },
+      { "name": "flow mapping with trailing text rewritten", "args": ["---\ndescription: {Tag} Handles foo\n---\nBody\n"] }
     ]
   },
   {

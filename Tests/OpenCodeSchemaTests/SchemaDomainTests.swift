@@ -119,15 +119,54 @@ struct SchemaDomainTests {
     @Test("ConfigFlagSchema registry, optInOnly, wildcard, and aliases match upstream")
     func configFeatureFlags() {
         #expect(ConfigFlagSchema.wildcard == "all")
-        #expect(ConfigFlagSchema.Key.allCases.count == 8)
-        #expect(ConfigFlagSchema.registry.count == 8)
-        #expect(ConfigFlagSchema.optInOnly == [.todo, .fullCodemode])
+        #expect(ConfigFlagSchema.Key.allCases.count == 12)
+        #expect(ConfigFlagSchema.registry.count == 12)
+        #expect(ConfigFlagSchema.optInOnly == [.todo, .sqliteFts])
+        #expect(ConfigFlagSchema.Key(rawValue: "recommended_api") == .recommendedApi)
+        #expect(ConfigFlagSchema.Key(rawValue: "machines") == .machines)
+        #expect(ConfigFlagSchema.Key(rawValue: "home_memory") == .homeMemory)
+        #expect(ConfigFlagSchema.registry[.fullCodemode] == "Enable the full Code Mode work in progress.")
         #expect(ConfigFlagSchema.aliases["schedules"] == .automations)
         for key in ConfigFlagSchema.Key.allCases {
             #expect(ConfigFlagSchema.registry[key] != nil)
             #expect(key.rawValue != "all_flags")
             #expect(key.rawValue != ConfigFlagSchema.wildcard)
         }
+    }
+
+    @Test("Job.Info decodes video jobs; experimental.video_generate takes an object; Tool.Options codemode object")
+    func videoJobsAndCodeModeOptions() throws {
+        let video = try SchemaDomainCodecHelper.decodeFromJSONString(JobSchema.Info.self, json: """
+        {"kind":"video","id":"job_1","sessionID":"ses_1","status":"running","time":{"started":1},"path":"clip.mp4"}
+        """)
+        guard case .video(let job) = video else {
+            Issue.record("Expected a video job, got \(video)")
+            return
+        }
+        #expect(job.path == "clip.mp4")
+        #expect(try SchemaDomainCodecHelper.roundTrip(video) == video)
+        #expect(JobSchema.Kind(rawValue: "video") == .video)
+        #expect(JobSchema.Event.updated.type == "experimental.job.updated")
+
+        let experimental = try SchemaDomainCodecHelper.decodeFromJSONString(ConfigExperimentalSchema.Info.self, json: """
+        {"video_generate":{"model":"google/veo-3"},"sqlite_fts":true,"part_rows":false}
+        """)
+        #expect(experimental.flagValue(for: .videoGenerate) == true)
+        #expect(experimental.videoGenerate?.options?.model?.model.rawValue == "veo-3")
+        #expect(experimental.flagValue(for: .sqliteFts) == true)
+        #expect(experimental.partRows == false)
+
+        let options = try SchemaDomainCodecHelper.decodeFromJSONString(ToolSchema.Options.self, json: """
+        {"namespace":"browser","codemode":{"pinned":true,"description":"Browse"}}
+        """)
+        #expect(options.codemode == true)
+        #expect(options.pinned == true)
+        #expect(options.codemodeOptions?.description == "Browse")
+        let legacy = try SchemaDomainCodecHelper.decodeFromJSONString(ToolSchema.Options.self, json: """
+        {"codemode":true,"pinned":true}
+        """)
+        #expect(legacy.pinned == true)
+        #expect(ToolSchema.Options(codemode: false, pinned: true).pinned == nil)
     }
 
     @Test("ConfigPolicy normalizes legacy prefixed integration.use statements")
