@@ -11,6 +11,12 @@ import OpenCodeServer
 import OpenCodeTUI
 import OpenCodeUtil
 import OpenTUICore
+#if canImport(AppKit)
+import AppKit
+#endif
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Errors thrown by `OpenCodeAppStore` operations.
 public enum OpenCodeAppStoreError: Error, Equatable, Sendable, CustomStringConvertible {
@@ -18,6 +24,7 @@ public enum OpenCodeAppStoreError: Error, Equatable, Sendable, CustomStringConve
     case invalidServerURL(String)
     case emptyInput
     case missingActiveSession
+    case noActiveOAuthAttempt
 
     public var description: String {
         switch self {
@@ -29,7 +36,95 @@ public enum OpenCodeAppStoreError: Error, Equatable, Sendable, CustomStringConve
             return "Input cannot be empty."
         case .missingActiveSession:
             return "No active session selected."
+        case .noActiveOAuthAttempt:
+            return "No active OAuth sign-in attempt."
         }
+    }
+}
+
+/// Active interactive OAuth sign-in attempt tracked by `OpenCodeAppStore`.
+public struct AppOAuthAttempt: Identifiable, Equatable, Hashable, Sendable {
+    public var id: String { attemptID }
+    public let integrationID: String
+    public let integrationName: String
+    public let methodID: String
+    public let attemptID: String
+    public let url: String
+    public let instructions: String
+    public let mode: IntegrationSchema.Attempt.Mode
+    public let supportsPaste: Bool
+    public var statusMessage: String?
+    public var isPolling: Bool
+    public var errorMessage: String?
+
+    public init(
+        integrationID: String,
+        integrationName: String,
+        methodID: String,
+        attemptID: String,
+        url: String,
+        instructions: String,
+        mode: IntegrationSchema.Attempt.Mode,
+        supportsPaste: Bool = false,
+        statusMessage: String? = nil,
+        isPolling: Bool = false,
+        errorMessage: String? = nil
+    ) {
+        self.integrationID = integrationID
+        self.integrationName = integrationName
+        self.methodID = methodID
+        self.attemptID = attemptID
+        self.url = url
+        self.instructions = instructions
+        self.mode = mode
+        self.supportsPaste = supportsPaste
+        self.statusMessage = statusMessage
+        self.isPolling = isPolling
+        self.errorMessage = errorMessage
+    }
+
+    /// Extracts an optional device/user code (such as `WDJB-MJHT` or `ABCD-1234`) from `instructions`
+    /// so the UI can highlight it and provide a one-click Copy Code action.
+    public var extractedDeviceCode: String? {
+        Self.extractDeviceCode(from: instructions)
+    }
+
+    public static func extractDeviceCode(from instructions: String) -> String? {
+        // 1. Prefer explicit "Enter code: <CODE>" / "enter code: <CODE>" pattern used by
+        //    OpenCode Console, GitHub Copilot, OpenAI Codex device auth, and xAI.
+        let lowered = instructions.lowercased()
+        if let markerRange = lowered.range(of: "enter code:") {
+            let tail = instructions[markerRange.upperBound...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let token = tail
+                .split(whereSeparator: { $0.isWhitespace || $0 == "," || $0 == "." || $0 == "\"" || $0 == "'" || $0 == "`" })
+                .first
+                .map(String.init)?
+                .trimmingCharacters(in: CharacterSet(charactersIn: ":;()[]{}"))
+            if let token, !token.isEmpty, token.count <= 32 {
+                return token
+            }
+        }
+
+        // 2. Fallback: scan for standard RFC 8628 dashed device codes (e.g. WDJB-MJHT, ABCD-12345).
+        let delimiters = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",.\"'`()[]{}"))
+        for rawToken in instructions.components(separatedBy: delimiters) {
+            let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: ":;"))
+            guard token.contains("-"), token.count >= 8, token.count <= 16 else { continue }
+            guard !token.lowercased().hasPrefix("http") else { continue }
+            let parts = token.split(separator: "-")
+            guard parts.count == 2,
+                  parts[0].count >= 4,
+                  parts[1].count >= 4,
+                  parts.allSatisfy({ part in
+                      part.allSatisfy { ch in ch.isASCII && (ch.isUppercase || ch.isNumber) }
+                  })
+            else {
+                continue
+            }
+            return token
+        }
+        return nil
     }
 }
 
@@ -64,6 +159,7 @@ public final class OpenCodeAppStore {
     public private(set) var serverVersion: String = ""
     public private(set) var sseConnected: Bool = false
     public private(set) var workspaceDirectory: String = FileManager.default.currentDirectoryPath
+    public private(set) var activeDatabasePath: String? = nil
     public private(set) var gitBranch: String? = nil
 
     // MARK: - Sessions & Active Transcript
@@ -95,6 +191,8 @@ public final class OpenCodeAppStore {
     public private(set) var selectedModel: AppModelItem? = nil
     public private(set) var selectedVariant: String? = nil
     public private(set) var integrations: [AppProviderIntegration] = []
+    /// Full `IntegrationSchema.Info` records keyed by integration ID (including OAuth, API Key, External, Command, and Env auth methods).
+    public private(set) var integrationCatalog: [String: IntegrationSchema.Info] = [:]
     public private(set) var serverCommands: [AppSlashCommandItem] = []
     public private(set) var mcpServers: [AppMCPServerItem] = []
     public private(set) var todos: [AppTodoItem] = []
@@ -132,7 +230,16 @@ public final class OpenCodeAppStore {
     public var renamingSession: AppSessionSummary? = nil
     public private(set) var pairingPayload: AppPairingPayload? = nil
     public private(set) var pairingError: String? = nil
+    public private(set) var activeOAuthAttempt: AppOAuthAttempt? = nil
+    public private(set) var isRefreshingModels: Bool = false
     public private(set) var toast: AppToastNotice? = nil
+
+    // MARK: - Injectable Platform Hooks
+
+    /// Opens an external URL (such as an OAuth authorization URL) in the system browser.
+    /// Defaults to `OpenCodeAppStore.openURLInBrowser(_:)` (`NSWorkspace.shared.open` on macOS,
+    /// `UIApplication.shared.open` on iOS/visionOS). Injectable for deterministic tests.
+    @ObservationIgnored public var urlOpener: @MainActor (String) -> Bool
 
     // MARK: - Private Runtime Handles
 
@@ -140,13 +247,22 @@ public final class OpenCodeAppStore {
     @ObservationIgnored private var embeddedSDK: OpenCode.Interface? = nil
     @ObservationIgnored private var eventTask: Task<Void, Never>? = nil
     @ObservationIgnored private var mentionTask: Task<Void, Never>? = nil
+    @ObservationIgnored private var oauthPollTask: Task<Void, Never>? = nil
+    @ObservationIgnored private var oauthPollInterval: Duration
     @ObservationIgnored private var runningSessionIDs: Set<String> = []
     @ObservationIgnored private var retryingSessions: [String: String] = [:]
     @ObservationIgnored private var sseReconnectEnabled: Bool = true
 
-    public init(settings: AppSettings = AppSettings(), systemIsDark: Bool = true) {
+    public init(
+        settings: AppSettings = AppSettings(),
+        systemIsDark: Bool = true,
+        oauthPollInterval: Duration = .milliseconds(500),
+        urlOpener: (@MainActor (String) -> Bool)? = nil
+    ) {
         self.settings = settings
         self.systemIsDark = systemIsDark
+        self.oauthPollInterval = oauthPollInterval
+        self.urlOpener = urlOpener ?? Self.openURLInBrowser
     }
 
     // MARK: - Derived Properties
@@ -251,6 +367,124 @@ public final class OpenCodeAppStore {
         !models.isEmpty || integrations.contains(where: \.isConnected)
     }
 
+    /// Returns all authentication methods advertised by the server for `integrationID`.
+    public func authMethods(for integrationID: String) -> [IntegrationSchema.Method] {
+        integrationCatalog[integrationID]?.methods ?? []
+    }
+
+    /// Opens `urlString` via the configured `urlOpener` closure (defaulting to the platform browser).
+    @discardableResult
+    public func openExternalURL(_ urlString: String) -> Bool {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return urlOpener(trimmed)
+    }
+
+    /// Opens `urlString` in the host OS default browser (`NSWorkspace` on macOS, `UIApplication` on iOS/visionOS).
+    @MainActor
+    @discardableResult
+    public static func openURLInBrowser(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString) else { return false }
+        #if canImport(AppKit) && os(macOS)
+        return NSWorkspace.shared.open(url)
+        #elseif canImport(UIKit) && !os(watchOS)
+        guard UIApplication.shared.canOpenURL(url) else { return false }
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        return true
+        #else
+        _ = url
+        return false
+        #endif
+    }
+
+    /// Resolves the default on-disk SQLite database path under `Global.make().data`.
+    ///
+    /// Resolution order:
+    /// 1. `OPENCODE_DB` environment variable (if set and non-empty; `":memory:"` returned verbatim,
+    ///    relative paths resolved against `dataDirectory`, absolute paths used directly).
+    /// 2. Release / standard channels (`latest`, `dev`, `beta`, `next`, `prod`, `release`) or
+    ///    `OPENCODE_DISABLE_CHANNEL_DB=1|true` -> `opencode.db`.
+    /// 3. Local / custom channel (`OPENCODE_CHANNEL`, defaulting to `"local"`) ->
+    ///    `opencode-<sanitizedChannel>.db` (e.g. `opencode-local.db`), falling back to `opencode.db`
+    ///    when `opencode.db` already exists on disk and `opencode-<sanitizedChannel>.db` does not.
+    public nonisolated static func resolveDefaultDatabasePath(
+        dataDirectory: String? = nil,
+        channel: String? = nil,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> String {
+        let dataDir = dataDirectory ?? Global.make(environment: environment).data
+
+        func resolveUnderDataDir(_ filename: String) -> String {
+            if filename == ":memory:" {
+                return filename
+            }
+            if isAbsolutePath(filename) {
+                return URL(fileURLWithPath: filename).standardizedFileURL.path
+            }
+            return URL(fileURLWithPath: dataDir, isDirectory: true)
+                .appendingPathComponent(filename)
+                .standardizedFileURL
+                .path
+        }
+
+        if let explicit = environment.variable("OPENCODE_DB")?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !explicit.isEmpty {
+            return resolveUnderDataDir(explicit)
+        }
+
+        let rawChannel = channel ?? environment.variable("OPENCODE_CHANNEL")
+        let trimmedChannel = rawChannel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveChannel = (trimmedChannel?.isEmpty == false ? trimmedChannel! : "local")
+
+        let standardChannels: Set<String> = ["latest", "dev", "beta", "next", "prod", "release"]
+        let disableChannelDB = environment.variable("OPENCODE_DISABLE_CHANNEL_DB")
+        if standardChannels.contains(effectiveChannel.lowercased())
+            || disableChannelDB == "1"
+            || disableChannelDB == "true" {
+            return resolveUnderDataDir("opencode.db")
+        }
+
+        let sanitized = sanitizeDatabaseChannelSegment(effectiveChannel)
+        let channelPath = resolveUnderDataDir("opencode-\(sanitized).db")
+        let defaultPath = resolveUnderDataDir("opencode.db")
+        if !fileExists(channelPath) && fileExists(defaultPath) {
+            return defaultPath
+        }
+        return channelPath
+    }
+
+    private nonisolated static func isAbsolutePath(_ path: String) -> Bool {
+        if path.hasPrefix("/") || path.hasPrefix("\\") {
+            return true
+        }
+        let units = Array(path.utf16)
+        if units.count >= 3,
+           ((units[0] >= 0x41 && units[0] <= 0x5A) || (units[0] >= 0x61 && units[0] <= 0x7A)),
+           units[1] == 0x3A,
+           (units[2] == 0x2F || units[2] == 0x5C) {
+            return true
+        }
+        return false
+    }
+
+    private nonisolated static func sanitizeDatabaseChannelSegment(_ channel: String) -> String {
+        var out = ""
+        out.reserveCapacity(channel.utf16.count)
+        for unit in channel.utf16 {
+            let allowed = (unit >= 0x30 && unit <= 0x39)
+                || (unit >= 0x41 && unit <= 0x5A)
+                || (unit >= 0x61 && unit <= 0x7A)
+                || unit == 0x2E || unit == 0x5F || unit == 0x2D
+            if allowed, let scalar = UnicodeScalar(unit) {
+                out.append(Character(scalar))
+            } else {
+                out.append("-")
+            }
+        }
+        return out.isEmpty ? "local" : out
+    }
+
     private var locationQuery: LocationQuery.LocationField? {
         guard !workspaceDirectory.isEmpty else { return nil }
         return LocationQuery.LocationField(directory: workspaceDirectory)
@@ -259,8 +493,13 @@ public final class OpenCodeAppStore {
     // MARK: - Connection Management
 
     /// Boots a live embedded `OpenCodeSDK` (`OpenCode.create`) host in-process and connects the store.
+    ///
+    /// When `databasePath` is explicitly provided (such as `":memory:"` or a temporary path in tests),
+    /// it is used directly. When `nil` in real app launches, opens the user's real on-disk OpenCode
+    /// SQLite database resolved via `resolveDefaultDatabasePath()`.
     public func connectEmbedded(
         directory: String? = nil,
+        databasePath: String? = nil,
         configContent: String? = nil,
         options: OpenCode.CreateOptions? = nil,
         subscribeEvents: Bool = true
@@ -272,20 +511,57 @@ public final class OpenCodeAppStore {
 
         do {
             let createOptions: OpenCode.CreateOptions
-            if let options {
+            let resolvedDatabasePath: String
+            if var options {
+                if let explicitDB = databasePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !explicitDB.isEmpty {
+                    options.server.database = CoreDatabaseStore.Options(path: explicitDB)
+                    resolvedDatabasePath = explicitDB
+                } else if let existingPath = options.server.database?.path, !existingPath.isEmpty {
+                    resolvedDatabasePath = existingPath
+                } else {
+                    let defaultPath = Self.resolveDefaultDatabasePath()
+                    options.server.database = CoreDatabaseStore.Options(path: defaultPath)
+                    resolvedDatabasePath = defaultPath
+                }
                 createOptions = options
             } else {
+                let explicitDB = databasePath?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let dbPath = (explicitDB?.isEmpty == false ? explicitDB! : Self.resolveDefaultDatabasePath())
+                resolvedDatabasePath = dbPath
+                let channelEnv = SystemEnvironment.shared.variable("OPENCODE_CHANNEL")?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let channel = (channelEnv?.isEmpty == false) ? channelEnv : nil
                 createOptions = OpenCode.CreateOptions(
-                    app: .init(version: OpenCodeAppModule.version),
+                    app: .init(
+                        name: "opencode",
+                        version: OpenCodeAppModule.version,
+                        channel: channel
+                    ),
+                    database: CoreDatabaseStore.Options(path: dbPath),
                     config: .init(
                         directory: resolvedDir,
-                        project: false,
+                        project: configContent == nil,
                         content: configContent
                     )
                 )
             }
+
+            if resolvedDatabasePath != ":memory:" && !resolvedDatabasePath.isEmpty {
+                let parentDir = URL(fileURLWithPath: resolvedDatabasePath)
+                    .deletingLastPathComponent()
+                    .path
+                if !parentDir.isEmpty {
+                    try? FileManager.default.createDirectory(
+                        atPath: parentDir,
+                        withIntermediateDirectories: true
+                    )
+                }
+            }
+
             let sdk = try await OpenCode.create(createOptions)
             self.embeddedSDK = sdk
+            self.activeDatabasePath = resolvedDatabasePath
             self.workspaceDirectory = resolvedDir
             try await connect(
                 using: sdk.client,
@@ -295,6 +571,7 @@ public final class OpenCodeAppStore {
                 subscribeEvents: subscribeEvents
             )
         } catch {
+            activeDatabasePath = nil
             connectionState = .failed(String(describing: error))
             showToast("Failed to boot embedded server: \(error)", isError: true)
             throw error
@@ -405,13 +682,18 @@ public final class OpenCodeAppStore {
         eventTask = nil
         mentionTask?.cancel()
         mentionTask = nil
+        oauthPollTask?.cancel()
+        oauthPollTask = nil
+        activeOAuthAttempt = nil
 
         if let sdk = embeddedSDK {
             embeddedSDK = nil
             await sdk.close()
         }
         client = nil
+        activeDatabasePath = nil
         sseConnected = false
+        integrationCatalog.removeAll()
         runningSessionIDs.removeAll()
         retryingSessions.removeAll()
         connectionState = .disconnected
@@ -1004,18 +1286,48 @@ public final class OpenCodeAppStore {
         guard let resp = try? await client.integration.list(IntegrationListInput(location: locationQuery)) else {
             return
         }
-        integrations = resp.data
-            .filter { item in
-                if case .string(let src) = item.metadata?["source"], src == "mcp" {
-                    return false
-                }
-                return true
+        let filtered = resp.data.filter { item in
+            if case .string(let src) = item.metadata?["source"], src == "mcp" {
+                return false
             }
+            return true
+        }
+        integrationCatalog = Dictionary(
+            filtered.map { ($0.id.rawValue, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        integrations = filtered
             .map(AppProviderIntegration.init(from:))
             .sorted { lhs, rhs in
                 if lhs.sortPriority != rhs.sortPriority { return lhs.sortPriority < rhs.sortPriority }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
+    }
+
+    /// Calls `POST /api/location/reload` to reload ModelsDev, OpenCode Console, and provider catalogs
+    /// on the server, then refreshes integrations, providers, models, agents, and usage limits.
+    public func refreshLiveModels() async {
+        await refreshLiveModels(showToastNotice: true)
+    }
+
+    private func refreshLiveModels(showToastNotice: Bool) async {
+        guard let client else { return }
+        isRefreshingModels = true
+        defer { isRefreshingModels = false }
+        try? await client.location.reload()
+        await refreshIntegrations()
+        await refreshModelsAndProviders()
+        await refreshAgents()
+        await refreshUsageLimits()
+        if showToastNotice {
+            let modelCount = models.count
+            let providerCount = providers.count
+            if modelCount > 0 {
+                showToast("Refreshed \(modelCount) models across \(providerCount) providers")
+            } else {
+                showToast("Model catalog refreshed")
+            }
+        }
     }
 
     public func refreshMCP() async {
@@ -1550,8 +1862,11 @@ public final class OpenCodeAppStore {
         case "inspector":
             settings.showInspector.toggle()
         case "reload":
+            await refreshLiveModels(showToastNotice: false)
             await refreshWorkspace()
             showToast("Workspace refreshed")
+        case "refresh-models", "models":
+            await refreshLiveModels()
         default:
             guard let client else { throw OpenCodeAppStoreError.notConnected }
             let targetID: String
@@ -1644,20 +1959,272 @@ public final class OpenCodeAppStore {
     public func connectProviderAPIKey(
         integrationID: String,
         apiKey: String,
+        answer: FormSchema.Answer? = nil,
         label: String? = nil
     ) async throws {
         guard let client else { throw OpenCodeAppStoreError.notConnected }
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else { throw OpenCodeAppStoreError.emptyInput }
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines)
         try await client.integration.connect.key(IntegrationConnectKeyInput(
             integrationID: integrationID,
             location: locationQuery,
             key: trimmedKey,
-            label: label?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : label
+            answer: answer,
+            label: (trimmedLabel?.isEmpty == true) ? nil : trimmedLabel
         ))
         await refreshIntegrations()
         await refreshModelsAndProviders()
         showToast("Connected \(integrationID)")
+    }
+
+    public func connectProviderExternal(
+        integrationID: String,
+        methodID: String,
+        answer: FormSchema.Answer? = nil,
+        label: String? = nil
+    ) async throws {
+        guard let client else { throw OpenCodeAppStoreError.notConnected }
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try await client.integration.connect.external(IntegrationConnectExternalInput(
+            integrationID: integrationID,
+            location: locationQuery,
+            methodID: methodID,
+            answer: answer,
+            label: (trimmedLabel?.isEmpty == true) ? nil : trimmedLabel
+        ))
+        await refreshLiveModels(showToastNotice: false)
+        let displayName = integrationCatalog[integrationID]?.name
+            ?? integrations.first(where: { $0.id == integrationID })?.name
+            ?? integrationID
+        showToast("Connected \(displayName)")
+    }
+
+    // MARK: - Interactive OAuth Sign-In
+
+    /// Starts an interactive OAuth sign-in flow (`POST /api/integration/:id/connect/oauth`),
+    /// automatically opens the authorization URL via `urlOpener`, and polls
+    /// `GET /api/integration/:id/connect/oauth/:attemptID` in a cancellable background `Task`.
+    @discardableResult
+    public func startOAuth(
+        integrationID: String,
+        methodID: String,
+        answer: FormSchema.Answer? = nil,
+        label: String? = nil
+    ) async throws -> AppOAuthAttempt {
+        guard let client else { throw OpenCodeAppStoreError.notConnected }
+
+        if activeOAuthAttempt != nil {
+            await cancelOAuth(notifyServer: true)
+        }
+
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let response = try await client.integration.oauth.connect(IntegrationOauthConnectInput(
+            integrationID: integrationID,
+            location: locationQuery,
+            methodID: methodID,
+            answer: answer,
+            label: (trimmedLabel?.isEmpty == true) ? nil : trimmedLabel
+        ))
+        let attempt = response.data
+        let integrationName = integrationCatalog[integrationID]?.name
+            ?? integrations.first(where: { $0.id == integrationID })?.name
+            ?? TUIUtil.titlecase(integrationID)
+
+        let opened = openExternalURL(attempt.url)
+        let initialStatus: String
+        if attempt.mode == .code {
+            initialStatus = opened
+                ? "Browser opened. Complete sign-in and paste the authorization code below."
+                : "Open the authorization URL in your browser and paste the authorization code below."
+        } else {
+            initialStatus = opened
+                ? "Waiting for authorization in your browser…"
+                : "Open the authorization URL in your browser to finish signing in…"
+        }
+
+        let active = AppOAuthAttempt(
+            integrationID: integrationID,
+            integrationName: integrationName,
+            methodID: methodID,
+            attemptID: attempt.attemptID.rawValue,
+            url: attempt.url,
+            instructions: attempt.instructions,
+            mode: attempt.mode,
+            supportsPaste: attempt.paste == true,
+            statusMessage: initialStatus,
+            isPolling: true,
+            errorMessage: nil
+        )
+        activeOAuthAttempt = active
+        startOAuthPolling(for: active)
+        return active
+    }
+
+    /// Submits a manually pasted OAuth authorization code or redirect URL for the active OAuth attempt
+    /// (`POST /api/integration/:id/connect/oauth/:attemptID/complete`).
+    public func completeOAuth(code: String) async throws {
+        guard let client else { throw OpenCodeAppStoreError.notConnected }
+        guard let current = activeOAuthAttempt else {
+            throw OpenCodeAppStoreError.noActiveOAuthAttempt
+        }
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw OpenCodeAppStoreError.emptyInput }
+
+        let attemptID = current.attemptID
+        let integrationID = current.integrationID
+        let integrationName = current.integrationName
+
+        activeOAuthAttempt?.errorMessage = nil
+        activeOAuthAttempt?.statusMessage = "Completing sign-in…"
+
+        do {
+            try await client.integration.oauth.complete(IntegrationOauthCompleteInput(
+                integrationID: integrationID,
+                attemptID: attemptID,
+                location: locationQuery,
+                code: trimmed
+            ))
+            await handleOAuthCompleted(
+                integrationID: integrationID,
+                integrationName: integrationName,
+                attemptID: attemptID
+            )
+        } catch {
+            if activeOAuthAttempt?.attemptID == attemptID {
+                activeOAuthAttempt?.errorMessage = String(describing: error)
+                activeOAuthAttempt?.statusMessage = "Unable to complete sign-in with that code."
+            }
+            showToast("OAuth completion failed: \(error)", isError: true)
+            throw error
+        }
+    }
+
+    /// Cancels the active OAuth attempt, stops background polling, and notifies the server
+    /// (`DELETE /api/integration/:id/connect/oauth/:attemptID`).
+    public func cancelOAuth() async {
+        await cancelOAuth(notifyServer: true)
+    }
+
+    private func cancelOAuth(notifyServer: Bool) async {
+        oauthPollTask?.cancel()
+        oauthPollTask = nil
+        let previous = activeOAuthAttempt
+        activeOAuthAttempt = nil
+
+        if notifyServer, let client, let previous {
+            try? await client.integration.oauth.cancel(IntegrationOauthCancelInput(
+                integrationID: previous.integrationID,
+                attemptID: previous.attemptID,
+                location: locationQuery
+            ))
+        }
+    }
+
+    private func startOAuthPolling(for attempt: AppOAuthAttempt) {
+        oauthPollTask?.cancel()
+        let attemptID = attempt.attemptID
+        let integrationID = attempt.integrationID
+        let integrationName = attempt.integrationName
+        let pollInterval = oauthPollInterval
+
+        oauthPollTask = Task { @MainActor [weak self] in
+            var consecutiveErrors = 0
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: pollInterval)
+                } catch {
+                    return
+                }
+                guard let self,
+                      let client = self.client,
+                      let current = self.activeOAuthAttempt,
+                      current.attemptID == attemptID
+                else {
+                    return
+                }
+
+                do {
+                    let response = try await client.integration.oauth.status(IntegrationOauthStatusInput(
+                        integrationID: integrationID,
+                        attemptID: attemptID,
+                        location: self.locationQuery
+                    ))
+                    consecutiveErrors = 0
+                    guard !Task.isCancelled,
+                          self.activeOAuthAttempt?.attemptID == attemptID
+                    else {
+                        return
+                    }
+
+                    switch response.data {
+                    case .pending:
+                        continue
+
+                    case .complete:
+                        await self.handleOAuthCompleted(
+                            integrationID: integrationID,
+                            integrationName: integrationName,
+                            attemptID: attemptID
+                        )
+                        return
+
+                    case .failed(let message, _):
+                        let detail = message.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let finalError = detail.isEmpty ? "Authorization failed." : detail
+                        self.activeOAuthAttempt?.isPolling = false
+                        self.activeOAuthAttempt?.errorMessage = finalError
+                        self.activeOAuthAttempt?.statusMessage = "Authorization failed."
+                        self.showToast("Sign-in failed for \(integrationName): \(finalError)", isError: true)
+                        return
+
+                    case .expired:
+                        let expiredMessage = "Authorization expired. Please start sign-in again."
+                        self.activeOAuthAttempt?.isPolling = false
+                        self.activeOAuthAttempt?.errorMessage = expiredMessage
+                        self.activeOAuthAttempt?.statusMessage = "Authorization expired."
+                        self.showToast("Sign-in expired for \(integrationName)", isError: true)
+                        return
+                    }
+                } catch {
+                    if Task.isCancelled { return }
+                    if isIntegrationAttemptNotFoundError(error) {
+                        self.activeOAuthAttempt?.isPolling = false
+                        self.activeOAuthAttempt?.errorMessage = "Authorization session expired or was closed."
+                        self.activeOAuthAttempt?.statusMessage = "Authorization closed."
+                        return
+                    }
+                    consecutiveErrors += 1
+                    if consecutiveErrors >= 5 {
+                        let errText = String(describing: error)
+                        self.activeOAuthAttempt?.isPolling = false
+                        self.activeOAuthAttempt?.errorMessage = errText
+                        self.activeOAuthAttempt?.statusMessage = "Unable to check authorization status."
+                        self.showToast("OAuth polling failed: \(errText)", isError: true)
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleOAuthCompleted(
+        integrationID: String,
+        integrationName: String,
+        attemptID: String
+    ) async {
+        oauthPollTask?.cancel()
+        oauthPollTask = nil
+        if activeOAuthAttempt?.attemptID == attemptID {
+            activeOAuthAttempt?.isPolling = false
+            activeOAuthAttempt?.errorMessage = nil
+            activeOAuthAttempt?.statusMessage = "Connected to \(integrationName)! Refreshing models…"
+        }
+        await refreshLiveModels(showToastNotice: false)
+        if activeOAuthAttempt?.attemptID == attemptID {
+            activeOAuthAttempt = nil
+        }
+        showToast("Connected \(integrationName)")
     }
 
     // MARK: - Permissions & Forms

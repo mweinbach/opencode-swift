@@ -1,3 +1,4 @@
+import Synchronization
 import Testing
 import OpenCodeApp
 import OpenCodeClient
@@ -282,7 +283,12 @@ struct OpenCodeAppStoreLiveTests {
         """
 
         let store = OpenCodeAppStore()
-        try await store.connectEmbedded(directory: dir, configContent: configJSON, subscribeEvents: false)
+        try await store.connectEmbedded(
+            directory: dir,
+            databasePath: ":memory:",
+            configContent: configJSON,
+            subscribeEvents: false
+        )
         defer {
             Task { @MainActor in await store.disconnect() }
         }
@@ -358,7 +364,7 @@ struct OpenCodeAppStoreLiveTests {
         defer { OpenCodeAppTestHelper.removeDirectory(dir) }
 
         let store = OpenCodeAppStore()
-        try await store.connectEmbedded(directory: dir, subscribeEvents: false)
+        try await store.connectEmbedded(directory: dir, databasePath: ":memory:", subscribeEvents: false)
         defer {
             Task { @MainActor in await store.disconnect() }
         }
@@ -649,7 +655,7 @@ struct OpenCodeAppStoreLiveTests {
         defer { OpenCodeAppTestHelper.removeDirectory(dir) }
 
         let store = OpenCodeAppStore(systemIsDark: true)
-        try await store.connectEmbedded(directory: dir, subscribeEvents: false)
+        try await store.connectEmbedded(directory: dir, databasePath: ":memory:", subscribeEvents: false)
         defer {
             Task { @MainActor in await store.disconnect() }
         }
@@ -697,6 +703,447 @@ struct OpenCodeAppStoreLiveTests {
         #expect(store.activeGUIPlugins.contains { $0.id == "ssh" })
         #expect(store.activeGUIPlugins.contains { $0.id == "review" })
         #expect(store.activeGUIPlugins.contains { $0.id == "pairing" })
+
+        await store.disconnect()
+    }
+}
+
+@Suite("OpenCodeAppStore Database Resolution & Interactive OAuth")
+struct OpenCodeAppOAuthAndDatabaseTests {
+    @Test("resolveDefaultDatabasePath honors OPENCODE_DB, release/local channels, and opencode.db fallback without touching user home")
+    func databasePathResolutionRules() {
+        let fakeData = "/tmp/opencode-isolated-data"
+
+        // 1. Explicit OPENCODE_DB (absolute, relative, and :memory:)
+        let explicitAbs = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_DB": "/tmp/custom-dir/my.db"]),
+            fileExists: { _ in false }
+        )
+        #expect(explicitAbs == "/tmp/custom-dir/my.db")
+
+        let explicitRel = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_DB": "custom.db"]),
+            fileExists: { _ in false }
+        )
+        #expect(explicitRel == "\(fakeData)/custom.db")
+
+        let explicitMem = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_DB": ":memory:"]),
+            fileExists: { _ in false }
+        )
+        #expect(explicitMem == ":memory:")
+
+        // 2. Standard release channels & OPENCODE_DISABLE_CHANNEL_DB -> opencode.db
+        for releaseChannel in ["latest", "dev", "beta", "next", "prod", "release"] {
+            let resolved = OpenCodeAppStore.resolveDefaultDatabasePath(
+                dataDirectory: fakeData,
+                environment: DictionaryEnvironment(variables: ["OPENCODE_CHANNEL": releaseChannel]),
+                fileExists: { _ in false }
+            )
+            #expect(resolved == "\(fakeData)/opencode.db")
+        }
+
+        let disabledChannel = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: [
+                "OPENCODE_CHANNEL": "local",
+                "OPENCODE_DISABLE_CHANNEL_DB": "1",
+            ]),
+            fileExists: { _ in false }
+        )
+        #expect(disabledChannel == "\(fakeData)/opencode.db")
+
+        // 3. Default / local channel when neither file exists -> opencode-local.db
+        let freshLocal = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: [:]),
+            fileExists: { _ in false }
+        )
+        #expect(freshLocal == "\(fakeData)/opencode-local.db")
+
+        // 4. Local channel falls back to existing opencode.db when opencode-local.db does not exist
+        let fallbackToRelease = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_CHANNEL": "local"]),
+            fileExists: { path in path == "\(fakeData)/opencode.db" }
+        )
+        #expect(fallbackToRelease == "\(fakeData)/opencode.db")
+
+        // 5. Local channel stays on opencode-local.db when opencode-local.db already exists alongside opencode.db
+        let preferExistingLocal = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_CHANNEL": "local"]),
+            fileExists: { path in
+                path == "\(fakeData)/opencode.db" || path == "\(fakeData)/opencode-local.db"
+            }
+        )
+        #expect(preferExistingLocal == "\(fakeData)/opencode-local.db")
+
+        // 6. Custom channel sanitization
+        let sanitizedChannel = OpenCodeAppStore.resolveDefaultDatabasePath(
+            dataDirectory: fakeData,
+            environment: DictionaryEnvironment(variables: ["OPENCODE_CHANNEL": "feat/swift app"]),
+            fileExists: { _ in false }
+        )
+        #expect(sanitizedChannel == "\(fakeData)/opencode-feat-swift-app.db")
+
+        // 7. Resolves under Global.make(environment:).data when dataDirectory is nil (isolated XDG_DATA_HOME)
+        let isolatedEnv = DictionaryEnvironment(
+            variables: ["XDG_DATA_HOME": "/tmp/opencode-xdg-isolated", "OPENCODE_CHANNEL": "latest"],
+            homeDirectory: "/tmp/opencode-home-isolated"
+        )
+        let expectedGlobalData = Global.make(environment: isolatedEnv).data
+        let resolvedFromGlobal = OpenCodeAppStore.resolveDefaultDatabasePath(
+            environment: isolatedEnv,
+            fileExists: { _ in false }
+        )
+        #expect(resolvedFromGlobal == "\(expectedGlobalData)/opencode.db")
+    }
+
+    @Test("connectEmbedded persists sessions across restarts when given an isolated on-disk temp SQLite databasePath")
+    @MainActor
+    func onDiskDatabasePersistenceIsolatedTempPath() async throws {
+        let dir = try OpenCodeAppTestHelper.makeTempDirectory(prefix: "opencode-app-diskdb")
+        defer { OpenCodeAppTestHelper.removeDirectory(dir) }
+        let dbFile = "\(dir)/data/opencode-test.db"
+
+        let firstStore = OpenCodeAppStore()
+        try await firstStore.connectEmbedded(
+            directory: dir,
+            databasePath: dbFile,
+            subscribeEvents: false
+        )
+        #expect(firstStore.activeDatabasePath == dbFile)
+        let created = try await firstStore.createSession(title: "Persisted On-Disk Session")
+        await firstStore.disconnect()
+        #expect(firstStore.activeDatabasePath == nil)
+
+        // Boot a second store pointing at the exact same isolated temp SQLite database file
+        let secondStore = OpenCodeAppStore()
+        try await secondStore.connectEmbedded(
+            directory: dir,
+            databasePath: dbFile,
+            subscribeEvents: false
+        )
+        defer {
+            Task { @MainActor in await secondStore.disconnect() }
+        }
+        #expect(secondStore.activeDatabasePath == dbFile)
+        #expect(secondStore.sessions.contains { $0.id == created.id && $0.title == "Persisted On-Disk Session" })
+        await secondStore.disconnect()
+    }
+
+    private static func jsonResponse<T: Encodable>(_ value: T, statusCode: Int = 200) throws -> HTTPResponse {
+        let text = try ClientCodec.encodeString(value)
+        return HTTPResponse(
+            head: HTTPResponseHead(statusCode: statusCode, headers: ["content-type": "application/json"]),
+            body: Array(text.utf8)
+        )
+    }
+
+    @Test("OAuth start -> URL open hook -> polling -> completion -> live model refresh, failure & cancel")
+    @MainActor
+    func oauthStartURLOpenPollingCompletionAndLiveModelRefresh() async throws {
+        let dir = try OpenCodeAppTestHelper.makeTempDirectory(prefix: "opencode-app-oauth-poll")
+        defer { OpenCodeAppTestHelper.removeDirectory(dir) }
+
+        let sdk = try await OpenCode.create(
+            OpenCode.CreateOptions(
+                app: .init(version: "oauth-poll-test"),
+                database: CoreDatabaseStore.Options(path: ":memory:"),
+                config: .init(directory: dir, project: false)
+            )
+        )
+        defer { Task { await sdk.close() } }
+
+        struct MockOAuthServerState: Sendable {
+            var pollCount = 0
+            var failNextAttempt = false
+            var connected = false
+            var reloadCalls = 0
+            var cancelledAttemptIDs: [String] = []
+            var startedPayloads: [String] = []
+        }
+
+        let serverState = Mutex(MockOAuthServerState())
+        let locationRef = LocationSchema.PublicRef(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
+
+        let transport = MockHTTPTransport { request in
+            let path = request.url.split(separator: "?").first.map(String.init) ?? request.url
+
+            let method = request.method.uppercased()
+
+            if method == "POST" && path.hasSuffix("/api/location/reload") {
+                serverState.withLock { $0.reloadCalls += 1 }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204), body: [])
+            }
+
+            if method == "GET" && path.hasSuffix("/api/integration") {
+                let isConnected = serverState.withLock { $0.connected }
+                let connections: [ConnectionSchema.Info] = isConnected
+                    ? [.credential(ConnectionSchema.CredentialInfo(
+                        id: CredentialSchema.ID(rawValue: "cred_copilot_1"),
+                        label: "GitHub Copilot",
+                        method: .oauth
+                    ))]
+                    : []
+                let copilotForm = FormSchema.Fields([
+                    .string(FormSchema.StringField(
+                        key: "deployment",
+                        title: "Deployment",
+                        defaultValue: "github.com",
+                        options: [
+                            FormSchema.Option(value: "github.com", label: "GitHub.com"),
+                            FormSchema.Option(value: "enterprise", label: "GitHub Enterprise"),
+                        ]
+                    )),
+                ])
+                let list: [IntegrationSchema.Info] = [
+                    IntegrationSchema.Info(
+                        id: IntegrationID(rawValue: "opencode"),
+                        name: "OpenCode Console",
+                        methods: [
+                            .oauth(IntegrationSchema.OAuthMethod(
+                                id: IntegrationMethodID(rawValue: "console"),
+                                label: "OpenCode Console account"
+                            )),
+                            .key(IntegrationSchema.KeyMethod(label: "API key")),
+                        ],
+                        connections: []
+                    ),
+                    IntegrationSchema.Info(
+                        id: IntegrationID(rawValue: "github-copilot"),
+                        name: "GitHub Copilot",
+                        methods: [
+                            .oauth(IntegrationSchema.OAuthMethod(
+                                id: IntegrationMethodID(rawValue: "copilot-oauth"),
+                                label: "Login with GitHub Copilot",
+                                form: copilotForm
+                            )),
+                            .external(IntegrationSchema.ExternalMethod(
+                                id: IntegrationMethodID(rawValue: "gh-cli"),
+                                label: "GitHub CLI"
+                            )),
+                        ],
+                        connections: connections
+                    ),
+                ]
+                return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: list))
+            }
+
+            if method == "POST" && path.hasSuffix("/api/integration/github-copilot/connect/oauth") {
+                let bodyText = String(decoding: request.body ?? [], as: UTF8.self)
+                let attemptID: String = serverState.withLock { s in
+                    s.startedPayloads.append(bodyText)
+                    s.pollCount = 0
+                    return s.failNextAttempt ? "att_copilot_fail" : "att_copilot_ok"
+                }
+                let attempt = IntegrationSchema.Attempt(
+                    attemptID: IntegrationSchema.AttemptID(rawValue: attemptID),
+                    url: "https://github.com/login/device",
+                    instructions: "Open https://github.com/login/device and enter code WDJB-MJHT to connect GitHub Copilot.",
+                    mode: .auto,
+                    paste: true,
+                    time: IntegrationSchema.AttemptTime(created: 1_000, expires: 301_000)
+                )
+                return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: attempt))
+            }
+
+            if method == "GET" && path.contains("/api/integration/github-copilot/connect/oauth/") {
+                let attemptID = path.split(separator: "/").last.map(String.init) ?? ""
+                let time = IntegrationSchema.AttemptTime(created: 1_000, expires: 301_000)
+                if attemptID == "att_copilot_fail" {
+                    let status = IntegrationSchema.AttemptStatus.failed(message: "Access denied by user", time: time)
+                    return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: status))
+                }
+                let step = serverState.withLock { s -> Int in
+                    s.pollCount += 1
+                    if s.pollCount >= 2 {
+                        s.connected = true
+                    }
+                    return s.pollCount
+                }
+                let status: IntegrationSchema.AttemptStatus = step >= 2 ? .complete(time: time) : .pending(time: time)
+                return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: status))
+            }
+
+            if method == "DELETE" && path.contains("/api/integration/github-copilot/connect/oauth/") {
+                let attemptID = path.split(separator: "/").last.map(String.init) ?? ""
+                serverState.withLock { $0.cancelledAttemptIDs.append(attemptID) }
+                return HTTPResponse(head: HTTPResponseHead(statusCode: 204), body: [])
+            }
+
+            if method == "GET" && path.hasSuffix("/api/provider") {
+                let isConnected = serverState.withLock { $0.connected }
+                let providers: [ProviderSchema.Info] = isConnected
+                    ? [ProviderSchema.Info(
+                        id: ProviderSchema.ID(rawValue: "github-copilot"),
+                        integrationID: IntegrationID(rawValue: "github-copilot"),
+                        name: "GitHub Copilot",
+                        activation: .auto,
+                        package: "@opencode/ai/providers/openai-compatible"
+                    )]
+                    : []
+                return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: providers))
+            }
+
+            if method == "GET" && path.hasSuffix("/api/model") {
+                let isConnected = serverState.withLock { $0.connected }
+                let models: [ModelSchema.Info] = isConnected
+                    ? [
+                        ModelSchema.Info.default(
+                            providerID: ProviderSchema.ID(rawValue: "github-copilot"),
+                            id: ModelSchema.ID(rawValue: "gpt-5.4")
+                        ),
+                    ]
+                    : []
+                return try Self.jsonResponse(LocationSchema.response(location: locationRef, data: models))
+            }
+
+            return try await sdk.host.fetch.send(request)
+        }
+
+        var openedURLs: [String] = []
+        let store = OpenCodeAppStore(
+            oauthPollInterval: .milliseconds(15),
+            urlOpener: { url in
+                openedURLs.append(url)
+                return true
+            }
+        )
+        try await store.connectRemote(
+            url: "http://opencode.local",
+            transport: transport,
+            subscribeEvents: false
+        )
+
+        // Verify auth methods metadata is retained for ConnectProviderSheet
+        let copilotMethods = store.authMethods(for: "github-copilot")
+        #expect(copilotMethods.count == 2)
+        #expect(store.models.isEmpty)
+
+        // 1. Start OAuth -> opens URL via injectable urlOpener -> populates activeOAuthAttempt -> polls to .complete -> reloads & refreshes models!
+        let attempt = try await store.startOAuth(
+            integrationID: "github-copilot",
+            methodID: "copilot-oauth",
+            answer: ["deployment": .string("github.com")],
+            label: "Work Copilot"
+        )
+        #expect(openedURLs == ["https://github.com/login/device"])
+        #expect(attempt.integrationID == "github-copilot")
+        #expect(attempt.integrationName == "GitHub Copilot")
+        #expect(attempt.methodID == "copilot-oauth")
+        #expect(attempt.attemptID == "att_copilot_ok")
+        #expect(attempt.mode == .auto)
+        #expect(attempt.supportsPaste == true)
+        #expect(attempt.isPolling == true)
+        #expect(attempt.extractedDeviceCode == "WDJB-MJHT")
+        #expect(AppOAuthAttempt.extractDeviceCode(from: "Enter code: ABCD-12345") == "ABCD-12345")
+        #expect(AppOAuthAttempt.extractDeviceCode(from: "Open https://accounts.x.ai/device on any device and enter code: A1B2C3D4") == "A1B2C3D4")
+        #expect(AppOAuthAttempt.extractDeviceCode(from: "Complete authorization in your browser. This window will close automatically.") == nil)
+        #expect(store.activeOAuthAttempt?.attemptID == "att_copilot_ok")
+        let startedPayload = serverState.withLock { $0.startedPayloads.first ?? "" }
+        #expect(startedPayload.contains("copilot-oauth"))
+        #expect(startedPayload.contains("github.com"))
+
+        // Wait for polling (.pending -> .complete) to finish and refresh live models
+        for _ in 0..<100 where store.activeOAuthAttempt != nil {
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        #expect(store.activeOAuthAttempt == nil)
+        #expect(store.models.contains { $0.providerID == "github-copilot" && $0.modelID == "gpt-5.4" })
+        #expect(store.integrations.first { $0.id == "github-copilot" }?.isConnected == true)
+        #expect(store.toast?.message.contains("GitHub Copilot") == true)
+        #expect(store.toast?.isError == false)
+        #expect(serverState.withLock { $0.reloadCalls } >= 1)
+
+        // 2. Explicit refreshLiveModels() triggers POST /api/location/reload and refreshes catalogs
+        let reloadsBefore = serverState.withLock { $0.reloadCalls }
+        await store.refreshLiveModels()
+        #expect(serverState.withLock { $0.reloadCalls } == reloadsBefore + 1)
+        #expect(store.toast?.message.contains("1 models") == true)
+
+        // 3. Polling failure surfaces errorMessage and stops polling
+        serverState.withLock { $0.failNextAttempt = true }
+        let failedAttempt = try await store.startOAuth(
+            integrationID: "github-copilot",
+            methodID: "copilot-oauth"
+        )
+        #expect(failedAttempt.attemptID == "att_copilot_fail")
+        for _ in 0..<100 where store.activeOAuthAttempt?.isPolling == true {
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        #expect(store.activeOAuthAttempt?.isPolling == false)
+        #expect(store.activeOAuthAttempt?.errorMessage == "Access denied by user")
+        #expect(store.toast?.isError == true)
+
+        // 4. Cancel active OAuth sends DELETE and clears activeOAuthAttempt
+        await store.cancelOAuth()
+        #expect(store.activeOAuthAttempt == nil)
+        #expect(serverState.withLock { $0.cancelledAttemptIDs }.contains("att_copilot_fail"))
+
+        await store.disconnect()
+    }
+
+    @Test("Manual OAuth code completion against live embedded OpenCodeSDK stores credential and refreshes integrations")
+    @MainActor
+    func manualOAuthCodeCompletionAgainstEmbeddedServer() async throws {
+        let dir = try OpenCodeAppTestHelper.makeTempDirectory(prefix: "opencode-app-oauth-manual")
+        defer { OpenCodeAppTestHelper.removeDirectory(dir) }
+
+        var openedURLs: [String] = []
+        let store = OpenCodeAppStore(
+            oauthPollInterval: .seconds(60),
+            urlOpener: { url in
+                openedURLs.append(url)
+                return true
+            }
+        )
+        try await store.connectEmbedded(
+            directory: dir,
+            databasePath: ":memory:",
+            subscribeEvents: false
+        )
+        defer {
+            Task { @MainActor in await store.disconnect() }
+        }
+
+        // Calling completeOAuth with no active attempt fails cleanly
+        do {
+            try await store.completeOAuth(code: "orphan-code")
+            Issue.record("Expected noActiveOAuthAttempt error")
+        } catch let error as OpenCodeAppStoreError {
+            #expect(error == .noActiveOAuthAttempt)
+        }
+
+        // Start a real OAuth attempt on the embedded ServerRouter
+        let attempt = try await store.startOAuth(
+            integrationID: "anthropic",
+            methodID: "oauth-code",
+            label: "Manual OAuth Test"
+        )
+        #expect(openedURLs == [attempt.url])
+        #expect(attempt.mode == .code)
+        #expect(store.activeOAuthAttempt?.attemptID == attempt.attemptID)
+
+        // Whitespace-only code is rejected without clearing the attempt
+        do {
+            try await store.completeOAuth(code: "   ")
+            Issue.record("Expected emptyInput error")
+        } catch let error as OpenCodeAppStoreError {
+            #expect(error == .emptyInput)
+        }
+        #expect(store.activeOAuthAttempt?.attemptID == attempt.attemptID)
+
+        // Submit manual authorization code -> completes on real embedded server, saves credential, refreshes integrations
+        try await store.completeOAuth(code: "manual-oauth-code-12345")
+        #expect(store.activeOAuthAttempt == nil)
+        #expect(store.integrations.first { $0.id == "anthropic" }?.isConnected == true)
+        #expect(store.toast?.isError == false)
+        #expect(store.toast?.message.contains("Connected") == true)
 
         await store.disconnect()
     }
