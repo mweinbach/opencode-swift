@@ -330,7 +330,7 @@ private func containsUnsupportedKeyCharacters(_ sequence: String) -> Bool {
 
 /// Multi-line interactive text editor renderable with full keybinding dispatch,
 /// shift-selection, bracketed paste handling, undo/redo, placeholders, and extmarks.
-// parity: core/src/renderables/Textarea.ts#TextareaRenderable [status=implemented hash=956c7c20251d]
+// parity: core/src/renderables/Textarea.ts#TextareaRenderable [status=implemented hash=475141805ce0]
 open class TextareaRenderable: EditBufferRenderable, @unchecked Sendable {
     public static let defaultTextareaBackgroundColor: Color = "transparent"
     public static let defaultTextareaTextColor: Color = "#FFFFFF"
@@ -466,9 +466,21 @@ open class TextareaRenderable: EditBufferRenderable, @unchecked Sendable {
 
     // MARK: - Input Handling
 
-    // parity: core/src/renderables/Textarea.ts#TextareaRenderable.handlePaste [status=implemented hash=6f4e2c2f52c7]
+    /// A paste drops control characters (Unicode Cc) but tab, LF and CR once escape sequences are gone, as Rust's
+    /// editors do (`/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g`).
+    static func dropPastedControlCharacters(_ text: String) -> String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            let v = scalar.value
+            let dropped = v <= 0x08 || v == 0x0B || v == 0x0C || (v >= 0x0E && v <= 0x1F) || (v >= 0x7F && v <= 0x9F)
+            if !dropped { scalars.append(scalar) }
+        }
+        return String(scalars)
+    }
+
+    // parity: core/src/renderables/Textarea.ts#TextareaRenderable.handlePaste [status=implemented hash=25ff3a024113]
     open override func handlePaste(_ event: PasteEvent) {
-        insertText(stripAnsiSequences(decodePasteBytes(event.bytes)))
+        insertText(Self.dropPastedControlCharacters(stripAnsiSequences(decodePasteBytes(event.bytes))))
     }
 
     // parity: core/src/renderables/Textarea.ts#TextareaRenderable.handleKeyPress [status=implemented hash=7dd80b865a28]

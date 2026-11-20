@@ -446,16 +446,19 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/types.ts#ScrollbackOptions [status=implemented hash=69fee409d57c]
+    // parity: tui/src/mini/types.ts#ScrollbackOptions [status=implemented hash=b48910cc33ec]
     public struct ScrollbackOptions: Equatable, Hashable, Sendable, Codable {
         public var suppressBackgrounds: Bool
         public var shellOutput: Bool
         public var mono: Bool
+        /// The `session.markdown` setting (`"source"` or `"rendered"`); defaults to rendered.
+        public var markdown: String?
 
-        public init(suppressBackgrounds: Bool = false, shellOutput: Bool = true, mono: Bool = false) {
+        public init(suppressBackgrounds: Bool = false, shellOutput: Bool = true, mono: Bool = false, markdown: String? = nil) {
             self.suppressBackgrounds = suppressBackgrounds
             self.shellOutput = shellOutput
             self.mono = mono
+            self.markdown = markdown
         }
     }
 
@@ -985,6 +988,7 @@ public enum TUIMini {
         0x00A0: " ", 0x00B7: "-", 0x2010: "-", 0x2011: "-", 0x2012: "-",
         0x2013: "-", 0x2014: "--", 0x2018: "'", 0x2019: "'", 0x201C: "\"",
         0x201D: "\"", 0x2022: "*", 0x2026: "...", 0x2191: "up", 0x2193: "down",
+        0x2610: "[ ]", 0x2611: "[x]",
     ]
 
     public struct MonoMarkdownTableOptions: Equatable, Hashable, Sendable {
@@ -1009,8 +1013,17 @@ public enum TUIMini {
         return out
     }
 
-    // parity: tui/src/mini/mono.ts#monoMarkdownRenderable [status=adapted hash=524a76772ec6]
+    // parity: tui/src/mini/mono.ts#monoMarkdownRenderable [status=adapted hash=2a7664a02398]
     public static func monoMarkdownRenderable(_ renderable: MarkdownRenderable) {
+        // Native code writes unhooked prose itself, so a hook keeps every paragraph and heading on the
+        // hooked path, where each span's text is transliterated.
+        renderable.inlineHook = { spans, _ in
+            spans.map { span in
+                var copy = span
+                copy.text = monoText(span.text)
+                return copy
+            }
+        }
         let asciiBorder = BorderCharacters(
             topLeft: "+", topRight: "+", bottomLeft: "+", bottomRight: "+",
             horizontal: "-", vertical: "|", topT: "+", bottomT: "+", leftT: "+", rightT: "+", cross: "+"
@@ -1193,7 +1206,7 @@ public enum TUIMini {
     private static func mapResolvedTheme(_ theme: ResolvedTheme, syntax: SyntaxStyle? = nil) -> RunTheme {
         var cat: [RGBA] = []
         for scale in theme.categorical {
-            let c = scale[.s200]
+            let c = scale[.s400]
             if !cat.contains(c) { cat.append(c) }
         }
         return RunTheme(
@@ -1206,9 +1219,9 @@ public enum TUIMini {
                 formfieldFocusedBg: theme.background.formfield.focused,
                 formfieldFocusedText: theme.text.formfield.focused,
                 selection: theme.text.formfield.selected,
-                running: theme.hue.interactive[.s200],
-                question: theme.hue.accent[.s200],
-                permission: theme.hue.accent[.s200],
+                running: theme.hue.interactive[.s400],
+                question: theme.hue.accent[.s400],
+                permission: theme.hue.accent[.s400],
                 success: theme.text.feedback.success.base,
                 link: theme.markdown.link,
                 categorical: cat,
@@ -1730,7 +1743,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/entry.body.ts#entryBody [status=implemented hash=d7c5af2010a1]
+    // parity: tui/src/mini/entry.body.ts#entryBody [status=implemented hash=5657beb135f8]
     public static func entryBody(_ commit: StreamCommit, options: ScrollbackOptions? = nil) -> RunEntryBody {
         if commit.summary != nil { return .none }
         let raw = commit.text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
@@ -1775,12 +1788,17 @@ public enum TUIMini {
             let leadCount = clean.prefix(while: { $0 == "\n" }).count
             let lead = String(repeating: "\n", count: leadCount)
             let body = String(clean.dropFirst(leadCount))
-            if body.hasPrefix("Thinking:") {
-                let rest = String(body.dropFirst("Thinking:".count)).drop(while: { $0 == " " || $0 == "\t" })
-                if mono { return .text(content: "\(lead)Thinking: \(rest)") }
-                return .code(content: "\(lead)_Thinking:_ \(rest)", filetype: "markdown")
+            // Rendered reasoning is native Markdown, as answers are; source reasoning is highlighted Markdown source.
+            let rendered = options?.markdown != "source"
+            func styled(_ content: String) -> RunEntryBody {
+                rendered ? .markdown(content: content) : .code(content: content, filetype: "markdown")
             }
-            return mono ? .text(content: clean) : .code(content: clean, filetype: "markdown")
+            if body.hasPrefix("Thinking:") {
+                let rest = String(body.dropFirst("Thinking:".count)).drop(while: { $0.isWhitespace })
+                if mono { return .text(content: "\(lead)Thinking: \(rest)") }
+                return styled("\(lead)_Thinking:_ \(rest)")
+            }
+            return mono ? .text(content: clean) : styled(clean)
         case .system, .error:
             let content = commit.phase == .progress ? raw : raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if content.isEmpty { return .none }
@@ -1959,13 +1977,15 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream [status=adapted hash=04a4f2df166c]
+    // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream [status=adapted hash=efbb6abf16f9]
     public final class RunScrollbackStream: @unchecked Sendable {
         private let renderer: CliRenderer
         private var theme: RunTheme
         private var mono: Bool
         private var shellOutput: Bool
         private var wrote: Bool
+        /// The `session.markdown` setting, forwarded to every entry body.
+        private let markdown: String?
         private var tail: StreamCommit?
         private var destroyed = false
         public private(set) var committed: [StreamCommit] = []
@@ -1975,13 +1995,15 @@ public enum TUIMini {
             theme: RunTheme = RUN_THEME_FALLBACK,
             mono: Bool = false,
             shellOutput: Bool = true,
-            wrote: Bool = false
+            wrote: Bool = false,
+            markdown: String? = nil
         ) {
             self.renderer = renderer
             self.theme = theme
             self.mono = mono
             self.shellOutput = shellOutput
             self.wrote = wrote
+            self.markdown = markdown
         }
 
         // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.setTheme [status=implemented hash=f81976a2e0ea]
@@ -1994,10 +2016,10 @@ public enum TUIMini {
             self.mono = mono
         }
 
-        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.append [status=implemented hash=e41f26a7ddf9]
+        // parity: tui/src/mini/scrollback.surface.ts#RunScrollbackStream.append [status=implemented hash=d734397ab229]
         public func append(_ commit: StreamCommit) {
             guard !destroyed else { return }
-            let opts = ScrollbackOptions(shellOutput: shellOutput, mono: mono)
+            let opts = ScrollbackOptions(shellOutput: shellOutput, mono: mono, markdown: markdown)
             if let summary = commit.summary {
                 if separatorRows(prev: tail, next: commit) > 0 || (tail == nil && wrote) {
                     try? renderer.writeToScrollback(spacerWriter())
@@ -5172,7 +5194,9 @@ public enum TUIMini {
         return PromptCommandSelection(name: command.name, arguments: head.arguments, source: command.source)
     }
 
-    // parity: tui/src/mini/footer.prompt.tsx#createPromptState [status=adapted hash=a4f10463269f]
+    /// The Swift prompt state holds the draft text, not a textarea with chip extmarks, so upstream's chip undo
+    /// (a mark's data rebinds its part) and cell-range deletes (`deleteCells`) apply to hosts that own a textarea.
+    // parity: tui/src/mini/footer.prompt.tsx#createPromptState [status=adapted hash=6445dfe9fc73]
     public static func createPromptState(history: [RunPrompt] = []) -> PromptState {
         PromptState(history: createPromptHistory(history))
     }
@@ -5385,12 +5409,15 @@ public enum TUIMini {
     // parity: tui/src/mini/footer.subagent.tsx#SUBAGENT_INSPECTOR_ROWS [status=implemented hash=5cb85f3a78e3]
     public static let SUBAGENT_INSPECTOR_ROWS = 14
 
-    // parity: tui/src/mini/footer.subagent.tsx#RunFooterSubagentBody [status=adapted hash=5de503c1c6f3]
+    // parity: tui/src/mini/footer.subagent.tsx#RunFooterSubagentBody [status=adapted hash=4e9f08864fe5]
     public static func RunFooterSubagentBody(
         ctx: any RenderContext,
         tab: FooterSubagentTab,
         detail: FooterSubagentDetail? = nil,
-        theme: RunFooterTheme = RUN_THEME_FALLBACK.footer
+        theme: RunFooterTheme = RUN_THEME_FALLBACK.footer,
+        shellOutput: Bool = true,
+        mono: Bool = false,
+        markdown: String? = nil
     ) -> BoxRenderable {
         let box = BoxRenderable(ctx: ctx, options: BoxOptions(
             id: "mini-subagent-\(tab.sessionID)", width: .percent(100), flexDirection: .column, backgroundColor: .rgba(theme.pane)
@@ -5400,13 +5427,23 @@ public enum TUIMini {
             fg: .rgba(theme.text),
             attributes: createTextAttributes(bold: true)
         )))
+        // Each commit renders with the same entry options as the scrollback, including `session.markdown`.
+        let opts = ScrollbackOptions(shellOutput: shellOutput, mono: mono, markdown: markdown)
         for commit in (detail?.commits ?? []).suffix(6) {
-            box.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(commit.text), fg: .rgba(theme.muted))))
+            let text: String
+            switch entryBody(commit, options: opts) {
+            case .none: continue
+            case .text(let content), .markdown(let content), .code(let content, _): text = content
+            case .structured: text = commit.text
+            }
+            box.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(text), fg: .rgba(theme.muted))))
         }
         return box
     }
 
-    // parity: tui/src/mini/footer.view.tsx#RunFooterView [status=adapted hash=4b899aa7dc2f]
+    /// The subagent inspector renders through ``RunFooterSubagentBody(ctx:tab:detail:theme:shellOutput:mono:markdown:)``,
+    /// which takes the `session.markdown` setting; this view covers the prompt, permission and form bodies.
+    // parity: tui/src/mini/footer.view.tsx#RunFooterView [status=adapted hash=448467e7f5b9]
     public static func RunFooterView(
         ctx: any RenderContext,
         state: FooterState,
@@ -5471,7 +5508,7 @@ public enum TUIMini {
         return merged
     }
 
-    // parity: tui/src/mini/footer.ts#RunFooter [status=adapted hash=9194f37c1fff]
+    // parity: tui/src/mini/footer.ts#RunFooter [status=adapted hash=31341ce3d581]
     public final class RunFooter: FooterApi, @unchecked Sendable {
         public struct StartupSplash: Equatable, Hashable, Sendable {
             public let version: String
@@ -5506,6 +5543,8 @@ public enum TUIMini {
         private let scrollbackLock: Mutex<RunScrollbackStream>
         private let inner: Mutex<Inner>
         private let requestExitHandler: (@Sendable () -> Bool)?
+        /// The `session.markdown` setting, forwarded to the scrollback and the subagent inspector.
+        public let markdown: String?
 
         public init(
             renderer: CliRenderer,
@@ -5516,11 +5555,13 @@ public enum TUIMini {
             miniSettings: MiniSettings? = nil,
             themeConfig: TUIConfig.ThemeConfig? = nil,
             startup: StartupSplash? = nil,
+            markdown: String? = nil,
             requestExitHandler: (@Sendable () -> Bool)? = nil
         ) {
             let resolvedSettings = miniSettings ?? MiniSettings(mono: mono)
             self.renderer = renderer
-            self.scrollbackLock = Mutex(RunScrollbackStream(renderer: renderer, theme: theme, mono: resolvedSettings.mono))
+            self.markdown = markdown
+            self.scrollbackLock = Mutex(RunScrollbackStream(renderer: renderer, theme: theme, mono: resolvedSettings.mono, markdown: markdown))
             self.requestExitHandler = requestExitHandler
             self.inner = Mutex(Inner(
                 state: FooterState(model: modelLabel),
@@ -5641,7 +5682,7 @@ public enum TUIMini {
             let (theme, mono) = inner.withLock { ($0.theme, $0.miniSettings.mono) }
             scrollbackLock.withLock { sb in
                 sb.destroy()
-                sb = RunScrollbackStream(renderer: renderer, theme: theme, mono: mono, wrote: wrote)
+                sb = RunScrollbackStream(renderer: renderer, theme: theme, mono: mono, wrote: wrote, markdown: markdown)
             }
         }
 
@@ -5757,7 +5798,8 @@ public enum TUIMini {
             modelLabel: input.modelLabel,
             agent: input.agent,
             theme: theme,
-            mono: input.miniSettings.mono
+            mono: input.miniSettings.mono,
+            markdown: input.tuiConfig.session.markdown
         )
         return Lifecycle(renderer: input.renderer, footer: footer) {
             footer.destroy()

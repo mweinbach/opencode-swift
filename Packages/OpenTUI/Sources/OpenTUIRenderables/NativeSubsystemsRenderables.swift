@@ -1616,7 +1616,10 @@ public enum NativeZigMarkdown: Sendable {
         return UInt32(i)
     }
 
-    // parity: native/src/markdown.zig#Doc [status=implemented hash=074807db94fc]
+    // The native live-tail run writer (held lines drawn up to the cut, including a token whose whole display ends at
+    // the cut, as the `$` before a held pipe in `$|$[`) has no counterpart here: this Doc re-parses the pending line
+    // and draws no held tail.
+    // parity: native/src/markdown.zig#Doc [status=adapted hash=7e79a4df90d7]
     public final class Doc: @unchecked Sendable {
         public struct LeafContent: Equatable, Sendable {
             public var bytes: [UInt8]

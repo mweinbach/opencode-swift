@@ -31,37 +31,28 @@ private final class LatexFrame: Sendable {
 /// Creates a `MarkdownCodeBlockRenderer` that renders `latex`/`math`/`tex` fences into horizontally scrollable
 /// 2D Unicode math formulas, retaining the last valid formula while an open fence streams and falling back
 /// to the default `CodeRenderable` for invalid, unsupported, or oversized input.
-// parity: latex/src/markdown.ts#createLatexCodeBlockRenderer [status=implemented hash=6ffc24491172]
+// parity: latex/src/markdown.ts#createLatexCodeBlockRenderer [status=implemented hash=f57d4145ed6f]
 public func createLatexCodeBlockRenderer(
     _ context: any RenderContext,
     options: @escaping () -> LatexOptions
 ) -> MarkdownCodeBlockRenderer {
     let lastGood = Mutex<[String: LatexFrame]>([:])
-    return { token, render in
+    return { block, render in
         let fallback = render.defaultRender()
         let key = fallback?.id
         let previous = key.flatMap { id in lastGood.withLock { $0[id] } }
-        let retained: LatexFrame? = if let previous, token.text.hasPrefix(previous.source) {
+        let retained: LatexFrame? = if let previous, block.text.hasPrefix(previous.source) {
             previous
         } else {
             nil
         }
-        let fence = extractOpeningFence(token.raw)
-        let streaming: Bool
-        if let codeFallback = fallback as? CodeRenderable,
-           codeFallback.streaming,
-           let fence,
-           !hasClosingFence(token.raw, char: fence.char, minLength: fence.length)
-        {
-            streaming = true
-        } else {
-            streaming = false
-        }
+        // A fence still streaming in keeps the last formula that parsed.
+        let streaming = (fallback as? CodeRenderable)?.streaming == true && !block.closed
 
-        let layout = layoutLatex(token.text)
+        let layout = layoutLatex(block.text)
         let frame: LatexFrame?
         if let layout {
-            frame = LatexFrame(source: token.text, layout: layout)
+            frame = LatexFrame(source: block.text, layout: layout)
         } else if streaming, let retained {
             frame = LatexFrame(source: retained.source, layout: retained.layout)
         } else {
@@ -242,42 +233,6 @@ private func isRelationMathGlyph(_ value: String) -> Bool {
     default:
         return false
     }
-}
-
-private func extractOpeningFence(_ raw: String) -> (char: Character, length: Int)? {
-    var index = raw.startIndex
-    var spaces = 0
-    while index < raw.endIndex && raw[index] == " " && spaces < 3 {
-        index = raw.index(after: index)
-        spaces += 1
-    }
-    guard index < raw.endIndex else { return nil }
-    let fenceChar = raw[index]
-    guard fenceChar == "`" || fenceChar == "~" else { return nil }
-    var count = 0
-    while index < raw.endIndex && raw[index] == fenceChar {
-        count += 1
-        index = raw.index(after: index)
-    }
-    guard count >= 3 else { return nil }
-    return (fenceChar, count)
-}
-
-private func hasClosingFence(_ raw: String, char: Character, minLength: Int) -> Bool {
-    let trimmed = latexTrimEnd(raw)
-    guard let newlineIndex = trimmed.lastIndex(of: "\n") else { return false }
-    var index = trimmed.index(after: newlineIndex)
-    var spaces = 0
-    while index < trimmed.endIndex && trimmed[index] == " " && spaces < 3 {
-        index = trimmed.index(after: index)
-        spaces += 1
-    }
-    var count = 0
-    while index < trimmed.endIndex && trimmed[index] == char {
-        count += 1
-        index = trimmed.index(after: index)
-    }
-    return index == trimmed.endIndex && count >= minLength
 }
 
 private func layoutLatex(_ source: String) -> MathLayout? {

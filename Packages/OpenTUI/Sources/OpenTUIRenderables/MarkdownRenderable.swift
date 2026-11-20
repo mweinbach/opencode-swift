@@ -273,8 +273,25 @@ public func createMarkdownCodeBlockRenderer(
 
 // MARK: - MarkdownOptions
 
+/// The text of a task item's box with conceal on.
+// parity: core/src/renderables/Markdown.ts#MarkdownTaskMarkers [status=implemented hash=8aed4165d6a9]
+public struct MarkdownTaskMarkers: Equatable, Hashable, Sendable {
+    public var unchecked: String
+    public var checked: String
+
+    public init(unchecked: String, checked: String) {
+        self.unchecked = unchecked
+        self.checked = checked
+    }
+
+    /// `☐` and `☑`, the boxes a task item shows with conceal on unless `taskMarkers` says otherwise.
+    public static let `default` = MarkdownTaskMarkers(unchecked: "☐", checked: "☑")
+    /// The source's boxes, which items show with conceal off.
+    static let source = MarkdownTaskMarkers(unchecked: "[ ]", checked: "[x]")
+}
+
 /// Configuration options for `MarkdownRenderable`.
-// parity: core/src/renderables/Markdown.ts#MarkdownOptions [status=implemented hash=89468533e0af]
+// parity: core/src/renderables/Markdown.ts#MarkdownOptions [status=implemented hash=43030af279c9]
 public struct MarkdownOptions {
     public var base: RenderableOptions
     public var content: String?
@@ -285,6 +302,9 @@ public struct MarkdownOptions {
     public var conceal: Bool?
     /// Controls concealment inside fenced code blocks rendered by `CodeRenderable`.
     public var concealCode: Bool?
+    /// The box a task item shows with `conceal` on: `☐` and `☑` by default. `{ unchecked: "[ ]", checked: "[x]" }`
+    /// shows ASCII boxes. Without conceal, items show the source's `[ ]` or `[x]`.
+    public var taskMarkers: MarkdownTaskMarkers?
     /// Syntax highlighter used for fenced code blocks (defaults to `BuiltInSyntaxHighlighter.shared`).
     public var highlighter: (any SyntaxHighlighter)?
     /// Whether content is actively streaming (enables incremental block reuse and open-fence tracking).
@@ -308,6 +328,7 @@ public struct MarkdownOptions {
         bg: Color? = nil,
         conceal: Bool? = nil,
         concealCode: Bool? = nil,
+        taskMarkers: MarkdownTaskMarkers? = nil,
         highlighter: (any SyntaxHighlighter)? = nil,
         streaming: Bool? = nil,
         tableOptions: MarkdownTableOptions? = nil,
@@ -364,6 +385,7 @@ public struct MarkdownOptions {
         self.bg = bg
         self.conceal = conceal
         self.concealCode = concealCode
+        self.taskMarkers = taskMarkers
         self.highlighter = highlighter
         self.streaming = streaming
         self.tableOptions = tableOptions
@@ -381,6 +403,7 @@ public struct MarkdownOptions {
         bg: Color? = nil,
         conceal: Bool? = nil,
         concealCode: Bool? = nil,
+        taskMarkers: MarkdownTaskMarkers? = nil,
         highlighter: (any SyntaxHighlighter)? = nil,
         streaming: Bool? = nil,
         tableOptions: MarkdownTableOptions? = nil,
@@ -397,6 +420,7 @@ public struct MarkdownOptions {
         self.bg = bg
         self.conceal = conceal
         self.concealCode = concealCode
+        self.taskMarkers = taskMarkers
         self.highlighter = highlighter
         self.streaming = streaming
         self.tableOptions = tableOptions
@@ -516,7 +540,7 @@ private func isDescendant(_ inner: Renderable, of outer: Renderable) -> Bool {
 /// and `MarkdownParser`. Composes `TextRenderable`, `BoxRenderable`, `CodeRenderable`, and
 /// `TextTableRenderable` with incremental streaming block reuse, inline concealment,
 /// OSC 8 hyperlinks, syntax-highlighted code fences, and custom `renderNode` overrides.
-// parity: core/src/renderables/Markdown.ts#MarkdownRenderable [status=implemented hash=64663ead6a3e]
+// parity: core/src/renderables/Markdown.ts#MarkdownRenderable [status=implemented hash=d461833341ef]
 open class MarkdownRenderable: Renderable, @unchecked Sendable {
     /// Entry returned by `MarkdownRenderable.blocks` summarizing each mounted top-level block.
     public struct RenderedBlockEntry {
@@ -537,6 +561,7 @@ open class MarkdownRenderable: Renderable, @unchecked Sendable {
     private var _bg: RGBA?
     private var _conceal: Bool
     private var _concealCode: Bool
+    private var _taskMarkers: MarkdownTaskMarkers
     private var _highlighter: (any SyntaxHighlighter)?
     private var _streaming: Bool
     private var _tableOptions: MarkdownTableOptions?
@@ -552,6 +577,7 @@ open class MarkdownRenderable: Renderable, @unchecked Sendable {
         self._bg = options.bg.map { RGBA.clone($0.resolved()) }
         self._conceal = options.conceal ?? true
         self._concealCode = options.concealCode ?? false
+        self._taskMarkers = options.taskMarkers ?? .default
         self._highlighter = options.highlighter
         self._streaming = options.streaming ?? false
         self._tableOptions = options.tableOptions
@@ -666,6 +692,19 @@ open class MarkdownRenderable: Renderable, @unchecked Sendable {
         set {
             guard _concealCode != newValue else { return }
             _concealCode = newValue
+            restyleAll()
+            requestRender()
+        }
+    }
+
+    /// The boxes task items show with conceal on; `nil` restores `☐` and `☑`. Items already on screen update, also
+    /// while the document streams.
+    // parity: core/src/renderables/Markdown.ts#MarkdownRenderable.taskMarkers [status=implemented hash=165e9598bfdc]
+    public var taskMarkers: MarkdownTaskMarkers? {
+        get { _taskMarkers }
+        set {
+            _taskMarkers = newValue ?? .default
+            if isDestroyed { return }
             restyleAll()
             requestRender()
         }
@@ -1326,16 +1365,8 @@ open class MarkdownRenderable: Renderable, @unchecked Sendable {
                     )
                 )
 
-                let taskSuffix: String
-                if let checked = item.taskChecked {
-                    if _conceal {
-                        taskSuffix = checked ? " ☑" : " ☐"
-                    } else {
-                        taskSuffix = checked ? " [x]" : " [ ]"
-                    }
-                } else {
-                    taskSuffix = ""
-                }
+                let box = _conceal ? _taskMarkers : MarkdownTaskMarkers.source
+                let taskSuffix = item.taskChecked.map { checked in " \(checked ? box.checked : box.unchecked)" } ?? ""
 
                 let prefixStr: String
                 if ordered {

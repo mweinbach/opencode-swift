@@ -1888,7 +1888,7 @@ public enum TUIUtil {
         try handle.write(contentsOf: Data(content.utf8))
     }
 
-    // parity: tui/src/util/persistence.ts#writeJsonAtomic [status=implemented hash=408154a3fb08]
+    // parity: tui/src/util/persistence.ts#writeJsonAtomic [status=implemented hash=894ac209279e]
     public static func writeJsonAtomic<T: Encodable>(_ filePath: String, value: T) async throws {
         let url = URL(fileURLWithPath: filePath)
         let fm = FileManager.default
@@ -1898,15 +1898,46 @@ public enum TUIUtil {
         let tempURL = URL(fileURLWithPath: tempPath)
         do {
             try data.write(to: tempURL, options: .atomic)
-            if fm.fileExists(atPath: filePath) {
-                _ = try fm.replaceItemAt(url, withItemAt: tempURL)
-            } else {
-                try fm.moveItem(at: tempURL, to: url)
-            }
         } catch {
             try? fm.removeItem(at: tempURL)
             throw error
         }
+        do {
+            try await replaceFile(fm, source: tempURL, target: url)
+        } catch {
+            try? fm.removeItem(at: tempURL)
+            throw error
+        }
+    }
+
+    /// Windows refuses to rename onto a file that is open, as it briefly is while another TUI reloads it, so a
+    /// permission or busy failure retries up to 20 times, 10 ms apart.
+    private static func replaceFile(_ fm: FileManager, source: URL, target: URL) async throws {
+        var attempt = 0
+        while true {
+            do {
+                if fm.fileExists(atPath: target.path) {
+                    _ = try fm.replaceItemAt(target, withItemAt: source)
+                } else {
+                    try fm.moveItem(at: source, to: target)
+                }
+                return
+            } catch {
+                guard attempt < 20, isTransientReplaceError(error) else { throw error }
+                attempt += 1
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+        }
+    }
+
+    /// `EPERM`, `EACCES` or `EBUSY`, also when wrapped as the underlying error of a Cocoa file error.
+    private static func isTransientReplaceError(_ error: any Error) -> Bool {
+        let ns = error as NSError
+        // POSIX EPERM (1), EACCES (13), EBUSY (16).
+        if ns.domain == NSPOSIXErrorDomain, [1, 13, 16].contains(ns.code) { return true }
+        if ns.domain == NSCocoaErrorDomain, ns.code == CocoaError.fileWriteNoPermission.rawValue { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError { return isTransientReplaceError(underlying) }
+        return false
     }
 
     // MARK: Presentation Epilogue (`src/util/presentation.ts`)
@@ -2233,6 +2264,80 @@ public enum TUIUtil {
         let value = number(tokens)
         guard let percent else { return value }
         return "\(value) (\(percent)%)"
+    }
+
+    /// The fields every job kind carries, read straight from the tagged union.
+    public struct JobFields: Equatable, Hashable, Sendable {
+        public let id: String
+        public let sessionID: String
+        public let kind: JobSchema.Kind
+        public let title: String?
+        public let started: Double
+        /// The child session a subagent job runs in; `nil` for every other kind.
+        public let childSessionID: String?
+
+        public init(_ job: JobSchema.Info) {
+            switch job {
+            case .shell(let v):
+                (id, sessionID, kind, title, started, childSessionID) = (v.id, v.sessionID.rawValue, .shell, v.title, v.time.started, nil)
+            case .subagent(let v):
+                (id, sessionID, kind, title, started, childSessionID) =
+                    (v.id, v.sessionID.rawValue, .subagent, v.title, v.time.started, v.childSessionID.rawValue)
+            case .image(let v):
+                (id, sessionID, kind, title, started, childSessionID) = (v.id, v.sessionID.rawValue, .image, v.title, v.time.started, nil)
+            case .codemode(let v):
+                (id, sessionID, kind, title, started, childSessionID) =
+                    (v.id, v.sessionID.rawValue, .codemode, v.title, v.time.started, nil)
+            }
+        }
+    }
+
+    /// Running jobs in a session's tree. A subagent job belongs to the child it runs.
+    // parity: tui/src/util/session.ts#ownedJobs [status=implemented hash=fb080adc82a9]
+    public static func ownedJobs(
+        _ jobs: [JobSchema.Info],
+        sessionID: String,
+        parentID: (String) -> String?
+    ) -> [JobSchema.Info] {
+        jobs.filter { job in
+            let fields = JobFields(job)
+            var seen = Set<String>()
+            var current: String? = fields.kind == .subagent ? fields.childSessionID : fields.sessionID
+            while let id = current, !id.isEmpty, !seen.contains(id) {
+                if id == sessionID { return true }
+                seen.insert(id)
+                // A subagent job runs in the direct child of the session that started it.
+                current = parentID(id)
+                    ?? (fields.kind == .subagent && id == fields.childSessionID ? fields.sessionID : nil)
+            }
+            return false
+        }
+    }
+
+    /// A script moved to the background ends its execute call with the job's id; its first line of code names it.
+    // parity: tui/src/util/session.ts#scriptLabel [status=implemented hash=28512fd0686a]
+    public static func scriptLabel(_ messages: [SessionMessageSchema.Info], job: JobSchema.Info) -> String {
+        let fields = JobFields(job)
+        let code = messages
+            .flatMap { message -> [SessionMessageSchema.AssistantContent] in
+                if case .assistant(let assistant) = message { return assistant.content }
+                return []
+            }
+            .compactMap { part -> String? in
+                guard case .tool(let tool) = part, tool.name == "execute",
+                      case .completed(let state) = tool.state,
+                      case .string(let jobID)? = state.metadata?["jobID"], jobID == fields.id,
+                      case .string(let code)? = state.input["code"]
+                else { return nil }
+                return code
+            }
+            .last
+        let line = code?
+            // Split on LF scalars like JavaScript, so a CRLF line keeps its CR for trim() to drop.
+            .unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { String(String.UnicodeScalarView($0)).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        return line ?? fields.title ?? "Script"
     }
 
     // MARK: Debounced Signal & FadeIn (`src/util/signal.ts`)
@@ -3012,14 +3117,16 @@ public enum TUIThemeBridge {
 
     private static let registryState = Mutex(RegistryState())
 
-    // parity: tui/src/theme/index.ts#getOpenCodeTheme [status=implemented hash=57312a1698aa]
+    /// The default "opencode" theme.
+    // parity: tui/src/theme/index.ts#getOpenCodeTheme [status=implemented hash=5447f380efc9]
     public static func getOpenCodeTheme() -> ThemeDocument {
         ThemeDefaults.opencode
     }
 
-    // parity: tui/src/theme/index.ts#getOpenCode2Theme [status=implemented hash=e659292c095b]
-    public static func getOpenCode2Theme() -> ThemeDocument {
-        ThemeDefaults.opencode2
+    /// The previous "opencode" theme, offered as "opencode-classic".
+    // parity: tui/src/theme/index.ts#getOpenCodeClassicTheme [status=implemented hash=9cad9f14de3c]
+    public static func getOpenCodeClassicTheme() -> ThemeDocument {
+        ThemeDefaults.opencodeClassic
     }
 
     // parity: tui/src/theme/index.ts#allThemes [status=implemented hash=bde16313efa6]
@@ -3030,6 +3137,7 @@ public enum TUIThemeBridge {
                 themes[k] = .v1(v)
             }
             themes["opencode"] = .v2(getOpenCodeTheme())
+            themes["opencode-classic"] = .v2(getOpenCodeClassicTheme())
             for (k, v) in state.customThemes {
                 themes[k] = v
             }
@@ -3745,7 +3853,7 @@ public enum TUIPluginHost {
 
     // MARK: Markdown Code-Block Renderer (`src/plugin/markdown.ts`)
 
-    // parity: tui/src/plugin/markdown.ts#createMarkdownRenderer [status=adapted hash=c8787cd2fdab]
+    // parity: tui/src/plugin/markdown.ts#createMarkdownRenderer [status=adapted hash=13fad3cda053]
     public static func createMarkdownRenderer(
         sources: () -> [[String: @Sendable (String) -> String]]
     ) -> (@Sendable (String, String) -> String?)? {
@@ -4088,11 +4196,14 @@ public enum TUIFeaturePlugin {
         costText: String? = nil,
         subagentCount: Int = 0,
         shellCount: Int = 0,
+        scriptCount: Int = 0,
         commandShortcut: String? = "ctrl+p",
         theme: ResolvedTheme
     ) -> BoxRenderable {
         let row = BoxRenderable(ctx: ctx, options: BoxOptions(id: "prompt-footer", width: .percent(100), flexDirection: .row, justifyContent: .spaceBetween, gap: .point(2)))
         var leftParts: [String] = []
+        // What the session has running, in the picker's busy order: scripts, subagents, shells.
+        if scriptCount > 0 { leftParts.append("\(scriptCount) script\(scriptCount == 1 ? "" : "s")") }
         if subagentCount > 0 { leftParts.append("\(subagentCount) subagent\(subagentCount == 1 ? "" : "s")") }
         if shellCount > 0 { leftParts.append("\(shellCount) shell\(shellCount == 1 ? "" : "s")") }
         if let usageText, !usageText.isEmpty { leftParts.append(usageText) }
@@ -5312,12 +5423,14 @@ public enum TUIFeaturePlugin {
             let cost: String? = { if case .string(let s) = input["cost"] { return s }; return nil }()
             let subagents: Int = { if case .int(let n) = input["subagents"] { return Int(n) }; return 0 }()
             let shells: Int = { if case .int(let n) = input["shells"] { return Int(n) }; return 0 }()
+            let scripts: Int = { if case .int(let n) = input["scripts"] { return Int(n) }; return 0 }()
             return PromptFooter(
                 ctx: ctx,
                 usageText: usage,
                 costText: cost,
                 subagentCount: subagents,
                 shellCount: shells,
+                scriptCount: scripts,
                 theme: context.host.theme()
             )
         }

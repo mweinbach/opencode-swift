@@ -314,7 +314,7 @@ public struct CliRendererListenerToken: Equatable, Hashable, Sendable {
 /// Pure-Swift terminal UI renderer coordinating the `RootRenderable` scene graph, Flexbox layout,
 /// double-buffered `AnsiDiffRenderer`, hit-test grid, `StdinParser` input routing, mouse/hover/drag/selection,
 /// focus management, and theme-mode detection.
-// parity: core/src/renderer.ts#CliRenderer [status=adapted hash=81cb2c8321ec]
+// parity: core/src/renderer.ts#CliRenderer [status=adapted hash=1e8ace8854c7]
 public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscriptionSource, @unchecked Sendable {
     private static let clickRepeatIntervalMs: Double = 500
     private static let animationTimerSlackMs: Double = 1
@@ -1197,14 +1197,31 @@ public final class CliRenderer: RenderContext, RendererThemeModeHost, OscSubscri
         themeModeState.cancelRefresh()
     }
 
-    // parity: core/src/renderer.ts#CliRenderer.resume [status=adapted hash=bee23b37f593]
+    /// Reads the terminal's current size (columns, rows), or `nil` when the host cannot tell. ``resume()`` reads it
+    /// because a stopped process gets no `SIGWINCH`.
+    public var terminalSizeProvider: (@Sendable () -> (width: Int, height: Int)?)?
+
+    /// A stopped process gets no SIGWINCH (its shell owns the terminal, and `fg` sends only SIGCONT), so resume reads
+    /// the terminal size again: a new terminal size, or else a size requested while suspended, applies first. A size
+    /// the renderer rejects (not positive) is dropped, as for a live resize.
+    // parity: core/src/renderer.ts#CliRenderer.resume [status=adapted hash=5bef600c34d8]
     public func resume() {
         guard !_isDestroyed && _controlState == .explicitSuspended else { return }
         stdinParser.resume()
         _useMouse = _suspendedMouseEnabled
         forceFullRepaintRequested = true
         _controlState = _previousControlState
-        applyPendingResizeIfNeeded()
+        let fresh = terminalSizeProvider?()
+        let resized = fresh.map { $0.width > 0 && $0.height > 0 && ($0.width != _terminalWidth || $0.height != _terminalHeight) } ?? false
+        let size = resized ? fresh : pendingResize
+        pendingResize = nil
+        if let handle = resizeTimeoutId {
+            clock.clearTimeout(handle)
+            resizeTimeoutId = nil
+        }
+        if let size, size.width > 0, size.height > 0 {
+            processResize(width: size.width, height: size.height)
+        }
         if _controlState == .autoStarted || _controlState == .explicitStarted {
             internalStart()
         } else {

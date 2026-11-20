@@ -189,7 +189,7 @@ extension TUIComponent {
     }
 
     /// Session tab title shimmer renderable for pending automatic renames (`src/component/title-shimmer.tsx`).
-    // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable [status=adapted hash=726c0c78f51d]
+    // parity: tui/src/component/title-shimmer.tsx#TitleShimmerRenderable [status=adapted hash=0224d9e98cab]
     public final class TitleShimmerRenderable: TextRenderable, @unchecked Sendable {
         public struct RenameState: Equatable, Hashable, Sendable {
             public var title: String
@@ -320,13 +320,35 @@ extension TUIComponent {
             backdropMatrix[11] = Float(_backdrop.b)
         }
 
+        private static let shimmerDuration: Double = 1200
+        private static let shimmerFade: Double = 240
+        private static let arrivalDuration: Double = 450
+
+        /// The app's frame rate, on the shared clock, only while animating and drawn. The clock's first tick measures
+        /// from the subscription, so a fade never inherits time spent idle before it started.
         private func updateAnimationState() {
-            animationFps = isAnimating ? 30 : nil
+            animationFps = isAnimating ? 60 : nil
         }
 
         private func changed() {
             updateAnimationState()
             requestRender()
+        }
+
+        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
+            elapsed = (elapsed + deltaTime).truncatingRemainder(dividingBy: Self.shimmerDuration)
+            if let current = arrival {
+                let next = current + deltaTime
+                if next >= Self.arrivalDuration {
+                    arrival = nil
+                    blend = 0
+                } else {
+                    arrival = next
+                }
+            }
+            let rising = isShimmering || arrival != nil
+            blend = max(0, min(1, blend + (rising ? deltaTime : -deltaTime) / Self.shimmerFade))
+            changed()
         }
     }
 
@@ -915,7 +937,64 @@ extension TUIComponent {
         return TextRenderable(ctx: ctx, options: TextOptions(content: .string("Press esc again to interrupt"), fg: .rgba(theme.text.feedback.warning.base)))
     }
 
-    // parity: tui/src/component/prompt/index.tsx#Prompt [status=adapted hash=b26d4a9e3395]
+    // MARK: Prompt editor context and chips (`src/component/prompt/index.tsx`)
+
+    private static func hasEditorRangeSelection(_ range: TUIContext.EditorSelectionRange) -> Bool {
+        range.selection.start.line != range.selection.end.line
+            || range.selection.start.character != range.selection.end.character
+    }
+
+    private static func editorRangeLabel(_ range: TUIContext.EditorSelectionRange) -> String? {
+        guard hasEditorRangeSelection(range) else { return nil }
+        if range.selection.start.line == range.selection.end.line { return "#\(range.selection.start.line)" }
+        return "#\(range.selection.start.line)-\(range.selection.end.line)"
+    }
+
+    /// The editor context the prompt sends with a message, wrapped in a `<system-update>` note.
+    public static func formatEditorContext(_ selection: TUIContext.EditorSelection) -> String {
+        let selected = selection.ranges.filter(hasEditorRangeSelection)
+        if selected.isEmpty {
+            return "<system-update>Note: The user opened the file \"\(selection.filePath)\". This may or may not be relevant to the current task.</system-update>\n"
+        }
+        let ranges = selected.enumerated().map { index, range in
+            let prefix = selected.count > 1 ? "Selection \(index + 1): " : ""
+            return "Note: The user selected \(prefix)\(editorRangeLabel(range) ?? "") from \"\(selection.filePath)\". ```\(range.text)```\n\n"
+        }
+        return "<system-update>\(ranges.joined(separator: "\n")) This may or may not be relevant to the current task.</system-update>\n"
+    }
+
+    /// Undo restores a deleted chip's mark, with its ``TUIPrompt/ChipData``, after its part left the prompt. Rebinds
+    /// the chip to a copy of its part appended to `prompt`, and returns the new part reference.
+    ///
+    /// A second chip for an attached file moves the first part's mention instead of adding one, so a file already in
+    /// the prompt is not appended again.
+    public static func rebindChip(_ prompt: inout TUIPrompt.PromptInfo, data: TUIPrompt.ChipData?) -> TUIPrompt.PromptPartRef? {
+        if let file = data?.file, !prompt.files.contains(where: { $0.uri == file.uri }) {
+            prompt.files.append(file)
+            return TUIPrompt.PromptPartRef(type: .file, index: prompt.files.count - 1)
+        }
+        if let agent = data?.agent {
+            prompt.agents.append(agent)
+            return TUIPrompt.PromptPartRef(type: .agent, index: prompt.agents.count - 1)
+        }
+        if let skill = data?.skill {
+            prompt.skills.append(skill)
+            return TUIPrompt.PromptPartRef(type: .skill, index: prompt.skills.count - 1)
+        }
+        return nil
+    }
+
+    /// The chip data each restored prompt part stores on its mark, so undo can bring a deleted chip back.
+    public static func chipData(for ref: TUIPrompt.PromptPartRef, in prompt: TUIPrompt.PromptInfo) -> TUIPrompt.ChipData? {
+        switch ref.type {
+        case .file: return prompt.files.indices.contains(ref.index) ? TUIPrompt.ChipData(file: prompt.files[ref.index]) : nil
+        case .agent: return prompt.agents.indices.contains(ref.index) ? TUIPrompt.ChipData(agent: prompt.agents[ref.index]) : nil
+        case .skill: return prompt.skills.indices.contains(ref.index) ? TUIPrompt.ChipData(skill: prompt.skills[ref.index]) : nil
+        case .pasted: return nil
+        }
+    }
+
+    // parity: tui/src/component/prompt/index.tsx#Prompt [status=adapted hash=b73c46441519]
     public static func Prompt(
         ctx: any RenderContext,
         props: PromptProps,
@@ -1264,7 +1343,7 @@ extension TUIComponent {
 
     // MARK: - Retry Provider (`src/component/retry-provider.tsx`)
 
-    // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable [status=adapted hash=4a8b3c32c3c1]
+    // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable [status=adapted hash=6bbeee5d778a]
     public final class RetryProviderRenderable: TextRenderable, @unchecked Sendable {
         public struct Value: Equatable, Hashable, Sendable {
             public var id: String
@@ -1302,7 +1381,7 @@ extension TUIComponent {
             super.init(ctx: ctx, options: TextOptions(content: .string(formatted), fg: fg.map { .rgba($0) }))
         }
 
-        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.value [status=implemented hash=5da95466b9fb]
+        // parity: tui/src/component/retry-provider.tsx#RetryProviderRenderable.value [status=implemented hash=0d5b6070f850]
         public var value: Value? {
             get { currentValue }
             set {
@@ -1558,12 +1637,26 @@ extension TUIComponent {
         }
     }
 
+    /// Hover marquee for overflowing session tab titles.
+    ///
+    /// Entering an overflowing title waits ``delay`` ms (the host calls ``begin()`` from its clock timer), then
+    /// scrolls one cell per ``interval`` ms on the shared animation clock: ``animationFps`` is non-nil only while
+    /// scrolling, and ``tick(_:)`` takes the clock's tick count, so missed frames catch up. One full cycle ends the
+    /// scroll back at offset 0.
     public final class MarqueeController: Sendable {
+        /// Hover delay before the title starts to scroll (`MARQUEE_DELAY`).
+        public static let delay: Double = 600
+        /// Milliseconds per scrolled cell (`MARQUEE_INTERVAL`).
+        public static let interval: Double = 80
+
         private struct State: Sendable {
             var offset: Int = 0
             var active: String? = nil
             var cycleWidth: Int = 0
             var hovered: String? = nil
+            var scrolling: Bool = false
+            /// Set while the hover delay runs; cleared by ``begin()`` or any reset.
+            var delayed: Bool = false
         }
 
         private let state = Mutex(State())
@@ -1573,54 +1666,80 @@ extension TUIComponent {
         public var offset: Int { state.withLock { $0.offset } }
         public var active: String? { state.withLock { $0.active } }
         public var hovered: String? { state.withLock { $0.hovered } }
+        public var scrolling: Bool { state.withLock { $0.scrolling } }
+        /// Whether the hover delay is pending, so the host should call ``begin()`` after ``delay`` ms.
+        public var delayPending: Bool { state.withLock { $0.delayed } }
+
+        /// The shared clock rate while scrolling; `nil` stops the ticks.
+        public var animationFps: Double? { state.withLock { $0.scrolling ? 1000 / Self.interval : nil } }
+
+        private static func clear(_ s: inout State) {
+            s.delayed = false
+            s.scrolling = false
+        }
+
+        private static func reset(_ s: inout State) {
+            clear(&s)
+            s.active = nil
+            s.offset = 0
+        }
 
         public func enter(sessionID: String, title: String, width: Int) {
             state.withLock { s in
                 s.hovered = sessionID
                 guard TUIUtil.marqueeOverflows(title, width: width) else {
-                    s.active = nil
-                    s.offset = 0
+                    Self.reset(&s)
                     return
                 }
                 if s.active == sessionID { return }
+                Self.clear(&s)
                 s.cycleWidth = TUIUtil.marqueeCycleWidth(title)
                 s.active = sessionID
                 s.offset = 0
+                s.delayed = true
             }
         }
 
-        public func tick() {
+        /// The end of the hover delay: the title moves one cell and starts scrolling.
+        public func begin() {
             state.withLock { s in
-                guard s.active != nil, s.cycleWidth > 0 else { return }
-                if s.offset + 1 < s.cycleWidth {
-                    s.offset += 1
-                } else {
-                    s.offset = 0
+                guard s.delayed, s.active != nil else { return }
+                s.delayed = false
+                s.offset = 1
+                s.scrolling = true
+            }
+        }
+
+        /// Advances by the clock's `ticks`; reaching the cycle width ends the scroll at offset 0.
+        public func tick(_ ticks: Int = 1) {
+            state.withLock { s in
+                guard s.scrolling else { return }
+                if s.offset + ticks < s.cycleWidth {
+                    s.offset += ticks
+                    return
                 }
+                Self.clear(&s)
+                s.offset = 0
             }
         }
 
         public func leave(sessionID: String) {
             state.withLock { s in
                 if s.hovered == sessionID { s.hovered = nil }
-                if s.active == sessionID {
-                    s.active = nil
-                    s.offset = 0
-                }
+                if s.active == sessionID { Self.reset(&s) }
             }
         }
 
         public func reset() {
             state.withLock { s in
-                s.active = nil
+                Self.reset(&s)
                 s.hovered = nil
-                s.offset = 0
                 s.cycleWidth = 0
             }
         }
     }
 
-    // parity: tui/src/component/session-tabs.tsx#createMarquee [status=adapted hash=fdaa09a3e9a9]
+    // parity: tui/src/component/session-tabs.tsx#createMarquee [status=adapted hash=0156237c174c]
     public static func createMarquee() -> MarqueeController {
         MarqueeController()
     }
@@ -1773,7 +1892,7 @@ extension TUIComponent {
     private static func nearestTerminalHue(theme: ResolvedThemeTokens, targetHue: Double) -> RGBA {
         var best: (color: RGBA, distance: Double)? = nil
         for scale in theme.hue.scales.values {
-            let color = scale[.s200]
+            let color = scale[.s400]
             let (r, g, b, a) = color.toInts()
             guard a > 0 else { continue }
             let oklch = rgbToOklch(Double(r) / 255.0, Double(g) / 255.0, Double(b) / 255.0)
@@ -1787,7 +1906,7 @@ extension TUIComponent {
         if let best, best.distance <= 30.0 {
             return best.color
         }
-        return theme.hue.accent[.s200]
+        return theme.hue.accent[.s400]
     }
 
     // parity: tui/src/component/terminal-pane.tsx#TerminalPane [status=adapted hash=0105f2e7ca78]

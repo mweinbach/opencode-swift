@@ -35,6 +35,18 @@ public enum TUIPrompt {
 
     // MARK: - Content (`packages/tui/src/prompt/content.ts`)
 
+    /// Deletes the document cells `[start, end)` and leaves the cursor at `start`.
+    ///
+    /// Offsets are textarea document offsets (display cells, with one cell per newline), resolved through the
+    /// edit buffer so a wide character or tab never splits.
+    // parity: tui/src/prompt/content.ts#deleteCells [status=implemented hash=5ba8e6ff3763]
+    public static func deleteCells(_ input: TextareaRenderable, start: Int, end: Int) {
+        guard let from = input.editBuffer.offsetToPosition(start),
+              let to = input.editBuffer.offsetToPosition(end)
+        else { return }
+        input.deleteRange(startLine: from.row, startCol: from.col, endLine: to.row, endCol: to.col)
+    }
+
     /// Strips a single trailing newline (`\r\n` or `\n`) from single-line editor content while preserving multiline text.
     // parity: tui/src/prompt/content.ts#normalizePromptContent [status=implemented hash=6d25c66376fb]
     public static func normalizePromptContent(_ content: String) -> String {
@@ -354,6 +366,24 @@ public enum TUIPrompt {
         public init(type: Kind, index: Int) {
             self.type = type
             self.index = index
+        }
+    }
+
+    /// A chip's extmark data. Undo restores it with the mark, so a restored chip keeps its part.
+    // parity: tui/src/prompt/history.tsx#ChipData [status=implemented hash=a110119c89da]
+    public struct ChipData: Equatable, Hashable, Sendable, Codable {
+        public var file: PromptFile?
+        public var agent: PromptSchema.AgentAttachment?
+        public var skill: PromptInputSchema.SkillAttachment?
+
+        public init(
+            file: PromptFile? = nil,
+            agent: PromptSchema.AgentAttachment? = nil,
+            skill: PromptInputSchema.SkillAttachment? = nil
+        ) {
+            self.file = file
+            self.agent = agent
+            self.skill = skill
         }
     }
 
@@ -734,14 +764,15 @@ public enum TUIPrompt {
         )
     }
 
-    // parity: tui/src/prompt/restore.ts#usePromptRestore [status=adapted hash=e123a7544d6e]
+    // parity: tui/src/prompt/restore.ts#usePromptRestore [status=adapted hash=80f53e222680]
     public static func usePromptRestore(
         readMedia: @escaping @Sendable (String) async throws -> [UInt8]?,
-        onWarning: @escaping @Sendable (String) -> Void = { _ in }
+        onWarning: @escaping @Sendable (String) -> Void = { _ in },
+        widthMethod: WidthMethod = .unicode
     ) -> @Sendable (ProjectedPrompt, Bool) async throws -> PromptInfo {
         { input, allowMissing in
             let missingCount = Mutex<Int>(0)
-            let restored = try await restoredPromptInput(input) { uri in
+            let decoded = try await restoredPromptInput(input) { uri in
                 do {
                     return try await readMedia(uri)
                 } catch {
@@ -757,6 +788,8 @@ public enum TUIPrompt {
                     : "\(missing) images in this message are no longer stored, so they can't be restored"
                 onWarning(msg)
             }
+            // Mention ranges stored by the web composer as string indexes become textarea cells.
+            let restored = promptMentionsToCells(decoded, widthMethod: widthMethod)
             let promptFiles = (restored.files ?? []).map {
                 PromptFile(uri: $0.uri, source: $0.source, name: $0.name, description: $0.description, mention: $0.mention)
             }
@@ -925,6 +958,55 @@ public enum TUIPrompt {
             }
         }
         return PromptInputSchema.Prompt(text: content, files: nextFiles, agents: nextAgents, skills: nextSkills)
+    }
+
+    /// The web composer stores mention ranges as string (UTF-16) indexes and the TUI as cells; the two differ after a
+    /// tab or a wide character. A range that does not cover its text in cells but does as string indexes is converted
+    /// to cells.
+    // parity: tui/src/prompt/mention.ts#promptMentionsToCells [status=implemented hash=c937b4ff7e7b]
+    public static func promptMentionsToCells(
+        _ prompt: PromptInputSchema.Prompt,
+        widthMethod: WidthMethod = .unicode
+    ) -> PromptInputSchema.Prompt {
+        let units = Array(prompt.text.utf16)
+        let method = textWidthMethod(widthMethod)
+        // JavaScript `String.prototype.slice` on UTF-16 indexes, clamped.
+        func slice(_ start: Int, _ end: Int) -> [UInt16] {
+            let from = max(0, min(units.count, start))
+            let to = max(0, min(units.count, end))
+            return from < to ? Array(units[from..<to]) : []
+        }
+        func cells(_ index: Int) -> Int {
+            measureEditText(String(decoding: slice(0, index), as: UTF16.self), widthMethod: method)
+        }
+        func indexOf(_ needle: [UInt16], from: Int) -> Int? {
+            guard !needle.isEmpty, needle.count <= units.count else { return nil }
+            var at = max(0, from)
+            while at + needle.count <= units.count {
+                if units[at] == needle[0] && Array(units[at..<(at + needle.count)]) == needle { return at }
+                at += 1
+            }
+            return nil
+        }
+        func convert(_ mention: PromptSchema.PromptMention?) -> PromptSchema.PromptMention? {
+            guard let mention, !mention.text.isEmpty else { return mention }
+            let needle = Array(mention.text.utf16)
+            guard slice(mention.start, mention.end) == needle else { return mention }
+            var at = indexOf(needle, from: 0)
+            while let found = at {
+                if cells(found) == mention.start { return mention }
+                at = indexOf(needle, from: found + 1)
+            }
+            return PromptSchema.PromptMention(start: cells(mention.start), end: cells(mention.end), text: mention.text)
+        }
+        return PromptInputSchema.Prompt(
+            text: prompt.text,
+            files: prompt.files?.map {
+                PromptInputSchema.FileAttachment(uri: $0.uri, source: $0.source, name: $0.name, description: $0.description, mention: convert($0.mention))
+            },
+            agents: prompt.agents?.map { PromptSchema.AgentAttachment(name: $0.name, mention: convert($0.mention)) },
+            skills: prompt.skills?.map { PromptInputSchema.SkillAttachment(id: $0.id, mention: convert($0.mention)) }
+        )
     }
 
     // parity: tui/src/prompt/mention.ts#expandPromptInputPastedText [status=implemented hash=21dd6a2bbe60]
@@ -2779,50 +2861,48 @@ public enum TUIRoutes {
         }
     }
 
+    /// The composer context value: the picker's tabs (``TUIRoutes/ComposerTabs``) plus open/close state.
     public final class ComposerTabController: @unchecked Sendable {
-        private struct State: Sendable {
-            var tabs: [ComposerTab] = []
-            var activeID: String = ""
-            var open: Bool = false
-        }
-
-        private let state = Mutex(State())
+        public let composerTabs: TUIRoutes.ComposerTabs
         private let onCloseCallback: @Sendable () -> Void
 
-        public init(open: Bool = false, onClose: @escaping @Sendable () -> Void = {}) {
-            self.state.withLock { $0.open = open }
+        public init(open: Bool = false, defaultTab: String? = nil, onClose: @escaping @Sendable () -> Void = {}) {
+            self.composerTabs = TUIRoutes.createComposerTabs(open: open, defaultTab: defaultTab)
             self.onCloseCallback = onClose
         }
 
         public func register(_ tab: ComposerTab) -> @Sendable () -> Void {
-            state.withLock { s in
-                if let idx = s.tabs.firstIndex(where: { $0.id == tab.id }) {
-                    s.tabs[idx] = tab
-                } else {
-                    s.tabs.append(tab)
-                }
-                if s.activeID.isEmpty { s.activeID = tab.id }
-            }
-            return { [weak self] in
-                self?.state.withLock { $0.tabs.removeAll { $0.id == tab.id } }
-            }
+            composerTabs.register(tab)
         }
 
         public func active(_ id: String) -> Bool {
-            state.withLock { $0.open && $0.activeID == id }
+            composerTabs.open && composerTabs.active == id
         }
 
         public func select(_ id: String) {
-            state.withLock { $0.activeID = id }
+            composerTabs.setActive(id)
+        }
+
+        /// Opens or closes the picker, optionally asking for a tab.
+        public func setOpen(_ open: Bool, defaultTab: String? = nil) {
+            composerTabs.setInputs(open: open, defaultTab: defaultTab)
+        }
+
+        /// Cycles the active tab by `direction` (wrapping); a single tab stays put.
+        public func switchTab(_ direction: Int) {
+            let list = composerTabs.list
+            guard list.count > 1 else { return }
+            let index = list.firstIndex { $0.id == composerTabs.active } ?? -1
+            composerTabs.setActive(list[((index + direction) % list.count + list.count) % list.count].id)
         }
 
         public func close() {
-            state.withLock { $0.open = false }
+            composerTabs.setInputs(open: false, defaultTab: nil)
             onCloseCallback()
         }
 
-        public var tabs: [ComposerTab] { state.withLock { $0.tabs } }
-        public var activeID: String { state.withLock { $0.activeID } }
+        public var tabs: [ComposerTab] { composerTabs.list }
+        public var activeID: String { composerTabs.active }
     }
 
     // parity: tui/src/routes/session/composer/context.ts#ComposerContext [status=adapted hash=6064d5547261]
@@ -3096,6 +3176,41 @@ public enum TUIRoutes {
         return box
     }
 
+    /// Reasoning in the reasoning colors. Rendered mode draws it with OpenTUI's native Markdown, as answers are drawn,
+    /// so none of it goes to the highlighter; source mode keeps the highlighted Markdown source.
+    // parity: tui/src/routes/session/message-parts.tsx#ReasoningBody [status=adapted hash=2c4c1ffd90ee]
+    public static func ReasoningBody(
+        ctx: any RenderContext,
+        content: String,
+        streaming: Bool,
+        sourceStreaming: Bool,
+        markdownMode: String = "rendered",
+        syntax: SyntaxStyle? = nil,
+        theme: ResolvedTheme? = nil
+    ) -> Renderable {
+        let t = defaultTheme(theme)
+        let thinkingSyntax = generateThinkingSyntax(syntax ?? generateSyntax(t), foreground: t.text.muted)
+        guard markdownMode == "rendered" else {
+            return CodeRenderable(ctx: ctx, options: CodeOptions(
+                content: content,
+                filetype: "markdown",
+                syntaxStyle: thinkingSyntax,
+                conceal: false,
+                drawUnstyledText: false,
+                streaming: sourceStreaming,
+                fg: .rgba(t.text.muted)
+            ))
+        }
+        return MarkdownRenderable(ctx: ctx, options: MarkdownOptions(
+            content: content,
+            syntaxStyle: thinkingSyntax,
+            fg: .rgba(t.text.muted),
+            conceal: true,
+            streaming: streaming,
+            tableOptions: MarkdownTableOptions(style: .grid, cellPaddingX: 1)
+        ))
+    }
+
     // parity: tui/src/routes/session/message-parts.tsx#TextPart [status=adapted hash=782a9fa5bc2d]
     public static func TextPart(
         ctx: any RenderContext,
@@ -3284,11 +3399,14 @@ public enum TUIRoutes {
         SessionLocationUnavailable(ctx: ctx, directory: directory, theme: theme)
     }
 
-    // parity: tui/src/routes/session/composer/index.tsx#Composer [status=adapted hash=316985d02260]
+    /// The tab strip of the composer picker. Tabs render in the fixed picker order (Subagents, Shell, Scripts,
+    /// Terminals); the active one is bold in the base color, the others muted.
+    // parity: tui/src/routes/session/composer/index.tsx#Composer [status=adapted hash=a29b7f245dcd]
     public static func Composer(
         ctx: any RenderContext,
         props: ComposerProps,
         tabs: [ComposerTab] = [],
+        activeTab: String? = nil,
         theme: ResolvedTheme? = nil
     ) -> BoxRenderable {
         let t = defaultTheme(theme)
@@ -3299,14 +3417,21 @@ public enum TUIRoutes {
             visible: props.open,
             backgroundColor: .rgba(t.background.raised.base)
         ))
-        let header = tabs.map(\.label).joined(separator: "  ")
-        if !header.isEmpty {
-            box.add(TextRenderable(ctx: ctx, options: TextOptions(
-                content: .string(header),
-                fg: .rgba(t.text.base),
-                attributes: createTextAttributes(bold: true)
+        let controller = createComposerTabs(open: props.open, defaultTab: props.defaultTab)
+        for tab in tabs { _ = controller.register(tab) }
+        if let activeTab { controller.setActive(activeTab) }
+        let list = controller.list
+        guard !list.isEmpty else { return box }
+        let strip = BoxRenderable(ctx: ctx, options: BoxOptions(flexDirection: .row, gap: .point(2)))
+        for tab in list {
+            let isActive = controller.active == tab.id
+            strip.add(TextRenderable(ctx: ctx, options: TextOptions(
+                content: .string(tab.label),
+                fg: .rgba(isActive ? t.text.base : t.text.muted),
+                attributes: isActive ? createTextAttributes(bold: true) : TextAttributes.none
             )))
         }
+        box.add(strip)
         return box
     }
 
