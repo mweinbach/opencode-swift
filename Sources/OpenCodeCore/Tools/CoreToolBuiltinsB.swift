@@ -156,8 +156,10 @@ extension CoreTool {
             return url
         }
 
-        // parity: core/src/tool/plugin/webfetch.ts#Plugin [status=adapted hash=d38609721c78]
+        // parity: core/src/tool/plugin/webfetch.ts#Plugin [status=adapted hash=474eddeeb5f4]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.webfetch") { editor, env in
+            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode, whose
+            // programs fetch through their `fetch` global.
             editor.add(RegisteredTool(
                 name: name,
                 description: description,
@@ -313,14 +315,16 @@ extension CoreTool {
             }.joined(separator: "\n\n")
         }
 
-        // parity: core/src/tool/plugin/websearch.ts#Plugin [status=adapted hash=3117cf643194]
+        // parity: core/src/tool/plugin/websearch.ts#Plugin [status=adapted hash=d3c1c18eb929]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.websearch") { editor, env in
+            // Whether a model is offered this tool (no provider, or search disabled) is `ModelPolicy.modelTools` with
+            // `WebSearch.available()`, not a session hook.
             editor.add(RegisteredTool(
                 name: name,
                 description: description,
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("array")],
-                options: ToolSchema.Options(codemode: false)
+                options: ToolSchema.Options(codemode: env.fullCodeMode)
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 let inv = CorePermission.invocation(context)
@@ -716,7 +720,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/subagent.ts#description [status=implemented hash=cd7cebc2544d]
         public static let description: String = [
             "Spawns an agent in a child session to work on the specified task.",
-            "Subagents always run in the background: the call returns immediately with a sessionID, and you receive a `<subagent>` message each time the child goes idle, including after later work.",
+            "Subagents always run in the background: the call returns immediately with a sessionID, and you receive a `<background-result kind=\"subagent\">` message each time the child goes idle, including after later work.",
             "Keep working on non-overlapping tasks, or briefly tell the user what you launched and end your response. Do not sleep, poll, or proactively check on the child's progress.",
             "New child sessions start with fresh context, so include all relevant context and instructions when you don't pass a sessionID.",
             "Pass the returned sessionID to continue that specific child conversation. A follow-up to a running child joins its current run.",
@@ -770,7 +774,7 @@ extension CoreTool {
             "required": .array([.string("agent"), .string("description"), .string("prompt")]),
         ]
 
-        // parity: core/src/tool/plugin/subagent.ts#Plugin [status=adapted hash=c93500a36de4]
+        // parity: core/src/tool/plugin/subagent.ts#Plugin [status=adapted hash=fc197ee730ed]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.subagent") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
@@ -851,10 +855,10 @@ extension CoreTool {
                     if let modelService = env.model {
                         let availableChat = (try? await modelService.available(types: nil)) ?? []
                         guard let matched = availableChat.first(where: { $0.providerID == ref.providerID && $0.id == ref.id }) else {
-                            let other = ((try? await modelService.available(types: [.image, .decision])) ?? [])
+                            let other = ((try? await modelService.available(types: [.image, .video, .decision])) ?? [])
                                 .first(where: { $0.providerID == ref.providerID && $0.id == ref.id })
                             if let other {
-                                let kind = other.type == .image ? "an image" : "a decision"
+                                let kind = other.type == .image ? "an image" : other.type == .video ? "a video" : "a decision"
                                 throw AISchema.ToolFailure(
                                     message: "Model \"\(ref.providerID.rawValue)/\(ref.id.rawValue)\" is \(kind) model; subagents need a chat model. Use the models tool to find one."
                                 )
@@ -924,7 +928,7 @@ extension CoreTool {
                 }
 
                 let msg = [
-                    "The subagent is working in the background (sessionID: \(child.id.rawValue)). You will receive a <subagent> message when it goes idle, and again after each later round of work.",
+                    "The subagent is working in the background (sessionID: \(child.id.rawValue)). You will receive a <background-result kind=\"subagent\"> message when it goes idle, and again after each later round of work.",
                     "DO NOT sleep, poll, proactively check on its progress, or duplicate this subagent's work.",
                     "Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.",
                     "To send it follow-ups or change its instructions while it runs, call subagent again with this sessionID.",
@@ -1672,8 +1676,10 @@ extension CoreTool {
             )
         }
 
-        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=40bafaa46136]
+        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=f7b8b31a99c8]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.image-generate") { editor, env in
+            // Input images and the saved image go through the target's own environment; every target here resolves on
+            // this server's environment, so that is `env.fileSystem`.
             editor.add(RegisteredTool(
                 name: name,
                 description: description,
@@ -2057,11 +2063,13 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#ModelsInput [status=implemented hash=ee6cd8c0ca35]
+        // parity: core/src/tool/plugin/opencode.ts#ModelsInput [status=implemented hash=9f3547076d38]
         public struct ModelsInput: Equatable, Hashable, Sendable, Codable {
+            /// "chat": a language model (LLM). "image": generates or edits images. "video": generates videos.
             public enum ModelKind: String, Equatable, Hashable, Sendable, Codable {
                 case chat
                 case image
+                case video
             }
 
             public let query: String?
@@ -2114,7 +2122,19 @@ extension CoreTool {
             return "Unable to remove worktree \(directory): \(error)"
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=7dfd06cf6e02]
+        /// The system note the plugin's session `context` hook adds, worded for how the model reaches `session.move`:
+        /// through Code Mode's `execute`, as the direct `opencode_session_move` tool, or not at all.
+        public static func sessionMoveHint(tools: Set<String>) -> String? {
+            if tools.contains("execute") {
+                return "When you create a worktree outside the current working directory and intend to use it as your primary working directory, consider using `execute` to call `tools.opencode.session.move` and make the worktree the session's working directory."
+            }
+            if tools.contains("opencode_session_move") {
+                return "When you create a worktree outside the current working directory and intend to use it as your primary working directory, consider calling `opencode_session_move` to make the worktree the session's working directory."
+            }
+            return nil
+        }
+
+        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=beafff62f683]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools") { editor, env in
             editor.namespace(ToolSchema.Namespace(
                 name: "opencode",
@@ -2122,8 +2142,8 @@ extension CoreTool {
             ))
 
             editor.add(RegisteredTool(
-                name: "session_rename",
-                description: "Rename a session, or omit sessionID to rename the current session.",
+                name: "rename",
+                description: "Rename a session, or omit sessionID to rename the current session. Use a short, specific title that summarizes the work being done.",
                 inputSchema: [
                     "type": .string("object"),
                     "properties": .object([
@@ -2133,9 +2153,9 @@ extension CoreTool {
                     "required": .array([.string("title")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "opencode.session", codemode: true)
             ) { rawInput, context in
-                let input = try decodeToolJSON(RenameInput.self, from: rawInput, toolName: "session_rename")
+                let input = try decodeToolJSON(RenameInput.self, from: rawInput, toolName: "opencode_session_rename")
                 let sid = input.sessionID ?? context.sessionID
                 let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !title.isEmpty else {
@@ -2156,8 +2176,8 @@ extension CoreTool {
             })
 
             editor.add(RegisteredTool(
-                name: "session_move",
-                description: "Move a session to another directory, or omit sessionID to move the current session.",
+                name: "move",
+                description: "Move a session to another directory, or omit sessionID to move the current session. The current session moves at the next safe boundary; do not run destination-dependent tools in the same execute call.",
                 inputSchema: [
                     "type": .string("object"),
                     "properties": .object([
@@ -2167,9 +2187,9 @@ extension CoreTool {
                     "required": .array([.string("directory")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true, pinned: true)
+                options: ToolSchema.Options(namespace: "opencode.session", codemode: true, pinned: true)
             ) { rawInput, context in
-                let input = try decodeToolJSON(MoveInput.self, from: rawInput, toolName: "session_move")
+                let input = try decodeToolJSON(MoveInput.self, from: rawInput, toolName: "opencode_session_move")
                 let sid = input.sessionID ?? context.sessionID
                 guard let sessionMove = env.sessionMove else {
                     throw AISchema.ToolFailure(message: "Session move service is not configured")
@@ -2340,7 +2360,7 @@ extension CoreTool {
 
             editor.add(RegisteredTool(
                 name: "models",
-                description: "Search the models available to use.",
+                description: "Search the models available to use. Use this to turn a model name the user mentions into an exact reference for a tool that takes a model. Check your own provider first.",
                 inputSchema: [
                     "type": .string("object"),
                     "properties": .object([
@@ -2381,7 +2401,12 @@ extension CoreTool {
                 }
 
                 let providerFilter = input.provider?.lowercased()
-                let requestedType: ModelSchema.ModelType = (input.type == .image) ? .image : .chat
+                let requestedType: ModelSchema.ModelType
+                switch input.type ?? .chat {
+                case .chat: requestedType = .chat
+                case .image: requestedType = .image
+                case .video: requestedType = .video
+                }
 
                 let rawModels: [ModelSchema.Info]
                 do {
@@ -2414,15 +2439,21 @@ extension CoreTool {
                         return lhs.id.rawValue < rhs.id.rawValue
                     }
 
+                // When browsing, hide older versions only: a family's same-day siblings, like free and paid offerings,
+                // stay listed. A search lists every match, so a version the user names is never hidden.
                 let matching: [ModelSchema.Info]
-                if input.all == true {
+                if input.all == true || !terms.isEmpty {
                     matching = filtered
                 } else {
-                    var seenFamilies: Set<String> = []
+                    var newest: [String: Double] = [:]
+                    for model in filtered {
+                        guard let family = model.family else { continue }
+                        let key = "\(model.providerID.rawValue)::\(family.rawValue)"
+                        if newest[key] == nil { newest[key] = model.time.released }
+                    }
                     matching = filtered.filter { model in
                         guard let family = model.family else { return true }
-                        let key = "\(model.providerID.rawValue)::\(family.rawValue)"
-                        return seenFamilies.insert(key).inserted
+                        return newest["\(model.providerID.rawValue)::\(family.rawValue)"] == model.time.released
                     }
                 }
 
@@ -2469,6 +2500,10 @@ extension CoreTool {
         into registry: any CoreTool.Interface,
         environment: BuiltinEnvironment
     ) async -> CoreFilesystem.LocationWatcherPolicy.Registration {
+        var resolving = environment
+        resolving.fullCodeMode = await environment.flags.enabled(.fullCodemode)
+        resolving.videoGenerate = await VideoGenerateTool.enabled(environment)
+        let resolved = resolving
         let plugins: [ToolPluginDescriptor] = [
             ReadTool.Plugin,
             WriteTool.Plugin,
@@ -2486,13 +2521,14 @@ extension CoreTool {
             ArtifactTools.Plugin,
             AutomationTools.Plugin,
             ImageGenerateTool.Plugin,
+            VideoGenerateTool.Plugin,
             McpEventTools.Plugin,
             McpResourceTools.Plugin,
             OpenCodeTools.Plugin,
         ]
         return await registry.transform { editor in
             for plugin in plugins {
-                plugin.register(editor, environment)
+                plugin.register(editor, resolved)
             }
         }
     }

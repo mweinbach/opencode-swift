@@ -836,12 +836,6 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#Interface [status=adapted hash=54b16bf550df]
-        public protocol Interface: Sendable {
-            func list(_ path: SchemaPrimitive.AbsolutePath) async throws -> [DirEntry]
-            func read(_ path: SchemaPrimitive.AbsolutePath, resource: String, page: PageInput) async throws -> Output
-        }
-
         /// Reads a file (text with pagination/clamping, or inline media) or directory listing.
         // parity: core/src/tool/read-filesystem.ts#read [status=implemented hash=eae022a720d4]
         public static func read(
@@ -995,47 +989,6 @@ public enum CoreToolOutput {
             if line.utf16.count <= maxLineLength { return line }
             return TextBoundary.head(line, limit: maxLineLength) + maxLineSuffix
         }
-
-        // parity: core/src/tool/read-filesystem.ts#Service [status=adapted hash=68faa694d912]
-        public final class Service: Interface, Sendable {
-            public static let serviceKey = "@opencode/ReadToolFileSystem"
-
-            private let fileSystem: any OpenCodeFileSystem
-
-            public init(fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared) {
-                self.fileSystem = fileSystem
-            }
-
-            public func list(_ path: SchemaPrimitive.AbsolutePath) async throws -> [DirEntry] {
-                let names = try await fileSystem.readDirectory(at: path.rawValue)
-                var out: [DirEntry] = []
-                for name in names {
-                    let abs = CoreConfigDiscovery.joinPath(path.rawValue, name)
-                    let t = (try? await fileSystem.stat(at: abs).type) ?? .other
-                    out.append(DirEntry(name: name, type: t))
-                }
-                return out
-            }
-
-            public func read(
-                _ path: SchemaPrimitive.AbsolutePath,
-                resource: String,
-                page: PageInput = PageInput()
-            ) async throws -> Output {
-                try await ReadFilesystem.read(fileSystem: fileSystem, path: path, resource: resource, page: page)
-            }
-        }
-
-        // parity: core/src/tool/read-filesystem.ts#node [status=adapted hash=3e8bae4c1515]
-        public static let node: LayerNode.Provider = AppNode.makeLocationNode(
-            Service.serviceKey,
-            LayerNode.ExecutableLayer { deps, _ in
-                let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
-                let svc = Service(fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared)
-                return LayerNode.Output([Service.serviceKey: svc as any Interface])
-            },
-            [FSUtil.node]
-        )
     }
 
     // MARK: - Search Helpers (`core/src/tool/search.ts`)

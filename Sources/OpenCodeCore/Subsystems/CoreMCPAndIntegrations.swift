@@ -3952,8 +3952,10 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/websearch.ts#Interface [status=implemented hash=cbca4fc1229c]
+        // parity: core/src/websearch.ts#Interface [status=implemented hash=163994a711f6]
         public protocol Interface: CoreState.Transformable where Editor == WebSearch.Editor {
+            /// Whether a search can run: some provider is registered and the selection is not disabled.
+            func available() async -> Bool
             func providers() async -> [Provider]
             func defaultProvider() async throws -> Provider?
             func select(_ selection: Selection) async throws
@@ -3982,6 +3984,11 @@ public enum CoreIntegration {
             }
 
             public func reload() async { await state.reload() }
+
+            public func available() async -> Bool {
+                if state.get().providers.isEmpty { return false }
+                return await effectiveSelection() != .disabled
+            }
 
             public func providers() async -> [Provider] {
                 state.get().providers.values
@@ -4312,23 +4319,60 @@ public enum CoreIntegration {
         public struct VideoInput: Equatable, Sendable {
             public let model: ModelSchema.Ref
             public let prompt: String
+            /// Image the video starts on exactly.
+            public let start: AIMedia.ImageAsset?
+            /// Image the video ends on exactly.
+            public let end: AIMedia.ImageAsset?
+            /// Images, videos or audio that guide the subject or style without pinning a frame.
+            public let references: [AIMedia.Asset]?
             public let duration: Int?
+            public let aspect: GenerateSchema.VideoAspect?
             public let resolution: String?
             public let sound: Bool?
 
             public init(
                 model: ModelSchema.Ref,
                 prompt: String,
+                start: AIMedia.ImageAsset? = nil,
+                end: AIMedia.ImageAsset? = nil,
+                references: [AIMedia.Asset]? = nil,
                 duration: Int? = nil,
+                aspect: GenerateSchema.VideoAspect? = nil,
                 resolution: String? = nil,
                 sound: Bool? = nil
             ) {
                 self.model = model
                 self.prompt = prompt
+                self.start = start
+                self.end = end
+                self.references = references
                 self.duration = duration
+                self.aspect = aspect
                 self.resolution = resolution
                 self.sound = sound
             }
+        }
+
+        /// A public video request, whose media arrives as inline files.
+        // parity: core/src/generate.ts#videoInput [status=implemented hash=5cd2b22ce4c5]
+        public static func videoInput(_ input: GenerateSchema.VideoRequest) throws(AISchema.AIError) -> VideoInput {
+            let start = try input.start.map { file throws(AISchema.AIError) in
+                try AIMedia.ImageAsset(validating: AIMedia.base64(file.data, mediaType: file.mime))
+            }
+            let end = try input.end.map { file throws(AISchema.AIError) in
+                try AIMedia.ImageAsset(validating: AIMedia.base64(file.data, mediaType: file.mime))
+            }
+            return VideoInput(
+                model: input.model,
+                prompt: input.prompt,
+                start: start,
+                end: end,
+                references: input.references?.map { AIMedia.base64($0.data, mediaType: $0.mime) },
+                duration: input.duration?.rawValue,
+                aspect: input.aspect,
+                resolution: input.resolution?.rawValue,
+                sound: input.sound
+            )
         }
 
         // parity: core/src/generate.ts#VideoFile [status=implemented hash=6a1f3e8bce1e]
@@ -4436,14 +4480,18 @@ public enum CoreIntegration {
             case unavailable(UnavailableError)
         }
 
-        // parity: core/src/generate.ts#Interface [status=implemented hash=4423b48022ef]
+        // parity: core/src/generate.ts#Interface [status=implemented hash=2a32fafc198e]
         public protocol Interface: Sendable {
             func text(_ input: TextInput) async throws -> String
             func image(_ input: GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult
             func decisions(_ input: GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult
+            /// A video is a job: `videoStart` submits it and returns the provider's job ID, which `videoStatus`,
+            /// `videoResult` and `videoCancel` read. `videoResult` returns every video the job made, at least one.
             func videoStart(_ input: VideoInput) async throws -> String
             func videoStatus(model: ModelSchema.Ref, id: String) async throws -> String
             func videoResult(model: ModelSchema.Ref, id: String) async throws -> [VideoFile]
+            /// Fails with `InvalidRequestError` when the provider has no way to cancel a job.
+            func videoCancel(model: ModelSchema.Ref, id: String) async throws
         }
 
         // parity: core/src/generate.ts#Service [status=implemented hash=f4b67ebd474d]
@@ -5202,9 +5250,17 @@ public enum CoreIntegration {
                 }
                 throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
             }
+
+            public func videoCancel(model: ModelSchema.Ref, id: String) async throws {
+                _ = id
+                guard (try await resolver.resolveVideo(model)) != nil else {
+                    throw await missingError(ref: model, capability: .video)
+                }
+                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
+            }
         }
 
-        // parity: core/src/generate.ts#layer [status=implemented hash=923ee1937595]
+        // parity: core/src/generate.ts#layer [status=implemented hash=e1207242b7bb]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let models = deps.get(CoreModel.Model.Service.serviceKey, as: CoreModel.Model.Service.self)
             let resolver = deps.get(CoreModel.Resolver.Service.serviceKey, as: CoreModel.Resolver.Service.self)
@@ -5611,10 +5667,13 @@ public enum CoreIntegration {
             public let message: String
             public init(id: String, message: String? = nil) {
                 self.id = id
-                self.message = message ?? "Video job not found: \(id)"
+                self.message = message ?? "Video not found: \(id)"
             }
             public var description: String { message }
         }
+
+        /// How often a running job is checked, and how often `wait` re-reads its record.
+        public static let INTERVAL_MS: UInt64 = 5_000
 
         // parity: core/src/video-generation.ts#StartOptions [status=implemented hash=abd8260f9016]
         public struct StartOptions: Equatable, Hashable, Sendable {
@@ -5622,49 +5681,82 @@ public enum CoreIntegration {
             public init(location: LocationSchema.Ref? = nil) { self.location = location }
         }
 
-        // parity: core/src/video-generation.ts#Interface [status=implemented hash=29491ec003be]
+        // parity: core/src/video-generation.ts#Interface [status=implemented hash=a644e121f107]
         public protocol Interface: Sendable {
-            func start(_ input: GenerateSchema.VideoRequest, options: StartOptions?) async throws -> GenerateSchema.VideoRunning
+            /// Returns once the provider accepted the job; the server then polls it and stores the videos as blobs.
+            func start(_ input: Generate.VideoInput, options: StartOptions?) async throws -> GenerateSchema.VideoRunning
             func get(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob
+            /// Waits until the job completes or fails, whichever server polls it. Never returns `.running`.
+            func wait(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob
+            /// Fails a running job as cancelled, and asks the provider to cancel it if it can.
+            func cancel(_ id: GenerateSchema.VideoID) async throws
         }
 
         // parity: core/src/video-generation.ts#Service [status=implemented hash=07621d6f3e7b]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/VideoGeneration"
-            private let startFn: @Sendable (GenerateSchema.VideoRequest, StartOptions?) async throws -> GenerateSchema.VideoRunning
+            private let startFn: @Sendable (Generate.VideoInput, StartOptions?) async throws -> GenerateSchema.VideoRunning
             private let getFn: @Sendable (GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob
+            private let cancelFn: @Sendable (GenerateSchema.VideoID) async throws -> Void
+            private let intervalMs: UInt64
 
             public init(
-                start: @escaping @Sendable (GenerateSchema.VideoRequest, StartOptions?) async throws -> GenerateSchema.VideoRunning,
-                get: @escaping @Sendable (GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob
+                start: @escaping @Sendable (Generate.VideoInput, StartOptions?) async throws -> GenerateSchema.VideoRunning,
+                get: @escaping @Sendable (GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob,
+                cancel: @escaping @Sendable (GenerateSchema.VideoID) async throws -> Void = { id in
+                    throw NotFoundError(id: id.rawValue)
+                },
+                intervalMs: UInt64 = VideoGeneration.INTERVAL_MS
             ) {
                 self.startFn = start
                 self.getFn = get
+                self.cancelFn = cancel
+                self.intervalMs = intervalMs
             }
 
-            public func start(_ input: GenerateSchema.VideoRequest, options: StartOptions? = nil) async throws -> GenerateSchema.VideoRunning {
+            public func start(_ input: Generate.VideoInput, options: StartOptions? = nil) async throws -> GenerateSchema.VideoRunning {
                 try await startFn(input, options)
             }
 
             public func get(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
                 try await getFn(id)
             }
+
+            // Reads the record, so it works whichever server polls the job.
+            public func wait(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
+                while true {
+                    let job = try await getFn(id)
+                    if case .running = job {
+                        try await Task.sleep(nanoseconds: intervalMs * 1_000_000)
+                        continue
+                    }
+                    return job
+                }
+            }
+
+            public func cancel(_ id: GenerateSchema.VideoID) async throws {
+                try await cancelFn(id)
+            }
         }
 
-        // parity: core/src/video-generation.ts#unsupportedLayer [status=implemented hash=3519bec2588c]
+        /// Videos are stored as blobs, which need a local disk that Durable Objects don't have.
+        // parity: core/src/video-generation.ts#unsupportedLayer [status=implemented hash=0bbab7e9d892]
         public static let unsupportedLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service(
                 start: { _, _ in
-                    throw Generate.UnavailableError(message: "Video generation is not supported on this host")
+                    throw Generate.UnavailableError(message: "Video generation is not supported in this runtime")
                 },
                 get: { id in
+                    throw NotFoundError(id: id.rawValue)
+                },
+                cancel: { id in
                     throw NotFoundError(id: id.rawValue)
                 }
             )
         )
 
-        // parity: core/src/video-generation.ts#node [status=implemented hash=8715487275f2]
+        // parity: core/src/video-generation.ts#node [status=implemented hash=61b35f494ee2]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(Service.serviceKey, unsupportedLayer, [])
     }
 
