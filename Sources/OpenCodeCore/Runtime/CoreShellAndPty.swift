@@ -524,7 +524,7 @@ public enum CoreShell {
             }
         }
 
-        // parity: core/src/shell/result.ts#notification [status=implemented hash=8e43adf58eb9]
+        // parity: core/src/shell/result.ts#notification [status=implemented hash=139a2270a8a2]
         public static func notification(_ input: NotificationInput) -> NotificationPayload {
             var meta: [String: JSONValue] = [
                 "source": .string("shell"),
@@ -535,7 +535,10 @@ public enum CoreShell {
             if let out = input.output {
                 for (k, v) in metadata(out) { meta[k] = v }
             }
-            let text = "<shell id=\"\(input.jobID ?? input.shellID)\" state=\"\(input.state)\" command=\"\(input.command)\">\n\(input.text)\n</shell>"
+            let text = CoreSessionBackgroundResult.render(
+                "kind=\"shell\" id=\"\(input.jobID ?? input.shellID)\" state=\"\(input.state)\" command=\"\(input.command)\"",
+                input.text
+            )
             return NotificationPayload(text: text, metadata: meta)
         }
 

@@ -4814,7 +4814,7 @@ public enum PromiseWire {
     public typealias IntegrationInfo = IntegrationSchema.Info
     // parity: client/src/promise/generated/types.ts#SessionEventDurable [status=implemented hash=89c554c21442]
     public typealias SessionEventDurable = SessionEventSchema.DurableEvent
-    // parity: client/src/promise/generated/types.ts#V2Event [status=implemented hash=846c84da91fc]
+    // parity: client/src/promise/generated/types.ts#V2Event [status=implemented hash=a0ac8f068c6f]
     public typealias V2Event = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#InvalidRequestError [status=implemented hash=b1b30e11e45e]
     public typealias InvalidRequestError = OpenCodeProtocol.InvalidRequestError

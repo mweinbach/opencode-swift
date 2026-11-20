@@ -717,7 +717,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/subagent.ts#name [status=implemented hash=1514a97a53f8]
         public static let name: String = "subagent"
 
-        // parity: core/src/tool/plugin/subagent.ts#description [status=implemented hash=cd7cebc2544d]
+        // parity: core/src/tool/plugin/subagent.ts#description [status=implemented hash=894e80feb010]
         public static let description: String = [
             "Spawns an agent in a child session to work on the specified task.",
             "Subagents always run in the background: the call returns immediately with a sessionID, and you receive a `<background-result kind=\"subagent\">` message each time the child goes idle, including after later work.",

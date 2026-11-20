@@ -980,7 +980,7 @@ public enum BrowserPlugin {
 
         private static let waitedOutputSchema = ToolSchema.ValueSchema.named("Browser.Waited")
 
-        // parity: plugin-browser/src/rpc.ts#Operations [status=implemented hash=7fe9a71a98af]
+        // parity: plugin-browser/src/rpc.ts#Operations [status=implemented hash=625f1cf1a776]
         public static let Operations: [Operation] = [
             operation(
                 .tabsList,
@@ -4435,7 +4435,7 @@ public enum BrowserPlugin {
 
         /// The attachment and tab a browser tool call targets, or the error the tool returns. The error for an unknown
         /// tab lists the session's tabs, so this runs only once the call is authorized.
-        // parity: plugin-browser/src/machine.ts#selectTarget [status=implemented hash=2987ada53821]
+        // parity: plugin-browser/src/machine.ts#selectTarget [status=implemented hash=d10b2fd1c9c9]
         public static func selectTarget(
             _ state: ConnectionState,
             sessionID: SessionID,

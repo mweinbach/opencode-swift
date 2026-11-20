@@ -7449,12 +7449,47 @@ public enum CorePlugin {
         }
 
         public enum QueryOptions {
-            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#connectionEnv [status=implemented hash=9ddb83b087c4]
-            public static func connectionEnv(apiKey: String?, baseURL: String?) -> [String: String] {
+            /// The environment a connection's settings, headers and body give Claude Code. Header lines and the extra
+            /// body are written in sorted key order, since Swift dictionaries keep no insertion order.
+            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#connectionEnv [status=adapted hash=ce762ac80ffc]
+            public static func connectionEnv(
+                settings: [String: JSONValue]? = nil,
+                headers: [String: String]? = nil,
+                body: [String: JSONValue]? = nil,
+                home: String? = Host.currentEnvironment.homeDirectory,
+                cwd: String = QueryOptions.processDirectory
+            ) -> [String: String] {
                 var env: [String: String] = [:]
-                if let apiKey, !apiKey.isEmpty { env["ANTHROPIC_API_KEY"] = apiKey }
-                if let baseURL, !baseURL.isEmpty { env["ANTHROPIC_BASE_URL"] = baseURL }
+                let settings = settings ?? [:]
+                if case .string(let value)? = settings["baseURL"] { env["ANTHROPIC_BASE_URL"] = value }
+                if case .string(let value)? = settings["apiKey"] { env["ANTHROPIC_API_KEY"] = value }
+                if case .string(let value)? = settings["authToken"] { env["ANTHROPIC_AUTH_TOKEN"] = value }
+                if let value = numberString(settings["headerTimeout"]) { env["API_TIMEOUT_MS"] = value }
+                if let value = numberString(settings["chunkTimeout"]) { env["CLAUDE_STREAM_IDLE_TIMEOUT_MS"] = value }
+                // ClaudeAccounts picks the folder for each request. The login check and model list use the first.
+                let dirs = configDirs(settings["configDir"], home: home, cwd: cwd)
+                if let first = dirs.first { env["CLAUDE_CONFIG_DIR"] = first }
+                let lines = (headers ?? [:]).sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }
+                if !lines.isEmpty { env["ANTHROPIC_CUSTOM_HEADERS"] = lines.joined(separator: "\n") }
+                if let body, !body.isEmpty {
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+                    if let data = try? encoder.encode(JSONValue.object(body)) {
+                        env["CLAUDE_CODE_EXTRA_BODY"] = String(decoding: data, as: UTF8.self)
+                    }
+                }
                 return env
+            }
+
+            /// `String(n)` for a JSON number, as JavaScript prints it; nil for anything else.
+            private static func numberString(_ value: JSONValue?) -> String? {
+                switch value {
+                case .int(let n)?: return String(n)
+                case .double(let d)?:
+                    if d == d.rounded(), abs(d) <= 9_007_199_254_740_991 { return String(Int64(d)) }
+                    return String(d)
+                default: return nil
+                }
             }
 
             /// The process's working directory, which `path.resolve` resolves relative paths from.
@@ -7648,12 +7683,20 @@ public enum CorePlugin {
         }
 
         public enum Status {
-            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#State [status=implemented hash=6bfed2bbbd1f]
+            /// The provider's Claude Code login. `ready` names the config folder it checked (`CLAUDE_CONFIG_DIR`, nil for
+            /// the default folder) and whether a chat's startup reported it (`fromChat`).
+            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#State [status=adapted hash=662c15de7161]
             public enum State: Equatable, Hashable, Sendable, Codable {
                 case idle
-                case ready(version: String?, models: [Probe.Model])
+                case ready(version: String?, models: [Probe.Model], configDir: String? = nil, fromChat: Bool? = nil)
                 case unauthenticated
                 case unavailable(message: String)
+
+                /// The config folder a `ready` state was checked against.
+                public var configDir: String? {
+                    if case .ready(_, _, let dir, _) = self { return dir }
+                    return nil
+                }
             }
 
             // parity: core/src/plugin/provider/claude-agent/claude/status.ts#Interface [status=implemented hash=243171849b11]
@@ -7683,20 +7726,21 @@ public enum CorePlugin {
                 /// A chat's startup report. A model with its own configDir runs another account, which must not replace
                 /// the provider's login, prices and models; every folder in the provider's list is its own, so those
                 /// follow the folder a chat last started on.
-                public func report(_ next: State, configDir: String?) async {
+                public func report(_ next: State) async {
                     if case .ready = next {
                         let own = ([await connection()] + (await configDirs()).map { ["CLAUDE_CONFIG_DIR": $0] })
                             .map { QueryOptions.withoutDefaultFolder($0, io: io)["CLAUDE_CONFIG_DIR"] }
-                        if !own.contains(where: { $0 == configDir }) { return }
+                        if !own.contains(where: { $0 == next.configDir }) { return }
                     }
                     state = next
                 }
 
                 public func refresh() async -> State {
+                    let env = QueryOptions.withoutDefaultFolder(await connection(), io: io)
                     do {
                         let result = try await io.probe()
                         if Probe.isLoggedIn(tokenSource: result.tokenSource, apiKeySource: result.apiKeySource) {
-                            state = .ready(version: result.version, models: result.models)
+                            state = .ready(version: result.version, models: result.models, configDir: env["CLAUDE_CONFIG_DIR"])
                         } else {
                             state = .unauthenticated
                         }

@@ -1343,12 +1343,13 @@ public enum PluginEffect {
     }
 
     /// Background work item reported to `session.experimental.idle` hooks.
-    // parity: plugin/src/effect/session.ts#SessionIdleBackground [status=implemented hash=e83602f9cd61]
+    // parity: plugin/src/effect/session.ts#SessionIdleBackground [status=implemented hash=e3d895140267]
     public enum SessionIdleBackground: Equatable, Hashable, Sendable, Codable {
         case codemode(sessionID: SessionID, jobID: String)
         case shell(sessionID: SessionID, shellID: String, command: String)
         case subagent(sessionID: SessionID, childSessionID: SessionID, agent: String, description: String)
         case image(sessionID: SessionID, path: String, model: String)
+        case video(sessionID: SessionID, path: String)
     }
 
     /// Hook payload emitted just before a session transitions to idle (`session.experimental.idle`).
@@ -2621,7 +2622,7 @@ public enum PluginPromise {
     // parity: plugin/src/promise/session.ts#SessionRetry [status=implemented hash=2220265f70c9]
     public typealias SessionRetry = PluginEffect.SessionRetry
 
-    // parity: plugin/src/promise/session.ts#SessionIdleBackground [status=implemented hash=e83602f9cd61]
+    // parity: plugin/src/promise/session.ts#SessionIdleBackground [status=implemented hash=e3d895140267]
     public typealias SessionIdleBackground = PluginEffect.SessionIdleBackground
 
     // parity: plugin/src/promise/session.ts#SessionIdle [status=implemented hash=d6a7a8975c21]
@@ -2686,8 +2687,10 @@ public enum PluginPromise {
         }
     }
 
-    /// Promise-style tool definition.
-    // parity: plugin/src/promise/tool.ts#Info [status=implemented hash=5b1f0fb8e236]
+    /// Promise-style tool definition. Upstream's `Info` gained Code Mode input/output type parameters (`CMInput`,
+    /// `CMOutput`): `execute` takes either input shape and returns either output. Swift entries carry type-erased JSON
+    /// values and `options.codemode` carries the Code Mode schemas (`ToolSchema.CodeModeOptions`), so the shape holds.
+    // parity: plugin/src/promise/tool.ts#Info [status=implemented hash=e836e24677b6]
     public struct Info: Sendable {
         public let id: String
         public var name: String

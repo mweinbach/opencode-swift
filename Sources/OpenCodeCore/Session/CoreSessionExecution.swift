@@ -249,7 +249,7 @@ public enum CoreSessionBackground {
         return false
     }
 
-    // parity: core/src/session/background.ts#outstanding [status=implemented hash=8c554ce99da8]
+    // parity: core/src/session/background.ts#outstanding [status=implemented hash=e88e4d32a80b]
     public static func outstanding(
         jobs: any CoreSessionJobTypes.JobBridge,
         store: any Lookup,

@@ -63,7 +63,7 @@ public enum CoreFlag {
     /// `OPENCODE_FLAGS` (`key` / `-key` / alias / `all`) -> `experimental.<key>` (latest `experimental` doc)
     /// -> `experimental.all_flags: true` (latest doc setting `all_flags`) -> channel default (`local`/`dev`).
     /// Opt-in-only flags (`todo`, `sqlite_fts`) skip both `all` wildcards and default to `false` on every channel.
-    // parity: core/src/flag.ts#resolve [status=implemented hash=6b90cf1c5c3c]
+    // parity: core/src/flag.ts#resolve [status=implemented hash=a825939df6d4]
     public static func resolve(_ input: ResolveInput) -> [Key: State] {
         var envMap: [String: Bool] = [:]
         if let rawOverrides = input.overrides {
@@ -100,6 +100,7 @@ public enum CoreFlag {
                 ?? (allEnv && !optInOnly ? true : nil)
 
             let aliasConfigValue: Bool? = aliasName == "schedules" ? experimental?.schedules : nil
+            // A flag that takes settings is on when given them (`flagValue` reads a settings object as `true`).
             let configured: Bool? =
                 experimental?.flagValue(for: key)
                 ?? aliasConfigValue
@@ -159,7 +160,7 @@ public enum CoreFlag {
         return LayerNode.Output([Service.serviceKey: service as any Interface])
     }
 
-    // parity: core/src/flag.ts#testLayer [status=adapted hash=40ded32daf4b]
+    // parity: core/src/flag.ts#testLayer [status=adapted hash=096233449609]
     public static func testLayer(
         entries: [CoreConfigEntry] = [],
         channel: String = "local",
