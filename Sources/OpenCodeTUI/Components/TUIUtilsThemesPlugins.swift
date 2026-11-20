@@ -2288,6 +2288,8 @@ public enum TUIUtil {
             case .codemode(let v):
                 (id, sessionID, kind, title, started, childSessionID) =
                     (v.id, v.sessionID.rawValue, .codemode, v.title, v.time.started, nil)
+            case .video(let v):
+                (id, sessionID, kind, title, started, childSessionID) = (v.id, v.sessionID.rawValue, .video, v.title, v.time.started, nil)
             }
         }
     }
