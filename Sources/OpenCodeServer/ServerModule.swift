@@ -1400,7 +1400,7 @@ public final class ServerAppRuntime: Sendable {
         let gitService = CoreVcs.Git.Service(spawner: hostSpawner, fileSystem: fileSystem)
         let project = try CoreProject.Project.Service(database: db, fileSystem: fileSystem, git: gitService)
         let worktree = try CoreWorktree.Service(database: db, fileSystem: fileSystem)
-        let credential = try CoreProvider.Credential.Service(database: db)
+        let credential = try CoreProvider.Credential.Service(database: db, bus: bus)
         let permissionSaved = try CorePermissionSaved.Service(database: db)
         let blobStore: any CoreBlobStore.Interface = customBlobStore ?? (
             workerdProfile
@@ -1471,6 +1471,7 @@ public final class ServerAppRuntime: Sendable {
         let wellKnown: any CoreIntegration.WellKnown.Interface = customWellKnown ?? CoreIntegration.WellKnown.Service(
             transport: httpTransport,
             kv: kv,
+            bus: bus,
             environment: environment
         )
         let pairing = ServerPairing.Service()
@@ -1668,6 +1669,11 @@ public final class ServerAppRuntime: Sendable {
             )
             let locationBusRoute = OpenCodeLocation(directory: ref.directory.rawValue, workspaceID: ref.workspaceID)
             let configUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: ConfigSchema.Event.updated.type)
+            #if os(macOS)
+            let configProcesses: (any AppProcess.Interface)? = AppProcess.Service(spawner: hostSpawner)
+            #else
+            let configProcesses: (any AppProcess.Interface)? = nil
+            #endif
             let configService = await CoreConfig.Service(
                 directory: dirPath,
                 options: configOpts,
@@ -1677,6 +1683,9 @@ public final class ServerAppRuntime: Sendable {
                 watcher: capturedWorkerd ? nil : watcher,
                 bus: bus,
                 location: locationBusRoute,
+                credentials: credential,
+                wellKnown: wellKnown,
+                processes: configProcesses,
                 debounce: configDebounce,
                 onUpdated: {
                     await bus.emit(
