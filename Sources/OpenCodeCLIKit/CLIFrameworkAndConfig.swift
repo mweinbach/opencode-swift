@@ -1918,20 +1918,138 @@ public enum CLIConfig {
                 let current = Self.merge(base, self.envOverlayInfo())
                 var next = current
                 mutate(&next)
-                if next == current {
+                let edits = Self.diffChanges(
+                    try Self.encodeInfoToWirePureJSON(current),
+                    try Self.encodeInfoToWirePureJSON(next)
+                )
+                if edits.isEmpty {
                     return current
                 }
-                if next.schema == nil {
-                    next.schema = SchemaURL
+                let defaultText = PureJSON.stringifyPretty(.object([("$schema", .string(SchemaURL))]), indent: 2)
+                let text: String
+                if let bytes = try? await self.fileSystem.readFile(at: self.path) {
+                    text = String(decoding: bytes, as: UTF8.self)
+                } else {
+                    text = defaultText
                 }
-                let encoded = try CLIPath.encodePrettyJSON(next) + "\n"
+                var updated = text
+                let modOpts = JSONC.ModificationOptions(
+                    formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                )
+                for (editPath, editValue) in edits {
+                    let jsoncEdits = try JSONC.modify(updated, path: editPath, value: editValue, options: modOpts)
+                    updated = try JSONC.applyEdits(updated, edits: jsoncEdits)
+                }
+                var parseErrors: [JSONC.ParseError] = []
+                _ = JSONC.parse(updated, errors: &parseErrors, options: JSONC.ParseOptions(allowTrailingComma: true))
+                guard parseErrors.isEmpty, let config = Self.decodeJSONC(updated) else {
+                    throw CLIError("Invalid CLI config update")
+                }
+                let finalText = updated.utf8.last == 0x0A ? updated : updated + "\n"
                 let temp = self.path + ".tmp"
                 try await self.fileSystem.makeDirectory(at: CLIPath.dirname(self.path), recursive: true)
-                try await self.fileSystem.writeFile(Array(encoded.utf8), to: temp, createDirectories: true)
+                try await self.fileSystem.writeFile(Array(finalText.utf8), to: temp, createDirectories: true)
                 try? await self.fileSystem.chmod(at: temp, mode: 0o600)
                 try await self.fileSystem.rename(from: temp, to: self.path)
-                return Self.merge(next, self.envOverlayInfo())
+                return Self.merge(config, self.envOverlayInfo())
             }
+        }
+
+        internal static func encodeInfoToWirePureJSON(_ info: Info) throws -> PureJSONValue {
+            let data = try JSONEncoder().encode(info)
+            var raw = try JSONDecoder().decode(JSONValue.self, from: data)
+            if case .object(var dict) = raw {
+                if case .object(let rawKeybinds) = dict["keybinds"] {
+                    var wireKeybinds: [String: JSONValue] = [:]
+                    for (name, val) in rawKeybinds {
+                        wireKeybinds[name] = denormalizeBindingValueJSON(val)
+                    }
+                    dict["keybinds"] = .object(wireKeybinds)
+                }
+                if case .array(let rawPlugins) = dict["plugins"] {
+                    dict["plugins"] = .array(rawPlugins.map(denormalizePluginJSON))
+                }
+                raw = .object(dict)
+            }
+            return CoreConfigJSONC.toPureJSON(raw)
+        }
+
+        private static func denormalizeBindingItemJSON(_ value: JSONValue) -> JSONValue {
+            guard case .object(let obj) = value else { return value }
+            if case .object(let seq) = obj["sequence"], let s = seq["_0"] {
+                return s
+            }
+            if case .object(let objWrap) = obj["object"], let inner = objWrap["_0"] {
+                return inner
+            }
+            if case .object(let strokeWrap) = obj["stroke"], let inner = strokeWrap["_0"] {
+                return inner
+            }
+            return value
+        }
+
+        private static func denormalizeBindingValueJSON(_ value: JSONValue) -> JSONValue {
+            guard case .object(let obj) = value else { return value }
+            if obj["disabled"] != nil {
+                return .bool(false)
+            }
+            if case .object(let itemWrap) = obj["item"], let inner = itemWrap["_0"] {
+                return denormalizeBindingItemJSON(inner)
+            }
+            if case .object(let itemsWrap) = obj["items"], case .array(let arr) = itemsWrap["_0"] {
+                return .array(arr.map(denormalizeBindingItemJSON))
+            }
+            return value
+        }
+
+        private static func denormalizePluginJSON(_ value: JSONValue) -> JSONValue {
+            guard case .object(let obj) = value else { return value }
+            if case .object(let spec) = obj["specifier"], let s = spec["_0"] {
+                return s
+            }
+            if case .object(let cfg) = obj["configured"] {
+                var out: [String: JSONValue] = [:]
+                if let pkg = cfg["package"] { out["package"] = pkg }
+                if let opts = cfg["options"], opts != .null { out["options"] = opts }
+                return .object(out)
+            }
+            return value
+        }
+
+        internal static func diffChanges(
+            _ before: PureJSONValue,
+            _ after: PureJSONValue,
+            path: [JSONC.PathSegment] = []
+        ) -> [([JSONC.PathSegment], PureJSONValue?)] {
+            if before == after { return [] }
+            if case .object(let bEntries) = before, case .object(let aEntries) = after {
+                var bMap: [String: PureJSONValue] = [:]
+                var aMap: [String: PureJSONValue] = [:]
+                var keys: [String] = []
+                for (k, v) in bEntries {
+                    if bMap[k] == nil { keys.append(k) }
+                    bMap[k] = v
+                }
+                for (k, v) in aEntries {
+                    if bMap[k] == nil && aMap[k] == nil { keys.append(k) }
+                    aMap[k] = v
+                }
+                var out: [([JSONC.PathSegment], PureJSONValue?)] = []
+                for key in keys {
+                    let nextPath = path + [.key(key)]
+                    guard let afterVal = aMap[key] else {
+                        out.append((nextPath, nil))
+                        continue
+                    }
+                    guard let beforeVal = bMap[key] else {
+                        out.append((nextPath, afterVal))
+                        continue
+                    }
+                    out.append(contentsOf: diffChanges(beforeVal, afterVal, path: nextPath))
+                }
+                return out
+            }
+            return [(path, after)]
         }
 
         internal static func decodeJSONC(_ text: String) -> Info? {
@@ -2112,29 +2230,57 @@ public enum CLIConfig {
             if await fileSystem.exists(at: input.file) {
                 let bytes = try await fileSystem.readFile(at: input.file)
                 let text = String(decoding: bytes, as: UTF8.self)
-                guard let parsed = try? CoreConfigJSONC.parse(text),
-                      case .object(var root) = parsed
-                else {
+                var parseErrors: [JSONC.ParseError] = []
+                let parsed = JSONC.parse(text, errors: &parseErrors, options: JSONC.ParseOptions(allowTrailingComma: true))
+                guard parseErrors.isEmpty, case .object(let rootEntries)? = parsed else {
                     return nil
                 }
-                var changed = false
+                var rootMap: [String: PureJSONValue] = [:]
+                for (k, v) in rootEntries { rootMap[k] = v }
 
-                // 1. Migrate `terminal.copy_on_select` -> `terminal.copy`
-                if case .object(var terminal) = root["terminal"],
-                   case .bool(let legacyCopy) = terminal["copy_on_select"]
-                {
-                    if terminal["copy"] == nil {
-                        terminal["copy"] = .string(legacyCopy ? "select" : "manual")
+                let modOpts = JSONC.ModificationOptions(
+                    formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                )
+
+                // 1. Surgically migrate `terminal.copy_on_select` -> `terminal.copy`
+                var renamed = text
+                if case .object(let terminalEntries)? = rootMap["terminal"] {
+                    var terminalMap: [String: PureJSONValue] = [:]
+                    for (k, v) in terminalEntries { terminalMap[k] = v }
+                    if case .bool(let legacyCopy)? = terminalMap["copy_on_select"] {
+                        var termEdits: [([JSONC.PathSegment], PureJSONValue?)] = []
+                        if terminalMap["copy"] == nil {
+                            termEdits.append(([.key("terminal"), .key("copy")], .string(legacyCopy ? "select" : "manual")))
+                        }
+                        termEdits.append(([.key("terminal"), .key("copy_on_select")], nil))
+                        for (editPath, editValue) in termEdits {
+                            let edits = try JSONC.modify(renamed, path: editPath, value: editValue, options: modOpts)
+                            renamed = try JSONC.applyEdits(renamed, edits: edits)
+                        }
                     }
-                    terminal.removeValue(forKey: "copy_on_select")
-                    root["terminal"] = .object(terminal)
-                    changed = true
                 }
 
-                // 2. Migrate legacy V1 keybind names in `keybinds`
-                if case .object(let keybinds) = root["keybinds"] {
-                    var updatedKeybinds: [String: JSONValue] = [:]
-                    for (name, val) in keybinds {
+                // 2. Surgically migrate legacy V1 keybind names in `keybinds` while preserving all comments
+                var updated = renamed
+                if case .object(let keybindEntries)? = rootMap["keybinds"] {
+                    var keybindMap: [String: PureJSONValue] = [:]
+                    var keybindKeys: [String] = []
+                    for (k, v) in keybindEntries {
+                        if keybindMap[k] == nil { keybindKeys.append(k) }
+                        keybindMap[k] = v
+                    }
+                    let duplicateKeybindObjects = findKeybindObjects(updated).matches
+                    if duplicateKeybindObjects.count > 1 {
+                        for _ in 0..<(duplicateKeybindObjects.count - 1) {
+                            let found = findKeybindObjects(updated)
+                            if let property = found.matches.first {
+                                updated = withExtendedLifetime(found.tree) {
+                                    removeProperty(updated, property: property)
+                                }
+                            }
+                        }
+                    }
+                    for name in keybindKeys {
                         let target: String?
                         if let mapped = TUIConfig.V1.Keybind.CommandMap[name] {
                             target = mapped
@@ -2143,30 +2289,45 @@ public enum CLIConfig {
                         } else {
                             target = nil
                         }
-                        guard let target else {
-                            updatedKeybinds[name] = val
-                            continue
-                        }
+                        guard let target else { continue }
+                        let properties = findKeybindProperties(updated, name: name).matches
+                        if properties.isEmpty { continue }
                         let shouldRemove = TUIConfig.Keybind.Definitions[target] == nil
-                            || (target != name && keybinds[target] != nil)
-                        if shouldRemove {
-                            changed = true
-                            continue
+                            || (target != name && keybindMap[target] != nil)
+                        // The parser gives the final duplicate precedence, so remove earlier properties before renaming it.
+                        let removeCount = shouldRemove ? properties.count : (properties.count - 1)
+                        if removeCount > 0 {
+                            for _ in 0..<removeCount {
+                                let found = findKeybindProperties(updated, name: name)
+                                if let property = found.matches.first {
+                                    updated = withExtendedLifetime(found.tree) {
+                                        removeProperty(updated, property: property)
+                                    }
+                                }
+                            }
                         }
-                        if target != name {
-                            changed = true
+                        if shouldRemove || target == name { continue }
+                        let renameFound = findKeybindProperties(updated, name: name)
+                        if let keyNode = renameFound.matches.first?.children?.first {
+                            updated = withExtendedLifetime(renameFound.tree) {
+                                JSONC.applyEdit(
+                                    updated,
+                                    edit: JSONC.Edit(
+                                        offset: keyNode.offset,
+                                        length: keyNode.length,
+                                        content: PureJSON.stringifyCompact(.string(target))
+                                    )
+                                )
+                            }
                         }
-                        updatedKeybinds[target] = val
-                    }
-                    if changed {
-                        root["keybinds"] = .object(updatedKeybinds)
                     }
                 }
 
-                if !changed { return nil }
-                let updatedText = try CLIPath.encodePrettyJSON(JSONValue.object(root)) + "\n"
-                guard let info = Service.decodeJSONC(updatedText) else { return nil }
-                return await persist(updatedText, info: info)
+                if updated == text { return nil }
+                var updatedErrors: [JSONC.ParseError] = []
+                _ = JSONC.parse(updated, errors: &updatedErrors, options: JSONC.ParseOptions(allowTrailingComma: true))
+                guard updatedErrors.isEmpty, let info = Service.decodeJSONC(updated) else { return nil }
+                return await persist(updated, info: info)
             }
 
             // No cli.json yet: check legacy tui.json + kv.json
@@ -2191,8 +2352,86 @@ public enum CLIConfig {
             if migrated == Info() { return nil }
             var withSchema = migrated
             withSchema.schema = SchemaURL
-            let encoded = try CLIPath.encodePrettyJSON(withSchema) + "\n"
+            let wirePure = try Service.encodeInfoToWirePureJSON(withSchema)
+            let encoded = PureJSON.stringifyPretty(wirePure, indent: 2) + "\n"
             return await persist(encoded, info: withSchema)
+        }
+
+        private static func findKeybindObjects(_ text: String) -> (tree: JSONC.Node?, matches: [JSONC.Node]) {
+            var errors: [JSONC.ParseError] = []
+            guard let tree = JSONC.parseTree(text, errors: &errors),
+                  let children = tree.children
+            else {
+                return (nil, [])
+            }
+            return (tree, children.filter { $0.children?.first?.stringValue == "keybinds" })
+        }
+
+        private static func findKeybindProperties(_ text: String, name: String) -> (tree: JSONC.Node?, matches: [JSONC.Node]) {
+            let found = findKeybindObjects(text)
+            guard let keybindObj = found.matches.last?.children?.dropFirst().first,
+                  let children = keybindObj.children
+            else {
+                return (found.tree, [])
+            }
+            return (found.tree, children.filter { $0.children?.first?.stringValue == name })
+        }
+
+        private static func removeProperty(_ text: String, property: JSONC.Node) -> String {
+            let properties = property.parent?.children ?? []
+            guard let index = properties.firstIndex(where: { $0 === property }) else { return text }
+            let end = property.offset + property.length
+            if index + 1 < properties.count {
+                let next = properties[index + 1]
+                if let comma = findComma(text, start: end, end: next.offset) {
+                    return spliceUTF16(text, [(property.offset, end), (comma, comma + 1)])
+                }
+            }
+            if index > 0 {
+                let previous = properties[index - 1]
+                if let comma = findComma(text, start: previous.offset + previous.length, end: property.offset) {
+                    return spliceUTF16(text, [(comma, comma + 1), (property.offset, end)])
+                }
+            }
+            let parentEnd = (property.parent?.offset ?? 0) + (property.parent?.length ?? 0)
+            if let comma = findComma(text, start: end, end: parentEnd) {
+                return spliceUTF16(text, [(property.offset, end), (comma, comma + 1)])
+            }
+            return spliceUTF16(text, [(property.offset, end)])
+        }
+
+        private static func findComma(_ text: String, start: Int, end: Int) -> Int? {
+            let units = Array(text.utf16)
+            let scanner = JSONC.createScanner(text, ignoreTrivia: false)
+            scanner.setPosition(start)
+            while true {
+                scanner.scan()
+                let offset = scanner.getTokenOffset()
+                if scanner.getTokenLength() == 0 || offset >= end { return nil }
+                if offset >= 0 && offset < units.count && units[offset] == 44 { // ','
+                    return offset
+                }
+            }
+        }
+
+        private static func spliceUTF16(_ text: String, _ removals: [(Int, Int)]) -> String {
+            let units = Array(text.utf16)
+            let sorted = removals.sorted { $0.0 < $1.0 }
+            var out: [UInt16] = []
+            out.reserveCapacity(units.count)
+            var cursor = 0
+            for (start, end) in sorted {
+                let s = min(max(cursor, start), units.count)
+                let e = min(max(s, end), units.count)
+                if cursor < s {
+                    out.append(contentsOf: units[cursor..<s])
+                }
+                cursor = e
+            }
+            if cursor < units.count {
+                out.append(contentsOf: units[cursor..<units.count])
+            }
+            return String(decoding: out, as: UTF16.self)
         }
 
         // parity: cli/src/config/migrate.ts#migrateV1 [status=implemented hash=17139b449864]

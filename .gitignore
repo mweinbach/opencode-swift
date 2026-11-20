@@ -13,3 +13,4 @@ upstream/
 
 # Local parity scratch outputs
 .parity-tmp/
+Tools/parity/.deps/

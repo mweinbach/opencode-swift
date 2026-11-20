@@ -179,6 +179,46 @@ func fromSchemaJSON(_ value: OpenCodeSchema.JSONValue) -> JSONValue {
     }
 }
 
+func toPureJSON(_ value: JSONValue) -> PureJSONValue {
+    switch value {
+    case .null: return .null
+    case .bool(let b): return .bool(b)
+    case .int(let i): return .number(Double(i))
+    case .double(let d): return .number(d)
+    case .string(let s): return .string(s)
+    case .array(let arr): return .array(arr.map(toPureJSON))
+    case .object(let obj):
+        return .object(obj.keys.sorted().map { ($0, toPureJSON(obj[$0]!)) })
+    }
+}
+
+func fromPureJSON(_ value: PureJSONValue) -> JSONValue {
+    switch value {
+    case .null: return .null
+    case .bool(let b): return .bool(b)
+    case .number(let d): return jsonNumber(d)
+    case .string(let s): return .string(s)
+    case .array(let arr): return .array(arr.map(fromPureJSON))
+    case .object(let entries):
+        var dict: [String: JSONValue] = [:]
+        for (k, v) in entries {
+            dict[k] = fromPureJSON(v)
+        }
+        return .object(dict)
+    }
+}
+
+func decodeJSONCFormattingOptions(_ obj: [String: JSONValue]?) -> JSONC.FormattingOptions? {
+    guard let obj else { return nil }
+    return JSONC.FormattingOptions(
+        tabSize: obj["tabSize"]?.intValue,
+        insertSpaces: obj["insertSpaces"]?.boolValue,
+        eol: obj["eol"]?.stringValue,
+        insertFinalNewline: obj["insertFinalNewline"]?.boolValue,
+        keepLines: obj["keepLines"]?.boolValue
+    )
+}
+
 func requireString(_ args: [JSONValue], _ idx: Int) throws -> String {
     guard idx < args.count, let s = args[idx].stringValue else {
         throw DispatchError.invalidArguments("Expected string at arg \(idx)")
@@ -1255,6 +1295,102 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
                 }),
             ])
         }
+
+    // MARK: - jsonc-parser@3.3.1
+    case "jsonc-parser#modifyAndApply":
+        let text = try requireString(args, 0)
+        guard args.count >= 3,
+              let pathArr = args[1].arrayValue,
+              let valueSpec = args[2].objectValue
+        else {
+            throw DispatchError.invalidArguments("Expected (text, path, valueSpec, options?) for jsonc-parser#modifyAndApply")
+        }
+        let path: [JSONC.PathSegment] = try pathArr.map { seg in
+            if let s = seg.stringValue { return .key(s) }
+            if let i = seg.intValue { return .index(i) }
+            throw DispatchError.invalidArguments("Path segment must be string or int")
+        }
+        let value: PureJSONValue?
+        if valueSpec["remove"]?.boolValue == true {
+            value = nil
+        } else if let rawJson = valueSpec["valueJson"]?.stringValue {
+            guard let parsed = PureJSON.parse(rawJson) else {
+                throw DispatchError.invalidArguments("Invalid valueJson: \(rawJson)")
+            }
+            value = parsed
+        } else if let v = valueSpec["value"] {
+            value = toPureJSON(v)
+        } else {
+            value = nil
+        }
+        var modOpts = JSONC.ModificationOptions()
+        if args.count > 3, let rawOpts = args[3].objectValue {
+            modOpts.formattingOptions = decodeJSONCFormattingOptions(rawOpts["formattingOptions"]?.objectValue)
+            if let isIns = rawOpts["isArrayInsertion"]?.boolValue {
+                modOpts.isArrayInsertion = isIns
+            }
+            if let idx = rawOpts["insertionIndex"]?.intValue {
+                modOpts.getInsertionIndex = { _ in idx }
+            }
+        }
+        let edits = try JSONC.modify(text, path: path, value: value, options: modOpts)
+        let applied = try JSONC.applyEdits(text, edits: edits)
+        return .object([
+            "edits": .array(edits.map {
+                .object([
+                    "offset": .int(Int64($0.offset)),
+                    "length": .int(Int64($0.length)),
+                    "content": .string($0.content),
+                ])
+            }),
+            "result": .string(applied),
+        ])
+
+    case "jsonc-parser#parse":
+        let text = try requireString(args, 0)
+        var parseOpts = JSONC.ParseOptions()
+        if args.count > 1, let rawOpts = args[1].objectValue {
+            if let v = rawOpts["allowTrailingComma"]?.boolValue { parseOpts.allowTrailingComma = v }
+            if let v = rawOpts["disallowComments"]?.boolValue { parseOpts.disallowComments = v }
+            if let v = rawOpts["allowEmptyContent"]?.boolValue { parseOpts.allowEmptyContent = v }
+        }
+        var errors: [JSONC.ParseError] = []
+        let parsed = JSONC.parse(text, errors: &errors, options: parseOpts)
+        return .object([
+            "value": parsed.map(fromPureJSON) ?? .null,
+            "errors": .array(errors.map {
+                .object([
+                    "error": .int(Int64($0.error.rawValue)),
+                    "offset": .int(Int64($0.offset)),
+                    "length": .int(Int64($0.length)),
+                ])
+            }),
+        ])
+
+    case "jsonc-parser#format":
+        let text = try requireString(args, 0)
+        let range: JSONC.Range?
+        if args.count > 1, let rObj = args[1].objectValue,
+           let offset = rObj["offset"]?.intValue,
+           let length = rObj["length"]?.intValue
+        {
+            range = JSONC.Range(offset: offset, length: length)
+        } else {
+            range = nil
+        }
+        let fmtOpts = (args.count > 2 ? decodeJSONCFormattingOptions(args[2].objectValue) : nil) ?? JSONC.FormattingOptions()
+        let edits = JSONC.format(text, range: range, options: fmtOpts)
+        let applied = try JSONC.applyEdits(text, edits: edits)
+        return .object([
+            "edits": .array(edits.map {
+                .object([
+                    "offset": .int(Int64($0.offset)),
+                    "length": .int(Int64($0.length)),
+                    "content": .string($0.content),
+                ])
+            }),
+            "result": .string(applied),
+        ])
 
     default:
         throw DispatchError.unknownFunction(req.fn)

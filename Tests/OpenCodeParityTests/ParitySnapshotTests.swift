@@ -49,6 +49,46 @@ struct ParitySnapshotTests {
         }
     }
 
+    private static func toPureJSON(_ value: SnapshotJSON) -> PureJSONValue {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .int(let i): return .number(Double(i))
+        case .double(let d): return .number(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(toPureJSON))
+        case .object(let obj):
+            return .object(obj.keys.sorted().map { ($0, toPureJSON(obj[$0]!)) })
+        }
+    }
+
+    private static func fromPureJSON(_ value: PureJSONValue) -> SnapshotJSON {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .number(let d): return snapshotNumber(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(fromPureJSON))
+        case .object(let entries):
+            var dict: [String: SnapshotJSON] = [:]
+            for (k, v) in entries {
+                dict[k] = fromPureJSON(v)
+            }
+            return .object(dict)
+        }
+    }
+
+    private static func decodeJSONCFormattingOptions(_ obj: [String: SnapshotJSON]?) -> JSONC.FormattingOptions? {
+        guard let obj else { return nil }
+        return JSONC.FormattingOptions(
+            tabSize: obj["tabSize"]?.int,
+            insertSpaces: obj["insertSpaces"]?.bool,
+            eol: obj["eol"]?.str,
+            insertFinalNewline: obj["insertFinalNewline"]?.bool,
+            keepLines: obj["keepLines"]?.bool
+        )
+    }
+
     private static func decodeStringMap(_ value: SnapshotJSON) -> [String: String] {
         var out: [String: String] = [:]
         if let obj = value.obj {
@@ -685,6 +725,88 @@ struct ParitySnapshotTests {
                     }),
                 ])
             }
+
+        // MARK: - jsonc-parser@3.3.1
+        case "jsonc-parser#modifyAndApply":
+            let text = args[0].str!
+            let path: [JSONC.PathSegment] = args[1].arr!.map { seg in
+                if let s = seg.str { return .key(s) }
+                return .index(seg.int!)
+            }
+            let spec = args[2].obj!
+            let value: PureJSONValue?
+            if spec["remove"]?.bool == true {
+                value = nil
+            } else if let rawJson = spec["valueJson"]?.str {
+                value = PureJSON.parse(rawJson)!
+            } else if let v = spec["value"] {
+                value = toPureJSON(v)
+            } else {
+                value = nil
+            }
+            var modOpts = JSONC.ModificationOptions()
+            if args.count > 3, let rawOpts = args[3].obj {
+                modOpts.formattingOptions = decodeJSONCFormattingOptions(rawOpts["formattingOptions"]?.obj)
+                if let isIns = rawOpts["isArrayInsertion"]?.bool {
+                    modOpts.isArrayInsertion = isIns
+                }
+                if let idx = rawOpts["insertionIndex"]?.int {
+                    modOpts.getInsertionIndex = { _ in idx }
+                }
+            }
+            let edits = try JSONC.modify(text, path: path, value: value, options: modOpts)
+            let applied = try JSONC.applyEdits(text, edits: edits)
+            return .object([
+                "edits": .array(edits.map {
+                    .object([
+                        "offset": .int(Int64($0.offset)),
+                        "length": .int(Int64($0.length)),
+                        "content": .string($0.content),
+                    ])
+                }),
+                "result": .string(applied),
+            ])
+
+        case "jsonc-parser#parse":
+            let text = args[0].str!
+            var parseOpts = JSONC.ParseOptions()
+            if args.count > 1, let rawOpts = args[1].obj {
+                if let v = rawOpts["allowTrailingComma"]?.bool { parseOpts.allowTrailingComma = v }
+                if let v = rawOpts["disallowComments"]?.bool { parseOpts.disallowComments = v }
+                if let v = rawOpts["allowEmptyContent"]?.bool { parseOpts.allowEmptyContent = v }
+            }
+            var errors: [JSONC.ParseError] = []
+            let parsed = JSONC.parse(text, errors: &errors, options: parseOpts)
+            return .object([
+                "value": parsed.map(fromPureJSON) ?? .null,
+                "errors": .array(errors.map {
+                    .object([
+                        "error": .int(Int64($0.error.rawValue)),
+                        "offset": .int(Int64($0.offset)),
+                        "length": .int(Int64($0.length)),
+                    ])
+                }),
+            ])
+
+        case "jsonc-parser#format":
+            let text = args[0].str!
+            let range: JSONC.Range? = args.count > 1 ? args[1].obj.flatMap { rObj in
+                guard let offset = rObj["offset"]?.int, let length = rObj["length"]?.int else { return nil }
+                return JSONC.Range(offset: offset, length: length)
+            } : nil
+            let fmtOpts = (args.count > 2 ? decodeJSONCFormattingOptions(args[2].obj) : nil) ?? JSONC.FormattingOptions()
+            let edits = JSONC.format(text, range: range, options: fmtOpts)
+            let applied = try JSONC.applyEdits(text, edits: edits)
+            return .object([
+                "edits": .array(edits.map {
+                    .object([
+                        "offset": .int(Int64($0.offset)),
+                        "length": .int(Int64($0.length)),
+                        "content": .string($0.content),
+                    ])
+                }),
+                "result": .string(applied),
+            ])
 
         default:
             throw SnapshotError.unknownFunction(fn)

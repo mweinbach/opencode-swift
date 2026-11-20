@@ -628,6 +628,12 @@ const mermanGanttMod = await import(path.join(UPSTREAM_DIR, "packages/merman/src
 // packages/core/src/shell/scan.ts
 const coreShellScanMod = await import(path.join(UPSTREAM_DIR, "packages/core/src/shell/scan.ts"))
 
+// third-party dependency pinned by upstream (`jsonc-parser@3.3.1`)
+const jsoncParserEntry = fs.existsSync(path.join(UPSTREAM_DIR, "node_modules/jsonc-parser/lib/esm/main.js"))
+  ? path.join(UPSTREAM_DIR, "node_modules/jsonc-parser/lib/esm/main.js")
+  : path.join(ROOT_DIR, "Tools/parity/.deps/node_modules/jsonc-parser/lib/esm/main.js")
+const jsoncParserMod = await import(jsoncParserEntry)
+
 function normalizeUndefinedToNull(value: unknown): unknown {
   if (value === undefined) return null
   if (value instanceof Uint8Array) return Array.from(value)
@@ -1306,6 +1312,85 @@ function invoke(fn: string, args: unknown[]): unknown {
           words: c.words,
           rawWords: c.rawWords,
         })),
+      }
+    }
+
+    // MARK: - jsonc-parser@3.3.1 (upstream dependency)
+    case "jsonc-parser#modifyAndApply": {
+      const text = args[0] as string
+      const jsonPath = args[1] as Array<string | number>
+      const valueSpec = args[2] as { remove?: boolean; value?: unknown; valueJson?: string }
+      const value = valueSpec.remove
+        ? undefined
+        : valueSpec.valueJson !== undefined
+          ? JSON.parse(valueSpec.valueJson)
+          : valueSpec.value
+      const rawOpts = (args[3] ?? undefined) as
+        | {
+            formattingOptions?: {
+              tabSize?: number
+              insertSpaces?: boolean
+              eol?: string
+              insertFinalNewline?: boolean
+              keepLines?: boolean
+            }
+            isArrayInsertion?: boolean
+            insertionIndex?: number
+          }
+        | undefined
+      const options: Record<string, unknown> = {}
+      if (rawOpts?.formattingOptions !== undefined) {
+        options.formattingOptions = rawOpts.formattingOptions
+      }
+      if (rawOpts?.isArrayInsertion !== undefined) {
+        options.isArrayInsertion = rawOpts.isArrayInsertion
+      }
+      if (rawOpts?.insertionIndex !== undefined) {
+        const idx = rawOpts.insertionIndex
+        options.getInsertionIndex = () => idx
+      }
+      const edits = jsoncParserMod.modify(text, jsonPath, value, options) as Array<{
+        offset: number
+        length: number
+        content: string
+      }>
+      const result = jsoncParserMod.applyEdits(text, edits) as string
+      return {
+        edits: edits.map((e) => ({ offset: e.offset, length: e.length, content: e.content })),
+        result,
+      }
+    }
+    case "jsonc-parser#parse": {
+      const text = args[0] as string
+      const rawOpts = (args[1] ?? undefined) as
+        | { allowTrailingComma?: boolean; disallowComments?: boolean; allowEmptyContent?: boolean }
+        | undefined
+      const errors: Array<{ error: number; offset: number; length: number }> = []
+      const value = jsoncParserMod.parse(text, errors, rawOpts)
+      return {
+        value: value === undefined ? null : value,
+        errors: errors.map((e) => ({ error: e.error, offset: e.offset, length: e.length })),
+      }
+    }
+    case "jsonc-parser#format": {
+      const text = args[0] as string
+      const range = (args[1] ?? undefined) as { offset: number; length: number } | undefined
+      const opts = (args[2] ?? {}) as {
+        tabSize?: number
+        insertSpaces?: boolean
+        eol?: string
+        insertFinalNewline?: boolean
+        keepLines?: boolean
+      }
+      const edits = jsoncParserMod.format(text, range, opts) as Array<{
+        offset: number
+        length: number
+        content: string
+      }>
+      const result = jsoncParserMod.applyEdits(text, edits) as string
+      return {
+        edits: edits.map((e) => ({ offset: e.offset, length: e.length, content: e.content })),
+        result,
       }
     }
 
