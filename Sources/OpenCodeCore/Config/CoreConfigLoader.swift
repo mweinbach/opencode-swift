@@ -22,124 +22,82 @@ public enum CoreConfigJSONC {
     }
 
     /// Strips `//` line comments, `/* ... */` block comments, and trailing commas before `}` or `]`
-    /// while preserving all string literals verbatim.
+    /// by parsing via `OpenCodeUtil.JSONC` (`allowTrailingComma: true`) and re-emitting strict JSON.
     public static func stripCommentsAndTrailingCommas(_ text: String) throws -> String {
-        let bytes = Array(text.utf8)
-        var withoutComments: [UInt8] = []
-        withoutComments.reserveCapacity(bytes.count)
-
-        var i = 0
-        var inString = false
-        while i < bytes.count {
-            let b = bytes[i]
-            if inString {
-                withoutComments.append(b)
-                if b == 0x5C { // '\'
-                    i += 1
-                    if i < bytes.count {
-                        withoutComments.append(bytes[i])
-                    }
-                } else if b == 0x22 { // '"'
-                    inString = false
-                }
-                i += 1
-                continue
-            }
-
-            if b == 0x22 { // '"'
-                inString = true
-                withoutComments.append(b)
-                i += 1
-                continue
-            }
-
-            if b == 0x2F, i + 1 < bytes.count { // '/'
-                let next = bytes[i + 1]
-                if next == 0x2F { // '//'
-                    i += 2
-                    while i < bytes.count && bytes[i] != 0x0A && bytes[i] != 0x0D {
-                        i += 1
-                    }
-                    continue
-                }
-                if next == 0x2A { // '/*'
-                    i += 2
-                    var closed = false
-                    while i + 1 < bytes.count {
-                        if bytes[i] == 0x2A && bytes[i + 1] == 0x2F {
-                            i += 2
-                            closed = true
-                            break
-                        }
-                        if bytes[i] == 0x0A {
-                            withoutComments.append(0x0A)
-                        }
-                        i += 1
-                    }
-                    if !closed {
-                        throw ParseError("Unterminated block comment in JSONC")
-                    }
-                    continue
-                }
-            }
-
-            withoutComments.append(b)
-            i += 1
+        var errors: [JSONC.ParseError] = []
+        let parsed = JSONC.parse(text, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+        guard errors.isEmpty, let parsed else {
+            let detail = errors.first.map {
+                "\(JSONC.printParseErrorCode($0.error)) at offset \($0.offset)"
+            } ?? "Empty JSON/JSONC document"
+            throw ParseError("Malformed JSON/JSONC: \(detail)")
         }
-
-        // Strip trailing commas before '}' or ']' outside string literals.
-        var out: [UInt8] = []
-        out.reserveCapacity(withoutComments.count)
-        i = 0
-        inString = false
-        while i < withoutComments.count {
-            let b = withoutComments[i]
-            if inString {
-                out.append(b)
-                if b == 0x5C {
-                    i += 1
-                    if i < withoutComments.count {
-                        out.append(withoutComments[i])
-                    }
-                } else if b == 0x22 {
-                    inString = false
-                }
-                i += 1
-                continue
-            }
-            if b == 0x22 {
-                inString = true
-                out.append(b)
-                i += 1
-                continue
-            }
-            if b == 0x2C { // ','
-                var look = i + 1
-                while look < withoutComments.count && isASCIIWhitespace(withoutComments[look]) {
-                    look += 1
-                }
-                if look < withoutComments.count && (withoutComments[look] == 0x7D || withoutComments[look] == 0x5D) {
-                    i += 1
-                    continue
-                }
-            }
-            out.append(b)
-            i += 1
-        }
-
-        return String(decoding: out, as: UTF8.self)
+        return PureJSON.stringifyCompact(parsed)
     }
 
     public static func parse(_ text: String) throws -> JSONValue {
-        let stripped = try stripCommentsAndTrailingCommas(text)
-        guard let data = stripped.data(using: .utf8) else {
-            throw ParseError("Invalid UTF-8 in JSONC")
+        var errors: [JSONC.ParseError] = []
+        let parsed = JSONC.parse(text, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+        guard errors.isEmpty, let parsed else {
+            let detail = errors.first.map {
+                "\(JSONC.printParseErrorCode($0.error)) at offset \($0.offset)"
+            } ?? "Empty JSON/JSONC document"
+            throw ParseError("Malformed JSON/JSONC: \(detail)")
         }
-        do {
-            return try JSONDecoder().decode(JSONValue.self, from: data)
-        } catch {
-            throw ParseError("Malformed JSON/JSONC: \(error)")
+        return fromPureJSON(parsed)
+    }
+
+    /// Converts an `OpenCodeSchema.JSONValue` into a deterministic `PureJSONValue` (with sorted object keys).
+    public static func toPureJSON(_ value: JSONValue) -> PureJSONValue {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .int(let i): return .number(Double(i))
+        case .double(let d): return .number(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(toPureJSON))
+        case .object(let obj):
+            return .object(obj.keys.sorted().map { ($0, toPureJSON(obj[$0]!)) })
         }
+    }
+
+    /// Converts a `PureJSONValue` into an `OpenCodeSchema.JSONValue`, preserving exact safe integer values.
+    public static func fromPureJSON(_ value: PureJSONValue) -> JSONValue {
+        switch value {
+        case .null: return .null
+        case .bool(let b): return .bool(b)
+        case .number(let d):
+            if d.isFinite && d.rounded(.towardZero) == d && abs(d) < 9_007_199_254_740_992.0 {
+                return .int(Int64(d))
+            }
+            return .double(d)
+        case .string(let s): return .string(s)
+        case .array(let arr): return .array(arr.map(fromPureJSON))
+        case .object(let entries):
+            var dict: [String: JSONValue] = [:]
+            dict.reserveCapacity(entries.count)
+            for (k, v) in entries {
+                dict[k] = fromPureJSON(v)
+            }
+            return .object(dict)
+        }
+    }
+
+    /// Computes surgical JSONC edit operations for `path` (passing `nil` removes the target property/element).
+    public static func modify(
+        _ text: String,
+        path: [JSONC.PathSegment],
+        value: JSONValue?,
+        options: JSONC.ModificationOptions = JSONC.ModificationOptions(
+            formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+        )
+    ) throws -> [JSONC.Edit] {
+        try JSONC.modify(text, path: path, value: value.map(toPureJSON), options: options)
+    }
+
+    /// Applies JSONC edit operations produced by `modify` or `JSONC.format` using UTF-16 offsets.
+    public static func applyEdits(_ text: String, edits: [JSONC.Edit]) throws -> String {
+        try JSONC.applyEdits(text, edits: edits)
     }
 
     public static func parseInfo(_ text: String) throws -> (info: ConfigSchema.Info, diagnostics: [CoreConfigNormalize.Diagnostic]) {
@@ -174,10 +132,6 @@ public enum CoreConfigJSONC {
             }
         }
         return out
-    }
-
-    private static func isASCIIWhitespace(_ b: UInt8) -> Bool {
-        b == 0x20 || b == 0x09 || b == 0x0A || b == 0x0D
     }
 }
 
@@ -957,6 +911,13 @@ public enum CoreConfigVariable {
             case .virtual(_, let dir): return dir
             }
         }
+
+        public var label: String {
+            switch self {
+            case .path(let p): return p
+            case .virtual(let source, _): return source
+            }
+        }
     }
 
     public struct SubstituteInput: Sendable {
@@ -995,7 +956,8 @@ public enum CoreConfigVariable {
     // parity: core/src/config/variable.ts#substitute [status=implemented hash=db54f5797490]
     public static func substitute(
         _ input: SubstituteInput,
-        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        log: (any LogSink)? = nil
     ) async -> SubstituteOutput {
         func expandEnv(escape: Bool) -> String {
             replacePattern(in: input.text, prefix: "{env:") { name in
@@ -1005,11 +967,13 @@ public enum CoreConfigVariable {
         }
 
         var refs: Set<String> = []
-        let raw = await substituteFiles(input: input, text: expandEnv(escape: false), fileSystem: fileSystem, references: &refs)
+        let raw = await substituteFiles(input: input, text: expandEnv(escape: false), fileSystem: fileSystem, log: log, references: &refs)
         if input.text.contains("{env:") {
-            if (try? CoreConfigJSONC.parse(raw)) == nil {
+            var errors: [JSONC.ParseError] = []
+            _ = JSONC.parse(raw, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+            if !errors.isEmpty {
                 var escapedRefs: Set<String> = []
-                let escaped = await substituteFiles(input: input, text: expandEnv(escape: true), fileSystem: fileSystem, references: &escapedRefs)
+                let escaped = await substituteFiles(input: input, text: expandEnv(escape: true), fileSystem: fileSystem, log: log, references: &escapedRefs)
                 return SubstituteOutput(text: escaped, references: escapedRefs)
             }
         }
@@ -1020,6 +984,7 @@ public enum CoreConfigVariable {
         input: SubstituteInput,
         text: String,
         fileSystem: any OpenCodeFileSystem,
+        log: (any LogSink)?,
         references: inout Set<String>
     ) async -> String {
         let configDir = input.source.directory
@@ -1057,10 +1022,22 @@ public enum CoreConfigVariable {
                     references.insert(resolvedPath)
 
                     let fileContent: String
-                    if let fileBytes = try? await fileSystem.readFile(at: resolvedPath) {
+                    do {
+                        let fileBytes = try await fileSystem.readFile(at: resolvedPath)
                         fileContent = String(decoding: fileBytes, as: UTF8.self)
                             .trimmingCharacters(in: .whitespacesAndNewlines)
-                    } else {
+                    } catch {
+                        await log?.log(StructuredLogRecord(
+                            timestamp: String(Flock.currentEpochMs()),
+                            level: .warn,
+                            message: "config file reference is missing or unreadable",
+                            fields: [
+                                ("source", input.source.label),
+                                ("reference", token),
+                                ("path", resolvedPath),
+                            ],
+                            cause: String(describing: error)
+                        ))
                         fileContent = ""
                     }
                     out += CoreConfigJSONC.encodeJSONStringContents(fileContent)
@@ -2137,6 +2114,7 @@ public enum CoreConfig {
         private let credentials: (any CoreProvider.Credential.Interface)?
         private let wellKnown: (any CoreIntegration.WellKnown.Interface)?
         private let processes: (any AppProcess.Interface)?
+        private let log: (any LogSink)?
         private let debounce: Duration
         private let wellKnownRefreshInterval: Duration
         private let clock: any Clock<Duration>
@@ -2158,6 +2136,7 @@ public enum CoreConfig {
             credentials: (any CoreProvider.Credential.Interface)? = nil,
             wellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
             processes: (any AppProcess.Interface)? = nil,
+            log: (any LogSink)? = nil,
             debounce: Duration = CoreConfig.Service.defaultDebounce,
             wellKnownRefreshInterval: Duration = CoreConfig.Service.defaultWellKnownRefreshInterval,
             clock: any Clock<Duration> = ContinuousClock(),
@@ -2177,6 +2156,7 @@ public enum CoreConfig {
             self.credentials = credentials
             self.wellKnown = wellKnown
             self.processes = processes
+            self.log = log
             self.debounce = debounce
             self.wellKnownRefreshInterval = wellKnownRefreshInterval
             self.clock = clock
@@ -2200,7 +2180,8 @@ public enum CoreConfig {
                 wellKnown: wellKnown,
                 processes: processes,
                 fileSystem: fileSystem,
-                environment: environment
+                environment: environment,
+                log: log
             )
             self.state = Mutex(State(sources: discovered, entries: loaded.entries, isInput: loaded.isInput))
 
@@ -2265,7 +2246,18 @@ public enum CoreConfig {
                         guard let self else { break }
                         if self.state.withLock({ $0.closed }) { break }
                         if wellKnown.snapshot().isEmpty { continue }
-                        let changed = (try? await wellKnown.refresh()) ?? false
+                        let changed: Bool
+                        do {
+                            changed = try await wellKnown.refresh()
+                        } catch {
+                            await Self.emitLog(
+                                self.log,
+                                level: .warn,
+                                message: "failed to refresh wellknown manifests",
+                                fields: [("error", String(describing: error))]
+                            )
+                            changed = false
+                        }
                         if Task.isCancelled || self.state.withLock({ $0.closed }) { break }
                         if !changed || !wellKnownPublishesToBus {
                             await self.reload()
@@ -2455,22 +2447,16 @@ public enum CoreConfig {
                 }
                 let filepath = chosenPath ?? CoreConfigDiscovery.joinPath(globalDir, "opencode.jsonc")
                 let existingText = (try? await fsUtil.readFileStringSafe(filepath)) ?? "{}\n"
-                var rootObj: [String: JSONValue]
-                if let parsed = try? CoreConfigJSONC.parse(existingText), case .object(let obj) = parsed {
-                    rootObj = obj
-                } else {
-                    rootObj = [:]
-                }
-                if let shell = patch.shell {
-                    rootObj["shell"] = .string(shell)
-                } else {
-                    rootObj.removeValue(forKey: "shell")
-                }
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                let data = try encoder.encode(JSONValue.object(rootObj))
-                var outputText = String(decoding: data, as: UTF8.self)
-                if !outputText.hasSuffix("\n") { outputText += "\n" }
+                let edits = try JSONC.modify(
+                    existingText,
+                    path: [.key("shell")],
+                    value: patch.shell.map { .string($0) },
+                    options: JSONC.ModificationOptions(
+                        formattingOptions: JSONC.FormattingOptions(tabSize: 2, insertSpaces: true)
+                    )
+                )
+                var outputText = try JSONC.applyEdits(existingText, edits: edits)
+                if outputText.utf8.last != 0x0A { outputText += "\n" }
                 try await fileSystem.writeFile(Array(outputText.utf8), to: filepath, createDirectories: true)
                 await reload()
                 await updateLock.release()
@@ -2524,7 +2510,8 @@ public enum CoreConfig {
                 wellKnown: wellKnown,
                 processes: processes,
                 fileSystem: fileSystem,
-                environment: environment
+                environment: environment,
+                log: log
             )
             state.withLock { s in
                 s.isInput = next.isInput
@@ -2703,12 +2690,101 @@ public enum CoreConfig {
 
         // MARK: - Config Loading
 
+        private static func emitLog(
+            _ log: (any LogSink)?,
+            level: OpenCodeLogLevel,
+            message: String,
+            fields: [(String, String)] = [],
+            cause: String? = nil
+        ) async {
+            guard let log else { return }
+            await log.log(StructuredLogRecord(
+                timestamp: String(Flock.currentEpochMs()),
+                level: level,
+                message: message,
+                fields: fields,
+                cause: cause
+            ))
+        }
+
+        private static func parseInfo(
+            _ text: String,
+            source: String,
+            log: (any LogSink)?
+        ) async -> ConfigSchema.Info? {
+            var errors: [JSONC.ParseError] = []
+            let rawPure = JSONC.parse(text, errors: &errors, options: JSONC.ParseOptions(allowTrailingComma: true))
+            guard errors.isEmpty, let rawPure else {
+                await emitLog(
+                    log,
+                    level: .warn,
+                    message: "configuration normalization diagnostic",
+                    fields: [
+                        ("source", source),
+                        ("path", "$"),
+                        ("kind", "invalid"),
+                        ("action", "rejected malformed JSON or JSONC document"),
+                    ]
+                )
+                return nil
+            }
+            let raw = CoreConfigJSONC.fromPureJSON(rawPure)
+            let result = CoreConfigNormalize.normalize(raw)
+            let diagnostics: [CoreConfigNormalize.Diagnostic]
+            let encoded: [String: JSONValue]?
+            let isRejected: Bool
+            switch result {
+            case .rejected(let d):
+                diagnostics = d
+                encoded = nil
+                isRejected = true
+            case .normalized(let enc, let d):
+                diagnostics = d
+                encoded = enc
+                isRejected = false
+            }
+            for diagnostic in diagnostics {
+                let level: OpenCodeLogLevel = (isRejected || diagnostic.kind == .invalid) ? .warn : .debug
+                let pathStr = diagnostic.path.first == "$" ? "$" : "$." + diagnostic.path.joined(separator: ".")
+                await emitLog(
+                    log,
+                    level: level,
+                    message: "configuration normalization diagnostic",
+                    fields: [
+                        ("source", source),
+                        ("path", pathStr),
+                        ("kind", diagnostic.kind.rawValue),
+                        ("action", diagnostic.message),
+                    ]
+                )
+            }
+            guard let encoded else { return nil }
+            if let data = try? JSONEncoder().encode(JSONValue.object(encoded)),
+               let info = try? JSONDecoder().decode(ConfigSchema.Info.self, from: data)
+            {
+                return info
+            }
+            await emitLog(
+                log,
+                level: .warn,
+                message: "configuration normalization diagnostic",
+                fields: [
+                    ("source", source),
+                    ("path", "$"),
+                    ("kind", "invalid"),
+                    ("action", "rejected canonical configuration after final validation"),
+                ]
+            )
+            return nil
+        }
+
         private static func loadFile(
             _ filepath: String,
             references: inout Set<String>,
             home: String,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> ConfigSchema.Document? {
             let fsUtil = FSUtil.Service(fileSystem: fileSystem)
             guard let text = try? await fsUtil.readFileStringSafe(filepath) else { return nil }
@@ -2720,10 +2796,11 @@ public enum CoreConfig {
                     home: home,
                     environment: environment
                 ),
-                fileSystem: fileSystem
+                fileSystem: fileSystem,
+                log: log
             )
             references.formUnion(sub.references)
-            guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { return nil }
+            guard let info = await parseInfo(sub.text, source: filepath, log: log) else { return nil }
             return ConfigSchema.Document(
                 path: SchemaPrimitive.AbsolutePath(rawValue: filepath),
                 info: info
@@ -2735,7 +2812,8 @@ public enum CoreConfig {
             references: inout Set<String>,
             home: String,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> [CoreConfigEntry] {
             var out: [CoreConfigEntry] = []
             for name in CoreConfigDiscovery.names {
@@ -2745,7 +2823,8 @@ public enum CoreConfig {
                     references: &references,
                     home: home,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 ) {
                     out.append(.document(doc))
                 }
@@ -2773,9 +2852,16 @@ public enum CoreConfig {
             home: String,
             processes: (any AppProcess.Interface)?,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> [CoreConfigEntry] {
             guard let effectiveProcesses = resolvePreferencesProcesses(processes) else {
+                await emitLog(
+                    log,
+                    level: .warn,
+                    message: "failed to convert managed preferences",
+                    fields: [("source", plist.rawValue)]
+                )
                 return []
             }
             let spec = ProcessSpec(
@@ -2791,6 +2877,12 @@ public enum CoreConfig {
                 )
                 runResult = try AppProcess.requireSuccess(raw)
             } catch {
+                await emitLog(
+                    log,
+                    level: .warn,
+                    message: "failed to convert managed preferences",
+                    fields: [("source", plist.rawValue)]
+                )
                 return []
             }
             references.insert(plist.rawValue)
@@ -2803,10 +2895,11 @@ public enum CoreConfig {
                     home: home,
                     environment: environment
                 ),
-                fileSystem: fileSystem
+                fileSystem: fileSystem,
+                log: log
             )
             references.formUnion(sub.references)
-            guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { return [] }
+            guard let info = await parseInfo(sub.text, source: plist.rawValue, log: log) else { return [] }
             return [.document(ConfigSchema.Document(path: plist, info: info))]
         }
 
@@ -2817,7 +2910,8 @@ public enum CoreConfig {
             credentials: (any CoreProvider.Credential.Interface)?,
             wellKnown: any CoreIntegration.WellKnown.Interface,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> [CoreConfigIntegration.WellKnownDocument] {
             let auth = entry.manifest.auth
             let credential = (try? await credentials?.list(entry.integrationID))?.last
@@ -2837,6 +2931,12 @@ public enum CoreConfig {
             do {
                 configs = try await wellKnown.resolve(entry: entry, variables: variables)
             } catch {
+                await emitLog(
+                    log,
+                    level: .warn,
+                    message: "failed to load wellknown config",
+                    fields: [("source", entry.origin), ("error", String(describing: error))]
+                )
                 configs = (try? await wellKnown.cached(origin: entry.origin)) ?? []
             }
             let encoder = JSONEncoder()
@@ -2853,10 +2953,11 @@ public enum CoreConfig {
                         home: home,
                         environment: environment
                     ),
-                    fileSystem: fileSystem
+                    fileSystem: fileSystem,
+                    log: log
                 )
                 references.formUnion(sub.references)
-                guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { continue }
+                guard let info = await parseInfo(sub.text, source: entry.origin, log: log) else { continue }
                 docs.append(CoreConfigIntegration.WellKnownDocument(
                     path: nil,
                     info: info,
@@ -2872,10 +2973,22 @@ public enum CoreConfig {
             credentials: (any CoreProvider.Credential.Interface)?,
             wellKnown: (any CoreIntegration.WellKnown.Interface)?,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> [(integrationID: IntegrationID, documents: [CoreConfigIntegration.WellKnownDocument])] {
             guard let wellKnown else { return [] }
-            let entries = (try? await wellKnown.entries()) ?? []
+            let entries: [CoreIntegration.WellKnown.Entry]
+            do {
+                entries = try await wellKnown.entries()
+            } catch {
+                await emitLog(
+                    log,
+                    level: .warn,
+                    message: "failed to discover wellknown config",
+                    fields: [("error", String(describing: error))]
+                )
+                return []
+            }
             var out: [(integrationID: IntegrationID, documents: [CoreConfigIntegration.WellKnownDocument])] = []
             for entry in entries {
                 let docs = await loadWellKnownEntry(
@@ -2885,7 +2998,8 @@ public enum CoreConfig {
                     credentials: credentials,
                     wellKnown: wellKnown,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 )
                 out.append((integrationID: entry.integrationID, documents: docs))
             }
@@ -2924,7 +3038,8 @@ public enum CoreConfig {
             wellKnown: (any CoreIntegration.WellKnown.Interface)?,
             processes: (any AppProcess.Interface)?,
             fileSystem: any OpenCodeFileSystem,
-            environment: any EnvironmentProviding
+            environment: any EnvironmentProviding,
+            log: (any LogSink)?
         ) async -> (entries: [CoreConfigEntry], isInput: @Sendable (String) -> Bool) {
             var references: Set<String> = []
             let home = globalPaths.home
@@ -2936,7 +3051,8 @@ public enum CoreConfig {
                     references: &references,
                     home: home,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 ) {
                     directDocs.append(.document(doc))
                 }
@@ -2949,7 +3065,8 @@ public enum CoreConfig {
                    references: &references,
                    home: home,
                    fileSystem: fileSystem,
-                   environment: environment
+                   environment: environment,
+                   log: log
                )
             {
                 explicitDocs.append(.document(doc))
@@ -2964,10 +3081,11 @@ public enum CoreConfig {
                         home: home,
                         environment: environment
                     ),
-                    fileSystem: fileSystem
+                    fileSystem: fileSystem,
+                    log: log
                 )
                 references.formUnion(sub.references)
-                if let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) {
+                if let info = await parseInfo(sub.text, source: "OPENCODE_CONFIG_CONTENT", log: log) {
                     contentDocs.append(.document(ConfigSchema.Document(path: nil, info: info)))
                 }
             }
@@ -2982,7 +3100,8 @@ public enum CoreConfig {
                     references: &references,
                     home: home,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 ))
             }
             if let prefs = sources.preferences {
@@ -2992,7 +3111,8 @@ public enum CoreConfig {
                     home: home,
                     processes: processes,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 ))
             }
             var managedPolicies: [CoreConfigEntry] = []
@@ -3049,7 +3169,8 @@ public enum CoreConfig {
                     references: &references,
                     home: home,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 )
             } else {
                 []
@@ -3062,7 +3183,8 @@ public enum CoreConfig {
                     references: &references,
                     home: home,
                     fileSystem: fileSystem,
-                    environment: environment
+                    environment: environment,
+                    log: log
                 ))
             }
 
@@ -3094,7 +3216,8 @@ public enum CoreConfig {
                 credentials: credentials,
                 wellKnown: wellKnown,
                 fileSystem: fileSystem,
-                environment: environment
+                environment: environment,
+                log: log
             )
             var wellKnownEntries: [CoreConfigEntry] = []
             for item in loadedWellKnown {
@@ -3230,6 +3353,17 @@ public enum CoreConfig {
         }
     }
 
+    private struct ObservabilityLogAdapter: LogSink, Sendable {
+        let service: Observability.Service
+
+        func log(_ record: StructuredLogRecord) async {
+            guard record.level >= service.minimumLevel else { return }
+            for sink in service.sinks {
+                await sink.log(record)
+            }
+        }
+    }
+
     // parity: core/src/config.ts#layer [status=implemented hash=880f93656adb]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, scope in
@@ -3240,6 +3374,8 @@ public enum CoreConfig {
             let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
             let credentials = deps.get(CoreProvider.Credential.Service.serviceKey, as: (any CoreProvider.Credential.Interface).self)
             let wellKnown = deps.get(CoreIntegration.WellKnown.Service.serviceKey, as: (any CoreIntegration.WellKnown.Interface).self)
+            let logSink: (any LogSink)? = deps.get("@opencode/LogSink", as: (any LogSink).self)
+                ?? deps.get(Observability.Service.serviceKey, as: Observability.Service.self).map(ObservabilityLogAdapter.init)
             #if os(macOS)
             let processes: (any AppProcess.Interface)? = deps.get(AppProcess.Service.serviceKey, as: (any AppProcess.Interface).self)
                 ?? AppProcess.Service()
@@ -3262,7 +3398,8 @@ public enum CoreConfig {
                 location: locRoute,
                 credentials: credentials,
                 wellKnown: wellKnown,
-                processes: processes
+                processes: processes,
+                log: logSink
             )
             scope.addFinalizer {
                 await service.close()

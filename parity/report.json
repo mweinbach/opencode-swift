@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-20T22:12:07.758Z",
+  "generatedAt": "2026-11-20T22:44:35.311Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opencode.git",
     "branch": "dev",
@@ -17,13 +17,13 @@
     ]
   },
   "swiftWorkspace": {
-    "swiftFiles": 293,
-    "publicSymbols": 36591,
+    "swiftFiles": 296,
+    "publicSymbols": 36765,
     "parityAnnotations": 11057
   },
   "differentialParity": {
-    "verifiedFunctions": 138,
-    "verifiedVectors": 1474
+    "verifiedFunctions": 141,
+    "verifiedVectors": 1572
   },
   "totals": {
     "files": 1848,

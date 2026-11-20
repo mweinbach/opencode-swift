@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "generatedAt": "2026-11-20T21:34:05.751Z",
-  "vectorCount": 1474,
+  "generatedAt": "2026-11-20T22:42:13.071Z",
+  "vectorCount": 1572,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -10166,7 +10166,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001swZGuVESHTQCPj"
+      "expectedValue": "bcfe56800001VFijbgA5DdhC63"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10177,7 +10177,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002xVANNhpoijAzHP"
+      "expectedValue": "bcfe56800002l4NNcd7oeF31hI"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10188,7 +10188,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeitsqKLR6slqcAn"
+      "expectedValue": "4301a97feffe7eTHZeMV3TG1wQ"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10199,7 +10199,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdlvkcZbSfYlzzBr"
+      "expectedValue": "4301a97feffdLi555OPKz304Ux"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10207,7 +10207,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1fae167a0001SrrMwG7RIjz551"
+      "expectedValue": "1fb1fc361001H9hKRJyIOfKzBJ"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10215,7 +10215,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e051e985fffdk5ruWobXBUWeQr"
+      "expectedValue": "e04e03c9effdyyAUyICZuChfxa"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10223,7 +10223,2982 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "ffc1d912-951d-42b6-b7bf-5fce4a5f6b2b"
+      "expectedValue": "4f4a9aa0-1a9a-4b8a-ba19-ef1f8e1338fa"
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comment before root object: replace existing key",
+      "args": [
+        "// Top-level config header\n{\n  \"shell\": \"/bin/bash\",\n  \"username\": \"alice\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 11,
+            "offset": 40
+          }
+        ],
+        "result": "// Top-level config header\n{\n  \"shell\": \"/bin/zsh\",\n  \"username\": \"alice\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comment after root object: insert new key",
+      "args": [
+        "{\n  \"username\": \"alice\"\n}\n// trailing comment\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\"",
+            "length": 21,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\"\n}\n// trailing comment\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: replace first key",
+      "args": [
+        "{\n  // primary shell\n  \"shell\": \"/bin/sh\",\n  // user identity\n  \"username\": \"alice\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/fish"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/fish\"",
+            "length": 9,
+            "offset": 32
+          }
+        ],
+        "result": "{\n  // primary shell\n  \"shell\": \"/bin/fish\",\n  // user identity\n  \"username\": \"alice\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: replace middle key",
+      "args": [
+        "{\n  // first\n  \"a\": 1,\n  // middle\n  \"b\": 2,\n  // last\n  \"c\": 3\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 42
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "42",
+            "length": 1,
+            "offset": 42
+          }
+        ],
+        "result": "{\n  // first\n  \"a\": 1,\n  // middle\n  \"b\": 42,\n  // last\n  \"c\": 3\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: insert new key at end",
+      "args": [
+        "{\n  // keep me\n  \"a\": 1,\n  // keep me too\n  \"b\": 2\n}\n",
+        [
+          "c"
+        ],
+        {
+          "value": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"b\": 2,\n  \"c\": true",
+            "length": 8,
+            "offset": 42
+          }
+        ],
+        "result": "{\n  // keep me\n  \"a\": 1,\n  // keep me too\n  \"b\": 2,\n  \"c\": true\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: remove first key",
+      "args": [
+        "{\n  // before first\n  \"a\": 1,\n  // before second\n  \"b\": 2\n}\n",
+        [
+          "a"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"b\": 2",
+            "length": 57,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: remove middle key",
+      "args": [
+        "{\n  \"a\": 1,\n  // middle comment\n  \"b\": 2,\n  // end comment\n  \"c\": 3\n}\n",
+        [
+          "b"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,",
+            "length": 39,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n  // end comment\n  \"c\": 3\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "line comments inside object: remove last key",
+      "args": [
+        "{\n  // keep header\n  \"a\": 1,\n  \"b\": 2\n}\n",
+        [
+          "b"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1",
+            "length": 18,
+            "offset": 19
+          }
+        ],
+        "result": "{\n  // keep header\n  \"a\": 1\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "inline trailing line comment on property: replace value",
+      "args": [
+        "{\n  \"shell\": \"/bin/bash\", // default login shell\n  \"snapshots\": true // keep snapshots\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 11,
+            "offset": 13
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\", // default login shell\n  \"snapshots\": true // keep snapshots\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "inline trailing line comment on last property: insert new key",
+      "args": [
+        "{\n  \"username\": \"alice\" // inline comment\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\" // inline comment",
+            "length": 39,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\" // inline comment\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "block comment before root object: insert key",
+      "args": [
+        "/*\n * Managed OpenCode config\n */\n{\n  \"username\": \"alice\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\"",
+            "length": 21,
+            "offset": 36
+          }
+        ],
+        "result": "/*\n * Managed OpenCode config\n */\n{\n  \"username\": \"alice\",\n  \"shell\": \"/bin/zsh\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "block comment after root object: replace key",
+      "args": [
+        "{\n  \"shell\": \"/bin/sh\"\n} /* end of file */\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 9,
+            "offset": 13
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n} /* end of file */\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "multiline block comment inside object: insert key",
+      "args": [
+        "{\n  /* multi\n     line\n     comment */\n  \"a\": 1\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,\n  \"b\": 2",
+            "length": 8,
+            "offset": 39
+          }
+        ],
+        "result": "{\n  /* multi\n     line\n     comment */\n  \"a\": 1,\n  \"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "inline block comment between colon and value: replace value",
+      "args": [
+        "{\n  \"a\": /* inline note */ 1,\n  \"b\": 2\n}\n",
+        [
+          "a"
+        ],
+        {
+          "value": 99
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "99",
+            "length": 1,
+            "offset": 27
+          }
+        ],
+        "result": "{\n  \"a\": /* inline note */ 99,\n  \"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "comment-like text inside string literal preserved untouched",
+      "args": [
+        "{\n  \"url\": \"https://example.com // not a comment /* nope */\",\n  \"shell\": \"/bin/sh\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 9,
+            "offset": 73
+          }
+        ],
+        "result": "{\n  \"url\": \"https://example.com // not a comment /* nope */\",\n  \"shell\": \"/bin/zsh\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "trailing comma in object: replace existing key",
+      "args": [
+        "{\n  \"a\": 1,\n  \"b\": 2,\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 20
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "20",
+            "length": 1,
+            "offset": 19
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n  \"b\": 20,\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "trailing comma in object: insert new key",
+      "args": [
+        "{\n  \"a\": 1,\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,\n  \"b\": 2,",
+            "length": 9,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n  \"b\": 2,\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "trailing comma in object: remove last key",
+      "args": [
+        "{\n  \"a\": 1,\n  \"b\": 2,\n}\n",
+        [
+          "b"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,",
+            "length": 19,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "trailing comma in object: remove only key",
+      "args": [
+        "{\n  \"a\": 1,\n}\n",
+        [
+          "a"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  ,",
+            "length": 11,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  ,\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "trailing comma in nested object: insert nested key",
+      "args": [
+        "{\n  \"terminal\": {\n    \"title\": true,\n  },\n}\n",
+        [
+          "terminal",
+          "copy"
+        ],
+        {
+          "value": "select"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"title\": true,\n    \"copy\": \"select\",",
+            "length": 18,
+            "offset": 18
+          }
+        ],
+        "result": "{\n  \"terminal\": {\n    \"title\": true,\n    \"copy\": \"select\",\n  },\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "insert key into empty object {}",
+      "args": [
+        "{}",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"shell\": \"/bin/zsh\"\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "insert key into empty object with newline {}\\n",
+      "args": [
+        "{}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"shell\": \"/bin/zsh\"\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "insert deeply nested mcp server path into empty {}",
+      "args": [
+        "{}",
+        [
+          "mcp",
+          "servers",
+          "linear"
+        ],
+        {
+          "valueJson": "{\"type\":\"remote\",\"url\":\"https://mcp.linear.app/sse\"}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"mcp\": {\n    \"servers\": {\n      \"linear\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.linear.app/sse\"\n      }\n    }\n  }\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"mcp\": {\n    \"servers\": {\n      \"linear\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.linear.app/sse\"\n      }\n    }\n  }\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "insert deeply nested mcp server into existing mcp block without servers",
+      "args": [
+        "{\n  // MCP config\n  \"mcp\": {\n    \"timeout\": 5000\n  }\n}\n",
+        [
+          "mcp",
+          "servers",
+          "local-fs"
+        ],
+        {
+          "valueJson": "{\"type\":\"local\",\"command\":[\"npx\",\"-y\",\"@modelcontextprotocol/server-filesystem\",\"/tmp\"],\"environment\":{\"DEBUG\":\"1\"}}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"timeout\": 5000,\n    \"servers\": {\n      \"local-fs\": {\n        \"type\": \"local\",\n        \"command\": [\n          \"npx\",\n          \"-y\",\n          \"@modelcontextprotocol/server-filesystem\",\n          \"/tmp\"\n        ],\n        \"environment\": {\n          \"DEBUG\": \"1\"\n        }\n      }\n    }",
+            "length": 19,
+            "offset": 29
+          }
+        ],
+        "result": "{\n  // MCP config\n  \"mcp\": {\n    \"timeout\": 5000,\n    \"servers\": {\n      \"local-fs\": {\n        \"type\": \"local\",\n        \"command\": [\n          \"npx\",\n          \"-y\",\n          \"@modelcontextprotocol/server-filesystem\",\n          \"/tmp\"\n        ],\n        \"environment\": {\n          \"DEBUG\": \"1\"\n        }\n      }\n    }\n  }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "insert sibling mcp server preserving existing servers and comments",
+      "args": [
+        "{\n  \"mcp\": {\n    \"servers\": {\n      // existing\n      \"github\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.github.com\"\n      }\n    }\n  }\n}\n",
+        [
+          "mcp",
+          "servers",
+          "linear"
+        ],
+        {
+          "valueJson": "{\"type\":\"remote\",\"url\":\"https://mcp.linear.app\"}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "      },\n      \"linear\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.linear.app\"\n      }",
+            "length": 7,
+            "offset": 132
+          }
+        ],
+        "result": "{\n  \"mcp\": {\n    \"servers\": {\n      // existing\n      \"github\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.github.com\"\n      },\n      \"linear\": {\n        \"type\": \"remote\",\n        \"url\": \"https://mcp.linear.app\"\n      }\n    }\n  }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "replace plugins array preserving comments and other keys",
+      "args": [
+        "{\n  // keep comment\n  \"plugins\": [\n    \"@acme/one\"\n  ],\n  \"username\": \"bob\"\n}\n",
+        [
+          "plugins"
+        ],
+        {
+          "value": [
+            "@acme/one",
+            "@acme/two"
+          ]
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "[\n    \"@acme/one\",\n    \"@acme/two\"\n  ]",
+            "length": 21,
+            "offset": 33
+          }
+        ],
+        "result": "{\n  // keep comment\n  \"plugins\": [\n    \"@acme/one\",\n    \"@acme/two\"\n  ],\n  \"username\": \"bob\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "remove nested property terminal.copy_on_select preserving terminal.copy",
+      "args": [
+        "{\n  // Keep terminal comment\n  \"terminal\": {\n    \"copy\": \"select\",\n    \"copy_on_select\": true\n  }\n}\n",
+        [
+          "terminal",
+          "copy_on_select"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"copy\": \"select\"",
+            "length": 48,
+            "offset": 45
+          }
+        ],
+        "result": "{\n  // Keep terminal comment\n  \"terminal\": {\n    \"copy\": \"select\"\n  }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "remove only property in object",
+      "args": [
+        "{\n  \"shell\": \"/bin/zsh\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{",
+            "length": 23,
+            "offset": 0
+          }
+        ],
+        "result": "{\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "remove non-existent top-level property returns no edits",
+      "args": [
+        "{\n  \"username\": \"alice\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [],
+        "result": "{\n  \"username\": \"alice\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "remove non-existent deeply nested property when parent missing throws",
+      "args": [
+        "{\n  \"username\": \"alice\"\n}\n",
+        [
+          "mcp",
+          "servers",
+          "missing"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "remove non-existent nested property when parent exists returns no edits",
+      "args": [
+        "{\n  \"mcp\": {\n    \"servers\": {}\n  }\n}\n",
+        [
+          "mcp",
+          "servers",
+          "missing"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [],
+        "result": "{\n  \"mcp\": {\n    \"servers\": {}\n  }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "set property to explicit null vs removal",
+      "args": [
+        "{\n  \"shell\": \"/bin/zsh\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": null
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "null",
+            "length": 10,
+            "offset": 13
+          }
+        ],
+        "result": "{\n  \"shell\": null\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "replace primitive value with nested object",
+      "args": [
+        "{\n  \"theme\": \"dark\"\n}\n",
+        [
+          "theme"
+        ],
+        {
+          "valueJson": "{\"name\":\"opencode\",\"mode\":\"dark\"}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n    \"name\": \"opencode\",\n    \"mode\": \"dark\"\n  }",
+            "length": 6,
+            "offset": 13
+          }
+        ],
+        "result": "{\n  \"theme\": {\n    \"name\": \"opencode\",\n    \"mode\": \"dark\"\n  }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "replace object value with primitive boolean",
+      "args": [
+        "{\n  \"snapshots\": {\n    \"enabled\": true\n  }\n}\n",
+        [
+          "snapshots"
+        ],
+        {
+          "value": false
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "false",
+            "length": 25,
+            "offset": 17
+          }
+        ],
+        "result": "{\n  \"snapshots\": false\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "replace root document with empty path []",
+      "args": [
+        "{\"old\": 1}",
+        [],
+        {
+          "valueJson": "{\"new\":true,\"count\":3}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"new\": true,\n  \"count\": 3\n}",
+            "length": 10,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"new\": true,\n  \"count\": 3\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "custom insertionIndex 0 in non-empty object",
+      "args": [
+        "{\n  \"b\": 2,\n  \"c\": 3\n}\n",
+        [
+          "a"
+        ],
+        {
+          "value": 1
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          },
+          "insertionIndex": 0
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"a\": 1,",
+            "length": 1,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "custom insertionIndex 1 in middle of object",
+      "args": [
+        "{\n  \"a\": 1,\n  \"c\": 3\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          },
+          "insertionIndex": 1
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,\n  \"b\": 2,",
+            "length": 9,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "duplicate keys in object: findNodeAtLocation matches first occurrence",
+      "args": [
+        "{\n  \"a\": 1,\n  \"a\": 2\n}\n",
+        [
+          "a"
+        ],
+        {
+          "value": 99
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "99",
+            "length": 1,
+            "offset": 9
+          }
+        ],
+        "result": "{\n  \"a\": 99,\n  \"a\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: replace element at index 0",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          0
+        ],
+        {
+          "value": "first"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"first\"",
+            "length": 3,
+            "offset": 19
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"first\",\n    \"b\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: replace element at middle index 1",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          1
+        ],
+        {
+          "value": "middle"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"middle\"",
+            "length": 3,
+            "offset": 28
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"middle\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: append with index -1 into empty array",
+      "args": [
+        "{\n  \"items\": []\n}\n",
+        [
+          "items",
+          -1
+        ],
+        {
+          "value": "first"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"items\": [\n    \"first\"\n  ]",
+            "length": 13,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"first\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: append with index -1 into non-empty array",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\"\n  ]\n}\n",
+        [
+          "items",
+          -1
+        ],
+        {
+          "value": "c"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"b\",\n    \"c\"",
+            "length": 7,
+            "offset": 24
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: isArrayInsertion true at index 0",
+      "args": [
+        "{\n  \"items\": [\n    \"b\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          0
+        ],
+        {
+          "value": "a"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          },
+          "isArrayInsertion": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"items\": [\n    \"a\",",
+            "length": 12,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: isArrayInsertion true at index 1",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          1
+        ],
+        {
+          "value": "b"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          },
+          "isArrayInsertion": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"a\",\n    \"b\",",
+            "length": 8,
+            "offset": 15
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: past-end index appends without isArrayInsertion",
+      "args": [
+        "{\n  \"items\": [\n    \"a\"\n  ]\n}\n",
+        [
+          "items",
+          5
+        ],
+        {
+          "value": "z"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"a\",\n    \"z\"",
+            "length": 7,
+            "offset": 15
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"z\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: remove only element",
+      "args": [
+        "{\n  \"items\": [\n    \"only\"\n  ]\n}\n",
+        [
+          "items",
+          0
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"items\": []",
+            "length": 27,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"items\": []\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: remove first element",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          0
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"b\",",
+            "length": 17,
+            "offset": 15
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"b\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: remove middle element",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n",
+        [
+          "items",
+          1
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"c\"",
+            "length": 16,
+            "offset": 24
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\",\n    \"c\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: remove last element multiline",
+      "args": [
+        "{\n  \"items\": [\n    \"a\",\n    \"b\"\n  ]\n}\n",
+        [
+          "items",
+          1
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"a\"\n  ]",
+            "length": 20,
+            "offset": 15
+          }
+        ],
+        "result": "{\n  \"items\": [\n    \"a\"\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: remove last element inline without formatting options",
+      "args": [
+        "[1, 2]",
+        [
+          1
+        ],
+        {
+          "remove": true
+        },
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "",
+            "length": 2,
+            "offset": 2
+          }
+        ],
+        "result": "[12]"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: trailing comma append with -1",
+      "args": [
+        "[\n  1,\n  2,\n]\n",
+        [
+          -1
+        ],
+        {
+          "value": 3
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  2,\n  3,",
+            "length": 4,
+            "offset": 7
+          }
+        ],
+        "result": "[\n  1,\n  2,\n  3,\n]\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "array: modify nested object property inside array element",
+      "args": [
+        "{\n  \"rules\": [\n    { \"action\": \"read\", \"effect\": \"allow\" },\n    { \"action\": \"write\", \"effect\": \"ask\" }\n  ]\n}\n",
+        [
+          "rules",
+          1,
+          "effect"
+        ],
+        {
+          "value": "deny"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"deny\"",
+            "length": 5,
+            "offset": 95
+          }
+        ],
+        "result": "{\n  \"rules\": [\n    { \"action\": \"read\", \"effect\": \"allow\" },\n    { \"action\": \"write\", \"effect\": \"deny\" }\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "create nested array inside missing path segment",
+      "args": [
+        "{}\n",
+        [
+          "nested",
+          0,
+          "name"
+        ],
+        {
+          "value": "alpha"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"nested\": [\n    {\n      \"name\": \"alpha\"\n    }\n  ]\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"nested\": [\n    {\n      \"name\": \"alpha\"\n    }\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "empty file: insert top-level key",
+      "args": [
+        "",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"shell\": \"/bin/zsh\"\n}",
+            "length": 0,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "empty file: set root value",
+      "args": [
+        "",
+        [],
+        {
+          "valueJson": "{\"shell\":\"/bin/zsh\"}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"shell\": \"/bin/zsh\"\n}",
+            "length": 0,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "whitespace-only file: insert nested key",
+      "args": [
+        "   \n  \n",
+        [
+          "a",
+          "b"
+        ],
+        {
+          "value": 1
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"a\": {\n    \"b\": 1\n  }\n}",
+            "length": 3,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"a\": {\n    \"b\": 1\n  }\n}\n  \n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "comment-only file: insert key",
+      "args": [
+        "// empty config\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"shell\": \"/bin/zsh\"\n} // empty config",
+            "length": 15,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"shell\": \"/bin/zsh\"\n} // empty config\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "empty file: delete throws",
+      "args": [
+        "",
+        [
+          "shell"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "CRLF document: replace value preserves CRLF",
+      "args": [
+        "{\r\n  // windows header\r\n  \"shell\": \"pwsh\",\r\n  \"username\": \"win\"\r\n}\r\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "powershell"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"powershell\"",
+            "length": 6,
+            "offset": 35
+          }
+        ],
+        "result": "{\r\n  // windows header\r\n  \"shell\": \"powershell\",\r\n  \"username\": \"win\"\r\n}\r\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "CRLF document: insert key uses CRLF",
+      "args": [
+        "{\r\n  \"username\": \"win\"\r\n}\r\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "pwsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"username\": \"win\",\r\n  \"shell\": \"pwsh\"",
+            "length": 19,
+            "offset": 3
+          }
+        ],
+        "result": "{\r\n  \"username\": \"win\",\r\n  \"shell\": \"pwsh\"\r\n}\r\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "CRLF document: remove key preserves CRLF",
+      "args": [
+        "{\r\n  \"a\": 1,\r\n  \"b\": 2\r\n}\r\n",
+        [
+          "b"
+        ],
+        {
+          "remove": true
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1",
+            "length": 19,
+            "offset": 3
+          }
+        ],
+        "result": "{\r\n  \"a\": 1\r\n}\r\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "CR-only document: insert key uses CR",
+      "args": [
+        "{\r  \"a\": 1\r}\r",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"a\": 1,\r  \"b\": 2",
+            "length": 8,
+            "offset": 2
+          }
+        ],
+        "result": "{\r  \"a\": 1,\r  \"b\": 2\r}\r"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "single-line doc with explicit eol CRLF",
+      "args": [
+        "{}",
+        [
+          "a"
+        ],
+        {
+          "value": 1
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true,
+            "eol": "\r\n"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\r\n  \"a\": 1\r\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\r\n  \"a\": 1\r\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: tabSize 4 with insertSpaces true",
+      "args": [
+        "{\n    \"a\": 1\n}\n",
+        [
+          "b"
+        ],
+        {
+          "valueJson": "{\"nested\":true}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 4,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"a\": 1,\n    \"b\": {\n        \"nested\": true\n    }",
+            "length": 10,
+            "offset": 2
+          }
+        ],
+        "result": "{\n    \"a\": 1,\n    \"b\": {\n        \"nested\": true\n    }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: insertSpaces false uses tabs",
+      "args": [
+        "{\n\t\"a\": 1\n}\n",
+        [
+          "b"
+        ],
+        {
+          "valueJson": "{\"nested\":true}"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": false
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\t\"a\": 1,\n\t\"b\": {\n\t\t\"nested\": true\n\t}",
+            "length": 7,
+            "offset": 2
+          }
+        ],
+        "result": "{\n\t\"a\": 1,\n\t\"b\": {\n\t\t\"nested\": true\n\t}\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: insertSpaces omitted defaults to tabs",
+      "args": [
+        "{\n\t\"a\": 1\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\t\"a\": 1,\n\t\"b\": 2",
+            "length": 7,
+            "offset": 2
+          }
+        ],
+        "result": "{\n\t\"a\": 1,\n\t\"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: tabSize omitted with insertSpaces true defaults to 4",
+      "args": [
+        "{\n    \"a\": 1\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "    \"a\": 1,\n    \"b\": 2",
+            "length": 10,
+            "offset": 2
+          }
+        ],
+        "result": "{\n    \"a\": 1,\n    \"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: insertFinalNewline true on single-line root",
+      "args": [
+        "{}",
+        [
+          "a"
+        ],
+        {
+          "value": 1
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true,
+            "insertFinalNewline": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\n  \"a\": 1\n}",
+            "length": 2,
+            "offset": 0
+          }
+        ],
+        "result": "{\n  \"a\": 1\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: no formattingOptions emits minimal unformatted edit",
+      "args": [
+        "{\"a\":1}",
+        [
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": ",\"b\": 2",
+            "length": 0,
+            "offset": 6
+          }
+        ],
+        "result": "{\"a\":1,\"b\": 2}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "formatting: 4-space indented document edited with tabSize 2",
+      "args": [
+        "{\n    \"outer\": {\n        \"a\": 1\n    }\n}\n",
+        [
+          "outer",
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "        \"a\": 1,\n        \"b\": 2",
+            "length": 14,
+            "offset": 17
+          }
+        ],
+        "result": "{\n    \"outer\": {\n        \"a\": 1,\n        \"b\": 2\n    }\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "unicode UTF-16: emoji in leading comment shifts UTF-16 offsets by 2 per emoji",
+      "args": [
+        "// 🚀🎉 config\n{\n  \"shell\": \"/bin/sh\"\n}\n",
+        [
+          "shell"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 9,
+            "offset": 28
+          }
+        ],
+        "result": "// 🚀🎉 config\n{\n  \"shell\": \"/bin/zsh\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "unicode UTF-16: emoji key and value replace and sibling insert",
+      "args": [
+        "{\n  \"🎉\": \"party 🥳\",\n  \"🚀\": 1\n}\n",
+        [
+          "🚀"
+        ],
+        {
+          "value": "launch 🚀🔥"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"launch 🚀🔥\"",
+            "length": 1,
+            "offset": 30
+          }
+        ],
+        "result": "{\n  \"🎉\": \"party 🥳\",\n  \"🚀\": \"launch 🚀🔥\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "unicode UTF-16: ZWJ family emoji key before inserted key",
+      "args": [
+        "{\n  \"👨‍👩‍👧‍👦\": \"family\"\n}\n",
+        [
+          "next"
+        ],
+        {
+          "value": "ok"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "  \"👨‍👩‍👧‍👦\": \"family\",\n  \"next\": \"ok\"",
+            "length": 25,
+            "offset": 2
+          }
+        ],
+        "result": "{\n  \"👨‍👩‍👧‍👦\": \"family\",\n  \"next\": \"ok\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "unicode UTF-16: CJK keys, values, and comments",
+      "args": [
+        "{\n  // 日本語コメント\n  \"設定\": \"値\",\n  \"シェル\": \"/bin/bash\"\n}\n",
+        [
+          "シェル"
+        ],
+        {
+          "value": "/bin/zsh"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"/bin/zsh\"",
+            "length": 11,
+            "offset": 37
+          }
+        ],
+        "result": "{\n  // 日本語コメント\n  \"設定\": \"値\",\n  \"シェル\": \"/bin/zsh\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "unicode UTF-16: escaped surrogate pair key matches decoded emoji segment",
+      "args": [
+        "{\n  \"\\uD83D\\uDE00\": \"grin\",\n  \"other\": 1\n}\n",
+        [
+          "😀"
+        ],
+        {
+          "value": "smile 😊"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"smile 😊\"",
+            "length": 6,
+            "offset": 20
+          }
+        ],
+        "result": "{\n  \"\\uD83D\\uDE00\": \"smile 😊\",\n  \"other\": 1\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "special characters: quotes, backslashes, control chars, Windows path",
+      "args": [
+        "{\n  \"path\": \"old\"\n}\n",
+        [
+          "path"
+        ],
+        {
+          "value": "C:\\Users\\Alice\\bin\\\"quote\"\n\t\u0007"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\"C:\\\\Users\\\\Alice\\\\bin\\\\\\\"quote\\\"\\n\\t\\u0007\"",
+            "length": 5,
+            "offset": 12
+          }
+        ],
+        "result": "{\n  \"path\": \"C:\\\\Users\\\\Alice\\\\bin\\\\\\\"quote\\\"\\n\\t\\u0007\"\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "number formatting edge cases in value",
+      "args": [
+        "{\n  \"nums\": []\n}\n",
+        [
+          "nums"
+        ],
+        {
+          "valueJson": "[0,-0,1,-42,3.14159,1e21,0.0000001]"
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "[\n    0,\n    0,\n    1,\n    -42,\n    3.14159,\n    1e+21,\n    1e-7\n  ]",
+            "length": 2,
+            "offset": 12
+          }
+        ],
+        "result": "{\n  \"nums\": [\n    0,\n    0,\n    1,\n    -42,\n    3.14159,\n    1e+21,\n    1e-7\n  ]\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "malformed: missing closing brace still replaces existing key",
+      "args": [
+        "{\n  \"a\": 1,\n  \"b\": 2\n",
+        [
+          "a"
+        ],
+        {
+          "value": 10
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "10",
+            "length": 1,
+            "offset": 9
+          }
+        ],
+        "result": "{\n  \"a\": 10,\n  \"b\": 2\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "malformed: unclosed block comment treated as empty document on insert",
+      "args": [
+        "/* unclosed comment",
+        [
+          "a"
+        ],
+        {
+          "value": 1
+        },
+        {}
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "{\"a\":1}",
+            "length": 0,
+            "offset": 0
+          }
+        ],
+        "result": "{\"a\":1}/* unclosed comment"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "malformed: missing comma between properties still updates second key",
+      "args": [
+        "{\n  \"a\": 1\n  \"b\": 2\n}\n",
+        [
+          "b"
+        ],
+        {
+          "value": 3
+        },
+        {
+          "formattingOptions": {
+            "tabSize": 2,
+            "insertSpaces": true
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "3",
+            "length": 1,
+            "offset": 18
+          }
+        ],
+        "result": "{\n  \"a\": 1\n  \"b\": 3\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "error: add string key to array parent throws",
+      "args": [
+        "[1, 2, 3]",
+        [
+          "key"
+        ],
+        {
+          "value": 4
+        },
+        {}
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "error: add numeric index to object parent throws",
+      "args": [
+        "{\"a\": 1}",
+        [
+          0
+        ],
+        {
+          "value": 2
+        },
+        {}
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "error: add child to primitive parent throws",
+      "args": [
+        "{\"a\": 1}",
+        [
+          "a",
+          "b"
+        ],
+        {
+          "value": 2
+        },
+        {}
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#modifyAndApply",
+      "name": "error: remove out-of-bounds array index throws",
+      "args": [
+        "[1, 2]",
+        [
+          5
+        ],
+        {
+          "remove": true
+        },
+        {}
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "valid JSONC with comments and trailing commas allowed",
+      "args": [
+        "// header\n{\n  /* block */\n  \"a\": [1, 2,],\n  \"b\": \"ok\",\n}\n",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [],
+        "value": {
+          "a": [
+            1,
+            2
+          ],
+          "b": "ok"
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "trailing commas reported when allowTrailingComma is false",
+      "args": [
+        "{\"a\": 1,}",
+        {
+          "allowTrailingComma": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 3,
+            "length": 1,
+            "offset": 8
+          },
+          {
+            "error": 4,
+            "length": 1,
+            "offset": 8
+          }
+        ],
+        "value": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "comments rejected when disallowComments is true",
+      "args": [
+        "// nope\n{\"a\": 1}",
+        {
+          "disallowComments": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 10,
+            "length": 7,
+            "offset": 0
+          }
+        ],
+        "value": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "empty string with allowEmptyContent false reports ValueExpected",
+      "args": [
+        "",
+        {
+          "allowEmptyContent": false
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 4,
+            "length": 0,
+            "offset": 0
+          }
+        ],
+        "value": null
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "empty string with allowEmptyContent true reports no errors",
+      "args": [
+        "",
+        {
+          "allowEmptyContent": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [],
+        "value": null
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "UTF-16 error offset after emoji and CJK",
+      "args": [
+        "{\"🚀日本\": 1, \"bad\": }",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 4,
+            "length": 1,
+            "offset": 19
+          }
+        ],
+        "value": {
+          "🚀日本": 1
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "invalid unicode escape and invalid escape char",
+      "args": [
+        "{\"a\": \"\\u12G4\\q\"}",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 15,
+            "length": 10,
+            "offset": 6
+          }
+        ],
+        "value": {
+          "a": "G4"
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "unclosed string, unclosed block comment, and invalid numbers",
+      "args": [
+        "[1., 1e+, \"unclosed\n/* unterminated",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 13,
+            "length": 2,
+            "offset": 1
+          },
+          {
+            "error": 13,
+            "length": 3,
+            "offset": 5
+          },
+          {
+            "error": 12,
+            "length": 9,
+            "offset": 10
+          },
+          {
+            "error": 11,
+            "length": 15,
+            "offset": 20
+          },
+          {
+            "error": 8,
+            "length": 0,
+            "offset": 35
+          }
+        ],
+        "value": [
+          1,
+          1,
+          "unclosed"
+        ]
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "duplicate keys keep final value",
+      "args": [
+        "{\"k\": \"first\", \"k\": \"second\"}",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [],
+        "value": {
+          "k": "second"
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#parse",
+      "name": "trailing garbage after root object reports EndOfFileExpected",
+      "args": [
+        "{\"a\": 1} extra",
+        {
+          "allowTrailingComma": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "errors": [
+          {
+            "error": 1,
+            "length": 5,
+            "offset": 9
+          }
+        ],
+        "value": {
+          "a": 1
+        }
+      }
+    },
+    {
+      "fn": "jsonc-parser#format",
+      "name": "format compact JSONC with comments and 2-space indent",
+      "args": [
+        "{// c1\n\"a\":1,/* c2 */\"b\":[1,2]}",
+        null,
+        {
+          "tabSize": 2,
+          "insertSpaces": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 1
+          },
+          {
+            "content": "\n  ",
+            "length": 1,
+            "offset": 6
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 11
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 13
+          },
+          {
+            "content": "\n  ",
+            "length": 0,
+            "offset": 21
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 25
+          },
+          {
+            "content": "\n    ",
+            "length": 0,
+            "offset": 26
+          },
+          {
+            "content": "\n    ",
+            "length": 0,
+            "offset": 28
+          },
+          {
+            "content": "\n  ",
+            "length": 0,
+            "offset": 29
+          },
+          {
+            "content": "\n",
+            "length": 0,
+            "offset": 30
+          }
+        ],
+        "result": "{ // c1\n  \"a\": 1, /* c2 */\n  \"b\": [\n    1,\n    2\n  ]\n}"
+      }
+    },
+    {
+      "fn": "jsonc-parser#format",
+      "name": "format with tabs and insertFinalNewline",
+      "args": [
+        "{\"a\":{\"b\":1}}",
+        null,
+        {
+          "tabSize": 4,
+          "insertSpaces": false,
+          "insertFinalNewline": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\n\t",
+            "length": 0,
+            "offset": 1
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 5
+          },
+          {
+            "content": "\n\t\t",
+            "length": 0,
+            "offset": 6
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 10
+          },
+          {
+            "content": "\n\t",
+            "length": 0,
+            "offset": 11
+          },
+          {
+            "content": "\n",
+            "length": 0,
+            "offset": 12
+          },
+          {
+            "content": "\n",
+            "length": 0,
+            "offset": 13
+          }
+        ],
+        "result": "{\n\t\"a\": {\n\t\t\"b\": 1\n\t}\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#format",
+      "name": "format with keepLines true preserves blank lines",
+      "args": [
+        "{\n  \"a\": 1,\n\n  \"b\": 2\n}\n",
+        null,
+        {
+          "tabSize": 2,
+          "insertSpaces": true,
+          "keepLines": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [],
+        "result": "{\n  \"a\": 1,\n\n  \"b\": 2\n}\n"
+      }
+    },
+    {
+      "fn": "jsonc-parser#format",
+      "name": "format sub-range inside indented object with emoji prefix",
+      "args": [
+        "{\n  \"🚀\": 1,\n  \"nested\": {\"x\":1,\"y\":2}\n}\n",
+        {
+          "offset": 25,
+          "length": 13
+        },
+        {
+          "tabSize": 2,
+          "insertSpaces": true
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "edits": [
+          {
+            "content": "\n    ",
+            "length": 0,
+            "offset": 26
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 30
+          },
+          {
+            "content": "\n    ",
+            "length": 0,
+            "offset": 32
+          },
+          {
+            "content": " ",
+            "length": 0,
+            "offset": 36
+          },
+          {
+            "content": "\n  ",
+            "length": 0,
+            "offset": 37
+          }
+        ],
+        "result": "{\n  \"🚀\": 1,\n  \"nested\": {\n    \"x\": 1,\n    \"y\": 2\n  }\n}\n"
+      }
     },
     {
       "fn": "latex/src/render.ts#renderLatexToString",

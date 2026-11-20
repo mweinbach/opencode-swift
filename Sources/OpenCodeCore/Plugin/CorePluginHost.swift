@@ -500,11 +500,17 @@ public enum CorePlugin {
                 if let env = hostEnvironment {
                     try await Host.withRuntime(
                         http: env.http,
+                        webSocket: env.webSocket,
                         environment: env.environment,
                         spawner: env.spawner,
                         fileSystem: env.fileSystem,
                         modelsDev: env.modelsDev,
-                        flags: env.flags
+                        flags: env.flags,
+                        bus: env.bus,
+                        config: env.config,
+                        sharedCache: env.sharedCache,
+                        opencodeWatchesOptions: env.opencodeWatchesOptions,
+                        opencodePollIntervalMs: env.opencodePollIntervalMs
                     ) {
                         try await definition.effect(context)
                     }
@@ -1101,12 +1107,18 @@ public enum CorePlugin {
     public enum Host {
         /// Task-local runtime dependency overrides used by built-in plugins when activated or invoked inside a host environment.
         @TaskLocal public static var currentHTTPTransportOverride: (any HTTPTransport)? = nil
+        @TaskLocal public static var currentWebSocketTransportOverride: (any WebSocketTransport)? = nil
         @TaskLocal public static var currentEnvironmentOverride: (any EnvironmentProviding)? = nil
         @TaskLocal public static var currentProcessSpawnerOverride: (any ProcessSpawner)? = nil
         @TaskLocal public static var currentFileSystemOverride: (any OpenCodeFileSystem)? = nil
         @TaskLocal public static var currentModelsDevOverride: (any CoreModel.ModelsDev.Interface)? = nil
-        /// The Location's feature flags, for built-ins that read a flag (`recommended_api`, `home_memory`).
+        /// The Location's feature flags, for built-ins that read a flag (`recommended_api`, `home_memory`, `console_watches`).
         @TaskLocal public static var currentFlagsOverride: (any CoreFlag.Interface)? = nil
+        @TaskLocal public static var currentBusOverride: (any CoreBus.Interface)? = nil
+        @TaskLocal public static var currentConfigOverride: (any CoreConfig.Interface)? = nil
+        @TaskLocal public static var currentSharedCacheOverride: (any CoreKV.SharedCache.Interface)? = nil
+        @TaskLocal public static var currentOpencodeWatchesOptionsOverride: OpencodeWatches.TransportOptions? = nil
+        @TaskLocal public static var currentOpencodePollIntervalMsOverride: Int64? = nil
 
         /// Whether the flag named `raw` is on for the bound flags. A flag this build's schema does not know yet reads
         /// as off.
@@ -1117,6 +1129,10 @@ public enum CorePlugin {
 
         public static var currentHTTPTransport: any HTTPTransport {
             currentHTTPTransportOverride ?? URLSessionHTTPTransport.shared
+        }
+
+        public static var currentWebSocketTransport: any WebSocketTransport {
+            currentWebSocketTransportOverride ?? URLSessionWebSocketTransport.shared
         }
 
         public static var currentEnvironment: any EnvironmentProviding {
@@ -1134,20 +1150,38 @@ public enum CorePlugin {
         /// Executes `operation` with task-local plugin runtime dependencies bound.
         public static func withRuntime<T: Sendable>(
             http: (any HTTPTransport)? = nil,
+            webSocket: (any WebSocketTransport)? = nil,
             environment: (any EnvironmentProviding)? = nil,
             spawner: (any ProcessSpawner)? = nil,
             fileSystem: (any OpenCodeFileSystem)? = nil,
             modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
             flags: (any CoreFlag.Interface)? = nil,
+            bus: (any CoreBus.Interface)? = nil,
+            config: (any CoreConfig.Interface)? = nil,
+            sharedCache: (any CoreKV.SharedCache.Interface)? = nil,
+            opencodeWatchesOptions: OpencodeWatches.TransportOptions? = nil,
+            opencodePollIntervalMs: Int64? = nil,
             operation: () async throws -> T
         ) async rethrows -> T {
             try await $currentHTTPTransportOverride.withValue(http ?? currentHTTPTransportOverride) {
-                try await $currentEnvironmentOverride.withValue(environment ?? currentEnvironmentOverride) {
-                    try await $currentProcessSpawnerOverride.withValue(spawner ?? currentProcessSpawnerOverride) {
-                        try await $currentFileSystemOverride.withValue(fileSystem ?? currentFileSystemOverride) {
-                            try await $currentModelsDevOverride.withValue(modelsDev ?? currentModelsDevOverride) {
-                                try await $currentFlagsOverride.withValue(flags ?? currentFlagsOverride) {
-                                    try await operation()
+                try await $currentWebSocketTransportOverride.withValue(webSocket ?? currentWebSocketTransportOverride) {
+                    try await $currentEnvironmentOverride.withValue(environment ?? currentEnvironmentOverride) {
+                        try await $currentProcessSpawnerOverride.withValue(spawner ?? currentProcessSpawnerOverride) {
+                            try await $currentFileSystemOverride.withValue(fileSystem ?? currentFileSystemOverride) {
+                                try await $currentModelsDevOverride.withValue(modelsDev ?? currentModelsDevOverride) {
+                                    try await $currentFlagsOverride.withValue(flags ?? currentFlagsOverride) {
+                                        try await $currentBusOverride.withValue(bus ?? currentBusOverride) {
+                                            try await $currentConfigOverride.withValue(config ?? currentConfigOverride) {
+                                                try await $currentSharedCacheOverride.withValue(sharedCache ?? currentSharedCacheOverride) {
+                                                    try await $currentOpencodeWatchesOptionsOverride.withValue(opencodeWatchesOptions ?? currentOpencodeWatchesOptionsOverride) {
+                                                        try await $currentOpencodePollIntervalMsOverride.withValue(opencodePollIntervalMs ?? currentOpencodePollIntervalMsOverride) {
+                                                            try await operation()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1212,7 +1246,9 @@ public enum CorePlugin {
                 var skills: [String: SkillSchema.Info] = [:]
                 var mcpServers: [String: McpSchema.ServerConfig] = [:]
                 var providers: [String: PluginEffect.ProviderRecord] = [:]
+                var providerTransforms: [(id: UUID, callback: @Sendable (PluginEffect.ProviderEditor) -> Void)] = []
                 var models: [String: ModelSchema.Info] = [:]
+                var modelTransforms: [(id: UUID, callback: @Sendable (PluginEffect.ModelEditor) -> Void)] = []
                 var defaultModel: PluginEffect.ModelEditor.DefaultModelRef?
                 var integrations: [String: PluginEffect.IntegrationRef] = [:]
                 var integrationMethods: [String: [PluginEffect.IntegrationMethod]] = [:]
@@ -1220,6 +1256,7 @@ public enum CorePlugin {
                 var vcsProviders: [String: PluginEffect.VcsDefinition] = [:]
                 var defaultVcs: String?
                 var webSearchProviders: [String: PluginEffect.WebSearchDefinition] = [:]
+                var webSearchTransforms: [(id: UUID, callback: @Sendable (PluginEffect.WebSearchEditor) -> Void)] = []
                 var defaultWebSearch: PluginEffect.WebSearchDefaultSelection?
                 var worktreeStrategies: [String: PluginEffect.WorktreeDefinition] = [:]
                 var artifactProviders: [String: PluginEffect.ArtifactProviderDefinition] = [:]
@@ -1237,15 +1274,22 @@ public enum CorePlugin {
             public let kv: any KVStore
             public let permissions: PermissionRuntime
             public let http: any HTTPTransport
+            public let webSocket: any WebSocketTransport
             public let environment: any EnvironmentProviding
             public let spawner: any ProcessSpawner
             public let fileSystem: any OpenCodeFileSystem
             public let modelsDev: (any CoreModel.ModelsDev.Interface)?
-            /// Flag service plugins read through `Host.flagEnabled` (e.g. `home_memory`, `recommended_api`).
+            /// Flag service plugins read through `Host.flagEnabled` (e.g. `home_memory`, `recommended_api`, `console_watches`).
             public let flags: (any CoreFlag.Interface)?
+            public let bus: (any CoreBus.Interface)?
+            public let config: (any CoreConfig.Interface)?
+            public let sharedCache: (any CoreKV.SharedCache.Interface)?
+            public let opencodeWatchesOptions: OpencodeWatches.TransportOptions?
+            public let opencodePollIntervalMs: Int64?
             public let vcsService: CoreVcs.Vcs.Service?
             public let integrationService: (any CoreIntegration.Integration.Interface)?
             public let onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)?
+            public let onSessionSynthetic: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)?
             private let state = Mutex(State())
 
             public init(
@@ -1263,14 +1307,21 @@ public enum CorePlugin {
                 kv: any KVStore = InMemoryKVStore(),
                 permissions: PermissionRuntime? = nil,
                 http: any HTTPTransport = URLSessionHTTPTransport.shared,
+                webSocket: any WebSocketTransport = URLSessionWebSocketTransport.shared,
                 environment: any EnvironmentProviding = SystemEnvironment.shared,
                 spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared,
                 fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
                 modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
                 flags: (any CoreFlag.Interface)? = nil,
+                bus: (any CoreBus.Interface)? = nil,
+                config: (any CoreConfig.Interface)? = nil,
+                sharedCache: (any CoreKV.SharedCache.Interface)? = nil,
+                opencodeWatchesOptions: OpencodeWatches.TransportOptions? = nil,
+                opencodePollIntervalMs: Int64? = nil,
                 vcsService: CoreVcs.Vcs.Service? = nil,
                 integrationService: (any CoreIntegration.Integration.Interface)? = nil,
-                onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)? = nil
+                onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)? = nil,
+                onSessionSynthetic: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)? = nil
             ) {
                 self.app = app
                 self.location = location
@@ -1278,14 +1329,21 @@ public enum CorePlugin {
                 self.kv = kv
                 self.permissions = permissions ?? PermissionRuntime(hooks: hooks)
                 self.http = http
+                self.webSocket = webSocket
                 self.environment = environment
                 self.spawner = spawner
                 self.fileSystem = fileSystem
                 self.modelsDev = modelsDev
                 self.flags = flags
+                self.bus = bus
+                self.config = config
+                self.sharedCache = sharedCache
+                self.opencodeWatchesOptions = opencodeWatchesOptions
+                self.opencodePollIntervalMs = opencodePollIntervalMs
                 self.vcsService = vcsService
                 self.integrationService = integrationService
                 self.onSessionPrompt = onSessionPrompt
+                self.onSessionSynthetic = onSessionSynthetic
             }
 
             /// Runs a plugin's effect against this environment with all runtime dependencies bound.
@@ -1293,11 +1351,17 @@ public enum CorePlugin {
                 let ctx = makeContext(pluginID: plugin.id, listPlugins: { [] }, addFinalizer: { _ in })
                 try await Host.withRuntime(
                     http: http,
+                    webSocket: webSocket,
                     environment: environment,
                     spawner: spawner,
                     fileSystem: fileSystem,
                     modelsDev: modelsDev,
-                    flags: flags
+                    flags: flags,
+                    bus: bus,
+                    config: config,
+                    sharedCache: sharedCache,
+                    opencodeWatchesOptions: opencodeWatchesOptions,
+                    opencodePollIntervalMs: opencodePollIntervalMs
                 ) {
                     try await plugin.effect(ctx)
                 }
@@ -1438,6 +1502,166 @@ public enum CorePlugin {
                 }
             }
 
+            private func makeProviderEditor() -> PluginEffect.ProviderEditor {
+                PluginEffect.ProviderEditor(
+                    list: { [self] in self.state.withLock { Array($0.providers.values) } },
+                    get: { [self] id in self.state.withLock { $0.providers[id] } },
+                    add: { [self] info, models, conn in
+                        self.state.withLock { s in
+                            let modelMap = Dictionary(uniqueKeysWithValues: models.map { ($0.id.rawValue, $0) })
+                            s.providers[info.id.rawValue] = PluginEffect.ProviderRecord(
+                                provider: info,
+                                models: modelMap,
+                                sourceConnection: conn
+                            )
+                            for m in models {
+                                s.models["\(info.id.rawValue)/\(m.id.rawValue)"] = m
+                            }
+                        }
+                    },
+                    update: { [self] id, mutate in
+                        self.state.withLock { s in
+                            if let rec = s.providers[id] {
+                                var info = rec.provider
+                                mutate(&info)
+                                s.providers[id] = PluginEffect.ProviderRecord(
+                                    provider: info,
+                                    models: rec.models,
+                                    sourceConnection: rec.sourceConnection
+                                )
+                            }
+                        }
+                    },
+                    remove: { [self] id in self.state.withLock { _ = $0.providers.removeValue(forKey: id) } },
+                    models: PluginEffect.ProviderEditor.ModelsEditor(
+                        set: { [self] pid, models in
+                            self.state.withLock { s in
+                                if let rec = s.providers[pid] {
+                                    let map = Dictionary(uniqueKeysWithValues: models.map { ($0.id.rawValue, $0) })
+                                    s.providers[pid] = PluginEffect.ProviderRecord(
+                                        provider: rec.provider,
+                                        models: map,
+                                        sourceConnection: rec.sourceConnection
+                                    )
+                                    for m in models {
+                                        s.models["\(pid)/\(m.id.rawValue)"] = m
+                                    }
+                                }
+                            }
+                        },
+                        update: { [self] pid, mid, mutate in
+                            self.state.withLock { s in
+                                if let rec = s.providers[pid], var model = rec.models[mid] {
+                                    mutate(&model)
+                                    var updated = rec.models
+                                    updated[mid] = model
+                                    s.providers[pid] = PluginEffect.ProviderRecord(
+                                        provider: rec.provider,
+                                        models: updated,
+                                        sourceConnection: rec.sourceConnection
+                                    )
+                                    s.models["\(pid)/\(mid)"] = model
+                                }
+                            }
+                        },
+                        remove: { [self] pid, mid in
+                            self.state.withLock { s in
+                                if let rec = s.providers[pid] {
+                                    var updated = rec.models
+                                    updated.removeValue(forKey: mid)
+                                    s.providers[pid] = PluginEffect.ProviderRecord(
+                                        provider: rec.provider,
+                                        models: updated,
+                                        sourceConnection: rec.sourceConnection
+                                    )
+                                    s.models.removeValue(forKey: "\(pid)/\(mid)")
+                                }
+                            }
+                        }
+                    )
+                )
+            }
+
+            private func makeModelEditor() -> PluginEffect.ModelEditor {
+                PluginEffect.ModelEditor(
+                    list: { [self] providerID in
+                        self.state.withLock { s in
+                            s.models.values.filter { providerID == nil || $0.providerID.rawValue == providerID }
+                        }
+                    },
+                    get: { [self] pid, mid in self.state.withLock { $0.models["\(pid)/\(mid)"] } },
+                    update: { [self] pid, mid, mutate in
+                        self.state.withLock { s in
+                            if var m = s.models["\(pid)/\(mid)"] {
+                                mutate(&m)
+                                s.models["\(pid)/\(mid)"] = m
+                            }
+                        }
+                    },
+                    remove: { [self] pid, mid in self.state.withLock { _ = $0.models.removeValue(forKey: "\(pid)/\(mid)") } },
+                    getDefault: { [self] in self.state.withLock { $0.defaultModel } },
+                    setDefault: { [self] pid, mid in
+                        self.state.withLock { $0.defaultModel = PluginEffect.ModelEditor.DefaultModelRef(providerID: pid, modelID: mid) }
+                    },
+                    listProviders: { [self] in self.state.withLock { Array($0.providers.values) } },
+                    getProvider: { [self] pid in self.state.withLock { $0.providers[pid] } }
+                )
+            }
+
+            private func makeWebSearchEditor() -> PluginEffect.WebSearchEditor {
+                PluginEffect.WebSearchEditor(
+                    add: { [self] def in self.state.withLock { $0.webSearchProviders[def.id] = def } },
+                    getDefault: { [self] in self.state.withLock { $0.defaultWebSearch } },
+                    setDefault: { [self] sel in self.state.withLock { $0.defaultWebSearch = sel } }
+                )
+            }
+
+            public func reloadProviders() {
+                let (providerCallbacks, modelCallbacks) = state.withLock { s -> ([@Sendable (PluginEffect.ProviderEditor) -> Void], [@Sendable (PluginEffect.ModelEditor) -> Void]) in
+                    s.providers.removeAll()
+                    s.models.removeAll()
+                    s.defaultModel = nil
+                    return (s.providerTransforms.map(\.callback), s.modelTransforms.map(\.callback))
+                }
+                let pEditor = makeProviderEditor()
+                for callback in providerCallbacks {
+                    callback(pEditor)
+                }
+                let mEditor = makeModelEditor()
+                for callback in modelCallbacks {
+                    callback(mEditor)
+                }
+            }
+
+            public func reloadModels() {
+                let modelCallbacks = state.withLock { s -> [@Sendable (PluginEffect.ModelEditor) -> Void] in
+                    s.models.removeAll()
+                    s.defaultModel = nil
+                    for (pid, rec) in s.providers {
+                        for (mid, model) in rec.models {
+                            s.models["\(pid)/\(mid)"] = model
+                        }
+                    }
+                    return s.modelTransforms.map(\.callback)
+                }
+                let mEditor = makeModelEditor()
+                for callback in modelCallbacks {
+                    callback(mEditor)
+                }
+            }
+
+            public func reloadWebSearch() {
+                let callbacks = state.withLock { s -> [@Sendable (PluginEffect.WebSearchEditor) -> Void] in
+                    s.webSearchProviders.removeAll()
+                    s.defaultWebSearch = nil
+                    return s.webSearchTransforms.map(\.callback)
+                }
+                let editor = makeWebSearchEditor()
+                for callback in callbacks {
+                    callback(editor)
+                }
+            }
+
             public func registeredCommands() -> [PluginEffect.CommandDefinition] {
                 state.withLock { Array($0.commands.values).sorted { $0.name < $1.name } }
             }
@@ -1538,107 +1762,8 @@ public enum CorePlugin {
                     remove: { [self] name in self.state.withLock { _ = $0.mcpServers.removeValue(forKey: name) } }
                 )
 
-                let providerEditor = PluginEffect.ProviderEditor(
-                    list: { [self] in self.state.withLock { Array($0.providers.values) } },
-                    get: { [self] id in self.state.withLock { $0.providers[id] } },
-                    add: { [self] info, models, conn in
-                        self.state.withLock { s in
-                            let modelMap = Dictionary(uniqueKeysWithValues: models.map { ($0.id.rawValue, $0) })
-                            s.providers[info.id.rawValue] = PluginEffect.ProviderRecord(
-                                provider: info,
-                                models: modelMap,
-                                sourceConnection: conn
-                            )
-                            for m in models {
-                                s.models["\(info.id.rawValue)/\(m.id.rawValue)"] = m
-                            }
-                        }
-                    },
-                    update: { [self] id, mutate in
-                        self.state.withLock { s in
-                            if let rec = s.providers[id] {
-                                var info = rec.provider
-                                mutate(&info)
-                                s.providers[id] = PluginEffect.ProviderRecord(
-                                    provider: info,
-                                    models: rec.models,
-                                    sourceConnection: rec.sourceConnection
-                                )
-                            }
-                        }
-                    },
-                    remove: { [self] id in self.state.withLock { _ = $0.providers.removeValue(forKey: id) } },
-                    models: PluginEffect.ProviderEditor.ModelsEditor(
-                        set: { [self] pid, models in
-                            self.state.withLock { s in
-                                if let rec = s.providers[pid] {
-                                    let map = Dictionary(uniqueKeysWithValues: models.map { ($0.id.rawValue, $0) })
-                                    s.providers[pid] = PluginEffect.ProviderRecord(
-                                        provider: rec.provider,
-                                        models: map,
-                                        sourceConnection: rec.sourceConnection
-                                    )
-                                    for m in models {
-                                        s.models["\(pid)/\(m.id.rawValue)"] = m
-                                    }
-                                }
-                            }
-                        },
-                        update: { [self] pid, mid, mutate in
-                            self.state.withLock { s in
-                                if let rec = s.providers[pid], var model = rec.models[mid] {
-                                    mutate(&model)
-                                    var updated = rec.models
-                                    updated[mid] = model
-                                    s.providers[pid] = PluginEffect.ProviderRecord(
-                                        provider: rec.provider,
-                                        models: updated,
-                                        sourceConnection: rec.sourceConnection
-                                    )
-                                    s.models["\(pid)/\(mid)"] = model
-                                }
-                            }
-                        },
-                        remove: { [self] pid, mid in
-                            self.state.withLock { s in
-                                if let rec = s.providers[pid] {
-                                    var updated = rec.models
-                                    updated.removeValue(forKey: mid)
-                                    s.providers[pid] = PluginEffect.ProviderRecord(
-                                        provider: rec.provider,
-                                        models: updated,
-                                        sourceConnection: rec.sourceConnection
-                                    )
-                                    s.models.removeValue(forKey: "\(pid)/\(mid)")
-                                }
-                            }
-                        }
-                    )
-                )
-
-                let modelEditor = PluginEffect.ModelEditor(
-                    list: { [self] providerID in
-                        self.state.withLock { s in
-                            s.models.values.filter { providerID == nil || $0.providerID.rawValue == providerID }
-                        }
-                    },
-                    get: { [self] pid, mid in self.state.withLock { $0.models["\(pid)/\(mid)"] } },
-                    update: { [self] pid, mid, mutate in
-                        self.state.withLock { s in
-                            if var m = s.models["\(pid)/\(mid)"] {
-                                mutate(&m)
-                                s.models["\(pid)/\(mid)"] = m
-                            }
-                        }
-                    },
-                    remove: { [self] pid, mid in self.state.withLock { _ = $0.models.removeValue(forKey: "\(pid)/\(mid)") } },
-                    getDefault: { [self] in self.state.withLock { $0.defaultModel } },
-                    setDefault: { [self] pid, mid in
-                        self.state.withLock { $0.defaultModel = PluginEffect.ModelEditor.DefaultModelRef(providerID: pid, modelID: mid) }
-                    },
-                    listProviders: { [self] in self.state.withLock { Array($0.providers.values) } },
-                    getProvider: { [self] pid in self.state.withLock { $0.providers[pid] } }
-                )
+                let providerEditor = makeProviderEditor()
+                let modelEditor = makeModelEditor()
 
                 let integrationEditor = PluginEffect.IntegrationEditor(
                     list: { [self] in self.state.withLock { Array($0.integrations.values) } },
@@ -1690,11 +1815,7 @@ public enum CorePlugin {
                     setDefault: { [self] sel in self.state.withLock { $0.defaultVcs = sel } }
                 )
 
-                let websearchEditor = PluginEffect.WebSearchEditor(
-                    add: { [self] def in self.state.withLock { $0.webSearchProviders[def.id] = def } },
-                    getDefault: { [self] in self.state.withLock { $0.defaultWebSearch } },
-                    setDefault: { [self] sel in self.state.withLock { $0.defaultWebSearch = sel } }
-                )
+                let websearchEditor = makeWebSearchEditor()
 
                 let worktreeEditor = PluginEffect.WorktreeEditor(
                     add: { [self] def in self.state.withLock { $0.worktreeStrategies[def.id] = def } }
@@ -1726,11 +1847,127 @@ public enum CorePlugin {
                         }
                         throw ToolSchema.ToolError(message: "Integration not found: \(id)")
                     },
-                    transform: { callback in
-                        callback(integrationEditor)
+                    transform: { [self] callback in
+                        struct CapturedIntegrationEdits: Sendable {
+                            var updatedRefs: [(id: String, name: String)] = []
+                            var removedIDs: [String] = []
+                            var methodRegistrations: [PluginEffect.IntegrationMethodRegistration] = []
+                        }
+                        let captured = Mutex(CapturedIntegrationEdits())
+                        let capturingEditor = PluginEffect.IntegrationEditor(
+                            list: integrationEditor.list,
+                            get: integrationEditor.get,
+                            update: { id, mutate in
+                                integrationEditor.update(id, mutate)
+                                if let latest = integrationEditor.get(id) {
+                                    captured.withLock { $0.updatedRefs.append((id: id, name: latest.name)) }
+                                }
+                            },
+                            remove: { id in
+                                integrationEditor.remove(id)
+                                captured.withLock { $0.removedIDs.append(id) }
+                            },
+                            method: PluginEffect.IntegrationEditor.MethodEditor(
+                                list: integrationEditor.method.list,
+                                update: { reg in
+                                    integrationEditor.method.update(reg)
+                                    captured.withLock { $0.methodRegistrations.append(reg) }
+                                },
+                                remove: integrationEditor.method.remove
+                            )
+                        )
+                        callback(capturingEditor)
+                        if let svc = self.integrationService {
+                            let edits = captured.withLock { $0 }
+                            let reg = try? await svc.transform { coreEditor in
+                                for entry in edits.updatedRefs {
+                                    coreEditor.update(IntegrationID(rawValue: entry.id)) { ref in
+                                        CoreIntegration.Integration.Ref(
+                                            id: ref.id,
+                                            name: entry.name,
+                                            metadata: ref.metadata
+                                        )
+                                    }
+                                }
+                                for removed in edits.removedIDs {
+                                    coreEditor.remove(IntegrationID(rawValue: removed))
+                                }
+                                for methodReg in edits.methodRegistrations {
+                                    switch methodReg {
+                                    case .oauth(let r):
+                                        let impl = CoreIntegration.Integration.OAuthImplementation(
+                                            integrationID: IntegrationID(rawValue: r.integrationID),
+                                            method: IntegrationSchema.OAuthMethod(
+                                                id: IntegrationSchema.MethodID(rawValue: r.method.id),
+                                                label: r.method.label,
+                                                form: r.method.form
+                                            ),
+                                            authorize: { answer in
+                                                let auth = try await r.authorize(answer)
+                                                switch auth {
+                                                case let .auto(url, instructions, expiresAt, cb, submit):
+                                                    return CoreIntegration.Integration.OAuthAuthorization(
+                                                        url: url,
+                                                        instructions: instructions,
+                                                        expiresAt: expiresAt.map(Int64.init),
+                                                        mode: .auto(callback: cb, submit: submit)
+                                                    )
+                                                case let .code(url, instructions, expiresAt, cb):
+                                                    return CoreIntegration.Integration.OAuthAuthorization(
+                                                        url: url,
+                                                        instructions: instructions,
+                                                        expiresAt: expiresAt.map(Int64.init),
+                                                        mode: .code(callback: cb)
+                                                    )
+                                                }
+                                            },
+                                            refresh: r.refresh,
+                                            revoke: r.revoke,
+                                            label: r.label
+                                        )
+                                        coreEditor.updateMethod(.oauth(impl))
+                                    case .key(let id, let m):
+                                        coreEditor.updateMethod(.key(CoreIntegration.Integration.KeyImplementation(
+                                            integrationID: IntegrationID(rawValue: id),
+                                            method: IntegrationSchema.KeyMethod(label: m.label, form: m.form)
+                                        )))
+                                    case .env(let id, let m):
+                                        coreEditor.updateMethod(.env(CoreIntegration.Integration.EnvImplementation(
+                                            integrationID: IntegrationID(rawValue: id),
+                                            method: IntegrationSchema.EnvMethod(names: m.names)
+                                        )))
+                                    case .command(let id, let m):
+                                        coreEditor.updateMethod(.command(CoreIntegration.Integration.CommandImplementation(
+                                            integrationID: IntegrationID(rawValue: id),
+                                            method: IntegrationSchema.CommandMethod(
+                                                id: IntegrationSchema.MethodID(rawValue: m.id),
+                                                label: m.label,
+                                                command: m.command
+                                            )
+                                        )))
+                                    case .external(let id, let m):
+                                        coreEditor.updateMethod(.external(CoreIntegration.Integration.ExternalImplementation(
+                                            integrationID: IntegrationID(rawValue: id),
+                                            method: IntegrationSchema.ExternalMethod(
+                                                id: IntegrationSchema.MethodID(rawValue: m.id),
+                                                label: m.label,
+                                                form: m.form
+                                            )
+                                        )))
+                                    }
+                                }
+                            }
+                            if let reg {
+                                return PluginEffect.Registration(dispose: { await reg.dispose() })
+                            }
+                        }
                         return PluginEffect.Registration(dispose: {})
                     },
-                    reload: {},
+                    reload: { [self] in
+                        if let svc = self.integrationService {
+                            await svc.reload()
+                        }
+                    },
                     connection: PluginEffect.IntegrationDomain.ConnectionAPI(
                         active: { [self] id in
                             if let svc = self.integrationService,
@@ -1916,11 +2153,18 @@ public enum CorePlugin {
                             )
                         )
                     },
-                    transform: { callback in
+                    transform: { [self] callback in
+                        let id = UUID()
+                        self.state.withLock { $0.webSearchTransforms.append((id: id, callback: callback)) }
                         callback(websearchEditor)
-                        return PluginEffect.Registration(dispose: {})
+                        return PluginEffect.Registration(dispose: { [self] in
+                            self.state.withLock { $0.webSearchTransforms.removeAll { $0.id == id } }
+                            self.reloadWebSearch()
+                        })
                     },
-                    reload: {}
+                    reload: { [self] in
+                        self.reloadWebSearch()
+                    }
                 )
 
                 return PluginEffect.Context(
@@ -1961,11 +2205,42 @@ public enum CorePlugin {
                     event: PluginEffect.EventDomain(subscribe: { [self] types in
                         let token = UUID()
                         let typeSet = types.map { Set($0) }
+                        let activeBus = self.bus ?? Host.currentBusOverride
                         return AsyncStream { continuation in
                             self.state.withLock { s in
                                 s.eventContinuations[token] = (typeSet, continuation)
                             }
+                            let busTask: Task<Void, Never>?
+                            if let activeBus {
+                                let busStream = typeSet.map { activeBus.subscribe(types: $0, location: nil) }
+                                    ?? activeBus.subscribe(location: nil)
+                                busTask = Task {
+                                    for await ev in busStream {
+                                        if Task.isCancelled { break }
+                                        let dataDict: [String: JSONValue]
+                                        if case .object(let obj) = ev.data {
+                                            dataDict = obj
+                                        } else {
+                                            dataDict = [:]
+                                        }
+                                        let locRef: LocationSchema.Ref? = ev.location.map {
+                                            LocationSchema.Ref(
+                                                directory: SchemaPrimitive.AbsolutePath(rawValue: $0.directory),
+                                                workspaceID: $0.workspaceID
+                                            )
+                                        }
+                                        continuation.yield(PluginSDK.EventPayload(
+                                            type: ev.type,
+                                            location: locRef,
+                                            data: dataDict
+                                        ))
+                                    }
+                                }
+                            } else {
+                                busTask = nil
+                            }
                             continuation.onTermination = { [weak self] _ in
+                                busTask?.cancel()
                                 self?.state.withLock { s in
                                     _ = s.eventContinuations.removeValue(forKey: token)
                                 }
@@ -2000,11 +2275,18 @@ public enum CorePlugin {
                             }
                             return PluginSDK.LocatedResult(location: loc, data: def)
                         },
-                        transform: { callback in
+                        transform: { [self] callback in
+                            let id = UUID()
+                            self.state.withLock { $0.modelTransforms.append((id: id, callback: callback)) }
                             callback(modelEditor)
-                            return PluginEffect.Registration(dispose: {})
+                            return PluginEffect.Registration(dispose: { [self] in
+                                self.state.withLock { $0.modelTransforms.removeAll { $0.id == id } }
+                                self.reloadModels()
+                            })
                         },
-                        reload: {}
+                        reload: { [self] in
+                            self.reloadModels()
+                        }
                     ),
                     permission: PluginEffect.PermissionDomain(
                         list: { sessionID in permRuntime.list(sessionID: sessionID) },
@@ -2032,11 +2314,18 @@ public enum CorePlugin {
                             }
                             return PluginSDK.LocatedResult(location: loc, data: rec.provider)
                         },
-                        transform: { callback in
+                        transform: { [self] callback in
+                            let id = UUID()
+                            self.state.withLock { $0.providerTransforms.append((id: id, callback: callback)) }
                             callback(providerEditor)
-                            return PluginEffect.Registration(dispose: {})
+                            return PluginEffect.Registration(dispose: { [self] in
+                                self.state.withLock { $0.providerTransforms.removeAll { $0.id == id } }
+                                self.reloadProviders()
+                            })
                         },
-                        reload: {}
+                        reload: { [self] in
+                            self.reloadProviders()
+                        }
                     ),
                     reference: PluginEffect.ReferenceDomain(
                         list: { PluginSDK.LocatedResult(location: loc, data: []) },
@@ -2114,7 +2403,8 @@ public enum CorePlugin {
                             if let onSessionPrompt = self.onSessionPrompt {
                                 try await onSessionPrompt(sessionID, prompt, delivery)
                             }
-                        }
+                        },
+                        syntheticRequest: self.onSessionSynthetic
                     ),
                     shell: PluginEffect.ShellDomain(hook: { name, callback in
                         let reg = hookService.registerShell(name: name, callback: callback)
@@ -5665,13 +5955,27 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/refresh.ts#onSwitch [status=adapted hash=e9de25e50b30]
+        /// Runs `action` each time the active credential of `integrationID` switches, until `ctx`'s scope closes.
+        // parity: core/src/plugin/provider/refresh.ts#onSwitch [status=implemented hash=e9de25e50b30]
+        @discardableResult
         public static func onSwitch(
+            ctx: PluginEffect.Context,
             integrationID: String,
             action: @escaping @Sendable () async -> Void
-        ) async {
-            _ = integrationID
-            await action()
+        ) -> Task<Void, Never> {
+            let stream = ctx.event.subscribe([CredentialSchema.Event.switched.type])
+            let task = Task<Void, Never> {
+                for await payload in stream {
+                    if Task.isCancelled { break }
+                    if case .string(let switchedID) = payload.data["integrationID"], switchedID == integrationID {
+                        await action()
+                    }
+                }
+            }
+            ctx.addFinalizer {
+                task.cancel()
+            }
+            return task
         }
 
         // parity: core/src/plugin/provider/refresh.ts#reloadIfChanged [status=implemented hash=bf56772989c4]
@@ -6009,6 +6313,32 @@ public enum CorePlugin {
             }
         }
 
+        /// A single event frame pushed by OpenCode Console over `/api/event-watches/stream`.
+        public struct ServerMessage: Equatable, Hashable, Sendable, Codable {
+            public enum Kind: String, Equatable, Hashable, Sendable, Codable {
+                case snapshot
+                case events
+            }
+
+            public let type: Kind
+            public let events: [WatchEvent]
+
+            public init(type: Kind, events: [WatchEvent]) {
+                self.type = type
+                self.events = events
+            }
+        }
+
+        private struct AckMessage: Codable, Sendable {
+            let type: String
+            let ids: [String]
+
+            init(ids: [String]) {
+                self.type = "ack"
+                self.ids = ids
+            }
+        }
+
         public struct PollResponse: Equatable, Hashable, Sendable, Codable {
             public let cursor: String
             public let events: [WatchEvent]
@@ -6030,6 +6360,37 @@ public enum CorePlugin {
         private struct ProblemResponse: Codable, Sendable {
             let message: String?
             let limit: Int?
+        }
+
+        /// Timing and backoff configuration for the Console event-watch transport loop.
+        /// Defaults match upstream `opencode-watches.ts` verbatim.
+        public struct TransportOptions: Sendable {
+            public let silenceTimeoutMs: Int64
+            public let pollWaitSeconds: Int
+            public let pollTimeoutMs: Int64
+            public let pollRetryWebSocketMs: Int64
+            public let baseBackoffMs: Int64
+            public let maxBackoffMs: Int64
+            /// Injectable backoff sleep (receives delay in milliseconds); defaults to `Task.sleep`.
+            public let sleep: (@Sendable (Int64) async throws -> Void)?
+
+            public init(
+                silenceTimeoutMs: Int64 = OpencodeWatches.SILENCE_TIMEOUT_MS,
+                pollWaitSeconds: Int = OpencodeWatches.POLL_WAIT_SECONDS,
+                pollTimeoutMs: Int64 = OpencodeWatches.POLL_TIMEOUT_MS,
+                pollRetryWebSocketMs: Int64 = OpencodeWatches.POLL_RETRY_WEBSOCKET_MS,
+                baseBackoffMs: Int64 = OpencodeWatches.BASE_BACKOFF_MS,
+                maxBackoffMs: Int64 = OpencodeWatches.MAX_BACKOFF_MS,
+                sleep: (@Sendable (Int64) async throws -> Void)? = nil
+            ) {
+                self.silenceTimeoutMs = silenceTimeoutMs
+                self.pollWaitSeconds = pollWaitSeconds
+                self.pollTimeoutMs = pollTimeoutMs
+                self.pollRetryWebSocketMs = pollRetryWebSocketMs
+                self.baseBackoffMs = baseBackoffMs
+                self.maxBackoffMs = maxBackoffMs
+                self.sleep = sleep
+            }
         }
 
         /// The stored wakes since the member's last prompt, their times, and when the last update arrived.
@@ -6058,8 +6419,44 @@ public enum CorePlugin {
         public static let DELETED_RETENTION_MS: Int64 = 72 * 60 * 60 * 1_000
         public static let QUIET_RESET_MS: Double = 30 * 60 * 1_000
         public static let WINDOW_MS: Double = 10 * 60 * 1_000
+        public static let SILENCE_TIMEOUT_MS: Int64 = 11 * 60 * 1_000
+        public static let POLL_WAIT_SECONDS = 25
+        public static let POLL_TIMEOUT_MS: Int64 = Int64(POLL_WAIT_SECONDS + 10) * 1_000
+        public static let POLL_RETRY_WEBSOCKET_MS: Int64 = 10 * 60 * 1_000
+        public static let BASE_BACKOFF_MS: Int64 = 1_000
+        public static let MAX_BACKOFF_MS: Int64 = 60_000
         public static let namespace = "console_watch"
-        private static let pollWaitSeconds = 25
+
+        /// Builds the Console WebSocket stream URL (`server.replace(/^http/, "ws") + "/api/event-watches/stream"`).
+        public static func webSocketStreamURL(for server: String) -> String {
+            let trimmed = server.hasSuffix("/") ? String(server.dropLast()) : server
+            let wsBase: String
+            if trimmed.hasPrefix("http") {
+                wsBase = "ws" + String(trimmed.dropFirst(4))
+            } else {
+                wsBase = trimmed
+            }
+            return "\(wsBase)/api/event-watches/stream"
+        }
+
+        /// Percent-encodes a single URL query parameter value (RFC 3986 unreserved characters only).
+        internal static func encodeQueryComponent(_ value: String) -> String {
+            var out = ""
+            out.reserveCapacity(value.utf8.count)
+            for byte in value.utf8 {
+                switch byte {
+                case UInt8(ascii: "A")...UInt8(ascii: "Z"),
+                     UInt8(ascii: "a")...UInt8(ascii: "z"),
+                     UInt8(ascii: "0")...UInt8(ascii: "9"),
+                     UInt8(ascii: "-"), UInt8(ascii: "_"), UInt8(ascii: "."), UInt8(ascii: "~"):
+                    out.append(Character(Unicode.Scalar(byte)))
+                default:
+                    let hex = String(byte, radix: 16, uppercase: true)
+                    out += "%" + (hex.count == 1 ? "0" + hex : hex)
+                }
+            }
+            return out
+        }
 
         /// The storage key marking a watch unattended (such as a router's), set when the watch is created with
         /// `unattended: true`.
@@ -6205,17 +6602,280 @@ public enum CorePlugin {
             let message: String
         }
 
+        private struct TimeoutError: Swift.Error, Sendable {}
+
+        private static func withTimeout<T: Sendable>(
+            ms: Int64,
+            operation: @escaping @Sendable () async throws -> T
+        ) async throws -> T {
+            try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask {
+                    try await operation()
+                }
+                group.addTask {
+                    try await Task.sleep(for: .milliseconds(max(1, ms)))
+                    throw TimeoutError()
+                }
+                guard let result = try await group.next() else {
+                    throw CancellationError()
+                }
+                group.cancelAll()
+                return result
+            }
+        }
+
+        private enum StreamOutcome: Sendable {
+            case lease
+            case closed
+            case refused
+            case failed
+            case stopped
+        }
+
+        private enum PollOutcome: Sendable {
+            case websocket
+            case polled
+            case failed
+            case stopped
+        }
+
         private final class WorkspaceHub: Sendable {
             struct State: Sendable {
                 var memberIDs: [UInt64] = []
                 var members: [UInt64: Controller] = [:]
-                var pollTask: Task<Void, Never>? = nil
+                var connectionTask: Task<Void, Never>? = nil
             }
 
             let state = Mutex(State())
         }
 
         private static let hubs = Mutex<[String: WorkspaceHub]>([:])
+
+        private static func hubLeader(_ hub: WorkspaceHub) -> Controller? {
+            hub.state.withLock { s in
+                guard let first = s.memberIDs.first else { return nil }
+                return s.members[first]
+            }
+        }
+
+        /// Holds a workspace's shared event connection: WebSocket first, HTTP long-poll when upgrade fails,
+        /// with upstream's exact lease/close/backoff semantics (`opencode-watches.ts#run`).
+        private static func runHub(hub: WorkspaceHub) async {
+            var failures = 0
+            while !Task.isCancelled {
+                guard hubLeader(hub) != nil else { return }
+                let outcome = await runStream(hub: hub)
+                switch outcome {
+                case .stopped:
+                    return
+                case .lease:
+                    failures = 0
+                    continue
+                case .closed:
+                    failures = 0
+                case .refused:
+                    let polled = await runPoll(hub: hub)
+                    switch polled {
+                    case .stopped:
+                        return
+                    case .websocket:
+                        failures = 0
+                        continue
+                    case .polled:
+                        failures = 0
+                    case .failed:
+                        break
+                    }
+                case .failed:
+                    break
+                }
+                if Task.isCancelled { return }
+                guard let leader = hubLeader(hub) else { return }
+                failures += 1
+                let shift = min(failures - 1, 30)
+                let delayMs = min(leader.options.baseBackoffMs &* Int64(1 << shift), leader.options.maxBackoffMs)
+                do {
+                    try await leader.backoffSleep(ms: delayMs)
+                } catch {
+                    return
+                }
+            }
+        }
+
+        private static func runStream(hub: WorkspaceHub) async -> StreamOutcome {
+            guard let leader = hubLeader(hub), let conn = leader.currentConnection() else {
+                return .stopped
+            }
+            let headers: [String: String]
+            do {
+                headers = try await conn.headers()
+            } catch is CancellationError {
+                return .stopped
+            } catch {
+                return .failed
+            }
+            if Task.isCancelled { return .stopped }
+            guard let webSocket = leader.webSocket else {
+                return .refused
+            }
+            let url = webSocketStreamURL(for: conn.server)
+            let socket: any WebSocketConnection
+            do {
+                socket = try await webSocket.connect(url: url, headers: headers)
+            } catch is CancellationError {
+                return .stopped
+            } catch {
+                return .refused
+            }
+
+            let timedOut = Mutex(false)
+            let watchdog = Mutex<Task<Void, Never>?>(nil)
+            let cancelWatchdog: @Sendable () -> Void = {
+                let prev = watchdog.withLock { slot -> Task<Void, Never>? in
+                    let old = slot
+                    slot = nil
+                    return old
+                }
+                prev?.cancel()
+            }
+            let silenceMs = leader.options.silenceTimeoutMs
+            let armWatchdog: @Sendable () -> Void = {
+                guard silenceMs > 0 else { return }
+                let newTask = Task<Void, Never> {
+                    do {
+                        try await Task.sleep(for: .milliseconds(silenceMs))
+                    } catch {
+                        return
+                    }
+                    timedOut.withLock { $0 = true }
+                    await socket.close(code: 1000, reason: "The event stream went silent")
+                }
+                let prev = watchdog.withLock { slot -> Task<Void, Never>? in
+                    let old = slot
+                    slot = newTask
+                    return old
+                }
+                prev?.cancel()
+            }
+
+            return await withTaskCancellationHandler {
+                defer {
+                    cancelWatchdog()
+                }
+                armWatchdog()
+                do {
+                    for try await frame in socket.messages {
+                        cancelWatchdog()
+                        if Task.isCancelled {
+                            await socket.close(code: 1000, reason: "")
+                            return .stopped
+                        }
+                        let rawBytes: [UInt8]
+                        switch frame {
+                        case .text(let text): rawBytes = Array(text.utf8)
+                        case .binary(let data): rawBytes = data
+                        }
+                        if let decoded = try? OpencodeWatches.decodeJSON(ServerMessage.self, from: rawBytes) {
+                            guard let currentLeader = hubLeader(hub) else {
+                                await socket.close(code: 1000, reason: "")
+                                return .stopped
+                            }
+                            let ids = await currentLeader.deliver(decoded.events)
+                            for chunk in OpencodeWatches.chunks(ids) {
+                                let ackBytes = try OpencodeWatches.encodeJSON(AckMessage(ids: chunk))
+                                let ackText = String(decoding: ackBytes, as: UTF8.self)
+                                try await socket.send(.text(ackText))
+                            }
+                        }
+                        armWatchdog()
+                    }
+                    await socket.close(code: 1000, reason: "")
+                    return Task.isCancelled ? .stopped : .closed
+                } catch is CancellationError {
+                    await socket.close(code: 1000, reason: "")
+                    return .stopped
+                } catch let wsError as WebSocketTransportError {
+                    await socket.close(code: 1000, reason: "")
+                    if Task.isCancelled { return .stopped }
+                    if timedOut.withLock({ $0 }) { return .closed }
+                    if case .closed(let closeEvent) = wsError {
+                        if closeEvent.code == LEASE_CLOSE_CODE {
+                            return .lease
+                        }
+                        // Both OVERSIZED_CLOSE_CODE (1009) and any other close code reset failures to 0
+                        // and reconnect after one backoff step (`"closed"` in upstream).
+                        return .closed
+                    }
+                    return .closed
+                } catch {
+                    await socket.close(code: 1000, reason: "")
+                    return Task.isCancelled ? .stopped : .closed
+                }
+            } onCancel: {
+                cancelWatchdog()
+                Task { await socket.close(code: 1000, reason: "") }
+            }
+        }
+
+        /// Long polls until a request fails or until `pollRetryWebSocketMs` has elapsed after at least one poll
+        /// (`opencode-watches.ts#poll`).
+        private static func runPoll(hub: WorkspaceHub) async -> PollOutcome {
+            guard let initialLeader = hubLeader(hub) else { return .stopped }
+            let started = initialLeader.clock()
+            var cursor: String? = nil
+            var polled = false
+            while !Task.isCancelled {
+                guard let leader = hubLeader(hub) else { return .stopped }
+                if polled && (leader.clock() - started) >= leader.options.pollRetryWebSocketMs {
+                    return .websocket
+                }
+                guard let conn = leader.currentConnection(), let http = leader.http else {
+                    return polled ? .polled : .failed
+                }
+                var path = "/api/event-watches/events?wait=\(leader.options.pollWaitSeconds)"
+                if let cursor {
+                    path += "&cursor=\(encodeQueryComponent(cursor))"
+                }
+                let requestPath = path
+                let page: PollResponse?
+                do {
+                    page = try await withTimeout(ms: leader.options.pollTimeoutMs) {
+                        let resp = try await leader.callHTTP(http: http, conn: conn, method: "GET", path: requestPath, body: nil)
+                        guard (200..<300).contains(resp.head.statusCode) else { return nil }
+                        return try OpencodeWatches.decodeJSON(PollResponse.self, from: resp.body)
+                    }
+                } catch is CancellationError {
+                    return .stopped
+                } catch {
+                    page = nil
+                }
+                guard let page else {
+                    return polled ? .polled : .failed
+                }
+                polled = true
+                let ids = await leader.deliver(page.events)
+                do {
+                    for chunk in OpencodeWatches.chunks(ids) {
+                        let ackResp = try await leader.callHTTP(
+                            http: http,
+                            conn: conn,
+                            method: "POST",
+                            path: "/api/event-watches/ack",
+                            body: .object(["ids": .array(chunk.map(JSONValue.string))])
+                        )
+                        guard (200..<300).contains(ackResp.head.statusCode) else {
+                            return .polled
+                        }
+                    }
+                } catch is CancellationError {
+                    return .stopped
+                } catch {
+                    return .polled
+                }
+                cursor = page.cursor
+            }
+            return .stopped
+        }
 
         /// Live event-watch controller for one Location (`OpencodeWatches.make` return handle).
         public final class Controller: Sendable {
@@ -6233,21 +6893,35 @@ public enum CorePlugin {
             }
 
             private let ctx: PluginEffect.Context
-            private let http: (any HTTPTransport)?
-            private let clock: @Sendable () -> Int64
-            private let startPolling: Bool
+            fileprivate let http: (any HTTPTransport)?
+            fileprivate let webSocket: (any WebSocketTransport)?
+            fileprivate let clock: @Sendable () -> Int64
+            private let startConnection: Bool
+            fileprivate let options: TransportOptions
             private let state = Mutex(State())
 
             fileprivate init(
                 ctx: PluginEffect.Context,
                 http: (any HTTPTransport)?,
+                webSocket: (any WebSocketTransport)?,
                 clock: @escaping @Sendable () -> Int64,
-                startPolling: Bool
+                startConnection: Bool,
+                options: TransportOptions
             ) {
                 self.ctx = ctx
                 self.http = http
+                self.webSocket = webSocket
                 self.clock = clock
-                self.startPolling = startPolling
+                self.startConnection = startConnection
+                self.options = options
+            }
+
+            fileprivate func backoffSleep(ms: Int64) async throws {
+                if let customSleep = options.sleep {
+                    try await customSleep(ms)
+                } else {
+                    try await Task.sleep(for: .milliseconds(max(0, ms)))
+                }
             }
 
             /// Starts watching for `next`, stops when `nil`, or updates credentials in place when the workspace key matches.
@@ -6481,10 +7155,9 @@ public enum CorePlugin {
             /// Performs a single long-poll round against `/api/event-watches/events`, delivers events, and sends chunked acks.
             public func pollOnce(cursor: String? = nil) async throws -> PollResponse? {
                 guard let conn = currentConnection(), let http else { return nil }
-                var path = "/api/event-watches/events?wait=\(OpencodeWatches.pollWaitSeconds)"
+                var path = "/api/event-watches/events?wait=\(options.pollWaitSeconds)"
                 if let cursor {
-                    let encoded = cursor.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? cursor
-                    path += "&cursor=\(encoded)"
+                    path += "&cursor=\(OpencodeWatches.encodeQueryComponent(cursor))"
                 }
                 let resp = try await callHTTP(http: http, conn: conn, method: "GET", path: path, body: nil)
                 guard (200..<300).contains(resp.head.statusCode) else { return nil }
@@ -6684,7 +7357,7 @@ public enum CorePlugin {
 
             // MARK: Internal Helpers
 
-            private func currentConnection() -> ConsoleConnection? {
+            fileprivate func currentConnection() -> ConsoleConnection? {
                 state.withLock { $0.active?.connection }
             }
 
@@ -6778,11 +7451,11 @@ public enum CorePlugin {
 
             private func cancelSession(sessionID: String) async {
                 guard let conn = currentConnection(), let http else { return }
-                let encoded = sessionID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sessionID
+                let encoded = OpencodeWatches.encodeQueryComponent(sessionID)
                 _ = try? await callHTTP(http: http, conn: conn, method: "DELETE", path: "/api/event-watches?sessionID=\(encoded)", body: nil)
             }
 
-            private func callHTTP(
+            fileprivate func callHTTP(
                 http: any HTTPTransport,
                 conn: ConsoleConnection,
                 method: String,
@@ -6839,51 +7512,44 @@ public enum CorePlugin {
                     map[key] = created
                     return created
                 }
-                let shouldStartPoll: Bool = hub.state.withLock { s in
+                let shouldStart: Bool = hub.state.withLock { s in
                     s.memberIDs.append(memberID)
                     s.members[memberID] = self
-                    if s.pollTask == nil && startPolling && http != nil {
+                    if s.connectionTask == nil && startConnection && (webSocket != nil || http != nil) {
                         return true
                     }
                     return false
                 }
-                if shouldStartPoll {
-                    let task = Task {
-                        var cursor: String? = nil
-                        var failures = 0
-                        while !Task.isCancelled {
-                            let leader = hub.state.withLock { s -> Controller? in
-                                guard let first = s.memberIDs.first else { return nil }
-                                return s.members[first]
-                            }
-                            guard let leader else { break }
-                            if let page = try? await leader.pollOnce(cursor: cursor) {
-                                failures = 0
-                                cursor = page.cursor
-                                continue
-                            }
-                            failures += 1
-                            let delayMs = min(1_000 * (1 << min(failures - 1, 6)), 60_000)
-                            try? await Task.sleep(for: .milliseconds(delayMs))
-                        }
+                if shouldStart {
+                    let task = Task<Void, Never> {
+                        await OpencodeWatches.runHub(hub: hub)
                     }
-                    hub.state.withLock { $0.pollTask = task }
+                    let cancelImmediately: Bool = hub.state.withLock { s in
+                        if s.memberIDs.isEmpty {
+                            return true
+                        }
+                        s.connectionTask = task
+                        return false
+                    }
+                    if cancelImmediately {
+                        task.cancel()
+                    }
                 }
             }
 
             private func leaveHub(key: String, memberID: UInt64) {
                 guard let hub = OpencodeWatches.hubs.withLock({ $0[key] }) else { return }
-                let (isEmpty, pollTask) = hub.state.withLock { s -> (Bool, Task<Void, Never>?) in
+                let (isEmpty, connectionTask) = hub.state.withLock { s -> (Bool, Task<Void, Never>?) in
                     s.memberIDs.removeAll { $0 == memberID }
                     s.members.removeValue(forKey: memberID)
                     if s.memberIDs.isEmpty {
-                        let t = s.pollTask
-                        s.pollTask = nil
+                        let t = s.connectionTask
+                        s.connectionTask = nil
                         return (true, t)
                     }
                     return (false, nil)
                 }
-                pollTask?.cancel()
+                connectionTask?.cancel()
                 if isEmpty {
                     OpencodeWatches.hubs.withLock { _ = $0.removeValue(forKey: key) }
                 }
@@ -6895,10 +7561,19 @@ public enum CorePlugin {
         public static func make(
             ctx: PluginEffect.Context,
             http: (any HTTPTransport)? = nil,
+            webSocket: (any WebSocketTransport)? = nil,
             clock: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
-            startPolling: Bool = false
+            startPolling: Bool = false,
+            options: TransportOptions = TransportOptions()
         ) async -> Controller {
-            let controller = Controller(ctx: ctx, http: http, clock: clock, startPolling: startPolling)
+            let controller = Controller(
+                ctx: ctx,
+                http: http,
+                webSocket: webSocket,
+                clock: clock,
+                startConnection: startPolling || webSocket != nil,
+                options: options
+            )
             let toolReg = await ctx.tool.transform { editor in
                 controller.registerTools(editor: editor)
             }
@@ -7856,18 +8531,982 @@ public enum CorePlugin {
         }
     )
 
+    /// Runtime helpers for `OpencodePlugin` (`plugin/provider/opencode.ts`): Console OAuth device flow,
+    /// `GET /api/v2/config` sync via `SharedCache`, managed policy & `console_watches` flag gating, and
+    /// `OpencodeWatches` lifecycle wiring on sign-in, switch, periodic check, and sign-out.
+    private enum OpencodeConsole {
+        static let clientID = "opencode-cli"
+        static let methodID = IntegrationMethodID(rawValue: "device")
+        static let listsHeader = "x-opencode-instructions-skills"
+        static let signedOutMessage = "Reconnect OpenCode Console to continue"
+        static let configTimeoutMs: Int64 = 5_000
+        static let defaultConfigMaxAgeMs: Int64 = 60_000
+        static let webSearchTimeoutMs: Int64 = 25_000
+
+        static func ssoMessage(_ organization: String?) -> String {
+            "Sign in with SSO again to use \(organization ?? "your OpenCode Console organization")"
+        }
+
+        struct SsoRequiredError: Swift.Error, Equatable, Sendable, CustomStringConvertible {
+            let organization: String?
+            let url: String
+            var description: String { "\(OpencodeConsole.ssoMessage(organization))." }
+        }
+
+        struct SignedOutError: Swift.Error, Equatable, Sendable, CustomStringConvertible {
+            var description: String { "\(OpencodeConsole.signedOutMessage)." }
+        }
+
+        struct ConsoleHTTPError: Swift.Error, Sendable {
+            let status: Int
+        }
+
+        struct TimeoutError: Swift.Error, Sendable {}
+
+        struct ConsoleRemoteConfig: Equatable, Sendable {
+            let remote: CoreConfigIntegration.Remote
+            let watches: Bool
+            let lists: Bool
+            let artifacts: Bool
+        }
+
+        struct Snapshot: Equatable, Sendable {
+            let remote: ConsoleRemoteConfig?
+            let connection: ConnectionSchema.Info?
+            let organization: String?
+        }
+
+        enum CachedConfigResult: Sendable {
+            case ok(ConsoleRemoteConfig?)
+            case authFailure(ConnectionSchema.Status)
+        }
+
+        struct DeviceResponse: Codable, Sendable {
+            let device_code: String
+            let user_code: String
+            let verification_uri_complete: String
+            let expires_in: Double
+            let interval: Double
+        }
+
+        struct TokenResponse: Codable, Sendable {
+            let access_token: String
+            let refresh_token: String
+            let expires_in: Double
+            let org_id: String?
+        }
+
+        struct TokenPendingResponse: Codable, Sendable {
+            let error: String
+        }
+
+        struct UserResponse: Codable, Sendable {
+            let id: String
+            let email: String
+        }
+
+        struct OrgResponse: Codable, Sendable {
+            let id: String
+            let name: String
+        }
+
+        struct SsoRequiredBody: Codable, Sendable {
+            let _tag: String
+            let orgId: String
+            let connectionId: String
+        }
+
+        struct UnauthorizedBody: Codable, Sendable {
+            let _tag: String
+        }
+
+        struct InvalidGrantBody: Codable, Sendable {
+            let error: String
+        }
+
+        final class UserAgentHTTPTransport: HTTPTransport, Sendable {
+            private let inner: any HTTPTransport
+            private let userAgent: String
+
+            init(inner: any HTTPTransport, userAgent: String) {
+                self.inner = inner
+                self.userAgent = userAgent
+            }
+
+            private func stamped(_ request: HTTPRequest) -> HTTPRequest {
+                var headers = request.headers
+                headers["User-Agent"] = userAgent
+                return HTTPRequest(method: request.method, url: request.url, headers: headers, body: request.body)
+            }
+
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+                try await inner.send(stamped(request))
+            }
+
+            func stream(_ request: HTTPRequest) async throws -> HTTPStreamingResponse {
+                try await inner.stream(stamped(request))
+            }
+        }
+
+        actor SerialLock {
+            private var locked = false
+            private var waiters: [CheckedContinuation<Void, Never>] = []
+
+            func withPermit<T: Sendable>(_ operation: @Sendable () async -> T) async -> T {
+                if locked {
+                    await withCheckedContinuation { continuation in
+                        waiters.append(continuation)
+                    }
+                } else {
+                    locked = true
+                }
+                defer {
+                    if !waiters.isEmpty {
+                        let next = waiters.removeFirst()
+                        next.resume()
+                    } else {
+                        locked = false
+                    }
+                }
+                return await operation()
+            }
+        }
+
+        static func withTimeout<T: Sendable>(
+            ms: Int64,
+            operation: @escaping @Sendable () async throws -> T
+        ) async throws -> T {
+            try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask { try await operation() }
+                group.addTask {
+                    try await Task.sleep(for: .milliseconds(max(1, ms)))
+                    throw TimeoutError()
+                }
+                guard let result = try await group.next() else {
+                    throw CancellationError()
+                }
+                group.cancelAll()
+                return result
+            }
+        }
+
+        static func normalizeServer(_ input: String) throws -> String {
+            guard let components = URLComponents(string: input),
+                  let scheme = components.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https",
+                  let host = components.host, !host.isEmpty
+            else {
+                throw ToolSchema.ToolError(message: "Invalid OpenCode server URL: expected HTTP(S)")
+            }
+            var origin = "\(scheme)://\(host)"
+            if let port = components.port {
+                let isDefault = (scheme == "http" && port == 80) || (scheme == "https" && port == 443)
+                if !isDefault { origin += ":\(port)" }
+            }
+            var path = components.percentEncodedPath
+            while path.hasSuffix("/") {
+                path.removeLast()
+            }
+            return origin + path
+        }
+
+        static func ssoURL(server: String, connectionID: String) throws -> String {
+            let base = try normalizeServer(server)
+            let pathPart = URLComponents(string: base)?.percentEncodedPath ?? ""
+            var trimmedPath = pathPart
+            while trimmedPath.hasSuffix("/") { trimmedPath.removeLast() }
+            let redirectTo = "\(trimmedPath)/"
+            let encodedConn = OpencodeWatches.encodeQueryComponent(connectionID)
+            let encodedRedirect = OpencodeWatches.encodeQueryComponent(redirectTo)
+            return "\(base)/auth/sso/\(encodedConn)/start?redirectTo=\(encodedRedirect)"
+        }
+
+        static func workspaceKey(
+            connection: ConnectionSchema.Info,
+            credential: CredentialSchema.Value
+        ) -> String {
+            let server = CoreProvider.ConsoleAccess.server(credential)
+            let connKey = CoreIntegration.Connection.key(connection)
+            let orgID: String?
+            switch credential {
+            case .oauth(let o):
+                orgID = if case .string(let s)? = o.metadata?["orgID"] { s } else { nil }
+            case .key(let k):
+                orgID = if case .string(let s)? = k.metadata?["orgID"] { s } else { nil }
+            case .external:
+                orgID = nil
+            }
+            var items: [JSONValue] = [
+                .string(server),
+                connKey.map(JSONValue.string) ?? .null,
+            ]
+            if let orgID {
+                items.append(.string(orgID))
+            }
+            return CoreSubsystems.Util.canonicalJson(.array(items))
+        }
+
+        static func organizationName(_ credential: CredentialSchema.Value) -> String? {
+            let meta: [String: JSONValue]?
+            switch credential {
+            case .oauth(let o): meta = o.metadata
+            case .key(let k): meta = k.metadata
+            case .external(let e): meta = e.metadata
+            }
+            if case .string(let name)? = meta?["orgName"] { return name }
+            return nil
+        }
+
+        static func connectionStatus(_ error: any Error) -> ConnectionSchema.Status? {
+            if let sso = error as? SsoRequiredError {
+                return ConnectionSchema.Status(
+                    status: .needsAuth,
+                    message: ssoMessage(sso.organization),
+                    url: sso.url
+                )
+            }
+            if error is SignedOutError {
+                return ConnectionSchema.Status(status: .needsAuth, message: signedOutMessage)
+            }
+            if let authErr = error as? CoreIntegration.Integration.AuthorizationError,
+               authErr.message.contains(signedOutMessage)
+            {
+                return ConnectionSchema.Status(status: .needsAuth, message: signedOutMessage)
+            }
+            return nil
+        }
+
+        static func hasHeader(_ headers: [String: String], name: String) -> Bool {
+            let target = name.lowercased()
+            return headers.keys.contains { $0.lowercased() == target }
+        }
+
+        static func fetchConfig(
+            http: any HTTPTransport,
+            credential: CredentialSchema.Value
+        ) async throws -> ConsoleRemoteConfig? {
+            try await withTimeout(ms: configTimeoutMs) {
+                var headers = CoreProvider.ConsoleAccess.headers(credential)
+                headers["Accept"] = "application/json"
+                let url = "\(CoreProvider.ConsoleAccess.server(credential))/api/v2/config"
+                let resp = try await http.send(HTTPRequest(method: "GET", url: url, headers: headers))
+                if resp.head.statusCode == 404 {
+                    return nil
+                }
+                if resp.head.statusCode == 401,
+                   let body = try? JSONDecoder().decode(UnauthorizedBody.self, from: Data(resp.body)),
+                   body._tag == "Unauthorized"
+                {
+                    throw SignedOutError()
+                }
+                if resp.head.statusCode == 403,
+                   let body = try? JSONDecoder().decode(SsoRequiredBody.self, from: Data(resp.body)),
+                   body._tag == "SsoRequired"
+                {
+                    throw SsoRequiredError(
+                        organization: organizationName(credential),
+                        url: try ssoURL(server: CoreProvider.ConsoleAccess.server(credential), connectionID: body.connectionId)
+                    )
+                }
+                guard (200..<300).contains(resp.head.statusCode) else {
+                    throw ConsoleHTTPError(status: resp.head.statusCode)
+                }
+                let watches = hasHeader(resp.head.headers, name: OpencodeWatches.header)
+                let lists = hasHeader(resp.head.headers, name: listsHeader)
+                let artifacts = hasHeader(resp.head.headers, name: OpencodeArtifacts.header)
+                let remote = try JSONDecoder().decode(CoreConfigIntegration.Remote.self, from: Data(resp.body))
+                return ConsoleRemoteConfig(remote: remote, watches: watches, lists: lists, artifacts: artifacts)
+            }
+        }
+
+        static func postJSON(
+            http: any HTTPTransport,
+            url: String,
+            body: [String: JSONValue]
+        ) async throws -> HTTPResponse {
+            let data = try JSONEncoder().encode(JSONValue.object(body))
+            return try await http.send(HTTPRequest(
+                method: "POST",
+                url: url,
+                headers: ["Accept": "application/json", "Content-Type": "application/json"],
+                body: Array(data)
+            ))
+        }
+
+        static func getJSON<T: Decodable>(
+            http: any HTTPTransport,
+            url: String,
+            token: String,
+            as type: T.Type
+        ) async throws -> T {
+            let resp = try await http.send(HTTPRequest(
+                method: "GET",
+                url: url,
+                headers: ["Accept": "application/json", "Authorization": "Bearer \(token)"]
+            ))
+            guard (200..<300).contains(resp.head.statusCode) else {
+                throw ConsoleHTTPError(status: resp.head.statusCode)
+            }
+            return try JSONDecoder().decode(T.self, from: Data(resp.body))
+        }
+
+        static func buildCredential(
+            http: any HTTPTransport,
+            server: String,
+            token: TokenResponse
+        ) async throws -> CredentialSchema.OAuth {
+            async let userTask = getJSON(http: http, url: "\(server)/api/user", token: token.access_token, as: UserResponse.self)
+            async let orgsTask = getJSON(http: http, url: "\(server)/api/orgs", token: token.access_token, as: [OrgResponse].self)
+            let (user, orgs) = try await (userTask, orgsTask)
+            let org: OrgResponse?
+            if let requestedOrgID = token.org_id {
+                guard let found = orgs.first(where: { $0.id == requestedOrgID }) else {
+                    throw ToolSchema.ToolError(message: "OpenCode organization not found: \(requestedOrgID)")
+                }
+                org = found
+            } else {
+                org = orgs.sorted { a, b in
+                    let cmp = a.name.localizedCompare(b.name)
+                    if cmp != .orderedSame { return cmp == .orderedAscending }
+                    return a.id < b.id
+                }.first
+            }
+            let expiresMs = Int64(Date().timeIntervalSince1970 * 1000) + Int64(token.expires_in * 1000)
+            var metadata: [String: JSONValue] = [
+                "server": .string(server),
+                "accountID": .string(user.id),
+                "email": .string(user.email),
+            ]
+            if let org {
+                metadata["orgID"] = .string(org.id)
+                metadata["orgName"] = .string(org.name)
+            }
+            return CredentialSchema.OAuth(
+                methodID: methodID,
+                refresh: token.refresh_token,
+                access: token.access_token,
+                expires: SchemaPrimitive.NonNegativeInt(rawValue: Int(max(0, expiresMs)))!,
+                metadata: metadata
+            )
+        }
+
+        static func oauthRegistration(http: any HTTPTransport) -> PluginEffect.IntegrationOAuthMethodRegistration {
+            PluginEffect.IntegrationOAuthMethodRegistration(
+                integrationID: "opencode",
+                method: PluginEffect.IntegrationOAuthMethod(
+                    id: methodID.rawValue,
+                    label: "OpenCode Console account",
+                    form: FormSchema.Fields(
+                        first: .string(FormSchema.StringField(
+                            key: "server",
+                            hidden: true,
+                            format: .uri,
+                            defaultValue: CoreProvider.ConsoleAccess.defaultServer
+                        ))
+                    )
+                ),
+                authorize: { answer in
+                    let rawServer: String
+                    if case .string(let s)? = answer["server"], !s.isEmpty {
+                        rawServer = s
+                    } else {
+                        rawServer = CoreProvider.ConsoleAccess.defaultServer
+                    }
+                    let server = try normalizeServer(rawServer)
+                    let deviceResp = try await postJSON(
+                        http: http,
+                        url: "\(server)/auth/device/code",
+                        body: ["client_id": .string(clientID), "supports_org_scope": .bool(true)]
+                    )
+                    guard (200..<300).contains(deviceResp.head.statusCode) else {
+                        throw ConsoleHTTPError(status: deviceResp.head.statusCode)
+                    }
+                    let device = try JSONDecoder().decode(DeviceResponse.self, from: Data(deviceResp.body))
+                    let baseURL = URL(string: "\(server)/")
+                    guard let verificationURL = URL(string: device.verification_uri_complete, relativeTo: baseURL)?.absoluteURL,
+                          let scheme = verificationURL.scheme?.lowercased(),
+                          scheme == "http" || scheme == "https"
+                    else {
+                        throw ToolSchema.ToolError(message: "Invalid device verification URL: expected HTTP(S)")
+                    }
+                    let deviceCode = device.device_code
+                    let initialIntervalMs = Int64(max(1, device.interval) * 1000)
+                    return .auto(
+                        url: verificationURL.absoluteString,
+                        instructions: "Enter code: \(device.user_code)",
+                        expiresAt: nil,
+                        callback: {
+                            var waitMs = initialIntervalMs
+                            while true {
+                                try await Task.sleep(for: .milliseconds(waitMs))
+                                let resp = try await postJSON(
+                                    http: http,
+                                    url: "\(server)/auth/device/token",
+                                    body: [
+                                        "grant_type": .string("urn:ietf:params:oauth:grant-type:device_code"),
+                                        "device_code": .string(deviceCode),
+                                        "client_id": .string(clientID),
+                                    ]
+                                )
+                                if let token = try? JSONDecoder().decode(TokenResponse.self, from: Data(resp.body)) {
+                                    return try await buildCredential(http: http, server: server, token: token)
+                                }
+                                if let pending = try? JSONDecoder().decode(TokenPendingResponse.self, from: Data(resp.body)) {
+                                    if pending.error == "authorization_pending" { continue }
+                                    if pending.error == "slow_down" {
+                                        waitMs += 5_000
+                                        continue
+                                    }
+                                    throw ToolSchema.ToolError(message: "Device authorization failed: \(pending.error)")
+                                }
+                                throw ConsoleHTTPError(status: resp.head.statusCode)
+                            }
+                        },
+                        submit: nil
+                    )
+                },
+                refresh: { cred in
+                    let server = CoreProvider.ConsoleAccess.server(.oauth(cred))
+                    let resp = try await postJSON(
+                        http: http,
+                        url: "\(server)/auth/device/token",
+                        body: [
+                            "grant_type": .string("refresh_token"),
+                            "refresh_token": .string(cred.refresh),
+                            "client_id": .string(clientID),
+                        ]
+                    )
+                    if resp.head.statusCode == 400,
+                       let invalid = try? JSONDecoder().decode(InvalidGrantBody.self, from: Data(resp.body)),
+                       invalid.error == "invalid_grant"
+                    {
+                        throw SignedOutError()
+                    }
+                    guard (200..<300).contains(resp.head.statusCode) else {
+                        throw ConsoleHTTPError(status: resp.head.statusCode)
+                    }
+                    let token = try JSONDecoder().decode(TokenResponse.self, from: Data(resp.body))
+                    let expiresMs = Int64(Date().timeIntervalSince1970 * 1000) + Int64(token.expires_in * 1000)
+                    var nextMeta = cred.metadata ?? [:]
+                    if let orgID = token.org_id {
+                        let existingOrgName: String
+                        if case .string(let curID)? = cred.metadata?["orgID"], curID == orgID,
+                           case .string(let curName)? = cred.metadata?["orgName"]
+                        {
+                            existingOrgName = curName
+                        } else {
+                            existingOrgName = orgID
+                        }
+                        nextMeta["orgID"] = .string(orgID)
+                        nextMeta["orgName"] = .string(existingOrgName)
+                    }
+                    return CredentialSchema.OAuth(
+                        methodID: cred.methodID,
+                        refresh: token.refresh_token,
+                        access: token.access_token,
+                        expires: SchemaPrimitive.NonNegativeInt(rawValue: Int(max(0, expiresMs)))!,
+                        metadata: nextMeta.isEmpty ? nil : nextMeta
+                    )
+                },
+                label: { cred in
+                    if case .string(let name)? = cred.metadata?["orgName"] { return name }
+                    return nil
+                }
+            )
+        }
+
+        static func integrateProviders(
+            _ editor: PluginEffect.ProviderEditor,
+            document: CoreConfigIntegration.Document
+        ) {
+            guard let providers = document.info.providers else { return }
+            for (providerID, cfg) in providers {
+                let existing = editor.get(providerID)
+                let mergedName = cfg.name ?? existing?.provider.name ?? providerID
+                let mergedPackage = cfg.package ?? existing?.provider.package ?? "@opencode/ai/providers/openai-compatible"
+                let mergedSettings: ProviderSchema.Settings?
+                if let newSettings = cfg.settings, let oldSettings = existing?.provider.settings {
+                    var extra = oldSettings.extra
+                    for (k, v) in newSettings.extra { extra[k] = v }
+                    mergedSettings = ProviderSchema.Settings(
+                        timeout: newSettings.timeout ?? oldSettings.timeout,
+                        headerTimeout: newSettings.headerTimeout ?? oldSettings.headerTimeout,
+                        chunkTimeout: newSettings.chunkTimeout ?? oldSettings.chunkTimeout,
+                        compaction: newSettings.compaction ?? oldSettings.compaction,
+                        cache: newSettings.cache ?? oldSettings.cache,
+                        transport: newSettings.transport ?? oldSettings.transport,
+                        encoding: newSettings.encoding ?? oldSettings.encoding,
+                        tls: newSettings.tls ?? oldSettings.tls,
+                        extra: extra
+                    )
+                } else {
+                    mergedSettings = cfg.settings ?? existing?.provider.settings
+                }
+                var mergedHeaders = existing?.provider.headers ?? [:]
+                if let h = cfg.headers {
+                    for (k, v) in h { mergedHeaders[k] = v }
+                }
+                var mergedBody = existing?.provider.body ?? [:]
+                if let b = cfg.body {
+                    for (k, v) in b { mergedBody[k] = v }
+                }
+                let info = ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: providerID),
+                    canonical: cfg.canonical ?? existing?.provider.canonical,
+                    integrationID: existing?.provider.integrationID ?? document.integrationID,
+                    name: mergedName,
+                    activation: .enabled,
+                    package: mergedPackage,
+                    compatibility: cfg.compatibility ?? existing?.provider.compatibility,
+                    settings: mergedSettings,
+                    headers: mergedHeaders.isEmpty ? nil : mergedHeaders,
+                    body: mergedBody.isEmpty ? nil : mergedBody
+                )
+                let models = existing.map { Array($0.models.values) } ?? []
+                editor.add(info, models, document.connection)
+            }
+        }
+    }
+
     // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=3076ea9e0683]
     public static let OpencodePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.opencode") { ctx in
-            await registerCloudProvider(
-                ctx: ctx,
-                providerID: "opencode",
-                name: "OpenCode",
-                package: "@opencode/ai/providers/opencode/decisions",
-                defaultBaseURL: "https://opencode.ai/inference/systemone/v1",
-                envVars: ["OPENCODE_API_KEY"],
-                baseURLEnvVars: ["OPENCODE_BASE_URL"]
+            let env = Host.currentEnvironment
+            let disableFree = ["1", "true"].contains((env.variable("OPENCODE_DISABLE_FREE_MODELS") ?? "").lowercased())
+            let appInfo = CoreSubsystems.App.Info(name: ctx.app.name, version: ctx.app.version, channel: ctx.app.channel)
+            let consoleHTTP = OpencodeConsole.UserAgentHTTPTransport(
+                inner: Host.currentHTTPTransport,
+                userAgent: CoreSubsystems.App.useragent(appInfo)
             )
+            let webSocket = Host.currentWebSocketTransport
+            let config = Host.currentConfigOverride
+            let flags = Host.currentFlagsOverride
+            let cache: any CoreKV.SharedCache.Interface =
+                Host.currentSharedCacheOverride ?? CoreKV.SharedCache.Service()
+            let watchOptions = Host.currentOpencodeWatchesOptionsOverride ?? OpencodeWatches.TransportOptions()
+            let pollIntervalMs = Host.currentOpencodePollIntervalMsOverride ?? OpencodeConsole.defaultConfigMaxAgeMs
+
+            struct PluginState: Sendable {
+                var snapshot: OpencodeConsole.Snapshot = OpencodeConsole.Snapshot(
+                    remote: nil,
+                    connection: nil,
+                    organization: nil
+                )
+                var integrated: CoreConfigIntegration.Document? = nil
+                var reported: ConnectionSchema.Status? = nil
+                var pollTask: Task<Void, Never>? = nil
+            }
+            let state = Mutex(PluginState())
+            let loading = OpencodeConsole.SerialLock()
+
+            let watches = await OpencodeWatches.make(
+                ctx: ctx,
+                http: consoleHTTP,
+                webSocket: webSocket,
+                startPolling: true,
+                options: watchOptions
+            )
+
+            let load: @Sendable (_ maxAgeMs: Int64) async -> OpencodeConsole.Snapshot = { maxAgeMs in
+                guard let connection = await ctx.integration.connection.active("opencode") else {
+                    state.withLock { $0.reported = nil }
+                    return OpencodeConsole.Snapshot(remote: nil, connection: nil, organization: nil)
+                }
+                let setStatus: @Sendable (ConnectionSchema.Status?) async -> Void = { nextStatus in
+                    state.withLock { $0.reported = nextStatus }
+                    await ctx.integration.connection.status("opencode", connection, nextStatus)
+                }
+                do {
+                    guard let credential = try await ctx.integration.connection.resolve(connection) else {
+                        return OpencodeConsole.Snapshot(remote: nil, connection: connection, organization: nil)
+                    }
+                    if case .external = credential {
+                        return OpencodeConsole.Snapshot(remote: nil, connection: connection, organization: nil)
+                    }
+                    let workspace = OpencodeConsole.workspaceKey(connection: connection, credential: credential)
+                    let cached: OpencodeConsole.CachedConfigResult = try await cache.get(
+                        CoreKV.SharedCache.Input(
+                            key: "opencode-console:\(workspace)",
+                            intervalMs: maxAgeMs
+                        ) {
+                            do {
+                                let remote = try await OpencodeConsole.fetchConfig(http: consoleHTTP, credential: credential)
+                                return .ok(remote)
+                            } catch {
+                                if let status = OpencodeConsole.connectionStatus(error) {
+                                    return .authFailure(status)
+                                }
+                                throw error
+                            }
+                        }
+                    )
+                    switch cached {
+                    case .ok(let remote):
+                        await setStatus(nil)
+                        return OpencodeConsole.Snapshot(
+                            remote: remote,
+                            connection: connection,
+                            organization: OpencodeConsole.organizationName(credential)
+                        )
+                    case .authFailure(let authStatus):
+                        await setStatus(authStatus)
+                        let prev = state.withLock { $0.snapshot }
+                        if CoreIntegration.Connection.key(connection) == CoreIntegration.Connection.key(prev.connection) {
+                            return OpencodeConsole.Snapshot(
+                                remote: prev.remote,
+                                connection: connection,
+                                organization: prev.organization
+                            )
+                        }
+                        return OpencodeConsole.Snapshot(remote: nil, connection: connection, organization: nil)
+                    }
+                } catch {
+                    if let nextStatus = OpencodeConsole.connectionStatus(error) {
+                        await setStatus(nextStatus)
+                    }
+                    let prev = state.withLock { $0.snapshot }
+                    if CoreIntegration.Connection.key(connection) == CoreIntegration.Connection.key(prev.connection) {
+                        return OpencodeConsole.Snapshot(
+                            remote: prev.remote,
+                            connection: connection,
+                            organization: prev.organization
+                        )
+                    }
+                    return OpencodeConsole.Snapshot(remote: nil, connection: connection, organization: nil)
+                }
+            }
+
+            let syncWatches: @Sendable (_ connection: ConnectionSchema.Info?) async -> Void = { connection in
+                guard let connection,
+                      let credential = try? await ctx.integration.connection.resolve(connection)
+                else {
+                    await watches.sync(nil as OpencodeWatches.ConsoleConnection?)
+                    return
+                }
+                if case .external = credential {
+                    await watches.sync(nil as OpencodeWatches.ConsoleConnection?)
+                    return
+                }
+                guard let server = try? OpencodeConsole.normalizeServer(CoreProvider.ConsoleAccess.server(credential)) else {
+                    await watches.sync(nil as OpencodeWatches.ConsoleConnection?)
+                    return
+                }
+                let key = OpencodeConsole.workspaceKey(connection: connection, credential: credential)
+                await watches.sync(OpencodeWatches.ConsoleConnection(
+                    key: key,
+                    server: server,
+                    headers: {
+                        guard let current = try await ctx.integration.connection.resolve(connection) else {
+                            throw ToolSchema.ToolError(message: "OpenCode Console is not connected")
+                        }
+                        if case .external = current {
+                            throw ToolSchema.ToolError(message: "OpenCode Console is not connected")
+                        }
+                        return CoreProvider.ConsoleAccess.headers(current)
+                    }
+                ))
+            }
+
+            let publish: @Sendable (_ next: OpencodeConsole.Snapshot) async -> Void = { next in
+                let document: CoreConfigIntegration.Document?
+                if let remote = next.remote, let connection = next.connection {
+                    document = CoreConfigIntegration.make(CoreConfigIntegration.MakeInput(
+                        integrationID: IntegrationID(rawValue: "opencode"),
+                        connection: connection,
+                        organization: next.organization,
+                        info: remote.remote
+                    ))
+                } else {
+                    document = nil
+                }
+
+                let integratedDoc: CoreConfigIntegration.Document?
+                if let config {
+                    await config.integration(IntegrationID(rawValue: "opencode"), document: document)
+                    let entries = await config.entries()
+                    integratedDoc = entries.compactMap { entry -> CoreConfigIntegration.Document? in
+                        if case .integration(let doc) = entry, doc.integrationID == IntegrationID(rawValue: "opencode") {
+                            return doc
+                        }
+                        return nil
+                    }.first
+                } else {
+                    integratedDoc = document
+                }
+                state.withLock { $0.integrated = integratedDoc }
+
+                // Managed `integration.use: deny` layers a policies-only copy, withholding event watches too.
+                let allowed = document != nil && (config == nil || integratedDoc == document)
+                let flagOn: Bool
+                if let flags {
+                    flagOn = await flags.enabled(.consoleWatches)
+                } else {
+                    flagOn = false
+                }
+                let watching = allowed && (next.remote?.watches == true) && flagOn
+                await syncWatches(watching ? next.connection : nil)
+            }
+
+            _ = await ctx.integration.transform { editor in
+                editor.update("opencode") { integration in
+                    integration.name = "OpenCode Console"
+                }
+                editor.method.update(.oauth(OpencodeConsole.oauthRegistration(http: consoleHTTP)))
+                editor.method.update(.key(
+                    integrationID: "opencode",
+                    method: PluginEffect.IntegrationKeyMethod(label: "API key (service account)")
+                ))
+            }
+
+            let initial = await load(OpencodeConsole.defaultConfigMaxAgeMs)
+            state.withLock { $0.snapshot = initial }
+            await publish(initial)
+
+            _ = await ctx.provider.transform { providers in
+                if let doc = state.withLock({ $0.integrated }) {
+                    OpencodeConsole.integrateProviders(providers, document: doc)
+                }
+            }
+
+            _ = await ctx.provider.transform { providers in
+                let envKey = env.variable("OPENCODE_API_KEY").flatMap { $0.isEmpty ? nil : $0 }
+                let hasConnection = state.withLock { $0.snapshot.connection != nil }
+                if let item = providers.get("opencode") {
+                    let hasSettingsKey: Bool
+                    if case .string(let s)? = item.provider.settings?.extra["apiKey"], !s.isEmpty {
+                        hasSettingsKey = true
+                    } else {
+                        hasSettingsKey = false
+                    }
+                    let hasKey = (envKey != nil) || hasConnection || hasSettingsKey
+                    providers.update(item.provider.id.rawValue) { provider in
+                        if !hasKey && !disableFree {
+                            var extra = provider.settings?.extra ?? [:]
+                            extra["apiKey"] = .string("public")
+                            provider = ProviderSchema.Info(
+                                id: provider.id,
+                                canonical: provider.canonical,
+                                integrationID: provider.integrationID,
+                                name: provider.name,
+                                activation: .enabled,
+                                package: provider.package,
+                                compatibility: provider.compatibility,
+                                settings: ProviderSchema.Settings(
+                                    timeout: provider.settings?.timeout,
+                                    headerTimeout: provider.settings?.headerTimeout,
+                                    chunkTimeout: provider.settings?.chunkTimeout,
+                                    compaction: provider.settings?.compaction,
+                                    cache: provider.settings?.cache,
+                                    transport: provider.settings?.transport,
+                                    encoding: provider.settings?.encoding,
+                                    tls: provider.settings?.tls,
+                                    extra: extra
+                                ),
+                                headers: provider.headers,
+                                body: provider.body
+                            )
+                        } else if hasKey && provider.activation == .auto {
+                            provider = ProviderSchema.Info(
+                                id: provider.id,
+                                canonical: provider.canonical,
+                                integrationID: provider.integrationID,
+                                name: provider.name,
+                                activation: .enabled,
+                                package: provider.package,
+                                compatibility: provider.compatibility,
+                                settings: provider.settings,
+                                headers: provider.headers,
+                                body: provider.body
+                            )
+                        }
+                    }
+                } else if envKey != nil || hasConnection {
+                    let baseURL = env.variable("OPENCODE_BASE_URL").flatMap { $0.isEmpty ? nil : $0 }
+                        ?? "https://opencode.ai/inference/systemone/v1"
+                    providers.add(
+                        ProviderSchema.Info(
+                            id: ProviderSchema.ID(rawValue: "opencode"),
+                            integrationID: IntegrationID(rawValue: "opencode"),
+                            name: "OpenCode",
+                            activation: .enabled,
+                            package: "@opencode/ai/providers/opencode/decisions",
+                            settings: ProviderSchema.Settings(extra: ["baseURL": .string(baseURL)])
+                        ),
+                        [],
+                        state.withLock { $0.snapshot.connection }
+                    )
+                }
+            }
+
+            _ = await ctx.model.transform { models in
+                guard let item = models.getProvider("opencode") else { return }
+                let envKey = env.variable("OPENCODE_API_KEY").flatMap { $0.isEmpty ? nil : $0 }
+                let hasConnection = state.withLock { $0.snapshot.connection != nil }
+                let hasPaidSettingsKey: Bool
+                if case .string(let s)? = item.provider.settings?.extra["apiKey"], !s.isEmpty, s != "public" {
+                    hasPaidSettingsKey = true
+                } else {
+                    hasPaidSettingsKey = false
+                }
+                let hasKey = (envKey != nil) || hasConnection || hasPaidSettingsKey
+                if hasKey { return }
+                for model in models.list("opencode") {
+                    guard model.cost.contains(where: { $0.input.rawValue > 0 }) else { continue }
+                    models.update("opencode", model.id.rawValue) { draft in
+                        draft = ModelSchema.Info(
+                            id: draft.id,
+                            modelID: draft.modelID,
+                            providerID: draft.providerID,
+                            canonical: draft.canonical,
+                            type: draft.type,
+                            family: draft.family,
+                            name: draft.name,
+                            compatibility: draft.compatibility,
+                            package: draft.package,
+                            settings: draft.settings,
+                            headers: draft.headers,
+                            body: draft.body,
+                            capabilities: draft.capabilities,
+                            variants: draft.variants,
+                            time: draft.time,
+                            cost: draft.cost,
+                            status: draft.status,
+                            enabled: false,
+                            limit: draft.limit
+                        )
+                    }
+                }
+            }
+
+            _ = await ctx.websearch.transform { editor in
+                let snap = state.withLock { $0.snapshot }
+                let targetProvider = WebSearchSchema.ID(rawValue: "opencode")
+                guard case .enabled(let wsInfo)? = snap.remote?.remote.websearch,
+                      wsInfo.provider == .provider(targetProvider),
+                      let conn = snap.connection
+                else { return }
+                editor.add(PluginEffect.WebSearchDefinition(
+                    id: targetProvider.rawValue,
+                    name: "OpenCode Web Search",
+                    execute: { input in
+                        guard let active = await ctx.integration.connection.active("opencode"),
+                              CoreIntegration.Connection.key(active) == CoreIntegration.Connection.key(conn)
+                        else {
+                            throw ToolSchema.ToolError(message: "OpenCode Console connection changed")
+                        }
+                        guard let credential = try await ctx.integration.connection.resolve(active) else {
+                            throw ToolSchema.ToolError(message: "OpenCode Console is not connected")
+                        }
+                        if case .external = credential {
+                            throw ToolSchema.ToolError(message: "OpenCode Console is not connected")
+                        }
+                        let server = try OpencodeConsole.normalizeServer(CoreProvider.ConsoleAccess.server(credential))
+                        var headers = CoreProvider.ConsoleAccess.headers(credential)
+                        headers["Accept"] = "application/json"
+                        headers["Content-Type"] = "application/json"
+                        let reqHeaders = headers
+                        let reqBody = try JSONEncoder().encode(JSONValue.object([
+                            "query": .string(input.query),
+                            "providerID": .string(targetProvider.rawValue),
+                        ]))
+                        let resp = try await OpencodeConsole.withTimeout(ms: OpencodeConsole.webSearchTimeoutMs) {
+                            try await consoleHTTP.send(HTTPRequest(
+                                method: "POST",
+                                url: "\(server)/api/websearch",
+                                headers: reqHeaders,
+                                body: Array(reqBody)
+                            ))
+                        }
+                        guard (200..<300).contains(resp.head.statusCode) else {
+                            throw OpencodeConsole.ConsoleHTTPError(status: resp.head.statusCode)
+                        }
+                        let decoded = try JSONDecoder().decode(WebSearchSchema.Response.self, from: Data(resp.body))
+                        guard decoded.providerID == targetProvider else {
+                            throw ToolSchema.ToolError(
+                                message: "OpenCode web search returned provider \(decoded.providerID.rawValue) instead of \(targetProvider.rawValue)"
+                            )
+                        }
+                        return decoded.results
+                    }
+                ))
+            }
+
+            let apply: @Sendable (_ next: OpencodeConsole.Snapshot) async -> Void = { next in
+                state.withLock { $0.snapshot = next }
+                await publish(next)
+                await ctx.provider.reload()
+                await ctx.websearch.reload()
+                await ctx.mcp.reload()
+            }
+
+            let refresh: @Sendable () async -> Void = {
+                await loading.withPermit {
+                    let next = await load(OpencodeConsole.defaultConfigMaxAgeMs)
+                    await apply(next)
+                }
+            }
+
+            let check: @Sendable (_ maxAgeMs: Int64) async -> Void = { maxAgeMs in
+                await loading.withPermit {
+                    let next = await load(maxAgeMs)
+                    let prev = state.withLock { $0.snapshot }
+                    if prev != next {
+                        await apply(next)
+                    }
+                }
+            }
+
+            // Re-fetch Console config periodically ONLY while signed in; a signed-out location runs no timer.
+            let updatePoll: @Sendable () -> Void = {
+                let connected = state.withLock { $0.snapshot.connection != nil }
+                if !connected {
+                    let old = state.withLock { s -> Task<Void, Never>? in
+                        let t = s.pollTask
+                        s.pollTask = nil
+                        return t
+                    }
+                    old?.cancel()
+                    return
+                }
+                let alreadyRunning = state.withLock { $0.pollTask != nil }
+                if alreadyRunning { return }
+                let task = Task<Void, Never> {
+                    while !Task.isCancelled {
+                        do {
+                            try await Task.sleep(for: .milliseconds(max(1, pollIntervalMs)))
+                        } catch {
+                            break
+                        }
+                        if Task.isCancelled { break }
+                        await check(pollIntervalMs)
+                    }
+                }
+                let raceCancel: Bool = state.withLock { s in
+                    if s.snapshot.connection == nil || s.pollTask != nil {
+                        return true
+                    }
+                    s.pollTask = task
+                    return false
+                }
+                if raceCancel {
+                    task.cancel()
+                }
+            }
+
+            ctx.addFinalizer {
+                let old = state.withLock { s -> Task<Void, Never>? in
+                    let t = s.pollTask
+                    s.pollTask = nil
+                    return t
+                }
+                old?.cancel()
+            }
+
+            ProviderRefresh.onSwitch(ctx: ctx, integrationID: "opencode") {
+                await refresh()
+                updatePoll()
+            }
+            updatePoll()
         }
     )
 
