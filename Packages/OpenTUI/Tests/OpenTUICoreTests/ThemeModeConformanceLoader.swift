@@ -30,13 +30,20 @@ enum ThemeModeConformanceLoader {
             .deletingLastPathComponent() // Packages
             .deletingLastPathComponent() // repo root
 
-        let conformanceURL = repoRoot
+        let upstreamURL = repoRoot
             .appendingPathComponent("upstream")
             .appendingPathComponent("opentui")
             .appendingPathComponent("packages")
             .appendingPathComponent("core")
             .appendingPathComponent("src")
             .appendingPathComponent("theme-mode.conformance.json")
+
+        let conformanceURL = FileManager.default.fileExists(atPath: upstreamURL.path)
+            ? upstreamURL
+            : URL(fileURLWithPath: filePath)
+                .deletingLastPathComponent()
+                .appendingPathComponent("Fixtures")
+                .appendingPathComponent("theme-mode.conformance.json")
 
         let data = try Data(contentsOf: conformanceURL)
         let decoded = try JSONDecoder().decode(RawThemeModeConformanceFile.self, from: data)

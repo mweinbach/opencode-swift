@@ -319,6 +319,13 @@ public enum CrossSpawnSpawner {
             defer { settle() }
 
             try process.run()
+            #if !canImport(Darwin)
+            // On swift-corelibs-foundation, Process.run() keeps the parent's copies of child-facing
+            // pipe endpoints open; close them immediately so drain threads observe EOF on exit.
+            try? stdoutPipe.fileHandleForWriting.close()
+            try? stderrPipe.fileHandleForWriting.close()
+            try? stdinPipe?.fileHandleForReading.close()
+            #endif
 
             let controller = ActiveProcessController(process: process, forceKillAfterMs: forceKillAfterMs)
             let collector = ConcurrentProcessCollector()

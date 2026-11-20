@@ -312,6 +312,7 @@ private struct PosixPTY: Sendable {
     let slaveFD: Int32
 
     static func openPair(width: UInt16 = 80, height: UInt16 = 24) -> PosixPTY? {
+        #if canImport(Darwin)
         let master = posix_openpt(O_RDWR | O_NOCTTY)
         guard master >= 0 else { return nil }
         guard grantpt(master) == 0, unlockpt(master) == 0, let namePtr = ptsname(master) else {
@@ -326,6 +327,15 @@ private struct PosixPTY: Sendable {
         let pair = PosixPTY(masterFD: master, slaveFD: slave)
         pair.setSize(width: width, height: height)
         return pair
+        #else
+        var master: Int32 = -1
+        var slave: Int32 = -1
+        var ws = winsize(ws_row: height, ws_col: width, ws_xpixel: 0, ws_ypixel: 0)
+        guard openpty(&master, &slave, nil, nil, &ws) == 0 else {
+            return nil
+        }
+        return PosixPTY(masterFD: master, slaveFD: slave)
+        #endif
     }
 
     func setSize(width: UInt16, height: UInt16) {

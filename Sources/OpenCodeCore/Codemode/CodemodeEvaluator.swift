@@ -7365,7 +7365,15 @@ extension CodemodeLanguage {
                 return .number(x > 0 ? 1 : -1)
             },
             Method("sqrt", 1) { _, a, _, _ in .number(sqrt(coerceToNumber(a.first ?? .undefined))) },
-            Method("cbrt", 1) { _, a, _, _ in .number(cbrt(coerceToNumber(a.first ?? .undefined))) },
+            Method("cbrt", 1) { _, a, _, _ in
+                let x = coerceToNumber(a.first ?? .undefined)
+                let r = cbrt(x)
+                if r.isFinite {
+                    let n = r.rounded()
+                    if n * n * n == x { return .number(n) }
+                }
+                return .number(r)
+            },
             Method("pow", 2) { _, a, _, _ in .number(pow(coerceToNumber(a.first ?? .undefined), coerceToNumber(a.count > 1 ? a[1] : .undefined))) },
             Method("exp", 1) { _, a, _, _ in .number(exp(coerceToNumber(a.first ?? .undefined))) },
             Method("log", 1) { _, a, _, _ in .number(log(coerceToNumber(a.first ?? .undefined))) },

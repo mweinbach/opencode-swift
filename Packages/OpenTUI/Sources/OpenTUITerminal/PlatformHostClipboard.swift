@@ -888,8 +888,8 @@ public enum PosixClipboardIO {
                         cPath,
                         &actions,
                         nil,
-                        argvBuf.baseAddress,
-                        envpBuf.baseAddress
+                        argvBuf.baseAddress!,
+                        envpBuf.baseAddress!
                     )
                 }
             }

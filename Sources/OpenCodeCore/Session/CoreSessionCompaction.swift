@@ -1,7 +1,7 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+#if canImport(Foundation)
 import Foundation
+#elseif canImport(FoundationEssentials)
+import FoundationEssentials
 #endif
 import Synchronization
 import OpenCodeAI
@@ -454,7 +454,7 @@ public enum CoreSessionCompaction {
                 return window - bufTokens
             }
         }
-        let share = Int(floor(Double(window) * reserveShare))
+        let share = Int((Double(window) * reserveShare).rounded(.down))
         let floorMin = window >= 2 * reserveMin ? reserveMin : 0
         return window - max(share, floorMin)
     }

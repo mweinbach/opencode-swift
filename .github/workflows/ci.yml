@@ -2,8 +2,9 @@ name: CI & Cross-Platform Parity
 
 on:
   push:
-    branches: [main]
+    branches: [main, "ci/**"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   swift-testing-matrix:
@@ -24,11 +25,25 @@ jobs:
     container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Swift on Windows
+      - name: Select Xcode with Swift 6.2 on macOS
+        if: matrix.os == 'macos-15'
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_APP}" ]]; then
+            echo "::error::No Xcode 26.x (Swift 6.2) found in /Applications"
+            ls -la /Applications
+            exit 1
+          fi
+          sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+          swift --version
+      - name: Install Swift 6.2 on Windows
         if: matrix.os == 'windows-2022'
-        uses: swift-actions/setup-swift@v2
+        uses: compnerd/gha-setup-swift@main
         with:
-          swift-version: "6.2"
+          swift-version: swift-6.2.4-release
+          swift-build: 6.2.4-RELEASE
+      - name: Verify Swift version
+        run: swift --version
       - name: Test swift-opencode (Swift Testing)
         run: swift test --disable-xctest --enable-swift-testing
       - name: Test Packages/OpenTUI (Swift Testing)
@@ -41,6 +56,16 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6.2 on macOS
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_APP}" ]]; then
+            echo "::error::No Xcode 26.x (Swift 6.2) found in /Applications"
+            ls -la /Applications
+            exit 1
+          fi
+          sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+          swift --version
       - uses: oven-sh/setup-bun@v2
       - name: Sync pinned upstream commits
         run: ./scripts/parity.sh sync

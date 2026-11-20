@@ -1043,6 +1043,10 @@ public enum CLIServices {
             }
 
             try process.run()
+            #if !canImport(Darwin)
+            try? stdinPipe.fileHandleForReading.close()
+            try? stdoutPipe.fileHandleForWriting.close()
+            #endif
             let pid = process.processIdentifier
 
             // Read first newline-terminated JSON readiness line from stdout

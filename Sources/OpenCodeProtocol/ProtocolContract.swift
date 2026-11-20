@@ -421,14 +421,27 @@ public struct ProtocolURLComponents: Equatable, Hashable, Sendable {
     }
 
     private static func findSchemeDelimiter(in input: Substring) -> Range<Substring.Index>? {
-        guard let range = input.range(of: "://") else { return nil }
-        let scheme = input[..<range.lowerBound]
-        guard let first = scheme.utf8.first, isASCIIAlpha(first) else { return nil }
-        for byte in scheme.utf8.dropFirst() {
-            let ok = isASCIIAlpha(byte) || isASCIIDigit(byte) || byte == 43 || byte == 45 || byte == 46 // + - .
-            if !ok { return nil }
+        var idx = input.startIndex
+        while idx < input.endIndex {
+            if input[idx] == ":" {
+                let next1 = input.index(after: idx)
+                if next1 < input.endIndex, input[next1] == "/" {
+                    let next2 = input.index(after: next1)
+                    if next2 < input.endIndex, input[next2] == "/" {
+                        let end = input.index(after: next2)
+                        let scheme = input[..<idx]
+                        guard let first = scheme.utf8.first, isASCIIAlpha(first) else { return nil }
+                        for byte in scheme.utf8.dropFirst() {
+                            let ok = isASCIIAlpha(byte) || isASCIIDigit(byte) || byte == 43 || byte == 45 || byte == 46 // + - .
+                            if !ok { return nil }
+                        }
+                        return idx..<end
+                    }
+                }
+            }
+            idx = input.index(after: idx)
         }
-        return range
+        return nil
     }
 
     private static func normalizeDotSegments(_ path: String) -> String {

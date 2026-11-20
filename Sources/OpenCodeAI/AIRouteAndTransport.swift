@@ -1403,7 +1403,7 @@ public enum AIRequestExecutor {
 
     private static func clampRetryAfterMs(_ millis: Double) -> Int {
         guard millis.isFinite else { return 0 }
-        let clamped = max(0, ceil(millis))
+        let clamped = max(0, millis.rounded(.up))
         if clamped >= Double(Int.max) { return Int.max }
         return Int(clamped)
     }

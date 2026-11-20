@@ -429,7 +429,14 @@ public struct LocalFileSystem: OpenCodeFileSystem, Sendable {
             case .typeSymbolicLink: entryType = .symlink
             default: entryType = .other
             }
-            let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+            let size: Int64
+            if let numeric = attrs[.size] as? any BinaryInteger {
+                size = Int64(clamping: numeric)
+            } else if let int64 = attrs[.size] as? Int64 {
+                size = int64
+            } else {
+                size = 0
+            }
             let modDate = attrs[.modificationDate] as? Date
             let modMs = modDate.map { Int64(($0.timeIntervalSince1970 * 1_000.0).rounded()) } ?? 0
             return FileStat(type: entryType, size: size, modifiedAtMs: modMs)

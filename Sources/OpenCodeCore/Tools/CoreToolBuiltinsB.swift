@@ -1,7 +1,7 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+#if canImport(Foundation)
 import Foundation
+#elseif canImport(FoundationEssentials)
+import FoundationEssentials
 #endif
 import OpenCodeAI
 import OpenCodePlatform

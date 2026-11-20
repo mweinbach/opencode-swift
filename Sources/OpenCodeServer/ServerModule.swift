@@ -565,7 +565,7 @@ public enum ServerHostInfo {
         while let current = cursor {
             defer { cursor = current.pointee.ifa_next }
             let flags = Int32(current.pointee.ifa_flags)
-            guard (flags & IFF_UP) != 0, (flags & IFF_LOOPBACK) == 0 else { continue }
+            guard (flags & Int32(IFF_UP)) != 0, (flags & Int32(IFF_LOOPBACK)) == 0 else { continue }
             guard let sa = current.pointee.ifa_addr else { continue }
             let family = Int32(sa.pointee.sa_family)
             let wantFamily = ipv6 ? AF_INET6 : AF_INET
@@ -1121,7 +1121,7 @@ public final class ServerAppRuntime: Sendable {
         self.locationActivity = locationActivity
         self.instance = instance
         self.serverInfo = serverInfo
-        let trimmedCacheDir = global.cache.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let trimmedCacheDir = String(global.cache.drop(while: { $0 == "/" }).reversed().drop(while: { $0 == "/" }).reversed())
         let defaultCachePath = "\(trimmedCacheDir.isEmpty ? "" : "/\(trimmedCacheDir)")/models.json"
         let effectiveModelsOpts = modelsDevOptions ?? options.models ?? CoreModel.ModelsDev.Options(
             file: nil,
