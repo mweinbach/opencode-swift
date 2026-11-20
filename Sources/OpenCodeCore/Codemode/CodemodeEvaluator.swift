@@ -484,7 +484,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#Arr [status=implemented hash=ce7f0945851f]
+    // parity: psychoscript/src/runtime/objects.ts#Arr [status=implemented hash=ee5c9661cb82]
     public final class Arr: Obj, @unchecked Sendable {
         private let itemsStorage: Mutex<[Value]>
 
@@ -1721,7 +1721,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#Bytes [status=implemented hash=ec5518effd40]
+    // parity: psychoscript/src/runtime/objects.ts#Bytes [status=implemented hash=75eb8520f393]
     public class Bytes: Wrapper, @unchecked Sendable {
         private let bytesBox: Mutex<[UInt8]>
 
@@ -8237,7 +8237,29 @@ extension CodemodeLanguage {
         return ctor
     }
 
-    // parity: psychoscript/src/stdlib/buffer.ts#bufferGlobal [status=implemented hash=da2ad403be02]
+    /// The bytes `Buffer.from(...)` and `Buffer(...)` make from a non-string, non-Uint8Array source: an array, the
+    /// `{ type: "Buffer", data }` form `toJSON` gives, or an array-like object. Under `withReads`.
+    static func bufferBytes(_ value: Value, eval: Evaluator) async throws -> [UInt8] {
+        if case .object(let arr as Arr) = value { return arr.items.map(toUint8) }
+        if case .object(let obj) = value {
+            let data = get(obj, "data")
+            let type = get(obj, "type")
+            // `type` and `data` decide the path, so a getter among them is read before `length` could be.
+            if readsPending() { return [] }
+            if case .string("Buffer") = type, case .object(let items as Arr) = data { return items.items.map(toUint8) }
+            if case .number(let n) = get(obj, "length") {
+                let count = max(0, n.isFinite ? Int(n) : 0)
+                try checkArrayLength(count)
+                return (0..<count).map { toUint8(get(obj, String($0))) }
+            }
+            if !readsPending(), (try? requireIteratorMethod(value)) != nil {
+                return try await eval.collectIterable(value).map(toUint8)
+            }
+        }
+        throw typeError("The first argument must be of type string or an instance of Buffer, Uint8Array, or Array or an Array-like Object. Received \(describeValue(value))")
+    }
+
+    // parity: psychoscript/src/stdlib/buffer.ts#bufferGlobal [status=implemented hash=aca9f38f2fab]
     public static func bufferGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.Buffer, [
             Method("toString", 1) { tv, args, _, _ in
@@ -8250,29 +8272,41 @@ extension CodemodeLanguage {
                 }
             },
         ])
+        let bytesFrom: @Sendable ([Value], Evaluator) async throws -> [UInt8] = { args, eval in
+            let first = args.first ?? .undefined
+            if case .string(let s) = first {
+                let enc = (args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : "utf8").lowercased()
+                if enc == "base64" { return (try? base64ToBytes(s)) ?? [] }
+                return Array(s.utf8)
+            }
+            if case .object(let b as Bytes) = first {
+                let data = b.data
+                let offset = args.count > 1 && !args[1].isUndefined ? resolveSliceIndex(coerceToInteger(args[1]), length: data.count) : 0
+                var end = data.count
+                if args.count > 2 && !args[2].isUndefined {
+                    end = min(data.count, offset + max(0, coerceToInteger(args[2])))
+                }
+                return offset < end ? Array(data[offset..<end]) : []
+            }
+            return try await bufferBytes(first, eval: eval)
+        }
         let ctor = constructor(builtins, builtins.Buffer, NativeOptions(
             name: "Buffer",
-            length: 1,
-            call: { _, args, _, _ in
-                let s = coerceToString(args.first ?? .undefined)
-                return .object(BufferObj(proto: builtins.Buffer, data: Array(s.utf8)))
+            length: 2,
+            call: { _, args, _, eval in
+                try await withReads(eval) { .object(BufferObj(proto: builtins.Buffer, data: try await bytesFrom(args, eval))) }
+            },
+            construct: { args, newTarget, eval in
+                try await withReads(eval) {
+                    .object(BufferObj(proto: prototypeFrom(newTarget, fallback: builtins.Buffer), data: try await bytesFrom(args, eval)))
+                }
             }
         ))
+        // Bun inherits this from Uint8Array; Buffer's constructor here does not.
+        define(ctor, "BYTES_PER_ELEMENT", .number(1), frozen)
         methods(builtins, ctor, [
-            Method("from", 2) { _, args, _, eval in
-                let first = args.first ?? .undefined
-                if case .string(let s) = first {
-                    let enc = (args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : "utf8").lowercased()
-                    if enc == "base64" {
-                        return .object(BufferObj(proto: builtins.Buffer, data: (try? base64ToBytes(s)) ?? []))
-                    }
-                    return .object(BufferObj(proto: builtins.Buffer, data: Array(s.utf8)))
-                }
-                if case .object(let b as Bytes) = first {
-                    return .object(BufferObj(proto: builtins.Buffer, data: b.data))
-                }
-                let items = try await eval.collectIterable(first)
-                return .object(BufferObj(proto: builtins.Buffer, data: items.map { UInt8(truncatingIfNeeded: coerceToInteger($0)) }))
+            Method("from", 3) { _, args, _, eval in
+                try await withReads(eval) { .object(BufferObj(proto: builtins.Buffer, data: try await bytesFrom(args, eval))) }
             },
             Method("concat", 1) { _, args, _, eval in
                 let list = try await eval.collectIterable(args.first ?? .undefined)
@@ -8310,41 +8344,45 @@ extension CodemodeLanguage {
         ))
     }
 
-    // parity: psychoscript/src/stdlib/bytes.ts#textDecoderGlobal [status=implemented hash=77bdbc72cf54]
+    // parity: psychoscript/src/stdlib/bytes.ts#textDecoderGlobal [status=implemented hash=3351760fd92f]
     public static func textDecoderGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.TextDecoder, [
-            Method("decode", 1) { tv, args, _, _ in
+            Method("decode", 0) { tv, args, _, eval in
                 let dec = try receiver(TextDecoderObj.self, tv, "TextDecoder.prototype.decode")
-                guard let first = args.first, !first.isUndefined else { return .string("") }
-                guard case .object(let bytes as Bytes) = first else {
-                    throw typeError("TextDecoder.prototype.decode expects a Uint8Array.")
+                let first = args.first ?? .undefined
+                var bytes: [UInt8] = []
+                switch first {
+                case .undefined: break
+                case .object(let b as Bytes): bytes = b.data
+                default: throw typeError("TextDecoder.decode expects a Uint8Array, received \(describeValue(first)).")
                 }
-                var raw = bytes.data
-                if !dec.ignoreBOM && raw.count >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF {
-                    raw.removeFirst(3)
+                let options = args.count > 1 ? args[1] : .undefined
+                switch options {
+                case .undefined, .object, .null: break
+                default: throw typeError("TextDecoder.decode expects an options object.")
                 }
-                if dec.fatal {
-                    guard let s = String(bytes: raw, encoding: .utf8) else {
-                        throw typeError("The encoded data was not valid for encoding utf-8")
-                    }
-                    return .string(s)
+                return try await withReads(eval) {
+                    let stream: Bool = if case .object(let opts) = options { get(opts, "stream").isTruthy } else { false }
+                    if readsPending() { return .undefined }
+                    return .string(try dec.decode(bytes, stream: stream))
                 }
-                return .string(String(decoding: raw, as: UTF8.self))
             },
         ])
         return constructor(builtins, builtins.TextDecoder, NativeOptions(
             name: "TextDecoder",
             length: 0,
             call: requiresNew("TextDecoder"),
-            construct: { args, _, _ in
+            construct: { args, _, eval in
                 let enc = args.first.map { $0.isUndefined ? "utf-8" : coerceToString($0).lowercased() } ?? "utf-8"
-                var fatal = false
-                var ignoreBOM = false
-                if args.count > 1, case .object(let opts) = args[1] {
-                    fatal = get(opts, "fatal").isTruthy
-                    ignoreBOM = get(opts, "ignoreBOM").isTruthy
+                return try await withReads(eval) {
+                    var fatal = false
+                    var ignoreBOM = false
+                    if args.count > 1, case .object(let opts) = args[1] {
+                        fatal = get(opts, "fatal").isTruthy
+                        ignoreBOM = get(opts, "ignoreBOM").isTruthy
+                    }
+                    return .object(TextDecoderObj(proto: builtins.TextDecoder, encoding: enc, fatal: fatal, ignoreBOM: ignoreBOM))
                 }
-                return .object(TextDecoderObj(proto: builtins.TextDecoder, encoding: enc, fatal: fatal, ignoreBOM: ignoreBOM))
             }
         ))
     }
@@ -8392,11 +8430,14 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/stdlib/web.ts#structuredCloneGlobal [status=implemented hash=85b289a3fa85]
+    // parity: psychoscript/src/stdlib/web.ts#structuredCloneGlobal [status=implemented hash=813a5692f7f9]
+    /// The clone reads program getters' values (read ahead in program code); each round starts a fresh copy.
     public static func structuredCloneGlobal(_ builtins: Builtins) -> Native {
-        nativeFn(builtins, name: "structuredClone", length: 1) { _, args, _, _ in
-            guard let json = try toJsonValue(args.first ?? .undefined) else { return .undefined }
-            return try fromJson(builtins, json)
+        nativeFn(builtins, name: "structuredClone", length: 1) { _, args, _, eval in
+            try await withReads(eval) {
+                guard let json = try toJsonValue(args.first ?? .undefined) else { return .undefined }
+                return try fromJson(builtins, json)
+            }
         }
     }
 
@@ -10731,8 +10772,6 @@ extension CodemodeLanguage {
                 timeoutMs: timeoutMs
             )
             self.prelude = Prelude()
-            builtins.Array.guardInfo = ProtectorGuard(key: .symbol(CodemodeLanguage.IteratorSymbol), protector: protector)
-            builtins.Iterator.guardInfo = ProtectorGuard(key: .string("next"), protector: protector)
             self.intrinsics = IntrinsicNames(
                 made: builtins.allPrototypes,
                 roots: Roots(globals: [], builtins: builtins)
@@ -10741,6 +10780,13 @@ extension CodemodeLanguage {
 
         public func registerSource(_ source: Source) {
             cache.withLock { $0.sources[source.id] = source }
+        }
+
+        /// Guards `Array.prototype[Symbol.iterator]` and the built-in iterators' `next` once the intrinsics are made
+        /// (see `Protector`): a later change to either clears the protector for the run.
+        public func armProtector() {
+            builtins.Array.guardInfo = ProtectorGuard(key: .symbol(CodemodeLanguage.IteratorSymbol), protector: protector)
+            builtins.Iterator.guardInfo = ProtectorGuard(key: .string("next"), protector: protector)
         }
 
         /// Resolves a built-in/host module specifier to its exported value (cached per normalized name).
@@ -11132,10 +11178,18 @@ extension CodemodeLanguage {
             do {
                 let hostMap = setup.globals?(runObj) ?? [:]
                 try interp.evaluator.installBuiltins(hostGlobalsMap: hostMap, bindings: bindings)
+                interp.armProtector()
                 let rawValue = try await runWithOptionalTimeout(timeoutMs: effectiveTimeout) {
                     try await interp.evaluator.evaluateProgram(program)
                 }
-                let jsonVal = try toJsonValue(rawValue, dropFunctions: setup.translate.functions == .drop) ?? .null
+                // A program getter's value crosses as data: it is read ahead in program code (see `withReads`).
+                let dropFunctions = setup.translate.functions == .drop
+                var copied: JSONValue = .null
+                _ = try await withReads(interp.evaluator) {
+                    copied = try toJsonValue(rawValue, dropFunctions: dropFunctions) ?? .null
+                    return .undefined
+                }
+                let jsonVal = copied
                 let cancelled = interp.evaluator.cancelPendingWork()
                 var warnings = vm.diagnostics()
                 if cancelled > 0 {
