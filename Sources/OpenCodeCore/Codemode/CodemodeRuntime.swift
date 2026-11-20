@@ -1164,7 +1164,7 @@ public enum CodemodeEngine {
                 var offset = 0
                 if let first = args.first, !first.isUndefined {
                     if case .string(let q) = first {
-                        query = q
+                        query = q.toHostString()
                     } else if let j = try CodemodeLanguage.toJsonValue(first, dropFunctions: true), case .object(let dict) = j {
                         if case .string(let q) = dict["query"] { query = q }
                         if case .string(let n) = dict["namespace"] { ns = n }
@@ -1285,11 +1285,14 @@ public enum CodemodeEngine {
                     cur = inner
                 case .member(let obj, let prop, _, let loc):
                     switch prop {
-                    case .identifier(let s, _), .string(let s, _):
+                    case .identifier(let s, _):
                         segments.append(s)
                         cur = obj
+                    case .string(let s, _):
+                        segments.append(s.toHostString())
+                        cur = obj
                     case .computed(.literalString(let s, _), _):
-                        segments.append(s)
+                        segments.append(s.toHostString())
                         cur = obj
                     default:
                         if isRootedAtTools(obj) {
@@ -1324,7 +1327,7 @@ public enum CodemodeEngine {
                 if case .identifier("require", _) = callee {
                     if let first = args.first, case .expr(let srcExpr) = first {
                         if case .literalString(let s, _) = srcExpr {
-                            if CodemodeLanguage.moduleName(s) == "tools" {
+                            if CodemodeLanguage.moduleName(s.toHostString()) == "tools" {
                                 return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                             }
                         } else {
@@ -1360,7 +1363,7 @@ public enum CodemodeEngine {
                 return nil
             case .importExpr(let src, let loc):
                 if case .literalString(let s, _) = src {
-                    if CodemodeLanguage.moduleName(s) == "tools" {
+                    if CodemodeLanguage.moduleName(s.toHostString()) == "tools" {
                         return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                     }
                 } else {

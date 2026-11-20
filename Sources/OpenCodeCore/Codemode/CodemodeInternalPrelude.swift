@@ -301,7 +301,7 @@ async function $vmResult(value) {
             if case .object(let obj) = arg(args, 0) { return .bool(obj is Arr) }
             return .bool(false)
         }
-        add("typeof") { args in .string(typeofValue(arg(args, 0))) }
+        add("typeof") { args in .string(JSString(typeofValue(arg(args, 0)))) }
         add("$IsObj") { args in
             if case .object = arg(args, 0) { return .bool(true) }
             return .bool(false)
@@ -359,7 +359,7 @@ async function $vmResult(value) {
         switch value {
         case .null: return .null
         case .bool(let b): return .bool(b)
-        case .string(let s): return .string(s)
+        case .string(let s): return .string(s.toHostString())
         case .number(let n):
             guard n.isFinite else { return .null }
             if n == Double(Int64(n)) && n >= -9_007_199_254_740_991 && n <= 9_007_199_254_740_991 && !(n == 0 && n.sign == .minus) {

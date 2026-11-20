@@ -80,21 +80,22 @@ extension CodemodeLanguage {
     }
 
     /// How a method or accessor keyed by `key` is named: the key, or `[description]` for a symbol.
-    static func methodName(_ key: PropertyKey) -> String {
+    static func methodName(_ key: PropertyKey) -> JSString {
         switch key {
         case .string(let s): return s
         case .symbol(let sym):
             if sym == IteratorSymbol { return "[Symbol.iterator]" }
             if sym == AsyncIteratorSymbol { return "[Symbol.asyncIterator]" }
-            return "[\(sym.description)]"
+            return JSString("[\(sym.description)]")
         }
     }
 
     /// A non-computed class or object key's name.
-    static func literalKeyName(_ key: PropertyKeyExpr) -> String {
+    static func literalKeyName(_ key: PropertyKeyExpr) -> JSString {
         switch key {
-        case .identifier(let s, _), .string(let s, _): return s
-        case .number(let n, _): return formatJSNumber(n)
+        case .identifier(let s, _): return JSString(s)
+        case .string(let s, _): return s
+        case .number(let n, _): return JSString(formatJSNumber(n))
         case .computed: return ""
         }
     }
@@ -110,7 +111,7 @@ extension CodemodeLanguage {
     static func isErrorConstructor(_ value: Value, builtins: Builtins) -> Builtin? {
         guard case .object(let obj) = value, let builtin = obj as? Builtin,
               case .string(let name) = peek(builtin, .string("name")),
-              let type = ErrorType(rawValue: name),
+              let type = ErrorType(rawValue: name.toWellFormedString()),
               case .object(let ctor) = peek(builtins.errorProto(type), .string("constructor")),
               ctor === builtin
         else { return nil }
@@ -176,7 +177,7 @@ extension CodemodeLanguage.Evaluator {
             frame = current.parent
             guard let site = current.site, site.location != nil, !CodemodeLanguage.inPrelude(site) else { continue }
             let name: String? = current.function.map { fn in
-                if case .string(let s) = CodemodeLanguage.peek(fn, .string("name")), !s.isEmpty { return s }
+                if case .string(let s) = CodemodeLanguage.peek(fn, .string("name")), !s.isEmpty { return s.toWellFormedString() }
                 return "<anonymous>"
             }
             trace += CodemodeLanguage.stackFrame(site, name: name)
@@ -202,7 +203,7 @@ extension CodemodeLanguage.Evaluator {
     /// An anonymous function or class gets the name of what it is assigned to.
     func evalNamedExpression(
         _ expr: CodemodeLanguage.Expression,
-        name: String,
+        name: CodemodeLanguage.JSString,
         env: CodemodeLanguage.LexEnv,
         thisValue: CodemodeLanguage.Value
     ) async throws -> CodemodeLanguage.Value {
@@ -245,7 +246,7 @@ extension CodemodeLanguage.Evaluator {
         _ cls: CodemodeLanguage.ClassPayload,
         env: CodemodeLanguage.LexEnv,
         thisValue: CodemodeLanguage.Value,
-        nameHint: String? = nil
+        nameHint: CodemodeLanguage.JSString? = nil
     ) async throws -> CodemodeLanguage.Value {
         let node = CodemodeLanguage.AstNode(type: "ClassExpression", location: cls.loc)
         let classEnv = CodemodeLanguage.LexEnv(parent: env, isFunctionScope: false)

@@ -16,7 +16,7 @@ extension CodemodeLanguage {
         case null
         case bool(Bool)
         case number(Double)
-        case string(String)
+        case string(JSString)
         case symbol(RuntimeSymbol)
         case object(Obj)
         case hostNamespace(HostNamespace)
@@ -45,11 +45,16 @@ extension CodemodeLanguage {
     }
 
     public enum PropertyKey: Equatable, Hashable, Sendable {
-        case string(String)
+        case string(JSString)
         case symbol(RuntimeSymbol)
 
-        public var stringKey: String? {
+        public var jsStringKey: JSString? {
             if case .string(let s) = self { return s }
+            return nil
+        }
+
+        public var stringKey: String? {
+            if case .string(let s) = self { return s.toWellFormedString() }
             return nil
         }
     }
@@ -361,8 +366,8 @@ extension CodemodeLanguage {
         }
 
         // parity: psychoscript/src/runtime/objects.ts#Obj.toString [status=implemented hash=41f85da0afbd]
-        open func jsToString() -> String {
-            "[object \(tag)]"
+        open func jsToString() -> JSString {
+            JSString("[object \(tag)]")
         }
 
         // parity: psychoscript/src/runtime/objects.ts#Obj.toPrimitive [status=implemented hash=f658a26f7c38]
@@ -386,7 +391,7 @@ extension CodemodeLanguage {
         private func inspectBody(_ item: (Value) -> String) -> String {
             if !hasProgramAccessors {
                 let pairs = CodemodeLanguage.entries(self).map { k, v in
-                    "\(CodemodeLanguage.jsonEscapeString(k)):\(item(v))"
+                    "\(CodemodeLanguage.jsonQuote(k)):\(item(v))"
                 }
                 return "{\(pairs.joined(separator: ","))}"
             }
@@ -399,7 +404,7 @@ extension CodemodeLanguage {
                 } else {
                     shown = item(CodemodeLanguage.getOwn(self, key))
                 }
-                return "\(CodemodeLanguage.jsonEscapeString(key)):\(shown)"
+                return "\(CodemodeLanguage.jsonQuote(key)):\(shown)"
             }
             return "{\(pairs.joined(separator: ","))}"
         }
@@ -414,7 +419,7 @@ extension CodemodeLanguage {
                         continue
                     }
                     if let copied = item(value) {
-                        dict[key] = copied
+                        dict[key.toHostString()] = copied
                     }
                 }
                 return .object(dict)
@@ -423,7 +428,7 @@ extension CodemodeLanguage {
             for key in CodemodeLanguage.keys(self) where key != "__proto__" {
                 guard let slot = CodemodeLanguage.own(self, .string(key)), !CodemodeLanguage.isSetterOnly(slot) else { continue }
                 if let copied = item(CodemodeLanguage.getOwn(self, key)) {
-                    dict[key] = copied
+                    dict[key.toHostString()] = copied
                 }
             }
             return .object(dict)
@@ -537,10 +542,10 @@ extension CodemodeLanguage {
         public override var describe: String { "an array" }
 
         // parity: psychoscript/src/runtime/objects.ts#Arr.toString [status=implemented hash=63d245ffcfbe]
-        public override func jsToString() -> String {
-            items.map { item in
+        public override func jsToString() -> JSString {
+            items.map { item -> JSString in
                 item.isNullish ? "" : CodemodeLanguage.coerceToString(item)
-            }.joined(separator: ",")
+            }.joinedJS(separator: ",")
         }
 
         public var items: [Value] {
@@ -626,11 +631,11 @@ extension CodemodeLanguage {
         public override var tag: String { "Error" }
 
         // parity: psychoscript/src/runtime/objects.ts#ErrorObj.toString [status=implemented hash=03085e3a4fc2]
-        public override func jsToString() -> String {
+        public override func jsToString() -> JSString {
             let n = CodemodeLanguage.peek(self, .string("name"))
             let m = CodemodeLanguage.peek(self, .string("message"))
-            let shownName: String = if case .string(let s) = n { s } else { "Error" }
-            let shownMessage: String = if case .string(let s) = m { s } else { "" }
+            let shownName: JSString = if case .string(let s) = n { s } else { "Error" }
+            let shownMessage: JSString = if case .string(let s) = m { s } else { "" }
             if shownMessage.isEmpty { return shownName }
             if shownName.isEmpty { return shownMessage }
             return "\(shownName): \(shownMessage)"
@@ -639,16 +644,16 @@ extension CodemodeLanguage {
         // parity: psychoscript/src/runtime/objects.ts#ErrorObj.inspect [status=implemented hash=9c76db74334d]
         public override func inspect(_ item: (Value) -> String) -> String {
             _ = item
-            return jsToString()
+            return jsToString().toHostString()
         }
     }
 
     // parity: psychoscript/src/runtime/objects.ts#errorToString [status=implemented hash=b33867dd972b]
-    public static func errorToString(_ selfObj: Obj, read: (Obj, String) -> Value = { CodemodeLanguage.peek($0, .string($1)) }) -> String {
+    public static func errorToString(_ selfObj: Obj, read: (Obj, JSString) -> Value = { CodemodeLanguage.peek($0, .string($1)) }) -> JSString {
         let n = read(selfObj, "name")
         let m = read(selfObj, "message")
-        let shownName = n.isUndefined ? "Error" : coerceToString(n)
-        let shownMessage = m.isUndefined ? "" : coerceToString(m)
+        let shownName: JSString = n.isUndefined ? "Error" : coerceToString(n)
+        let shownMessage: JSString = m.isUndefined ? "" : coerceToString(m)
         if shownMessage.isEmpty { return shownName }
         if shownName.isEmpty { return shownMessage }
         return "\(shownName): \(shownMessage)"
@@ -684,7 +689,7 @@ extension CodemodeLanguage {
         /// The slot's value for `error`, formatting the header on first read; `nil` once a program wrote the property.
         func resolve(_ error: ErrorObj) -> Value? {
             if let trace {
-                let text = Value.string(CodemodeLanguage.errorToString(error) + trace)
+                let text = Value.string(CodemodeLanguage.errorToString(error) + JSString(trace))
                 return state.withLock { s -> Value? in
                     switch s {
                     case .pending:
@@ -723,9 +728,9 @@ extension CodemodeLanguage {
         // parity: psychoscript/src/runtime/objects.ts#Callable.describe [status=implemented hash=ade8adab0d14]
         public override var describe: String { "a function" }
 
-        public override func jsToString() -> String {
+        public override func jsToString() -> JSString {
             let n = CodemodeLanguage.get(self, "name")
-            let name = if case .string(let s) = n { s } else { "" }
+            let name: JSString = if case .string(let s) = n { s } else { "" }
             return "function \(name)() { [native code] }"
         }
     }
@@ -742,7 +747,7 @@ extension CodemodeLanguage {
             self.closure = closure
             self.code = code
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "name", .string(payload.name ?? ""), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "name", .string(JSString(payload.name ?? "")), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "length", .number(Double(payload.expectedArgumentCount)), CodemodeLanguage.readonly)
         }
 
@@ -778,7 +783,7 @@ extension CodemodeLanguage {
 
     /// A function's own string `name`, read without running program code.
     static func ownName(_ target: Obj) -> String {
-        if case .data(.string(let s), _, _, _)? = own(target, .string("name")) { return s }
+        if case .data(.string(let s), _, _, _)? = own(target, .string("name")) { return s.toWellFormedString() }
         return ""
     }
 
@@ -818,7 +823,7 @@ extension CodemodeLanguage {
             self.values = values
             super.init(proto: proto)
             for (idx, v) in values.enumerated() {
-                CodemodeLanguage.define(self, String(idx), v, CodemodeLanguage.data)
+                CodemodeLanguage.define(self, JSString(String(idx)), v, CodemodeLanguage.data)
             }
             CodemodeLanguage.define(self, "length", .number(Double(values.count)), CodemodeLanguage.hidden)
         }
@@ -894,7 +899,7 @@ extension CodemodeLanguage {
             self.supportsCallback = options.callback
             self.companionHalf = companion
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "name", .string(options.name), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "name", .string(JSString(options.name)), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "length", .number(Double(options.length)), CodemodeLanguage.readonly)
         }
 
@@ -919,7 +924,7 @@ extension CodemodeLanguage {
         public let boundArgs: [Value]
 
         /// `name` and `length` are the target's, as `Function.prototype.bind` read them.
-        public init(proto: Obj?, target: Callable, boundThis: Value, boundArgs: [Value], name: String, length: Int) {
+        public init(proto: Obj?, target: Callable, boundThis: Value, boundArgs: [Value], name: JSString, length: Int) {
             self.target = target
             self.boundThis = boundThis
             self.boundArgs = boundArgs
@@ -1475,7 +1480,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/objects.ts#PositionSource [status=implemented hash=e288d6bb89d5]
     public enum PositionSource: Sendable {
         case array(Arr)
-        case string(String)
+        case string(JSString)
         case bytes(Bytes)
         case map(MapObj)
         case set(SetObj)
@@ -1531,11 +1536,20 @@ extension CodemodeLanguage {
             if cursorBox.done { return Step(value: .undefined, done: true) }
             switch source {
             case .string(let str):
-                let scalars = Array(str.unicodeScalars)
+                let units = str.utf16Units
                 let idx = cursorBox.index
-                guard idx < scalars.count else { return finish() }
+                guard idx < units.count else { return finish() }
+                let u = units[idx]
+                if u >= 0xD800 && u <= 0xDBFF, idx + 1 < units.count {
+                    let lo = units[idx + 1]
+                    if lo >= 0xDC00 && lo <= 0xDFFF {
+                        cursorBox.index = idx + 2
+                        let cp = 0x10000 + ((UInt32(u - 0xD800) << 10) | UInt32(lo - 0xDC00))
+                        return Step(value: .string(JSString(codePoint: cp)), done: false)
+                    }
+                }
                 cursorBox.index = idx + 1
-                return Step(value: .string(String(scalars[idx])), done: false)
+                return Step(value: .string(JSString(unit: u)), done: false)
             case .map(let m):
                 let at = m.table.advance(cursorBox)
                 guard at >= 0, let (k, v) = m.table.entry(at: at) else { return Step(value: .undefined, done: true) }
@@ -1549,13 +1563,13 @@ extension CodemodeLanguage {
                 let idx = cursorBox.index
                 guard idx < list.count else { return finish() }
                 cursorBox.index = idx + 1
-                return yieldStep(key: .string(list[idx].0), value: .string(list[idx].1))
+                return yieldStep(key: .string(JSString(list[idx].0)), value: .string(JSString(list[idx].1)))
             case .searchParams(let sp):
                 let list = sp.pairs
                 let idx = cursorBox.index
                 guard idx < list.count else { return finish() }
                 cursorBox.index = idx + 1
-                return yieldStep(key: .string(list[idx].0), value: .string(list[idx].1))
+                return yieldStep(key: .string(JSString(list[idx].0)), value: .string(JSString(list[idx].1)))
             case .array(let arr):
                 let items = arr.items
                 let idx = cursorBox.index
@@ -1606,7 +1620,7 @@ extension CodemodeLanguage {
         // parity: psychoscript/src/runtime/objects.ts#Wrapper.inspect [status=implemented hash=361a036c27c5]
         public override func inspect(_ item: (Value) -> String) -> String {
             _ = item
-            return jsToString()
+            return jsToString().toHostString()
         }
     }
 
@@ -1634,10 +1648,10 @@ extension CodemodeLanguage {
         }
 
         // parity: psychoscript/src/runtime/objects.ts#DateObj.toString [status=implemented hash=61588c38428e]
-        public override func jsToString() -> String {
+        public override func jsToString() -> JSString {
             let ms = epochMs
             guard ms.isFinite else { return "Invalid Date" }
-            return CodemodeLanguage.formatISODate(epochMs: ms)
+            return JSString(CodemodeLanguage.formatISODate(epochMs: ms))
         }
 
         // parity: psychoscript/src/runtime/objects.ts#DateObj.toPrimitive [status=implemented hash=8d3d8d376b87]
@@ -1649,12 +1663,12 @@ extension CodemodeLanguage {
         // parity: psychoscript/src/runtime/objects.ts#DateObj.toHost [status=implemented hash=9d118f3e3e12]
         public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
             _ = item
-            return .string(jsToString())
+            return .string(jsToString().toHostString())
         }
 
         public override func inspect(_ item: (Value) -> String) -> String {
             _ = item
-            return jsToString()
+            return jsToString().toHostString()
         }
     }
 
@@ -1668,8 +1682,8 @@ extension CodemodeLanguage {
             self.pattern = pattern
             self.flags = String(Set(flags).sorted())
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "source", .string(CodemodeLanguage.escapeRegExpPattern(pattern)), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "flags", .string(self.flags), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "source", .string(JSString(CodemodeLanguage.escapeRegExpPattern(pattern))), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "flags", .string(JSString(self.flags)), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "global", .bool(flags.contains("g")), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "ignoreCase", .bool(flags.contains("i")), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "multiline", .bool(flags.contains("m")), CodemodeLanguage.readonly)
@@ -1705,19 +1719,19 @@ extension CodemodeLanguage {
         }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toString [status=implemented hash=0e8045c353fa]
-        public override func jsToString() -> String {
-            "/\(source)/\(flags)"
+        public override func jsToString() -> JSString {
+            JSString("/\(source)/\(flags)")
         }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toHost [status=implemented hash=cb210836aa66]
         public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
             _ = item
-            return .string(jsToString())
+            return .string(jsToString().toHostString())
         }
 
         public override func inspect(_ item: (Value) -> String) -> String {
             _ = item
-            return jsToString()
+            return jsToString().toHostString()
         }
     }
 
@@ -1825,10 +1839,10 @@ extension CodemodeLanguage {
         public override var tag: String { "URLSearchParams" }
 
         // parity: psychoscript/src/runtime/objects.ts#URLSearchParamsObj.toString [status=implemented hash=0c724ece7d0a]
-        public override func jsToString() -> String {
-            pairs.map { k, v in
+        public override func jsToString() -> JSString {
+            JSString(pairs.map { k, v in
                 "\(CodemodeLanguage.formEncode(k))=\(CodemodeLanguage.formEncode(v))"
-            }.joined(separator: "&")
+            }.joined(separator: "&"))
         }
 
         // parity: psychoscript/src/runtime/objects.ts#URLSearchParamsObj.toHost [status=implemented hash=8414ef4f12df]
@@ -1845,7 +1859,7 @@ extension CodemodeLanguage {
 
         public override func inspect(_ item: (Value) -> String) -> String {
             _ = item
-            return jsToString()
+            return jsToString().toHostString()
         }
     }
 
@@ -1997,7 +2011,7 @@ extension CodemodeLanguage {
             set { partsBox.withLock { $0.pathname = newValue } }
         }
         public var search: String {
-            let qs = searchParams.jsToString()
+            let qs = searchParams.jsToString().toWellFormedString()
             if !qs.isEmpty { return "?\(qs)" }
             return partsBox.withLock { $0.search }
         }
@@ -2031,7 +2045,7 @@ extension CodemodeLanguage {
         }
 
         // parity: psychoscript/src/runtime/objects.ts#URLObj.toString [status=implemented hash=5d785bac38a1]
-        public override func jsToString() -> String { href }
+        public override func jsToString() -> JSString { JSString(href) }
 
         // parity: psychoscript/src/runtime/objects.ts#URLObj.toHost [status=implemented hash=e619b7325ffa]
         public override func toHost(_ item: (Value) -> JSONValue?) -> JSONValue {
@@ -2105,8 +2119,8 @@ extension CodemodeLanguage {
         public override var tag: String { "Uint8Array" }
 
         // parity: psychoscript/src/runtime/objects.ts#Bytes.toString [status=implemented hash=fec9e28744d8]
-        public override func jsToString() -> String {
-            data.map(String.init).joined(separator: ",")
+        public override func jsToString() -> JSString {
+            JSString(data.map(String.init).joined(separator: ","))
         }
 
         // parity: psychoscript/src/runtime/objects.ts#Bytes.inspect [status=implemented hash=ecea006048d8]
@@ -2145,8 +2159,8 @@ extension CodemodeLanguage {
         }
 
         // parity: psychoscript/src/stdlib/buffer.ts#BufferObj.toString [status=implemented hash=dfb87aa69579]
-        public override func jsToString() -> String {
-            String(decoding: data, as: UTF8.self)
+        public override func jsToString() -> JSString {
+            JSString(String(decoding: data, as: UTF8.self))
         }
 
         // parity: psychoscript/src/stdlib/buffer.ts#BufferObj.toHost [status=implemented hash=12e39c28619e]
@@ -2185,7 +2199,7 @@ extension CodemodeLanguage {
             self.fatal = fatal
             self.ignoreBOM = ignoreBOM
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "encoding", .string(encoding), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "encoding", .string(JSString(encoding)), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "fatal", .bool(fatal), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "ignoreBOM", .bool(ignoreBOM), CodemodeLanguage.readonly)
         }
@@ -2302,20 +2316,20 @@ extension CodemodeLanguage {
     // MARK: - Object & Value Helpers (src/language/runtime/objects.ts)
 
     // parity: psychoscript/src/runtime/objects.ts#coerceToString [status=implemented hash=3bdfa14b7936]
-    public static func coerceToString(_ value: Value) -> String {
+    public static func coerceToString(_ value: Value) -> JSString {
         switch value {
         case .undefined: return "undefined"
         case .null: return "null"
         case .bool(let b): return b ? "true" : "false"
-        case .number(let n): return formatJSNumber(n)
+        case .number(let n): return JSString(formatJSNumber(n))
         case .string(let s): return s
-        case .symbol(let sym): return symbolString(sym)
+        case .symbol(let sym): return JSString(symbolString(sym))
         case .hostNamespace: return "[object Object]"
         case .object(let obj):
             if let arr = obj as? Arr {
-                return arr.items.map { item in
+                return arr.items.map { item -> JSString in
                     item.isNullish ? "" : coerceToString(item)
-                }.joined(separator: ",")
+                }.joinedJS(separator: ",")
             }
             return obj.jsToString()
         }
@@ -2358,10 +2372,10 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#parseArrayIndex [status=implemented hash=b49e0ee018a3]
-    public static func parseArrayIndex(_ key: String) -> Int? {
-        guard !key.isEmpty else { return nil }
-        if key == "0" { return 0 }
-        let bytes = Array(key.utf8)
+    public static func parseArrayIndex(_ key: JSString) -> Int? {
+        guard let swiftKey = key.wellFormedString, !swiftKey.isEmpty else { return nil }
+        if swiftKey == "0" { return 0 }
+        let bytes = Array(swiftKey.utf8)
         if bytes[0] == UInt8(ascii: "0") { return nil }
         var acc: UInt64 = 0
         for b in bytes {
@@ -2415,12 +2429,12 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#hasOwn [status=implemented hash=33209d0b02b0]
-    public static func hasOwn(_ obj: Obj, _ key: String) -> Bool {
+    public static func hasOwn(_ obj: Obj, _ key: JSString) -> Bool {
         own(obj, .string(key)) != nil
     }
 
     // parity: psychoscript/src/runtime/objects.ts#getOwn [status=implemented hash=590b0afd192b]
-    public static func getOwn(_ obj: Obj, _ key: String) -> Value {
+    public static func getOwn(_ obj: Obj, _ key: JSString) -> Value {
         getOwn(obj, .string(key))
     }
 
@@ -2443,7 +2457,7 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#get [status=implemented hash=dad0c4fa21ce]
-    public static func get(_ obj: Obj, _ key: String) -> Value {
+    public static func get(_ obj: Obj, _ key: JSString) -> Value {
         get(obj, .string(key), receiver: .object(obj))
     }
 
@@ -2607,7 +2621,7 @@ extension CodemodeLanguage {
 
     static func keyLabel(_ key: PropertyKey) -> String {
         switch key {
-        case .string(let s): return s
+        case .string(let s): return s.toWellFormedString()
         case .symbol(let sym): return sym.description
         }
     }
@@ -2671,7 +2685,7 @@ extension CodemodeLanguage {
         lookup(obj, key) != nil
     }
 
-    public static func has(_ obj: Obj, _ key: String) -> Bool {
+    public static func has(_ obj: Obj, _ key: JSString) -> Bool {
         has(obj, .string(key))
     }
 
@@ -2707,7 +2721,7 @@ extension CodemodeLanguage {
         }
         guard let arr = obj as? Arr else { return nil }
         if let idx = parseArrayIndex(s) {
-            if idx >= arr.count && !arr.extensible { try rejectAddition(s) }
+            if idx >= arr.count && !arr.extensible { try rejectAddition(s.toWellFormedString()) }
             try arr.setItem(at: idx, value: value)
             return true
         }
@@ -2770,7 +2784,7 @@ extension CodemodeLanguage {
     }
 
     /// [[Set]] for built-ins: a refusal is a TypeError, and a program setter is one they cannot call.
-    public static func set(_ obj: Obj, _ key: String, _ value: Value) throws {
+    public static func set(_ obj: Obj, _ key: JSString, _ value: Value) throws {
         try set(obj, .string(key), value)
     }
 
@@ -2783,7 +2797,7 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#define [status=implemented hash=dfa4346ea10d]
-    public static func define(_ obj: Obj, _ key: String, _ value: Value, _ attrs: Attributes = data) {
+    public static func define(_ obj: Obj, _ key: JSString, _ value: Value, _ attrs: Attributes = data) {
         define(obj, .string(key), value, attrs)
     }
 
@@ -2803,7 +2817,7 @@ extension CodemodeLanguage {
     /// A built-in's native accessor. Made with the intrinsics, each half gets its companion program function.
     public static func defineAccessor(
         _ obj: Obj,
-        _ key: String,
+        _ key: JSString,
         get: Getter? = nil,
         set: Setter? = nil,
         enumerable: Bool = false,
@@ -2821,8 +2835,8 @@ extension CodemodeLanguage {
         configurable: Bool = true
     ) {
         let functions = Making.functions
-        let label = switch key {
-        case .string(let s): s
+        let label: String = switch key {
+        case .string(let s): s.toWellFormedString()
         case .symbol(let sym): "[\(sym.description)]"
         }
         let getHalf: GetterHalf? = get.map { getter in
@@ -3019,7 +3033,7 @@ extension CodemodeLanguage {
             )
         }
         if current == nil || desc.value != nil {
-            _ = try writeElement(target, .string(String(at)), desc.value ?? .undefined)
+            _ = try writeElement(target, .string(JSString(String(at))), desc.value ?? .undefined)
         }
         return true
     }
@@ -3084,14 +3098,14 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#ownKeys [status=implemented hash=feef712030dc]
-    public static func ownKeys(_ obj: Obj) -> [String] {
-        var idxKeys: [(Int, String)] = []
-        var strKeys: [String] = []
+    public static func ownKeys(_ obj: Obj) -> [JSString] {
+        var idxKeys: [(Int, JSString)] = []
+        var strKeys: [JSString] = []
         if let arr = obj as? Arr {
             let holes = arr.holes
-            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, String(i))) }
+            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, JSString(String(i)))) }
         } else if let bytes = obj as? Bytes {
-            for i in 0..<bytes.data.count { idxKeys.append((i, String(i))) }
+            for i in 0..<bytes.data.count { idxKeys.append((i, JSString(String(i)))) }
         }
         for key in obj.orderedKeys() {
             guard case .string(let s) = key else { continue }
@@ -3106,14 +3120,14 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#enumerableKeys [status=implemented hash=aaa1d81f94d5]
-    public static func enumerableKeys(_ obj: Obj) -> [String] {
-        var idxKeys: [(Int, String)] = []
-        var strKeys: [String] = []
+    public static func enumerableKeys(_ obj: Obj) -> [JSString] {
+        var idxKeys: [(Int, JSString)] = []
+        var strKeys: [JSString] = []
         if let arr = obj as? Arr {
             let holes = arr.holes
-            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, String(i))) }
+            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, JSString(String(i)))) }
         } else if let bytes = obj as? Bytes {
-            for i in 0..<bytes.data.count { idxKeys.append((i, String(i))) }
+            for i in 0..<bytes.data.count { idxKeys.append((i, JSString(String(i)))) }
         }
         for (key, slot) in obj.allSlotsSnapshot() where slot.enumerable {
             guard case .string(let s) = key else { continue }
@@ -3137,22 +3151,22 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#keys [status=implemented hash=a521782cd83a]
-    public static func keys(_ obj: Obj) -> [String] {
+    public static func keys(_ obj: Obj) -> [JSString] {
         enumerableKeys(obj)
     }
 
     // parity: psychoscript/src/runtime/objects.ts#entries [status=implemented hash=2623c5e3a869]
-    public static func entries(_ obj: Obj) -> [(String, Value)] {
+    public static func entries(_ obj: Obj) -> [(JSString, Value)] {
         enumerableKeys(obj).map { ($0, getOwn(obj, $0)) }
     }
 
     // parity: psychoscript/src/runtime/objects.ts#shownEntries [status=implemented hash=259cc3db1a71]
     /// Own enumerable string entries for display, which runs no program code: a program accessor shows as its label.
-    public static func shownEntries(_ obj: Obj) -> [(String, Value)] {
+    public static func shownEntries(_ obj: Obj) -> [(JSString, Value)] {
         guard obj.hasProgramAccessors else { return entries(obj) }
         return keys(obj).map { key in
             if let slot = own(obj, .string(key)), isProgramAccessor(slot), let accessor = slot.accessorSlot {
-                return (key, .string(accessorLabel(accessor)))
+                return (key, .string(JSString(accessorLabel(accessor))))
             }
             return (key, getOwn(obj, key))
         }
@@ -3167,7 +3181,7 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#record [status=implemented hash=2bc09a81efe9]
-    public static func record(_ builtins: Builtins, _ pairs: [(String, Value)]) -> Obj {
+    public static func record(_ builtins: Builtins, _ pairs: [(JSString, Value)]) -> Obj {
         let obj = Obj(proto: builtins.Object)
         for (k, v) in pairs { define(obj, k, v) }
         return obj
@@ -3185,17 +3199,12 @@ extension CodemodeLanguage {
     // MARK: - Operations (src/language/runtime/operations.ts)
 
     // parity: psychoscript/src/runtime/operations.ts#compareText [status=implemented hash=60bb1e59107c]
+    public static func compareText(_ left: JSString, _ right: JSString) -> Int {
+        JSString.compareUTF16(left, right)
+    }
+
     public static func compareText(_ left: String, _ right: String) -> Int {
-        let a = Array(left.utf16)
-        let b = Array(right.utf16)
-        let n = min(a.count, b.count)
-        for i in 0..<n {
-            if a[i] < b[i] { return -1 }
-            if a[i] > b[i] { return 1 }
-        }
-        if a.count < b.count { return -1 }
-        if a.count > b.count { return 1 }
-        return 0
+        JSString.compareUTF16(JSString(left), JSString(right))
     }
 
     // parity: psychoscript/src/runtime/operations.ts#propertyKey [status=implemented hash=dcb9eeb17173]
@@ -3221,7 +3230,7 @@ extension CodemodeLanguage {
             let key: String?
             switch property {
             case .identifier(let name, _): key = name
-            case .computed(.literalString(let value, _), _): key = value
+            case .computed(.literalString(let value, _), _): key = value.toWellFormedString()
             default: key = nil
             }
             guard let key, let target = calleeDescription(object) else { return nil }
@@ -3345,7 +3354,7 @@ extension CodemodeLanguage {
             if case .hostNamespace(let ns) = rhs {
                 let key = coerceToString(lhs)
                 let ks = (try? ns.handler.keys(ns.path)) ?? []
-                return .bool(ks.contains(key))
+                return .bool(ks.contains(key.toWellFormedString()))
             }
             throw typeError("Cannot use 'in' operator to search in \(describeValue(rhs)).", node: node)
         case .instanceof:
@@ -3361,12 +3370,12 @@ extension CodemodeLanguage {
             let rPrim = if case .object(let o) = rhs { o.toPrimitive(hint: .default) } else { rhs }
             if case .string = lPrim {
                 let res = coerceToString(lPrim) + coerceToString(rPrim)
-                try checkStringLength(res.utf16.count)
+                try checkStringLength(res.utf16Count)
                 return .string(res)
             }
             if case .string = rPrim {
                 let res = coerceToString(lPrim) + coerceToString(rPrim)
-                try checkStringLength(res.utf16.count)
+                try checkStringLength(res.utf16Count)
                 return .string(res)
             }
             return .number(coerceToNumber(lPrim) + coerceToNumber(rPrim))
@@ -3484,11 +3493,11 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/operations.ts#forInKeys [status=implemented hash=2eaa2ae17f03]
-    public static func forInKeys(_ value: Value) -> [String] {
+    public static func forInKeys(_ value: Value) -> [JSString] {
         switch value {
         case .object(let obj):
-            var seen = Set<String>()
-            var result: [String] = []
+            var seen = Set<JSString>()
+            var result: [JSString] = []
             var current: Obj? = obj
             var depth = 0
             while let cur = current, depth < 64 {
@@ -3500,9 +3509,10 @@ extension CodemodeLanguage {
             }
             return result
         case .hostNamespace(let ns):
-            return (try? ns.handler.keys(ns.path)) ?? []
+            return ((try? ns.handler.keys(ns.path)) ?? []).map { JSString($0) }
         case .string(let s):
-            return (0..<s.utf16.count).map(String.init)
+            // Matches upstream `enumerableSource` (`[...value]`): one enumerable index per code-point / lone-surrogate chunk.
+            return (0..<s.codePointStrings().count).map { JSString(String($0)) }
         default:
             return []
         }
@@ -3532,13 +3542,12 @@ extension CodemodeLanguage {
         case .hostNamespace(let ns):
             guard case .string(let seg) = key else { return .value(.undefined) }
             if seg == "then" || seg == "catch" || seg == "finally" { return .value(.undefined) }
-            return .namespace(ns.child(seg))
+            return .namespace(ns.child(seg.toWellFormedString()))
         case .string(let str):
             if case .string(let s) = key {
-                if s == "length" { return .value(.number(Double(str.utf16.count))) }
-                if let idx = parseArrayIndex(s) {
-                    let units = Array(str.utf16)
-                    if idx < units.count { return .value(.string(String(decoding: [units[idx]], as: UTF16.self))) }
+                if s == "length" { return .value(.number(Double(str.utf16Count))) }
+                if let idx = parseArrayIndex(s), let unit = str.unit(at: idx) {
+                    return .value(.string(JSString(unit: unit)))
                 }
             }
             return .member(target: builtins.String, key: key, receiver: base)
@@ -3593,7 +3602,7 @@ extension CodemodeLanguage {
         get(target, key, receiver: receiver)
     }
 
-    public static func readProperty(_ base: Value, _ key: String, builtins: Builtins, node: AstNode? = nil) throws -> Value {
+    public static func readProperty(_ base: Value, _ key: JSString, builtins: Builtins, node: AstNode? = nil) throws -> Value {
         try resolveProperty(base, .string(key), builtins: builtins, node: node)
     }
 
@@ -3727,7 +3736,7 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/runtime/intrinsics.ts#createErrorValue [status=implemented hash=2b409a9c8dc5]
     /// A new error; its `stack` is `name: message` as of its first read, then `trace`, the `    at` lines where it was made.
-    public static func createErrorValue(_ prototype: Obj, message: String?, trace: String = "") -> ErrorObj {
+    public static func createErrorValue(_ prototype: Obj, message: JSString?, trace: String = "") -> ErrorObj {
         let value = ErrorObj(proto: prototype)
         if let message {
             define(value, "message", .string(message), hidden)
@@ -3757,7 +3766,7 @@ extension CodemodeLanguage {
         define(error, "message", .string(""), hidden)
         func derived(_ type: ErrorType) -> Obj {
             let p = Obj(proto: error)
-            define(p, "name", .string(type.rawValue), hidden)
+            define(p, "name", .string(JSString(type.rawValue)), hidden)
             define(p, "message", .string(""), hidden)
             return p
         }
@@ -3834,7 +3843,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/native.ts#methods [status=implemented hash=7104436dc4da]
     public static func methods(_ builtins: Builtins, _ target: Obj, _ list: [Method]) {
         for m in list {
-            define(target, m.name, .object(nativeFn(builtins, name: m.name, length: m.length, call: m.call)), hidden)
+            define(target, JSString(m.name), .object(nativeFn(builtins, name: m.name, length: m.length, call: m.call)), hidden)
         }
     }
 
@@ -3846,7 +3855,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/native.ts#constants [status=implemented hash=bccacfbd75a1]
     public static func constants(_ target: Obj, _ values: [(String, Value)]) {
         for (k, v) in values {
-            define(target, k, v, frozen)
+            define(target, JSString(k), v, frozen)
         }
     }
 
@@ -3887,7 +3896,7 @@ extension CodemodeLanguage {
     public static func invokeMethod(
         _ evaluator: Evaluator,
         target: Value,
-        name: String,
+        name: JSString,
         args: [Value],
         site: AstNode? = nil
     ) async throws -> Value {
@@ -4021,13 +4030,13 @@ extension CodemodeLanguage {
                 if let failure = errObj.failure {
                     return normalizeError(failure)
                 }
-                return Diagnostic(kind: "ExecutionFailure", message: errorToString(errObj))
+                return Diagnostic(kind: "ExecutionFailure", message: errorToString(errObj).toHostString())
             }
             let message: String
             if containsRuntimeReference(thrown.value) {
                 message = "a non-data value"
             } else if case .string(let s) = thrown.value {
-                message = s
+                message = s.toHostString()
             } else {
                 message = formatValue(thrown.value)
             }
@@ -4059,7 +4068,7 @@ extension CodemodeLanguage {
             if let existing = pt.value { return .object(existing) }
             let node = pt.node
             let trace = if let node, node.location != nil, !inPrelude(node) { stackFrame(node) } else { "" }
-            let created = createErrorValue(builtins.errorProto(pt.type), message: pt.message, trace: trace)
+            let created = createErrorValue(builtins.errorProto(pt.type), message: JSString(pt.message), trace: trace)
             created.failure = pt
             pt.value = created
             return .object(created)
@@ -4067,13 +4076,13 @@ extension CodemodeLanguage {
         if let hf = thrown as? HostFailure {
             let pt = PendingThrow(type: .error, message: hf.message, kind: hf.kind, suggestions: hf.suggestions.isEmpty ? nil : hf.suggestions)
             let trace = if let site, site.location != nil { stackFrame(site) } else { "" }
-            let created = createErrorValue(builtins.Error, message: hf.message, trace: trace)
+            let created = createErrorValue(builtins.Error, message: JSString(hf.message), trace: trace)
             created.failure = pt
             pt.value = created
             return .object(created)
         }
         let diag = normalizeError(thrown)
-        return .object(createErrorValue(builtins.errorProto(errorType(thrown)), message: diag.message))
+        return .object(createErrorValue(builtins.errorProto(errorType(thrown)), message: JSString(diag.message)))
     }
 
     // parity: psychoscript/src/runtime/errors.ts#stackFrame [status=implemented hash=654ee57bde24]
@@ -4089,7 +4098,7 @@ extension CodemodeLanguage {
     public static func createAggregateErrorValue(
         _ builtins: Builtins,
         errors: [Value],
-        message: String,
+        message: JSString,
         proto: Obj? = nil,
         trace: String = ""
     ) -> ErrorObj {
@@ -4108,7 +4117,7 @@ extension CodemodeLanguage {
             if type == .aggregateError {
                 let items = try await eval.collectIterable(args.first ?? .undefined)
                 return try await withReads(eval) {
-                    let msg = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : ""
+                    let msg: JSString = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : ""
                     let created = createAggregateErrorValue(builtins, errors: items, message: msg, proto: targetProto, trace: trace(eval))
                     if args.count > 2, case .object(let opts) = args[2], has(opts, "cause") {
                         define(created, "cause", get(opts, "cause"), hidden)
@@ -4117,7 +4126,7 @@ extension CodemodeLanguage {
                 }
             }
             return try await withReads(eval) {
-                let msg: String? = args.first.flatMap { $0.isUndefined ? nil : coerceToString($0) }
+                let msg: JSString? = args.first.flatMap { $0.isUndefined ? nil : coerceToString($0) }
                 let created = createErrorValue(targetProto, message: msg, trace: trace(eval))
                 if args.count > 1, case .object(let opts) = args[1], has(opts, "cause") {
                     define(created, "cause", get(opts, "cause"), hidden)
@@ -4171,7 +4180,7 @@ extension CodemodeLanguage {
         case .bool(let b): return .bool(b)
         case .int(let i): return .number(Double(i))
         case .double(let d): return .number(d)
-        case .string(let s): return .string(s)
+        case .string(let s): return .string(JSString(s))
         case .array(let items):
             var converted: [Value] = []
             converted.reserveCapacity(items.count)
@@ -4184,13 +4193,19 @@ extension CodemodeLanguage {
             for key in dict.keys.sorted() {
                 if key == "__proto__" { continue }
                 if let v = dict[key] {
-                    define(obj, key, try fromJson(builtins, v, depth: depth + 1))
+                    define(obj, JSString(key), try fromJson(builtins, v, depth: depth + 1))
                 }
             }
             return .object(obj)
         }
     }
 
+    /// Converts a program `Value` to `OpenCodeSchema.JSONValue` at the Swift host/tool boundary.
+    ///
+    /// Upstream psychoscript lives in JS, where host strings can carry lone UTF-16 surrogates directly;
+    /// Swift `String` / `JSONValue` can only hold well-formed Unicode scalar sequences. At this boundary,
+    /// `JSString.toHostString()` replaces each unpaired UTF-16 surrogate with U+FFFD so returning or
+    /// passing values to Swift tools never crashes or fails UTF-8/JSON encoding.
     public static func toJsonValue(_ value: Value, depth: Int = 0, dropFunctions: Bool = false) throws -> JSONValue? {
         guard depth <= MAX_VALUE_DEPTH else {
             throw rangeError("Value exceeds the maximum depth of \(MAX_VALUE_DEPTH).")
@@ -4205,7 +4220,7 @@ extension CodemodeLanguage {
                 return .int(Int64(n))
             }
             return .double(n)
-        case .string(let s): return .string(s)
+        case .string(let s): return .string(s.toHostString())
         case .symbol:
             if dropFunctions { return nil }
             throw invalidData("Cannot serialize symbol across boundary.")
@@ -4221,7 +4236,7 @@ extension CodemodeLanguage {
                 return dateObj.epochMs.isFinite ? .string(CodemodeLanguage.formatISODate(epochMs: dateObj.epochMs)) : .null
             }
             if let urlObj = obj as? URLObj { return .string(urlObj.href) }
-            if let spObj = obj as? URLSearchParamsObj { return .string(spObj.jsToString()) }
+            if let spObj = obj as? URLSearchParamsObj { return .string(spObj.jsToString().toHostString()) }
             if let hObj = obj as? HeadersObj {
                 var out: [String: JSONValue] = [:]
                 for (k, v) in hObj.sortedEntries() { out[k] = .string(v) }
@@ -4247,11 +4262,11 @@ extension CodemodeLanguage {
             }
             if let errObj = obj as? ErrorObj {
                 var out: [String: JSONValue] = [:]
-                out["name"] = .string(coerceToString(get(errObj, "name")))
-                out["message"] = .string(coerceToString(get(errObj, "message")))
+                out["name"] = .string(coerceToString(get(errObj, "name")).toHostString())
+                out["message"] = .string(coerceToString(get(errObj, "message")).toHostString())
                 for (k, v) in entries(errObj) where k != "__proto__" {
                     if let j = try toJsonValue(v, depth: depth + 1, dropFunctions: dropFunctions) {
-                        out[k] = j
+                        out[k.toHostString()] = j
                     }
                 }
                 return .object(out)
@@ -4262,7 +4277,7 @@ extension CodemodeLanguage {
             var out: [String: JSONValue] = [:]
             for (k, v) in entries(obj) where k != "__proto__" {
                 if let j = try toJsonValue(v, depth: depth + 1, dropFunctions: dropFunctions) {
-                    out[k] = j
+                    out[k.toHostString()] = j
                 }
             }
             return .object(out)
@@ -4731,7 +4746,7 @@ extension CodemodeLanguage {
                 let obj = Obj(proto: builtins.Object)
                 for key in dict.keys.sorted() {
                     if let child = dict[key] {
-                        define(obj, key, buildValue(name: "\(name).\(key)", item: child))
+                        define(obj, JSString(key), buildValue(name: "\(name).\(key)", item: child))
                     }
                 }
                 return .object(obj)
@@ -4847,7 +4862,7 @@ extension CodemodeLanguage {
             return changed ? .object(Arr(proto: arr.proto, items: items)) : value
         }
         guard type(of: obj) == Obj.self else { return value }
-        var pairs: [(String, Value)] = []
+        var pairs: [(JSString, Value)] = []
         var changed = obj.hasProgramAccessors
         for key in keys(obj) {
             let raw = try await eval.getValue(obj, .string(key), receiver: value)
@@ -5008,7 +5023,7 @@ extension CodemodeLanguage {
             } else if let thrown = reason as? Throw {
                 promise.reject(thrown.value)
             } else {
-                promise.reject(.string(CodemodeLanguage.errorMessage(reason)))
+                promise.reject(.string(JSString(CodemodeLanguage.errorMessage(reason))))
             }
         }
     }
@@ -5297,7 +5312,7 @@ extension CodemodeLanguage {
                 } else if let b = builtins {
                     reasonVal = CodemodeLanguage.materialize(b, error)
                 } else {
-                    reasonVal = .string(CodemodeLanguage.errorMessage(error))
+                    reasonVal = .string(JSString(CodemodeLanguage.errorMessage(error)))
                 }
                 promise.reject(reasonVal)
                 if !promise.isObserved && !(error is Interruption) {
@@ -5933,7 +5948,10 @@ extension CodemodeLanguage {
     // MARK: - Standard Library Part 1 (Object, Array, String, Number, Boolean, Math, JSON, Console, Value)
 
     // parity: psychoscript/src/stdlib/object.ts#enumerableSource [status=implemented hash=8a1c8ebfa939]
-    public static func enumerableSource(_ value: Value) -> [(String, Value)] {
+    public static func enumerableSource(_ value: Value) -> [(JSString, Value)] {
+        if case .string(let s) = value {
+            return s.codePointStrings().enumerated().map { (JSString(String($0.offset)), .string($0.element)) }
+        }
         guard case .object(let obj) = value else { return [] }
         return entries(obj)
     }
@@ -6001,8 +6019,8 @@ extension CodemodeLanguage {
         if has(obj, "configurable") { desc.configurable = get(obj, "configurable").isTruthy }
         if has(obj, "value") { desc.value = get(obj, "value") }
         if has(obj, "writable") { desc.writable = get(obj, "writable").isTruthy }
-        for half in ["get", "set"] where has(obj, half) {
-            let fn = get(obj, half)
+        for half in ["get", "set"] where has(obj, JSString(half)) {
+            let fn = get(obj, JSString(half))
             let callable: Callable?
             switch fn {
             case .undefined: callable = nil
@@ -6046,8 +6064,8 @@ extension CodemodeLanguage {
             }
         case .string(let str):
             // ToObject: a string's indexes are its only own enumerable properties.
-            for (index, char) in str.unicodeScalars.enumerated() {
-                descriptors.append((.string(String(index)), try toPropertyDescriptor(.string(String(char)))))
+            for (index, chunk) in str.codePointStrings().enumerated() {
+                descriptors.append((.string(JSString(String(index))), try toPropertyDescriptor(.string(chunk))))
             }
         default:
             break
@@ -6078,15 +6096,14 @@ extension CodemodeLanguage {
     /// The own properties a primitive has after ToObject, which only a string's are: its indexes and `length`.
     static func primitiveSlot(_ value: Value, _ key: PropertyKey) -> Slot? {
         guard case .string(let str) = value, case .string(let k) = key else { return nil }
-        let units = Array(str.utf16)
-        if k == "length" { return .data(value: .number(Double(units.count)), writable: false, enumerable: false, configurable: false) }
-        guard let at = parseArrayIndex(k), at < units.count else { return nil }
-        return .data(value: .string(String(decoding: [units[at]], as: UTF16.self)), writable: false, enumerable: true, configurable: false)
+        if k == "length" { return .data(value: .number(Double(str.utf16Count)), writable: false, enumerable: false, configurable: false) }
+        guard let at = parseArrayIndex(k), let unit = str.unit(at: at) else { return nil }
+        return .data(value: .string(JSString(unit: unit)), writable: false, enumerable: true, configurable: false)
     }
 
-    static func primitiveKeys(_ value: Value) -> [String] {
+    static func primitiveKeys(_ value: Value) -> [JSString] {
         guard case .string(let str) = value else { return [] }
-        return (0..<str.utf16.count).map(String.init) + ["length"]
+        return (0..<str.utf16Count).map { JSString(String($0)) } + ["length"]
     }
 
     static func requireObjectCoercible(_ value: Value, _ name: String) throws {
@@ -6148,10 +6165,10 @@ extension CodemodeLanguage {
                 let target = args.first ?? .undefined
                 if case .hostNamespace(let ns) = target {
                     let ks = (try? ns.handler.keys(ns.path)) ?? []
-                    return .object(Arr(proto: builtins.Array, items: ks.map { .string($0) }))
+                    return .object(Arr(proto: builtins.Array, items: ks.map { .string(JSString($0)) }))
                 }
                 if case .string(let s) = target {
-                    return .object(Arr(proto: builtins.Array, items: (0..<s.utf16.count).map { .string(String($0)) }))
+                    return .object(Arr(proto: builtins.Array, items: (0..<s.codePointStrings().count).map { .string(JSString(String($0))) }))
                 }
                 guard case .object(let obj) = target else {
                     if target.isNullish { throw typeError("Cannot convert undefined or null to object.") }
@@ -6161,6 +6178,9 @@ extension CodemodeLanguage {
             },
             Method("values", 1) { _, args, _, eval in
                 let target = args.first ?? .undefined
+                if case .string(let s) = target {
+                    return .object(Arr(proto: builtins.Array, items: s.codePointStrings().map { .string($0) }))
+                }
                 guard case .object(let obj) = target else {
                     if target.isNullish { throw typeError("Cannot convert undefined or null to object.") }
                     return .object(Arr(proto: builtins.Array))
@@ -6170,6 +6190,12 @@ extension CodemodeLanguage {
             },
             Method("entries", 1) { _, args, _, eval in
                 let target = args.first ?? .undefined
+                if case .string(let s) = target {
+                    let list = s.codePointStrings().enumerated().map { idx, chunk in
+                        Value.object(Arr(proto: builtins.Array, items: [.string(JSString(String(idx))), .string(chunk)]))
+                    }
+                    return .object(Arr(proto: builtins.Array, items: list))
+                }
                 guard case .object(let obj) = target else {
                     if target.isNullish { throw typeError("Cannot convert undefined or null to object.") }
                     return .object(Arr(proto: builtins.Array))
@@ -6204,8 +6230,15 @@ extension CodemodeLanguage {
                 return try await withReads(eval) { .object(try defineProperties(Obj(proto: proto), args[1])) }
             },
             Method("hasOwn", 2) { _, args, _, _ in
-                guard case .object(let obj) = args.first else { return .bool(false) }
-                return .bool(own(obj, propertyKey(args.count > 1 ? args[1] : .undefined)) != nil)
+                let target = args.first ?? .undefined
+                let key = propertyKey(args.count > 1 ? args[1] : .undefined)
+                if case .string(let s) = target, case .string(let k) = key {
+                    if k == "length" { return .bool(true) }
+                    if let idx = parseArrayIndex(k), idx < s.codePointStrings().count { return .bool(true) }
+                    return .bool(false)
+                }
+                guard case .object(let obj) = target else { return .bool(false) }
+                return .bool(own(obj, key) != nil)
             },
             Method("is", 2) { _, args, _, _ in
                 let a = args.first ?? .undefined
@@ -6241,10 +6274,10 @@ extension CodemodeLanguage {
                 let value = args.first ?? .undefined
                 if case .hostNamespace(let ns) = value {
                     let ks = (try? ns.handler.keys(ns.path)) ?? []
-                    return .object(Arr(proto: builtins.Array, items: ks.map { .string($0) }))
+                    return .object(Arr(proto: builtins.Array, items: ks.map { .string(JSString($0)) }))
                 }
                 try requireObjectCoercible(value, "getOwnPropertyNames")
-                var names: [String] = if case .object(let obj) = value { ownKeys(obj) } else { primitiveKeys(value) }
+                var names: [JSString] = if case .object(let obj) = value { ownKeys(obj) } else { primitiveKeys(value) }
                 if case .object(let obj) = value, obj is Arr, !names.contains("length") { names.append("length") }
                 if case .string = value, !names.contains("length") { names.append("length") }
                 return .object(Arr(proto: builtins.Array, items: names.map { .string($0) }))
@@ -6428,9 +6461,9 @@ extension CodemodeLanguage {
             },
             Method("join", 1) { thisVal, args, _, _ in
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.join")
-                let sep = args.first.map { $0.isUndefined ? "," : coerceToString($0) } ?? ","
-                let joined = arr.items.map { $0.isNullish ? "" : coerceToString($0) }.joined(separator: sep)
-                try checkStringLength(joined.utf16.count)
+                let sep: JSString = args.first.map { $0.isUndefined ? "," : coerceToString($0) } ?? ","
+                let joined = arr.items.map { $0.isNullish ? JSString.empty : coerceToString($0) }.joinedJS(separator: sep)
+                try checkStringLength(joined.utf16Count)
                 return .string(joined)
             },
             Method("reverse", 0) { thisVal, _, _, _ in
@@ -6707,7 +6740,7 @@ extension CodemodeLanguage {
             },
             Method("toString", 0) { thisVal, _, _, _ in
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.toString")
-                return .string(arr.items.map { $0.isNullish ? "" : coerceToString($0) }.joined(separator: ","))
+                return .string(arr.items.map { $0.isNullish ? JSString.empty : coerceToString($0) }.joinedJS(separator: ","))
             },
         ])
         if case .object(let valsFn as Native) = getOwn(builtins.Array, "values") {
@@ -6745,7 +6778,7 @@ extension CodemodeLanguage {
                 if case .object(let obj) = src, !(obj is Arr), !(obj is SetObj), !(obj is MapObj), has(obj, "length"), get(obj, .symbol(IteratorSymbol)).isUndefined {
                     let len = max(0, coerceToInteger(get(obj, "length")))
                     try checkArrayLength(len)
-                    items = (0..<len).map { get(obj, String($0)) }
+                    items = (0..<len).map { get(obj, JSString(String($0))) }
                 } else {
                     items = try await eval.collectIterable(src)
                 }
@@ -6767,112 +6800,101 @@ extension CodemodeLanguage {
 
     // MARK: String (src/language/stdlib/string.ts)
 
-    private static func utf16Slice(_ units: [UInt16], from start: Int, to end: Int) -> String {
-        let s = max(0, min(start, units.count))
-        let e = max(s, min(end, units.count))
-        return String(decoding: units[s..<e], as: UTF16.self)
-    }
-
     // parity: psychoscript/src/stdlib/string.ts#stringGlobal [status=implemented hash=ada05e2557d3]
     public static func stringGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.String, [
             Method("charAt", 1) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let str = coerceToString(thisVal)
                 let idx = coerceToInteger(args.first ?? .number(0))
-                guard idx >= 0 && idx < units.count else { return .string("") }
-                return .string(String(decoding: [units[idx]], as: UTF16.self))
+                guard let unit = str.unit(at: idx) else { return .string("") }
+                return .string(JSString(unit: unit))
             },
             Method("charCodeAt", 1) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let str = coerceToString(thisVal)
                 let idx = coerceToInteger(args.first ?? .number(0))
-                guard idx >= 0 && idx < units.count else { return .number(.nan) }
-                return .number(Double(units[idx]))
+                guard let unit = str.unit(at: idx) else { return .number(.nan) }
+                return .number(Double(unit))
             },
             Method("codePointAt", 1) { thisVal, args, _, _ in
                 let str = coerceToString(thisVal)
-                let units = Array(str.utf16)
                 let idx = coerceToInteger(args.first ?? .number(0))
-                guard idx >= 0 && idx < units.count else { return .undefined }
-                let first = units[idx]
-                if first >= 0xD800 && first <= 0xDBFF && idx + 1 < units.count {
-                    let second = units[idx + 1]
-                    if second >= 0xDC00 && second <= 0xDFFF {
-                        let cp = 0x10000 + ((UInt32(first - 0xD800) << 10) | UInt32(second - 0xDC00))
-                        return .number(Double(cp))
-                    }
-                }
-                return .number(Double(first))
+                guard let cp = str.codePoint(at: idx) else { return .undefined }
+                return .number(Double(cp))
             },
             Method("at", 1) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let str = coerceToString(thisVal)
                 var idx = coerceToInteger(args.first ?? .number(0))
-                if idx < 0 { idx += units.count }
-                guard idx >= 0 && idx < units.count else { return .undefined }
-                return .string(String(decoding: [units[idx]], as: UTF16.self))
+                if idx < 0 { idx += str.utf16Count }
+                guard let unit = str.unit(at: idx) else { return .undefined }
+                return .string(JSString(unit: unit))
             },
             Method("slice", 2) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
-                let start = args.first.map { $0.isUndefined ? 0 : resolveSliceIndex(coerceToInteger($0), length: units.count) } ?? 0
-                let end = args.count > 1 && !args[1].isUndefined ? resolveSliceIndex(coerceToInteger(args[1]), length: units.count) : units.count
-                return .string(utf16Slice(units, from: start, to: end))
+                let str = coerceToString(thisVal)
+                let count = str.utf16Count
+                let start = args.first.map { $0.isUndefined ? 0 : resolveSliceIndex(coerceToInteger($0), length: count) } ?? 0
+                let end = args.count > 1 && !args[1].isUndefined ? resolveSliceIndex(coerceToInteger(args[1]), length: count) : count
+                return .string(str.sliceUTF16(from: start, to: end))
             },
             Method("substring", 2) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
-                let a = max(0, min(units.count, args.first.map { $0.isUndefined ? 0 : coerceToInteger($0) } ?? 0))
-                let b = max(0, min(units.count, args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : units.count))
-                return .string(utf16Slice(units, from: min(a, b), to: max(a, b)))
+                let str = coerceToString(thisVal)
+                let count = str.utf16Count
+                let a = max(0, min(count, args.first.map { $0.isUndefined ? 0 : coerceToInteger($0) } ?? 0))
+                let b = max(0, min(count, args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : count))
+                return .string(str.sliceUTF16(from: min(a, b), to: max(a, b)))
             },
             Method("indexOf", 1) { thisVal, args, _, _ in
-                let hay = Array(coerceToString(thisVal).utf16)
-                let needle = Array(coerceToString(args.first ?? .undefined).utf16)
-                let pos = max(0, min(hay.count, args.count > 1 ? coerceToInteger(args[1]) : 0))
-                if needle.isEmpty { return .number(Double(pos)) }
-                if needle.count > hay.count { return .number(-1) }
-                for i in pos...(hay.count - needle.count) {
-                    var ok = true
-                    for j in 0..<needle.count where hay[i + j] != needle[j] { ok = false; break }
-                    if ok { return .number(Double(i)) }
-                }
-                return .number(-1)
+                let hay = coerceToString(thisVal)
+                let needle = coerceToString(args.first ?? .undefined)
+                let pos = args.count > 1 ? coerceToInteger(args[1]) : 0
+                return .number(Double(hay.indexOf(needle, from: pos)))
             },
             Method("lastIndexOf", 1) { thisVal, args, _, _ in
-                let hay = Array(coerceToString(thisVal).utf16)
-                let needle = Array(coerceToString(args.first ?? .undefined).utf16)
-                let maxPos = hay.count - needle.count
-                guard maxPos >= 0 else { return .number(-1) }
-                let rawPos = args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : maxPos
-                let start = max(0, min(maxPos, rawPos))
-                if needle.isEmpty { return .number(Double(min(hay.count, max(0, rawPos)))) }
-                for i in stride(from: start, through: 0, by: -1) {
-                    var ok = true
-                    for j in 0..<needle.count where hay[i + j] != needle[j] { ok = false; break }
-                    if ok { return .number(Double(i)) }
+                let hay = coerceToString(thisVal)
+                let needle = coerceToString(args.first ?? .undefined)
+                let pos: Int?
+                if args.count > 1 && !args[1].isUndefined {
+                    let raw = coerceToNumber(args[1])
+                    pos = raw.isNaN ? nil : coerceToInteger(.number(raw))
+                } else {
+                    pos = nil
                 }
-                return .number(-1)
+                return .number(Double(hay.lastIndexOf(needle, from: pos)))
             },
             Method("includes", 1) { thisVal, args, _, _ in
                 let hay = coerceToString(thisVal)
+                if case .object(let rx) = args.first, rx is RegExpObj {
+                    throw typeError("String.includes cannot take a regular expression; use regex.test(string) or String.search instead.")
+                }
                 let needle = coerceToString(args.first ?? .undefined)
                 let pos = max(0, args.count > 1 ? coerceToInteger(args[1]) : 0)
-                let units = Array(hay.utf16)
-                let sub = utf16Slice(units, from: pos, to: units.count)
-                return .bool(needle.isEmpty || sub.contains(needle))
+                return .bool(hay.includes(needle, from: pos))
             },
             Method("startsWith", 1) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let hay = coerceToString(thisVal)
+                if case .object(let rx) = args.first, rx is RegExpObj {
+                    throw typeError("String.startsWith cannot take a regular expression; use regex.test(string) or String.search instead.")
+                }
                 let needle = coerceToString(args.first ?? .undefined)
                 let pos = max(0, args.count > 1 ? coerceToInteger(args[1]) : 0)
-                return .bool(utf16Slice(units, from: pos, to: units.count).hasPrefix(needle))
+                return .bool(hay.startsWith(needle, from: pos))
             },
             Method("endsWith", 1) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let hay = coerceToString(thisVal)
+                if case .object(let rx) = args.first, rx is RegExpObj {
+                    throw typeError("String.endsWith cannot take a regular expression; use regex.test(string) or String.search instead.")
+                }
                 let needle = coerceToString(args.first ?? .undefined)
-                let end = args.count > 1 && !args[1].isUndefined ? max(0, min(units.count, coerceToInteger(args[1]))) : units.count
-                return .bool(utf16Slice(units, from: 0, to: end).hasSuffix(needle))
+                let end: Int? = args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : nil
+                return .bool(hay.endsWith(needle, endPosition: end))
             },
             Method("split", 2) { thisVal, args, _, _ in
                 let str = coerceToString(thisVal)
-                let limit = args.count > 1 && !args[1].isUndefined ? max(0, coerceToInteger(args[1])) : Int.max
+                let limit: Int
+                if args.count > 1 && !args[1].isUndefined {
+                    limit = Int(toUInt32(coerceToNumber(args[1])))
+                } else {
+                    limit = Int.max
+                }
                 if limit == 0 { return .object(Arr(proto: builtins.Array)) }
                 guard let sepArg = args.first, !sepArg.isUndefined else {
                     return .object(Arr(proto: builtins.Array, items: [.string(str)]))
@@ -6882,66 +6904,65 @@ extension CodemodeLanguage {
                     return .object(Arr(proto: builtins.Array, items: parts.map { .string($0) }))
                 }
                 let sep = coerceToString(sepArg)
-                if sep.isEmpty {
-                    let chars = Array(str.utf16).prefix(limit).map { Value.string(String(decoding: [$0], as: UTF16.self)) }
-                    return .object(Arr(proto: builtins.Array, items: Array(chars)))
-                }
-                let parts = str.components(separatedBy: sep).prefix(limit).map { Value.string($0) }
-                return .object(Arr(proto: builtins.Array, items: Array(parts)))
+                let parts = str.split(separator: sep, limit: limit).map { Value.string($0) }
+                return .object(Arr(proto: builtins.Array, items: parts))
             },
             Method("trim", 0) { thisVal, _, _, _ in
-                .string(coerceToString(thisVal).trimmingCharacters(in: .whitespacesAndNewlines))
+                .string(coerceToString(thisVal).trim())
             },
             Method("trimStart", 0) { thisVal, _, _, _ in
-                let s = coerceToString(thisVal)
-                let idx = s.firstIndex(where: { !$0.isWhitespace }) ?? s.endIndex
-                return .string(String(s[idx...]))
+                .string(coerceToString(thisVal).trimStart())
             },
             Method("trimEnd", 0) { thisVal, _, _, _ in
-                let s = coerceToString(thisVal)
-                var end = s.endIndex
-                while end > s.startIndex {
-                    let prev = s.index(before: end)
-                    if s[prev].isWhitespace { end = prev } else { break }
-                }
-                return .string(String(s[..<end]))
+                .string(coerceToString(thisVal).trimEnd())
             },
             Method("toLowerCase", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).lowercased()) },
             Method("toUpperCase", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).uppercased()) },
             Method("repeat", 1) { thisVal, args, _, _ in
                 let s = coerceToString(thisVal)
-                let n = coerceToInteger(args.first ?? .number(0))
-                guard n >= 0 else { throw rangeError("Invalid count value") }
-                try checkStringLength(s.utf16.count * n)
-                return .string(String(repeating: s, count: n))
+                let raw = coerceToNumber(args.first ?? .number(0))
+                if raw < 0 || raw.isInfinite { throw rangeError("Invalid count value") }
+                let n = raw.isNaN ? 0 : Int(raw.rounded(.towardZero))
+                let unitCount = s.utf16Count
+                if unitCount > 0 && n > MAX_STRING_LENGTH / unitCount {
+                    try checkStringLength(MAX_STRING_LENGTH + 1)
+                }
+                try checkStringLength(unitCount * n)
+                return .string(s.repeated(count: n))
             },
             Method("padStart", 2) { thisVal, args, _, _ in
                 let s = coerceToString(thisVal)
                 let targetLen = max(0, coerceToInteger(args.first ?? .number(0)))
-                let fill = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : " "
-                if targetLen <= s.utf16.count || fill.isEmpty { return .string(s) }
-                let needed = targetLen - s.utf16.count
+                let fill: JSString = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : " "
+                if targetLen <= s.utf16Count || fill.isEmpty { return .string(s) }
+                let needed = targetLen - s.utf16Count
                 try checkStringLength(targetLen)
                 var padUnits: [UInt16] = []
-                let fillUnits = Array(fill.utf16)
+                padUnits.reserveCapacity(needed + s.utf16Count)
+                let fillUnits = fill.utf16Units
                 while padUnits.count < needed {
                     padUnits.append(contentsOf: fillUnits)
                 }
-                return .string(String(decoding: padUnits.prefix(needed), as: UTF16.self) + s)
+                var combined = Array(padUnits.prefix(needed))
+                combined.append(contentsOf: s.utf16Units)
+                return .string(JSString(utf16: combined))
             },
             Method("padEnd", 2) { thisVal, args, _, _ in
                 let s = coerceToString(thisVal)
                 let targetLen = max(0, coerceToInteger(args.first ?? .number(0)))
-                let fill = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : " "
-                if targetLen <= s.utf16.count || fill.isEmpty { return .string(s) }
-                let needed = targetLen - s.utf16.count
+                let fill: JSString = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : " "
+                if targetLen <= s.utf16Count || fill.isEmpty { return .string(s) }
+                let needed = targetLen - s.utf16Count
                 try checkStringLength(targetLen)
                 var padUnits: [UInt16] = []
-                let fillUnits = Array(fill.utf16)
+                padUnits.reserveCapacity(needed)
+                let fillUnits = fill.utf16Units
                 while padUnits.count < needed {
                     padUnits.append(contentsOf: fillUnits)
                 }
-                return .string(s + String(decoding: padUnits.prefix(needed), as: UTF16.self))
+                var combined = s.utf16Units
+                combined.append(contentsOf: padUnits.prefix(needed))
+                return .string(JSString(utf16: combined))
             },
             Method("replace", 2) { thisVal, args, _, eval in
                 let str = coerceToString(thisVal)
@@ -6970,7 +6991,7 @@ extension CodemodeLanguage {
                 if case .object(let r as RegExpObj) = args.first {
                     rx = r
                 } else {
-                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0) } ?? ""
+                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0).toWellFormedString() } ?? ""
                     rx = RegExpObj(proto: builtins.RegExp, pattern: pat, flags: "")
                 }
                 return try regexMatch(str, regex: rx, builtins: builtins)
@@ -6981,15 +7002,17 @@ extension CodemodeLanguage {
                 if case .object(let r as RegExpObj) = args.first {
                     rx = r
                 } else {
-                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0) } ?? ""
+                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0).toWellFormedString() } ?? ""
                     rx = RegExpObj(proto: builtins.RegExp, pattern: pat, flags: "")
                 }
                 return .number(Double(try regexSearch(str, regex: rx)))
             },
             Method("concat", 1) { thisVal, args, _, _ in
-                var out = coerceToString(thisVal)
-                for a in args { out += coerceToString(a) }
-                try checkStringLength(out.utf16.count)
+                var parts: [JSString] = [coerceToString(thisVal)]
+                parts.reserveCapacity(args.count + 1)
+                for a in args { parts.append(coerceToString(a)) }
+                let out = parts.joinedJS()
+                try checkStringLength(out.utf16Count)
                 return .string(out)
             },
             Method("localeCompare", 1) { thisVal, args, _, eval in
@@ -7012,23 +7035,23 @@ extension CodemodeLanguage {
                     if case .object(let obj) = locales {
                         let length = max(0, coerceToInteger(get(obj, "length")))
                         try checkArrayLength(length)
-                        list = (0..<length).map { get(obj, String($0)) }
+                        list = (0..<length).map { get(obj, JSString(String($0))) }
                     }
                     var read: [Value] = []
                     if case .object(let obj) = options {
                         read = collatorOptions.map { key in
-                            let option = get(obj, key)
+                            let option = get(obj, JSString(key))
                             if collatorFlags.contains(key), case .object = option { return .bool(true) }
                             return option
                         }
                     }
                     return try withPrimitives(.string, (list ?? []) + read) { primitives in
                         let tags: [String]? = if let list {
-                            primitives.prefix(list.count).map { coerceToString($0) }
+                            primitives.prefix(list.count).map { coerceToString($0).toWellFormedString() }
                         } else if case .undefined = locales {
                             nil
                         } else {
-                            [coerceToString(locales)]
+                            [coerceToString(locales).toWellFormedString()]
                         }
                         var hostOptions: [String: Value] = [:]
                         if case .object = options {
@@ -7049,14 +7072,14 @@ extension CodemodeLanguage {
             length: 1,
             call: { _, args, _, eval in
                 if args.isEmpty { return .string("") }
-                if case .symbol(let sym) = args[0] { return .string(symbolString(sym)) }
+                if case .symbol(let sym) = args[0] { return .string(JSString(symbolString(sym))) }
                 return .string(try await eval.toStringValue(args[0]))
             }
         ))
         methods(builtins, ctor, [
             Method("fromCharCode", 1) { _, args, _, _ in
                 let units = args.map { UInt16(truncatingIfNeeded: toInt32(coerceToNumber($0))) }
-                return .string(String(decoding: units, as: UTF16.self))
+                return .string(JSString(utf16: units))
             },
             Method("raw", 1) { _, args, _, eval in
                 try await withReads(eval) {
@@ -7070,26 +7093,34 @@ extension CodemodeLanguage {
                     // Each literal is followed by its substitution, except the last literal, or when substitutions run out.
                     var parts: [Value] = []
                     for index in 0..<count {
-                        parts.append(get(rawObj, String(index)))
+                        parts.append(get(rawObj, JSString(String(index))))
                         if index + 1 < count && index + 1 < args.count { parts.append(args[index + 1]) }
                     }
                     return try withPrimitives(.string, parts, coerce: true) { strings in
-                        let output = strings.map { coerceToString($0) }.joined()
-                        try checkStringLength(output.utf16.count)
+                        let output = strings.map { coerceToString($0) }.joinedJS()
+                        try checkStringLength(output.utf16Count)
                         return .string(output)
                     }
                 }
             },
             Method("fromCodePoint", 1) { _, args, _, _ in
-                var scalars: [Unicode.Scalar] = []
+                var units: [UInt16] = []
+                units.reserveCapacity(args.count)
                 for a in args {
                     let n = coerceToNumber(a)
-                    guard n.isFinite && n >= 0 && n <= 0x10FFFF && n == n.rounded(.towardZero),
-                          let sc = Unicode.Scalar(UInt32(n))
-                    else { throw rangeError("Invalid code point \(n)") }
-                    scalars.append(sc)
+                    guard n.isFinite && n >= 0 && n <= 0x10FFFF && n == n.rounded(.towardZero) else {
+                        throw rangeError("Arguments contain a value that is out of range of code points")
+                    }
+                    let cp = UInt32(n)
+                    if cp <= 0xFFFF {
+                        units.append(UInt16(cp))
+                    } else {
+                        let adjusted = cp - 0x10000
+                        units.append(UInt16(0xD800 + (adjusted >> 10)))
+                        units.append(UInt16(0xDC00 + (adjusted & 0x3FF)))
+                    }
                 }
-                return .string(String(String.UnicodeScalarView(scalars)))
+                return .string(JSString(utf16: units))
             },
         ])
         return ctor
@@ -7121,7 +7152,7 @@ extension CodemodeLanguage {
     /// One Intl option that must be one of `allowed`.
     static func intlOption(_ options: [String: Value], _ key: String, _ allowed: [String], method: String) throws -> String? {
         guard let value = options[key], !value.isUndefined else { return nil }
-        let text = coerceToString(value)
+        let text = coerceToString(value).toWellFormedString()
         guard allowed.contains(text) else {
             throw rangeError("\(method): Value \(text) out of range for Intl.Collator options property \(key)")
         }
@@ -7129,7 +7160,12 @@ extension CodemodeLanguage {
     }
 
     /// String.prototype.localeCompare through the host collator: -1, 0 or 1.
-    static func collate(_ value: String, _ that: String, tags: [String]?, options: [String: Value]) throws -> Int {
+    ///
+    /// When either string contains lone UTF-16 surrogates, compares using a cross-platform 3-step UCA proxy:
+    /// 1. Base comparison with lone surrogates mapped to U+D7FF (the unassigned slot right before surrogates in UCA).
+    /// 2. Lexicographical tie-break on code units in `0xD7FF...0xDFFF` (excluding valid surrogate pairs).
+    /// 3. Full sensitivity tie-break on the proxy strings.
+    static func collate(_ value: JSString, _ that: JSString, tags: [String]?, options: [String: Value]) throws -> Int {
         let method = "String.localeCompare"
         let locale = try intlLocale(tags, method: method)
         _ = try intlOption(options, "usage", ["sort", "search"], method: method)
@@ -7152,10 +7188,33 @@ extension CodemodeLanguage {
                     !CharacterSet.punctuationCharacters.contains($0) && !CharacterSet.whitespaces.contains($0)
                 }))
             }
-            lhs = strip(lhs)
-            rhs = strip(rhs)
+            lhs = lhs.mapWellFormedSpans(strip)
+            rhs = rhs.mapWellFormedSpans(strip)
         }
-        switch lhs.compare(rhs, options: compareOptions, range: nil, locale: locale) {
+        if let a = lhs.wellFormedString, let b = rhs.wellFormedString {
+            switch a.compare(b, options: compareOptions, range: nil, locale: locale) {
+            case .orderedAscending: return -1
+            case .orderedDescending: return 1
+            case .orderedSame: return 0
+            }
+        }
+        let proxyA = lhs.ucaPrimaryProxy()
+        let proxyB = rhs.ucaPrimaryProxy()
+        let baseOptions = compareOptions.union([.caseInsensitive, .diacriticInsensitive])
+        switch proxyA.compare(proxyB, options: baseOptions, range: nil, locale: locale) {
+        case .orderedAscending: return -1
+        case .orderedDescending: return 1
+        case .orderedSame: break
+        }
+        let keyA = lhs.ucaSurrogateTieKey()
+        let keyB = rhs.ucaSurrogateTieKey()
+        for (x, y) in zip(keyA, keyB) where x != y {
+            return x < y ? -1 : 1
+        }
+        if keyA.count != keyB.count {
+            return keyA.count < keyB.count ? -1 : 1
+        }
+        switch proxyA.compare(proxyB, options: compareOptions, range: nil, locale: locale) {
         case .orderedAscending: return -1
         case .orderedDescending: return 1
         case .orderedSame: return 0
@@ -7176,7 +7235,7 @@ extension CodemodeLanguage {
     public static func coerce(_ kind: Coercion, args: [Value]) -> Value {
         switch kind {
         case .parseInt:
-            let str = coerceToString(args.first ?? .undefined).trimmingCharacters(in: .whitespacesAndNewlines)
+            let str = coerceToString(args.first ?? .undefined).trimStart().toWellFormedString()
             var radix = args.count > 1 && !args[1].isUndefined ? Int(toInt32(coerceToNumber(args[1]))) : 0
             var sign = 1.0
             var slice = str[...]
@@ -7206,7 +7265,7 @@ extension CodemodeLanguage {
             }
             return .number(sign * acc)
         case .parseFloat:
-            let str = coerceToString(args.first ?? .undefined).trimmingCharacters(in: .whitespacesAndNewlines)
+            let str = coerceToString(args.first ?? .undefined).trimStart().toWellFormedString()
             if str.hasPrefix("Infinity") || str.hasPrefix("+Infinity") { return .number(.infinity) }
             if str.hasPrefix("-Infinity") { return .number(-.infinity) }
             var end = str.startIndex
@@ -7251,15 +7310,15 @@ extension CodemodeLanguage {
                 let n = coerceToNumber(thisVal)
                 let digits = args.first.map { $0.isUndefined ? 0 : coerceToInteger($0) } ?? 0
                 guard digits >= 0 && digits <= 100 else { throw rangeError("toFixed() digits argument must be between 0 and 100") }
-                if !n.isFinite { return .string(formatJSNumber(n)) }
-                return .string(String(format: "%.\(digits)f", n))
+                if !n.isFinite { return .string(JSString(formatJSNumber(n))) }
+                return .string(JSString(String(format: "%.\(digits)f", n)))
             },
             Method("toString", 1) { thisVal, args, _, _ in
                 let n = coerceToNumber(thisVal)
                 let radix = args.first.map { $0.isUndefined ? 10 : coerceToInteger($0) } ?? 10
                 guard radix >= 2 && radix <= 36 else { throw rangeError("toString() radix must be between 2 and 36") }
-                if radix == 10 || !n.isFinite { return .string(formatJSNumber(n)) }
-                return .string(String(Int64(n.rounded(.towardZero)), radix: radix))
+                if radix == 10 || !n.isFinite { return .string(JSString(formatJSNumber(n))) }
+                return .string(JSString(String(Int64(n.rounded(.towardZero)), radix: radix)))
             },
             Method("valueOf", 0) { thisVal, _, _, _ in .number(coerceToNumber(thisVal)) },
         ])
@@ -7413,12 +7472,12 @@ extension CodemodeLanguage {
         case .null: return .null
         case .bool(let b): return .bool(b)
         case .number(let n): return .number(n)
-        case .string(let s): return .string(s)
+        case .string(let s): return .string(JSString(s))
         case .array(let items): return .object(Arr(proto: builtins.Array, items: items.map { pureJsonToValue(builtins, $0) }))
         case .object(let pairs):
             let obj = Obj(proto: builtins.Object)
             for (k, v) in pairs where k != "__proto__" {
-                define(obj, k, pureJsonToValue(builtins, v))
+                define(obj, JSString(k), pureJsonToValue(builtins, v))
             }
             return .object(obj)
         }
@@ -7430,7 +7489,7 @@ extension CodemodeLanguage {
         case .null: return .null
         case .bool(let b): return .bool(b)
         case .number(let n): return n.isFinite ? .number(n) : .null
-        case .string(let s): return .string(s)
+        case .string(let s): return .string(s.toHostString())
         case .hostNamespace: return .object([])
         case .object(let obj):
             if obj is Callable { return nil }
@@ -7454,7 +7513,7 @@ extension CodemodeLanguage {
             var pairs: [(String, PureJSONValue)] = []
             for (k, v) in entries(obj) {
                 if let p = try valueToPureJSON(v, seen: &seen) {
-                    pairs.append((k, p))
+                    pairs.append((k.toHostString(), p))
                 }
             }
             return .object(pairs)
@@ -7467,7 +7526,7 @@ extension CodemodeLanguage {
     public static func formatValue(_ value: Value) -> String {
         switch value {
         case .undefined: return "undefined"
-        case .string(let s): return s
+        case .string(let s): return s.toHostString()
         default:
             var seen = Set<ObjectIdentifier>()
             return formatConsoleValue(value, seen: &seen, depth: 0)
@@ -7479,7 +7538,7 @@ extension CodemodeLanguage {
         case .null, .undefined: return "null"
         case .bool(let b): return b ? "true" : "false"
         case .number(let n): return formatJSNumber(n)
-        case .string(let s): return jsonEscapeString(s)
+        case .string(let s): return s.jsonQuotedString()
         case .symbol(let sym): return symbolString(sym)
         case .hostNamespace: return "[opaque reference]"
         case .object(let obj):
@@ -7516,13 +7575,13 @@ extension CodemodeLanguage {
     private static func formatConsoleTable(_ value: Value, columnsArg: Value) -> String {
         if value.isUndefined { return "undefined" }
         if containsOpaqueReference(value) { return "[opaque reference]" }
-        let columns: [String]? = if case .object(let arr as Arr) = columnsArg { arr.items.map(coerceToString) } else { nil }
+        let columns: [String]? = if case .object(let arr as Arr) = columnsArg { arr.items.map { coerceToString($0).toHostString() } } else { nil }
         var rows: [(String, [String: Value])] = []
         if case .object(let arr as Arr) = value {
             for (idx, item) in arr.items.enumerated() {
                 if case .object(let obj) = item, !(obj is Arr) {
                     var dict: [String: Value] = [:]
-                    for (k, v) in entries(obj) { dict[k] = v }
+                    for (k, v) in entries(obj) { dict[k.toHostString()] = v }
                     rows.append((String(idx), dict))
                 } else {
                     rows.append((String(idx), ["Value": item]))
@@ -7532,10 +7591,10 @@ extension CodemodeLanguage {
             for (k, v) in entries(obj) {
                 if case .object(let inner) = v, !(inner is Arr) {
                     var dict: [String: Value] = [:]
-                    for (ik, iv) in entries(inner) { dict[ik] = iv }
-                    rows.append((k, dict))
+                    for (ik, iv) in entries(inner) { dict[ik.toHostString()] = iv }
+                    rows.append((k.toHostString(), dict))
                 } else {
-                    rows.append((k, ["Value": v]))
+                    rows.append((k.toHostString(), ["Value": v]))
                 }
             }
         } else {
@@ -7579,7 +7638,7 @@ extension CodemodeLanguage {
             count = n.isNaN ? 0 : max(0, Int(min(n.rounded(.down), Double(Int32.max))))
         }
         try checkArrayLength(count)
-        return (0..<count).filter { has(locales, String($0)) }.map { get(locales, String($0)) }
+        return (0..<count).filter { has(locales, JSString(String($0))) }.map { get(locales, JSString(String($0))) }
     }
 
     enum LocaleDateKind {
@@ -7595,7 +7654,7 @@ extension CodemodeLanguage {
         let locale = try intlLocale(tags, method: method)
         func option(_ key: String, _ allowed: [String]) throws -> String? {
             guard let value = options[key], !value.isUndefined else { return nil }
-            let text = coerceToString(value)
+            let text = coerceToString(value).toWellFormedString()
             guard allowed.contains(text) else {
                 throw rangeError("\(method): Value \(text) out of range for Intl.DateTimeFormat options property \(key)")
             }
@@ -7631,7 +7690,7 @@ extension CodemodeLanguage {
         let formatter = DateFormatter()
         formatter.locale = locale
         if let zone = options["timeZone"], !zone.isUndefined {
-            let name = coerceToString(zone)
+            let name = coerceToString(zone).toWellFormedString()
             guard let tz = TimeZone(identifier: name.uppercased() == "UTC" ? "UTC" : name) else {
                 throw rangeError("\(method): Invalid time zone specified: \(name)")
             }
@@ -7771,19 +7830,19 @@ extension CodemodeLanguage {
                     var entries: [(String, Value)] = []
                     if case .object(let opts) = options {
                         for key in dateTimeOptions {
-                            let value = get(opts, key)
+                            let value = get(opts, JSString(key))
                             if value.isUndefined { continue }
                             entries.append((key, key == "hour12" ? .bool(value.isTruthy) : value))
                         }
                     }
                     // Program objects among the arguments are converted first, as Intl's ToString would.
-                    let tagStrings = conversions(.string, tags).map(coerceToString)
+                    let tagStrings = conversions(.string, tags).map { coerceToString($0).toWellFormedString() }
                     let optionValues = conversions(.string, entries.map(\.1))
                     var hostOptions: [String: Value] = [:]
                     for (index, entry) in entries.enumerated() {
                         hostOptions[entry.0] = entry.0 == "fractionalSecondDigits" ? .number(coerceToNumber(optionValues[index])) : optionValues[index]
                     }
-                    return .string(try formatLocaleDate(time, kind: kind, tags: tagStrings, options: hostOptions, method: "Date.prototype.\(name)"))
+                    return .string(JSString(try formatLocaleDate(time, kind: kind, tags: tagStrings, options: hostOptions, method: "Date.prototype.\(name)")))
                 }
             }
         }
@@ -7791,10 +7850,10 @@ extension CodemodeLanguage {
         methods(builtins, builtins.Date, [
             Method("getTime", 0) { thisVal, _, _, _ in .number(try receiver(DateObj.self, thisVal, "Date.prototype.getTime").epochMs) },
             Method("valueOf", 0) { thisVal, _, _, _ in .number(try receiver(DateObj.self, thisVal, "Date.prototype.valueOf").epochMs) },
-            Method("toISOString", 0) { thisVal, _, _, _ in .string(try receiver(DateObj.self, thisVal, "Date.prototype.toISOString").toISOString()) },
+            Method("toISOString", 0) { thisVal, _, _, _ in .string(JSString(try receiver(DateObj.self, thisVal, "Date.prototype.toISOString").toISOString())) },
             Method("toJSON", 0) { thisVal, _, _, _ in
                 let d = try receiver(DateObj.self, thisVal, "Date.prototype.toJSON")
-                return d.epochMs.isFinite ? .string(try d.toISOString()) : .null
+                return d.epochMs.isFinite ? .string(JSString(try d.toISOString())) : .null
             },
             Method("toString", 0) { thisVal, _, _, _ in
                 let d = try receiver(DateObj.self, thisVal, "Date.prototype.toString")
@@ -7836,7 +7895,7 @@ extension CodemodeLanguage {
         let ctor = constructor(builtins, builtins.Date, NativeOptions(
             name: "Date",
             length: 7,
-            call: { _, _, _, _ in .string(formatISODate(epochMs: currentEpochMs())) },
+            call: { _, _, _, _ in .string(JSString(formatISODate(epochMs: currentEpochMs()))) },
             construct: { args, _, _ in
                 if args.isEmpty { return .object(DateObj(proto: builtins.Date, epochMs: currentEpochMs())) }
                 if args.count == 1 {
@@ -7844,7 +7903,7 @@ extension CodemodeLanguage {
                         return .object(DateObj(proto: builtins.Date, epochMs: other.epochMs))
                     }
                     if case .string(let s) = args[0] {
-                        return .object(DateObj(proto: builtins.Date, epochMs: parseISODate(s)))
+                        return .object(DateObj(proto: builtins.Date, epochMs: parseISODate(s.toWellFormedString())))
                     }
                     return .object(DateObj(proto: builtins.Date, epochMs: timeClip(coerceToNumber(args[0]))))
                 }
@@ -7861,7 +7920,7 @@ extension CodemodeLanguage {
         ))
         methods(builtins, ctor, [
             Method("now", 0) { _, _, _, _ in .number(currentEpochMs()) },
-            Method("parse", 1) { _, args, _, _ in .number(parseISODate(coerceToString(args.first ?? .undefined))) },
+            Method("parse", 1) { _, args, _, _ in .number(parseISODate(coerceToString(args.first ?? .undefined).toWellFormedString())) },
             Method("UTC", 7) { _, args, _, _ in
                 guard !args.isEmpty else { return .number(.nan) }
                 let y = coerceToInteger(args[0])
@@ -7945,15 +8004,14 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/stdlib/regexp.ts#matchToValue [status=implemented hash=36713a943eac]
     public static func matchToValue(
         _ match: NSTextCheckingResult,
-        in string: String,
+        in string: JSString,
         builtins: Builtins,
         pattern: String = ""
     ) -> Value {
-        let ns = string as NSString
         var items: [Value] = []
         for idx in 0..<match.numberOfRanges {
             let r = match.range(at: idx)
-            items.append(r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+            items.append(r.location == NSNotFound ? .undefined : .string(string.sliceUTF16(from: r.location, to: r.location + r.length)))
         }
         let arr = Arr(proto: builtins.Array, items: items)
         define(arr, "index", .number(Double(match.range.location)))
@@ -7965,7 +8023,7 @@ extension CodemodeLanguage {
             let groups = Obj(proto: builtins.Object)
             for name in names {
                 let r = match.range(withName: name)
-                define(groups, name, r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+                define(groups, JSString(name), r.location == NSNotFound ? .undefined : .string(string.sliceUTF16(from: r.location, to: r.location + r.length)))
             }
             define(arr, "groups", .object(groups))
         }
@@ -8003,10 +8061,10 @@ extension CodemodeLanguage {
         }
         if case .object(let existing as RegExpObj) = patternArg {
             pattern = existing.pattern
-            flags = flagsArg.isUndefined ? existing.flags : coerceToString(flagsArg)
+            flags = flagsArg.isUndefined ? existing.flags : coerceToString(flagsArg).toWellFormedString()
         } else {
-            pattern = patternArg.isUndefined ? "" : coerceToString(patternArg)
-            flags = flagsArg.isUndefined ? "" : coerceToString(flagsArg)
+            pattern = patternArg.isUndefined ? "" : coerceToString(patternArg).toWellFormedString()
+            flags = flagsArg.isUndefined ? "" : coerceToString(flagsArg).toWellFormedString()
         }
         let validFlags = Set("dgimsuvy")
         if flags.contains(where: { !validFlags.contains($0) }) || Set(flags).count != flags.count {
@@ -8022,9 +8080,10 @@ extension CodemodeLanguage {
 
     /// One `RegExpBuiltinExec` step: a match starting at or after `lastIndex` (exactly at it with `y`), updating
     /// `lastIndex` for global and sticky expressions.
-    static func regexExec(_ regex: RegExpObj, _ input: String) throws -> NSTextCheckingResult? {
+    static func regexExec(_ regex: RegExpObj, _ input: JSString) throws -> NSTextCheckingResult? {
+        let hostInput = input.toWellFormedString()
         let re = try compileHostRegex(regex.pattern, flags: regex.flags)
-        let ns = input as NSString
+        let ns = hostInput as NSString
         let tracksIndex = regex.flags.contains("g") || regex.flags.contains("y")
         let start = tracksIndex ? regex.lastIndex : 0
         if start > ns.length {
@@ -8032,7 +8091,7 @@ extension CodemodeLanguage {
             return nil
         }
         let options: NSRegularExpression.MatchingOptions = regex.flags.contains("y") ? [.anchored] : []
-        guard let m = re.firstMatch(in: input, options: options.union(.withTransparentBounds), range: NSRange(location: start, length: ns.length - start)) else {
+        guard let m = re.firstMatch(in: hostInput, options: options.union(.withTransparentBounds), range: NSRange(location: start, length: ns.length - start)) else {
             if tracksIndex { regex.lastIndex = 0 }
             return nil
         }
@@ -8040,13 +8099,12 @@ extension CodemodeLanguage {
         return m
     }
 
-    internal static func regexMatch(_ input: String, regex: RegExpObj, builtins: Builtins) throws -> Value {
+    internal static func regexMatch(_ input: JSString, regex: RegExpObj, builtins: Builtins) throws -> Value {
         if regex.flags.contains("g") {
             regex.lastIndex = 0
             var found: [Value] = []
-            let ns = input as NSString
             while let m = try regexExec(regex, input) {
-                found.append(.string(ns.substring(with: m.range)))
+                found.append(.string(input.sliceUTF16(from: m.range.location, to: m.range.location + m.range.length)))
                 if m.range.length == 0 { regex.lastIndex = advanceIndex(input, m.range.location, unicode: regex.flags.contains("u")) }
             }
             return found.isEmpty ? .null : .object(Arr(proto: builtins.Array, items: found))
@@ -8056,29 +8114,28 @@ extension CodemodeLanguage {
     }
 
     /// AdvanceStringIndex: one code unit, or one code point under the `u` flag.
-    static func advanceIndex(_ input: String, _ index: Int, unicode: Bool) -> Int {
-        let units = input.utf16
-        guard unicode, index + 1 < units.count else { return index + 1 }
-        let i = units.index(units.startIndex, offsetBy: index)
-        if UTF16.isLeadSurrogate(units[i]), UTF16.isTrailSurrogate(units[units.index(after: i)]) { return index + 2 }
+    static func advanceIndex(_ input: JSString, _ index: Int, unicode: Bool) -> Int {
+        let units = input.utf16Units
+        guard unicode, index >= 0, index + 1 < units.count else { return index + 1 }
+        if UTF16.isLeadSurrogate(units[index]), UTF16.isTrailSurrogate(units[index + 1]) { return index + 2 }
         return index + 1
     }
 
-    internal static func regexSearch(_ input: String, regex: RegExpObj) throws -> Int {
+    internal static func regexSearch(_ input: JSString, regex: RegExpObj) throws -> Int {
+        let hostInput = input.toWellFormedString()
         let re = try compileHostRegex(regex.pattern, flags: regex.flags)
-        let ns = input as NSString
-        guard let m = re.firstMatch(in: input, range: NSRange(location: 0, length: ns.length)) else { return -1 }
+        let ns = hostInput as NSString
+        guard let m = re.firstMatch(in: hostInput, range: NSRange(location: 0, length: ns.length)) else { return -1 }
         return m.range.location
     }
 
     // Upstream: psychoscript/src/stdlib/regexp.ts#split (implemented).
     /// RegExp.prototype[Symbol.split]: sticky matching at each position, with captures spliced in.
-    internal static func regexSplit(_ input: String, regex: RegExpObj, limit: Int) throws -> [String] {
+    internal static func regexSplit(_ input: JSString, regex: RegExpObj, limit: Int) throws -> [JSString] {
         let splitter = RegExpObj(proto: nil, pattern: regex.pattern, flags: regex.flags.contains("y") ? regex.flags : regex.flags + "y")
-        let ns = input as NSString
-        let size = ns.length
+        let size = input.utf16Count
         let unicode = regex.flags.contains("u") || regex.flags.contains("v")
-        var parts: [String] = []
+        var parts: [JSString] = []
         if limit == 0 { return [] }
         if size == 0 {
             splitter.lastIndex = 0
@@ -8097,35 +8154,34 @@ extension CodemodeLanguage {
                 q = advanceIndex(input, q, unicode: unicode)
                 continue
             }
-            parts.append(ns.substring(with: NSRange(location: p, length: q - p)))
+            parts.append(input.sliceUTF16(from: p, to: q))
             if parts.count == limit { return parts }
             p = e
             for idx in 1..<max(1, m.numberOfRanges) {
                 let r = m.range(at: idx)
-                parts.append(r.location == NSNotFound ? "" : ns.substring(with: r))
+                parts.append(r.location == NSNotFound ? .empty : input.sliceUTF16(from: r.location, to: r.location + r.length))
                 if parts.count == limit { return parts }
             }
             q = p
         }
-        parts.append(ns.substring(from: p))
+        parts.append(input.sliceUTF16(from: p, to: size))
         return parts
     }
 
     /// GetSubstitution: `$$`, `$&`, `` $` ``, `$'`, `$n`/`$nn`, and `$<name>`.
-    static func expandReplacement(_ template: String, matched: String, position: Int, input: String, captures: [Value], groups: Value) -> String {
-        let t = Array(template.utf16)
-        let inputUnits = Array(input.utf16)
+    static func expandReplacement(_ template: JSString, matched: JSString, position: Int, input: JSString, captures: [Value], groups: Value) -> JSString {
+        let t = template.utf16Units
+        let inputUnits = input.utf16Units
         var out: [UInt16] = []
         var i = 0
-        func units(_ s: String) -> [UInt16] { Array(s.utf16) }
-        let tailStart = min(position + matched.utf16.count, inputUnits.count)
+        let tailStart = min(position + matched.utf16Count, inputUnits.count)
         while i < t.count {
             let c = t[i]
             guard c == 0x24, i + 1 < t.count else { out.append(c); i += 1; continue }
             let n = t[i + 1]
             switch n {
             case 0x24: out.append(0x24); i += 2
-            case 0x26: out += units(matched); i += 2
+            case 0x26: out += matched.utf16Units; i += 2
             case 0x60: out += inputUnits[0..<min(position, inputUnits.count)]; i += 2
             case 0x27: out += inputUnits[tailStart...]; i += 2
             case 0x30...0x39:
@@ -8137,7 +8193,7 @@ extension CodemodeLanguage {
                     if two >= 1 && two <= captures.count { index = two; consumed = 3 }
                 }
                 if index >= 1 && index <= captures.count {
-                    if case .string(let s) = captures[index - 1] { out += units(s) }
+                    if case .string(let s) = captures[index - 1] { out += s.utf16Units }
                     i += consumed
                 } else {
                     out.append(c)
@@ -8149,25 +8205,25 @@ extension CodemodeLanguage {
                     i += 1
                     continue
                 }
-                let name = String(decoding: t[(i + 2)..<close], as: UTF16.self)
+                let name = JSString(utf16: t[(i + 2)..<close])
                 let value = get(groupsObj, name)
-                if !value.isUndefined { out += units(coerceToString(value)) }
+                if !value.isUndefined { out += coerceToString(value).utf16Units }
                 i = close + 1
             default:
                 out.append(c)
                 i += 1
             }
         }
-        return String(decoding: out, as: UTF16.self)
+        return JSString(utf16: out)
     }
 
     internal static func regexReplace(
-        _ input: String,
+        _ input: JSString,
         regex: RegExpObj,
         replacement: Value,
         replaceAll: Bool,
         eval: Evaluator
-    ) async throws -> String {
+    ) async throws -> JSString {
         var matches: [NSTextCheckingResult] = []
         if replaceAll {
             regex.lastIndex = 0
@@ -8179,24 +8235,26 @@ extension CodemodeLanguage {
             matches.append(m)
         }
         if matches.isEmpty { return input }
-        let ns = input as NSString
         let names = namedGroups(regex.pattern)
-        var out = ""
+        var out: [UInt16] = []
+        let inputUnits = input.utf16Units
         var cursor = 0
         for m in matches {
-            out += ns.substring(with: NSRange(location: cursor, length: max(0, m.range.location - cursor)))
-            let matched = ns.substring(with: m.range)
+            if cursor < m.range.location {
+                out.append(contentsOf: inputUnits[cursor..<m.range.location])
+            }
+            let matched = input.sliceUTF16(from: m.range.location, to: m.range.location + m.range.length)
             var captures: [Value] = []
             for idx in 1..<max(1, m.numberOfRanges) {
                 let r = m.range(at: idx)
-                captures.append(r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+                captures.append(r.location == NSNotFound ? .undefined : .string(input.sliceUTF16(from: r.location, to: r.location + r.length)))
             }
             var groups: Value = .undefined
             if !names.isEmpty {
                 let g = Obj(proto: eval.builtins.Object)
                 for name in names {
                     let r = m.range(withName: name)
-                    define(g, name, r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+                    define(g, JSString(name), r.location == NSNotFound ? .undefined : .string(input.sliceUTF16(from: r.location, to: r.location + r.length)))
                 }
                 groups = .object(g)
             }
@@ -8205,14 +8263,16 @@ extension CodemodeLanguage {
                 cbArgs.append(.number(Double(m.range.location)))
                 cbArgs.append(.string(input))
                 if !names.isEmpty { cbArgs.append(groups) }
-                out += coerceToString(try await eval.callCallable(.object(cb), thisValue: .undefined, args: cbArgs, site: nil))
+                out.append(contentsOf: coerceToString(try await eval.callCallable(.object(cb), thisValue: .undefined, args: cbArgs, site: nil)).utf16Units)
             } else {
-                out += expandReplacement(coerceToString(replacement), matched: matched, position: m.range.location, input: input, captures: captures, groups: groups)
+                out.append(contentsOf: expandReplacement(coerceToString(replacement), matched: matched, position: m.range.location, input: input, captures: captures, groups: groups).utf16Units)
             }
             cursor = m.range.location + m.range.length
         }
-        out += ns.substring(from: min(cursor, ns.length))
-        return out
+        if cursor < inputUnits.count {
+            out.append(contentsOf: inputUnits[cursor...])
+        }
+        return JSString(utf16: out)
     }
 
     // parity: psychoscript/src/stdlib/regexp.ts#regexpGlobal [status=implemented hash=38dcf3d03ad1]
@@ -8453,7 +8513,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/stdlib/url.ts#readPairs [status=implemented hash=e094046908d2]
     public static func readPairs(_ value: Value, eval: Evaluator) async throws -> PairsInto {
         if value.isNullish { return [] }
-        if case .string(let s) = value { return parseQueryString(s) }
+        if case .string(let s) = value { return parseQueryString(s.toWellFormedString()) }
         if case .object(let sp as URLSearchParamsObj) = value { return sp.pairs }
         if case .object(let h as HeadersObj) = value { return h.sortedEntries() }
         if case .object(let arr as Arr) = value {
@@ -8461,14 +8521,14 @@ extension CodemodeLanguage {
             for item in arr.items {
                 let pair = try await eval.collectIterable(item)
                 guard pair.count == 2 else { throw typeError("Expected key-value pair of length 2.") }
-                out.append((coerceToString(pair[0]), coerceToString(pair[1])))
+                out.append((coerceToString(pair[0]).toWellFormedString(), coerceToString(pair[1]).toWellFormedString()))
             }
             return out
         }
         if case .object(let obj) = value {
-            return entries(obj).map { ($0.0, coerceToString($0.1)) }
+            return entries(obj).map { ($0.0.toWellFormedString(), coerceToString($0.1).toWellFormedString()) }
         }
-        return parseQueryString(coerceToString(value))
+        return parseQueryString(coerceToString(value).toWellFormedString())
     }
 
     // parity: psychoscript/src/stdlib/url.ts#buildPairs [status=implemented hash=28e44d0502a6]
@@ -8490,7 +8550,7 @@ extension CodemodeLanguage {
         eval: Evaluator
     ) async throws {
         for (k, v) in pairs {
-            _ = try await eval.callCallable(.object(cb), thisValue: thisArg, args: [.string(v), .string(k), thisVal], site: nil)
+            _ = try await eval.callCallable(.object(cb), thisValue: thisArg, args: [.string(JSString(v)), .string(JSString(k)), thisVal], site: nil)
         }
     }
 
@@ -8499,11 +8559,21 @@ extension CodemodeLanguage {
         nativeFn(builtins, name: name, length: 1) { _, args, _, _ in
             let str = coerceToString(args.first ?? .undefined)
             switch name {
-            case "encodeURIComponent": return .string(percentEncode(str, preserveURIReserved: false))
-            case "encodeURI": return .string(percentEncode(str, preserveURIReserved: true))
+            case "encodeURIComponent":
+                guard let encoded = percentEncodeUTF16(str, preserveURIReserved: false) else {
+                    throw uriError("\(name) received malformed URI data: String contained an illegal UTF-16 sequence.")
+                }
+                return .string(encoded)
+            case "encodeURI":
+                guard let encoded = percentEncodeUTF16(str, preserveURIReserved: true) else {
+                    throw uriError("\(name) received malformed URI data: String contained an illegal UTF-16 sequence.")
+                }
+                return .string(encoded)
             case "decodeURIComponent", "decodeURI":
                 // Upstream appends the host engine's own message (JavaScriptCore: "URI error").
-                guard let decoded = percentDecode(str) else { throw uriError("\(name) received malformed URI data: URI error") }
+                guard let decoded = percentDecodeUTF16(str, preserveURIReserved: name == "decodeURI") else {
+                    throw uriError("\(name) received malformed URI data: URI error")
+                }
                 return .string(decoded)
             default:
                 return .string(str)
@@ -8519,23 +8589,23 @@ extension CodemodeLanguage {
         methods(builtins, builtins.URLSearchParams, [
             Method("get", 1) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.get")
-                let key = coerceToString(args.first ?? .undefined)
-                return sp.pairs.first { $0.0 == key }.map { .string($0.1) } ?? .null
+                let key = coerceToString(args.first ?? .undefined).toWellFormedString()
+                return sp.pairs.first { $0.0 == key }.map { .string(JSString($0.1)) } ?? .null
             },
             Method("getAll", 1) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.getAll")
-                let key = coerceToString(args.first ?? .undefined)
-                return .object(Arr(proto: builtins.Array, items: sp.pairs.filter { $0.0 == key }.map { .string($0.1) }))
+                let key = coerceToString(args.first ?? .undefined).toWellFormedString()
+                return .object(Arr(proto: builtins.Array, items: sp.pairs.filter { $0.0 == key }.map { .string(JSString($0.1)) }))
             },
             Method("has", 1) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.has")
-                let key = coerceToString(args.first ?? .undefined)
+                let key = coerceToString(args.first ?? .undefined).toWellFormedString()
                 return .bool(sp.pairs.contains { $0.0 == key })
             },
             Method("set", 2) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.set")
-                let key = coerceToString(args.first ?? .undefined)
-                let val = coerceToString(args.count > 1 ? args[1] : .undefined)
+                let key = coerceToString(args.first ?? .undefined).toWellFormedString()
+                let val = coerceToString(args.count > 1 ? args[1] : .undefined).toWellFormedString()
                 var list = sp.pairs
                 var replaced = false
                 var next: [(String, String)] = []
@@ -8553,12 +8623,12 @@ extension CodemodeLanguage {
             },
             Method("append", 2) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.append")
-                sp.pairs.append((coerceToString(args.first ?? .undefined), coerceToString(args.count > 1 ? args[1] : .undefined)))
+                sp.pairs.append((coerceToString(args.first ?? .undefined).toWellFormedString(), coerceToString(args.count > 1 ? args[1] : .undefined).toWellFormedString()))
                 return .undefined
             },
             Method("delete", 1) { thisVal, args, _, _ in
                 let sp = try receiver(URLSearchParamsObj.self, thisVal, "URLSearchParams.prototype.delete")
-                let key = coerceToString(args.first ?? .undefined)
+                let key = coerceToString(args.first ?? .undefined).toWellFormedString()
                 sp.pairs = sp.pairs.filter { $0.0 != key }
                 return .undefined
             },
@@ -8602,34 +8672,34 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/stdlib/url.ts#urlGlobal [status=implemented hash=dabbd0472e1c]
     public static func urlGlobal(_ builtins: Builtins) -> Native {
-        defineAccessor(builtins.URL, "href", get: { .string(try receiver(URLObj.self, $0, "URL.href").href) })
-        defineAccessor(builtins.URL, "origin", get: { .string(try receiver(URLObj.self, $0, "URL.origin").origin) })
-        defineAccessor(builtins.URL, "protocol", get: { .string(try receiver(URLObj.self, $0, "URL.protocol").protocolStr) })
-        defineAccessor(builtins.URL, "username", get: { .string(try receiver(URLObj.self, $0, "URL.username").username) })
-        defineAccessor(builtins.URL, "password", get: { .string(try receiver(URLObj.self, $0, "URL.password").password) })
-        defineAccessor(builtins.URL, "host", get: { .string(try receiver(URLObj.self, $0, "URL.host").host) })
-        defineAccessor(builtins.URL, "hostname", get: { .string(try receiver(URLObj.self, $0, "URL.hostname").hostname) })
-        defineAccessor(builtins.URL, "port", get: { .string(try receiver(URLObj.self, $0, "URL.port").port) })
-        defineAccessor(builtins.URL, "pathname", get: { .string(try receiver(URLObj.self, $0, "URL.pathname").pathname) }, set: { tv, v in
-            try receiver(URLObj.self, tv, "URL.pathname").pathname = coerceToString(v)
+        defineAccessor(builtins.URL, "href", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.href").href)) })
+        defineAccessor(builtins.URL, "origin", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.origin").origin)) })
+        defineAccessor(builtins.URL, "protocol", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.protocol").protocolStr)) })
+        defineAccessor(builtins.URL, "username", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.username").username)) })
+        defineAccessor(builtins.URL, "password", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.password").password)) })
+        defineAccessor(builtins.URL, "host", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.host").host)) })
+        defineAccessor(builtins.URL, "hostname", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.hostname").hostname)) })
+        defineAccessor(builtins.URL, "port", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.port").port)) })
+        defineAccessor(builtins.URL, "pathname", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.pathname").pathname)) }, set: { tv, v in
+            try receiver(URLObj.self, tv, "URL.pathname").pathname = coerceToString(v).toWellFormedString()
         })
-        defineAccessor(builtins.URL, "search", get: { .string(try receiver(URLObj.self, $0, "URL.search").search) })
+        defineAccessor(builtins.URL, "search", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.search").search)) })
         defineAccessor(builtins.URL, "searchParams", get: { .object(try receiver(URLObj.self, $0, "URL.searchParams").searchParams) })
-        defineAccessor(builtins.URL, "hash", get: { .string(try receiver(URLObj.self, $0, "URL.hash").hashStr) }, set: { tv, v in
-            let s = coerceToString(v)
+        defineAccessor(builtins.URL, "hash", get: { .string(JSString(try receiver(URLObj.self, $0, "URL.hash").hashStr)) }, set: { tv, v in
+            let s = coerceToString(v).toWellFormedString()
             try receiver(URLObj.self, tv, "URL.hash").hashStr = s.isEmpty || s.hasPrefix("#") ? s : "#\(s)"
         })
         methods(builtins, builtins.URL, [
-            Method("toString", 0) { tv, _, _, _ in .string(try receiver(URLObj.self, tv, "URL.prototype.toString").href) },
-            Method("toJSON", 0) { tv, _, _, _ in .string(try receiver(URLObj.self, tv, "URL.prototype.toJSON").href) },
+            Method("toString", 0) { tv, _, _, _ in .string(JSString(try receiver(URLObj.self, tv, "URL.prototype.toString").href)) },
+            Method("toJSON", 0) { tv, _, _, _ in .string(JSString(try receiver(URLObj.self, tv, "URL.prototype.toJSON").href)) },
         ])
         let ctor = constructor(builtins, builtins.URL, NativeOptions(
             name: "URL",
             length: 1,
             call: requiresNew("URL"),
             construct: { args, _, _ in
-                let raw = coerceToString(args.first ?? .undefined)
-                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : nil
+                let raw = coerceToString(args.first ?? .undefined).toWellFormedString()
+                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]).toWellFormedString() : nil
                 guard let parsed = parseURL(raw, base: base, builtins: builtins) else {
                     throw typeError("Invalid URL: \(raw)")
                 }
@@ -8638,13 +8708,13 @@ extension CodemodeLanguage {
         ))
         methods(builtins, ctor, [
             Method("parse", 1) { _, args, _, _ in
-                let raw = coerceToString(args.first ?? .undefined)
-                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : nil
+                let raw = coerceToString(args.first ?? .undefined).toWellFormedString()
+                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]).toWellFormedString() : nil
                 return parseURL(raw, base: base, builtins: builtins).map { .object($0) } ?? .null
             },
             Method("canParse", 1) { _, args, _, _ in
-                let raw = coerceToString(args.first ?? .undefined)
-                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : nil
+                let raw = coerceToString(args.first ?? .undefined).toWellFormedString()
+                let base = args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]).toWellFormedString() : nil
                 return .bool(parseURL(raw, base: base, builtins: builtins) != nil)
             },
         ])
@@ -8656,21 +8726,21 @@ extension CodemodeLanguage {
         methods(builtins, builtins.Headers, [
             Method("get", 1) { tv, args, _, _ in
                 let h = try receiver(HeadersObj.self, tv, "Headers.prototype.get")
-                return h.getHeader(coerceToString(args.first ?? .undefined)).map { .string($0) } ?? .null
+                return h.getHeader(coerceToString(args.first ?? .undefined).toWellFormedString()).map { .string(JSString($0)) } ?? .null
             },
             Method("has", 1) { tv, args, _, _ in
-                .bool(try receiver(HeadersObj.self, tv, "Headers.prototype.has").hasHeader(coerceToString(args.first ?? .undefined)))
+                .bool(try receiver(HeadersObj.self, tv, "Headers.prototype.has").hasHeader(coerceToString(args.first ?? .undefined).toWellFormedString()))
             },
             Method("set", 2) { tv, args, _, _ in
-                try receiver(HeadersObj.self, tv, "Headers.prototype.set").setHeader(coerceToString(args.first ?? .undefined), coerceToString(args.count > 1 ? args[1] : .undefined))
+                try receiver(HeadersObj.self, tv, "Headers.prototype.set").setHeader(coerceToString(args.first ?? .undefined).toWellFormedString(), coerceToString(args.count > 1 ? args[1] : .undefined).toWellFormedString())
                 return .undefined
             },
             Method("append", 2) { tv, args, _, _ in
-                try receiver(HeadersObj.self, tv, "Headers.prototype.append").appendHeader(coerceToString(args.first ?? .undefined), coerceToString(args.count > 1 ? args[1] : .undefined))
+                try receiver(HeadersObj.self, tv, "Headers.prototype.append").appendHeader(coerceToString(args.first ?? .undefined).toWellFormedString(), coerceToString(args.count > 1 ? args[1] : .undefined).toWellFormedString())
                 return .undefined
             },
             Method("delete", 1) { tv, args, _, _ in
-                try receiver(HeadersObj.self, tv, "Headers.prototype.delete").deleteHeader(coerceToString(args.first ?? .undefined))
+                try receiver(HeadersObj.self, tv, "Headers.prototype.delete").deleteHeader(coerceToString(args.first ?? .undefined).toWellFormedString())
                 return .undefined
             },
             Method("keys", 0) { tv, _, _, _ in
@@ -8728,9 +8798,9 @@ extension CodemodeLanguage {
 
     /// A string option of the base64 methods: one of `allowed`, defaulting to the first.
     static func base64Option(_ options: Obj?, _ key: String, _ allowed: [String], _ name: String) throws -> String {
-        let value = options.map { get($0, key) } ?? .undefined
+        let value = options.map { get($0, JSString(key)) } ?? .undefined
         if value.isUndefined { return allowed[0] }
-        if case .string(let s) = value, allowed.contains(s) { return s }
+        if case .string(let s) = value, let wf = s.wellFormedString, allowed.contains(wf) { return wf }
         throw typeError("\(name) requires that \(key) be \(allowed.map { "\"\($0)\"" }.joined(separator: " or ")).")
     }
 
@@ -8872,12 +8942,12 @@ extension CodemodeLanguage {
                     let options = try base64Options(args.first ?? .undefined, "Uint8Array.prototype.toBase64")
                     let alphabet = try base64Option(options, "alphabet", base64Alphabets, "Uint8Array.prototype.toBase64")
                     let omitPadding = options.map { get($0, "omitPadding").isTruthy } ?? false
-                    return .string(encodeBase64(bytes, alphabet: alphabet, omitPadding: omitPadding))
+                    return .string(JSString(encodeBase64(bytes, alphabet: alphabet, omitPadding: omitPadding)))
                 }
             },
             Method("toHex", 0) { tv, _, _, _ in
                 let d = try receiver(Bytes.self, tv, "Uint8Array.prototype.toHex").data
-                return .string(d.map { String(format: "%02x", $0) }.joined())
+                return .string(JSString(d.map { String(format: "%02x", $0) }.joined()))
             },
         ])
         let ctor = constructor(builtins, builtins.Uint8Array, NativeOptions(
@@ -8908,7 +8978,8 @@ extension CodemodeLanguage {
                     let alphabet = try base64Option(options, "alphabet", base64Alphabets, "Uint8Array.fromBase64")
                     let lastChunkHandling = try base64Option(options, "lastChunkHandling", lastChunkHandlings, "Uint8Array.fromBase64")
                     do {
-                        return .object(finishBytes(builtins, try decodeBase64(text, alphabet: alphabet, lastChunkHandling: lastChunkHandling)))
+                        guard let wf = text.wellFormedString else { throw syntaxError("Uint8Array.fromBase64: the string is not valid base64.") }
+                        return .object(finishBytes(builtins, try decodeBase64(wf, alphabet: alphabet, lastChunkHandling: lastChunkHandling)))
                     } catch {
                         throw syntaxError("Uint8Array.fromBase64: the string is not valid base64.")
                     }
@@ -8933,7 +9004,7 @@ extension CodemodeLanguage {
             if case .number(let n) = get(obj, "length") {
                 let count = max(0, n.isFinite ? Int(n) : 0)
                 try checkArrayLength(count)
-                return (0..<count).map { toUint8(get(obj, String($0))) }
+                return (0..<count).map { toUint8(get(obj, JSString(String($0)))) }
             }
             if !readsPending(), (try? requireIteratorMethod(value)) != nil {
                 return try await eval.collectIterable(value).map(toUint8)
@@ -8947,20 +9018,20 @@ extension CodemodeLanguage {
         methods(builtins, builtins.Buffer, [
             Method("toString", 1) { tv, args, _, _ in
                 let b = try receiver(Bytes.self, tv, "Buffer.prototype.toString")
-                let enc = (args.first.map { $0.isUndefined ? "utf8" : coerceToString($0) } ?? "utf8").lowercased()
+                let enc = (args.first.map { $0.isUndefined ? "utf8" : coerceToString($0).toWellFormedString() } ?? "utf8").lowercased()
                 switch enc {
-                case "base64": return .string(bytesToBase64(b.data))
-                case "hex": return .string(b.data.map { String(format: "%02x", $0) }.joined())
-                default: return .string(String(decoding: b.data, as: UTF8.self))
+                case "base64": return .string(JSString(bytesToBase64(b.data)))
+                case "hex": return .string(JSString(b.data.map { String(format: "%02x", $0) }.joined()))
+                default: return .string(JSString(String(decoding: b.data, as: UTF8.self)))
                 }
             },
         ])
         let bytesFrom: @Sendable ([Value], Evaluator) async throws -> [UInt8] = { args, eval in
             let first = args.first ?? .undefined
             if case .string(let s) = first {
-                let enc = (args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]) : "utf8").lowercased()
-                if enc == "base64" { return (try? base64ToBytes(s)) ?? [] }
-                return Array(s.utf8)
+                let enc = (args.count > 1 && !args[1].isUndefined ? coerceToString(args[1]).toWellFormedString() : "utf8").lowercased()
+                if enc == "base64" { return (try? base64ToBytes(s.toWellFormedString())) ?? [] }
+                return s.utf8BytesReplacingSurrogates()
             }
             if case .object(let b as Bytes) = first {
                 let data = b.data
@@ -9011,8 +9082,8 @@ extension CodemodeLanguage {
     public static func textEncoderGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.TextEncoder, [
             Method("encode", 1) { _, args, _, _ in
-                let str = args.first.map { $0.isUndefined ? "" : coerceToString($0) } ?? ""
-                return .object(finishBytes(builtins, Array(str.utf8)))
+                let str: JSString = args.first.map { $0.isUndefined ? "" : coerceToString($0) } ?? ""
+                return .object(finishBytes(builtins, str.utf8BytesReplacingSurrogates()))
             },
         ])
         return constructor(builtins, builtins.TextEncoder, NativeOptions(
@@ -9047,7 +9118,7 @@ extension CodemodeLanguage {
                 return try await withReads(eval) {
                     let stream: Bool = if case .object(let opts) = options { get(opts, "stream").isTruthy } else { false }
                     if readsPending() { return .undefined }
-                    return .string(try dec.decode(bytes, stream: stream))
+                    return .string(JSString(try dec.decode(bytes, stream: stream)))
                 }
             },
         ])
@@ -9056,7 +9127,7 @@ extension CodemodeLanguage {
             length: 0,
             call: requiresNew("TextDecoder"),
             construct: { args, _, eval in
-                let enc = args.first.map { $0.isUndefined ? "utf-8" : coerceToString($0).lowercased() } ?? "utf-8"
+                let enc = args.first.map { $0.isUndefined ? "utf-8" : coerceToString($0).toWellFormedString().lowercased() } ?? "utf-8"
                 return try await withReads(eval) {
                     var fatal = false
                     var ignoreBOM = false
@@ -9096,16 +9167,21 @@ extension CodemodeLanguage {
         nativeFn(builtins, name: name, length: 1) { _, args, _, _ in
             let str = coerceToString(args.first ?? .undefined)
             if name == "btoa" {
+                let units = str.utf16Units
                 var bytes: [UInt8] = []
-                for sc in str.unicodeScalars {
-                    guard sc.value <= 0xFF else { throw invalidData("The string to be encoded contains characters outside of the Latin1 range.") }
-                    bytes.append(UInt8(sc.value))
+                bytes.reserveCapacity(units.count)
+                for u in units {
+                    guard u <= 0xFF else { throw typeError("The string contains invalid characters.") }
+                    bytes.append(UInt8(u))
                 }
-                return .string(bytesToBase64(bytes))
+                return .string(JSString(bytesToBase64(bytes)))
             } else {
+                guard let wf = str.wellFormedString else {
+                    throw typeError("The string contains invalid characters.")
+                }
                 do {
-                    let bytes = try base64ToBytes(str)
-                    return .string(String(bytes.map { Character(UnicodeScalar($0)) }))
+                    let bytes = try base64ToBytes(wf)
+                    return .string(JSString(utf16: bytes.map { UInt16($0) }))
                 } catch {
                     throw typeError("The string contains invalid characters.")
                 }
@@ -9129,7 +9205,7 @@ extension CodemodeLanguage {
     public static func cryptoGlobal(_ builtins: Builtins) -> Obj {
         let obj = Obj(proto: builtins.Object)
         methods(builtins, obj, [
-            Method("randomUUID", 0) { _, _, _, _ in .string(OpenCodeUtil.uuid()) },
+            Method("randomUUID", 0) { _, _, _, _ in .string(JSString(OpenCodeUtil.uuid())) },
             Method("getRandomValues", 1) { _, args, _, _ in
                 guard case .object(let bytes as Bytes) = args.first else {
                     throw typeError("crypto.getRandomValues expects a Uint8Array.")
@@ -9194,7 +9270,7 @@ extension CodemodeLanguage {
                     } else {
                         shownLength = 0
                     }
-                    let shownName: String = if case .string(let s) = name { s } else { "" }
+                    let shownName: JSString = if case .string(let s) = name { s } else { "" }
                     return .object(BoundFn(
                         proto: builtins.Function,
                         target: target,
@@ -9227,7 +9303,7 @@ extension CodemodeLanguage {
             guard case .string(let spec) = args.first else {
                 throw typeError("require expects a module name string.", node: site)
             }
-            return try resolveMod(spec)
+            return try resolveMod(spec.toWellFormedString())
         }
 
         var list: [(String, Value)] = [
@@ -9393,6 +9469,77 @@ extension CodemodeLanguage {
             t -= Double(TimeZone.current.secondsFromGMT(for: guess)) * 1000
         }
         return timeClip(t)
+    }
+
+    internal static func percentEncodeUTF16(_ text: JSString, preserveURIReserved: Bool) -> JSString? {
+        guard let wellFormed = text.wellFormedString else { return nil }
+        return JSString(percentEncode(wellFormed, preserveURIReserved: preserveURIReserved))
+    }
+
+    internal static func percentDecodeUTF16(_ text: JSString, preserveURIReserved: Bool) -> JSString? {
+        let reserved: Set<UInt8> = Set(";/?:@&=+$,#".utf8)
+        let units = text.utf16Units
+        let count = units.count
+        var out: [UInt16] = []
+        out.reserveCapacity(count)
+
+        func readPercentByte(at pos: Int) -> UInt8? {
+            guard pos + 2 < count, units[pos] == 0x25,
+                  units[pos + 1] <= 0x7F, units[pos + 2] <= 0x7F,
+                  let hi = hexVal(UInt8(units[pos + 1])),
+                  let lo = hexVal(UInt8(units[pos + 2]))
+            else { return nil }
+            return (hi << 4) | lo
+        }
+
+        var i = 0
+        while i < count {
+            let u = units[i]
+            if u != 0x25 { // '%'
+                out.append(u)
+                i += 1
+                continue
+            }
+            guard let b0 = readPercentByte(at: i) else { return nil }
+            if b0 < 0x80 {
+                if preserveURIReserved && reserved.contains(b0) {
+                    out.append(units[i])
+                    out.append(units[i + 1])
+                    out.append(units[i + 2])
+                } else {
+                    out.append(UInt16(b0))
+                }
+                i += 3
+                continue
+            }
+            let seqLen: Int
+            var cp: UInt32
+            let minCP: UInt32
+            if (b0 & 0xE0) == 0xC0 {
+                seqLen = 2; cp = UInt32(b0 & 0x1F); minCP = 0x80
+            } else if (b0 & 0xF0) == 0xE0 {
+                seqLen = 3; cp = UInt32(b0 & 0x0F); minCP = 0x800
+            } else if (b0 & 0xF8) == 0xF0 {
+                seqLen = 4; cp = UInt32(b0 & 0x07); minCP = 0x10000
+            } else {
+                return nil
+            }
+            i += 3
+            for _ in 1..<seqLen {
+                guard let bn = readPercentByte(at: i), (bn & 0xC0) == 0x80 else { return nil }
+                cp = (cp << 6) | UInt32(bn & 0x3F)
+                i += 3
+            }
+            guard cp >= minCP, cp <= 0x10FFFF, !(cp >= 0xD800 && cp <= 0xDFFF) else { return nil }
+            if cp <= 0xFFFF {
+                out.append(UInt16(cp))
+            } else {
+                let adj = cp - 0x10000
+                out.append(UInt16(0xD800 + (adj >> 10)))
+                out.append(UInt16(0xDC00 + (adj & 0x3FF)))
+            }
+        }
+        return JSString(utf16: out)
     }
 
     internal static func percentEncode(_ text: String, preserveURIReserved: Bool) -> String {
@@ -10228,7 +10375,7 @@ extension CodemodeLanguage {
                     let val: Value
                     if let initExpr = d.initializer {
                         if case .identifier(let name, _) = d.id {
-                            val = try await evalNamedExpression(initExpr, name: name, env: env, thisValue: thisValue)
+                            val = try await evalNamedExpression(initExpr, name: JSString(name), env: env, thisValue: thisValue)
                         } else {
                             val = try await evalExpression(initExpr, env: env, thisValue: thisValue)
                         }
@@ -10410,7 +10557,7 @@ extension CodemodeLanguage {
                     case .defaultImport(let local), .namespaceImport(let local):
                         env.declare(local, value: mod, isConst: true, initialized: true)
                     case .namedImport(let imported, let local):
-                        let val = try resolveProperty(mod, .string(imported), builtins: builtins)
+                        let val = try resolveProperty(mod, .string(JSString(imported)), builtins: builtins)
                         env.declare(local, value: val, isConst: true, initialized: true)
                     }
                 }
@@ -10559,10 +10706,10 @@ extension CodemodeLanguage {
                 if value.isNullish {
                     throw typeError("Cannot destructure \(describeValue(value)) as it is \(value.isUndefined ? "undefined" : "null").", node: AstNode(type: "ObjectPattern", location: loc))
                 }
-                var usedKeys = Set<String>()
+                var usedKeys = Set<JSString>()
                 for prop in props {
                     let key = try await evalPropertyKey(prop.key, env: env, thisValue: thisValue)
-                    if let s = key.stringKey { usedKeys.insert(s) }
+                    if let s = key.jsStringKey { usedKeys.insert(s) }
                     let propVal = try await readMember(value, key, node: AstNode(type: "ObjectPattern", location: loc))
                     try await bindPattern(prop.value, value: propVal, kind: kind, env: env, thisValue: thisValue, isInit: isInit)
                 }
@@ -10570,6 +10717,11 @@ extension CodemodeLanguage {
                     let restObj = Obj(proto: builtins.Object)
                     if case .object(let src) = value {
                         try await copyDataPropertiesAsync(restObj, src, skip: Set(usedKeys.map { PropertyKey.string($0) }))
+                    } else if case .string(let s) = value {
+                        for (idx, chunk) in s.codePointStrings().enumerated() {
+                            let k = JSString(String(idx))
+                            if !usedKeys.contains(k) { define(restObj, k, .string(chunk)) }
+                        }
                     }
                     try await bindPattern(rest, value: .object(restObj), kind: kind, env: env, thisValue: thisValue, isInit: isInit)
                 }
@@ -10586,8 +10738,9 @@ extension CodemodeLanguage {
 
         internal func evalPropertyKey(_ key: PropertyKeyExpr, env: LexEnv, thisValue: Value) async throws -> PropertyKey {
             switch key {
-            case .identifier(let s, _), .string(let s, _): return .string(s)
-            case .number(let n, _): return .string(formatJSNumber(n))
+            case .identifier(let s, _): return .string(JSString(s))
+            case .string(let s, _): return .string(s)
+            case .number(let n, _): return .string(JSString(formatJSNumber(n)))
             case .computed(let expr, _):
                 return propertyKey(try await evalExpression(expr, env: env, thisValue: thisValue))
             }
@@ -10601,7 +10754,7 @@ extension CodemodeLanguage {
             case .literalNumber(let n, _): return .number(n)
             case .literalString(let s, _): return .string(s)
             case .literalRegExp(let p, let f, _):
-                return .object(try constructRegExp(builtins, args: [.string(p), .string(f)]))
+                return .object(try constructRegExp(builtins, args: [.string(JSString(p)), .string(JSString(f))]))
             case .identifier(let name, let loc):
                 let node = AstNode(type: "Identifier", location: loc)
                 if let marker = markerError(name, node: node) { throw marker }
@@ -10649,9 +10802,9 @@ extension CodemodeLanguage {
                     case .spread(let e, _):
                         let v = try await evalExpression(e, env: env, thisValue: thisValue)
                         if case .string(let text) = v {
-                            // CopyDataProperties of a string: one property per UTF-16 code unit.
-                            for (i, unit) in text.utf16.enumerated() {
-                                define(obj, String(i), .string(String(decoding: [unit], as: UTF16.self)))
+                            // Matches upstream `enumerableSource` (`[...value]`): one property per code-point / lone-surrogate chunk.
+                            for (i, chunk) in text.codePointStrings().enumerated() {
+                                define(obj, JSString(String(i)), .string(chunk))
                             }
                         }
                         if case .object(let src) = v {
@@ -10676,12 +10829,13 @@ extension CodemodeLanguage {
             case .superCall(let argSpecs, let passThrough, let loc):
                 return try await evalSuperCall(argSpecs, passThrough: passThrough, env: env, thisValue: thisValue, loc: loc)
             case .templateLiteral(let quasis, let exprs, _):
-                var out = quasis.first?.cooked ?? ""
+                var parts: [JSString] = [quasis.first?.cooked ?? .empty]
                 for (idx, e) in exprs.enumerated() {
-                    out += try await toStringValue(try await evalExpression(e, env: env, thisValue: thisValue))
-                    if idx + 1 < quasis.count { out += quasis[idx + 1].cooked }
+                    parts.append(try await toStringValue(try await evalExpression(e, env: env, thisValue: thisValue)))
+                    if idx + 1 < quasis.count { parts.append(quasis[idx + 1].cooked) }
                 }
-                try checkStringLength(out.utf16.count)
+                let out = parts.joinedJS()
+                try checkStringLength(out.utf16Count)
                 return .string(out)
             case .taggedTemplate(let tag, let quasis, let exprs, let loc):
                 let (calleeVal, receiverVal) = try await evalCallee(tag, env: env, thisValue: thisValue)
@@ -10689,7 +10843,7 @@ extension CodemodeLanguage {
                     throw notAFunction(calleeDescription(tag), node: AstNode(type: tag.nodeType, location: tag.location ?? loc))
                 }
                 let cookedArr = Arr(proto: builtins.Array, items: quasis.map { .string($0.cooked) })
-                let rawArr = Arr(proto: builtins.Array, items: quasis.map { .string($0.raw) })
+                let rawArr = Arr(proto: builtins.Array, items: quasis.map { .string(JSString($0.raw)) })
                 define(cookedArr, "raw", .object(rawArr), readonly)
                 var args: [Value] = [.object(cookedArr)]
                 for e in exprs { args.append(try await evalExpression(e, env: env, thisValue: thisValue)) }
@@ -10731,7 +10885,7 @@ extension CodemodeLanguage {
                     if case .identifier(let name, _) = arg, !env.hasBinding(name) {
                         return .string("undefined")
                     }
-                    return .string(typeofValue(try await evalExpression(arg, env: env, thisValue: thisValue)))
+                    return .string(JSString(typeofValue(try await evalExpression(arg, env: env, thisValue: thisValue))))
                 case .delete:
                     if case .superMember(let propKey, let loc) = arg {
                         // `delete super.x` evaluates the reference (`this` first, then the key) and always throws.
@@ -10826,7 +10980,7 @@ extension CodemodeLanguage {
                 if op == .assign {
                     let rVal: Value
                     if case .identifier(let name, _) = left {
-                        rVal = try await evalNamedExpression(right, name: name, env: env, thisValue: thisValue)
+                        rVal = try await evalNamedExpression(right, name: JSString(name), env: env, thisValue: thisValue)
                     } else {
                         rVal = try await evalExpression(right, env: env, thisValue: thisValue)
                     }
@@ -10851,7 +11005,7 @@ extension CodemodeLanguage {
                 }
                 return try await yieldValue(val, isAsync: isAsync)
             case .importExpr(let srcExpr, _):
-                let spec = coerceToString(try await evalExpression(srcExpr, env: env, thisValue: thisValue))
+                let spec = coerceToString(try await evalExpression(srcExpr, env: env, thisValue: thisValue)).toWellFormedString()
                 do {
                     let mod = try loadModule(spec)
                     return .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(mod)))

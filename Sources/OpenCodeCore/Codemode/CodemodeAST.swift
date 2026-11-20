@@ -333,7 +333,7 @@ public enum CodemodeLanguage {
 
     public indirect enum PropertyKeyExpr: Equatable, Sendable {
         case identifier(String, SourceLocation?)
-        case string(String, SourceLocation?)
+        case string(JSString, SourceLocation?)
         case number(Double, SourceLocation?)
         case computed(Expression, SourceLocation?)
 
@@ -433,10 +433,10 @@ public enum CodemodeLanguage {
     }
 
     public struct TemplateQuasi: Equatable, Sendable {
-        public let cooked: String
+        public let cooked: JSString
         public let raw: String
 
-        public init(cooked: String, raw: String) {
+        public init(cooked: JSString, raw: String) {
             self.cooked = cooked
             self.raw = raw
         }
@@ -508,7 +508,7 @@ public enum CodemodeLanguage {
         case literalNull(SourceLocation?)
         case literalBool(Bool, SourceLocation?)
         case literalNumber(Double, SourceLocation?)
-        case literalString(String, SourceLocation?)
+        case literalString(JSString, SourceLocation?)
         case literalRegExp(pattern: String, flags: String, loc: SourceLocation?)
         case identifier(name: String, loc: SourceLocation?)
         case thisExpr(SourceLocation?)
@@ -948,12 +948,12 @@ public enum CodemodeLanguage {
         case eof
         case identifier(String)
         case number(Double)
-        case string(String)
+        case string(JSString)
         case regExp(pattern: String, flags: String)
-        case templateNoSub(cooked: String, raw: String)
-        case templateHead(cooked: String, raw: String)
-        case templateMiddle(cooked: String, raw: String)
-        case templateTail(cooked: String, raw: String)
+        case templateNoSub(cooked: JSString, raw: String)
+        case templateHead(cooked: JSString, raw: String)
+        case templateMiddle(cooked: JSString, raw: String)
+        case templateTail(cooked: JSString, raw: String)
         case keyword(String)
         case punct(String)
     }
@@ -1160,70 +1160,61 @@ public enum CodemodeLanguage {
             isIdentStart(sc) || isDigit(sc) || (sc.value >= 0x80 && sc.properties.isXIDContinue)
         }
 
-        private mutating func readEscapeSequence(startLoc: SourceLocation) throws -> String {
+        private mutating func readEscapeSequence(startLoc: SourceLocation) throws -> [UInt16] {
             guard !isAtEnd else { throw makeSyntaxFailure("Unterminated escape sequence", at: startLoc) }
             let esc = advance()
             switch esc {
-            case "n": return "\n"
-            case "r": return "\r"
-            case "t": return "\t"
-            case "b": return "\u{08}"
-            case "f": return "\u{0C}"
-            case "v": return "\u{0B}"
-            case "0": return "\0"
-            case "\\": return "\\"
-            case "'": return "'"
-            case "\"": return "\""
-            case "`": return "`"
-            case "$": return "$"
-            case "\n": return ""
+            case "n": return [0x000A]
+            case "r": return [0x000D]
+            case "t": return [0x0009]
+            case "b": return [0x0008]
+            case "f": return [0x000C]
+            case "v": return [0x000B]
+            case "0": return [0x0000]
+            case "\\": return [0x005C]
+            case "'": return [0x0027]
+            case "\"": return [0x0022]
+            case "`": return [0x0060]
+            case "$": return [0x0024]
+            case "\n", "\u{2028}", "\u{2029}": return []
             case "\r":
                 if peek() == "\n" { _ = advance() }
-                return ""
+                return []
             case "x":
                 let hex = try readFixedHex(2, startLoc: startLoc)
-                guard let v = UInt32(hex, radix: 16), let sc = Unicode.Scalar(v) else {
+                guard let v = UInt16(hex, radix: 16) else {
                     throw makeSyntaxFailure("Invalid hex escape sequence", at: startLoc)
                 }
-                return String(sc)
+                return [v]
             case "u":
                 if peek() == "{" {
                     _ = advance()
                     var hex = ""
                     while !isAtEnd && scalars[index] != "}" {
-                        hex.unicodeScalars.append(advance())
+                        let c = advance()
+                        guard isHexDigit(c) else {
+                            throw makeSyntaxFailure("Invalid unicode code point escape", at: startLoc)
+                        }
+                        hex.unicodeScalars.append(c)
                     }
                     guard !isAtEnd else { throw makeSyntaxFailure("Unterminated unicode escape", at: startLoc) }
                     _ = advance()
-                    guard !hex.isEmpty, let v = UInt32(hex, radix: 16), let sc = Unicode.Scalar(v) else {
+                    guard !hex.isEmpty, let v = UInt32(hex, radix: 16), v <= 0x10FFFF else {
                         throw makeSyntaxFailure("Invalid unicode code point escape", at: startLoc)
                     }
-                    return String(sc)
+                    if v <= 0xFFFF {
+                        return [UInt16(v)]
+                    }
+                    let adjusted = v - 0x10000
+                    return [UInt16(0xD800 + (adjusted >> 10)), UInt16(0xDC00 + (adjusted & 0x3FF))]
                 }
                 let hex = try readFixedHex(4, startLoc: startLoc)
                 guard let u1 = UInt16(hex, radix: 16) else {
                     throw makeSyntaxFailure("Invalid unicode escape", at: startLoc)
                 }
-                if u1 >= 0xD800 && u1 <= 0xDBFF, peek() == "\\", peek(1) == "u" {
-                    let savedIdx = index
-                    let savedLine = line
-                    let savedCol = column
-                    _ = advance(); _ = advance()
-                    if let hex2 = try? readFixedHex(4, startLoc: startLoc),
-                       let u2 = UInt16(hex2, radix: 16),
-                       u2 >= 0xDC00 && u2 <= 0xDFFF
-                    {
-                        let combined = 0x10000 + ((UInt32(u1 - 0xD800) << 10) | UInt32(u2 - 0xDC00))
-                        if let sc = Unicode.Scalar(combined) { return String(sc) }
-                    }
-                    index = savedIdx; line = savedLine; column = savedCol
-                }
-                guard let sc = Unicode.Scalar(u1) else {
-                    throw makeSyntaxFailure("Invalid unicode surrogate escape", at: startLoc)
-                }
-                return String(sc)
+                return [u1]
             default:
-                return String(esc)
+                return Array(esc.utf16)
             }
         }
 
@@ -1238,23 +1229,23 @@ public enum CodemodeLanguage {
             return hex
         }
 
-        private mutating func readString(quote: Unicode.Scalar, startLoc: SourceLocation) throws -> String {
+        private mutating func readString(quote: Unicode.Scalar, startLoc: SourceLocation) throws -> JSString {
             _ = advance() // opening quote
-            var out = ""
+            var units: [UInt16] = []
             while !isAtEnd {
                 let sc = scalars[index]
                 if sc == quote {
                     _ = advance()
-                    return out
+                    return JSString(utf16: units)
                 }
                 if sc == "\n" || sc == "\r" {
                     throw makeSyntaxFailure("Unterminated string constant", at: startLoc)
                 }
                 if sc == "\\" {
                     _ = advance()
-                    out.append(try readEscapeSequence(startLoc: startLoc))
+                    units.append(contentsOf: try readEscapeSequence(startLoc: startLoc))
                 } else {
-                    out.unicodeScalars.append(advance())
+                    units.append(contentsOf: advance().utf16)
                 }
             }
             throw makeSyntaxFailure("Unterminated string constant", at: startLoc)
@@ -1265,12 +1256,13 @@ public enum CodemodeLanguage {
             startLoc: SourceLocation,
             precededByNewline: Bool
         ) throws -> Token {
-            var cooked = ""
+            var cookedUnits: [UInt16] = []
             var raw = ""
             while !isAtEnd {
                 let sc = scalars[index]
                 if sc == "`" {
                     _ = advance()
+                    let cooked = JSString(utf16: cookedUnits)
                     return Token(
                         kind: isHead ? .templateNoSub(cooked: cooked, raw: raw) : .templateTail(cooked: cooked, raw: raw),
                         location: startLoc,
@@ -1280,6 +1272,7 @@ public enum CodemodeLanguage {
                 if sc == "$" && peek(1) == "{" {
                     _ = advance(); _ = advance()
                     braceDepthStack.append(0)
+                    let cooked = JSString(utf16: cookedUnits)
                     return Token(
                         kind: isHead ? .templateHead(cooked: cooked, raw: raw) : .templateMiddle(cooked: cooked, raw: raw),
                         location: startLoc,
@@ -1289,18 +1282,18 @@ public enum CodemodeLanguage {
                 if sc == "\\" {
                     let beforeIdx = index
                     _ = advance()
-                    cooked.append(try readEscapeSequence(startLoc: startLoc))
+                    cookedUnits.append(contentsOf: try readEscapeSequence(startLoc: startLoc))
                     for k in beforeIdx..<index {
                         raw.unicodeScalars.append(scalars[k])
                     }
                 } else if sc == "\r" {
                     _ = advance()
                     if peek() == "\n" { _ = advance() }
-                    cooked.append("\n")
+                    cookedUnits.append(0x000A)
                     raw.append("\n")
                 } else {
                     let c = advance()
-                    cooked.unicodeScalars.append(c)
+                    cookedUnits.append(contentsOf: c.utf16)
                     raw.unicodeScalars.append(c)
                 }
             }
@@ -1762,7 +1755,7 @@ public enum CodemodeLanguage {
             if case .string(let src) = current.kind {
                 _ = try advance(allowRegex: true)
                 try consumeSemicolon()
-                return .importDecl(specifiers: [], source: src, loc: loc)
+                return .importDecl(specifiers: [], source: src.toWellFormedString(), loc: loc)
             }
             // Upstream reports a failed import at its first specifier (the IMPORT op's site).
             let specifierLoc = current.location
@@ -1811,7 +1804,7 @@ public enum CodemodeLanguage {
             }
             _ = try advance(allowRegex: true)
             try consumeSemicolon()
-            return .importDecl(specifiers: specifiers, source: source, loc: specifiers.isEmpty ? loc : specifierLoc)
+            return .importDecl(specifiers: specifiers, source: source.toWellFormedString(), loc: specifiers.isEmpty ? loc : specifierLoc)
         }
 
         private mutating func parseVariableStatement(kind: VariableKind, loc: SourceLocation) throws -> Statement {
@@ -2048,7 +2041,8 @@ public enum CodemodeLanguage {
 
         private static func staticKeyName(_ key: PropertyKeyExpr) -> String? {
             switch key {
-            case .identifier(let s, _), .string(let s, _): return s
+            case .identifier(let s, _): return s
+            case .string(let s, _): return s.toWellFormedString()
             case .number(let n, _): return CodemodeLanguage.formatJSNumber(n)
             case .computed: return nil
             }
@@ -4708,7 +4702,7 @@ public enum CodemodeLanguage {
         }
         if found.isEmpty { return .undefined }
         let mod = Obj(proto: nil)
-        for (k, v) in found { define(mod, k, v) }
+        for (k, v) in found { define(mod, JSString(k), v) }
         return .object(mod)
     }
 

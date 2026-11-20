@@ -200,8 +200,8 @@ extension CodemodeLanguage {
     }
 
     /// JS StringToNumber for the decimal literal grammar (Number(" 12 "), "1e3", ".5"; not "1_0", "nan", "0x1p3").
-    static func stringToNumber(_ s: String) -> Double {
-        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}")))
+    static func stringToNumber(_ s: JSString) -> Double {
+        guard let trimmed = s.trim().wellFormedString else { return .nan }
         if trimmed.isEmpty { return 0 }
         switch trimmed {
         case "Infinity", "+Infinity": return .infinity
@@ -256,29 +256,29 @@ extension CodemodeLanguage {
                 let n = try thisNumber(thisVal, "Number.prototype.toFixed")
                 let digits = args.first.map { $0.isUndefined ? 0 : coerceToInteger($0) } ?? 0
                 guard digits >= 0 && digits <= 100 else { throw rangeError("toFixed() digits argument must be between 0 and 100") }
-                return .string(numberToFixed(n, digits))
+                return .string(JSString(numberToFixed(n, digits)))
             },
             Method("toPrecision", 1) { thisVal, args, _, _ in
                 let n = try thisNumber(thisVal, "Number.prototype.toPrecision")
-                guard let arg = args.first, !arg.isUndefined else { return .string(formatJSNumber(n)) }
+                guard let arg = args.first, !arg.isUndefined else { return .string(JSString(formatJSNumber(n))) }
                 let p = coerceToInteger(arg)
-                if !n.isFinite { return .string(formatJSNumber(n)) }
+                if !n.isFinite { return .string(JSString(formatJSNumber(n))) }
                 guard p >= 1 && p <= 100 else { throw rangeError("toPrecision() argument must be between 1 and 100") }
-                return .string(numberToPrecision(n, p))
+                return .string(JSString(numberToPrecision(n, p)))
             },
             Method("toExponential", 1) { thisVal, args, _, _ in
                 let n = try thisNumber(thisVal, "Number.prototype.toExponential")
                 let f: Int? = args.first.flatMap { $0.isUndefined ? nil : coerceToInteger($0) }
-                if !n.isFinite { return .string(formatJSNumber(n)) }
+                if !n.isFinite { return .string(JSString(formatJSNumber(n))) }
                 if let f, f < 0 || f > 100 { throw rangeError("toExponential() argument must be between 0 and 100") }
-                return .string(numberToExponential(n, f))
+                return .string(JSString(numberToExponential(n, f)))
             },
             Method("toString", 1) { thisVal, args, _, _ in
                 let n = try thisNumber(thisVal, "Number.prototype.toString")
                 let radix = args.first.map { $0.isUndefined ? 10 : coerceToInteger($0) } ?? 10
                 guard radix >= 2 && radix <= 36 else { throw rangeError("toString() radix must be between 2 and 36") }
-                if radix == 10 { return .string(formatJSNumber(n)) }
-                return .string(numberToRadixString(n, radix: radix))
+                if radix == 10 { return .string(JSString(formatJSNumber(n))) }
+                return .string(JSString(numberToRadixString(n, radix: radix)))
             },
         ])
 
@@ -286,19 +286,21 @@ extension CodemodeLanguage {
         methods(builtins, builtins.String, [
             Method("normalize", 0) { thisVal, args, _, _ in
                 let s = coerceToString(thisVal)
-                let form = args.first.map { $0.isUndefined ? "NFC" : coerceToString($0) } ?? "NFC"
+                let form: JSString = args.first.map { $0.isUndefined ? "NFC" : coerceToString($0) } ?? "NFC"
                 switch form {
-                case "NFC": return .string(s.precomposedStringWithCanonicalMapping)
-                case "NFD": return .string(s.decomposedStringWithCanonicalMapping)
-                case "NFKC": return .string(s.precomposedStringWithCompatibilityMapping)
-                case "NFKD": return .string(s.decomposedStringWithCompatibilityMapping)
-                default: throw rangeError("The normalization form should be one of NFC, NFD, NFKC, NFKD.")
+                case "NFC": return .string(s.mapWellFormedSpans { $0.precomposedStringWithCanonicalMapping })
+                case "NFD": return .string(s.mapWellFormedSpans { $0.decomposedStringWithCanonicalMapping })
+                case "NFKC": return .string(s.mapWellFormedSpans { $0.precomposedStringWithCompatibilityMapping })
+                case "NFKD": return .string(s.mapWellFormedSpans { $0.decomposedStringWithCompatibilityMapping })
+                default: throw rangeError("String.normalize expects the form \"NFC\", \"NFD\", \"NFKC\", or \"NFKD\" (got \(jsonQuote(form))).")
                 }
             },
             Method("toLocaleUpperCase", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).uppercased()) },
             Method("toLocaleLowerCase", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).lowercased()) },
+            Method("trimLeft", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).trimStart()) },
+            Method("trimRight", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal).trimEnd()) },
             Method("substr", 2) { thisVal, args, _, _ in
-                let units = Array(coerceToString(thisVal).utf16)
+                let units = coerceToString(thisVal).utf16Units
                 let size = units.count
                 var start = args.first.map { coerceToInteger($0) } ?? 0
                 if start < 0 { start = max(size + start, 0) }
@@ -306,14 +308,14 @@ extension CodemodeLanguage {
                 let length = args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : size - start
                 let end = min(start + max(length, 0), size)
                 guard start < end else { return .string("") }
-                return .string(String(decoding: units[start..<end], as: UTF16.self))
+                return .string(JSString(utf16: units[start..<end]))
             },
             Method("isWellFormed", 0) { thisVal, _, _, _ in
-                // Swift strings are always well-formed Unicode (a lone surrogate cannot be represented).
-                _ = thisVal
-                return .bool(true)
+                .bool(coerceToString(thisVal).isWellFormed)
             },
-            Method("toWellFormed", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal)) },
+            Method("toWellFormed", 0) { thisVal, _, _, _ in
+                .string(coerceToString(thisVal).toWellFormed())
+            },
             Method("matchAll", 1) { thisVal, args, site, eval in
                 let s = coerceToString(thisVal)
                 let arg = args.first ?? .undefined
@@ -396,7 +398,7 @@ extension CodemodeLanguage {
             Method("propertyIsEnumerable", 1) { thisVal, args, _, _ in
                 guard case .object(let obj) = thisVal else { return .bool(false) }
                 let key = coerceToString(args.first ?? .undefined)
-                if let arr = obj as? Arr, let idx = Int(key), idx >= 0, idx < arr.count { return .bool(true) }
+                if let arr = obj as? Arr, let idx = parseArrayIndex(key), idx >= 0, idx < arr.count { return .bool(true) }
                 return .bool(own(obj, .string(key))?.enumerable ?? false)
             },
         ])
@@ -582,29 +584,54 @@ extension CodemodeLanguage {
     }
 
     // Upstream: psychoscript/src/stdlib/regexp.ts#escape (implemented).
-    /// ES2025 RegExp.escape.
-    static func regexpEscape(_ s: String) -> String {
+    /// ES2025 RegExp.escape (handles lone UTF-16 surrogates as `\udxxx` while preserving valid pairs).
+    static func regexpEscape(_ s: JSString) -> JSString {
+        let units = s.utf16Units
         var out = ""
-        let syntax: Set<Character> = ["^", "$", "\\", ".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "/"]
-        let other: Set<Character> = [",", "-", "=", "<", ">", "#", "&", "!", "%", ":", ";", "@", "~", "'", "`", "\""]
-        for (i, scalar) in s.unicodeScalars.enumerated() {
-            let ch = Character(scalar)
-            if i == 0, scalar.properties.isASCIIHexDigit || (scalar.value >= 0x41 && scalar.value <= 0x5A) || (scalar.value >= 0x61 && scalar.value <= 0x7A) || (scalar.value >= 0x30 && scalar.value <= 0x39) {
-                out += String(format: "\\x%02x", scalar.value)
-            } else if syntax.contains(ch) {
-                out += "\\\(ch)"
-            } else if other.contains(ch) || scalar == " " {
-                out += String(format: "\\x%02x", scalar.value)
-            } else if scalar.properties.isWhitespace || scalar.value == 0xFEFF || scalar.value == 0x2028 || scalar.value == 0x2029 {
-                out += scalar.value <= 0xFF ? String(format: "\\x%02x", scalar.value) : String(format: "\\u%04x", scalar.value)
-            } else if scalar.value == 0x09 { out += "\\t" }
-            else if scalar.value == 0x0A { out += "\\n" }
-            else if scalar.value == 0x0B { out += "\\v" }
-            else if scalar.value == 0x0C { out += "\\f" }
-            else if scalar.value == 0x0D { out += "\\r" }
-            else { out.unicodeScalars.append(scalar) }
+        let syntax: Set<UInt16> = Set("^$\\.*+?()[]{}|/".utf16)
+        let other: Set<UInt16> = Set(",-=<>#&!%:;@~'`\"".utf16)
+        var i = 0
+        var cpIndex = 0
+        while i < units.count {
+            let u = units[i]
+            if u >= 0xD800 && u <= 0xDBFF, i + 1 < units.count {
+                let lo = units[i + 1]
+                if lo >= 0xDC00 && lo <= 0xDFFF {
+                    let cp = 0x10000 + ((UInt32(u - 0xD800) << 10) | UInt32(lo - 0xDC00))
+                    out.unicodeScalars.append(Unicode.Scalar(cp)!)
+                    i += 2
+                    cpIndex += 1
+                    continue
+                }
+            }
+            if u >= 0xD800 && u <= 0xDFFF {
+                out += String(format: "\\u%04x", u)
+                i += 1
+                cpIndex += 1
+                continue
+            }
+            let scalar = Unicode.Scalar(u)!
+            if cpIndex == 0,
+               (u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A) || (u >= 0x30 && u <= 0x39) {
+                out += String(format: "\\x%02x", u)
+            } else if syntax.contains(u) {
+                out += "\\\(Character(scalar))"
+            } else if other.contains(u) || u == 0x20 {
+                out += String(format: "\\x%02x", u)
+            } else if u == 0x09 { out += "\\t" }
+            else if u == 0x0A { out += "\\n" }
+            else if u == 0x0B { out += "\\v" }
+            else if u == 0x0C { out += "\\f" }
+            else if u == 0x0D { out += "\\r" }
+            else if JSString.isJSWhitespace(u) || scalar.properties.isWhitespace {
+                out += u <= 0xFF ? String(format: "\\x%02x", u) : String(format: "\\u%04x", u)
+            } else {
+                out.unicodeScalars.append(scalar)
+            }
+            i += 1
+            cpIndex += 1
         }
-        return out
+        return JSString(out)
     }
 
     // MARK: Date
@@ -677,7 +704,7 @@ extension CodemodeLanguage {
                 guard d.epochMs.isFinite else { return .string("Invalid Date") }
                 let c = comps(d)
                 let year = c.year < 0 ? "-" + pad(-c.year, 6) : pad(c.year, 4)
-                return .string("\(weekdays[weekday(d.epochMs)]), \(pad(c.day)) \(months[Int(c.month)]) \(year) \(pad(c.hour)):\(pad(c.minute)):\(pad(c.second)) GMT")
+                return .string(JSString("\(weekdays[weekday(d.epochMs)]), \(pad(c.day)) \(months[Int(c.month)]) \(year) \(pad(c.hour)):\(pad(c.minute)):\(pad(c.second)) GMT"))
             },
         ])
     }
