@@ -461,7 +461,10 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Info [status=adapted hash=5b1f0fb8e236]
+    /// A tool. Upstream's `Info<Input, Output, CMInput, CMOutput>` lets `options.codemode` give Code Mode its own
+    /// input/output schemas, so `execute` may receive the Code Mode input and return the Code Mode output. Here those
+    /// schemas are type-erased `ValueSchema`s in `Options.codemodeOptions`, and `Input`/`Output` must cover both shapes.
+    // parity: schema/src/tool.ts#Info [status=adapted hash=970700845161]
     public struct Info<
         Input: Sendable,
         Output: Equatable & Hashable & Sendable & Codable

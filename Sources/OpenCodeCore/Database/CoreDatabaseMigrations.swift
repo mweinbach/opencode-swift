@@ -69,7 +69,7 @@ public enum CoreDatabaseMigration {
     }
 
     /// Ordered registry of all 62 canonical schema/data migrations matching `migration.gen.ts`.
-    // parity: core/src/database/migration.gen.ts#migrations [status=implemented hash=b9a05c35b1cf]
+    // parity: core/src/database/migration.gen.ts#migrations [status=implemented hash=d830116bb1d6]
     public static let migrations: [Migration] = Migrations.all
 
     public struct ApplyOptions: Equatable, Sendable {

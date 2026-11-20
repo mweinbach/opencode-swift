@@ -735,7 +735,13 @@ public enum CoreCodemode {
             CodemodeLanguage.define(respObj, "ok", .bool(streaming.ok))
             CodemodeLanguage.define(respObj, "redirected", .bool(streaming.redirected))
             CodemodeLanguage.define(respObj, "headers", .object(headersObj))
-            CodemodeLanguage.defineAccessor(respObj, "bodyUsed", get: { _ in .bool(used.withLock { $0 }) })
+            CodemodeLanguage.defineAccessorHalf(
+                respObj,
+                .string("bodyUsed"),
+                half: .get,
+                fn: CodemodeLanguage.hostGetter(builtins, "bodyUsed") { used.withLock { $0 } },
+                enumerable: false
+            )
 
             @Sendable func consumeBody() throws -> [UInt8] {
                 let already = used.withLock { u -> Bool in

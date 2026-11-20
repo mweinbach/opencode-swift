@@ -5462,9 +5462,11 @@ public enum CoreIntegration {
         )
 
         public enum Notice {
-            // parity: core/src/image/notice.ts#text [status=implemented hash=65d9f8d14d6a]
+            /// The completion notice for a background image job, tagged with its job ID like
+            /// `<background-result kind="shell" id=…>` notices.
+            // parity: core/src/image/notice.ts#text [status=implemented hash=669a7be86734]
             public static func text(id: String, state: String, body: String) -> String {
-                "<image id=\"\(id)\" state=\"\(state)\">\n\(body)\n</image>"
+                CoreSessionBackgroundResult.render("kind=\"image\" id=\"\(id)\" state=\"\(state)\"", body)
             }
         }
 

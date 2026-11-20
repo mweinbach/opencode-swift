@@ -92,7 +92,7 @@ extension CodemodeLanguage {
         case setter(Setter)
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#Slot [status=implemented hash=7507490a460c]
+    // parity: psychoscript/src/runtime/objects.ts#Slot [status=implemented hash=19ff9a8daf94]
     public enum Slot: Sendable {
         case data(value: Value, writable: Bool, enumerable: Bool, configurable: Bool)
         case accessor(get: GetterHalf?, set: SetterHalf?, enumerable: Bool, configurable: Bool)
@@ -3146,7 +3146,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/operations.ts#resolveProperty [status=implemented hash=69fca9fc7688]
+    // parity: psychoscript/src/runtime/operations.ts#resolveProperty [status=implemented hash=4461169ae62f]
     public static func resolveProperty(_ base: Value, _ key: PropertyKey, builtins: Builtins, node: AstNode? = nil) throws -> Value {
         switch try resolveReference(base, key, builtins: builtins, node: node) {
         case .namespace(let ns): return .hostNamespace(ns)
@@ -4299,7 +4299,14 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/extensions.ts#hostGlobals [status=adapted hash=7cc4bec998ab]
+    /// A live response's state, read through a host function: the one kind of accessor made after the intrinsics.
+    /// Defined with `defineAccessorHalf`, so `Object.getOwnPropertyDescriptor(…).get` is a real function
+    /// (`get <name>`), where a native accessor made after the intrinsics would have no function to show.
+    public static func hostGetter(_ builtins: Builtins, _ name: String, _ read: @escaping @Sendable () -> Bool) -> Native {
+        native(builtins, NativeOptions(name: "get \(name)", call: { _, _, _, _ in .bool(read()) }))
+    }
+
+    // parity: psychoscript/src/runtime/extensions.ts#hostGlobals [status=adapted hash=0af33be61f23]
     public static func hostGlobals(
         builtins: Builtins,
         hostCalls: HostCalls,
@@ -4495,7 +4502,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/scheduler.ts#Job [status=implemented hash=ababf26e3822]
+    // parity: psychoscript/src/scheduler.ts#Job [status=implemented hash=6dd061449c55]
     public struct Job: Sendable {
         public let description: String
         public let run: @Sendable () async -> Void

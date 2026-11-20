@@ -559,6 +559,24 @@ struct CodemodeTests {
 
     // MARK: - 7. CoreCodemode Integration (Fetch, Path, Bun, Catalog, Instructions, Job, Tool.create)
 
+    @Test("A fetch response's bodyUsed reads through a host getter that its descriptor shows")
+    func coreCodemodeFetchBodyUsedGetter() async throws {
+        let transport = CodemodeTestHelper.MockHTTPTransport { _ in
+            CodemodeTestHelper.makeResponse(status: 200, body: "hello")
+        }
+        let permission = CoreCodemode.PermissionHook(assertAllowed: { _ in }, assertNotDenied: { _ in })
+        let execTool = CoreCodemode.Tool.create(inventory: .init(tools: [:]), transport: transport, permission: permission)
+        let result = try await execTool.execute(.init(code: """
+        const res = await fetch("https://a.example/body");
+        const before = res.bodyUsed;
+        const text = await res.text();
+        const d = Object.getOwnPropertyDescriptor(res, "bodyUsed");
+        return [before, res.bodyUsed, text, typeof d.get, d.get.name, d.enumerable, d.set === undefined].join("|");
+        """), CodemodeTestHelper.makeToolContext())
+        #expect(result.metadata?["error"] == nil)
+        #expect((result.output?.output ?? "").contains("false|true|hello|function|get bodyUsed|false|true"))
+    }
+
     @Test("CoreCodemode.Fetch routes via HTTPTransport, enforces permissions, redirects, and blocks file:/credentials")
     func coreCodemodeFetch() async throws {
         let permChecks = Mutex<[String]>([])

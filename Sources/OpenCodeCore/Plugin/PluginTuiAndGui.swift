@@ -1484,7 +1484,7 @@ public enum PluginGui {
     // MARK: - gui/icon-name.ts
 
     /// Complete catalog of built-in app icon names (`packages/plugin/src/gui/icon-name.ts`).
-    // parity: plugin/src/gui/icon-name.ts#AppIconName [status=implemented hash=c7806394bc14]
+    // parity: plugin/src/gui/icon-name.ts#AppIconName [status=implemented hash=87c9c41d2ad3]
     public enum AppIconName: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case alignRight = "align-right"
         case appearance = "appearance"
@@ -1618,6 +1618,7 @@ public enum PluginGui {
         case postSkill = "post-skill"
         case prompt = "prompt"
         case providers = "providers"
+        case puzzle = "puzzle"
         case refresh = "refresh"
         case reset = "reset"
         case review = "review"

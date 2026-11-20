@@ -1907,7 +1907,7 @@ public enum CodemodeEngine {
         return await rt.execute(options.code, options.bindings, nil)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#make [status=implemented hash=2717f96c2efd]
+    // parity: codemode/src/codemode/codemode.ts#make [status=implemented hash=9bd57b059d2a]
     public static func make(_ options: Options = Options()) throws -> Runtime {
         let prepared = ToolRuntime.prepare(options.tools)
         let resolved = ResolvedExecutionLimits(
