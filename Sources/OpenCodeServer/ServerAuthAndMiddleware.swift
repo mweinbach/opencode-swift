@@ -1132,6 +1132,9 @@ public func createRoutes(
     customVideoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
     customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
     customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
+    customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+    instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+    instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
     workerdProfile: Bool = false,
     onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
 ) async throws -> ServerRouter {
@@ -1150,6 +1153,9 @@ public func createRoutes(
         customVideoGeneration: customVideoGeneration,
         customPluginUpdate: customPluginUpdate,
         customWellKnown: customWellKnown,
+        customWatcher: customWatcher,
+        instructionDebounce: instructionDebounce,
+        instructionURLTimeout: instructionURLTimeout,
         workerdProfile: workerdProfile,
         onLocationBoot: onLocationBoot
     )
@@ -1167,6 +1173,9 @@ public func createEmbeddedRoutes(
     globalOverrides: Global.Overrides? = nil,
     defaultDirectory: String? = nil,
     databaseClient: (any SQLiteDatabase)? = nil,
+    customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+    instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+    instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
     onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
 ) async throws -> ServerRouter {
     let unauthenticated = ServerOptions(
@@ -1196,6 +1205,9 @@ public func createEmbeddedRoutes(
         globalOverrides: globalOverrides,
         defaultDirectory: defaultDirectory,
         databaseClient: databaseClient,
+        customWatcher: customWatcher,
+        instructionDebounce: instructionDebounce,
+        instructionURLTimeout: instructionURLTimeout,
         onLocationBoot: onLocationBoot
     )
 }
@@ -1212,6 +1224,9 @@ public enum ServerFetch {
         public let globalOverrides: Global.Overrides?
         public let defaultDirectory: String?
         public let databaseClient: (any SQLiteDatabase)?
+        public let customWatcher: (any CoreFilesystem.Watcher.Interface)?
+        public let instructionDebounce: Duration
+        public let instructionURLTimeout: Duration
         public let workerdProfile: Bool
         public let onLocationBoot: ServerAppRuntime.LocationCustomizer?
 
@@ -1223,6 +1238,9 @@ public enum ServerFetch {
             globalOverrides: Global.Overrides? = nil,
             defaultDirectory: String? = nil,
             databaseClient: (any SQLiteDatabase)? = nil,
+            customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+            instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+            instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
             workerdProfile: Bool = false,
             onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
         ) {
@@ -1233,6 +1251,9 @@ public enum ServerFetch {
             self.globalOverrides = globalOverrides
             self.defaultDirectory = defaultDirectory
             self.databaseClient = databaseClient
+            self.customWatcher = customWatcher
+            self.instructionDebounce = instructionDebounce
+            self.instructionURLTimeout = instructionURLTimeout
             self.workerdProfile = workerdProfile
             self.onLocationBoot = onLocationBoot
         }
@@ -1273,6 +1294,9 @@ public enum ServerFetch {
             globalOverrides: boot.globalOverrides,
             defaultDirectory: boot.defaultDirectory,
             databaseClient: boot.databaseClient,
+            customWatcher: boot.customWatcher,
+            instructionDebounce: boot.instructionDebounce,
+            instructionURLTimeout: boot.instructionURLTimeout,
             workerdProfile: boot.workerdProfile,
             onLocationBoot: boot.onLocationBoot
         )

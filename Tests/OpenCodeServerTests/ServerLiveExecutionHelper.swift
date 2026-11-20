@@ -90,6 +90,42 @@ final class LiveExecutionMockTransport: HTTPTransport, Sendable {
     }
 }
 
+/// Routes remote instruction GET requests to a custom handler while delegating LLM API requests to
+/// `LiveExecutionMockTransport` (no `import Testing` per macOS CLT cross-import rule).
+final class LiveInstructionRoutingTransport: HTTPTransport, Sendable {
+    private let llm: LiveExecutionMockTransport
+    private let remoteHandler: @Sendable (HTTPRequest) async throws -> HTTPResponse
+    private let remoteRequestsBox = Mutex<[HTTPRequest]>([])
+
+    init(
+        llm: LiveExecutionMockTransport,
+        remoteHandler: @escaping @Sendable (HTTPRequest) async throws -> HTTPResponse
+    ) {
+        self.llm = llm
+        self.remoteHandler = remoteHandler
+    }
+
+    var recordedLLMRequests: [HTTPRequest] {
+        llm.recordedRequests
+    }
+
+    var recordedRemoteRequests: [HTTPRequest] {
+        remoteRequestsBox.withLock { $0 }
+    }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        if request.method == "GET" && !request.url.contains("anthropic.com") && !request.url.contains("openai.com") {
+            remoteRequestsBox.withLock { $0.append(request) }
+            return try await remoteHandler(request)
+        }
+        return try await llm.send(request)
+    }
+
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamingResponse {
+        try await llm.stream(request)
+    }
+}
+
 struct LiveExecutionHarness: Sendable {
     let handle: ServerFetch.Handle
     let client: OpenCodeClient
@@ -110,7 +146,16 @@ enum LiveExecutionFixture {
         configContent: String? = nil,
         initialFiles: [String: [UInt8]] = [:],
         responses: [LiveExecutionMockTransport.ScriptedResponse] = [],
-        rootDir: String = "/workspace"
+        rootDir: String = "/workspace",
+        homeDir: String = "/tmp/opencode-live-test/home",
+        configDir: String = "/tmp/opencode-live-test/config",
+        project: Bool = false,
+        claude: Bool = false,
+        filewatcher: Bool? = nil,
+        customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+        instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
+        httpTransport: (any HTTPTransport)? = nil
     ) async throws -> LiveExecutionHarness {
         var files = initialFiles
         if files["\(rootDir)/.keep"] == nil {
@@ -118,16 +163,16 @@ enum LiveExecutionFixture {
         }
         let fs = InMemoryFileSystem(initialFiles: files)
         try await fs.makeDirectory(at: rootDir, recursive: true)
-        try await fs.makeDirectory(at: "/tmp/opencode-live-test/config", recursive: true)
+        try await fs.makeDirectory(at: configDir, recursive: true)
         try await fs.makeDirectory(at: "/tmp/opencode-live-test/data", recursive: true)
         try await fs.makeDirectory(at: "/tmp/opencode-live-test/log", recursive: true)
-        try await fs.makeDirectory(at: "/tmp/opencode-live-test/home", recursive: true)
+        try await fs.makeDirectory(at: homeDir, recursive: true)
 
         let globalOverrides = Global.Overrides(
-            home: "/tmp/opencode-live-test/home",
+            home: homeDir,
             data: "/tmp/opencode-live-test/data",
             cache: "/tmp/opencode-live-test/cache",
-            config: "/tmp/opencode-live-test/config",
+            config: configDir,
             state: "/tmp/opencode-live-test/state",
             tmp: "/tmp/opencode-live-test/tmp",
             bin: "/tmp/opencode-live-test/bin",
@@ -139,11 +184,13 @@ enum LiveExecutionFixture {
             app: ServerOptions.AppOptions(name: "opencode", version: "2.0.0-live-test", channel: "local"),
             events: ServerOptions.EventsOptions(persist: true),
             config: ServerOptions.ConfigOptions(
-                directory: "/tmp/opencode-live-test/config",
-                project: false,
-                claude: false,
+                directory: configDir,
+                project: project,
+                claude: claude,
                 content: configContent
-            )
+            ),
+            instructions: ServerOptions.InstructionsOptions(claude: claude),
+            fs: filewatcher.map { ServerOptions.FSOptions(filewatcher: $0) }
         )
 
         let mockTransport = LiveExecutionMockTransport(responses: responses)
@@ -151,14 +198,17 @@ enum LiveExecutionFixture {
             options: options,
             boot: ServerFetch.BootOptions(
                 fileSystem: fs,
-                httpTransport: mockTransport,
+                httpTransport: httpTransport ?? mockTransport,
                 environment: DictionaryEnvironment(
                     variables: env,
-                    homeDirectory: "/tmp/opencode-live-test/home",
+                    homeDirectory: homeDir,
                     temporaryDirectory: "/tmp/opencode-live-test/tmp"
                 ),
                 globalOverrides: globalOverrides,
-                defaultDirectory: rootDir
+                defaultDirectory: rootDir,
+                customWatcher: customWatcher,
+                instructionDebounce: instructionDebounce,
+                instructionURLTimeout: instructionURLTimeout
             )
         )
 
@@ -173,6 +223,183 @@ enum LiveExecutionFixture {
             mockTransport: mockTransport,
             rootDir: rootDir
         )
+    }
+
+    /// Real on-disk harness backed by `LocalFileSystem.shared` and `NativeFileWatcher` for end-to-end
+    /// instruction watching tests.
+    struct RealDiskInstructionHarness: Sendable {
+        let harness: LiveExecutionHarness
+        let rootTempDir: String
+        let configDir: String
+        let homeDir: String
+        let projectDir: String
+        let locationDir: String
+        let cleanup: @Sendable () async -> Void
+    }
+
+    static func makeRealDiskInstructionHarness(
+        env: [String: String] = ["ANTHROPIC_API_KEY": "sk-ant-live-secret"],
+        configContent: String? = nil,
+        responses: [LiveExecutionMockTransport.ScriptedResponse] = [],
+        instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce
+    ) async throws -> RealDiskInstructionHarness {
+        let baseTmp = FileManager.default.temporaryDirectory.path
+        let rawRoot = "\(baseTmp)/opencode-instr-disk-\(OpenCodeUtil.uuid())"
+        try await LocalFileSystem.shared.makeDirectory(at: rawRoot, recursive: true)
+        let rootTempDir = (try? await LocalFileSystem.shared.realPath(at: rawRoot)) ?? rawRoot
+
+        let configDir = "\(rootTempDir)/config"
+        let homeDir = "\(rootTempDir)/home"
+        let projectDir = "\(homeDir)/code/repo"
+        let locationDir = "\(projectDir)/packages/core"
+
+        for dir in [
+            configDir,
+            "\(rootTempDir)/data",
+            "\(rootTempDir)/cache",
+            "\(rootTempDir)/state",
+            "\(rootTempDir)/tmp",
+            "\(rootTempDir)/bin",
+            "\(rootTempDir)/log",
+            "\(rootTempDir)/repos",
+            "\(projectDir)/.git",
+            locationDir,
+        ] {
+            try await LocalFileSystem.shared.makeDirectory(at: dir, recursive: true)
+        }
+        try await LocalFileSystem.shared.writeFile(
+            Array("ref: refs/heads/main\n".utf8),
+            to: "\(projectDir)/.git/HEAD",
+            createDirectories: true
+        )
+
+        let globalOverrides = Global.Overrides(
+            home: homeDir,
+            data: "\(rootTempDir)/data",
+            cache: "\(rootTempDir)/cache",
+            config: configDir,
+            state: "\(rootTempDir)/state",
+            tmp: "\(rootTempDir)/tmp",
+            bin: "\(rootTempDir)/bin",
+            log: "\(rootTempDir)/log",
+            repos: "\(rootTempDir)/repos"
+        )
+
+        let options = ServerOptions(
+            app: ServerOptions.AppOptions(name: "opencode", version: "2.0.0-disk-instr-test", channel: "local"),
+            events: ServerOptions.EventsOptions(persist: true),
+            models: CoreModel.ModelsDev.Options(fetch: false),
+            config: ServerOptions.ConfigOptions(
+                directory: configDir,
+                project: true,
+                claude: true,
+                content: configContent
+            ),
+            instructions: ServerOptions.InstructionsOptions(claude: true)
+        )
+
+        let mockTransport = LiveExecutionMockTransport(responses: responses)
+        let handle = try await ServerFetch.make(
+            options: options,
+            boot: ServerFetch.BootOptions(
+                fileSystem: LocalFileSystem.shared,
+                httpTransport: mockTransport,
+                environment: DictionaryEnvironment(
+                    variables: env,
+                    homeDirectory: homeDir,
+                    temporaryDirectory: "\(rootTempDir)/tmp"
+                ),
+                globalOverrides: globalOverrides,
+                defaultDirectory: locationDir,
+                instructionDebounce: instructionDebounce
+            )
+        )
+
+        let client = OpenCodeClient(options: ClientOptions(
+            baseUrl: "http://127.0.0.1:4096",
+            transport: handle.transport
+        ))
+        let harness = LiveExecutionHarness(
+            handle: handle,
+            client: client,
+            fileSystem: LocalFileSystem.shared,
+            mockTransport: mockTransport,
+            rootDir: locationDir
+        )
+        let cleanup: @Sendable () async -> Void = {
+            await harness.close()
+            try? await LocalFileSystem.shared.remove(at: rootTempDir)
+        }
+        return RealDiskInstructionHarness(
+            harness: harness,
+            rootTempDir: rootTempDir,
+            configDir: configDir,
+            homeDir: homeDir,
+            projectDir: projectDir,
+            locationDir: locationDir,
+            cleanup: cleanup
+        )
+    }
+
+    /// Subscribes to `instruction-discovery.updated` BEFORE invoking `action`, then waits up to `timeoutMs`
+    /// for the watcher-driven reload event. Returns `true` if received before timeout.
+    @discardableResult
+    static func triggerAndWaitForInstructionUpdate(
+        bus: CoreBus.Service,
+        location: OpenCodeLocation? = nil,
+        timeoutMs: Int = 3_000,
+        action: @Sendable () async throws -> Void
+    ) async throws -> Bool {
+        let stream = bus.subscribe(types: [CoreInstruction.Discovery.Event.updated.type], location: location)
+        let seen = Mutex(false)
+        let listener = Task {
+            for await _ in stream {
+                seen.withLock { $0 = true }
+                break
+            }
+        }
+        defer { listener.cancel() }
+        await Task.yield()
+        try await action()
+        let deadline = Flock.currentEpochMs() + Int64(timeoutMs)
+        while Flock.currentEpochMs() < deadline {
+            if seen.withLock({ $0 }) { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return seen.withLock { $0 }
+    }
+
+    /// Subscribes to `filesystem.changed` BEFORE invoking `action`, then waits for an event matching `file`.
+    static func triggerAndWaitForFileChanged(
+        bus: CoreBus.Service,
+        location: OpenCodeLocation? = nil,
+        file: String,
+        timeoutMs: Int = 3_000,
+        action: @Sendable () async throws -> Void
+    ) async throws -> FileSystemSchema.Event.ChangedPayload? {
+        let stream = bus.subscribe(types: [FileSystemSchema.Event.changed.type], location: location)
+        let matched = Mutex<FileSystemSchema.Event.ChangedPayload?>(nil)
+        let listener = Task {
+            for await env in stream {
+                guard case .object(let obj) = env.data,
+                      case .string(let path) = obj["file"],
+                      case .string(let kindStr) = obj["event"],
+                      let kind = FileSystemSchema.Event.ChangeKind(rawValue: kindStr),
+                      path == file
+                else { continue }
+                matched.withLock { $0 = FileSystemSchema.Event.ChangedPayload(file: path, event: kind) }
+                break
+            }
+        }
+        defer { listener.cancel() }
+        await Task.yield()
+        try await action()
+        let deadline = Flock.currentEpochMs() + Int64(timeoutMs)
+        while Flock.currentEpochMs() < deadline {
+            if let hit = matched.withLock({ $0 }) { return hit }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return matched.withLock { $0 }
     }
 
     static func utf8(_ bytes: [UInt8]) -> String {

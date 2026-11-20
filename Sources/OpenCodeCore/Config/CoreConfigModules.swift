@@ -407,17 +407,28 @@ public enum CoreConfigPlugin {
     }
 
     public enum Instruction {
-        /// Adapted: the plugin's sources are ported by `Loader`, but there is no file watcher or `config.updated`
-        /// subscription here. The host calls `Loader.refresh` before it reads `InstructionDiscovery`, which rescans
-        /// the files and picks up a changed `instructions` config list.
-        // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=0a7d4cb2760b]
+        /// Ports `core/src/config/plugin/instruction.ts#Plugin`: loads global AGENTS.md (falling back to
+        /// `~/.claude/CLAUDE.md`), ancestor project instruction files, and configured paths/globs/URLs,
+        /// keeping `InstructionDiscovery` live via debounced file watches and `config.updated` reloads.
+        // parity: core/src/config/plugin/instruction.ts#Plugin [status=implemented hash=0a7d4cb2760b]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.instruction")
 
         /// Feeds one Location's `InstructionDiscovery`: the global AGENTS.md (or `~/.claude/CLAUDE.md` in its
         /// place), the AGENTS.md / CLAUDE.md files from the Location up to the project root (or the home directory
-        /// when the Location sits beneath it), and the files and URLs named by config `instructions` entries.
+        /// when the Location sits beneath it), and the files, globs, and URLs named by config `instructions` entries.
+        ///
+        /// Keeps discovery current via `CoreFilesystem.Watcher` (100 ms trailing debounce) and `config.updated`
+        /// subscriptions scoped to the Location lifecycle, with a 5-second timeout and concurrency limit of 4 on
+        /// remote URL fetches.
         public actor Loader {
             public typealias File = CoreInstruction.Discovery.File
+
+            /// Trailing-edge debounce window for bursty editor saves (upstream: `100 millis`).
+            public static let defaultDebounce: Duration = .milliseconds(100)
+            /// Timeout per remote instruction URL fetch (upstream: `5 seconds`).
+            public static let defaultURLFetchTimeout: Duration = .seconds(5)
+            /// Max concurrent remote instruction URL fetches (upstream: `{ concurrency: 4 }`).
+            public static let defaultURLFetchConcurrency: Int = 4
 
             public struct Paths: Sendable {
                 public let directory: String
@@ -454,60 +465,297 @@ public enum CoreConfigPlugin {
                 let globalFiles: [String]
             }
 
+            private enum PatternWatchKey: Hashable, Sendable {
+                case directory(base: String, pattern: String)
+                case missingChild(parent: String, name: String)
+            }
+
             private final class Current: Sendable {
                 let value = Mutex<Loaded>(.available([]))
             }
 
             private let discovery: CoreInstruction.Discovery.Service
             private let fs: FSUtil.Service
+            private let watcher: (any CoreFilesystem.Watcher.Interface)?
             private let http: (any HTTPTransport)?
             private let entries: @Sendable () async -> [CoreConfigEntry]
+            private let configUpdates: (@Sendable () -> AsyncStream<Void>)?
             private let paths: Paths
+            private let debounce: Duration
+            private let urlFetchTimeout: Duration
+            private let urlFetchConcurrency: Int
+
             private let current = Current()
             private var resolved: Resolved?
-            private var registered = false
-            private var published: Loaded?
-            private var configured: (sources: [String], matches: [String: [String]], remote: [String: File])?
+            private var started = false
+            private var closed = false
+            private var ready = false
+            private var readyWaiters: [CheckedContinuation<Void, Never>] = []
+
+            private var locked = false
+            private var lockWaiters: [CheckedContinuation<Void, Never>] = []
+
+            private var registration: CoreState.Registration?
+            private var configuredSources: [String] = []
+            private var configuredRemote: [String: File] = [:]
+
+            private var candidateWatchTasks: [Task<Void, Never>] = []
+            private var configuredFileWatches: [String: Task<Void, Never>] = [:]
+            private var configuredPatternWatches: [PatternWatchKey: Task<Void, Never>] = [:]
+            private var configUpdateTask: Task<Void, Never>?
+            private var debounceTask: Task<Void, Never>?
+            private var debounceGeneration: UInt64 = 0
+            private var pendingChangeFile: String?
+
+            /// Total number of instruction rescans executed by this loader (initial + watcher/config reloads).
+            public private(set) var rescanCount: Int = 0
 
             public init(
                 discovery: CoreInstruction.Discovery.Service,
                 paths: Paths,
                 fileSystem: any OpenCodeFileSystem,
+                watcher: (any CoreFilesystem.Watcher.Interface)? = nil,
                 http: (any HTTPTransport)? = nil,
-                entries: @escaping @Sendable () async -> [CoreConfigEntry]
+                entries: @escaping @Sendable () async -> [CoreConfigEntry],
+                configUpdates: (@Sendable () -> AsyncStream<Void>)? = nil,
+                debounce: Duration = Loader.defaultDebounce,
+                urlFetchTimeout: Duration = Loader.defaultURLFetchTimeout,
+                urlFetchConcurrency: Int = Loader.defaultURLFetchConcurrency
             ) {
                 self.discovery = discovery
                 self.paths = paths
                 self.fs = FSUtil.Service(fileSystem: fileSystem)
+                self.watcher = watcher
                 self.http = http
                 self.entries = entries
+                self.configUpdates = configUpdates
+                self.debounce = debounce
+                self.urlFetchTimeout = urlFetchTimeout
+                self.urlFetchConcurrency = max(1, urlFetchConcurrency)
             }
 
-            /// Rescans the instruction files (re-reading configured sources when the config list changed) and
-            /// reloads `InstructionDiscovery` when what it lists changed.
-            public func refresh() async {
-                let resolved = await resolve()
-                let sources = Self.unique(await entries().flatMap { $0.info?.instructions ?? [] })
-                if configured?.sources != sources { await reconfigure(sources, resolved: resolved) }
-                let loaded = await load(resolved)
-                current.value.withLock { $0 = loaded }
-                if !registered {
-                    registered = true
-                    published = loaded
-                    let current = self.current
-                    _ = try? await discovery.transform { editor in
-                        switch current.value.withLock({ $0 }) {
+            /// Activates candidate file watches, `config.updated` observation, initial load, and
+            /// `InstructionDiscovery` transform registration. Safe to call once per Location lifecycle.
+            public func start() async {
+                guard !started && !closed else { return }
+                started = true
+                defer { markReady() }
+
+                let r = await resolve()
+
+                // 1. Subscribe to candidate global & ancestor instruction files before the initial scan.
+                if let watcher {
+                    var candidateList: [String] = []
+                    if discovery.global {
+                        candidateList.append(contentsOf: r.globalFiles)
+                    }
+                    if r.project {
+                        for directory in Self.ancestorDirectories(start: r.start, stop: r.stop) {
+                            for name in r.names {
+                                let file = Self.join(directory, name)
+                                if discovery.global || !r.globalFiles.contains(file) {
+                                    candidateList.append(file)
+                                }
+                            }
+                        }
+                    }
+                    for file in Self.unique(candidateList) {
+                        if closed || Task.isCancelled { break }
+                        let updates = await watcher.subscribe(.file(path: file), onReady: nil)
+                        let task = Task { [weak self] in
+                            for await update in updates {
+                                if Task.isCancelled { break }
+                                await self?.publishChange(update.path)
+                            }
+                        }
+                        candidateWatchTasks.append(task)
+                    }
+                }
+
+                // 2. Subscribe to `config.updated` before the first config read so updates in between still reload.
+                if let configUpdates, !closed, !Task.isCancelled {
+                    let stream = configUpdates()
+                    configUpdateTask = Task { [weak self] in
+                        for await _ in stream {
+                            if Task.isCancelled { break }
+                            await self?.handleConfigUpdated()
+                        }
+                    }
+                }
+
+                if closed || Task.isCancelled {
+                    await close()
+                    return
+                }
+
+                // 3. Perform initial config load, file scan, dynamic configured watch setup, and transform registration.
+                await acquireLock()
+                await reconfigureLocked()
+                await performRefreshLocked(file: nil)
+                if !closed && !Task.isCancelled && registration == nil {
+                    let currentBox = self.current
+                    registration = try? await discovery.transform { editor in
+                        switch currentBox.value.withLock({ $0 }) {
                         case .unavailable:
                             editor.unavailable()
                         case .available(let files):
                             for file in files { editor.add(file) }
                         }
                     }
-                } else if published != loaded {
-                    published = loaded
+                }
+                releaseLock()
+
+                if closed || Task.isCancelled {
+                    await close()
+                }
+            }
+
+            /// Waits until initial activation (`start()`) completes (or the loader is closed).
+            /// Once ready, returns immediately without rescanning any files.
+            public func awaitReady() async {
+                if ready || closed { return }
+                await withCheckedContinuation { continuation in
+                    if ready || closed {
+                        continuation.resume()
+                    } else {
+                        readyWaiters.append(continuation)
+                    }
+                }
+            }
+
+            /// Stops all file watchers, pending debounce timers, and config subscriptions for this Location.
+            public func close() async {
+                if closed {
+                    markReady()
+                    return
+                }
+                closed = true
+                pendingChangeFile = nil
+                debounceTask?.cancel()
+                debounceTask = nil
+                configUpdateTask?.cancel()
+                configUpdateTask = nil
+                for task in candidateWatchTasks { task.cancel() }
+                candidateWatchTasks.removeAll()
+                for task in configuredFileWatches.values { task.cancel() }
+                configuredFileWatches.removeAll()
+                for task in configuredPatternWatches.values { task.cancel() }
+                configuredPatternWatches.removeAll()
+                let reg = registration
+                registration = nil
+                markReady()
+                if let reg {
+                    await reg.dispose()
+                }
+            }
+
+            /// Explicit manual refresh (for callers/tests driving `Loader` directly without live watchers).
+            public func refresh() async {
+                guard !closed else { return }
+                if !started {
+                    await start()
+                    return
+                }
+                await acquireLock()
+                let latestSources = Self.unique(
+                    (await entries()).flatMap { $0.isDocument ? ($0.info?.instructions ?? []) : [] }
+                )
+                if configuredSources != latestSources {
+                    await reconfigureLocked()
+                }
+                await performRefreshLocked(file: nil)
+                let shouldReload = !closed && registration != nil
+                releaseLock()
+                if shouldReload {
                     await discovery.reload()
                 }
             }
+
+            // MARK: - Internal Reactive Handlers
+
+            private func publishChange(_ path: String) {
+                guard !closed else { return }
+                pendingChangeFile = path
+                debounceGeneration &+= 1
+                let generation = debounceGeneration
+                debounceTask?.cancel()
+                let delay = self.debounce
+                debounceTask = Task { [weak self] in
+                    do {
+                        try await Task.sleep(for: delay)
+                    } catch {
+                        return
+                    }
+                    await self?.flushDebouncedChange(generation: generation)
+                }
+            }
+
+            private func flushDebouncedChange(generation: UInt64) async {
+                guard !closed, generation == debounceGeneration, let file = pendingChangeFile else { return }
+                pendingChangeFile = nil
+                debounceTask = nil
+                await acquireLock()
+                guard !closed else {
+                    releaseLock()
+                    return
+                }
+                await performRefreshLocked(file: file)
+                let shouldReload = !closed && registration != nil
+                releaseLock()
+                if shouldReload {
+                    await discovery.reload()
+                }
+            }
+
+            private func handleConfigUpdated() async {
+                guard !closed else { return }
+                await acquireLock()
+                guard !closed else {
+                    releaseLock()
+                    return
+                }
+                await reconfigureLocked()
+                await performRefreshLocked(file: nil)
+                let shouldReload = !closed && registration != nil
+                releaseLock()
+                if shouldReload {
+                    await discovery.reload()
+                }
+            }
+
+            // MARK: - Synchronization Helpers
+
+            private func markReady() {
+                ready = true
+                if !readyWaiters.isEmpty {
+                    let waiters = readyWaiters
+                    readyWaiters.removeAll()
+                    for waiter in waiters {
+                        waiter.resume()
+                    }
+                }
+            }
+
+            private func acquireLock() async {
+                if !locked {
+                    locked = true
+                    return
+                }
+                await withCheckedContinuation { continuation in
+                    lockWaiters.append(continuation)
+                }
+            }
+
+            private func releaseLock() {
+                if !lockWaiters.isEmpty {
+                    let next = lockWaiters.removeFirst()
+                    next.resume()
+                } else {
+                    locked = false
+                }
+            }
+
+            // MARK: - Resolution & Source Loading
 
             private func resolve() async -> Resolved {
                 if let resolved { return resolved }
@@ -544,10 +792,19 @@ public enum CoreConfigPlugin {
                 }
             }
 
+            private func performRefreshLocked(file: String?) async {
+                _ = file
+                guard !closed else { return }
+                rescanCount += 1
+                let r = await resolve()
+                let loaded = await load(r)
+                current.value.withLock { $0 = loaded }
+            }
+
             private func load(_ r: Resolved) async -> Loaded {
                 guard let global = await globalSource(r),
                       let project = await projectSource(r),
-                      let configured = await configuredSource()
+                      let configured = await configuredSource(r)
                 else { return .unavailable }
                 return .available(global + project + configured)
             }
@@ -588,60 +845,230 @@ public enum CoreConfigPlugin {
                 return files
             }
 
-            private func configuredSource() async -> [File]? {
-                guard let configured else { return [] }
+            private func configuredSource(_ r: Resolved) async -> [File]? {
                 var files: [File] = []
-                var seen: Set<String> = []
-                for source in configured.sources {
+                var watchedFiles: Set<String> = []
+                var desiredPatternWatches: Set<PatternWatchKey> = []
+
+                for source in configuredSources {
                     if Self.isURL(source) {
-                        if let file = configured.remote[source] { files.append(file) }
+                        if let file = configuredRemote[source] { files.append(file) }
                         continue
                     }
-                    for item in configured.matches[source] ?? [] {
+                    let matched = await match(source, r).sorted()
+                    for item in matched {
                         let resolved = await fs.resolve(item)
-                        if !seen.insert(resolved).inserted { continue }
+                        if !watchedFiles.insert(resolved).inserted { continue }
                         if case .file(let file) = await read(resolved) { files.append(file) }
                     }
+                    if watcher != nil {
+                        for key in await patternWatchKeys(for: source, r) {
+                            desiredPatternWatches.insert(key)
+                        }
+                    }
                 }
+
+                if let watcher, !closed {
+                    // Reconcile per-file watches for currently matched configured files.
+                    for (key, task) in configuredFileWatches where !watchedFiles.contains(key) {
+                        task.cancel()
+                        configuredFileWatches.removeValue(forKey: key)
+                    }
+                    for file in watchedFiles.sorted() where configuredFileWatches[file] == nil {
+                        if closed || Task.isCancelled { break }
+                        let updates = await watcher.subscribe(.file(path: file), onReady: nil)
+                        configuredFileWatches[file] = Task { [weak self] in
+                            for await update in updates {
+                                if Task.isCancelled { break }
+                                await self?.publishChange(update.path)
+                            }
+                        }
+                    }
+
+                    // Reconcile glob/pattern directory watches so configured globs gaining new matches trigger refresh.
+                    for (key, task) in configuredPatternWatches where !desiredPatternWatches.contains(key) {
+                        task.cancel()
+                        configuredPatternWatches.removeValue(forKey: key)
+                    }
+                    for key in desiredPatternWatches where configuredPatternWatches[key] == nil {
+                        if closed || Task.isCancelled { break }
+                        switch key {
+                        case let .directory(base, pattern):
+                            let updates = await watcher.subscribe(
+                                .directory(path: base, ignore: FSPathUtil.ignoreGlobs),
+                                onReady: nil
+                            )
+                            configuredPatternWatches[key] = Task { [weak self] in
+                                for await update in updates {
+                                    if Task.isCancelled { break }
+                                    if Self.patternWatchMatches(update: update, base: base, pattern: pattern) {
+                                        await self?.publishChange(update.path)
+                                    }
+                                }
+                            }
+                        case let .missingChild(parent, name):
+                            let updates = await watcher.subscribe(.entries(path: parent, names: [name]), onReady: nil)
+                            configuredPatternWatches[key] = Task { [weak self] in
+                                for await update in updates {
+                                    if Task.isCancelled { break }
+                                    await self?.publishChange(update.path)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 return files
             }
 
-            /// Remote instructions are fetched only when the config list changes; a failed fetch keeps the last
-            /// good copy or skips the URL. Path patterns are matched here too, since walking directories for
-            /// every refresh would cost a scan per model step; each refresh re-reads the matched files.
-            private func reconfigure(_ sources: [String], resolved r: Resolved) async {
-                var remote: [String: File] = [:]
-                var matches: [String: [String]] = [:]
-                for source in sources {
-                    if Self.isURL(source) {
-                        if let file = await fetch(source) {
-                            remote[source] = file
-                        } else if let previous = configured?.remote[source] {
-                            remote[source] = previous
+            /// Remote instructions are fetched only when config loads (or on `config.updated`), never on file
+            /// rescans. Each fetch enforces a 5-second timeout with concurrency 4; a failed or timed-out fetch
+            /// keeps the last good copy or omits the URL without marking the instruction set unavailable.
+            private func reconfigureLocked() async {
+                let rawEntries = await entries()
+                let sources = Self.unique(
+                    rawEntries.flatMap { $0.isDocument ? ($0.info?.instructions ?? []) : [] }
+                )
+                let urls = sources.filter(Self.isURL)
+                let previousRemote = configuredRemote
+                var nextRemote: [String: File] = [:]
+
+                if let http, !urls.isEmpty {
+                    let maxConcurrency = max(1, urlFetchConcurrency)
+                    let timeout = urlFetchTimeout
+                    var results = Array<File?>(repeating: nil, count: urls.count)
+                    await withTaskGroup(of: (Int, File?).self) { group in
+                        var nextIndex = 0
+                        func enqueueNext() {
+                            guard nextIndex < urls.count else { return }
+                            let idx = nextIndex
+                            let url = urls[idx]
+                            nextIndex += 1
+                            group.addTask {
+                                let file = await Self.fetchWithTimeout(url: url, http: http, timeout: timeout)
+                                return (idx, file)
+                            }
                         }
-                        continue
+                        for _ in 0..<min(maxConcurrency, urls.count) {
+                            enqueueNext()
+                        }
+                        while let (idx, file) = await group.next() {
+                            results[idx] = file
+                            enqueueNext()
+                        }
                     }
-                    matches[source] = await match(source, r).sorted()
+                    for (idx, url) in urls.enumerated() {
+                        if let file = results[idx] {
+                            nextRemote[url] = file
+                        } else if let previous = previousRemote[url] {
+                            nextRemote[url] = previous
+                        }
+                    }
+                } else {
+                    for url in urls {
+                        if let previous = previousRemote[url] {
+                            nextRemote[url] = previous
+                        }
+                    }
                 }
-                configured = (sources, matches, remote)
+
+                configuredSources = sources
+                configuredRemote = nextRemote
             }
 
-            private func fetch(_ url: String) async -> File? {
-                guard let http,
-                      let response = try? await http.send(HTTPRequest(method: "GET", url: url)),
-                      (200..<300).contains(response.head.statusCode)
-                else { return nil }
-                return File(path: url, content: String(decoding: response.body, as: UTF8.self))
+            private static func fetchWithTimeout(
+                url: String,
+                http: any HTTPTransport,
+                timeout: Duration
+            ) async -> File? {
+                final class RaceBox: Sendable {
+                    struct State: Sendable {
+                        var completed = false
+                        var continuation: CheckedContinuation<File?, Never>?
+                        var fetchTask: Task<Void, Never>?
+                        var timeoutTask: Task<Void, Never>?
+                    }
+
+                    let state = Mutex(State())
+
+                    func resolve(_ value: File?) {
+                        let (cont, fetchTask, timeoutTask) = state.withLock { s -> (
+                            CheckedContinuation<File?, Never>?,
+                            Task<Void, Never>?,
+                            Task<Void, Never>?
+                        ) in
+                            guard !s.completed else { return (nil, nil, nil) }
+                            s.completed = true
+                            let c = s.continuation
+                            s.continuation = nil
+                            let f = s.fetchTask
+                            let t = s.timeoutTask
+                            s.fetchTask = nil
+                            s.timeoutTask = nil
+                            return (c, f, t)
+                        }
+                        fetchTask?.cancel()
+                        timeoutTask?.cancel()
+                        cont?.resume(returning: value)
+                    }
+                }
+
+                let box = RaceBox()
+                return await withTaskCancellationHandler {
+                    await withCheckedContinuation { continuation in
+                        let alreadyDone = box.state.withLock { s -> Bool in
+                            if s.completed { return true }
+                            s.continuation = continuation
+                            return false
+                        }
+                        if alreadyDone {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                        let fetchTask = Task {
+                            defer { box.resolve(nil) }
+                            guard !Task.isCancelled else { return }
+                            guard let response = try? await http.send(HTTPRequest(method: "GET", url: url)),
+                                  !Task.isCancelled,
+                                  (200..<300).contains(response.head.statusCode)
+                            else {
+                                return
+                            }
+                            let file = File(path: url, content: String(decoding: response.body, as: UTF8.self))
+                            box.resolve(file)
+                        }
+                        let timeoutTask = Task {
+                            do {
+                                try await Task.sleep(for: timeout)
+                            } catch {
+                                return
+                            }
+                            box.resolve(nil)
+                        }
+                        let cancelNow = box.state.withLock { s -> Bool in
+                            if s.completed { return true }
+                            s.fetchTask = fetchTask
+                            s.timeoutTask = timeoutTask
+                            return false
+                        }
+                        if cancelNow {
+                            fetchTask.cancel()
+                            timeoutTask.cancel()
+                        }
+                    }
+                } onCancel: {
+                    box.resolve(nil)
+                }
             }
 
             // Relative patterns search upward from the location to the project root. Without project discovery
             // they resolve against the global config directory instead.
             private func match(_ source: String, _ r: Resolved) async -> [String] {
-                let expanded = source.hasPrefix("~/") ? Self.join(r.home, String(source.dropFirst(2))) : source
+                let expanded = Self.expandSource(source, home: r.home)
                 func options(_ cwd: String) -> Glob.Options {
                     Glob.Options(cwd: cwd, absolute: true, include: .file, dot: true)
                 }
-                if expanded.hasPrefix("/") {
+                if Self.isAbsolutePath(expanded) {
                     if !Self.hasGlob(expanded) { return await fs.isFile(expanded) ? [expanded] : [] }
                     let directory = Self.dirname(expanded)
                     if await fs.isDir(directory) {
@@ -656,14 +1083,9 @@ public enum CoreConfigPlugin {
                         return (try? await fs.globUp(pattern: expanded, start: r.start, stop: r.root)) ?? []
                     }
                     var found: [String] = []
-                    var directory = r.start
-                    while true {
+                    for directory in Self.ancestorDirectories(start: r.start, stop: r.root) {
                         let candidate = Self.join(directory, expanded)
                         if await fs.isFile(candidate) { found.append(candidate) }
-                        if sameDirectory(directory, r.root) { break }
-                        let parent = Self.dirname(directory)
-                        if parent == directory { break }
-                        directory = parent
                     }
                     return found
                 }
@@ -675,13 +1097,131 @@ public enum CoreConfigPlugin {
                 return (try? await fs.scan(pattern: expanded, options: options(paths.globalConfig))) ?? []
             }
 
+            private func resolveGlobWatchKey(_ fullPattern: String, stopAt anchor: String?) async -> PatternWatchKey? {
+                let (literalBase, rest) = Self.literalPrefix(fullPattern)
+                if await fs.isDir(literalBase) {
+                    let resolvedBase = await fs.resolve(literalBase)
+                    return resolvedBase != "/" ? .directory(base: resolvedBase, pattern: rest) : nil
+                }
+                // Literal directory does not exist yet: watch the nearest existing ancestor for its first missing child.
+                var missing = literalBase
+                while true {
+                    let parent = Self.dirname(missing)
+                    if parent == missing { break }
+                    if await fs.isDir(parent) {
+                        let resolvedParent = await fs.resolve(parent)
+                        let childName = Self.basename(missing)
+                        if !childName.isEmpty {
+                            return .missingChild(parent: resolvedParent, name: childName)
+                        }
+                        break
+                    }
+                    if let anchor, sameDirectory(parent, anchor) { break }
+                    missing = parent
+                }
+                return nil
+            }
+
+            private func patternWatchKeys(for source: String, _ r: Resolved) async -> [PatternWatchKey] {
+                let expanded = Self.expandSource(source, home: r.home)
+                guard Self.hasGlob(expanded) else { return [] }
+
+                var keys: [PatternWatchKey] = []
+                if Self.isAbsolutePath(expanded) {
+                    if let key = await resolveGlobWatchKey(expanded, stopAt: nil) {
+                        keys.append(key)
+                    }
+                } else if r.project {
+                    for directory in Self.ancestorDirectories(start: r.start, stop: r.root) {
+                        if let key = await resolveGlobWatchKey(Self.join(directory, expanded), stopAt: directory) {
+                            keys.append(key)
+                        }
+                    }
+                } else if discovery.global {
+                    let resolvedGlobal = await fs.resolve(paths.globalConfig)
+                    if let key = await resolveGlobWatchKey(Self.join(resolvedGlobal, expanded), stopAt: resolvedGlobal) {
+                        keys.append(key)
+                    }
+                }
+                return keys
+            }
+
+            private static func patternWatchMatches(
+                update: CoreFilesystem.Watcher.Update,
+                base: String,
+                pattern: String
+            ) -> Bool {
+                let normalizedUpdate = update.path.replacing("\\", with: "/")
+                let normalizedBase = base.replacing("\\", with: "/")
+                guard let rel = relativeSuffix(of: normalizedUpdate, under: normalizedBase), !rel.isEmpty else {
+                    return update.type == .delete
+                }
+                if Glob.match(pattern, filepath: rel, dot: true) {
+                    return true
+                }
+                // Directory deletion may remove matched files inside it without individual child events.
+                if update.type == .delete && !rel.contains(".") {
+                    return true
+                }
+                return false
+            }
+
+            private static func relativeSuffix(of path: String, under base: String) -> String? {
+                if path == base { return "" }
+                let prefix = base.hasSuffix("/") ? base : base + "/"
+                guard path.hasPrefix(prefix) else { return nil }
+                return String(path.dropFirst(prefix.count))
+            }
+
+            // `start` keeps the client's spelling while `stop` may come from git, so a Windows drive
+            // letter can differ only in case (`c:\repo` vs `C:\repo`). Compare with `sameDirectory`
+            // and stop at filesystem root as a safety bound.
+            private static func ancestorDirectories(start: String, stop: String) -> [String] {
+                var dirs: [String] = []
+                var current = start
+                while true {
+                    dirs.append(current)
+                    if sameDirectory(current, stop) { break }
+                    let parent = dirname(current)
+                    if parent == current { break }
+                    current = parent
+                }
+                return dirs
+            }
+
+            private static func expandSource(_ source: String, home: String) -> String {
+                let normalized = source.replacing("\\", with: "/")
+                if normalized.hasPrefix("~/") {
+                    return join(home, String(normalized.dropFirst(2)))
+                }
+                return normalized
+            }
+
+            private static func isAbsolutePath(_ path: String) -> Bool {
+                if path.hasPrefix("/") { return true }
+                let chars = Array(path)
+                guard chars.count >= 2, let ascii = chars[0].asciiValue else { return false }
+                let isAlpha = (ascii >= 65 && ascii <= 90) || (ascii >= 97 && ascii <= 122)
+                return isAlpha && chars[1] == ":"
+            }
+
             private static func unique(_ values: [String]) -> [String] {
                 var seen: Set<String> = []
                 return values.filter { seen.insert($0).inserted }
             }
 
             private static func isURL(_ source: String) -> Bool {
-                source.hasPrefix("http://") || source.hasPrefix("https://")
+                let lower = source.lowercased()
+                let rest: Substring
+                if lower.hasPrefix("https://") {
+                    rest = source.dropFirst("https://".count)
+                } else if lower.hasPrefix("http://") {
+                    rest = source.dropFirst("http://".count)
+                } else {
+                    return false
+                }
+                let authority = rest.split(separator: "/", maxSplits: 1).first ?? ""
+                return !authority.isEmpty && !authority.contains(where: \.isWhitespace)
             }
 
             private static func hasGlob(_ pattern: String) -> Bool {
@@ -694,9 +1234,14 @@ public enum CoreConfigPlugin {
             }
 
             private static func dirname(_ path: String) -> String {
-                guard let index = path.lastIndex(of: "/") else { return "." }
-                if index == path.startIndex { return "/" }
-                return String(path[..<index])
+                var p = path
+                while p.count > 1 && p.hasSuffix("/") {
+                    if p.count == 3 && isAbsolutePath(p) && p.dropFirst().hasPrefix(":/") { break }
+                    p.removeLast()
+                }
+                guard let index = p.lastIndex(of: "/") else { return "." }
+                if index == p.startIndex { return "/" }
+                return String(p[..<index])
             }
 
             private static func basename(_ path: String) -> String {
