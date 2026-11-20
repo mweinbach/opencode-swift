@@ -574,7 +574,8 @@ struct CodemodeTests {
         return [before, res.bodyUsed, text, typeof d.get, d.get.name, d.enumerable, d.set === undefined].join("|");
         """), CodemodeTestHelper.makeToolContext())
         #expect(result.metadata?["error"] == nil)
-        #expect((result.output?.output ?? "").contains("false|true|hello|function|get bodyUsed|false|true"))
+        let output = result.output?.output ?? ""
+        #expect(output.contains("false|true|hello|function|get bodyUsed|false|true"))
     }
 
     @Test("CoreCodemode.Fetch routes via HTTPTransport, enforces permissions, redirects, and blocks file:/credentials")
