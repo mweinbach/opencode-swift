@@ -38,7 +38,13 @@ public enum CLIUtil {
         // parity: cli/src/version.ts#OPENCODE_VERSION [status=implemented hash=d10b83002c91]
         public static let OPENCODE_VERSION: String = "local"
         // parity: cli/src/version.ts#OPENCODE_CHANNEL [status=implemented hash=cb038e26553b]
-        public static let OPENCODE_CHANNEL: String = "local"
+        public static let OPENCODE_CHANNEL: String = {
+            #if DEBUG
+            return "local"
+            #else
+            return "latest"
+            #endif
+        }()
         // parity: cli/src/version.ts#OPENCODE_ARTIFACT [status=implemented hash=a68bef1bc782]
         public static let OPENCODE_ARTIFACT: String = "cli"
         // parity: cli/src/version.ts#OPENCODE_HIGHLIGHTS [status=implemented hash=0ea9a722a821]
@@ -46,6 +52,20 @@ public enum CLIUtil {
 
         // parity: cli/src/version.ts#OPENCODE_LOCAL [status=implemented hash=f27e42b689b3]
         public static let OPENCODE_LOCAL: Bool = OPENCODE_CHANNEL == "local"
+
+        /// Resolves the active CLI channel, honoring a non-empty `OPENCODE_CHANNEL` environment variable
+        /// before falling back to the build-time `OPENCODE_CHANNEL` (`"local"` in debug, `"latest"` in release).
+        public static func resolvedChannel(
+            environment: any EnvironmentProviding = SystemEnvironment.shared
+        ) -> String {
+            if let override = environment.variable("OPENCODE_CHANNEL")?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !override.isEmpty
+            {
+                return override
+            }
+            return OPENCODE_CHANNEL
+        }
     }
 
     // MARK: Error Formatting (`packages/cli/src/util/error.ts`)
@@ -3521,6 +3541,28 @@ public enum CLIUI {
     // parity: cli/src/ui/timeline.tsx#createTimelineHost [status=adapted hash=92ee791e1842]
     public static func createTimelineHost(context: CLIContext = CLIContext.current) async -> any TimelineHost {
         DefaultTimelineHost(context: context)
+    }
+}
+
+extension CLIContext {
+    /// Creates a default host `CLIContext` that honors `OPENCODE_CHANNEL` from `environment` when set
+    /// (allowing debug builds to run with `OPENCODE_CHANNEL=latest swift run opencode`), falling back to
+    /// `CLIUtil.Version.OPENCODE_CHANNEL` (`"local"` in debug builds, `"latest"` in release builds).
+    public static func makeDefault(
+        io: CLIIO = .system,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        transport: any HTTPTransport = URLSessionHTTPTransport.shared,
+        rawArguments: [String] = Array(CommandLine.arguments.dropFirst())
+    ) -> CLIContext {
+        CLIContext(
+            io: io,
+            environment: environment,
+            fileSystem: fileSystem,
+            transport: transport,
+            rawArguments: rawArguments,
+            channel: CLIUtil.Version.resolvedChannel(environment: environment)
+        )
     }
 }
 

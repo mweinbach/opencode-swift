@@ -57,6 +57,10 @@ public struct TUIModelItem: Equatable, Hashable, Sendable {
     public let providerName: String
     public let variants: [String]
     public let contextLimit: Int?
+    public let compositeKey: String
+    internal let searchBlob: String
+    internal let lowerName: String
+    internal let lowerID: String
 
     public init(
         id: String,
@@ -72,6 +76,12 @@ public struct TUIModelItem: Equatable, Hashable, Sendable {
         self.providerName = providerName
         self.variants = variants
         self.contextLimit = contextLimit
+        self.compositeKey = "\(providerID)/\(id)"
+        let ln = name.lowercased()
+        let li = id.lowercased()
+        self.lowerName = ln
+        self.lowerID = li
+        self.searchBlob = "\(ln) \(li) \(providerID.lowercased()) \(providerName.lowercased())"
     }
 
     public var ref: ModelSchema.Ref {
@@ -246,9 +256,9 @@ public enum TUITranscriptItem: Equatable, Hashable, Sendable {
 }
 
 public enum TUIIntegrationMethod: Equatable, Hashable, Sendable {
-    case key(label: String)
-    case oauth(id: String, label: String)
-    case external(id: String, label: String)
+    case key(label: String, form: FormSchema.Fields? = nil)
+    case oauth(id: String, label: String, form: FormSchema.Fields? = nil)
+    case external(id: String, label: String, form: FormSchema.Fields? = nil)
     case command(id: String, label: String)
     case env(names: [String])
 
@@ -257,11 +267,30 @@ public enum TUIIntegrationMethod: Equatable, Hashable, Sendable {
         return true
     }
 
+    public var form: FormSchema.Fields? {
+        switch self {
+        case .key(_, let form): return form
+        case .oauth(_, _, let form): return form
+        case .external(_, _, let form): return form
+        case .command, .env: return nil
+        }
+    }
+
+    internal var sortRank: Int {
+        switch self {
+        case .oauth: return 0
+        case .external: return 1
+        case .command: return 2
+        case .key: return 3
+        case .env: return 4
+        }
+    }
+
     public var displayLabel: String {
         switch self {
-        case .key(let label): return label.isEmpty ? "API key" : label
-        case .oauth(_, let label): return label.isEmpty ? "Sign in with OAuth" : label
-        case .external(_, let label): return label.isEmpty ? "External auth" : label
+        case .key(let label, _): return label.isEmpty ? "API key" : label
+        case .oauth(_, let label, _): return label.isEmpty ? "Sign in with OAuth" : label
+        case .external(_, let label, _): return label.isEmpty ? "External auth" : label
         case .command(_, let label): return label.isEmpty ? "CLI sign in" : label
         case .env(let names): return names.map { "$\($0)" }.joined(separator: ", ")
         }
@@ -270,8 +299,8 @@ public enum TUIIntegrationMethod: Equatable, Hashable, Sendable {
     public var rowID: String {
         switch self {
         case .key: return "method:key"
-        case .oauth(let id, _): return "method:oauth:\(id)"
-        case .external(let id, _): return "method:external:\(id)"
+        case .oauth(let id, _, _): return "method:oauth:\(id)"
+        case .external(let id, _, _): return "method:external:\(id)"
         case .command(let id, _): return "method:command:\(id)"
         case .env(let names): return "method:env:\(names.joined(separator: ","))"
         }
@@ -331,14 +360,11 @@ public struct TUIIntegrationItem: Equatable, Hashable, Sendable {
         !connections.isEmpty
     }
 
-    /// Non-env interactive connect methods, matching upstream ordering (OAuth/external/command before API key).
+    /// Non-env interactive connect methods, matching upstream ordering (OAuth first, then external/command, then API key).
     public var connectMethods: [TUIIntegrationMethod] {
-        let nonEnv = methods.filter(\.isInteractive)
-        return nonEnv.sorted { lhs, rhs in
-            let lIsKey = (lhs.rowID == "method:key") ? 1 : 0
-            let rIsKey = (rhs.rowID == "method:key") ? 1 : 0
-            return lIsKey < rIsKey
-        }
+        methods
+            .filter(\.isInteractive)
+            .sorted { $0.sortRank < $1.sortRank }
     }
 
     public var envVarNames: [String] {
@@ -372,11 +398,11 @@ public struct TUIIntegrationItem: Equatable, Hashable, Sendable {
         let mappedMethods: [TUIIntegrationMethod] = info.methods.map { method in
             switch method {
             case .key(let k):
-                return .key(label: k.label ?? "API key")
+                return .key(label: k.label ?? "API key", form: k.form)
             case .oauth(let o):
-                return .oauth(id: o.id.rawValue, label: o.label)
+                return .oauth(id: o.id.rawValue, label: o.label, form: o.form)
             case .external(let e):
-                return .external(id: e.id.rawValue, label: e.label)
+                return .external(id: e.id.rawValue, label: e.label, form: e.form)
             case .command(let c):
                 return .command(id: c.id.rawValue, label: c.label)
             case .env(let env):
@@ -409,6 +435,44 @@ public struct TUIIntegrationItem: Equatable, Hashable, Sendable {
             methods: mappedMethods,
             connections: mappedConnections
         )
+    }
+}
+
+/// Interactive multi-step form state for provider connection methods that declare `FormSchema.Fields`
+/// (such as GitHub Copilot's `deploymentType` choice + conditional `enterpriseUrl` text input).
+public struct TUIConnectFormState: Equatable, Sendable {
+    public let integrationID: String
+    public let integrationName: String
+    public let method: TUIIntegrationMethod
+    public let fields: [FormSchema.Field]
+    public var fieldIndex: Int
+    public var visitedIndices: [Int]
+    public var answers: FormSchema.Answer
+    public var multiselectDraft: [String]
+
+    public init(
+        integrationID: String,
+        integrationName: String,
+        method: TUIIntegrationMethod,
+        fields: [FormSchema.Field],
+        fieldIndex: Int = 0,
+        visitedIndices: [Int] = [],
+        answers: FormSchema.Answer = [:],
+        multiselectDraft: [String] = []
+    ) {
+        self.integrationID = integrationID
+        self.integrationName = integrationName
+        self.method = method
+        self.fields = fields
+        self.fieldIndex = fieldIndex
+        self.visitedIndices = visitedIndices
+        self.answers = answers
+        self.multiselectDraft = multiselectDraft
+    }
+
+    public var currentField: FormSchema.Field? {
+        guard fieldIndex >= 0 && fieldIndex < fields.count else { return nil }
+        return fields[fieldIndex]
     }
 }
 
@@ -706,11 +770,16 @@ public struct TUIInteractiveState: Equatable, Sendable {
     public var connectTargetIntegrationID: String?
     public var connectTargetIntegrationName: String
     public var connectMethodLabel: String
+    public var connectFormState: TUIConnectFormState?
+    public var connectFormAnswer: FormSchema.Answer?
     public var connectOAuthMethodID: String?
     public var connectOAuthAttemptID: String?
     public var connectOAuthURL: String?
     public var connectOAuthInstructions: String?
+    public var connectOAuthUserCode: String?
+    public var connectOAuthMode: IntegrationSchema.Attempt.Mode?
     public var connectOAuthNeedsCode: Bool
+    public var connectOAuthAllowsPaste: Bool
     public var connectSubmitting: Bool
     public var connectErrorMessage: String?
     public var pendingDeleteCredentialID: String?
@@ -839,11 +908,16 @@ public struct TUIInteractiveState: Equatable, Sendable {
         self.connectTargetIntegrationID = nil
         self.connectTargetIntegrationName = ""
         self.connectMethodLabel = "API key"
+        self.connectFormState = nil
+        self.connectFormAnswer = nil
         self.connectOAuthMethodID = nil
         self.connectOAuthAttemptID = nil
         self.connectOAuthURL = nil
         self.connectOAuthInstructions = nil
+        self.connectOAuthUserCode = nil
+        self.connectOAuthMode = nil
         self.connectOAuthNeedsCode = false
+        self.connectOAuthAllowsPaste = false
         self.connectSubmitting = false
         self.connectErrorMessage = nil
         self.pendingDeleteCredentialID = nil
@@ -1126,35 +1200,76 @@ public struct TUIInteractiveState: Equatable, Sendable {
 
         case .modelPicker:
             let favSet = Set(favoriteModels)
-            let filtered = models.filter { item in
-                if let filterPID = modelPickerProviderID, !filterPID.isEmpty, item.providerID != filterPID {
-                    return false
+            var recentRank: [String: Int] = [:]
+            recentRank.reserveCapacity(recentModels.count)
+            for (idx, key) in recentModels.enumerated() where recentRank[key] == nil {
+                recentRank[key] = idx
+            }
+            let searchTerms: [Substring] = needle.isEmpty ? [] : needle.split(whereSeparator: \.isWhitespace)
+            let filterPID = (modelPickerProviderID?.isEmpty == false) ? modelPickerProviderID : nil
+
+            var favItems: [TUIModelItem] = []
+            var recentItems: [TUIModelItem] = []
+            var prefixOtherItems: [TUIModelItem] = []
+            var otherItems: [TUIModelItem] = []
+            otherItems.reserveCapacity(min(models.count, 1024))
+
+            for item in models {
+                if let filterPID, item.providerID != filterPID {
+                    continue
                 }
+                if !searchTerms.isEmpty {
+                    let fallbackLowerProv: String? = item.providerName.isEmpty
+                        ? (providers[item.providerID]?.lowercased() ?? item.providerID.lowercased())
+                        : nil
+                    var matchedAll = true
+                    for term in searchTerms {
+                        if item.searchBlob.contains(term) { continue }
+                        if let fallbackLowerProv, fallbackLowerProv.contains(term) { continue }
+                        matchedAll = false
+                        break
+                    }
+                    if !matchedAll { continue }
+                }
+                let key = item.compositeKey
+                if favSet.contains(key) {
+                    favItems.append(item)
+                } else if recentRank[key] != nil {
+                    recentItems.append(item)
+                } else if !searchTerms.isEmpty && (item.lowerID.hasPrefix(needle) || item.lowerName.hasPrefix(needle)) {
+                    prefixOtherItems.append(item)
+                } else {
+                    otherItems.append(item)
+                }
+            }
+
+            if favItems.count > 1 && !recentRank.isEmpty {
+                favItems.sort { lhs, rhs in
+                    let li = recentRank[lhs.compositeKey]
+                    let ri = recentRank[rhs.compositeKey]
+                    switch (li, ri) {
+                    case (let a?, let b?): return a < b
+                    case (_?, nil): return true
+                    default: return false
+                    }
+                }
+            }
+            if recentItems.count > 1 {
+                recentItems.sort { lhs, rhs in
+                    (recentRank[lhs.compositeKey] ?? Int.max) < (recentRank[rhs.compositeKey] ?? Int.max)
+                }
+            }
+
+            var rows: [TUIDialogRow] = []
+            rows.reserveCapacity(favItems.count + recentItems.count + prefixOtherItems.count + otherItems.count + 1)
+            let selectedID = selectedModel?.id
+            let selectedProviderID = selectedModel?.providerID
+
+            func appendRow(_ item: TUIModelItem, isFav: Bool) {
                 let prov = item.providerName.isEmpty
                     ? (providers[item.providerID] ?? TUIUtil.titlecase(item.providerID))
                     : item.providerName
-                return matches(item.name, "\(item.id) \(prov)")
-            }
-            let ordered = filtered.sorted { lhs, rhs in
-                let lk = "\(lhs.providerID)/\(lhs.id)"
-                let rk = "\(rhs.providerID)/\(rhs.id)"
-                let lf = favSet.contains(lk)
-                let rf = favSet.contains(rk)
-                if lf != rf { return lf }
-                if let li = recentModels.firstIndex(of: lk), let ri = recentModels.firstIndex(of: rk), li != ri {
-                    return li < ri
-                } else if recentModels.contains(lk) != recentModels.contains(rk) {
-                    return recentModels.contains(lk)
-                }
-                return false
-            }
-            var rows: [TUIDialogRow] = ordered.map { item in
-                let prov = item.providerName.isEmpty
-                    ? (providers[item.providerID] ?? TUIUtil.titlecase(item.providerID))
-                    : item.providerName
-                let key = "\(item.providerID)/\(item.id)"
-                let active = selectedModel?.id == item.id && selectedModel?.providerID == item.providerID
-                let isFav = favSet.contains(key)
+                let active = selectedID == item.id && selectedProviderID == item.providerID
                 let trailing: String?
                 if active && isFav {
                     trailing = "★ active"
@@ -1165,14 +1280,20 @@ public struct TUIInteractiveState: Equatable, Sendable {
                 } else {
                     trailing = nil
                 }
-                return TUIDialogRow(
-                    id: key,
+                rows.append(TUIDialogRow(
+                    id: item.compositeKey,
                     title: item.name.isEmpty ? item.id : item.name,
                     subtitle: prov,
                     trailing: trailing,
                     isActive: active
-                )
+                ))
             }
+
+            for item in favItems { appendRow(item, isFav: true) }
+            for item in recentItems { appendRow(item, isFav: false) }
+            for item in prefixOtherItems { appendRow(item, isFav: false) }
+            for item in otherItems { appendRow(item, isFav: false) }
+
             if rows.isEmpty && needle.isEmpty {
                 rows.append(TUIDialogRow(
                     id: "__connect_provider__",
@@ -1185,10 +1306,19 @@ public struct TUIInteractiveState: Equatable, Sendable {
             return rows
 
         case .connectProvider:
+            let searchTerms: [Substring] = needle.isEmpty ? [] : needle.split(whereSeparator: \.isWhitespace)
             return visibleProviderIntegrations.compactMap { integration in
-                let envHint = integration.envVarNames.joined(separator: " ")
-                let category = integration.isPopular ? "Popular" : "Provider"
-                guard matches(integration.name, "\(integration.id) \(category) \(envHint)") else { return nil }
+                if !searchTerms.isEmpty {
+                    let lowerName = integration.name.lowercased()
+                    let lowerID = integration.id.lowercased()
+                    let category = integration.isPopular ? "popular" : "provider"
+                    let envHint = integration.envVarNames.joined(separator: " ").lowercased()
+                    for term in searchTerms {
+                        if !(lowerName.contains(term) || lowerID.contains(term) || category.contains(term) || envHint.contains(term)) {
+                            return nil
+                        }
+                    }
+                }
                 let hasStatus = integration.connections.first?.statusMessage != nil
                 let subtitle: String?
                 if integration.connectMethods.isEmpty && integration.credentialConnections.isEmpty {
@@ -1224,6 +1354,13 @@ public struct TUIInteractiveState: Equatable, Sendable {
             }
 
         case .connectMethod:
+            if let form = connectFormState {
+                return TUIInteractiveClient.connectFormDialogRows(
+                    form: form,
+                    filter: dialogFilter,
+                    errorMessage: connectErrorMessage
+                )
+            }
             guard let targetID = connectTargetIntegrationID,
                   let integration = integrations.first(where: { $0.id == targetID })
             else {
@@ -1570,14 +1707,25 @@ public final class TUIInteractiveClient: Sendable {
         }
     }
 
+    public typealias BrowserOpener = @Sendable (String) async throws -> Void
+
+    /// Default system browser opener (`/usr/bin/open` on macOS, `xdg-open` on Linux, `cmd /c start` on Windows).
+    public static func defaultOpenBrowserURL(_ url: String) async throws {
+        try await OpenExternal.openUrl(url)
+    }
+
     public let client: OpenCodeClient
     public let store: TUIInteractiveStore
     public let directory: String
     public let persistence: TUIPersistenceStore?
     internal let markDirty: @Sendable () -> Void
     internal let onRequestExternalEditor: (@Sendable () -> Void)?
+    internal let openBrowserURL: BrowserOpener
+    internal let oauthPollInterval: Duration
     private let optimisticCounter = Mutex<Int>(0)
     internal let mentionQueryGeneration = Mutex<Int>(0)
+    internal let activeOAuthTask = Mutex<Task<Void, Never>?>(nil)
+    internal let oauthGeneration = Mutex<Int>(0)
 
     public init(
         client: OpenCodeClient,
@@ -1585,6 +1733,8 @@ public final class TUIInteractiveClient: Sendable {
         directory: String,
         persistence: TUIPersistenceStore? = nil,
         onRequestExternalEditor: (@Sendable () -> Void)? = nil,
+        openBrowserURL: BrowserOpener? = nil,
+        oauthPollInterval: Duration = .seconds(1),
         markDirty: @escaping @Sendable () -> Void
     ) {
         self.client = client
@@ -1592,7 +1742,16 @@ public final class TUIInteractiveClient: Sendable {
         self.directory = directory
         self.persistence = persistence
         self.onRequestExternalEditor = onRequestExternalEditor
+        self.openBrowserURL = openBrowserURL ?? Self.defaultOpenBrowserURL
+        self.oauthPollInterval = oauthPollInterval
         self.markDirty = markDirty
+    }
+
+    deinit {
+        activeOAuthTask.withLock { task in
+            task?.cancel()
+            task = nil
+        }
     }
 
     internal var locationQuery: LocationQuery.LocationField {
@@ -1913,6 +2072,14 @@ public final class TUIInteractiveClient: Sendable {
         let items = resp.data.map(TUIIntegrationItem.from)
         store.withLock { state in
             state.integrations = items
+            if state.activeDialog == .connectProvider {
+                let count = state.dialogRows().count
+                if count == 0 {
+                    state.dialogSelectedIndex = 0
+                } else if state.dialogSelectedIndex >= count {
+                    state.dialogSelectedIndex = count - 1
+                }
+            }
         }
         markDirty()
     }
@@ -2016,6 +2183,14 @@ public final class TUIInteractiveClient: Sendable {
             }
             if state.contextLimit == nil {
                 state.contextLimit = state.selectedModel?.contextLimit
+            }
+            if state.activeDialog == .modelPicker {
+                let count = state.dialogRows().count
+                if count == 0 {
+                    state.dialogSelectedIndex = 0
+                } else if state.dialogSelectedIndex >= count {
+                    state.dialogSelectedIndex = count - 1
+                }
             }
         }
         markDirty()
@@ -2329,39 +2504,58 @@ public final class TUIInteractiveClient: Sendable {
         }
     }
 
+    /// Applies a server SSE event to state and awaits all triggered live catalog/session refreshes.
+    public func processServerEvent(_ event: OpenCodeEvent) async {
+        let effect = store.withLock { state -> EventSideEffect in
+            state.sseConnected = true
+            state.sseReconnecting = false
+            return Self.applyServerEvent(event, to: &state)
+        }
+        markDirty()
+        await run(effect: effect)
+    }
+
     private func dispatch(effect: EventSideEffect) {
-        if effect.refreshAgents {
-            Task { await self.refreshAgents() }
+        Task { [weak self] in
+            await self?.run(effect: effect)
         }
-        if effect.refreshIntegrations {
-            Task { await self.refreshIntegrations() }
-        }
-        if effect.refreshModels {
-            Task { await self.refreshProvidersAndModels() }
-        }
-        if effect.refreshMCP {
-            Task { await self.refreshMCP() }
-        }
-        if effect.refreshVCS {
-            Task { await self.refreshVCS() }
-        }
-        if effect.refreshSessions {
-            Task { await self.refreshSessions() }
-        }
-        if effect.refreshCommands {
-            Task { await self.refreshCommands() }
-        }
-        if effect.refreshSkills {
-            Task { await self.refreshSkills() }
-        }
-        if effect.refreshPermissions {
-            Task { await self.refreshPermissions() }
-        }
-        if effect.refreshForms {
-            Task { await self.refreshForms() }
-        }
-        if let sid = effect.refreshMessagesForSession {
-            Task { await self.loadMessages(sessionID: sid) }
+    }
+
+    private func run(effect: EventSideEffect) async {
+        await withTaskGroup(of: Void.self) { group in
+            if effect.refreshAgents {
+                group.addTask { await self.refreshAgents() }
+            }
+            if effect.refreshIntegrations {
+                group.addTask { await self.refreshIntegrations() }
+            }
+            if effect.refreshModels {
+                group.addTask { await self.refreshProvidersAndModels() }
+            }
+            if effect.refreshMCP {
+                group.addTask { await self.refreshMCP() }
+            }
+            if effect.refreshVCS {
+                group.addTask { await self.refreshVCS() }
+            }
+            if effect.refreshSessions {
+                group.addTask { await self.refreshSessions() }
+            }
+            if effect.refreshCommands {
+                group.addTask { await self.refreshCommands() }
+            }
+            if effect.refreshSkills {
+                group.addTask { await self.refreshSkills() }
+            }
+            if effect.refreshPermissions {
+                group.addTask { await self.refreshPermissions() }
+            }
+            if effect.refreshForms {
+                group.addTask { await self.refreshForms() }
+            }
+            if let sid = effect.refreshMessagesForSession {
+                group.addTask { await self.loadMessages(sessionID: sid) }
+            }
         }
         if let sid = effect.selectSessionID {
             let title = store.withLock { state in
@@ -2762,11 +2956,16 @@ public final class TUIInteractiveClient: Sendable {
         case "agent.updated":
             effect.refreshAgents = true
 
-        case "integration.updated":
+        case "plugin.updated":
+            effect.refreshAgents = true
             effect.refreshIntegrations = true
             effect.refreshModels = true
 
-        case "model.updated", "provider.updated":
+        case "integration.updated", "credential.updated", "credential.switched":
+            effect.refreshIntegrations = true
+            effect.refreshModels = true
+
+        case "model.updated", "provider.updated", "models-dev.refreshed":
             effect.refreshModels = true
             effect.refreshIntegrations = true
 
@@ -3200,6 +3399,10 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func openConnectProvider() {
+        store.withLock { state in
+            state.connectFormState = nil
+            state.connectFormAnswer = nil
+        }
         openDialog(.connectProvider)
         Task { [weak self] in
             await self?.refreshIntegrations()
@@ -3230,6 +3433,7 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func closeDialog(commitTheme: Bool = false) {
+        cancelActiveOAuthTaskOnly()
         let activeOAuth = store.withLock { state -> (String, String)? in
             if state.activeDialog == .connectOAuth,
                let intID = state.connectTargetIntegrationID,
@@ -3256,12 +3460,17 @@ public final class TUIInteractiveClient: Sendable {
             state.dialogFilter = ""
             state.dialogSelectedIndex = 0
             state.modelPickerProviderID = nil
+            state.connectFormState = nil
+            state.connectFormAnswer = nil
             state.connectErrorMessage = nil
             state.connectSubmitting = false
             state.connectOAuthAttemptID = nil
             state.connectOAuthURL = nil
             state.connectOAuthInstructions = nil
+            state.connectOAuthUserCode = nil
+            state.connectOAuthMode = nil
             state.connectOAuthNeedsCode = false
+            state.connectOAuthAllowsPaste = false
             state.pendingDeleteCredentialID = nil
         }
         markDirty()
@@ -3495,6 +3704,8 @@ public final class TUIInteractiveClient: Sendable {
             return
         }
         store.withLock { state in
+            state.connectFormState = nil
+            state.connectFormAnswer = nil
             state.connectTargetIntegrationID = item.id
             state.connectTargetIntegrationName = item.name
             state.activeDialog = .connectMethod
@@ -3506,181 +3717,11 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func beginConnectMethod(_ item: TUIIntegrationItem, method: TUIIntegrationMethod) {
-        switch method {
-        case .key(let label):
-            store.withLock { state in
-                state.connectTargetIntegrationID = item.id
-                state.connectTargetIntegrationName = item.name
-                state.connectMethodLabel = label.isEmpty ? "API key" : label
-                state.activeDialog = .connectAPIKey
-                state.dialogFilter = ""
-                state.dialogSelectedIndex = 0
-                state.connectErrorMessage = nil
-                state.connectSubmitting = false
-            }
-            markDirty()
-
-        case .external(let methodID, _):
-            store.withLock { state in
-                state.connectSubmitting = true
-                state.connectErrorMessage = nil
-                state.toastMessage = "Connecting \(item.name)…"
-                state.toastIsError = false
-            }
-            markDirty()
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await self.client.integration.connect.external(
-                        IntegrationConnectExternalInput(
-                            integrationID: item.id,
-                            location: self.locationQuery,
-                            methodID: methodID
-                        )
-                    )
-                    await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
-                } catch {
-                    self.store.withLock { state in
-                        state.connectSubmitting = false
-                        state.connectErrorMessage = "\(error)"
-                        state.toastMessage = "Failed to connect \(item.name): \(error)"
-                        state.toastIsError = true
-                    }
-                    self.markDirty()
-                }
-            }
-
-        case .oauth(let methodID, let label):
-            store.withLock { state in
-                state.connectTargetIntegrationID = item.id
-                state.connectTargetIntegrationName = item.name
-                state.connectMethodLabel = label.isEmpty ? "OAuth" : label
-                state.connectOAuthMethodID = methodID
-                state.connectOAuthAttemptID = nil
-                state.connectOAuthURL = nil
-                state.connectOAuthInstructions = "Starting authorization…"
-                state.connectOAuthNeedsCode = false
-                state.connectSubmitting = true
-                state.connectErrorMessage = nil
-                state.activeDialog = .connectOAuth
-                state.dialogFilter = ""
-                state.dialogSelectedIndex = 0
-            }
-            markDirty()
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    let started = try await self.client.integration.oauth.connect(
-                        IntegrationOauthConnectInput(
-                            integrationID: item.id,
-                            location: self.locationQuery,
-                            methodID: methodID
-                        )
-                    )
-                    let data = started.data
-                    let attemptID = data.attemptID.rawValue
-                    let needsCode = (data.mode == .code)
-                    self.store.withLock { state in
-                        guard state.activeDialog == .connectOAuth else { return }
-                        state.connectOAuthAttemptID = attemptID
-                        state.connectOAuthURL = data.url
-                        state.connectOAuthInstructions = data.instructions
-                        state.connectOAuthNeedsCode = needsCode
-                        state.connectSubmitting = false
-                    }
-                    self.markDirty()
-                    if !needsCode {
-                        await self.pollOAuthAttempt(
-                            integrationID: item.id,
-                            integrationName: item.name,
-                            attemptID: attemptID
-                        )
-                    }
-                } catch {
-                    self.store.withLock { state in
-                        state.connectSubmitting = false
-                        state.connectErrorMessage = "\(error)"
-                    }
-                    self.markDirty()
-                }
-            }
-
-        case .command(let methodID, let label):
-            store.withLock { state in
-                state.connectTargetIntegrationID = item.id
-                state.connectTargetIntegrationName = item.name
-                state.connectMethodLabel = label
-                state.connectSubmitting = true
-                state.toastMessage = "Running \(label)…"
-                state.toastIsError = false
-            }
-            markDirty()
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    let started = try await self.client.integration.command.connect(
-                        IntegrationCommandConnectInput(
-                            integrationID: item.id,
-                            location: self.locationQuery,
-                            methodID: methodID
-                        )
-                    )
-                    let attemptID = started.data.attemptID.rawValue
-                    for _ in 0..<120 {
-                        try? await Task.sleep(for: .milliseconds(500))
-                        let status = try await self.client.integration.command.status(
-                            IntegrationCommandStatusInput(
-                                integrationID: item.id,
-                                attemptID: attemptID,
-                                location: self.locationQuery
-                            )
-                        )
-                        switch status.data {
-                        case .pending:
-                            continue
-                        case .complete:
-                            await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
-                            return
-                        case .failed(let msg, _):
-                            self.store.withLock { state in
-                                state.connectSubmitting = false
-                                state.toastMessage = msg
-                                state.toastIsError = true
-                            }
-                            self.markDirty()
-                            return
-                        case .expired:
-                            self.store.withLock { state in
-                                state.connectSubmitting = false
-                                state.toastMessage = "Authentication expired"
-                                state.toastIsError = true
-                            }
-                            self.markDirty()
-                            return
-                        }
-                    }
-                } catch {
-                    self.store.withLock { state in
-                        state.connectSubmitting = false
-                        state.toastMessage = "Failed to connect \(item.name): \(error)"
-                        state.toastIsError = true
-                    }
-                    self.markDirty()
-                }
-            }
-
-        case .env(let names):
-            let hint = names.map { "$\($0)" }.joined(separator: " or ")
-            store.withLock { state in
-                state.toastMessage = "Set \(hint) to connect \(item.name)"
-                state.toastIsError = false
-            }
-            markDirty()
-        }
+        beginConnectMethodWithFormCheck(item, method: method)
     }
 
     public func submitAPIKey(_ rawKey: String? = nil) {
-        let info = store.withLock { state -> (id: String, name: String, key: String)? in
+        let info = store.withLock { state -> (id: String, name: String, key: String, answer: FormSchema.Answer?)? in
             guard state.activeDialog == .connectAPIKey,
                   !state.connectSubmitting,
                   let id = state.connectTargetIntegrationID
@@ -3694,7 +3735,7 @@ public final class TUIInteractiveClient: Sendable {
             }
             state.connectSubmitting = true
             state.connectErrorMessage = nil
-            return (id, state.connectTargetIntegrationName, key)
+            return (id, state.connectTargetIntegrationName, key, state.connectFormAnswer)
         }
         markDirty()
         guard let info else { return }
@@ -3706,7 +3747,8 @@ public final class TUIInteractiveClient: Sendable {
                     IntegrationConnectKeyInput(
                         integrationID: info.id,
                         location: self.locationQuery,
-                        key: info.key
+                        key: info.key,
+                        answer: info.answer
                     )
                 )
                 await self.finishProviderConnected(integrationID: info.id, integrationName: info.name)
@@ -3721,98 +3763,25 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func submitOAuthCode(_ rawCode: String? = nil) {
-        let info = store.withLock { state -> (id: String, name: String, attemptID: String, code: String)? in
-            guard state.activeDialog == .connectOAuth,
-                  !state.connectSubmitting,
-                  let id = state.connectTargetIntegrationID,
-                  let attemptID = state.connectOAuthAttemptID
-            else {
-                return nil
-            }
-            let code = (rawCode ?? state.dialogFilter).trimmingCharacters(in: .whitespacesAndNewlines)
-            if state.connectOAuthNeedsCode && code.isEmpty {
-                state.connectErrorMessage = "Please paste the authorization code"
-                return nil
-            }
-            state.connectSubmitting = true
-            state.connectErrorMessage = nil
-            return (id, state.connectTargetIntegrationName, attemptID, code)
-        }
-        markDirty()
-        guard let info else { return }
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.client.integration.oauth.complete(
-                    IntegrationOauthCompleteInput(
-                        integrationID: info.id,
-                        attemptID: info.attemptID,
-                        location: self.locationQuery,
-                        code: info.code.isEmpty ? nil : info.code
-                    )
-                )
-                await self.finishProviderConnected(integrationID: info.id, integrationName: info.name)
-            } catch {
-                self.store.withLock { state in
-                    state.connectSubmitting = false
-                    state.connectErrorMessage = "\(error)"
-                }
-                self.markDirty()
-            }
-        }
+        submitOAuthManualCodeOrReopenBrowser(rawCode)
     }
 
-    private func pollOAuthAttempt(integrationID: String, integrationName: String, attemptID: String) async {
-        for _ in 0..<240 {
-            try? await Task.sleep(for: .milliseconds(500))
-            let stillActive = store.withLock { state in
-                state.activeDialog == .connectOAuth && state.connectOAuthAttemptID == attemptID
-            }
-            guard stillActive else { return }
-            guard let resp = try? await client.integration.oauth.status(
-                IntegrationOauthStatusInput(
-                    integrationID: integrationID,
-                    attemptID: attemptID,
-                    location: locationQuery
-                )
-            ) else {
-                continue
-            }
-            switch resp.data {
-            case .pending:
-                continue
-            case .complete:
-                await finishProviderConnected(integrationID: integrationID, integrationName: integrationName)
-                return
-            case .failed(let msg, _):
-                store.withLock { state in
-                    state.connectSubmitting = false
-                    state.connectErrorMessage = msg
-                }
-                markDirty()
-                return
-            case .expired:
-                store.withLock { state in
-                    state.connectSubmitting = false
-                    state.connectErrorMessage = "Authorization expired"
-                }
-                markDirty()
-                return
-            }
-        }
-    }
-
-    private func finishProviderConnected(integrationID: String, integrationName: String) async {
+    internal func finishProviderConnected(integrationID: String, integrationName: String) async {
+        cancelActiveOAuthTaskOnly()
         await refreshIntegrations()
         await refreshProvidersAndModels()
         let firstProviderModel = store.withLock { state -> TUIModelItem? in
             state.connectSubmitting = false
             state.connectErrorMessage = nil
+            state.connectFormState = nil
+            state.connectFormAnswer = nil
             state.connectOAuthAttemptID = nil
             state.connectOAuthURL = nil
             state.connectOAuthInstructions = nil
+            state.connectOAuthUserCode = nil
+            state.connectOAuthMode = nil
             state.connectOAuthNeedsCode = false
+            state.connectOAuthAllowsPaste = false
             state.toastMessage = "Connected \(integrationName)"
             state.toastIsError = false
             let matched = state.models.first(where: { $0.providerID == integrationID })
@@ -3901,9 +3870,15 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func navigateBackFromSubDialog() {
-        let current = store.withLock { $0.activeDialog }
+        let (current, hasForm) = store.withLock { ($0.activeDialog, $0.connectFormState != nil) }
         switch current {
-        case .connectAPIKey, .connectMethod, .manageConnections:
+        case .connectMethod:
+            if hasForm {
+                navigateBackInConnectForm()
+            } else {
+                openConnectProvider()
+            }
+        case .connectAPIKey, .manageConnections:
             openConnectProvider()
         case .connectOAuth:
             closeDialog(commitTheme: false)
@@ -4139,6 +4114,10 @@ public final class TUIInteractiveClient: Sendable {
             }
 
         case .connectMethod:
+            if store.withLock({ $0.connectFormState != nil }) {
+                confirmConnectFormRow(rowID: row.id)
+                return
+            }
             let match = store.withLock { state -> (TUIIntegrationItem, TUIIntegrationMethod)? in
                 guard let id = state.connectTargetIntegrationID,
                       let item = state.integrations.first(where: { $0.id == id }),

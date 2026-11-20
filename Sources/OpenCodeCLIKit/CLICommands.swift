@@ -666,18 +666,19 @@ public enum CLICommands {
 
         // parity: cli/src/commands/handlers/auth/shared.ts#connectMethods [status=implemented hash=fdf3e7e2fd21]
         public static func connectMethods(_ integration: IntegrationSchema.Info) -> [ConnectMethod] {
-            var nonKey: [ConnectMethod] = []
+            var oauthMethods: [ConnectMethod] = []
+            var otherNonKey: [ConnectMethod] = []
             var keys: [ConnectMethod] = []
             for method in integration.methods {
                 switch method {
-                case .oauth(let m): nonKey.append(.oauth(m))
-                case .command(let m): nonKey.append(.command(m))
-                case .external(let m): nonKey.append(.external(m))
+                case .oauth(let m): oauthMethods.append(.oauth(m))
+                case .command(let m): otherNonKey.append(.command(m))
+                case .external(let m): otherNonKey.append(.external(m))
                 case .key(let m): keys.append(.key(m))
                 case .env: break
                 }
             }
-            return nonKey + keys
+            return oauthMethods + otherNonKey + keys
         }
 
         // parity: cli/src/commands/handlers/auth/shared.ts#resolveMethod [status=implemented hash=36ad003a6f90]
@@ -879,6 +880,39 @@ public enum CLICommands {
             }
         }
 
+        /// Extracts a device-flow verification code (such as `ABCD-1234` or `R283-GOUEO`) from instructions text.
+        public static func extractDeviceCode(from text: String) -> String? {
+            let bytes = Array(text.utf8)
+            let isCodeChar: (UInt8) -> Bool = { b in
+                (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A)
+            }
+            var i = 0
+            while i + 9 <= bytes.count {
+                let prevBoundary = (i == 0) || !isCodeChar(bytes[i - 1])
+                if prevBoundary
+                    && isCodeChar(bytes[i])
+                    && isCodeChar(bytes[i + 1])
+                    && isCodeChar(bytes[i + 2])
+                    && isCodeChar(bytes[i + 3])
+                    && bytes[i + 4] == 0x2D
+                    && isCodeChar(bytes[i + 5])
+                    && isCodeChar(bytes[i + 6])
+                    && isCodeChar(bytes[i + 7])
+                    && isCodeChar(bytes[i + 8])
+                {
+                    var end = i + 9
+                    if end < bytes.count && isCodeChar(bytes[end]) {
+                        end += 1
+                    }
+                    if end == bytes.count || !isCodeChar(bytes[end]) {
+                        return String(decoding: bytes[i..<end], as: UTF8.self)
+                    }
+                }
+                i += 1
+            }
+            return nil
+        }
+
         // parity: cli/src/commands/handlers/auth/login.ts#oauthLogin [status=implemented hash=4f35058f4def]
         public static func oauthLogin(
             client: OpenCodeClient,
@@ -886,7 +920,9 @@ public enum CLICommands {
             method: IntegrationSchema.OAuthMethod,
             answer: FormSchema.Answer? = nil,
             label: String? = nil,
-            context: CLIContext = CLIContext.current
+            context: CLIContext = CLIContext.current,
+            urlOpener: (@Sendable (String) async throws -> Void)? = nil,
+            pollInterval: Duration = .milliseconds(500)
         ) async throws {
             let loc = LocationQuery.LocationField(directory: context.cwd)
             let started = try await client.integration.oauth.connect(
@@ -901,20 +937,26 @@ public enum CLICommands {
             let attempt = started.data
             var completed = false
             do {
-                context.io.writeStderr("\(attempt.instructions)\(context.io.eol)")
-                context.io.writeStderr("\(attempt.url)\(context.io.eol)")
+                if !attempt.instructions.isEmpty {
+                    context.io.writeStderr("│  \(attempt.instructions)\(context.io.eol)")
+                }
+                if let deviceCode = extractDeviceCode(from: attempt.instructions) {
+                    context.io.writeStderr("│  User code: \(deviceCode)\(context.io.eol)")
+                }
+                context.io.writeStderr("│  Verification URL: \(attempt.url)\(context.io.eol)")
                 if context.io.isStdinTTY() && context.io.isStdoutTTY() {
-                    await CLIUI.Prompt.openUrl(attempt.url)
+                    await CLIUI.Prompt.openUrl(attempt.url, launcher: urlOpener)
                 }
 
                 if attempt.mode == .code {
                     try CLIUI.Prompt.requireInteractive("This login requires an interactive terminal to enter the authorization code", context: context)
-                    let code = try await CLIUI.Prompt.backend(for: context).text(
+                    let rawCode = try await CLIUI.Prompt.backend(for: context).text(
                         message: "Paste the authorization code",
                         placeholder: nil,
                         initialValue: nil,
-                        validate: { $0.isEmpty ? "Required" : nil }
+                        validate: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Required" : nil }
                     )
+                    let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
                     try await client.integration.oauth.complete(
                         IntegrationOauthCompleteInput(
                             integrationID: integration.id.rawValue,
@@ -929,7 +971,72 @@ public enum CLICommands {
                 }
 
                 context.io.writeStderr("Waiting for authorization...\(context.io.eol)")
+                let allowPaste = attempt.paste == true && context.io.isStdinTTY() && context.io.isStdoutTTY()
+                if allowPaste {
+                    context.io.writeStderr("If the browser can't reach this machine, paste the redirect URL or code and press Enter.\(context.io.eol)")
+                }
+                let pasteTask: Task<Void, Never>?
+                if allowPaste, let promptBackend = context.promptBackend {
+                    let integrationID = integration.id.rawValue
+                    let attemptID = attempt.attemptID.rawValue
+                    pasteTask = Task {
+                        while !Task.isCancelled {
+                            guard let raw = try? await promptBackend.text(
+                                message: "Paste the redirect URL or authorization code",
+                                placeholder: nil,
+                                initialValue: nil,
+                                validate: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Required" : nil }
+                            ) else {
+                                return
+                            }
+                            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if trimmed.isEmpty { continue }
+                            do {
+                                try await client.integration.oauth.complete(
+                                    IntegrationOauthCompleteInput(
+                                        integrationID: integrationID,
+                                        attemptID: attemptID,
+                                        location: loc,
+                                        code: trimmed
+                                    )
+                                )
+                                return
+                            } catch {
+                                context.io.writeStderr("■ \(CLIUtil.errorMessage(error))\(context.io.eol)")
+                            }
+                        }
+                    }
+                } else {
+                    pasteTask = nil
+                }
+                defer { pasteTask?.cancel() }
+
                 while true {
+                    try Task.checkCancellation()
+                    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+                    if allowPaste && context.promptBackend == nil && isatty(STDIN_FILENO) != 0 {
+                        var pfd = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+                        if poll(&pfd, 1, 0) > 0, (pfd.revents & Int16(POLLIN)) != 0 {
+                            if let pasted = try? await context.io.readStdinLine(nil) {
+                                let trimmed = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !trimmed.isEmpty {
+                                    do {
+                                        try await client.integration.oauth.complete(
+                                            IntegrationOauthCompleteInput(
+                                                integrationID: integration.id.rawValue,
+                                                attemptID: attempt.attemptID.rawValue,
+                                                location: loc,
+                                                code: trimmed
+                                            )
+                                        )
+                                    } catch {
+                                        context.io.writeStderr("■ \(CLIUtil.errorMessage(error))\(context.io.eol)")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    #endif
                     let response = try await client.integration.oauth.status(
                         IntegrationOauthStatusInput(
                             integrationID: integration.id.rawValue,
@@ -939,7 +1046,7 @@ public enum CLICommands {
                     )
                     switch response.data {
                     case .pending:
-                        try await Task.sleep(for: .milliseconds(500))
+                        try await Task.sleep(for: pollInterval)
                     case .complete:
                         completed = true
                         context.io.writeStderr("◇ Connected to \(integration.name)\(context.io.eol)")
@@ -1358,6 +1465,9 @@ public enum CLICommands {
                         if ISO8601DateFormatter().date(from: s) == nil { return "Expected a date and time" }
                     }
                 }
+                if let opts = f.options, !opts.isEmpty, f.custom != true, !opts.contains(where: { $0.value == s }) {
+                    return "Invalid selection: \(s)"
+                }
                 return nil
             case .number(let f):
                 guard let value else { return f.required == true ? "Required" : nil }
@@ -1414,15 +1524,41 @@ public enum CLICommands {
                     let chosen = try await backend.select(message: f.title ?? f.key, options: selectOpts, initialValue: f.defaultValue)
                     return .string(chosen)
                 }
-                let text = try await backend.text(message: f.title ?? f.key, placeholder: f.placeholder, initialValue: f.defaultValue, validate: nil)
+                let text = try await backend.text(
+                    message: f.title ?? f.key,
+                    placeholder: f.placeholder,
+                    initialValue: f.defaultValue,
+                    validate: { raw in
+                        let candidate: FormSchema.Value? = (raw.isEmpty && f.required != true) ? nil : .string(raw)
+                        return validateFormValue(field: field, value: candidate)
+                    }
+                )
                 return text.isEmpty && f.required != true ? nil : .string(text)
             case .number(let f):
-                let text = try await backend.text(message: f.title ?? f.key, placeholder: nil, initialValue: f.defaultValue.map { String($0) }, validate: nil)
+                let text = try await backend.text(
+                    message: f.title ?? f.key,
+                    placeholder: nil,
+                    initialValue: f.defaultValue.map { String($0) },
+                    validate: { raw in
+                        if raw.isEmpty && f.required != true { return nil }
+                        guard let n = Double(raw) else { return "Expected a number" }
+                        return validateFormValue(field: field, value: .number(n))
+                    }
+                )
                 if text.isEmpty && f.required != true { return nil }
                 guard let n = Double(text) else { throw CLIError("Expected a number") }
                 return .number(n)
             case .integer(let f):
-                let text = try await backend.text(message: f.title ?? f.key, placeholder: nil, initialValue: f.defaultValue.map { String($0) }, validate: nil)
+                let text = try await backend.text(
+                    message: f.title ?? f.key,
+                    placeholder: nil,
+                    initialValue: f.defaultValue.map { String($0) },
+                    validate: { raw in
+                        if raw.isEmpty && f.required != true { return nil }
+                        guard let n = Int(raw) else { return "Expected an integer" }
+                        return validateFormValue(field: field, value: .number(Double(n)))
+                    }
+                )
                 if text.isEmpty && f.required != true { return nil }
                 guard let n = Int(text) else { throw CLIError("Expected an integer") }
                 return .number(Double(n))
@@ -3552,17 +3688,27 @@ public enum CLICommands {
     // parity: cli/src/commands/handlers/models.ts#default [status=implemented hash=5dbfa03338f7]
     public static func runModels(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
         try await withResolvedServer(context: context) { _, client in
+            let loc = LocationQuery.LocationField(directory: context.cwd)
             if input.bool("refresh") {
                 try await client.location.reload()
             }
             await CLIServices.waitForPlugins(client, context.cwd)
-            let response = try await client.model.list(
-                ModelListInput(location: LocationQuery.LocationField(directory: context.cwd))
-            )
+            async let providersTask = try? client.provider.list(ProviderListInput(location: loc))
+            let response = try await client.model.list(ModelListInput(location: loc))
+            let providers = await providersTask?.data ?? []
             let providerFilter = input.arg("provider")
+            let normalizedFilter = providerFilter?.lowercased()
+            let matchingProviderIDs: Set<String> = {
+                guard let normalizedFilter else { return [] }
+                var ids: Set<String> = [normalizedFilter]
+                for provider in providers where provider.name.lowercased() == normalizedFilter {
+                    ids.insert(provider.id.rawValue.lowercased())
+                }
+                return ids
+            }()
             let filtered = response.data.filter { model in
-                guard let providerFilter else { return true }
-                return model.providerID.rawValue.lowercased() == providerFilter.lowercased()
+                guard normalizedFilter != nil else { return true }
+                return matchingProviderIDs.contains(model.providerID.rawValue.lowercased())
             }
             let sorted = filtered.sorted { lhs, rhs in
                 let lKey = "\(lhs.providerID.rawValue)/\(lhs.id.rawValue)"
@@ -3829,7 +3975,7 @@ public enum CLIEntrypoint {
     /// Executes the OpenCode CLI for `arguments` in the supplied `context`, returning the process exit code.
     public static func run(
         arguments: [String],
-        context: CLIContext = CLIContext()
+        context: CLIContext = CLIContext.makeDefault()
     ) async -> Int32 {
         // Ensure loopback requests bypass HTTP proxies
         let noProxy = mergedNoProxy(
@@ -3877,7 +4023,7 @@ public enum CLIEntrypoint {
     /// Process entrypoint invoked by `Sources/OpenCodeCLI/main.swift`.
     public static func main() async -> Never {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        let context = CLIContext(
+        let context = CLIContext.makeDefault(
             io: .system,
             rawArguments: arguments
         )

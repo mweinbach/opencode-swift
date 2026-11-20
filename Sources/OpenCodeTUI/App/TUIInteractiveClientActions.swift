@@ -1583,4 +1583,1097 @@ extension TUIInteractiveClient {
             }
         }
     }
+
+    // MARK: - 12. Interactive OAuth, Connect Method Forms & System Browser Launch
+
+    /// Extracts a device-flow verification code (such as `ABCD-1234` or `R283-GOUEO`) from OAuth instructions.
+    public static func extractOAuthDeviceCode(from text: String) -> String? {
+        let bytes = Array(text.utf8)
+        let isCodeChar: (UInt8) -> Bool = { b in
+            (b >= 0x30 && b <= 0x39) || (b >= 0x41 && b <= 0x5A)
+        }
+        var i = 0
+        while i + 9 <= bytes.count {
+            let prevBoundary = (i == 0) || !isCodeChar(bytes[i - 1])
+            if prevBoundary
+                && isCodeChar(bytes[i])
+                && isCodeChar(bytes[i + 1])
+                && isCodeChar(bytes[i + 2])
+                && isCodeChar(bytes[i + 3])
+                && bytes[i + 4] == 0x2D
+                && isCodeChar(bytes[i + 5])
+                && isCodeChar(bytes[i + 6])
+                && isCodeChar(bytes[i + 7])
+                && isCodeChar(bytes[i + 8])
+            {
+                var end = i + 9
+                if end < bytes.count && isCodeChar(bytes[end]) {
+                    end += 1
+                }
+                if end == bytes.count || !isCodeChar(bytes[end]) {
+                    return String(decoding: bytes[i..<end], as: UTF8.self)
+                }
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    internal static func connectFormFieldKey(_ field: FormSchema.Field) -> String {
+        switch field {
+        case .string(let f): return f.key
+        case .number(let f): return f.key
+        case .integer(let f): return f.key
+        case .boolean(let f): return f.key
+        case .multiselect(let f): return f.key
+        case .external(let f): return f.key
+        }
+    }
+
+    internal static func connectFormFieldTitle(_ field: FormSchema.Field) -> String {
+        switch field {
+        case .string(let f): return f.title ?? f.key
+        case .number(let f): return f.title ?? f.key
+        case .integer(let f): return f.title ?? f.key
+        case .boolean(let f): return f.title ?? f.key
+        case .multiselect(let f): return f.title ?? f.key
+        case .external(let f): return f.title ?? f.key
+        }
+    }
+
+    internal static func connectFormFieldIsHidden(_ field: FormSchema.Field) -> Bool {
+        switch field {
+        case .string(let f): return f.hidden == true
+        case .number(let f): return f.hidden == true
+        case .integer(let f): return f.hidden == true
+        case .boolean(let f): return f.hidden == true
+        case .multiselect(let f): return f.hidden == true
+        case .external: return false
+        }
+    }
+
+    internal static func connectFormDefaultValue(_ field: FormSchema.Field) -> FormSchema.Value? {
+        switch field {
+        case .string(let f): return f.defaultValue.map(FormSchema.Value.string)
+        case .number(let f): return f.defaultValue.map(FormSchema.Value.number)
+        case .integer(let f): return f.defaultValue.map { .number(Double($0)) }
+        case .boolean(let f): return f.defaultValue.map(FormSchema.Value.bool)
+        case .multiselect(let f): return f.defaultValue.map(FormSchema.Value.strings)
+        case .external: return nil
+        }
+    }
+
+    internal static func isConnectFormFieldActive(_ field: FormSchema.Field, answer: FormSchema.Answer) -> Bool {
+        let conditions: [FormSchema.When]?
+        switch field {
+        case .string(let f): conditions = f.when
+        case .number(let f): conditions = f.when
+        case .integer(let f): conditions = f.when
+        case .boolean(let f): conditions = f.when
+        case .multiselect(let f): conditions = f.when
+        case .external: return true
+        }
+        guard let conditions else { return true }
+        return conditions.allSatisfy { cond in
+            guard let current = answer[cond.key] else { return false }
+            let matches: Bool
+            switch (current, cond.value) {
+            case (.string(let a), .string(let b)): matches = a == b
+            case (.number(let a), .number(let b)): matches = a == b
+            case (.bool(let a), .bool(let b)): matches = a == b
+            case (.strings(let arr), .string(let b)): matches = arr.contains(b)
+            case (.strings(let arr), .number(let b)): matches = arr.contains(String(b))
+            case (.strings(let arr), .bool(let b)): matches = arr.contains(String(b))
+            default: matches = false
+            }
+            return cond.op == .eq ? matches : !matches
+        }
+    }
+
+    internal static func validateConnectFormValue(field: FormSchema.Field, value: FormSchema.Value?) -> String? {
+        switch field {
+        case .external:
+            return nil
+        case .string(let f):
+            guard let value else { return f.required == true ? "Required" : nil }
+            guard case .string(let s) = value else { return "Expected a string" }
+            if s.isEmpty && f.required == true { return "Required" }
+            if let minLen = f.minLength, s.count < minLen.rawValue {
+                return "Must be at least \(minLen.rawValue) characters"
+            }
+            if let maxLen = f.maxLength, s.count > maxLen.rawValue {
+                return "Must be at most \(maxLen.rawValue) characters"
+            }
+            if let pattern = f.pattern, let rx = try? Regex(pattern), !s.contains(rx) {
+                return "Invalid format"
+            }
+            if let fmt = f.format {
+                switch fmt {
+                case .uri:
+                    if URL(string: s)?.scheme == nil { return "Expected a URL" }
+                case .email:
+                    let parts = s.split(separator: "@")
+                    if parts.count != 2 || !parts[1].contains(".") || s.contains(" ") {
+                        return "Expected an email address"
+                    }
+                case .date:
+                    if s.count != 10 || s.split(separator: "-").count != 3 { return "Expected a date" }
+                case .dateTime:
+                    if !s.contains("T") || s.count < 19 { return "Expected a date and time" }
+                }
+            }
+            if let opts = f.options, !opts.isEmpty, f.custom != true, !opts.contains(where: { $0.value == s }) {
+                return "Invalid selection"
+            }
+            return nil
+        case .number(let f):
+            guard let value else { return f.required == true ? "Required" : nil }
+            guard case .number(let n) = value, n.isFinite else { return "Expected a number" }
+            if let minV = f.minimum, n < minV { return "Must be at least \(minV)" }
+            if let maxV = f.maximum, n > maxV { return "Must be at most \(maxV)" }
+            return nil
+        case .integer(let f):
+            guard let value else { return f.required == true ? "Required" : nil }
+            guard case .number(let n) = value, n.isFinite, n.rounded(.towardZero) == n else {
+                return "Expected an integer"
+            }
+            if let minV = f.minimum, n < minV { return "Must be at least \(minV)" }
+            if let maxV = f.maximum, n > maxV { return "Must be at most \(maxV)" }
+            return nil
+        case .boolean(let f):
+            guard let value else { return f.required == true ? "Required" : nil }
+            guard case .bool = value else { return "Expected a boolean" }
+            return nil
+        case .multiselect(let f):
+            guard let value else { return f.required == true ? "Required" : nil }
+            guard case .strings(let arr) = value else { return "Expected an array of strings" }
+            if let minI = f.minItems, arr.count < minI.rawValue { return "Select at least \(minI.rawValue)" }
+            if let maxI = f.maxItems, arr.count > maxI.rawValue { return "Select at most \(maxI.rawValue)" }
+            return nil
+        }
+    }
+
+    internal static func connectFormDialogRows(
+        form: TUIConnectFormState,
+        filter: String,
+        errorMessage: String?
+    ) -> [TUIDialogRow] {
+        guard let field = form.currentField else { return [] }
+        let needle = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        func matches(_ text: String, _ secondary: String? = nil) -> Bool {
+            guard !needle.isEmpty else { return true }
+            if text.lowercased().contains(needle) { return true }
+            if let secondary, secondary.lowercased().contains(needle) { return true }
+            return false
+        }
+
+        switch field {
+        case .string(let sf):
+            if let opts = sf.options, !opts.isEmpty {
+                var rows: [TUIDialogRow] = opts.compactMap { opt in
+                    guard matches(opt.label, "\(opt.value) \(opt.description ?? "")") else { return nil }
+                    let isDefault = sf.defaultValue == opt.value
+                    return TUIDialogRow(
+                        id: "form-opt:\(opt.value)",
+                        title: opt.label,
+                        subtitle: opt.description,
+                        trailing: isDefault ? "default" : nil,
+                        isActive: isDefault
+                    )
+                }
+                let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+                if sf.custom == true, !trimmed.isEmpty, !opts.contains(where: { $0.value == trimmed }) {
+                    rows.append(TUIDialogRow(
+                        id: "form-custom:\(trimmed)",
+                        title: "Use \"\(trimmed)\"",
+                        subtitle: "Custom value",
+                        trailing: "enter",
+                        badgeColorKind: .success
+                    ))
+                }
+                if sf.required != true, matches("Skip", "optional") {
+                    rows.append(TUIDialogRow(
+                        id: "form-skip",
+                        title: "Skip",
+                        subtitle: "Optional"
+                    ))
+                }
+                return rows
+            }
+            let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let err = errorMessage, !err.isEmpty {
+                return [
+                    TUIDialogRow(
+                        id: "form-text-submit",
+                        title: trimmed.isEmpty ? (sf.placeholder ?? sf.title ?? sf.key) : trimmed,
+                        subtitle: err,
+                        trailing: "enter",
+                        badgeColorKind: .error
+                    ),
+                ]
+            }
+            if !trimmed.isEmpty {
+                return [
+                    TUIDialogRow(
+                        id: "form-text-submit",
+                        title: trimmed,
+                        subtitle: sf.title ?? sf.key,
+                        trailing: "enter confirm",
+                        badgeColorKind: .success
+                    ),
+                ]
+            }
+            return [
+                TUIDialogRow(
+                    id: "form-text-submit",
+                    title: sf.placeholder ?? sf.title ?? sf.key,
+                    subtitle: sf.description ?? (sf.required == true ? "Type value and press Enter" : "Optional — press Enter to skip"),
+                    trailing: "enter"
+                ),
+            ]
+
+        case .boolean(let bf):
+            let ordered: [(String, String, Bool)] = bf.defaultValue == false
+                ? [("form-bool:false", "No", true), ("form-bool:true", "Yes", false)]
+                : [("form-bool:true", "Yes", bf.defaultValue != false), ("form-bool:false", "No", false)]
+            var rows: [TUIDialogRow] = ordered.compactMap { id, label, isDefault in
+                guard matches(label) else { return nil }
+                return TUIDialogRow(
+                    id: id,
+                    title: label,
+                    trailing: isDefault ? "default" : nil,
+                    isActive: isDefault
+                )
+            }
+            if bf.required != true, matches("Skip", "optional") {
+                rows.append(TUIDialogRow(id: "form-skip", title: "Skip", subtitle: "Optional"))
+            }
+            return rows
+
+        case .multiselect(let mf):
+            let selectedSet = Set(form.multiselectDraft)
+            var rows: [TUIDialogRow] = mf.options.compactMap { opt in
+                guard matches(opt.label, "\(opt.value) \(opt.description ?? "")") else { return nil }
+                let checked = selectedSet.contains(opt.value)
+                return TUIDialogRow(
+                    id: "form-multi:\(opt.value)",
+                    title: "\(checked ? "[✓]" : "[ ]") \(opt.label)",
+                    subtitle: opt.description,
+                    isActive: checked,
+                    badgeColorKind: checked ? .success : nil
+                )
+            }
+            let errSub = (errorMessage?.isEmpty == false) ? errorMessage : "\(form.multiselectDraft.count) selected"
+            rows.append(TUIDialogRow(
+                id: "form-multi-submit",
+                title: "Continue",
+                subtitle: errSub,
+                trailing: "enter",
+                badgeColorKind: (errorMessage?.isEmpty == false) ? .error : .success
+            ))
+            return rows
+
+        case .number(let nf):
+            let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+            return [
+                TUIDialogRow(
+                    id: "form-text-submit",
+                    title: trimmed.isEmpty ? (nf.defaultValue.map { String($0) } ?? "Enter a number") : trimmed,
+                    subtitle: (errorMessage?.isEmpty == false) ? errorMessage : (nf.title ?? nf.key),
+                    trailing: "enter",
+                    badgeColorKind: (errorMessage?.isEmpty == false) ? .error : (!trimmed.isEmpty ? .success : nil)
+                ),
+            ]
+
+        case .integer(let inf):
+            let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+            return [
+                TUIDialogRow(
+                    id: "form-text-submit",
+                    title: trimmed.isEmpty ? (inf.defaultValue.map { String($0) } ?? "Enter an integer") : trimmed,
+                    subtitle: (errorMessage?.isEmpty == false) ? errorMessage : (inf.title ?? inf.key),
+                    trailing: "enter",
+                    badgeColorKind: (errorMessage?.isEmpty == false) ? .error : (!trimmed.isEmpty ? .success : nil)
+                ),
+            ]
+
+        case .external(let ext):
+            return [
+                TUIDialogRow(
+                    id: "form-ext-continue",
+                    title: ext.title ?? "Continue after completing browser step",
+                    subtitle: ext.url,
+                    trailing: "enter",
+                    badgeColorKind: .success
+                ),
+            ]
+        }
+    }
+
+    private static func initialDraftForConnectField(_ field: FormSchema.Field) -> (filter: String, selectedIndex: Int, multiDraft: [String]) {
+        switch field {
+        case .string(let sf):
+            if let opts = sf.options, !opts.isEmpty {
+                let defaultIdx = sf.defaultValue.flatMap { def in opts.firstIndex(where: { $0.value == def }) } ?? 0
+                return ("", defaultIdx, [])
+            }
+            return (sf.defaultValue ?? "", 0, [])
+        case .number(let nf):
+            return (nf.defaultValue.map { String($0) } ?? "", 0, [])
+        case .integer(let inf):
+            return (inf.defaultValue.map { String($0) } ?? "", 0, [])
+        case .boolean:
+            return ("", 0, [])
+        case .multiselect(let mf):
+            return ("", 0, mf.defaultValue ?? [])
+        case .external:
+            return ("", 0, [])
+        }
+    }
+
+    /// Finds the next active visible field starting at `startIndex`, populating any active hidden fields along the way.
+    private static func nextVisibleConnectFieldIndex(
+        in fields: [FormSchema.Field],
+        from startIndex: Int,
+        answers: inout FormSchema.Answer
+    ) -> Int? {
+        var idx = startIndex
+        while idx < fields.count {
+            let field = fields[idx]
+            if !isConnectFormFieldActive(field, answer: answers) {
+                idx += 1
+                continue
+            }
+            if connectFormFieldIsHidden(field) {
+                if let def = connectFormDefaultValue(field) {
+                    answers[connectFormFieldKey(field)] = def
+                }
+                idx += 1
+                continue
+            }
+            return idx
+        }
+        return nil
+    }
+
+    internal static func connectFormDialogTitle(integrationName: String, fieldTitle: String) -> String {
+        let combined = "\(integrationName) — \(fieldTitle)"
+        return combined.count <= 44 ? combined : fieldTitle
+    }
+
+    internal func beginConnectMethodWithFormCheck(_ item: TUIIntegrationItem, method: TUIIntegrationMethod) {
+        guard let formFields = method.form, !formFields.elements.isEmpty else {
+            executeConnectMethod(item, method: method, answer: nil)
+            return
+        }
+        var answers: FormSchema.Answer = [:]
+        guard let firstVisible = Self.nextVisibleConnectFieldIndex(
+            in: formFields.elements,
+            from: 0,
+            answers: &answers
+        ) else {
+            executeConnectMethod(item, method: method, answer: answers.isEmpty ? nil : answers)
+            return
+        }
+
+        let field = formFields.elements[firstVisible]
+        let draft = Self.initialDraftForConnectField(field)
+        let title = Self.connectFormFieldTitle(field)
+        let formState = TUIConnectFormState(
+            integrationID: item.id,
+            integrationName: item.name,
+            method: method,
+            fields: formFields.elements,
+            fieldIndex: firstVisible,
+            visitedIndices: [],
+            answers: answers,
+            multiselectDraft: draft.multiDraft
+        )
+
+        store.withLock { state in
+            state.connectFormState = formState
+            state.connectFormAnswer = nil
+            state.connectTargetIntegrationID = item.id
+            state.connectTargetIntegrationName = Self.connectFormDialogTitle(integrationName: item.name, fieldTitle: title)
+            state.activeDialog = .connectMethod
+            state.dialogFilter = draft.filter
+            state.dialogSelectedIndex = draft.selectedIndex
+            state.connectErrorMessage = nil
+            state.connectSubmitting = false
+        }
+        markDirty()
+
+        if case .external(let ext) = field, !ext.url.isEmpty {
+            launchBrowserURLNonFatal(ext.url)
+        }
+    }
+
+    internal func confirmConnectFormRow(rowID: String) {
+        enum StepOutcome {
+            case stay
+            case advance(externalURL: String?)
+            case complete(item: TUIIntegrationItem, method: TUIIntegrationMethod, answer: FormSchema.Answer)
+        }
+
+        let outcome: StepOutcome = store.withLock { state in
+            guard var form = state.connectFormState, let field = form.currentField else {
+                return .stay
+            }
+            let key = Self.connectFormFieldKey(field)
+
+            // Toggle multiselect option in place without advancing yet
+            if rowID.hasPrefix("form-multi:") {
+                let optVal = String(rowID.dropFirst("form-multi:".count))
+                if let existing = form.multiselectDraft.firstIndex(of: optVal) {
+                    form.multiselectDraft.remove(at: existing)
+                } else {
+                    form.multiselectDraft.append(optVal)
+                }
+                state.connectFormState = form
+                state.connectErrorMessage = nil
+                return .stay
+            }
+
+            let parsedValue: FormSchema.Value?
+            if rowID == "form-skip" {
+                parsedValue = nil
+            } else if rowID.hasPrefix("form-opt:") {
+                parsedValue = .string(String(rowID.dropFirst("form-opt:".count)))
+            } else if rowID.hasPrefix("form-custom:") {
+                parsedValue = .string(String(rowID.dropFirst("form-custom:".count)))
+            } else if rowID == "form-bool:true" {
+                parsedValue = .bool(true)
+            } else if rowID == "form-bool:false" {
+                parsedValue = .bool(false)
+            } else if rowID == "form-multi-submit" {
+                parsedValue = form.multiselectDraft.isEmpty ? nil : .strings(form.multiselectDraft)
+            } else if rowID == "form-ext-continue" {
+                parsedValue = .bool(true)
+            } else if rowID == "form-text-submit" {
+                let trimmed = state.dialogFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+                switch field {
+                case .string(let sf):
+                    parsedValue = (trimmed.isEmpty && sf.required != true) ? nil : .string(trimmed)
+                case .number(let nf):
+                    if trimmed.isEmpty && nf.required != true {
+                        parsedValue = nil
+                    } else if let n = Double(trimmed), n.isFinite {
+                        parsedValue = .number(n)
+                    } else {
+                        state.connectErrorMessage = "Expected a number"
+                        return .stay
+                    }
+                case .integer(let inf):
+                    if trimmed.isEmpty && inf.required != true {
+                        parsedValue = nil
+                    } else if let n = Int(trimmed) {
+                        parsedValue = .number(Double(n))
+                    } else {
+                        state.connectErrorMessage = "Expected an integer"
+                        return .stay
+                    }
+                default:
+                    parsedValue = nil
+                }
+            } else {
+                return .stay
+            }
+
+            if let err = Self.validateConnectFormValue(field: field, value: parsedValue) {
+                state.connectErrorMessage = err
+                return .stay
+            }
+
+            if let parsedValue {
+                form.answers[key] = parsedValue
+            } else {
+                form.answers.removeValue(forKey: key)
+            }
+            form.visitedIndices.append(form.fieldIndex)
+
+            if let nextIdx = Self.nextVisibleConnectFieldIndex(
+                in: form.fields,
+                from: form.fieldIndex + 1,
+                answers: &form.answers
+            ) {
+                let nextField = form.fields[nextIdx]
+                let draft = Self.initialDraftForConnectField(nextField)
+                let nextTitle = Self.connectFormFieldTitle(nextField)
+                form.fieldIndex = nextIdx
+                form.multiselectDraft = draft.multiDraft
+                state.connectFormState = form
+                state.connectTargetIntegrationName = Self.connectFormDialogTitle(integrationName: form.integrationName, fieldTitle: nextTitle)
+                state.dialogFilter = draft.filter
+                state.dialogSelectedIndex = draft.selectedIndex
+                state.connectErrorMessage = nil
+                if case .external(let ext) = nextField, !ext.url.isEmpty {
+                    return .advance(externalURL: ext.url)
+                }
+                return .advance(externalURL: nil)
+            }
+
+            // Form complete: restore integration name and launch connection method
+            let integrationItem = state.integrations.first(where: { $0.id == form.integrationID })
+                ?? TUIIntegrationItem(id: form.integrationID, name: form.integrationName, methods: [form.method])
+            state.connectFormState = nil
+            state.connectTargetIntegrationName = form.integrationName
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.connectErrorMessage = nil
+            return .complete(item: integrationItem, method: form.method, answer: form.answers)
+        }
+
+        markDirty()
+        switch outcome {
+        case .stay:
+            break
+        case .advance(let externalURL):
+            if let externalURL {
+                launchBrowserURLNonFatal(externalURL)
+            }
+        case .complete(let item, let method, let answer):
+            executeConnectMethod(item, method: method, answer: answer)
+        }
+    }
+
+    /// Submits a text/number/integer value directly for the currently active connect form field.
+    public func submitConnectFormFieldValue(_ rawValue: String) {
+        store.withLock { state in
+            state.dialogFilter = rawValue
+            state.connectErrorMessage = nil
+        }
+        confirmConnectFormRow(rowID: "form-text-submit")
+    }
+
+    internal func navigateBackInConnectForm() {
+        let shouldReturnToProviderList: Bool = store.withLock { state in
+            guard var form = state.connectFormState else { return true }
+            if let prevIdx = form.visitedIndices.popLast(), prevIdx >= 0, prevIdx < form.fields.count {
+                let prevField = form.fields[prevIdx]
+                let prevKey = Self.connectFormFieldKey(prevField)
+                form.answers.removeValue(forKey: prevKey)
+                let draft = Self.initialDraftForConnectField(prevField)
+                form.fieldIndex = prevIdx
+                form.multiselectDraft = draft.multiDraft
+                state.connectFormState = form
+                state.connectTargetIntegrationName = Self.connectFormDialogTitle(
+                    integrationName: form.integrationName,
+                    fieldTitle: Self.connectFormFieldTitle(prevField)
+                )
+                state.dialogFilter = draft.filter
+                state.dialogSelectedIndex = draft.selectedIndex
+                state.connectErrorMessage = nil
+                return false
+            }
+
+            // First field: exit form back to method picker (if multiple methods) or provider picker
+            let integration = state.integrations.first(where: { $0.id == form.integrationID })
+            state.connectFormState = nil
+            state.connectFormAnswer = nil
+            state.connectTargetIntegrationName = form.integrationName
+            state.dialogFilter = ""
+            state.dialogSelectedIndex = 0
+            state.connectErrorMessage = nil
+            if let integration, integration.connectMethods.count > 1 {
+                state.activeDialog = .connectMethod
+                return false
+            }
+            return true
+        }
+        if shouldReturnToProviderList {
+            openConnectProvider()
+        } else {
+            markDirty()
+        }
+    }
+
+    internal func nextOAuthGeneration() -> Int {
+        oauthGeneration.withLock { gen in
+            gen &+= 1
+            return gen
+        }
+    }
+
+    internal func currentOAuthGeneration() -> Int {
+        oauthGeneration.withLock { $0 }
+    }
+
+    internal func cancelActiveOAuthTaskOnly() {
+        _ = nextOAuthGeneration()
+        let prior = activeOAuthTask.withLock { task -> Task<Void, Never>? in
+            let existing = task
+            task = nil
+            return existing
+        }
+        prior?.cancel()
+    }
+
+    internal func setActiveOAuthTask(_ task: Task<Void, Never>) {
+        let prior = activeOAuthTask.withLock { slot -> Task<Void, Never>? in
+            let existing = slot
+            slot = task
+            return existing
+        }
+        prior?.cancel()
+    }
+
+    /// Cancels any active OAuth attempt (stopping polling and notifying `DELETE /api/integration/:id/connect/oauth/:attemptID`).
+    public func cancelActiveOAuth() {
+        cancelActiveOAuthTaskOnly()
+        let activeOAuth = store.withLock { state -> (String, String)? in
+            let intID = state.connectTargetIntegrationID
+            let attemptID = state.connectOAuthAttemptID
+            state.connectSubmitting = false
+            state.connectOAuthAttemptID = nil
+            state.connectOAuthURL = nil
+            state.connectOAuthInstructions = nil
+            state.connectOAuthUserCode = nil
+            state.connectOAuthMode = nil
+            state.connectOAuthNeedsCode = false
+            state.connectOAuthAllowsPaste = false
+            state.connectErrorMessage = nil
+            if let intID, let attemptID {
+                return (intID, attemptID)
+            }
+            return nil
+        }
+        markDirty()
+        if let (intID, attemptID) = activeOAuth {
+            Task { [weak self] in
+                guard let self else { return }
+                _ = try? await self.client.integration.oauth.cancel(
+                    IntegrationOauthCancelInput(
+                        integrationID: intID,
+                        attemptID: attemptID,
+                        location: self.locationQuery
+                    )
+                )
+            }
+        }
+    }
+
+    /// Re-opens the currently displayed OAuth verification URL in the system browser.
+    public func openActiveOAuthURL() {
+        guard let url = store.withLock({ $0.connectOAuthURL }), !url.isEmpty else { return }
+        launchBrowserURLNonFatal(url)
+    }
+
+    private func launchBrowserURLNonFatal(_ url: String) {
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.openBrowserURL(url)
+            } catch {
+                self.store.withLock { state in
+                    state.toastMessage = "Could not open the browser. Open the URL manually."
+                    state.toastIsError = true
+                }
+                self.markDirty()
+            }
+        }
+    }
+
+    internal func executeConnectMethod(
+        _ item: TUIIntegrationItem,
+        method: TUIIntegrationMethod,
+        answer: FormSchema.Answer?
+    ) {
+        switch method {
+        case .key(let label, _):
+            store.withLock { state in
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label.isEmpty ? "API key" : label
+                state.connectFormState = nil
+                state.connectFormAnswer = answer
+                state.activeDialog = .connectAPIKey
+                state.dialogFilter = ""
+                state.dialogSelectedIndex = 0
+                state.connectErrorMessage = nil
+                state.connectSubmitting = false
+            }
+            markDirty()
+
+        case .external(let methodID, _, _):
+            store.withLock { state in
+                state.connectFormState = nil
+                state.connectFormAnswer = nil
+                state.connectSubmitting = true
+                state.connectErrorMessage = nil
+                state.toastMessage = "Connecting \(item.name)…"
+                state.toastIsError = false
+            }
+            markDirty()
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.client.integration.connect.external(
+                        IntegrationConnectExternalInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID,
+                            answer: answer
+                        )
+                    )
+                    await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
+                } catch {
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.connectErrorMessage = "\(error)"
+                        state.toastMessage = "Failed to connect \(item.name): \(error)"
+                        state.toastIsError = true
+                    }
+                    self.markDirty()
+                }
+            }
+
+        case .oauth(let methodID, let label, _):
+            cancelActiveOAuthTaskOnly()
+            let generation = nextOAuthGeneration()
+            store.withLock { state in
+                state.connectFormState = nil
+                state.connectFormAnswer = nil
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label.isEmpty ? "OAuth" : label
+                state.connectOAuthMethodID = methodID
+                state.connectOAuthAttemptID = nil
+                state.connectOAuthURL = nil
+                state.connectOAuthInstructions = "Starting authorization…"
+                state.connectOAuthUserCode = nil
+                state.connectOAuthMode = nil
+                state.connectOAuthNeedsCode = false
+                state.connectOAuthAllowsPaste = false
+                state.connectSubmitting = true
+                state.connectErrorMessage = nil
+                state.activeDialog = .connectOAuth
+                state.dialogFilter = ""
+                state.dialogSelectedIndex = 0
+            }
+            markDirty()
+
+            let oauthTask = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let started = try await self.client.integration.oauth.connect(
+                        IntegrationOauthConnectInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID,
+                            answer: answer
+                        )
+                    )
+                    let data = started.data
+                    let attemptID = data.attemptID.rawValue
+                    let isStillCurrent = !Task.isCancelled
+                        && self.currentOAuthGeneration() == generation
+                        && self.store.withLock { $0.activeDialog == .connectOAuth && $0.connectTargetIntegrationID == item.id }
+
+                    guard isStillCurrent else {
+                        _ = try? await self.client.integration.oauth.cancel(
+                            IntegrationOauthCancelInput(
+                                integrationID: item.id,
+                                attemptID: attemptID,
+                                location: self.locationQuery
+                            )
+                        )
+                        return
+                    }
+
+                    let userCode = Self.extractOAuthDeviceCode(from: data.instructions)
+                    let allowsPaste = (data.paste == true)
+                    let showCodeInput = (data.mode == .code) || allowsPaste
+                    var displayInstructions = data.instructions
+                    if let userCode, !displayInstructions.contains(userCode) {
+                        displayInstructions = displayInstructions.isEmpty
+                            ? "Enter code: \(userCode)"
+                            : "\(displayInstructions) (Code: \(userCode))"
+                    }
+                    if data.mode == .auto && allowsPaste {
+                        let hint = "Waiting for authorization… or paste redirect URL / code and press Enter."
+                        displayInstructions = displayInstructions.isEmpty ? hint : "\(displayInstructions)\n\(hint)"
+                    }
+
+                    self.store.withLock { state in
+                        guard state.activeDialog == .connectOAuth else { return }
+                        state.connectOAuthAttemptID = attemptID
+                        state.connectOAuthURL = data.url
+                        state.connectOAuthInstructions = displayInstructions
+                        state.connectOAuthUserCode = userCode
+                        state.connectOAuthMode = data.mode
+                        state.connectOAuthAllowsPaste = allowsPaste
+                        state.connectOAuthNeedsCode = showCodeInput
+                        state.connectSubmitting = false
+                    }
+                    self.markDirty()
+
+                    if !data.url.isEmpty {
+                        do {
+                            try await self.openBrowserURL(data.url)
+                        } catch {
+                            self.store.withLock { state in
+                                state.toastMessage = "Could not open the browser. Open the URL manually."
+                                state.toastIsError = true
+                            }
+                            self.markDirty()
+                        }
+                    }
+
+                    if data.mode == .auto {
+                        await self.pollOAuthAttempt(
+                            integrationID: item.id,
+                            integrationName: item.name,
+                            attemptID: attemptID,
+                            generation: generation
+                        )
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled, self.currentOAuthGeneration() == generation else { return }
+                    self.store.withLock { state in
+                        guard state.activeDialog == .connectOAuth else { return }
+                        state.connectSubmitting = false
+                        state.connectErrorMessage = "\(error)"
+                    }
+                    self.markDirty()
+                }
+            }
+            setActiveOAuthTask(oauthTask)
+
+        case .command(let methodID, let label):
+            store.withLock { state in
+                state.connectFormState = nil
+                state.connectFormAnswer = nil
+                state.connectTargetIntegrationID = item.id
+                state.connectTargetIntegrationName = item.name
+                state.connectMethodLabel = label
+                state.connectSubmitting = true
+                state.toastMessage = "Running \(label)…"
+                state.toastIsError = false
+            }
+            markDirty()
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let started = try await self.client.integration.command.connect(
+                        IntegrationCommandConnectInput(
+                            integrationID: item.id,
+                            location: self.locationQuery,
+                            methodID: methodID
+                        )
+                    )
+                    let attemptID = started.data.attemptID.rawValue
+                    for _ in 0..<120 {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        let status = try await self.client.integration.command.status(
+                            IntegrationCommandStatusInput(
+                                integrationID: item.id,
+                                attemptID: attemptID,
+                                location: self.locationQuery
+                            )
+                        )
+                        switch status.data {
+                        case .pending:
+                            continue
+                        case .complete:
+                            await self.finishProviderConnected(integrationID: item.id, integrationName: item.name)
+                            return
+                        case .failed(let msg, _):
+                            self.store.withLock { state in
+                                state.connectSubmitting = false
+                                state.toastMessage = msg
+                                state.toastIsError = true
+                            }
+                            self.markDirty()
+                            return
+                        case .expired:
+                            self.store.withLock { state in
+                                state.connectSubmitting = false
+                                state.toastMessage = "Authentication expired"
+                                state.toastIsError = true
+                            }
+                            self.markDirty()
+                            return
+                        }
+                    }
+                } catch {
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.toastMessage = "Failed to connect \(item.name): \(error)"
+                        state.toastIsError = true
+                    }
+                    self.markDirty()
+                }
+            }
+
+        case .env(let names):
+            let hint = names.map { "$\($0)" }.joined(separator: " or ")
+            store.withLock { state in
+                state.toastMessage = "Set \(hint) to connect \(item.name)"
+                state.toastIsError = false
+            }
+            markDirty()
+        }
+    }
+
+    internal func submitOAuthManualCodeOrReopenBrowser(_ rawCode: String? = nil) {
+        enum Action {
+            case none
+            case reopenBrowser(String)
+            case complete(id: String, name: String, attemptID: String, code: String, mode: IntegrationSchema.Attempt.Mode?)
+        }
+
+        let action: Action = store.withLock { state in
+            guard state.activeDialog == .connectOAuth,
+                  !state.connectSubmitting,
+                  let id = state.connectTargetIntegrationID,
+                  let attemptID = state.connectOAuthAttemptID
+            else {
+                return .none
+            }
+            let code = (rawCode ?? state.dialogFilter).trimmingCharacters(in: .whitespacesAndNewlines)
+            if code.isEmpty {
+                if state.connectOAuthMode == .auto, let url = state.connectOAuthURL, !url.isEmpty {
+                    return .reopenBrowser(url)
+                }
+                state.connectErrorMessage = "Please paste the authorization code"
+                return .none
+            }
+            state.connectSubmitting = true
+            state.connectErrorMessage = nil
+            return .complete(
+                id: id,
+                name: state.connectTargetIntegrationName,
+                attemptID: attemptID,
+                code: code,
+                mode: state.connectOAuthMode
+            )
+        }
+        markDirty()
+
+        switch action {
+        case .none:
+            return
+        case .reopenBrowser(let url):
+            launchBrowserURLNonFatal(url)
+            return
+        case .complete(let id, let name, let attemptID, let code, let mode):
+            cancelActiveOAuthTaskOnly()
+            let generation = nextOAuthGeneration()
+            let task = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.client.integration.oauth.complete(
+                        IntegrationOauthCompleteInput(
+                            integrationID: id,
+                            attemptID: attemptID,
+                            location: self.locationQuery,
+                            code: code
+                        )
+                    )
+                    guard !Task.isCancelled, self.currentOAuthGeneration() == generation else { return }
+                    await self.finishProviderConnected(integrationID: id, integrationName: name)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled, self.currentOAuthGeneration() == generation else { return }
+                    self.store.withLock { state in
+                        state.connectSubmitting = false
+                        state.connectErrorMessage = "\(error)"
+                    }
+                    self.markDirty()
+                    if mode == .auto {
+                        await self.pollOAuthAttempt(
+                            integrationID: id,
+                            integrationName: name,
+                            attemptID: attemptID,
+                            generation: generation
+                        )
+                    }
+                }
+            }
+            setActiveOAuthTask(task)
+        }
+    }
+
+    internal func pollOAuthAttempt(
+        integrationID: String,
+        integrationName: String,
+        attemptID: String,
+        generation: Int
+    ) async {
+        let maxPolls = 900 // Up to 15 minutes at 1s polling cadence
+        for pollIdx in 0..<maxPolls {
+            if Task.isCancelled || currentOAuthGeneration() != generation { return }
+            if pollIdx > 0 {
+                do {
+                    try await Task.sleep(for: oauthPollInterval)
+                } catch {
+                    return
+                }
+            }
+            if Task.isCancelled || currentOAuthGeneration() != generation { return }
+            let stillActive = store.withLock { state in
+                state.activeDialog == .connectOAuth
+                    && state.connectOAuthAttemptID == attemptID
+                    && !state.connectSubmitting
+            }
+            guard stillActive else { return }
+
+            do {
+                let resp = try await client.integration.oauth.status(
+                    IntegrationOauthStatusInput(
+                        integrationID: integrationID,
+                        attemptID: attemptID,
+                        location: locationQuery
+                    )
+                )
+                if Task.isCancelled || currentOAuthGeneration() != generation { return }
+                switch resp.data {
+                case .pending:
+                    continue
+                case .complete:
+                    await finishProviderConnected(integrationID: integrationID, integrationName: integrationName)
+                    return
+                case .failed(let msg, _):
+                    store.withLock { state in
+                        guard state.activeDialog == .connectOAuth && state.connectOAuthAttemptID == attemptID else { return }
+                        state.connectSubmitting = false
+                        state.connectOAuthAttemptID = nil
+                        state.connectErrorMessage = msg
+                        state.toastMessage = msg
+                        state.toastIsError = true
+                    }
+                    markDirty()
+                    return
+                case .expired:
+                    store.withLock { state in
+                        guard state.activeDialog == .connectOAuth && state.connectOAuthAttemptID == attemptID else { return }
+                        state.connectSubmitting = false
+                        state.connectOAuthAttemptID = nil
+                        state.connectErrorMessage = "Authorization expired"
+                        state.toastMessage = "Authorization expired"
+                        state.toastIsError = true
+                    }
+                    markDirty()
+                    return
+                }
+            } catch is CancellationError {
+                return
+            } catch let err as ClientError where err.statusCode == 404 || err.statusCode == 410 {
+                store.withLock { state in
+                    guard state.activeDialog == .connectOAuth && state.connectOAuthAttemptID == attemptID else { return }
+                    state.connectSubmitting = false
+                    state.connectOAuthAttemptID = nil
+                    state.connectErrorMessage = "Authorization session expired"
+                }
+                markDirty()
+                return
+            } catch {
+                continue
+            }
+        }
+    }
 }
