@@ -1591,6 +1591,27 @@ extension ProcessDaemon {
             process.standardOutput = slaveHandle
             process.standardError = slaveHandle
 
+            #if !canImport(Darwin)
+            struct LinuxPtyExitBridge: @unchecked Sendable {
+                var exited: (Int32, Foundation.Process.TerminationReason)? = nil
+                var deliver: (@Sendable (Int32, Foundation.Process.TerminationReason) -> Void)? = nil
+            }
+            let linuxExitBridge = Mutex(LinuxPtyExitBridge())
+            process.terminationHandler = { proc in
+                let status = proc.terminationStatus
+                let reason = proc.terminationReason
+                let deliver = linuxExitBridge.withLock { state -> (@Sendable (Int32, Foundation.Process.TerminationReason) -> Void)? in
+                    if let fn = state.deliver {
+                        state.deliver = nil
+                        return fn
+                    }
+                    state.exited = (status, reason)
+                    return nil
+                }
+                deliver?(status, reason)
+            }
+            #endif
+
             do {
                 try process.run()
             } catch {
@@ -1708,6 +1729,7 @@ extension ProcessDaemon {
 
             // Child exit waiter thread: keep slaveFD open until child finishes so Darwin XNU does not
             // tear down the PTY output queue before the reader thread drains it.
+            #if canImport(Darwin)
             Thread.detachNewThread {
                 process.waitUntilExit()
                 // Brief yield so reader thread drains any already-written bytes before slave EOF
@@ -1719,6 +1741,30 @@ extension ProcessDaemon {
                     actor.emitChildExit(exitCode: UInt32(bitPattern: process.terminationStatus))
                 }
             }
+            #else
+            let deliverExit: @Sendable (Int32, Foundation.Process.TerminationReason) -> Void = { status, reason in
+                Thread.detachNewThread {
+                    Thread.sleep(forTimeInterval: 0.01)
+                    closeSlaveOnce()
+                    if reason == .uncaughtSignal {
+                        actor.emitChildExit(exitCode: nil, signal: posixSignalName(status))
+                    } else {
+                        actor.emitChildExit(exitCode: UInt32(bitPattern: status))
+                    }
+                }
+            }
+            let alreadyExited = linuxExitBridge.withLock { state -> (Int32, Foundation.Process.TerminationReason)? in
+                if let exited = state.exited {
+                    state.exited = nil
+                    return exited
+                }
+                state.deliver = deliverExit
+                return nil
+            }
+            if let (status, reason) = alreadyExited {
+                deliverExit(status, reason)
+            }
+            #endif
 
             return actor
         }
@@ -2181,7 +2227,19 @@ extension ProcessDaemon {
 
             var spawnAttr = posix_spawnattr_t()
             posix_spawnattr_init(&spawnAttr)
-            posix_spawnattr_setflags(&spawnAttr, Int16(POSIX_SPAWN_SETPGROUP))
+            var emptySigMask = sigset_t()
+            sigemptyset(&emptySigMask)
+            posix_spawnattr_setsigmask(&spawnAttr, &emptySigMask)
+            var defaultSigSet = sigset_t()
+            sigemptyset(&defaultSigSet)
+            for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM, SIGPIPE] {
+                sigaddset(&defaultSigSet, sig)
+            }
+            posix_spawnattr_setsigdefault(&spawnAttr, &defaultSigSet)
+            posix_spawnattr_setflags(
+                &spawnAttr,
+                Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)
+            )
             posix_spawnattr_setpgroup(&spawnAttr, 0)
 
             let execPath: String

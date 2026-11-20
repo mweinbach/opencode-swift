@@ -4730,7 +4730,7 @@ public enum AIRoute {
                     guard attempt < cfg.maxRetries, AIErrorClassifier.isRetryable(error) else {
                         throw error
                     }
-                    let exp = min(cfg.maxDelayMs, cfg.initialDelayMs * pow(2.0, Double(attempt)))
+                    let exp = min(cfg.maxDelayMs, cfg.initialDelayMs * Double(sign: .plus, exponent: attempt, significand: 1.0))
                     let baseDelay = cfg.jitter ? exp * Double.random(in: 0.5...1.0) : exp
                     let delayMs: Double
                     if let hint = retryAfterMs(from: error), hint.isFinite, hint > 0 {

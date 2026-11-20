@@ -17,7 +17,7 @@ import WinSDK
 import Synchronization
 import OpenCodeUtil
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || (os(Linux) && !(canImport(Glibc) || canImport(Musl)))
 private final class ActiveProcessController: @unchecked Sendable {
     private struct State: Sendable {
         var exited: Bool = false
@@ -83,6 +83,63 @@ private final class ActiveProcessController: @unchecked Sendable {
                 #else
                 self.process.terminate()
                 #endif
+            }
+        }
+    }
+}
+#endif
+
+#if os(Linux) && (canImport(Glibc) || canImport(Musl))
+private final class LinuxProcessController: @unchecked Sendable {
+    private struct State: Sendable {
+        var exited: Bool = false
+        var terminationRequested: Bool = false
+    }
+
+    let pid: pid_t
+    private let forceKillAfterMs: Int
+    private let state = Mutex(State())
+
+    init(pid: pid_t, forceKillAfterMs: Int = 500) {
+        self.pid = pid
+        self.forceKillAfterMs = forceKillAfterMs
+    }
+
+    func markExited() {
+        state.withLock { $0.exited = true }
+    }
+
+    var isExited: Bool {
+        state.withLock { $0.exited }
+    }
+
+    /// Terminates the child's process group with SIGTERM -> SIGKILL escalation.
+    func terminate() {
+        let shouldTerminate = state.withLock { s -> Bool in
+            if s.exited || s.terminationRequested { return false }
+            s.terminationRequested = true
+            return true
+        }
+        guard shouldTerminate, pid > 0 else { return }
+
+        _ = killpg(pid, SIGTERM)
+        _ = kill(pid, SIGTERM)
+
+        let graceMs = max(50, forceKillAfterMs)
+        let targetPid = pid
+        Thread.detachNewThread { [self] in
+            let stepMs = 10
+            var elapsed = 0
+            while elapsed < graceMs {
+                if self.isExited {
+                    return
+                }
+                Thread.sleep(forTimeInterval: Double(stepMs) / 1000.0)
+                elapsed += stepMs
+            }
+            if !self.isExited {
+                _ = killpg(targetPid, SIGKILL)
+                _ = kill(targetPid, SIGKILL)
             }
         }
     }
@@ -287,6 +344,13 @@ public enum CrossSpawnSpawner {
             #if os(Windows)
             _ = forceKillAfterMs
             return try await runWindowsSubprocess(spec, timeoutMs: timeoutMs, signal: signal)
+            #elseif os(Linux) && (canImport(Glibc) || canImport(Musl))
+            return try await runLinuxSubprocess(
+                spec,
+                timeoutMs: timeoutMs,
+                signal: signal,
+                forceKillAfterMs: forceKillAfterMs
+            )
             #else
             let process = Process()
             if spec.executable.contains("/") || spec.executable.contains("\\") {
@@ -413,6 +477,266 @@ public enum CrossSpawnSpawner {
             throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "ProcessSpawner.run")
             #endif
         }
+
+        #if os(Linux) && (canImport(Glibc) || canImport(Musl))
+        /// Native Linux subprocess runner using `posix_spawn` with an unmasked signal set
+        /// (`POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF`) and dedicated process group
+        /// (`POSIX_SPAWN_SETPGROUP`). Avoids inheriting libdispatch's blocked `SIGCHLD` mask
+        /// (which stalls POSIX shells in `wait`) and `swift-corelibs-foundation`'s `waitUntilExit` hangs.
+        private func runLinuxSubprocess(
+            _ spec: ProcessSpec,
+            timeoutMs: Int?,
+            signal: AbortSignal?,
+            forceKillAfterMs: Int
+        ) async throws -> ProcessOutput {
+            func makeCloexecPipe() throws -> (read: Int32, write: Int32) {
+                var fds: [Int32] = [-1, -1]
+                guard pipe(&fds) == 0 else {
+                    throw PlatformError.ioFailure("pipe() failed with errno \(errno)")
+                }
+                _ = fcntl(fds[0], F_SETFD, FD_CLOEXEC)
+                _ = fcntl(fds[1], F_SETFD, FD_CLOEXEC)
+                return (fds[0], fds[1])
+            }
+
+            let stdoutPipe = try makeCloexecPipe()
+            let stderrPipe: (read: Int32, write: Int32)
+            do {
+                stderrPipe = try makeCloexecPipe()
+            } catch {
+                _ = close(stdoutPipe.read); _ = close(stdoutPipe.write)
+                throw error
+            }
+            let stdinPipe: (read: Int32, write: Int32)?
+            if spec.stdin != nil {
+                do {
+                    stdinPipe = try makeCloexecPipe()
+                } catch {
+                    _ = close(stdoutPipe.read); _ = close(stdoutPipe.write)
+                    _ = close(stderrPipe.read); _ = close(stderrPipe.write)
+                    throw error
+                }
+            } else {
+                stdinPipe = nil
+            }
+
+            var fileActions = posix_spawn_file_actions_t()
+            posix_spawn_file_actions_init(&fileActions)
+            posix_spawn_file_actions_adddup2(&fileActions, stdoutPipe.write, STDOUT_FILENO)
+            posix_spawn_file_actions_adddup2(&fileActions, stderrPipe.write, STDERR_FILENO)
+            if let stdinPipe {
+                posix_spawn_file_actions_adddup2(&fileActions, stdinPipe.read, STDIN_FILENO)
+            }
+            #if canImport(Glibc)
+            if let cwd = spec.workingDirectory, !cwd.isEmpty {
+                _ = cwd.withCString { posix_spawn_file_actions_addchdir_np(&fileActions, $0) }
+            }
+            #endif
+
+            var spawnAttr = posix_spawnattr_t()
+            posix_spawnattr_init(&spawnAttr)
+            var emptySigMask = sigset_t()
+            sigemptyset(&emptySigMask)
+            posix_spawnattr_setsigmask(&spawnAttr, &emptySigMask)
+            var defaultSigSet = sigset_t()
+            sigemptyset(&defaultSigSet)
+            for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM, SIGPIPE] {
+                sigaddset(&defaultSigSet, sig)
+            }
+            posix_spawnattr_setsigdefault(&spawnAttr, &defaultSigSet)
+            posix_spawnattr_setflags(
+                &spawnAttr,
+                Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)
+            )
+            posix_spawnattr_setpgroup(&spawnAttr, 0)
+
+            let execPath: String
+            let argvStrings: [String]
+            if spec.executable.contains("/") || spec.executable.contains("\\") {
+                execPath = spec.executable
+                argvStrings = [spec.executable] + spec.arguments
+            } else {
+                execPath = "/usr/bin/env"
+                argvStrings = ["/usr/bin/env", spec.executable] + spec.arguments
+            }
+            let effectiveEnv = spec.environment ?? ProcessInfo.processInfo.environment
+            let envStrings = effectiveEnv.map { "\($0.key)=\($0.value)" }
+
+            var argvPtrs: [UnsafeMutablePointer<CChar>?] = argvStrings.map { strdup($0) }
+            argvPtrs.append(nil)
+            var envpPtrs: [UnsafeMutablePointer<CChar>?] = envStrings.map { strdup($0) }
+            envpPtrs.append(nil)
+
+            let settle = Teardown.track("process \(spec.executable)")
+            defer { settle() }
+
+            var spawnedPid: pid_t = 0
+            let spawnRc: Int32 = execPath.withCString { cPath in
+                argvPtrs.withUnsafeMutableBufferPointer { argvBuf in
+                    envpPtrs.withUnsafeMutableBufferPointer { envpBuf in
+                        posix_spawn(&spawnedPid, cPath, &fileActions, &spawnAttr, argvBuf.baseAddress!, envpBuf.baseAddress!)
+                    }
+                }
+            }
+
+            posix_spawn_file_actions_destroy(&fileActions)
+            posix_spawnattr_destroy(&spawnAttr)
+            for ptr in argvPtrs { if let ptr { free(ptr) } }
+            for ptr in envpPtrs { if let ptr { free(ptr) } }
+
+            _ = close(stdoutPipe.write)
+            _ = close(stderrPipe.write)
+            if let stdinPipe { _ = close(stdinPipe.read) }
+
+            guard spawnRc == 0, spawnedPid > 0 else {
+                _ = close(stdoutPipe.read)
+                _ = close(stderrPipe.read)
+                if let stdinPipe { _ = close(stdinPipe.write) }
+                throw PlatformError.ioFailure("Failed to spawn \(spec.executable): errno \(spawnRc)")
+            }
+
+            let childPid = spawnedPid
+            let controller = LinuxProcessController(pid: childPid, forceKillAfterMs: forceKillAfterMs)
+            let collector = ConcurrentProcessCollector()
+
+            if let inputBytes = spec.stdin, let stdinPipe {
+                let writeFD = stdinPipe.write
+                Thread.detachNewThread {
+                    defer { _ = close(writeFD) }
+                    if !inputBytes.isEmpty {
+                        var written = 0
+                        while written < inputBytes.count {
+                            let n: Int = inputBytes.withUnsafeBytes { raw in
+                                guard let base = raw.baseAddress else { return -1 }
+                                #if canImport(Glibc)
+                                return Glibc.write(writeFD, base.advanced(by: written), inputBytes.count - written)
+                                #else
+                                return Musl.write(writeFD, base.advanced(by: written), inputBytes.count - written)
+                                #endif
+                            }
+                            if n > 0 {
+                                written += n
+                            } else if n < 0 && errno == EINTR {
+                                continue
+                            } else {
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            let stdoutReadFD = stdoutPipe.read
+            let stderrReadFD = stderrPipe.read
+
+            Thread.detachNewThread {
+                defer { _ = close(stdoutReadFD) }
+                var collected: [UInt8] = []
+                var buf = [UInt8](repeating: 0, count: 16_384)
+                while true {
+                    let n: Int = buf.withUnsafeMutableBytes { raw in
+                        guard let base = raw.baseAddress else { return -1 }
+                        #if canImport(Glibc)
+                        return Glibc.read(stdoutReadFD, base, raw.count)
+                        #else
+                        return Musl.read(stdoutReadFD, base, raw.count)
+                        #endif
+                    }
+                    if n > 0 {
+                        collected.append(contentsOf: buf[0..<n])
+                    } else if n == 0 {
+                        break
+                    } else if errno == EINTR {
+                        continue
+                    } else {
+                        break
+                    }
+                }
+                collector.setStdout(collected)
+            }
+
+            Thread.detachNewThread {
+                defer { _ = close(stderrReadFD) }
+                var collected: [UInt8] = []
+                var buf = [UInt8](repeating: 0, count: 16_384)
+                while true {
+                    let n: Int = buf.withUnsafeMutableBytes { raw in
+                        guard let base = raw.baseAddress else { return -1 }
+                        #if canImport(Glibc)
+                        return Glibc.read(stderrReadFD, base, raw.count)
+                        #else
+                        return Musl.read(stderrReadFD, base, raw.count)
+                        #endif
+                    }
+                    if n > 0 {
+                        collected.append(contentsOf: buf[0..<n])
+                    } else if n == 0 {
+                        break
+                    } else if errno == EINTR {
+                        continue
+                    } else {
+                        break
+                    }
+                }
+                collector.setStderr(collected)
+            }
+
+            Thread.detachNewThread {
+                var status: Int32 = 0
+                while true {
+                    let waited = waitpid(childPid, &status, 0)
+                    if waited < 0 && errno == EINTR { continue }
+                    break
+                }
+                let termSig = status & 0x7F
+                let exitCode: Int32 = (termSig == 0) ? ((status >> 8) & 0xFF) : termSig
+                controller.markExited()
+                collector.setExited(exitCode: exitCode)
+            }
+
+            let removeAbortListener: @Sendable () -> Void
+            if let signal {
+                removeAbortListener = signal.onAbort {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+                if signal.isAborted {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+            } else {
+                removeAbortListener = {}
+            }
+            defer { removeAbortListener() }
+
+            let timeoutTask: Task<Void, Never>?
+            if let timeoutMs {
+                timeoutTask = Task {
+                    do {
+                        try await Task.sleep(for: .milliseconds(timeoutMs))
+                    } catch {
+                        return
+                    }
+                    if !controller.isExited {
+                        collector.recordTerminationError(PlatformError.ioFailure("Timed out"))
+                        controller.terminate()
+                    }
+                }
+            } else {
+                timeoutTask = nil
+            }
+            defer { timeoutTask?.cancel() }
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    collector.install(continuation: continuation)
+                }
+            } onCancel: {
+                collector.recordTerminationError(CancellationError())
+                controller.terminate()
+            }
+        }
+        #endif
 
         #if os(Windows)
         /// Creates stdio pipes, spawns the suspended child, and returns ONLY the parent pipe ends

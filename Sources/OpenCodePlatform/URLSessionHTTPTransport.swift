@@ -236,6 +236,9 @@ private final class StreamingSessionDelegate: NSObject, URLSessionDataDelegate, 
     private struct Entry {
         var headContinuation: CheckedContinuation<HTTPResponseHead, any Error>?
         let streamContinuation: AsyncThrowingStream<[UInt8], Error>.Continuation
+        #if !canImport(Darwin)
+        var rejectedAuthChallenge: Bool = false
+        #endif
     }
 
     private let entries = Mutex<[Int: Entry]>([:])
@@ -318,6 +321,31 @@ private final class StreamingSessionDelegate: NSObject, URLSessionDataDelegate, 
         streamCont?.yield(Array(data))
     }
 
+    #if !canImport(Darwin)
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        // On swift-corelibs-foundation (Linux/Windows), returning `.performDefaultHandling` (or
+        // omitting this delegate method) for an HTTP 401 `WWW-Authenticate` challenge causes the
+        // data task to hang indefinitely after headers and body have already been delivered.
+        // Rejecting the protection space completes the task promptly so callers receive the 401.
+        let method = challenge.protectionSpace.authenticationMethod
+        if method == NSURLAuthenticationMethodHTTPBasic
+            || method == NSURLAuthenticationMethodHTTPDigest
+            || method == NSURLAuthenticationMethodDefault {
+            entries.withLock { map in
+                map[task.taskIdentifier]?.rejectedAuthChallenge = true
+            }
+            completionHandler(.rejectProtectionSpace, nil)
+            return
+        }
+        completionHandler(.performDefaultHandling, nil)
+    }
+    #endif
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -326,8 +354,17 @@ private final class StreamingSessionDelegate: NSObject, URLSessionDataDelegate, 
         let entry = entries.withLock { $0.removeValue(forKey: task.taskIdentifier) }
         guard let entry else { return }
         if let error {
-            let mappedError: any Error
             let nsError = error as NSError
+            #if !canImport(Darwin)
+            if entry.rejectedAuthChallenge
+                && entry.headContinuation == nil
+                && nsError.domain == NSURLErrorDomain
+                && nsError.code == NSURLErrorCancelled {
+                entry.streamContinuation.finish()
+                return
+            }
+            #endif
+            let mappedError: any Error
             if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
                 mappedError = HTTPTransportError.cancelled
             } else {

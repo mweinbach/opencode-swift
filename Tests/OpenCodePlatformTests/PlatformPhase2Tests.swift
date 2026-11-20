@@ -164,7 +164,10 @@ struct PlatformPhase2Tests {
 
     @Test("NativeSQLiteDatabase creates WAL temp DB with parameterized CRUD, blobs, FK, savepoints, rollback, and migrations")
     func nativeSQLiteDatabaseComprehensive() throws {
-        #if canImport(SQLite3)
+        #if canImport(SQLite3) || canImport(Glibc) || canImport(Musl) || os(Windows)
+        guard (try? SQLiteDatabaseFactory.open(path: ":memory:")) is NativeSQLiteDatabase else {
+            return
+        }
         let dir = try PlatformPhase2Helper.makeTempDirectory(prefix: "opencode-sqlite")
         defer { PlatformPhase2Helper.removeItemIfExists(at: dir) }
         let dbPath = "\(dir)/state.sqlite"

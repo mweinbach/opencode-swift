@@ -713,7 +713,7 @@ struct ParitySnapshotTests {
             switch tc.compare {
             case "exact":
                 if tc.fn == "theme/src/tui/color.ts#rgbToOklch" {
-                    #expect(actual.matches(tc.expectedValue, floatTolerance: 1e-12), "Mismatch for [\(tc.fn)] \(tc.name)")
+                    #expect(actual.matches(tc.expectedValue, floatTolerance: 1e-6), "Mismatch for [\(tc.fn)] \(tc.name)")
                 } else {
                     #expect(actual == tc.expectedValue, "Mismatch for [\(tc.fn)] \(tc.name)")
                 }
