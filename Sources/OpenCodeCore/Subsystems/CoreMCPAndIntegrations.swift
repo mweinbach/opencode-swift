@@ -4424,6 +4424,17 @@ public enum CoreIntegration {
             )
         }
 
+        /// Converts wire `VideoRequest` into `VideoInput`, translating `AISchema.AIError` into `InvalidRequestError`.
+        public static func videoInputOrInvalid(_ input: GenerateSchema.VideoRequest) throws(InvalidRequestError) -> VideoInput {
+            do {
+                return try videoInput(input)
+            } catch {
+                throw InvalidRequestError(message: error.message)
+            }
+        }
+
+        public typealias VideoStatus = AIVideo.VideoStatus
+
         // parity: core/src/generate.ts#VideoFile [status=implemented hash=6a1f3e8bce1e]
         public struct VideoFile: Sendable {
             public let mime: String
@@ -4537,7 +4548,7 @@ public enum CoreIntegration {
             /// A video is a job: `videoStart` submits it and returns the provider's job ID, which `videoStatus`,
             /// `videoResult` and `videoCancel` read. `videoResult` returns every video the job made, at least one.
             func videoStart(_ input: VideoInput) async throws -> String
-            func videoStatus(model: ModelSchema.Ref, id: String) async throws -> String
+            func videoStatus(model: ModelSchema.Ref, id: String) async throws -> AIVideo.VideoStatus
             func videoResult(model: ModelSchema.Ref, id: String) async throws -> [VideoFile]
             /// Fails with `InvalidRequestError` when the provider has no way to cancel a job.
             func videoCancel(model: ModelSchema.Ref, id: String) async throws
@@ -4549,6 +4560,7 @@ public enum CoreIntegration {
             private let resolver: any CoreModel.Resolver.Interface
             private let models: (any CoreModel.Model.Interface)?
             private let http: (any HTTPTransport)?
+            private let environment: any EnvironmentProviding
             private let textHandler: (@Sendable (CoreModel.Resolver.Resolved, String) async throws -> String)?
             private let imageHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult)?
             private let decisionHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult)?
@@ -4557,6 +4569,7 @@ public enum CoreIntegration {
                 resolver: any CoreModel.Resolver.Interface,
                 models: (any CoreModel.Model.Interface)? = nil,
                 http: (any HTTPTransport)? = nil,
+                environment: any EnvironmentProviding = SystemEnvironment.shared,
                 textHandler: (@Sendable (CoreModel.Resolver.Resolved, String) async throws -> String)? = nil,
                 imageHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.ImageRequest) async throws -> GenerateSchema.ImageResult)? = nil,
                 decisionHandler: (@Sendable (CoreModel.Resolver.ResolvedModelDescriptor, GenerateSchema.DecisionRequest) async throws -> GenerateSchema.DecisionResult)? = nil
@@ -4564,6 +4577,7 @@ public enum CoreIntegration {
                 self.resolver = resolver
                 self.models = models
                 self.http = http
+                self.environment = environment
                 self.textHandler = textHandler
                 self.imageHandler = imageHandler
                 self.decisionHandler = decisionHandler
@@ -5277,35 +5291,246 @@ public enum CoreIntegration {
                 return out
             }
 
-            public func videoStart(_ input: VideoInput) async throws -> String {
-                guard (try await resolver.resolveVideo(input.model)) != nil else {
-                    throw await missingError(ref: input.model, capability: .video)
+            private static func mapAIError(_ error: any Error, providerID: String) -> any Error {
+                if error is ModelNotFoundError
+                    || error is UnsupportedModelError
+                    || error is InvalidRequestError
+                    || error is ProviderRequestError
+                    || error is UnavailableError
+                    || error is GenerateError
+                {
+                    return error
                 }
-                throw UnavailableError(message: "Video generation transport is not configured", service: input.model.providerID.rawValue)
+                if let ai = error as? AISchema.AIError {
+                    switch ai.reason {
+                    case .invalidRequest(let e) where e.http == nil:
+                        return InvalidRequestError(message: e.message)
+                    case .unsupportedOperation(let e):
+                        return InvalidRequestError(message: e.message)
+                    case .authentication(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .authentication,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .rateLimit(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .rateLimit,
+                            message: e.message,
+                            status: e.http?.status,
+                            retryAfterMs: e.retryAfterMs
+                        )
+                    case .quotaExceeded(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .rateLimit,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .contentPolicy(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .contentFilter,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .invalidRequest(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .invalidRequest,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .providerInternal(let e):
+                        let status = e.http?.status
+                        let reason: ProviderFailure = (status == 503 || status == 529) ? .overloaded : .provider
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: reason,
+                            message: e.message,
+                            status: status,
+                            retryAfterMs: e.retryAfterMs
+                        )
+                    case .invalidProviderOutput(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .provider,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .transport(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .provider,
+                            message: e.message,
+                            status: e.http?.status
+                        )
+                    case .timeout(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .provider,
+                            message: e.message
+                        )
+                    case .unknownProvider(let e):
+                        return ProviderRequestError(
+                            providerID: providerID,
+                            reason: .provider,
+                            message: e.message
+                        )
+                    }
+                }
+                return ProviderRequestError(
+                    providerID: providerID,
+                    reason: .provider,
+                    message: String(describing: error)
+                )
             }
 
-            public func videoStatus(model: ModelSchema.Ref, id: String) async throws -> String {
-                _ = id
-                guard (try await resolver.resolveVideo(model)) != nil else {
-                    throw await missingError(ref: model, capability: .video)
+            private func resolveVideoModel(_ ref: ModelSchema.Ref) async throws -> AIVideo.VideoModel {
+                let descriptor: CoreModel.Resolver.ResolvedModelDescriptor?
+                do {
+                    descriptor = try await resolver.resolveVideo(ref)
+                } catch {
+                    throw Self.mapResolutionError(error, ref: ref, capability: "video")
                 }
-                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
+                guard let descriptor else {
+                    throw await missingError(ref: ref, capability: .video)
+                }
+                var effectiveSettings = descriptor.settings
+                if let baseURL = descriptor.baseURL, effectiveSettings["baseURL"] == nil {
+                    effectiveSettings["baseURL"] = .string(baseURL)
+                }
+                do {
+                    return try AIProviders.makeVideoModel(
+                        package: descriptor.package,
+                        modelID: descriptor.id,
+                        settings: effectiveSettings,
+                        headers: descriptor.headers.isEmpty ? nil : descriptor.headers,
+                        body: descriptor.body.isEmpty ? nil : descriptor.body,
+                        environment: environment
+                    )
+                } catch {
+                    throw UnsupportedModelError(
+                        providerID: ref.providerID.rawValue,
+                        modelID: ref.id.rawValue,
+                        capability: "video",
+                        message: error.message
+                    )
+                }
+            }
+
+            private func videoExecutor() throws -> AIRequestExecutor.RequestExecutorService {
+                guard let http else {
+                    throw UnavailableError(message: "Video generation transport is not configured")
+                }
+                return AIRequestExecutor.layer(transport: http)
+            }
+
+            public func videoStart(_ input: VideoInput) async throws -> String {
+                let videoModel = try await resolveVideoModel(input.model)
+                let executor = try videoExecutor()
+                let parsedDuration: AIVideo.VideoDuration?
+                if let secs = input.duration {
+                    guard secs > 0, let d = AIVideo.VideoDuration(rawValue: "\(secs) seconds") else {
+                        throw InvalidRequestError(message: "Invalid video duration: \(secs)", field: "duration")
+                    }
+                    parsedDuration = d
+                } else {
+                    parsedDuration = nil
+                }
+                let parsedAspect: AIVideo.VideoAspectRatio?
+                if let rawAspect = input.aspect {
+                    switch rawAspect {
+                    case .auto:
+                        parsedAspect = .auto
+                    case .ratio(let imageAspect):
+                        guard let ratio = AIMedia.AspectRatio(rawValue: imageAspect.rawValue) else {
+                            throw InvalidRequestError(message: "Invalid video aspect ratio: \(imageAspect.rawValue)", field: "aspect")
+                        }
+                        parsedAspect = .ratio(ratio)
+                    }
+                } else {
+                    parsedAspect = nil
+                }
+                let parsedResolution = input.resolution.map { AIVideo.VideoResolution(rawValue: $0) }
+                let request = AIVideo.VideoRequest(
+                    model: videoModel,
+                    prompt: input.prompt,
+                    start: input.start,
+                    end: input.end,
+                    references: input.references,
+                    duration: parsedDuration,
+                    aspect: parsedAspect,
+                    resolution: parsedResolution,
+                    sound: input.sound
+                )
+                let client = AIVideo.VideoClient.layer(executor: executor)
+                do {
+                    let job = try await client.start(request)
+                    return job.id
+                } catch {
+                    throw Self.mapAIError(error, providerID: input.model.providerID.rawValue)
+                }
+            }
+
+            public func videoStatus(model: ModelSchema.Ref, id: String) async throws -> AIVideo.VideoStatus {
+                let videoModel = try await resolveVideoModel(model)
+                let executor = try videoExecutor()
+                let client = AIVideo.VideoClient.layer(executor: executor)
+                do {
+                    return try await client.status(model: videoModel, id: id)
+                } catch {
+                    throw Self.mapAIError(error, providerID: model.providerID.rawValue)
+                }
             }
 
             public func videoResult(model: ModelSchema.Ref, id: String) async throws -> [VideoFile] {
-                _ = id
-                guard (try await resolver.resolveVideo(model)) != nil else {
-                    throw await missingError(ref: model, capability: .video)
+                let videoModel = try await resolveVideoModel(model)
+                let executor = try videoExecutor()
+                let client = AIVideo.VideoClient.layer(executor: executor)
+                let response: AIVideo.VideoResponse
+                do {
+                    response = try await client.result(model: videoModel, id: id)
+                } catch {
+                    throw Self.mapAIError(error, providerID: model.providerID.rawValue)
                 }
-                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
+                if response.videos.isEmpty {
+                    throw ProviderRequestError(
+                        providerID: model.providerID.rawValue,
+                        reason: .provider,
+                        message: "\(model.providerID.rawValue)/\(model.id.rawValue) returned no video"
+                    )
+                }
+                var files: [VideoFile] = []
+                files.reserveCapacity(response.videos.count)
+                for asset in response.videos {
+                    let bytes: [UInt8]
+                    do {
+                        bytes = try await asset.bytes(executor: executor)
+                    } catch {
+                        throw Self.mapAIError(error, providerID: model.providerID.rawValue)
+                    }
+                    files.append(VideoFile(
+                        mime: asset.mediaType,
+                        width: asset.info?.width.map { Int($0.rounded()) },
+                        height: asset.info?.height.map { Int($0.rounded()) },
+                        bytes: bytes
+                    ))
+                }
+                return files
             }
 
             public func videoCancel(model: ModelSchema.Ref, id: String) async throws {
-                _ = id
-                guard (try await resolver.resolveVideo(model)) != nil else {
-                    throw await missingError(ref: model, capability: .video)
+                let videoModel = try await resolveVideoModel(model)
+                let executor = try videoExecutor()
+                let client = AIVideo.VideoClient.layer(executor: executor)
+                do {
+                    try await client.cancel(model: videoModel, id: id)
+                } catch {
+                    throw Self.mapAIError(error, providerID: model.providerID.rawValue)
                 }
-                throw UnavailableError(message: "Video generation transport is not configured", service: model.providerID.rawValue)
             }
         }
 
@@ -5725,6 +5950,20 @@ public enum CoreIntegration {
 
         /// How often a running job is checked, and how often `wait` re-reads its record.
         public static let INTERVAL_MS: UInt64 = 5_000
+        /// How long a running job may wait for the provider before timing out (2 hours).
+        public static let DEADLINE_MS: Double = 2 * 3_600_000
+        /// How long settled or expired records are retained before GC (24 hours).
+        public static let RETENTION_MS: Double = 24 * 3_600_000
+        /// KV prefix for persisted video job records.
+        public static let PREFIX = "video:"
+        /// KV key used for SQLite lease-based leader election.
+        public static let LEADER = "video-leader"
+        /// Leader lease duration (1 minute).
+        public static let TTL_MS: Double = 60_000
+        /// Number of download retries after initial failure (matching upstream `Schedule.recurs(2)`).
+        public static let DOWNLOAD_RETRIES = 2
+        /// Exponential backoff base delay for download retries (1 second).
+        public static let DOWNLOAD_RETRY_BASE_MS: UInt64 = 1_000
 
         // parity: core/src/video-generation.ts#StartOptions [status=implemented hash=abd8260f9016]
         public struct StartOptions: Equatable, Hashable, Sendable {
@@ -5743,6 +5982,512 @@ public enum CoreIntegration {
             func cancel(_ id: GenerateSchema.VideoID) async throws
         }
 
+        /// Persisted KV record (`video:<id>`) matching `core/src/video-generation.ts#Record`.
+        private struct StoredRecord: Codable, Sendable {
+            let status: String
+            let model: ModelSchema.Ref
+            let location: LocationSchema.Ref
+            let created: Double
+            let remote: String?
+            let blobs: [BlobStoreSchema.ID]?
+            let reason: GenerateSchema.VideoErrorReason?
+            let error: String?
+            let finished: Double?
+        }
+
+        private enum FinishOutcome: Sendable {
+            case completed([BlobStoreSchema.ID])
+            case error(GenerateSchema.VideoErrorReason, String)
+        }
+
+        private static func formatDuration(_ ms: Double) -> String {
+            let totalSeconds = Int((ms / 1000.0).rounded())
+            if totalSeconds > 0 && totalSeconds % 3600 == 0 {
+                return "\(totalSeconds / 3600)h"
+            }
+            if totalSeconds > 0 && totalSeconds % 60 == 0 {
+                return "\(totalSeconds / 60)m"
+            }
+            if totalSeconds > 0 {
+                return "\(totalSeconds)s"
+            }
+            return "\(Int(ms.rounded()))ms"
+        }
+
+        private static func errorMessage(_ error: any Error) -> String {
+            if let e = error as? Generate.ProviderRequestError { return e.message }
+            if let e = error as? Generate.InvalidRequestError { return e.message }
+            if let e = error as? Generate.ModelNotFoundError { return e.message }
+            if let e = error as? Generate.UnsupportedModelError { return e.message }
+            if let e = error as? Generate.UnavailableError { return e.message }
+            if let e = error as? CoreBlobStore.UnavailableError { return e.message }
+            if let e = error as? CoreBlobStore.NotFoundError { return e.message }
+            return String(describing: error)
+        }
+
+        private final class LiveEngine: Sendable {
+            private struct State: Sendable {
+                var closed = false
+                var pollerTask: Task<Void, Never>?
+                var checks: [GenerateSchema.VideoID: Task<Void, Never>] = [:]
+            }
+
+            let owner: String
+            let db: any SQLiteDatabase
+            let kv: any CoreKV.Interface
+            let blobs: any CoreBlobStore.Interface
+            let defaultLocation: @Sendable () async -> LocationSchema.Ref
+            let resolveGenerate: @Sendable (LocationSchema.Ref) async throws -> any Generate.Interface
+            let intervalMs: UInt64
+            let deadlineMs: Double
+            let retentionMs: Double
+            let ttlMs: Double
+            let retryBaseDelayMs: UInt64
+            let nowMs: @Sendable () -> Double
+            private let state = Mutex(State())
+
+            init(
+                database: any SQLiteDatabase,
+                kv: any CoreKV.Interface,
+                blobs: any CoreBlobStore.Interface,
+                defaultLocation: @escaping @Sendable () async -> LocationSchema.Ref,
+                resolveGenerate: @escaping @Sendable (LocationSchema.Ref) async throws -> any Generate.Interface,
+                intervalMs: UInt64,
+                deadlineMs: Double,
+                retentionMs: Double,
+                ttlMs: Double,
+                retryBaseDelayMs: UInt64,
+                nowMs: @escaping @Sendable () -> Double
+            ) {
+                self.owner = UUID().uuidString
+                self.db = database
+                self.kv = kv
+                self.blobs = blobs
+                self.defaultLocation = defaultLocation
+                self.resolveGenerate = resolveGenerate
+                self.intervalMs = intervalMs
+                self.deadlineMs = deadlineMs
+                self.retentionMs = retentionMs
+                self.ttlMs = ttlMs
+                self.retryBaseDelayMs = retryBaseDelayMs
+                self.nowMs = nowMs
+            }
+
+            private func key(for id: GenerateSchema.VideoID) -> String {
+                "\(VideoGeneration.PREFIX)\(id.rawValue)"
+            }
+
+            private func encodeRecord(_ record: StoredRecord) throws -> (jsonValue: JSONValue, raw: String) {
+                let data = try JSONEncoder().encode(record)
+                let value = try JSONDecoder().decode(JSONValue.self, from: data)
+                return (value, String(decoding: data, as: UTF8.self))
+            }
+
+            private func decodeRecord(_ value: JSONValue) -> StoredRecord? {
+                guard let data = try? JSONEncoder().encode(value) else { return nil }
+                return try? JSONDecoder().decode(StoredRecord.self, from: data)
+            }
+
+            private func load(_ id: GenerateSchema.VideoID) async throws -> StoredRecord? {
+                guard let raw = try await kv.get(key(for: id)) else { return nil }
+                return decodeRecord(raw)
+            }
+
+            private func expired(_ record: StoredRecord, now: Double) -> Bool {
+                let finished = record.status == "running"
+                    ? (record.created + deadlineMs)
+                    : (record.finished ?? record.created)
+                return finished + retentionMs <= now
+            }
+
+            /// Claims or renews the DB leader lease (`video-leader`) atomically via SQLite upsert.
+            func claim() -> Bool {
+                let now = nowMs()
+                let nowInt = Int64(now)
+                let until = now + ttlMs
+                guard let leaseData = try? JSONEncoder().encode(JSONValue.object([
+                    "owner": .string(owner),
+                    "until": .double(until),
+                ])) else {
+                    return false
+                }
+                let leaseJSON = String(decoding: leaseData, as: UTF8.self)
+                do {
+                    let rows = try db.query(
+                        """
+                        INSERT INTO kv (key, value, time_created, time_updated)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(key) DO UPDATE SET
+                            value = excluded.value,
+                            time_updated = excluded.time_updated
+                        WHERE json_extract(kv.value, '$.owner') = ?
+                           OR json_extract(kv.value, '$.until') <= ?
+                        RETURNING key
+                        """,
+                        parameters: [
+                            .text(VideoGeneration.LEADER),
+                            .text(leaseJSON),
+                            .integer(nowInt),
+                            .integer(nowInt),
+                            .text(owner),
+                            .real(now),
+                        ]
+                    )
+                    return !rows.isEmpty
+                } catch {
+                    return false
+                }
+            }
+
+            private func releaseLeader() {
+                _ = try? db.execute(
+                    "DELETE FROM kv WHERE key = ? AND json_extract(value, '$.owner') = ?",
+                    parameters: [.text(VideoGeneration.LEADER), .text(owner)]
+                )
+            }
+
+            private func finish(id: GenerateSchema.VideoID, job: StoredRecord, outcome: FinishOutcome) async {
+                let now = nowMs()
+                let updated: StoredRecord
+                switch outcome {
+                case .completed(let blobIDs):
+                    updated = StoredRecord(
+                        status: "completed",
+                        model: job.model,
+                        location: job.location,
+                        created: job.created,
+                        remote: nil,
+                        blobs: blobIDs,
+                        reason: nil,
+                        error: nil,
+                        finished: now
+                    )
+                case .error(let reason, let message):
+                    updated = StoredRecord(
+                        status: "error",
+                        model: job.model,
+                        location: job.location,
+                        created: job.created,
+                        remote: nil,
+                        blobs: nil,
+                        reason: reason,
+                        error: message,
+                        finished: now
+                    )
+                }
+                guard let encoded = try? encodeRecord(updated) else { return }
+                let updatedRows: [SQLiteRow]
+                do {
+                    updatedRows = try db.query(
+                        """
+                        UPDATE kv SET value = ?, time_updated = ?
+                        WHERE key = ? AND json_extract(value, '$.status') = 'running'
+                        RETURNING key
+                        """,
+                        parameters: [
+                            .text(encoded.raw),
+                            .integer(Int64(now)),
+                            .text(key(for: id)),
+                        ]
+                    )
+                } catch {
+                    if case .completed(let blobIDs) = outcome {
+                        for bid in blobIDs { await blobs.remove(bid) }
+                    }
+                    return
+                }
+                if updatedRows.isEmpty, case .completed(let blobIDs) = outcome {
+                    for bid in blobIDs { await blobs.remove(bid) }
+                }
+            }
+
+            func start(_ input: Generate.VideoInput, options: StartOptions?) async throws -> GenerateSchema.VideoRunning {
+                // Run uninterruptibly on a detached task so caller cancellation cannot orphan a paid provider job.
+                let task = Task<GenerateSchema.VideoRunning, Error>.detached { [self] in
+                    let loc = if let explicit = options?.location {
+                        explicit
+                    } else {
+                        await self.defaultLocation()
+                    }
+                    let gen = try await self.resolveGenerate(loc)
+                    let remote = try await gen.videoStart(input)
+                    let id = GenerateSchema.VideoID.create()
+                    let record = StoredRecord(
+                        status: "running",
+                        model: input.model,
+                        location: loc,
+                        created: self.nowMs(),
+                        remote: remote,
+                        blobs: nil,
+                        reason: nil,
+                        error: nil,
+                        finished: nil
+                    )
+                    let encoded = try self.encodeRecord(record)
+                    try await self.kv.set(self.key(for: id), value: encoded.jsonValue)
+                    return GenerateSchema.VideoRunning(id: id)
+                }
+                return try await task.value
+            }
+
+            func get(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
+                guard let record = try await load(id), !expired(record, now: nowMs()) else {
+                    throw NotFoundError(id: id.rawValue)
+                }
+                switch record.status {
+                case "running":
+                    return .running(GenerateSchema.VideoRunning(id: id))
+                case "error":
+                    return .error(GenerateSchema.VideoError(
+                        id: id,
+                        error: record.error ?? "Video generation failed",
+                        reason: record.reason ?? .unknown
+                    ))
+                case "completed":
+                    var infos: [BlobStoreSchema.Info] = []
+                    for blobID in record.blobs ?? [] {
+                        do {
+                            let content = try await blobs.read(blobID)
+                            infos.append(BlobStoreSchema.Info(
+                                id: content.id,
+                                mime: content.mime,
+                                bytes: content.bytes
+                            ))
+                        } catch is CoreBlobStore.NotFoundError {
+                            continue
+                        }
+                    }
+                    if infos.isEmpty {
+                        throw NotFoundError(id: id.rawValue)
+                    }
+                    return .completed(GenerateSchema.VideoCompleted(id: id, blobs: infos))
+                default:
+                    throw NotFoundError(id: id.rawValue)
+                }
+            }
+
+            func cancel(_ id: GenerateSchema.VideoID) async throws {
+                guard let record = try await load(id) else {
+                    throw NotFoundError(id: id.rawValue)
+                }
+                guard record.status == "running" else { return }
+                let inflight = state.withLock { $0.checks.removeValue(forKey: id) }
+                inflight?.cancel()
+                await finish(id: id, job: record, outcome: .error(.cancelled, "The video generation was cancelled"))
+                if let remote = record.remote {
+                    if let gen = try? await resolveGenerate(record.location) {
+                        try? await gen.videoCancel(model: record.model, id: remote)
+                    }
+                }
+            }
+
+            private func downloadOnce(_ job: StoredRecord) async throws -> [BlobStoreSchema.ID] {
+                guard let remote = job.remote else {
+                    throw Generate.ProviderRequestError(
+                        providerID: job.model.providerID.rawValue,
+                        reason: .provider,
+                        message: "Missing remote job ID"
+                    )
+                }
+                let gen = try await resolveGenerate(job.location)
+                let files = try await gen.videoResult(model: job.model, id: remote)
+                var written: [BlobStoreSchema.ID] = []
+                written.reserveCapacity(files.count)
+                do {
+                    for file in files {
+                        let info = try await blobs.write([file.bytes])
+                        if info.bytes == 0 {
+                            await blobs.remove(info.id)
+                            throw Generate.ProviderRequestError(
+                                providerID: job.model.providerID.rawValue,
+                                reason: .provider,
+                                message: "The provider returned an empty video"
+                            )
+                        }
+                        written.append(info.id)
+                    }
+                    return written
+                } catch {
+                    for bid in written {
+                        await blobs.remove(bid)
+                    }
+                    throw error
+                }
+            }
+
+            private func downloadWithRetry(_ job: StoredRecord) async throws -> [BlobStoreSchema.ID] {
+                var attempt = 0
+                while true {
+                    do {
+                        return try await downloadOnce(job)
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        if attempt >= VideoGeneration.DOWNLOAD_RETRIES {
+                            throw error
+                        }
+                        let delayMs = retryBaseDelayMs * (UInt64(1) << UInt64(attempt))
+                        if delayMs > 0 {
+                            try await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                        }
+                        attempt += 1
+                    }
+                }
+            }
+
+            private func check(_ id: GenerateSchema.VideoID, job: StoredRecord) async {
+                if Task.isCancelled { return }
+                let now = nowMs()
+                if now >= job.created + deadlineMs {
+                    await finish(
+                        id: id,
+                        job: job,
+                        outcome: .error(.unknown, "The provider had no result \(VideoGeneration.formatDuration(deadlineMs)) after submission")
+                    )
+                    return
+                }
+                guard let remote = job.remote else {
+                    await finish(id: id, job: job, outcome: .error(.failed, "Missing remote video job ID"))
+                    return
+                }
+                let status: AIVideo.VideoStatus
+                do {
+                    let gen = try await resolveGenerate(job.location)
+                    status = try await gen.videoStatus(model: job.model, id: remote)
+                } catch {
+                    // Status errors are retried on the next tick.
+                    return
+                }
+                if Task.isCancelled { return }
+                switch status.status {
+                case .running:
+                    return
+                case .error:
+                    let reason: GenerateSchema.VideoErrorReason = switch status.reason {
+                    case .cancelled: .cancelled
+                    case .expired: .expired
+                    default: .failed
+                    }
+                    await finish(id: id, job: job, outcome: .error(reason, "The provider reported the job as \(reason.rawValue)"))
+                case .completed:
+                    do {
+                        let blobIDs = try await downloadWithRetry(job)
+                        await finish(id: id, job: job, outcome: .completed(blobIDs))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        await finish(id: id, job: job, outcome: .error(.failed, VideoGeneration.errorMessage(error)))
+                    }
+                }
+            }
+
+            private func cancelAllChecks() {
+                let tasks = state.withLock { s -> [Task<Void, Never>] in
+                    let values = Array(s.checks.values)
+                    s.checks.removeAll()
+                    return values
+                }
+                for task in tasks { task.cancel() }
+            }
+
+            func tick(awaitChecks: Bool = false) async {
+                if state.withLock({ $0.closed }) { return }
+                var entries: [CoreKV.Entry] = []
+                var after: String? = nil
+                while true {
+                    guard let page = try? await kv.scan(CoreKV.ScanOptions(
+                        prefix: VideoGeneration.PREFIX,
+                        after: after,
+                        limit: 500
+                    )) else {
+                        return
+                    }
+                    entries.append(contentsOf: page.entries)
+                    guard let next = page.next else { break }
+                    after = next
+                }
+
+                let now = nowMs()
+                var running: [(id: GenerateSchema.VideoID, job: StoredRecord)] = []
+                for entry in entries {
+                    guard let record = decodeRecord(entry.value), !expired(record, now: now) else {
+                        try? await kv.remove(entry.key)
+                        continue
+                    }
+                    if record.status == "running" {
+                        let rawID = String(entry.key.dropFirst(VideoGeneration.PREFIX.count))
+                        if let vid = GenerateSchema.VideoID(rawValue: rawID) {
+                            running.append((vid, record))
+                        }
+                    }
+                }
+
+                if running.isEmpty {
+                    cancelAllChecks()
+                    return
+                }
+                guard claim() else {
+                    cancelAllChecks()
+                    return
+                }
+
+                var spawned: [Task<Void, Never>] = []
+                for item in running {
+                    let task: Task<Void, Never>? = state.withLock { s in
+                        if s.closed || s.checks[item.id] != nil { return nil }
+                        let t = Task { [self] in
+                            defer {
+                                self.state.withLock { _ = $0.checks.removeValue(forKey: item.id) }
+                            }
+                            await self.check(item.id, job: item.job)
+                        }
+                        s.checks[item.id] = t
+                        return t
+                    }
+                    if let task { spawned.append(task) }
+                }
+
+                if awaitChecks {
+                    for task in spawned {
+                        await task.value
+                    }
+                }
+            }
+
+            func startPoller() {
+                state.withLock { s in
+                    guard !s.closed, s.pollerTask == nil else { return }
+                    let sleepNs = max(UInt64(1), intervalMs) * 1_000_000
+                    s.pollerTask = Task { [self] in
+                        while !Task.isCancelled {
+                            await self.tick(awaitChecks: false)
+                            do {
+                                try await Task.sleep(nanoseconds: sleepNs)
+                            } catch {
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            func close() async {
+                let tasks = state.withLock { s -> [Task<Void, Never>] in
+                    s.closed = true
+                    var all = Array(s.checks.values)
+                    s.checks.removeAll()
+                    if let poller = s.pollerTask {
+                        all.append(poller)
+                        s.pollerTask = nil
+                    }
+                    return all
+                }
+                for task in tasks { task.cancel() }
+                for task in tasks { await task.value }
+                releaseLeader()
+            }
+        }
+
         // parity: core/src/video-generation.ts#Service [status=implemented hash=07621d6f3e7b]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/VideoGeneration"
@@ -5750,6 +6495,7 @@ public enum CoreIntegration {
             private let getFn: @Sendable (GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob
             private let cancelFn: @Sendable (GenerateSchema.VideoID) async throws -> Void
             private let intervalMs: UInt64
+            private let engine: LiveEngine?
 
             public init(
                 start: @escaping @Sendable (Generate.VideoInput, StartOptions?) async throws -> GenerateSchema.VideoRunning,
@@ -5763,6 +6509,44 @@ public enum CoreIntegration {
                 self.getFn = get
                 self.cancelFn = cancel
                 self.intervalMs = intervalMs
+                self.engine = nil
+            }
+
+            public init(
+                database: any SQLiteDatabase,
+                kv: any CoreKV.Interface,
+                blobs: any CoreBlobStore.Interface,
+                defaultLocation: @escaping @Sendable () async -> LocationSchema.Ref,
+                resolveGenerate: @escaping @Sendable (LocationSchema.Ref) async throws -> any Generate.Interface,
+                intervalMs: UInt64 = VideoGeneration.INTERVAL_MS,
+                deadlineMs: Double = VideoGeneration.DEADLINE_MS,
+                retentionMs: Double = VideoGeneration.RETENTION_MS,
+                ttlMs: Double = VideoGeneration.TTL_MS,
+                retryBaseDelayMs: UInt64 = VideoGeneration.DOWNLOAD_RETRY_BASE_MS,
+                nowMs: @escaping @Sendable () -> Double = { Double(Flock.currentEpochMs()) },
+                startPolling: Bool = true
+            ) {
+                let live = LiveEngine(
+                    database: database,
+                    kv: kv,
+                    blobs: blobs,
+                    defaultLocation: defaultLocation,
+                    resolveGenerate: resolveGenerate,
+                    intervalMs: intervalMs,
+                    deadlineMs: deadlineMs,
+                    retentionMs: retentionMs,
+                    ttlMs: ttlMs,
+                    retryBaseDelayMs: retryBaseDelayMs,
+                    nowMs: nowMs
+                )
+                self.engine = live
+                self.intervalMs = intervalMs
+                self.startFn = { input, opts in try await live.start(input, options: opts) }
+                self.getFn = { id in try await live.get(id) }
+                self.cancelFn = { id in try await live.cancel(id) }
+                if startPolling {
+                    live.startPoller()
+                }
             }
 
             public func start(_ input: Generate.VideoInput, options: StartOptions? = nil) async throws -> GenerateSchema.VideoRunning {
@@ -5778,7 +6562,7 @@ public enum CoreIntegration {
                 while true {
                     let job = try await getFn(id)
                     if case .running = job {
-                        try await Task.sleep(nanoseconds: intervalMs * 1_000_000)
+                        try await Task.sleep(nanoseconds: max(UInt64(1), intervalMs) * 1_000_000)
                         continue
                     }
                     return job
@@ -5787,6 +6571,16 @@ public enum CoreIntegration {
 
             public func cancel(_ id: GenerateSchema.VideoID) async throws {
                 try await cancelFn(id)
+            }
+
+            /// Executes a single poll tick and awaits any checks it spawned (useful for deterministic testing).
+            public func pollOnce() async {
+                await engine?.tick(awaitChecks: true)
+            }
+
+            /// Stops background polling, cancels in-flight checks, and releases the DB leader lease.
+            public func close() async {
+                await engine?.close()
             }
         }
 
@@ -5807,8 +6601,50 @@ public enum CoreIntegration {
             )
         )
 
+        /// Builds the real SQLite/KV/BlobStore-backed `VideoGeneration.Service`, registering lease cleanup on scope close.
+        public static let liveLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, scope in
+            guard let dbStore = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self),
+                  let kv = deps.get(CoreKV.Service.serviceKey, as: CoreKV.Service.self),
+                  let locations = deps.get(CoreLocation.ServiceMap.Service.serviceKey, as: CoreLocation.ServiceMap.Service.self)
+            else {
+                return try await unsupportedLayer.build(deps, scope)
+            }
+            let blobs: (any CoreBlobStore.Interface)? =
+                deps.get(CoreBlobStore.Service.serviceKey, as: (any CoreBlobStore.Interface).self)
+                ?? deps.get(CoreBlobStore.Service.serviceKey, as: CoreBlobStore.Service.self)
+            guard let blobs else {
+                return try await unsupportedLayer.build(deps, scope)
+            }
+            let globalPaths = deps.get(Global.Service.serviceKey, as: Global.Service.self)?.paths ?? Global.make()
+            let service = Service(
+                database: dbStore.db,
+                kv: kv,
+                blobs: blobs,
+                defaultLocation: {
+                    LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: globalPaths.config))
+                },
+                resolveGenerate: { ref in
+                    let out = try await locations.get(ref)
+                    guard let gen = out.get(Generate.Service.serviceKey, as: (any Generate.Interface).self)
+                        ?? out.get(Generate.Service.serviceKey, as: Generate.Service.self)
+                    else {
+                        throw Generate.UnavailableError(message: "Generate service is not registered at location \(ref.directory.rawValue)")
+                    }
+                    return gen
+                }
+            )
+            scope.addFinalizer {
+                await service.close()
+            }
+            return LayerNode.Output([Service.serviceKey: service])
+        }
+
         // parity: core/src/video-generation.ts#node [status=implemented hash=7b440690dd17]
-        public static let node: LayerNode.Provider = AppNode.makeGlobalNode(Service.serviceKey, unsupportedLayer, [])
+        public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
+            Service.serviceKey,
+            liveLayer,
+            [CoreBlobStore.node, CoreDatabaseStore.node, Global.node, CoreKV.node, CoreLocation.ServiceMap.node]
+        )
     }
 
     // MARK: - core/src/voice.ts

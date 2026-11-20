@@ -1136,6 +1136,7 @@ public func createRoutes(
     instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
     instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
     workerdProfile: Bool = false,
+    videoGenerationPollIntervalMs: UInt64? = nil,
     onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
 ) async throws -> ServerRouter {
     _ = overrides
@@ -1157,6 +1158,7 @@ public func createRoutes(
         instructionDebounce: instructionDebounce,
         instructionURLTimeout: instructionURLTimeout,
         workerdProfile: workerdProfile,
+        videoGenerationPollIntervalMs: videoGenerationPollIntervalMs,
         onLocationBoot: onLocationBoot
     )
     return ServerRouter(runtime: runtime)
@@ -1228,6 +1230,7 @@ public enum ServerFetch {
         public let instructionDebounce: Duration
         public let instructionURLTimeout: Duration
         public let workerdProfile: Bool
+        public let videoGenerationPollIntervalMs: UInt64?
         public let onLocationBoot: ServerAppRuntime.LocationCustomizer?
 
         public init(
@@ -1242,6 +1245,7 @@ public enum ServerFetch {
             instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
             instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
             workerdProfile: Bool = false,
+            videoGenerationPollIntervalMs: UInt64? = nil,
             onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
         ) {
             self.overrides = overrides
@@ -1255,6 +1259,7 @@ public enum ServerFetch {
             self.instructionDebounce = instructionDebounce
             self.instructionURLTimeout = instructionURLTimeout
             self.workerdProfile = workerdProfile
+            self.videoGenerationPollIntervalMs = videoGenerationPollIntervalMs
             self.onLocationBoot = onLocationBoot
         }
     }
@@ -1298,6 +1303,7 @@ public enum ServerFetch {
             instructionDebounce: boot.instructionDebounce,
             instructionURLTimeout: boot.instructionURLTimeout,
             workerdProfile: boot.workerdProfile,
+            videoGenerationPollIntervalMs: boot.videoGenerationPollIntervalMs,
             onLocationBoot: boot.onLocationBoot
         )
         let restart = router.runtime.sessionRestart

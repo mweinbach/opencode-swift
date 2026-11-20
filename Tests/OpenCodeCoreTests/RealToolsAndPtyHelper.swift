@@ -242,7 +242,7 @@ enum RealToolsAndPtyHelper {
             throw CoreIntegration.Generate.UnavailableError(message: "video unused in test")
         }
 
-        func videoStatus(model: ModelSchema.Ref, id: String) async throws -> String {
+        func videoStatus(model: ModelSchema.Ref, id: String) async throws -> AIVideo.VideoStatus {
             throw CoreIntegration.Generate.UnavailableError(message: "video unused in test")
         }
 

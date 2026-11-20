@@ -2801,7 +2801,18 @@ public enum CoreModel {
                 let provider = await providers.get(model.providerID)
                 let intID = provider?.integrationID ?? IntegrationID(rawValue: model.providerID.rawValue)
                 let activeConn = try? await integrations?.activeConnection(intID)
-                let credential = activeConn != nil ? (try? await integrations?.resolveConnection(activeConn!)) : nil
+                let credential: CredentialSchema.Value?
+                if let activeConn, let integrations {
+                    do {
+                        credential = try await integrations.resolveConnection(activeConn)
+                    } catch let authErr as CoreIntegration.Integration.AuthorizationError {
+                        throw authErr
+                    } catch {
+                        credential = nil
+                    }
+                } else {
+                    credential = nil
+                }
                 let withVar = try Resolver.withVariant(model, variantID: variant)
                 let mergedSettings = CoreProvider.AISDKNative.mergeOverlay(
                     provider?.settings?.extra,
