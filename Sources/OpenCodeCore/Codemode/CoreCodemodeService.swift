@@ -68,6 +68,28 @@ public enum CoreCodemode {
         }
 
         public static let allowAll = PermissionHook()
+
+        /// Routes Code Mode's checks (the `fetch` global, its redirect hops, `path`/`Bun` file access) through the
+        /// session permission service, as upstream's Code Mode does with `Permission.Service`: `assertAllowed` may ask
+        /// the user, while `assertNotDenied` only enforces deny rules.
+        public static func service(_ permission: CorePermission.Service) -> PermissionHook {
+            PermissionHook(
+                assertAllowed: { request in try await permission.assert(assertInput(request, save: ["*"])) },
+                assertNotDenied: { request in try await permission.assertNotDenied(assertInput(request, save: nil)) }
+            )
+        }
+
+        static func assertInput(_ request: PermissionRequest, save: [String]?) -> CorePermission.AssertInput {
+            CorePermission.AssertInput(
+                sessionID: request.sessionID,
+                agent: request.agent,
+                action: request.action,
+                resources: request.resources,
+                save: save,
+                metadata: request.metadata.isEmpty ? nil : request.metadata,
+                source: .tool(messageID: request.messageID, id: request.callID.rawValue)
+            )
+        }
     }
 
     // MARK: - Execution Context (core/src/codemode/execution.ts)
@@ -1132,10 +1154,9 @@ public enum CoreCodemode {
             }
         }
 
-        /// `<background-result attributes>\nbody\n</background-result>`, the session's wrapper for work that finished in
-        /// the background (upstream `BackgroundResult.render` in core/src/session/background-result.ts).
+        /// The session's background-completion wrapper (upstream `BackgroundResult.render`).
         static func backgroundResult(_ attributes: String, _ body: String) -> String {
-            "<background-result \(attributes)>\n\(body)\n</background-result>"
+            CoreSessionBackgroundResult.render(attributes, body)
         }
 
         // parity: core/src/codemode/job.ts#notice [status=implemented hash=643c21dfd255]

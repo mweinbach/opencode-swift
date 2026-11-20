@@ -224,8 +224,12 @@ struct ServerLiveExecutionTests {
             }
             #expect(toolNames.contains("read"))
             #expect(toolNames.contains("edit"))
-            #expect(toolNames.contains("grep"))
-            #expect(toolNames.contains("glob"))
+            // core/src/tool/model-policy.ts: local builds default `full_codemode` on, so Code Mode's `execute`
+            // is offered and glob/grep are hidden (programs search through shell and `fetch`). This fixture's
+            // model isn't in the available catalog, so the built-ins stay direct as for any unresolved model.
+            #expect(toolNames.contains("execute"))
+            #expect(!toolNames.contains("grep"))
+            #expect(!toolNames.contains("glob"))
         } else {
             Issue.record("Expected built-in tools array in first Anthropic request")
         }

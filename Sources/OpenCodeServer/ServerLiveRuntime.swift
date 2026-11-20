@@ -5500,6 +5500,9 @@ public enum ServerLiveRuntime {
         environment: any EnvironmentProviding,
         snapshotService: (any CoreSnapshot.Interface)? = nil,
         oauthManager: ServerLiveOAuthManager? = nil,
+        webSearch: (any CoreIntegration.WebSearch.Interface)? = nil,
+        flags: (any CoreFlag.Interface)? = nil,
+        codeModeServices: CoreCodemode.Tool.Services? = nil,
         isLocationClosed: @escaping @Sendable () -> Bool
     ) -> LiveSessionRunner {
         let llmClient = makeLLMClient(transport: httpTransport)
@@ -5548,14 +5551,27 @@ public enum ServerLiveRuntime {
                     model: modelRef
                 )
             },
-            selectTools: { session, agentProfile, _ in
+            selectTools: { session, agentProfile, policyModel in
                 await snapshotTracker?.beginStep(sessionID: session.id)
                 let agentInfo = await agentService.get(AgentSchema.ID(rawValue: agentProfile.id))
                 let ruleset = effectivePermissionRuleset(
                     agent: agentInfo,
                     configEntries: await configService.entries()
                 )
-                let snap = await toolService.snapshot(permissions: ruleset)
+                // core/src/session/context.ts: the selected model chooses which tools it sees
+                // (patch vs edit/write, websearch availability) and, under full_codemode, which
+                // built-ins stay direct. An agent that can't run `execute` gets the flag-off policy.
+                let hasWebSearch = await webSearch?.available() ?? false
+                let fullCodeMode = await flags?.enabled(.fullCodemode) ?? false
+                let placement = CoreTool.ModelPolicy.modelTools(
+                    model: policyModel,
+                    websearch: hasWebSearch,
+                    fullCodeMode: fullCodeMode && CoreTool.codeModeAvailable(ruleset)
+                )
+                let snap = await toolService.snapshot(
+                    permissions: ruleset,
+                    options: CoreTool.SnapshotOptions(services: codeModeServices, tools: placement.policy)
+                )
                 let entries: [AISchema.ToolEntry] = snap.definitions.map { .tool($0) }
                 return CoreSessionModelRequest.ToolSnapshot(
                     definitions: entries,

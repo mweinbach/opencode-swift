@@ -503,7 +503,8 @@ public enum CorePlugin {
                         environment: env.environment,
                         spawner: env.spawner,
                         fileSystem: env.fileSystem,
-                        modelsDev: env.modelsDev
+                        modelsDev: env.modelsDev,
+                        flags: env.flags
                     ) {
                         try await definition.effect(context)
                     }
@@ -1239,6 +1240,8 @@ public enum CorePlugin {
             public let spawner: any ProcessSpawner
             public let fileSystem: any OpenCodeFileSystem
             public let modelsDev: (any CoreModel.ModelsDev.Interface)?
+            /// Flag service plugins read through `Host.flagEnabled` (e.g. `home_memory`, `recommended_api`).
+            public let flags: (any CoreFlag.Interface)?
             public let vcsService: CoreVcs.Vcs.Service?
             public let integrationService: (any CoreIntegration.Integration.Interface)?
             public let onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)?
@@ -1263,6 +1266,7 @@ public enum CorePlugin {
                 spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared,
                 fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
                 modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
+                flags: (any CoreFlag.Interface)? = nil,
                 vcsService: CoreVcs.Vcs.Service? = nil,
                 integrationService: (any CoreIntegration.Integration.Interface)? = nil,
                 onSessionPrompt: (@Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void)? = nil
@@ -1277,6 +1281,7 @@ public enum CorePlugin {
                 self.spawner = spawner
                 self.fileSystem = fileSystem
                 self.modelsDev = modelsDev
+                self.flags = flags
                 self.vcsService = vcsService
                 self.integrationService = integrationService
                 self.onSessionPrompt = onSessionPrompt
@@ -1290,7 +1295,8 @@ public enum CorePlugin {
                     environment: environment,
                     spawner: spawner,
                     fileSystem: fileSystem,
-                    modelsDev: modelsDev
+                    modelsDev: modelsDev,
+                    flags: flags
                 ) {
                     try await plugin.effect(ctx)
                 }

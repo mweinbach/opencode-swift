@@ -1564,19 +1564,15 @@ public final class ServerAppRuntime: Sendable {
                     channel: capturedOptions.app?.channel ?? "local"
                 ),
                 location: locInfo,
-                hooks: hooksService
-            )
-            let rawPluginService = CorePlugin.Service(
+                hooks: hooksService,
+                http: capturedHttp,
+                environment: capturedEnv,
                 fileSystem: capturedFs,
-                contextFactory: { pluginID, listInventory, addFinalizer in
-                    CorePlugin.Host.make(
-                        environment: pluginHostEnv,
-                        pluginID: pluginID,
-                        listPlugins: listInventory,
-                        addFinalizer: addFinalizer
-                    )
-                }
+                flags: flagService
             )
+            // The environment-bound initializer runs each plugin effect inside `Host.withRuntime`, so plugins
+            // see this location's transport, environment, filesystem and flags (`Host.flagEnabled`).
+            let rawPluginService = CorePlugin.Service(environment: pluginHostEnv)
             let pluginService = ServerTrackedPluginService(inner: rawPluginService)
             let commandUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: CommandSchema.Event.updated.type)
             let commandService = CoreSubsystems.Command.Service(onUpdated: {
@@ -1755,7 +1751,18 @@ public final class ServerAppRuntime: Sendable {
                 configEntries: latestConfigEntries
             )
 
-            let toolService = CoreTool.Service()
+            // Code Mode's `execute` tool, with its fetch/file globals gated by this location's permission service.
+            let codeModePermission = CoreCodemode.PermissionHook.service(permissionService)
+            let toolService = CoreTool.Service(codeMode: CoreTool.CodeModeHost(
+                transport: capturedHttp,
+                permission: codeModePermission,
+                flags: flagService
+            ))
+            let codeModeServices = CoreCodemode.Tool.services(
+                location: OpenCodeLocation(directory: dirPath, workspaceID: locInfo.workspaceID),
+                fileSystem: capturedFs,
+                permission: codeModePermission
+            )
             let toolEnv = CoreTool.BuiltinEnvironment(
                 directory: dirPath,
                 fileSystem: capturedFs,
@@ -1800,6 +1807,9 @@ public final class ServerAppRuntime: Sendable {
                 environment: capturedEnv,
                 snapshotService: capturedWorkerd ? nil : snapshotService,
                 oauthManager: oauthManager,
+                webSearch: webSearchService,
+                flags: flagService,
+                codeModeServices: codeModeServices,
                 isLocationClosed: { closedFlag.withLock { $0 } }
             )
 
