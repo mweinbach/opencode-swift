@@ -226,6 +226,11 @@ public enum NativeZigSyntaxStyle: Sendable {
 // MARK: - 2. native/src/rope.zig (66 symbols)
 
 public enum NativeZigRope: Sendable {
+    public enum SplitError: Error, Equatable, Hashable, Sendable {
+        case outOfBounds
+        case outOfMemory
+    }
+
     // parity: native/src/rope.zig#Rope [status=adapted hash=305d40c38294]
     public struct Rope<Element: Sendable>: Sendable {
         public static var maxImbalance: Int { 7 }
@@ -308,10 +313,7 @@ public enum NativeZigRope: Sendable {
             case right
         }
 
-        public enum SplitError: Error, Equatable, Hashable, Sendable {
-            case outOfBounds
-            case outOfMemory
-        }
+        public typealias SplitError = NativeZigRope.SplitError
 
         public final class Node: @unchecked Sendable {
             public enum Storage: Sendable {

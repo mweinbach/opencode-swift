@@ -2253,10 +2253,12 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func loadMessages(sessionID: String) async {
-        async let listTask = try? client.message.list(MessageListInput(sessionID: sessionID, limit: 100))
+        async let listTask = try? client.message.list(MessageListInput(sessionID: sessionID, limit: 100, order: .desc))
         async let sessionTask = try? client.session.get(SessionGetInput(sessionID: sessionID))
+        async let activeTask = try? client.session.active()
         let resp = await listTask
         let info = await sessionTask
+        let activeMap = await activeTask
 
         if let info {
             let resolvedTitle = SessionTitleFallback.displayLabel(
@@ -2287,11 +2289,13 @@ public final class TUIInteractiveClient: Sendable {
         }
 
         guard let resp else { return }
+        // `GET /api/session/:id/message` returns newest-first (`order=desc`); reverse into chronological oldest→newest order.
+        let chronological = Array(resp.data.reversed())
         var totalCost = 0.0
         var latestTokens = 0
         var mapped: [TUITranscriptItem] = []
 
-        for msg in resp.data {
+        for msg in chronological {
             switch msg {
             case .user(let u):
                 mapped.append(.user(id: u.id.rawValue, text: u.text, agentName: nil, isOptimistic: false))
@@ -2370,7 +2374,9 @@ public final class TUIInteractiveClient: Sendable {
             }
             // Preserve active in-flight streaming assistant message if server hasn't persisted it yet
             let serverIDs = Set(mapped.map(\.itemID))
-            let inFlightStreaming = state.messages.filter { item in
+            let isServerActive = activeMap.map { $0[sessionID] != nil }
+            let keepInFlight = isServerActive ?? state.sessionStatus.isRunning
+            let inFlightStreaming = keepInFlight ? state.messages.filter { item in
                 if case .assistant(let id, _, _, let parts, let completed, _) = item,
                    !completed,
                    !parts.isEmpty,
@@ -2378,8 +2384,18 @@ public final class TUIInteractiveClient: Sendable {
                     return true
                 }
                 return false
-            }
+            } : []
             state.messages = mapped + remainingOptimistic + inFlightStreaming
+            if let isServerActive {
+                if isServerActive {
+                    if !state.sessionStatus.isRunning {
+                        state.sessionStatus = .running
+                    }
+                } else if remainingOptimistic.isEmpty {
+                    state.sessionStatus = .idle
+                    state.interruptArmed = false
+                }
+            }
             if totalCost > 0 { state.sessionCost = totalCost }
             if latestTokens > 0 { state.contextTokens = latestTokens }
         }
@@ -2768,6 +2784,42 @@ public final class TUIInteractiveClient: Sendable {
         case "session.step.ended":
             if isForActiveSession {
                 markLastAssistantCompleted(in: &state)
+                if let sid = state.activeSessionID {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.step.failed":
+            if isForActiveSession {
+                state.sessionStatus = .idle
+                state.interruptArmed = false
+                markLastAssistantCompleted(in: &state)
+                if let errMsg = stringField(jsonObject(obj["error"]), "message") ?? stringField(obj, "error") {
+                    state.messages.append(.system(id: "err-\(event.id)", text: "Error: \(errMsg)", isError: true))
+                }
+                if let sid = state.activeSessionID {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.retry.scheduled":
+            if isForActiveSession {
+                let msg = stringField(obj, "message") ?? stringField(jsonObject(obj["error"]), "message") ?? "Retrying…"
+                state.sessionStatus = .retry(msg)
+            }
+
+        case "session.shell.started":
+            if isForActiveSession {
+                state.sessionStatus = .running
+                if let sid = state.activeSessionID {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.shell.ended":
+            if isForActiveSession {
+                state.sessionStatus = .idle
+                state.interruptArmed = false
                 if let sid = state.activeSessionID {
                     effect.refreshMessagesForSession = sid
                 }
