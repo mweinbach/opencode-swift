@@ -1335,12 +1335,16 @@ private func migrateModeNewDesigns(_ theme: V1Theme, mode: Mode) -> ThemeDefinit
     return referenceHues(definition)
 }
 
-// MARK: - Built-in Default Themes (`opencode`, `opencode2`, and V1 `opencode`)
+// MARK: - Built-in Default Themes (`opencode`, `opencode-classic`, and V1 `opencode`)
 
 /// Built-in default light and dark TUI theme documents matching upstream `packages/tui/src/theme/assets/`.
 public enum ThemeDefaults {
-    /// Built-in V2 `opencode` theme document (light + dark).
-    public static let opencode = ThemeDocument(
+    /// `opencode2` was the new theme's name before it became `opencode`; the name stays an alias of it.
+    public static var opencode2: ThemeDocument { opencode }
+
+    /// Built-in V2 `opencode-classic` theme document (light + dark): the previous default `opencode` theme
+    /// (`packages/tui/src/theme/assets/v2/opencode-classic.json`).
+    public static let opencodeClassic = ThemeDocument(
         schema: "https://opencode.ai/theme.json",
         base: BaseThemeDefinition(
             categorical: ["blue", "purple", "green", "orange", "red"],
@@ -1600,8 +1604,9 @@ public enum ThemeDefaults {
         )
     )
 
-    /// Built-in V2 `opencode2` theme document (light + dark, including `@dialog.@footer`).
-    public static let opencode2 = ThemeDocument(
+    /// Built-in V2 `opencode` theme document (light + dark, including `@dialog.@footer`): the new default theme,
+    /// formerly the `opencode2` new-designs theme (`packages/tui/src/theme/assets/v2/opencode.json`).
+    public static let opencode = ThemeDocument(
         schema: "https://opencode.ai/theme.json",
         base: BaseThemeDefinition(
             categorical: ["blue", "purple", "green", "orange", "red"],
@@ -1736,7 +1741,7 @@ public enum ThemeDefaults {
                 [
                     "gray": .scale([
                         .s100: "#101010", .s200: "#505050", .s300: "#808080",
-                        .s400: "#b5b5b5", .s500: "#cfcfcf", .s600: "#dddddd",
+                        .s400: "#b5b5b5", .s500: "#e6e6e6", .s600: "#eeeeee",
                         .s700: "#f2f2f2", .s800: "#fafafa", .s900: "#ffffff",
                     ]),
                     "blue": .scale([

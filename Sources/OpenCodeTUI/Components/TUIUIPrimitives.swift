@@ -1295,18 +1295,144 @@ public enum TUIPrimitive {
     public struct SessionLinksController: Sendable {
         public let linkify: @Sendable ([TextChunk], Bool, RGBA?) -> (chunks: [TextChunk], ranges: [SessionLinkRange], sessionIDs: Set<String>)
         public let sessionAt: @Sendable (String, [SessionLinkRange], Int, Int) -> String?
+        /// The Markdown inline hook: links session IDs in paragraphs and headings, tagging each link span with its
+        /// session ID as the span `target`.
+        public let linkSpans: @Sendable ([MarkdownInlineSpan], MarkdownInlineContext) -> [MarkdownInlineSpan]
+        /// Labels each ID was last rendered with, so a refresh reruns the hook only for blocks whose labels changed.
+        private let labels: SessionLinkLabels
+        private let labelOf: @Sendable (String) -> String?
 
         public init(
             linkify: @escaping @Sendable ([TextChunk], Bool, RGBA?) -> (chunks: [TextChunk], ranges: [SessionLinkRange], sessionIDs: Set<String>),
-            sessionAt: @escaping @Sendable (String, [SessionLinkRange], Int, Int) -> String?
+            sessionAt: @escaping @Sendable (String, [SessionLinkRange], Int, Int) -> String?,
+            labelOf: @escaping @Sendable (String) -> String? = { _ in nil }
         ) {
             self.linkify = linkify
             self.sessionAt = sessionAt
+            self.labelOf = labelOf
+            let labels = SessionLinkLabels()
+            self.labels = labels
+            self.linkSpans = { spans, context in
+                linkSessionSpans(spans, context: context, labelOf: labelOf, labels: labels)
+            }
+        }
+
+        /// Markdown runs the hook only on blocks whose source holds one of these substrings.
+        public var inlineHookFilter: [String] { ["ses_"] }
+
+        /// Installs the hook on `markdown` and opens a clicked session link through `open`. The first parse already
+        /// runs the hook when this is called before content is set.
+        public func attach(
+            _ markdown: MarkdownRenderable,
+            renderer: CliRenderer,
+            dialog: DialogContext? = nil,
+            open: @escaping (String) -> Void
+        ) {
+            let hook = linkSpans
+            markdown.inlineHook = { spans, context in hook(spans, context) }
+            markdown.inlineHookFilter = inlineHookFilter
+            markdown.onMouseUp = { [weak markdown] event in
+                guard let markdown, plainClick(renderer: renderer, event: event) else { return }
+                guard let sessionID = markdown.targetAt(x: event.x, y: event.y) else { return }
+                event.stopPropagation()
+                if let dialog, !dialog.stack.isEmpty { dialog.clear() }
+                open(sessionID)
+            }
+        }
+
+        /// Reruns the hook on the blocks that mention a session whose label changed; nothing is parsed again.
+        public func refreshLabels(_ markdown: MarkdownRenderable) {
+            let changed = labels.changed(labelOf)
+            guard !changed.isEmpty else { return }
+            markdown.rerunInlineHook { source in changed.contains { source.contains($0) } }
+        }
+    }
+
+    /// Labels each session ID was last rendered with.
+    final class SessionLinkLabels: Sendable {
+        private let used = Mutex<[String: String?]>([:])
+
+        func record(_ sessionID: String, _ label: String?) {
+            used.withLock { map in
+                if map[sessionID] == nil || map[sessionID]! != label { map[sessionID] = .some(label) }
+            }
+        }
+
+        /// The IDs whose label differs from the one last rendered; records the new labels.
+        func changed(_ labelOf: (String) -> String?) -> [String] {
+            used.withLock { map in
+                var changed: [String] = []
+                for (sessionID, label) in map where labelOf(sessionID) != label {
+                    changed.append(sessionID)
+                }
+                for sessionID in changed { map[sessionID] = .some(labelOf(sessionID)) }
+                return changed.sorted()
+            }
+        }
+    }
+
+    /// Strips a code span's backtick fence (`` /^`+\s?|\s?`+$/ ``).
+    private static func stripCodeFence(_ text: String) -> String {
+        var scalars = Array(text.unicodeScalars)
+        var leading = 0
+        while leading < scalars.count, scalars[leading] == "`" { leading += 1 }
+        if leading > 0 {
+            scalars.removeFirst(leading)
+            if let first = scalars.first, first.properties.isWhitespace { scalars.removeFirst() }
+        }
+        var trailing = 0
+        while trailing < scalars.count, scalars[scalars.count - 1 - trailing] == "`" { trailing += 1 }
+        if trailing > 0 {
+            scalars.removeLast(trailing)
+            if let last = scalars.last, last.properties.isWhitespace { scalars.removeLast() }
+        }
+        return String(String.UnicodeScalarView(scalars))
+    }
+
+    /// Markdown runs this on every paragraph and heading that holds "ses_"; fenced code never gets it.
+    static func linkSessionSpans(
+        _ spans: [MarkdownInlineSpan],
+        context: MarkdownInlineContext,
+        labelOf: (String) -> String?,
+        labels: SessionLinkLabels
+    ) -> [MarkdownInlineSpan] {
+        if context.tableCell { return spans }
+        let style = context.syntaxStyle.mergeStyles(["markup.link.url"])
+        return spans.flatMap { span -> [MarkdownInlineSpan] in
+            // Like the web app, a code span links only when it is exactly a session ID, so a command such
+            // as `opencode --session ses_…` stays copyable.
+            if span.link != nil || (span.code && parseSessionMention(stripCodeFence(span.text)) == nil) { return [span] }
+            let mentions = sessionMentions(span.text)
+            if mentions.isEmpty { return [span] }
+            let units = Array(span.text.utf16)
+            // Odd parts are the mentions.
+            let cuts = [0] + mentions.flatMap { [$0.start, $0.end] } + [units.count]
+            return cuts.dropFirst().enumerated().flatMap { index, end -> [MarkdownInlineSpan] in
+                let text = String(decoding: units[cuts[index]..<end], as: UTF16.self)
+                let mention = index % 2 == 1 ? mentions[(index - 1) / 2] : nil
+                let label = mention.flatMap { labelOf($0.id) }
+                if let mention { labels.record(mention.id, label) }
+                guard let mention, let label else {
+                    if text.isEmpty { return [] }
+                    var copy = span
+                    copy.text = text
+                    return [copy]
+                }
+                var link = span
+                // Raw markdown mode shows the source.
+                link.text = context.conceal ? "@\(label)" : text
+                link.fg = style.fg ?? span.fg
+                link.attributes = style.attributes | TextAttributes.underline
+                link.target = mention.id
+                return [link]
+            }
         }
     }
 
     /// Creates a session-ID linkifier & click hit-tester for markdown prose blocks, matching `ui/session-link.ts#useSessionLinks`.
-    // parity: tui/src/ui/session-link.ts#useSessionLinks [status=adapted hash=6d721808062f]
+    /// ``SessionLinksController/attach(_:renderer:dialog:open:)`` installs the inline hook on a `MarkdownRenderable`;
+    /// links carry their session ID as the span target, so a click resolves through `targetAt`.
+    // parity: tui/src/ui/session-link.ts#useSessionLinks [status=adapted hash=32090ccd4d9a]
     public static func useSessionLinks(
         currentSessionID: String? = nil,
         resolveLabel: @escaping @Sendable (String) -> String?
@@ -1393,7 +1519,8 @@ public enum TUIPrimitive {
                     }
                 }
                 return nil
-            }
+            },
+            labelOf: { id in id == currentSessionID ? nil : resolveLabel(id) }
         )
     }
 
@@ -2118,7 +2245,8 @@ public enum TUIPrimitive {
     }
 
     /// Standard dialog vertical layout container: header, body, and buttons or footer.
-    // parity: tui/src/ui/dialog.tsx#DialogLayout [status=adapted hash=9864beffe478]
+    /// With `grow`, the layout fills the parent's height and keeps the footer at the bottom.
+    // parity: tui/src/ui/dialog.tsx#DialogLayout [status=adapted hash=d99988669b2d]
     public static func DialogLayout(
         ctx: any RenderContext,
         id: String? = nil,
@@ -2126,13 +2254,15 @@ public enum TUIPrimitive {
         body: Renderable,
         buttons: Renderable? = nil,
         footer: Renderable? = nil,
-        inset: Int = DIALOG_INSET
+        inset: Int = DIALOG_INSET,
+        grow: Bool = false
     ) -> BoxRenderable {
         let box = BoxRenderable(
             ctx: ctx,
             options: BoxOptions(
                 id: id,
                 width: .percent(100),
+                flexGrow: grow ? 1 : nil,
                 flexDirection: .column,
                 paddingRight: .point(Float(inset)),
                 paddingBottom: .point(1),
@@ -2141,7 +2271,13 @@ public enum TUIPrimitive {
             )
         )
         box.add(header)
-        box.add(body)
+        if grow {
+            let content = BoxRenderable(ctx: ctx, options: BoxOptions(width: .percent(100), flexGrow: 1, flexDirection: .column))
+            content.add(body)
+            box.add(content)
+        } else {
+            box.add(body)
+        }
         if let buttons {
             box.add(buttons)
         } else if let footer {
@@ -2150,19 +2286,45 @@ public enum TUIPrimitive {
         return box
     }
 
-    /// Right-aligned interactive dialog button strip matching `ui/dialog.tsx#DialogButtons`.
-    // parity: tui/src/ui/dialog.tsx#DialogButtons [status=adapted hash=38998e7bdcb2]
+    /// Right-aligned interactive dialog button strip matching `ui/dialog.tsx#DialogButtons`. `hints` are extra key
+    /// actions shown on the left; a hint without a key takes its command's shortcut, and is dropped without one.
+    // parity: tui/src/ui/dialog.tsx#DialogButtons [status=adapted hash=f1034301abe9]
     public static func DialogButtons(
         ctx: any RenderContext,
         buttons: [DialogButton],
         active: Int,
-        theme: ResolvedTheme
+        theme: ResolvedTheme,
+        hints: [DialogFooterAction] = [],
+        shortcut: ((String) -> String?)? = nil,
+        onActive: (@Sendable (Int) -> Void)? = nil
     ) -> BoxRenderable {
         let surface = theme.surface(.dialog)
+        let resolvedHints = hints.flatMap { action -> [DialogFooterAction] in
+            guard action.key == nil, let command = action.command else { return [action] }
+            guard let key = shortcut?(command), !key.isEmpty else { return [] }
+            var copy = action
+            copy.key = key
+            return [copy]
+        }
         let row = BoxRenderable(
             ctx: ctx,
-            options: BoxOptions(width: .percent(100), flexDirection: .row, justifyContent: .flexEnd, gap: .point(1))
+            options: BoxOptions(
+                width: .percent(100),
+                flexDirection: .row,
+                justifyContent: resolvedHints.isEmpty ? .flexEnd : .spaceBetween
+            )
         )
+        if !resolvedHints.isEmpty {
+            // Hint items pad one cell for hover, so pull them back to line up with the body.
+            let hintGroup = BoxRenderable(ctx: ctx, options: BoxOptions(flexDirection: .row, marginLeft: .point(-1)))
+            for action in resolvedHints {
+                let item = BoxRenderable(ctx: ctx, options: BoxOptions(paddingRight: .point(1), paddingLeft: .point(1)))
+                item.add(renderFooterAction(ctx: ctx, action: action, surface: surface))
+                hintGroup.add(item)
+            }
+            row.add(hintGroup)
+        }
+        let buttonGroup = BoxRenderable(ctx: ctx, options: BoxOptions(flexDirection: .row, gap: .point(1)))
         for (idx, button) in buttons.enumerated() {
             let isActive = idx == active
             let btn = BoxRenderable(
@@ -2171,6 +2333,7 @@ public enum TUIPrimitive {
                     paddingRight: .point(1),
                     paddingLeft: .point(1),
                     onMouseUp: { _ in button.run() },
+                    onMouseOver: onActive.map { handler in { _ in handler(idx) } },
                     backgroundColor: isActive ? .rgba(surface.background.action.primary.focused) : nil
                 )
             )
@@ -2183,8 +2346,9 @@ public enum TUIPrimitive {
                     )
                 )
             )
-            row.add(btn)
+            buttonGroup.add(btn)
         }
+        row.add(buttonGroup)
         return row
     }
 
@@ -2595,12 +2759,16 @@ public enum TUIPrimitive {
         }
     }
 
-    // parity: tui/src/ui/dialog-prompt.tsx#DialogPrompt [status=adapted hash=fa9749c76853]
+    /// Under new designs the dialog ends in a Submit button, with the extra actions as hints on its left; the legacy
+    /// layout keeps the footer band.
+    // parity: tui/src/ui/dialog-prompt.tsx#DialogPrompt [status=adapted hash=dbc31302252c]
     public static func DialogPrompt(
         ctx: any RenderContext,
         props: DialogPromptProps,
         dialog: DialogContext,
-        theme: ResolvedTheme
+        theme: ResolvedTheme,
+        newDesigns: Bool = false,
+        shortcut: ((String) -> String?)? = nil
     ) -> BoxRenderable {
         dialog.setSize(props.size)
         let surface = theme.surface(.dialog)
@@ -2616,12 +2784,38 @@ public enum TUIPrimitive {
         if props.busy {
             body.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(props.busyText), fg: .rgba(surface.text.muted))))
         }
+        let header = DialogHeader(ctx: ctx, title: props.title, description: props.subtitle, theme: theme, onClose: {
+            if !props.busy { (props.onCancel ?? { dialog.clear() })() }
+        })
+        if newDesigns {
+            let extraActions = props.actions.map { action in
+                DialogFooterAction(
+                    title: action.title,
+                    command: action.command,
+                    // The rendered prompt is a snapshot, so the action's value handle has nothing to update.
+                    onTrigger: { action.onTrigger { _ in } },
+                    disabled: props.busy
+                )
+            }
+            return DialogLayout(
+                ctx: ctx,
+                id: "dialog-prompt",
+                header: header,
+                body: body,
+                buttons: DialogButtons(
+                    ctx: ctx,
+                    buttons: [DialogButton(label: "Submit") { props.onConfirm?(props.value) }],
+                    active: 0,
+                    theme: theme,
+                    hints: extraActions,
+                    shortcut: shortcut
+                )
+            )
+        }
         return DialogLayout(
             ctx: ctx,
             id: "dialog-prompt",
-            header: DialogHeader(ctx: ctx, title: props.title, description: props.subtitle, theme: theme, onClose: {
-                if !props.busy { (props.onCancel ?? { dialog.clear() })() }
-            }),
+            header: header,
             body: body,
             footer: DialogFooter(
                 ctx: ctx,
@@ -2693,7 +2887,7 @@ public enum TUIPrimitive {
         }
     }
 
-    // parity: tui/src/ui/dialog-select.tsx#DialogSelectProps [status=implemented hash=78aea675fdd1]
+    // parity: tui/src/ui/dialog-select.tsx#DialogSelectProps [status=implemented hash=79dcb45a537a]
     public struct DialogSelectProps<Value: Equatable & Sendable>: Sendable {
         public var title: String
         public var description: String?
@@ -2709,6 +2903,8 @@ public enum TUIPrimitive {
         public var onMove: (@Sendable (DialogSelectOption<Value>) -> Void)?
         public var onCancel: (@Sendable () -> Void)?
         public var footerActions: DialogFooterActions?
+        /// Fill the parent's height, keeping the footer at the bottom.
+        public var grow: Bool
 
         public init(
             title: String,
@@ -2724,8 +2920,10 @@ public enum TUIPrimitive {
             onSelect: (@Sendable (DialogSelectOption<Value>) -> Void)? = nil,
             onMove: (@Sendable (DialogSelectOption<Value>) -> Void)? = nil,
             onCancel: (@Sendable () -> Void)? = nil,
-            footerActions: DialogFooterActions? = nil
+            footerActions: DialogFooterActions? = nil,
+            grow: Bool = false
         ) {
+            self.grow = grow
             self.title = title
             self.description = description
             self.placeholder = placeholder
@@ -2842,12 +3040,16 @@ public enum TUIPrimitive {
     }
 
     /// Renders a searchable grouped select dialog into a `BoxRenderable`, matching `ui/dialog-select.tsx#DialogSelect`.
-    // parity: tui/src/ui/dialog-select.tsx#DialogSelect [status=adapted hash=55a8e8d322b6]
+    ///
+    /// Under new designs each row starts with a one-cell bar, `┃` on the active row in the row's own background
+    /// (such as a destructive confirmation's) or the focused form-field color.
+    // parity: tui/src/ui/dialog-select.tsx#DialogSelect [status=adapted hash=8e6c064e3109]
     public static func DialogSelect<Value: Equatable & Sendable>(
         ctx: any RenderContext,
         props: DialogSelectProps<Value>,
         dialog: DialogContext,
-        theme: ResolvedTheme
+        theme: ResolvedTheme,
+        newDesigns: Bool = false
     ) -> BoxRenderable {
         let surface = theme.surface(.dialog)
         let filtered = DialogSelectRef.filterOptions(props.options, needle: props.filter)
@@ -2935,7 +3137,20 @@ public enum TUIPrimitive {
                         )
                     )
                 }
-                listBox.add(row)
+                if newDesigns {
+                    let barred = BoxRenderable(ctx: ctx, options: BoxOptions(width: .percent(100), flexDirection: .row))
+                    barred.add(TextRenderable(ctx: ctx, options: TextOptions(
+                        content: .string(isActive ? "┃" : " "),
+                        width: .point(1),
+                        flexShrink: 0,
+                        fg: .rgba(option.bg ?? surface.text.formfield.focused)
+                    )))
+                    row.flexGrow = 1
+                    barred.add(row)
+                    listBox.add(barred)
+                } else {
+                    listBox.add(row)
+                }
                 if let details = option.details {
                     for detail in details {
                         listBox.add(
@@ -2953,15 +3168,19 @@ public enum TUIPrimitive {
             }
         }
 
-        let footerNode: Renderable? = props.footerActions.map {
-            DialogFooter(ctx: ctx, props: DialogFooterProps(actions: $0), theme: theme)
+        // Without actions there is no footer, so the list ends one blank row above the dialog edge.
+        let footerNode: Renderable? = props.footerActions.flatMap { actions in
+            actions.secondary.isEmpty && actions.primary.isEmpty
+                ? nil
+                : DialogFooter(ctx: ctx, props: DialogFooterProps(actions: actions), theme: theme, newDesigns: newDesigns)
         }
         return DialogLayout(
             ctx: ctx,
             id: "dialog-select",
             header: headerBox,
             body: listBox,
-            footer: footerNode
+            footer: footerNode,
+            grow: props.grow
         )
     }
 

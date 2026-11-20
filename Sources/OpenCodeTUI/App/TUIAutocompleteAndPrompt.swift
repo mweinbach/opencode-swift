@@ -467,7 +467,7 @@ public enum TUISettingsCatalog {
     public static let diffWrapChoices: [String] = ["word", "none"]
 
     public static var availableThemes: [String] {
-        var result: [String] = ["opencode", "opencode2"]
+        var result: [String] = ["opencode", "opencode-classic"]
         var seen: Set<String> = Set(result)
         for name in TUIThemeBridge.DEFAULT_THEMES.keys.sorted() {
             if seen.insert(name).inserted {

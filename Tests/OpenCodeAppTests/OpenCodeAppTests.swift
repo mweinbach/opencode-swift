@@ -56,7 +56,7 @@ struct OpenCodeAppThemeAndRenderingTests {
         #expect(light.isDark == false)
         #expect(dark.background != light.background)
         #expect(dark.textPrimary != light.textPrimary)
-        #expect(hex(dark.background) == "#0a0a0a")
+        #expect(hex(dark.background) == "#080808") // "opencode" is the new default theme (upstream 85951cb)
         #expect(hex(light.background) == "#ffffff")
 
         let opencode2Dark = AppResolvedPalette(themeName: "opencode2", mode: .dark)

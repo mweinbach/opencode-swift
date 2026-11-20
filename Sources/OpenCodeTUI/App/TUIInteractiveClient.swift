@@ -1108,14 +1108,13 @@ public struct TUIInteractiveState: Equatable, Sendable {
 
     public func resolveTheme() -> ResolvedTheme {
         let mode = effectiveMode
-        if themeName == "opencode" {
+        let all = TUIThemeBridge.allThemes()
+        // "opencode2" was the new theme's name before it became "opencode".
+        let name = themeName == "opencode2" && all["opencode2"] == nil ? "opencode" : themeName
+        if name == "opencode" {
             return ThemeDefaults.resolveOrDefault(ThemeDefaults.opencode, mode: mode)
         }
-        if themeName == "opencode2" {
-            return ThemeDefaults.resolveOrDefault(ThemeDefaults.opencode2, mode: mode)
-        }
-        let all = TUIThemeBridge.allThemes()
-        if let source = all[themeName], let doc = try? TUIThemeBridge.parseTheme(source, name: themeName) {
+        if let source = all[name], let doc = try? TUIThemeBridge.parseTheme(source, name: name) {
             return ThemeDefaults.resolveOrDefault(doc, mode: mode)
         }
         return ThemeDefaults.resolveOrDefault(nil, mode: mode)
@@ -1574,7 +1573,7 @@ public struct TUIInteractiveState: Equatable, Sendable {
             for (id, title, sub, active) in modeEntries where matches(title, sub) {
                 rows.append(TUIDialogRow(id: id, title: title, subtitle: sub, trailing: active ? "active" : nil, isActive: active))
             }
-            let builtInNames = ["opencode", "opencode2"] + TUIThemeBridge.DEFAULT_THEMES.keys.sorted()
+            let builtInNames = ["opencode", "opencode-classic"] + TUIThemeBridge.DEFAULT_THEMES.keys.sorted()
             for name in builtInNames {
                 guard matches(name) else { continue }
                 let active = themeName == name

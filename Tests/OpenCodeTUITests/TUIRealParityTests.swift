@@ -105,8 +105,10 @@ struct TUIRealParityTests {
         let expectedPromptBg = lightTheme.decrease(lightTheme.background.raised.base)
         let expectedAgentColor = state.agentColor(theme: lightTheme)
         #expect(expectedWhite == RGBA.fromHex("#ffffff"))
-        #expect(expectedPromptBg == RGBA.fromHex("#f5f5f5"))
-        #expect(expectedAgentColor == RGBA.fromHex("#7b5bb6"))
+        // The default "opencode" theme is the new design (upstream 85951cb): raised.base gray.700 decreased to gray.600,
+        // and the first categorical hue's 200 step (blue).
+        #expect(expectedPromptBg == RGBA.fromHex("#eeeeee"))
+        #expect(expectedAgentColor == RGBA.fromHex("#6e7380"))
         #expect(harness.cellBackground(x: 0, y: 0) == expectedWhite)
         #expect(harness.cellBackground(x: 99, y: 0) == expectedWhite)
         #expect(harness.cellBackground(x: 0, y: 33) == expectedWhite)
@@ -154,7 +156,7 @@ struct TUIRealParityTests {
         let frame = harness.frame()
         let darkTheme = state.resolveTheme()
         #expect(harness.cellBackground(x: 0, y: 0) == darkTheme.background.base)
-        #expect(harness.cellBackground(x: 0, y: 0) == RGBA.fromHex("#0a0a0a"))
+        #expect(harness.cellBackground(x: 0, y: 0) == RGBA.fromHex("#080808"))
 
         // 0 MCPs -> hidden from footer, version still visible
         #expect(!frame.contains("MCP"))
@@ -354,7 +356,7 @@ struct TUIRealParityTests {
 
         harness.testRenderer.mockInput.pressKey("t", modifiers: MockKeyModifiers(ctrl: true))
         #expect(harness.store.snapshot().effectiveMode == .dark)
-        #expect(harness.cellBackground(x: 0, y: 0) == RGBA.fromHex("#0a0a0a"))
+        #expect(harness.cellBackground(x: 0, y: 0) == RGBA.fromHex("#080808"))
 
         harness.testRenderer.mockInput.pressKey("t", modifiers: MockKeyModifiers(ctrl: true))
         #expect(harness.store.snapshot().effectiveMode == .light)

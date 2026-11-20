@@ -272,11 +272,14 @@ public enum TUIComponent {
         public let id: String
         public let title: String
         public let description: String
+        /// Whether the experiment is on when the config does not set it.
+        public let `default`: Bool?
 
-        public init(id: String, title: String, description: String) {
+        public init(id: String, title: String, description: String, default: Bool? = nil) {
             self.id = id
             self.title = title
             self.description = description
+            self.default = `default`
         }
     }
 
@@ -286,7 +289,8 @@ public enum TUIComponent {
         ExperimentDefinition(
             id: "new-designs",
             title: "New designs",
-            description: "Preview the new TUI designs"
+            description: "Preview the new TUI designs",
+            default: true
         ),
         ExperimentDefinition(
             id: "client-mcp",
@@ -318,14 +322,19 @@ public enum TUIComponent {
         public var registry: [ExperimentDefinition] { state.withLock { $0.registry } }
         public var allFlags: [String: Bool] { state.withLock { $0.flags } }
 
+        /// The configured flag, else the experiment's default, else off.
         public func isEnabled(_ id: String) -> Bool {
-            state.withLock { $0.flags[id] == true }
+            state.withLock { Self.enabled(id, $0) }
+        }
+
+        private static func enabled(_ id: String, _ s: State) -> Bool {
+            (s.flags[id] ?? s.registry.first { $0.id == id }?.default ?? false) == true
         }
 
         @discardableResult
         public func toggle(_ id: String) async throws -> Bool {
             let (next, snapshot) = state.withLock { s -> (Bool, [String: Bool]) in
-                let value = !(s.flags[id] == true)
+                let value = !Self.enabled(id, s)
                 s.flags[id] = value
                 return (value, s.flags)
             }
@@ -347,7 +356,7 @@ public enum TUIComponent {
     }
 
     /// Renders the permanent Experiments dialog (including empty-registry state), matching `dialog-experiments.tsx`.
-    // parity: tui/src/component/dialog-experiments.tsx#DialogExperiments [status=adapted hash=3b4d9516b125]
+    // parity: tui/src/component/dialog-experiments.tsx#DialogExperiments [status=adapted hash=0cba9634b987]
     public static func DialogExperiments(
         ctx: any RenderContext,
         store: ExperimentsStore,
@@ -904,10 +913,12 @@ public enum TUIComponent {
     }
 
     /// Radiating shimmer background art renderable for OpenCode Go upsell (`go-upsell-art.ts`).
-    // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable [status=adapted hash=6dec1d006e67]
+    // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable [status=adapted hash=ef2f24e4554d]
     public final class GoUpsellArtRenderable: Renderable, @unchecked Sendable {
         private static let periodMs: Double = 4600.0
         private static let stillMs: Double = 2300.0
+        /// The art ticks at 30 fps; every cell changes each tick.
+        private static let fps: Double = 30
 
         private var _animate: Bool
         private var _background: RGBA
@@ -931,17 +942,17 @@ public enum TUIComponent {
             self._logoBase = logoBase
             self._logoAnchor = logoAnchor
             self.elapsedMs = animate ? 0 : Self.stillMs
-            super.init(ctx: ctx, options: RenderableOptions(id: "go-upsell-art"))
-            if animate { animationFps = 30 }
+            // Ticks on the renderer's shared animation clock only while animating and drawn.
+            super.init(ctx: ctx, options: RenderableOptions(id: "go-upsell-art", animationFps: animate ? Self.fps : nil))
         }
 
-        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.animate [status=implemented hash=6b9a11ac587c]
+        // parity: tui/src/component/go-upsell-art.ts#GoUpsellArtRenderable.animate [status=implemented hash=fd0fff2acbef]
         public var animate: Bool {
             get { _animate }
             set {
                 guard newValue != _animate else { return }
                 _animate = newValue
-                animationFps = newValue ? 30 : nil
+                animationFps = newValue ? Self.fps : nil
                 if !newValue { elapsedMs = Self.stillMs }
                 redraw()
             }
@@ -1004,13 +1015,11 @@ public enum TUIComponent {
         }
 
         public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
-            guard _animate else { return }
             elapsedMs = (elapsedMs + deltaTime).truncatingRemainder(dividingBy: Self.periodMs)
             requestRender()
         }
 
         public override func destroySelf() {
-            animationFps = nil
             _logoAnchor = nil
             super.destroySelf()
         }
@@ -1780,7 +1789,7 @@ public enum TUIComponent {
         case new(name: String)
     }
 
-    // parity: tui/src/component/dialog-workspaces.tsx#DialogWorkspaces [status=adapted hash=33a7f0d7e4f2]
+    // parity: tui/src/component/dialog-workspaces.tsx#DialogWorkspaces [status=adapted hash=37488019ef3c]
     public static func DialogWorkspaces(
         ctx: any RenderContext,
         directories: [String],
@@ -1796,7 +1805,7 @@ public enum TUIComponent {
         }
         return TUIPrimitive.DialogSelect(
             ctx: ctx,
-            props: TUIPrimitive.DialogSelectProps(title: "Workspaces", options: options, current: current),
+            props: TUIPrimitive.DialogSelectProps(title: "Workspaces", options: options, current: current, grow: true),
             dialog: dialog,
             theme: theme
         )

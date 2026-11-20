@@ -148,7 +148,7 @@ public enum TUIConfig {
         // parity: tui/src/config/keybind.ts#LeaderDefault [status=implemented hash=83ca3f4e2efe]
         public static let LeaderDefault = "ctrl+x"
 
-        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=fbb65a5e11fb]
+        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=62f715d86dfd]
         public static let Definitions: [String: Definition] = [
             "leader": Definition(.item(.sequence(LeaderDefault)), "Leader key for keybind combinations"),
             "app.exit": Definition("ctrl+c,ctrl+d,<leader>q", "Exit the application"),
@@ -351,6 +351,9 @@ public enum TUIConfig {
             "composer.shell.down": Definition("down", "Next shell"),
             "composer.shell.select": Definition("return", "View shell output"),
             "composer.shell.kill": Definition("ctrl+d", "Kill shell command"),
+            "composer.script.up": Definition("up", "Previous script"),
+            "composer.script.down": Definition("down", "Next script"),
+            "composer.script.cancel": Definition("ctrl+d", "Cancel script"),
             "composer.terminal.up": Definition("up,k", "Previous terminal"),
             "composer.terminal.down": Definition("down,j", "Next terminal"),
             "composer.terminal.select": Definition("return", "Select terminal"),
@@ -1181,9 +1184,10 @@ public enum TUIConfig {
         try useConfig().data.cursor
     }
 
-    // parity: tui/src/config/index.tsx#useNewDesigns [status=adapted hash=47c3482ba562]
+    /// Reactive accessor for the temporary "new-designs" experiment. On unless the config turns it off.
+    // parity: tui/src/config/index.tsx#useNewDesigns [status=adapted hash=97c19b0bc140]
     public static func useNewDesigns() throws(ConfigError) -> Bool {
-        try useConfig().data.experimental?["new-designs"] == true
+        try useConfig().data.experimental?["new-designs"] != false
     }
 
     // parity: tui/src/config/index.tsx#useClientMcpExperiment [status=adapted hash=59580d51c9f0]
@@ -4265,17 +4269,26 @@ public enum TUIContext {
         private let state: Mutex<Inner>
 
         public init(mode: Mode = .dark, activeName: String = "opencode", customThemes: [String: ThemeDocument] = [:]) {
-            var all: [String: ThemeDocument] = ["opencode": ThemeDefaults.opencode]
+            var all: [String: ThemeDocument] = [
+                "opencode": ThemeDefaults.opencode,
+                "opencode-classic": ThemeDefaults.opencodeClassic,
+            ]
             for (k, v) in customThemes { all[k] = v }
             self.state = Mutex(Inner(activeName: activeName, mode: mode, lockedMode: nil, themes: all, surface: nil))
         }
 
-        public var selected: String { state.withLock { $0.activeName } }
+        /// "opencode2" was the new theme's name before it became "opencode".
+        private static func alias(_ name: String, _ themes: [String: ThemeDocument]) -> String {
+            name == "opencode2" && themes["opencode2"] == nil ? "opencode" : name
+        }
+
+        /// The theme actually shown, with aliases resolved.
+        public var selected: String { state.withLock { Self.alias($0.activeName, $0.themes) } }
         public var mode: Mode { state.withLock { $0.lockedMode ?? $0.mode } }
         public var locked: Bool { state.withLock { $0.lockedMode != nil } }
 
         public func has(_ name: String) -> Bool {
-            state.withLock { $0.themes[name] != nil }
+            state.withLock { !name.isEmpty && $0.themes[Self.alias(name, $0.themes)] != nil }
         }
 
         public func modes() -> [Mode] {
@@ -4290,8 +4303,9 @@ public enum TUIContext {
         @discardableResult
         public func set(_ theme: String) -> Bool {
             state.withLock { s in
-                guard s.themes[theme] != nil else { return false }
-                s.activeName = theme
+                let name = Self.alias(theme, s.themes)
+                guard !theme.isEmpty, s.themes[name] != nil else { return false }
+                s.activeName = name
                 return true
             }
         }
@@ -4311,7 +4325,7 @@ public enum TUIContext {
         }
 
         private func activeDocument() -> ThemeDocument {
-            state.withLock { $0.themes[$0.activeName] ?? ThemeDefaults.opencode }
+            state.withLock { $0.themes[Self.alias($0.activeName, $0.themes)] ?? ThemeDefaults.opencode }
         }
 
         public func currentTokens() -> ResolvedTheme {
