@@ -314,7 +314,7 @@ extension CodemodeLanguage {
                 return .bool(true)
             },
             Method("toWellFormed", 0) { thisVal, _, _, _ in .string(coerceToString(thisVal)) },
-            Method("matchAll", 1) { thisVal, args, site, eval in
+            Method("matchAll", 1) { thisVal, args, _, eval in
                 let s = coerceToString(thisVal)
                 let arg = args.first ?? .undefined
                 let rx: RegExpObj
@@ -322,28 +322,23 @@ extension CodemodeLanguage {
                     guard existing.flags.contains("g") else {
                         throw typeError("String.matchAll requires a regular expression with the global (g) flag: write /\(existing.source)/\(existing.flags)g, or use String.match for a single match.")
                     }
-                    rx = RegExpObj(proto: builtins.RegExp, pattern: existing.pattern, flags: existing.flags)
-                    rx.lastIndex = existing.lastIndex
+                    rx = RegExpObj(proto: builtins.RegExp, compiled: existing.compiled)
+                    rx.lastIndexNumber = existing.lastIndexNumber
                 } else {
-                    rx = try constructRegExp(builtins, args: [arg.isUndefined ? .string("") : .string(coerceToString(arg)), .string("g")])
+                    let pat = arg.isUndefined ? "" : coerceToString(arg)
+                    rx = try compileStringPattern(builtins, source: pat, method: "matchAll", extraFlags: "g")
                 }
+                let units = Array(s.utf16)
+                let unicode = rx.compiled.flags.isUnicodeMode
                 var matches: [Value] = []
-                while true {
-                    let m = try await invokeMethod(eval, target: .object(rx), name: "exec", args: [.string(s)], site: site)
-                    guard case .object(let mObj) = m else { break }
-                    matches.append(m)
-                    if case .string(let whole) = get(mObj, "0"), whole.isEmpty { rx.lastIndex += 1 }
-                }
-                let list = matches
-                let index = Mutex(0)
-                let cursor = Cursor {
-                    index.withLock { i in
-                        guard i < list.count else { return Step(value: .undefined, done: true) }
-                        defer { i += 1 }
-                        return Step(value: list[i], done: false)
+                while let m = try regexExec(rx, units: units, eval: eval) {
+                    try checkArrayLength(matches.count + 1)
+                    matches.append(matchToValue(m, in: s, units: units, builtins: builtins))
+                    if m.range.isEmpty {
+                        rx.lastIndexNumber = Double(ECMAScriptRegExp.advanceIndex(in: units, from: m.range.lowerBound, unicode: unicode))
                     }
                 }
-                return .object(IteratorObj(proto: builtins.Iterator, cursor: cursor))
+                return .object(Arr(proto: builtins.Array, items: matches))
             },
         ])
 
@@ -584,27 +579,7 @@ extension CodemodeLanguage {
     // Upstream: psychoscript/src/stdlib/regexp.ts#escape (implemented).
     /// ES2025 RegExp.escape.
     static func regexpEscape(_ s: String) -> String {
-        var out = ""
-        let syntax: Set<Character> = ["^", "$", "\\", ".", "*", "+", "?", "(", ")", "[", "]", "{", "}", "|", "/"]
-        let other: Set<Character> = [",", "-", "=", "<", ">", "#", "&", "!", "%", ":", ";", "@", "~", "'", "`", "\""]
-        for (i, scalar) in s.unicodeScalars.enumerated() {
-            let ch = Character(scalar)
-            if i == 0, scalar.properties.isASCIIHexDigit || (scalar.value >= 0x41 && scalar.value <= 0x5A) || (scalar.value >= 0x61 && scalar.value <= 0x7A) || (scalar.value >= 0x30 && scalar.value <= 0x39) {
-                out += String(format: "\\x%02x", scalar.value)
-            } else if syntax.contains(ch) {
-                out += "\\\(ch)"
-            } else if other.contains(ch) || scalar == " " {
-                out += String(format: "\\x%02x", scalar.value)
-            } else if scalar.properties.isWhitespace || scalar.value == 0xFEFF || scalar.value == 0x2028 || scalar.value == 0x2029 {
-                out += scalar.value <= 0xFF ? String(format: "\\x%02x", scalar.value) : String(format: "\\u%04x", scalar.value)
-            } else if scalar.value == 0x09 { out += "\\t" }
-            else if scalar.value == 0x0A { out += "\\n" }
-            else if scalar.value == 0x0B { out += "\\v" }
-            else if scalar.value == 0x0C { out += "\\f" }
-            else if scalar.value == 0x0D { out += "\\r" }
-            else { out.unicodeScalars.append(scalar) }
-        }
-        return out
+        ECMAScriptRegExp.escape(s)
     }
 
     // MARK: Date
