@@ -1025,6 +1025,11 @@ public final class ServerAppRuntime: Sendable {
     public let modelsDevOptions: CoreModel.ModelsDev.Options
     public let defaultDirectory: String
     public let scope: LayerNode.ResourceScope
+    /// The one-time session search build (`SessionSearchBuild.node`, an application service upstream). Its `run` is
+    /// forked once per server process and waits until a location with `sqlite_fts` on starts it.
+    public let sessionSearchBuild: any SessionSearchBuild.Interface
+    private let sessionSearchTask = Mutex<Task<Void, Never>?>(nil)
+    private let sessionSearchStarted = Mutex(false)
     private let backgroundRefreshTask = Mutex<Task<Void, Never>?>(nil)
     private let isClosed = Mutex(false)
 
@@ -1135,6 +1140,20 @@ public final class ServerAppRuntime: Sendable {
         )
         self.defaultDirectory = defaultDirectory
         self.scope = scope
+        let build = SessionSearchBuild.Service(db: databaseService.db)
+        self.sessionSearchBuild = build
+        sessionSearchTask.withLock { $0 = Task(priority: .utility) { await build.run() } }
+    }
+
+    /// `ConfigSessionSearchPlugin`: starts the session search build once a booted location has the `sqlite_fts` flag
+    /// on. Runs off the request path; once started, later locations skip the flag read.
+    internal func applySessionSearch(_ bundle: ServerLocationBundle) {
+        guard !sessionSearchStarted.withLock({ $0 }) else { return }
+        Task(priority: .utility) { [self] in
+            if await CoreConfigPlugin.SessionSearch.apply(flags: bundle.flag, build: sessionSearchBuild) {
+                sessionSearchStarted.withLock { $0 = true }
+            }
+        }
     }
 
     /// Force-refreshes the live ModelsDev catalog (when live network is enabled) prior to location reload.
@@ -1219,12 +1238,17 @@ public final class ServerAppRuntime: Sendable {
             )
         }
         startBackgroundModelsDevRefreshIfNeeded()
+        applySessionSearch(bundle)
         return bundle
     }
 
     public func close() async {
         isClosed.withLock { $0 = true }
         backgroundRefreshTask.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+        sessionSearchTask.withLock { task in
             task?.cancel()
             task = nil
         }

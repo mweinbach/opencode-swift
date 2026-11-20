@@ -140,9 +140,26 @@ public enum CoreShell {
         ]
         private static let cwdBuiltins: Set<String> = ["cd", "chdir", "popd", "pushd", "push-location", "set-location"]
 
+        /// The home a scan expands `~` against (`options.home` upstream).
+        public enum Home: Equatable, Hashable, Sendable {
+            /// This server's home directory (`options.home` unset).
+            case server
+            /// A known home directory.
+            case path(String)
+            /// No home is known here (`options.home: null`): a machine's home is not this server's, so `~` there is
+            /// left as written for locating to resolve on that machine.
+            case unknown
+        }
+
         /// Scans a shell command into permission resources, save patterns, and directory operands (`cd ...`).
-        // parity: core/src/shell/parse.ts#scan [status=adapted hash=3f4fc0d1ec4e]
-        public static func scan(command: String, shell: String, cwd: String) throws -> Result {
+        // parity: core/src/shell/parse.ts#scan [status=adapted hash=837d112160a0]
+        public static func scan(command: String, shell: String, cwd: String, home: Home = .server) throws -> Result {
+            let resolvedHome: String?
+            switch home {
+            case .server: resolvedHome = Global.Path.home
+            case .path(let value): resolvedHome = value
+            case .unknown: resolvedHome = nil
+            }
             let powershell = Select.ps(shell)
             let shellName = Select.name(shell)
             let scanned: Scan.Result
@@ -198,9 +215,23 @@ public enum CoreShell {
                     if let dirWords = unwrapped, dirWords.count >= 2 {
                         let headLower = dirWords[0].lowercased()
                         if headLower != "popd" && headLower != "pop-location" {
-                            for arg in extractDirectoryOperands(Array(dirWords.dropFirst()), powershell: powershell) {
+                            // The raw words line up with the unwrapped words from the end; a raw word starting with `~`
+                            // is an unquoted, unescaped tilde.
+                            let rawTail = Array(effectiveRawWords.suffix(dirWords.count))
+                            let operands = extractDirectoryOperands(
+                                Array(dirWords.dropFirst()),
+                                raw: rawTail.count == dirWords.count ? Array(rawTail.dropFirst()) : nil,
+                                powershell: powershell
+                            )
+                            for (arg, unquotedTilde) in operands {
                                 if !arg.isEmpty && arg != "-" && !arg.contains("$") && !arg.contains("`") {
-                                    directories.append(CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: arg))
+                                    directories.append(directoryArgument(
+                                        arg,
+                                        cwd: cwd,
+                                        powershell: powershell,
+                                        unquotedTilde: unquotedTilde,
+                                        home: resolvedHome
+                                    ))
                                 }
                             }
                         }
@@ -236,18 +267,47 @@ public enum CoreShell {
             return Array(words[idx...])
         }
 
-        private static func extractDirectoryOperands(_ args: [String], powershell: Bool) -> [String] {
-            var operands: [String] = []
+        /// Resolves one directory operand. With a known home a leading `~` expands against it; with none, a tilde is left
+        /// as written so locating resolves it on that machine, and a quoted or escaped `~` (a directory of that name to
+        /// `sh`) gets `./` so locating never reads it as a home. PowerShell words carry no such flag and stay as written.
+        private static func directoryArgument(
+            _ arg: String,
+            cwd: String,
+            powershell: Bool,
+            unquotedTilde: Bool,
+            home: String?
+        ) -> String {
+            guard arg.hasPrefix("~") else {
+                return CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: arg, home: home ?? Global.Path.home)
+            }
+            guard let home else {
+                return unquotedTilde || powershell
+                    ? arg
+                    : CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: "./\(arg)")
+            }
+            return CoreFilesystem.FileAccess.resolvePath(directory: cwd, input: arg, home: home)
+        }
+
+        private static func extractDirectoryOperands(
+            _ args: [String],
+            raw: [String]?,
+            powershell: Bool
+        ) -> [(String, Bool)] {
+            var operands: [(String, Bool)] = []
+            func tilde(_ index: Int) -> Bool {
+                guard let raw, index < raw.count else { return false }
+                return raw[index].hasPrefix("~")
+            }
             var endOfOptions = false
             var expectPath = false
-            for arg in args {
+            for (index, arg) in args.enumerated() {
                 if !endOfOptions && arg == "--" {
                     endOfOptions = true
                     continue
                 }
                 if powershell {
                     if expectPath {
-                        operands.append(arg)
+                        operands.append((arg, tilde(index)))
                         expectPath = false
                         continue
                     }
@@ -257,17 +317,17 @@ public enum CoreShell {
                         if lower.hasPrefix("-p") || lower.hasPrefix("-l") {
                             if let colon = arg.firstIndex(of: ":") {
                                 let tail = String(arg[arg.index(after: colon)...])
-                                if !tail.isEmpty { operands.append(tail) }
+                                if !tail.isEmpty { operands.append((tail, false)) }
                             } else {
                                 expectPath = true
                             }
                         }
                         continue
                     }
-                    operands.append(arg)
+                    operands.append((arg, tilde(index)))
                 } else {
                     if endOfOptions || arg == "-" || !arg.hasPrefix("-") {
-                        operands.append(arg)
+                        operands.append((arg, tilde(index)))
                     }
                 }
             }
@@ -837,6 +897,8 @@ public enum CoreShell {
         public let metadata: ShellSchema.Metadata
         public let toolCall: ToolCall?
         public let waited: Bool
+        /// Where the working directory lives, and so where the command runs. The Location's own environment when unset.
+        public let environment: (any CoreLocation.Environment.Interface)?
 
         public init(
             command: String,
@@ -845,7 +907,8 @@ public enum CoreShell {
             shell: String? = nil,
             metadata: ShellSchema.Metadata = [:],
             toolCall: ToolCall? = nil,
-            waited: Bool = true
+            waited: Bool = true,
+            environment: (any CoreLocation.Environment.Interface)? = nil
         ) {
             self.command = command
             self.cwd = cwd
@@ -854,6 +917,7 @@ public enum CoreShell {
             self.metadata = metadata
             self.toolCall = toolCall
             self.waited = waited
+            self.environment = environment
         }
     }
 
@@ -914,6 +978,8 @@ public enum CoreShell {
             var task: Task<Void, Never>?
             var waiters: [CheckedContinuation<ShellSchema.Info, any Swift.Error>] = []
             var terminated: Bool = false
+            /// Why its exit could not be read, such as a machine's worker restarting: the driver's own sentence.
+            var killed: String?
 
             init(info: ShellSchema.Info, toolCall: ToolCall?) {
                 self.info = info
@@ -928,6 +994,9 @@ public enum CoreShell {
         private let processes: any AppProcess.Interface
         private let shellSelect: any Select.Interface
         private let daemon: any DaemonInterface
+        /// The Location's own environment.
+        private let environment: any CoreLocation.Environment.Interface
+        private let workspaceID: WorkspaceID?
         private let state = Mutex<[ShellSchema.ID: Entry]>([:])
 
         public init(
@@ -937,7 +1006,9 @@ public enum CoreShell {
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             processes: any AppProcess.Interface = AppProcess.Service(),
             shellSelect: any Select.Interface = Select.Service(),
-            daemon: any DaemonInterface = Daemon()
+            daemon: any DaemonInterface = Daemon(),
+            environment: (any CoreLocation.Environment.Interface)? = nil,
+            workspaceID: WorkspaceID? = nil
         ) {
             self.directory = directory
             self.projectID = projectID
@@ -946,14 +1017,26 @@ public enum CoreShell {
             self.processes = processes
             self.shellSelect = shellSelect
             self.daemon = daemon
+            self.environment = environment ?? CoreLocation.Environment.local(fileSystem: fileSystem)
+            self.workspaceID = workspaceID
         }
 
         public func create(
             _ input: CreateRequest,
             before: (@Sendable (inout CreateBeforeInvocation) async throws -> Void)? = nil
         ) async throws -> ShellSchema.Info {
+            let target = input.environment ?? environment
+            // Local only on this server's own machine: the Location's environment, by id, outside a workspace. A
+            // command anywhere else takes none of this machine's variables, keeps its cwd as given and is spawned
+            // from the server.
+            let local = workspaceID == nil && target.id == environment.id
+            // A command anywhere else has none of this server's shell paths, and the driver runs only argv, cwd and
+            // env. `sh -c` is the contract every POSIX worker can meet. Only a command outside this Location's
+            // environment takes it: a workspace session keeps its own shell.
             let resolvedShell: String
-            if let s = input.shell {
+            if target.id != environment.id {
+                resolvedShell = "sh"
+            } else if let s = input.shell {
                 resolvedShell = s
             } else {
                 resolvedShell = await shellSelect.resolve(Select.ResolveInput(priority: .compat))
@@ -968,6 +1051,10 @@ public enum CoreShell {
             if let before {
                 try await before(&invocation)
             }
+            // Absolute for local commands, so the command reports the same cwd wherever it runs.
+            if local {
+                invocation.cwd = CoreConfigDiscovery.resolvePath(base: directory, relative: invocation.cwd)
+            }
 
             let id = ShellSchema.ID.create()
             let outputDir = CoreConfigDiscovery.joinPath(
@@ -975,6 +1062,7 @@ public enum CoreShell {
                 projectID.rawValue
             )
             let outputFile = CoreConfigDiscovery.joinPath(outputDir, "\(id.rawValue).out")
+            // Created per command: the directory can be removed while the Location stays open.
             try await fileSystem.writeFile([], to: outputFile, createDirectories: true)
 
             let startedAt = Double(Flock.currentEpochMs())
@@ -997,6 +1085,7 @@ public enum CoreShell {
             let procService = self.processes
             let fs = self.fileSystem
             let finalInvocation = invocation
+            let remote: (any CoreLocation.Environment.Interface)? = target.id == environment.id ? nil : target
             let runnerTask = Task {
                 let spec = ProcessSpec(
                     executable: finalInvocation.shell,
@@ -1005,8 +1094,18 @@ public enum CoreShell {
                     environment: finalInvocation.env.isEmpty ? nil : finalInvocation.env
                 )
                 do {
-                    let runResult = try await procService.run(spec, options: AppProcess.RunOptions(combineOutput: true))
-                    let combined = runResult.output ?? (runResult.stdout + runResult.stderr)
+                    let combined: [UInt8]
+                    let exitCode: Int32
+                    if let remote {
+                        // A working directory in another environment runs there, through its spawner.
+                        let output = try await remote.spawner.run(spec)
+                        combined = output.stdout + output.stderr
+                        exitCode = output.exitCode
+                    } else {
+                        let runResult = try await procService.run(spec, options: AppProcess.RunOptions(combineOutput: true))
+                        combined = runResult.output ?? (runResult.stdout + runResult.stderr)
+                        exitCode = runResult.exitCode
+                    }
                     try? await fs.writeFile(combined, to: outputFile, createDirectories: true)
                     let completedAt = Double(Flock.currentEpochMs())
                     let finishedInfo = ShellSchema.Info(
@@ -1017,7 +1116,7 @@ public enum CoreShell {
                         shell: finalInvocation.shell,
                         file: outputFile,
                         pid: nil,
-                        exit: Double(runResult.exitCode),
+                        exit: Double(exitCode),
                         signal: nil,
                         metadata: input.metadata,
                         time: ShellSchema.Time(started: startedAt, completed: completedAt)
@@ -1025,7 +1124,13 @@ public enum CoreShell {
                     Self.completeEntry(entry, with: finishedInfo)
                 } catch {
                     let msg = String(describing: error)
-                    try? await fs.writeFile(Array(msg.utf8), to: outputFile, createDirectories: true)
+                    // A command on another machine that cannot read its exit reports the driver's own sentence instead
+                    // of an exit code; a local one is unchanged.
+                    if remote != nil {
+                        entry.lock.withLock { _ in entry.killed = msg }
+                    } else {
+                        try? await fs.writeFile(Array(msg.utf8), to: outputFile, createDirectories: true)
+                    }
                     let completedAt = Double(Flock.currentEpochMs())
                     let finishedInfo = ShellSchema.Info(
                         id: id,
@@ -1035,7 +1140,7 @@ public enum CoreShell {
                         shell: finalInvocation.shell,
                         file: outputFile,
                         pid: nil,
-                        exit: 1,
+                        exit: remote == nil ? 1 : nil,
                         signal: nil,
                         metadata: input.metadata,
                         time: ShellSchema.Time(started: startedAt, completed: completedAt)
@@ -1087,6 +1192,9 @@ public enum CoreShell {
             } else {
                 finalInfo = (try? await wait(started.id)) ?? started
             }
+            let killed: String? = state.withLock { $0[finalInfo.id] }.flatMap { entry in
+                entry.lock.withLock { _ in entry.killed }
+            }
             guard let bytes = try? await fileSystem.readFile(at: finalInfo.file) else {
                 return ResultHelper.Result(info: finalInfo, capture: nil)
             }
@@ -1096,7 +1204,7 @@ public enum CoreShell {
             let preview = truncated ? TextBoundary.utf8Tail(bytes, limit: 50 * 1024) : display
             return ResultHelper.Result(
                 info: finalInfo,
-                capture: ResultHelper.Capture(output: preview, truncated: truncated)
+                capture: ResultHelper.Capture(output: preview, truncated: truncated, killed: killed)
             )
         }
 
@@ -1227,7 +1335,7 @@ public enum CoreShell {
         []
     )
 
-    // parity: core/src/shell.ts#node [status=adapted hash=1edae422e8e6]
+    // parity: core/src/shell.ts#node [status=adapted hash=07f0b8100386]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1237,13 +1345,19 @@ public enum CoreShell {
             let proc = deps.get(AppProcess.Service.serviceKey, as: (any AppProcess.Interface).self) ?? AppProcess.Service()
             let select = deps.get(Select.Service.serviceKey, as: (any Select.Interface).self) ?? Select.Service()
             let daemon = deps.get(Daemon.serviceKey, as: (any DaemonInterface).self) ?? Daemon()
+            let location = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
             let svc = Service(
                 directory: dir,
                 globalPaths: global,
                 fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared,
                 processes: proc,
                 shellSelect: select,
-                daemon: daemon
+                daemon: daemon,
+                environment: deps.get(
+                    CoreLocation.Environment.Service.serviceKey,
+                    as: (any CoreLocation.Environment.Interface).self
+                ),
+                workspaceID: location?.info.workspaceID
             )
             return LayerNode.Output([Service.serviceKey: svc as any Interface])
         },

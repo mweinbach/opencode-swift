@@ -54,8 +54,10 @@ public enum CoreRipgrep {
         public var description: String { message }
     }
 
-    // parity: core/src/ripgrep.ts#FindInput [status=implemented hash=7dae06170251]
+    // parity: core/src/ripgrep.ts#FindInput [status=implemented hash=d396a41012ec]
     public struct FindInput: Sendable {
+        /// Where `cwd` lives, and so where the search runs.
+        public let environment: any CoreLocation.Environment.Interface
         public let cwd: String
         public let pattern: String
         public let limit: Int
@@ -66,6 +68,7 @@ public enum CoreRipgrep {
         public let onEntry: (@Sendable (FileSystemSchema.Entry) async -> Void)?
 
         public init(
+            environment: any CoreLocation.Environment.Interface = CoreLocation.Environment.host,
             cwd: String,
             pattern: String,
             limit: Int,
@@ -75,6 +78,7 @@ public enum CoreRipgrep {
             signal: AbortSignal? = nil,
             onEntry: (@Sendable (FileSystemSchema.Entry) async -> Void)? = nil
         ) {
+            self.environment = environment
             self.cwd = cwd
             self.pattern = pattern
             self.limit = limit
@@ -86,8 +90,10 @@ public enum CoreRipgrep {
         }
     }
 
-    // parity: core/src/ripgrep.ts#GlobInput [status=implemented hash=ae75eefd5da7]
+    // parity: core/src/ripgrep.ts#GlobInput [status=implemented hash=27a7783d8133]
     public struct GlobInput: Sendable {
+        /// Where `cwd` lives, and so where the search runs.
+        public let environment: any CoreLocation.Environment.Interface
         public let cwd: String
         public let pattern: String
         public let limit: Int
@@ -96,6 +102,7 @@ public enum CoreRipgrep {
         public let signal: AbortSignal?
 
         public init(
+            environment: any CoreLocation.Environment.Interface = CoreLocation.Environment.host,
             cwd: String,
             pattern: String,
             limit: Int,
@@ -103,6 +110,7 @@ public enum CoreRipgrep {
             follow: Bool? = nil,
             signal: AbortSignal? = nil
         ) {
+            self.environment = environment
             self.cwd = cwd
             self.pattern = pattern
             self.limit = limit
@@ -112,8 +120,10 @@ public enum CoreRipgrep {
         }
     }
 
-    // parity: core/src/ripgrep.ts#GrepInput [status=implemented hash=0a88643b963e]
+    // parity: core/src/ripgrep.ts#GrepInput [status=implemented hash=f9f58a4f17fe]
     public struct GrepInput: Sendable {
+        /// Where `cwd` lives, and so where the search runs.
+        public let environment: any CoreLocation.Environment.Interface
         public let cwd: String
         public let pattern: String
         public let file: String?
@@ -124,6 +134,7 @@ public enum CoreRipgrep {
         public let signal: AbortSignal?
 
         public init(
+            environment: any CoreLocation.Environment.Interface = CoreLocation.Environment.host,
             cwd: String,
             pattern: String,
             file: String? = nil,
@@ -133,6 +144,7 @@ public enum CoreRipgrep {
             limit: Int,
             signal: AbortSignal? = nil
         ) {
+            self.environment = environment
             self.cwd = cwd
             self.pattern = pattern
             self.file = file
@@ -271,9 +283,15 @@ public enum CoreRipgrep {
             self.fileSystem = fileSystem
         }
 
+        /// The disk a search runs over: this machine's file system for the local environment, the input environment's
+        /// files anywhere else (upstream spawns `rg` through `input.environment.spawner`).
+        private func disk(_ environment: any CoreLocation.Environment.Interface) -> any OpenCodeFileSystem {
+            CoreFilesystem.FileMutation.fileSystem(for: environment, local: fileSystem)
+        }
+
         public func find(_ input: FindInput) async throws -> [FileSystemSchema.Entry] {
             try checkAborted(input.signal)
-            let files = try await walkFiles(root: input.cwd, hidden: input.hidden ?? false)
+            let files = try await walkFiles(disk(input.environment), root: input.cwd, hidden: input.hidden ?? false)
             let excludes = input.exclude ?? []
             var results: [FileSystemSchema.Entry] = []
             for rel in files {
@@ -301,7 +319,7 @@ public enum CoreRipgrep {
             try checkAborted(input.signal)
             try validateGlobPattern(input.pattern)
             let hidden = input.hidden ?? false
-            let files = try await walkFiles(root: input.cwd, hidden: hidden)
+            let files = try await walkFiles(disk(input.environment), root: input.cwd, hidden: hidden)
             var results: [FileSystemSchema.Entry] = []
             for rel in files {
                 try checkAborted(input.signal)
@@ -342,11 +360,12 @@ public enum CoreRipgrep {
             }
             #endif
 
+            let disk = self.disk(input.environment)
             let targets: [String]
             if let singleFile = input.file {
                 targets = [normalizeRelPath(singleFile)]
             } else {
-                targets = try await walkFiles(root: input.cwd, hidden: true)
+                targets = try await walkFiles(disk, root: input.cwd, hidden: true)
             }
 
             var matches: [FileSystemSchema.Match] = []
@@ -356,7 +375,7 @@ public enum CoreRipgrep {
                     continue
                 }
                 let abs = CoreConfigDiscovery.joinPath(input.cwd, rel)
-                guard let bytes = try? await fileSystem.readFile(at: abs) else { continue }
+                guard let bytes = try? await disk.readFile(at: abs) else { continue }
                 if bytes.contains(0) { continue } // skip binary files like ripgrep
                 let content = String(decoding: bytes, as: UTF8.self)
                 let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
@@ -468,23 +487,29 @@ public enum CoreRipgrep {
             return s
         }
 
-        private func walkFiles(root: String, hidden: Bool) async throws -> [String] {
+        private func walkFiles(_ disk: any OpenCodeFileSystem, root: String, hidden: Bool) async throws -> [String] {
             var out: [String] = []
-            try await walkRec(root: root, relative: "", hidden: hidden, into: &out)
+            try await walkRec(disk, root: root, relative: "", hidden: hidden, into: &out)
             return out.sorted()
         }
 
-        private func walkRec(root: String, relative: String, hidden: Bool, into out: inout [String]) async throws {
+        private func walkRec(
+            _ disk: any OpenCodeFileSystem,
+            root: String,
+            relative: String,
+            hidden: Bool,
+            into out: inout [String]
+        ) async throws {
             let current = relative.isEmpty ? root : CoreConfigDiscovery.joinPath(root, relative)
-            guard let names = try? await fileSystem.readDirectory(at: current) else { return }
+            guard let names = try? await disk.readDirectory(at: current) else { return }
             for name in names.sorted() {
                 if name == ".git" { continue }
                 if !hidden && name.hasPrefix(".") { continue }
                 let rel = relative.isEmpty ? name : "\(relative)/\(name)"
                 let abs = CoreConfigDiscovery.joinPath(root, rel)
-                guard let st = try? await fileSystem.stat(at: abs) else { continue }
+                guard let st = try? await disk.stat(at: abs) else { continue }
                 if st.type == .directory {
-                    try await walkRec(root: root, relative: rel, hidden: hidden, into: &out)
+                    try await walkRec(disk, root: root, relative: rel, hidden: hidden, into: &out)
                 } else if st.type == .file {
                     out.append(rel)
                 }
@@ -527,7 +552,7 @@ public enum CoreRipgrep {
         }
     }
 
-    // parity: core/src/ripgrep.ts#node [status=adapted hash=19ef5c4a0236]
+    // parity: core/src/ripgrep.ts#node [status=adapted hash=9976121974f7]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -811,11 +836,11 @@ public enum CoreFormatter {
         }
     }
 
-    // parity: core/src/formatter.ts#Interface [status=adapted hash=78061df1fc55]
+    // parity: core/src/formatter.ts#Interface [status=adapted hash=bbb97f7d34a2]
     public protocol Interface: Sendable {
         func transform(_ fn: @escaping @Sendable (Editor) -> Void) async -> CoreFilesystem.LocationWatcherPolicy.Registration
         func reload() async
-        func file(_ filepath: String) async -> Bool
+        func file(_ target: CoreFilesystem.FileAccess.Target) async -> Bool
     }
 
     // parity: core/src/formatter.ts#Service [status=adapted hash=e5bd60fd47c6]
@@ -872,7 +897,10 @@ public enum CoreFormatter {
             }
         }
 
-        public func file(_ filepath: String) async -> Bool {
+        public func file(_ target: CoreFilesystem.FileAccess.Target) async -> Bool {
+            // A formatter is a process on this machine acting on this machine's disk.
+            if target.environment.id != CoreLocation.Environment.localID { return false }
+            let filepath = target.absolute.rawValue
             let ext = Self.fileExtension(filepath)
             let matching = state.withLock { s in
                 s.formatters.filter { $0.extensions.contains(ext) }
@@ -923,6 +951,16 @@ public enum CoreFormatter {
         },
         [AppProcess.node]
     )
+}
+
+extension CoreFormatter.Interface {
+    /// Formats a path on this server's own machine (a local target named by its absolute path).
+    public func file(_ filepath: String) async -> Bool {
+        await file(CoreFilesystem.FileAccess.Target(
+            absolute: SchemaPrimitive.AbsolutePath(rawValue: filepath),
+            resource: filepath
+        ))
+    }
 }
 
 // MARK: - CoreFuzzyFileIndex Wiring into CoreFilesystem.Search & CoreFilesystem.Fff
