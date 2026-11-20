@@ -12,6 +12,21 @@ import OpenCodeUtil
 // MARK: - CoreTool Registry, Runtime & MCP Tool Bridge (`tool.ts`, `tool/runtime.ts`, `tool/mcp.ts`)
 
 public enum CoreTool {
+    /// The object form of upstream `options.codemode`: what a tool looks like when it is called from inside Code Mode.
+    /// Its presence implies the tool allows Code Mode (`options.codemode !== false`); `pinned` stays on
+    /// `ToolSchema.Options.pinned`.
+    public struct CodeModeOverrides: Sendable, Equatable {
+        public var description: String?
+        public var input: AISchema.JsonSchema?
+        public var output: AISchema.JsonSchema?
+
+        public init(description: String? = nil, input: AISchema.JsonSchema? = nil, output: AISchema.JsonSchema? = nil) {
+            self.description = description
+            self.input = input
+            self.output = output
+        }
+    }
+
     /// Dynamic JSON-based registered tool entry stored in `CoreTool.Service`.
     public struct RegisteredTool: Sendable {
         public let id: String
@@ -21,6 +36,9 @@ public enum CoreTool {
         public var outputSchema: AISchema.JsonSchema?
         public var freeform: AISchema.Freeform?
         public var options: ToolSchema.Options?
+        /// Code Mode description and schema overrides (upstream `options.codemode` given as an object).
+        public var codemode: CodeModeOverrides?
+        /// Executes the tool. `CoreTool.Runtime.inCodeMode` carries upstream `context.codemode` while it runs.
         public var execute: @Sendable (JSONValue, ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>
 
         public init(
@@ -31,6 +49,7 @@ public enum CoreTool {
             outputSchema: AISchema.JsonSchema? = nil,
             freeform: AISchema.Freeform? = nil,
             options: ToolSchema.Options? = nil,
+            codemode: CodeModeOverrides? = nil,
             execute: @escaping @Sendable (JSONValue, ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>
         ) {
             self.name = name
@@ -39,6 +58,7 @@ public enum CoreTool {
             self.outputSchema = outputSchema
             self.freeform = freeform
             self.options = options
+            self.codemode = codemode
             self.execute = execute
             self.id = id ?? Runtime.effectiveName(name: name, options: options)
         }
@@ -77,24 +97,34 @@ public enum CoreTool {
             JsonSchemaCodec(schema: schema)
         }
 
-        // parity: core/src/tool/runtime.ts#definition [status=implemented hash=fbd6ab9a713a]
-        public static func definition(_ tool: RegisteredTool) -> AISchema.ToolDefinition {
-            AISchema.ToolDefinition(
+        /// Upstream `context.codemode`: true while a tool runs from inside Code Mode (`execute`).
+        @TaskLocal public static var inCodeMode: Bool = false
+
+        private static func codemodeOverrides(_ tool: RegisteredTool, codemode: Bool) -> CodeModeOverrides? {
+            codemode ? tool.codemode : nil
+        }
+
+        // parity: core/src/tool/runtime.ts#definition [status=implemented hash=2f0338ea62be]
+        public static func definition(_ tool: RegisteredTool, codemode: Bool = false) -> AISchema.ToolDefinition {
+            let overrides = codemodeOverrides(tool, codemode: codemode)
+            return AISchema.ToolDefinition(
                 name: effectiveName(name: tool.name, options: tool.options),
-                description: tool.description,
-                inputSchema: tool.inputSchema,
-                outputSchema: tool.outputSchema,
+                description: overrides?.description ?? tool.description,
+                inputSchema: overrides?.input ?? tool.inputSchema,
+                outputSchema: overrides?.output ?? tool.outputSchema,
                 freeform: tool.freeform
             )
         }
 
-        // parity: core/src/tool/runtime.ts#execute [status=implemented hash=eaacedb56015]
+        // parity: core/src/tool/runtime.ts#execute [status=implemented hash=f367dac2914e]
         public static func execute(
             _ tool: RegisteredTool,
             input: JSONValue,
-            context: ToolSchema.Context
+            context: ToolSchema.Context,
+            codemode: Bool = false
         ) async throws -> NormalizedResult {
-            let codec = codecFor(tool.inputSchema)
+            let overrides = codemodeOverrides(tool, codemode: codemode)
+            let codec = codecFor(overrides?.input ?? tool.inputSchema)
             let issues = codec.validate(input)
             if !issues.isEmpty {
                 let details = issues.prefix(5).map { "- \($0)" }.joined(separator: "\n")
@@ -105,7 +135,9 @@ public enum CoreTool {
             }
             let rawResult: ToolSchema.Result<JSONValue>
             do {
-                rawResult = try await tool.execute(input, context)
+                rawResult = try await $inCodeMode.withValue(codemode) {
+                    try await tool.execute(input, context)
+                }
             } catch let err as AISchema.ToolFailure {
                 throw err
             } catch let err as CorePermission.DeclinedError {
@@ -114,7 +146,7 @@ public enum CoreTool {
                 throw AISchema.ToolFailure(message: String(describing: error))
             }
 
-            if tool.outputSchema == nil {
+            if (overrides?.output ?? tool.outputSchema) == nil {
                 if rawResult.output != nil {
                     throw AISchema.ToolFailure(message: "Tool result declared output without an output schema")
                 }
@@ -176,6 +208,11 @@ public enum CoreTool {
             let norm = normalizedName(name)
             guard let ns = options?.namespace else { return norm }
             return "\(ns.replacing(".", with: "_"))_\(norm)"
+        }
+
+        // parity: core/src/tool/runtime.ts#defaultCodeMode [status=implemented hash=72f9ba082b6e]
+        public static func defaultCodeMode(_ options: ToolSchema.Options?) -> Bool {
+            options?.codemode != false
         }
 
         // parity: core/src/tool/runtime.ts#toolFailure [status=implemented hash=52a93de96d56]
@@ -241,7 +278,7 @@ public enum CoreTool {
         }
     }
 
-    // parity: core/src/tool.ts#Editor [status=adapted hash=f0f95cb00195]
+    // parity: core/src/tool.ts#Editor [status=adapted hash=ce399ba741cd]
     public final class Editor: @unchecked Sendable {
         public private(set) var tools: [String: RegisteredTool] = [:]
         public private(set) var definitions: [String: AISchema.ToolDefinition] = [:]
@@ -277,10 +314,11 @@ public enum CoreTool {
                 return
             }
             let id = Runtime.effectiveName(name: tool.name, options: tool.options)
-            if tool.options?.codemode == false && id == "execute" {
+            if !Runtime.defaultCodeMode(tool.options) && id == "execute" {
                 errors.append(RegistrationError(name: id, message: "Tool name \"execute\" is reserved for CodeMode"))
                 return
             }
+            // Code Mode overrides only apply to a tool that allows Code Mode; a disallowed tool keeps none.
             let stored = RegisteredTool(
                 id: id,
                 name: tool.name,
@@ -289,6 +327,7 @@ public enum CoreTool {
                 outputSchema: tool.outputSchema,
                 freeform: tool.freeform,
                 options: tool.options,
+                codemode: Runtime.defaultCodeMode(tool.options) ? tool.codemode : nil,
                 execute: tool.execute
             )
             tools[id] = stored
@@ -383,12 +422,63 @@ public enum CoreTool {
         }
     }
 
-    // parity: core/src/tool.ts#Interface [status=adapted hash=6e4c7e999245]
+    /// Per-request tool placement, as `ModelPolicy.modelTools` decides it for the session's model.
+    // parity: core/src/tool.ts#Policy [status=implemented hash=8d955a285b73]
+    public struct Policy: Equatable, Sendable {
+        /// Tools left out of the request entirely.
+        public let hidden: Set<String>?
+        /// Tools that allow Code Mode but stay direct tools for this request.
+        public let direct: Set<String>?
+
+        public init(hidden: Set<String>? = nil, direct: Set<String>? = nil) {
+            self.hidden = hidden
+            self.direct = direct
+        }
+    }
+
+    // parity: core/src/tool.ts#SnapshotOptions [status=implemented hash=7dabf9441520]
+    public struct SnapshotOptions: Sendable {
+        /// With `full_codemode`, Code Mode gets the experimental `path` and `Bun` globals, which act through
+        /// `services`: the session's Location and file services.
+        public let services: CoreCodemode.Tool.Services?
+        public let tools: Policy?
+
+        public init(services: CoreCodemode.Tool.Services? = nil, tools: Policy? = nil) {
+            self.services = services
+            self.tools = tools
+        }
+    }
+
+    /// Whether the rules leave Code Mode's `execute` reachable, as `snapshot` decides it.
+    // parity: core/src/tool.ts#codeModeAvailable [status=implemented hash=c2b864a46af0]
+    public static func codeModeAvailable(_ rules: PermissionSchema.Ruleset) -> Bool {
+        !Service.whollyDisabled(action: "execute", rules: rules)
+    }
+
+    /// What the registry needs to build the Code Mode `execute` tool. Without one, Code Mode is unavailable and every
+    /// tool is exposed as a direct tool, exactly as upstream does when the rules deny `execute`.
+    public struct CodeModeHost: Sendable {
+        public let transport: any HTTPTransport
+        public let permission: CoreCodemode.PermissionHook
+        public let flags: (any CoreFlag.Interface)?
+
+        public init(
+            transport: any HTTPTransport,
+            permission: CoreCodemode.PermissionHook = .allowAll,
+            flags: (any CoreFlag.Interface)? = nil
+        ) {
+            self.transport = transport
+            self.permission = permission
+            self.flags = flags
+        }
+    }
+
+    // parity: core/src/tool.ts#Interface [status=adapted hash=382bd626b20c]
     public protocol Interface: Sendable {
         func transform(_ fn: @escaping @Sendable (Editor) -> Void) async -> CoreFilesystem.LocationWatcherPolicy.Registration
         func reload() async
         func list() async -> [RegisteredTool]
-        func snapshot(permissions: PermissionSchema.Ruleset?) async -> Snapshot
+        func snapshot(permissions: PermissionSchema.Ruleset?, options: SnapshotOptions?) async -> Snapshot
         func check(_ input: CheckInput) async -> CheckResult
     }
 
@@ -407,8 +497,11 @@ public enum CoreTool {
         }
 
         private let state = Mutex(State())
+        private let codeMode: CodeModeHost?
 
-        public init() {}
+        public init(codeMode: CodeModeHost? = nil) {
+            self.codeMode = codeMode
+        }
 
         public func transform(
             _ fn: @escaping @Sendable (Editor) -> Void
@@ -448,21 +541,57 @@ public enum CoreTool {
             state.withLock { $0.errors }
         }
 
-        public func snapshot(permissions: PermissionSchema.Ruleset? = nil) async -> Snapshot {
+        public func snapshot(permissions: PermissionSchema.Ruleset?, options: SnapshotOptions?) async -> Snapshot {
             let rules = permissions ?? []
-            let (activeTools, activeDefs): ([String: RegisteredTool], [AISchema.ToolDefinition]) = state.withLock { s in
-                var active: [String: RegisteredTool] = [:]
-                for (name, tool) in s.tools {
-                    let action = tool.options?.permission ?? name
-                    if Self.whollyDisabled(action: action, rules: rules) { continue }
-                    active[name] = tool
-                }
-                let defs = active.keys.sorted().compactMap { s.definitions[$0] }
-                return (active, defs)
+            // Without Code Mode its tools would be unreachable, so expose them as direct tools instead.
+            let codeModeEnabled = codeModeAvailable(rules) && codeMode != nil
+            let fullFlag: Bool
+            if codeModeEnabled, options?.services != nil, let flags = codeMode?.flags {
+                fullFlag = await flags.enabled(.fullCodemode)
+            } else {
+                fullFlag = false
             }
+            let full = codeModeEnabled && options?.services != nil && fullFlag
+            let hidden = options?.tools?.hidden
+            let keepDirect = options?.tools?.direct
+            let (direct, codemodeEntries, directDefs, namespaces):
+                ([String: RegisteredTool], [String: RegisteredTool], [AISchema.ToolDefinition], [String: ToolSchema.Namespace]) =
+                state.withLock { s in
+                    var direct: [String: RegisteredTool] = [:]
+                    var codemodeEntries: [String: RegisteredTool] = [:]
+                    for (name, tool) in s.tools {
+                        if hidden?.contains(name) == true { continue }
+                        let action = tool.options?.permission ?? name
+                        if Self.whollyDisabled(action: action, rules: rules) { continue }
+                        if codeModeEnabled && Runtime.defaultCodeMode(tool.options) && keepDirect?.contains(name) != true {
+                            codemodeEntries[name] = tool
+                            continue
+                        }
+                        direct[name] = tool
+                    }
+                    let defs = direct.keys.sorted().compactMap { s.definitions[$0] }
+                    return (direct, codemodeEntries, defs, s.namespaces)
+                }
 
-            return Snapshot(definitions: activeDefs) { call in
-                guard let tool = activeTools[call.name] else {
+            let executeTool: RegisteredTool? = codeModeEnabled
+                ? codeMode.map { host in
+                    Self.makeCodeModeTool(
+                        entries: codemodeEntries,
+                        namespaces: namespaces,
+                        host: host,
+                        services: full ? options?.services : nil
+                    )
+                }
+                : nil
+            let definitions = directDefs + (executeTool.map { [Runtime.definition($0)] } ?? [])
+
+            return Snapshot(definitions: definitions) { call in
+                let tool: RegisteredTool
+                if call.name == "execute", let executeTool {
+                    tool = executeTool
+                } else if let found = direct[call.name] {
+                    tool = found
+                } else {
                     throw AISchema.ToolFailure(
                         message: "No tool named \"\(call.name)\" is currently available. Please use a tool from the available tool list."
                     )
@@ -479,6 +608,69 @@ public enum CoreTool {
             }
         }
 
+        /// Builds the Code Mode `execute` tool over the tools placed inside Code Mode. Each inner call runs through
+        /// `Runtime.execute` with `codemode: true`, so it sees its Code Mode overrides and `Runtime.inCodeMode`.
+        private static func makeCodeModeTool(
+            entries: [String: RegisteredTool],
+            namespaces: [String: ToolSchema.Namespace],
+            host: CodeModeHost,
+            services: CoreCodemode.Tool.Services?
+        ) -> RegisteredTool {
+            var registrations: [String: CoreCodemode.Tool.ToolRegistration] = [:]
+            for (name, tool) in entries {
+                let def = Runtime.definition(tool, codemode: true)
+                registrations[name] = CoreCodemode.Tool.ToolRegistration(
+                    name: tool.name,
+                    description: def.description,
+                    inputSchema: def.inputSchema,
+                    outputSchema: def.outputSchema,
+                    freeform: tool.freeform,
+                    options: tool.options
+                ) { input, context throws(ToolSchema.ToolError) in
+                    do {
+                        let normalized = try await Runtime.execute(tool, input: input, context: context, codemode: true)
+                        return ToolSchema.Result(
+                            output: normalized.output,
+                            content: .parts(normalized.content),
+                            metadata: normalized.metadata
+                        )
+                    } catch let failure as AISchema.ToolFailure {
+                        throw ToolSchema.ToolError(message: failure.message)
+                    } catch {
+                        throw ToolSchema.ToolError(message: String(describing: error))
+                    }
+                }
+            }
+            let info = CoreCodemode.Tool.create(
+                inventory: CoreCodemode.Tool.Inventory(tools: registrations, namespaces: namespaces),
+                transport: host.transport,
+                permission: host.permission,
+                services: services
+            )
+            let inputSchema: AISchema.JsonSchema
+            if case .jsonSchema(let schema) = info.input {
+                inputSchema = schema
+            } else {
+                inputSchema = ["type": .string("object")]
+            }
+            return RegisteredTool(
+                id: info.name,
+                name: info.name,
+                description: info.description,
+                inputSchema: inputSchema,
+                outputSchema: ["type": .string("object")],
+                freeform: info.freeform
+            ) { rawInput, context in
+                let input = try decodeToolJSON(CodemodeEngine.Input.self, from: rawInput, toolName: info.name)
+                let result = try await info.execute(input, context)
+                return ToolSchema.Result(
+                    output: result.output.map { encodeToolJSON($0) },
+                    content: result.content,
+                    metadata: result.metadata
+                )
+            }
+        }
+
         public func check(_ input: CheckInput) async -> CheckResult {
             if Self.whollyDisabled(action: "execute", rules: input.permissions) {
                 return CheckResult(ok: false, error: "Code Mode is disabled for this agent", availableTools: [])
@@ -486,7 +678,7 @@ public enum CoreTool {
             let allowedSet = Set(input.tools)
             let visible: [String] = state.withLock { s in
                 s.tools.compactMap { name, tool -> String? in
-                    guard tool.options?.codemode != false else { return nil }
+                    guard Runtime.defaultCodeMode(tool.options) else { return nil }
                     guard allowedSet.contains(name) || allowedSet.contains(tool.name) else { return nil }
                     let action = tool.options?.permission ?? name
                     if Self.whollyDisabled(action: action, rules: input.permissions) { return nil }
@@ -496,7 +688,7 @@ public enum CoreTool {
             return CheckResult(ok: true, error: nil, availableTools: visible)
         }
 
-        private static func whollyDisabled(action: String, rules: PermissionSchema.Ruleset) -> Bool {
+        fileprivate static func whollyDisabled(action: String, rules: PermissionSchema.Ruleset) -> Bool {
             for rule in rules.reversed() {
                 if CorePermissionWildcard.match(action, pattern: rule.action) {
                     return rule.resource == "*" && rule.effect == .deny
@@ -734,5 +926,12 @@ public enum CoreTool {
             layer,
             [CoreTool.node, CorePermission.node, CoreToolOutput.node]
         )
+    }
+}
+
+extension CoreTool.Interface {
+    /// A snapshot with no per-request policy or Code Mode services.
+    public func snapshot(permissions: PermissionSchema.Ruleset? = nil) async -> CoreTool.Snapshot {
+        await snapshot(permissions: permissions, options: nil)
     }
 }

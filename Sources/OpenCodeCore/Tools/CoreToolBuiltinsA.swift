@@ -20,7 +20,6 @@ extension CoreTool {
         public let fileAccess: any CoreFilesystem.FileAccess.Interface
         public let fileMutation: any CoreFilesystem.FileMutation.Interface
         public let fileWrite: any CoreFilesystem.FileWrite.Interface
-        public let readFileSystem: any CoreToolOutput.ReadFilesystem.Interface
         public let ripgrep: any CoreRipgrep.Interface
         public let formatter: any CoreFormatter.Interface
         public let permission: any CorePermission.Interface
@@ -44,6 +43,15 @@ extension CoreTool {
         public let provider: (any CoreProvider.Provider.Interface)?
         public let agent: (any CoreAgent.Agent.Interface)?
         public let generate: (any CoreIntegration.Generate.Interface)?
+        /// Upstream `flags.resolve(loaded.entries).full_codemode.enabled`, resolved once per registration pass by
+        /// `registerAllBuiltins` so the synchronous registrations can read it.
+        public var fullCodeMode: Bool = false
+        /// Whether the `video_generate` flag is on and some video model is available (`VideoGenerateTool` registers
+        /// only then). Resolved by `registerAllBuiltins`.
+        public var videoGenerate: Bool = false
+        public let videoGeneration: (any CoreIntegration.VideoGeneration.Interface)?
+        public let blobStore: (any CoreBlobStore.Interface)?
+        public let jobs: (any CoreJob.Interface)?
 
         public init(
             directory: String = "/",
@@ -51,7 +59,6 @@ extension CoreTool {
             fileAccess: (any CoreFilesystem.FileAccess.Interface)? = nil,
             fileMutation: (any CoreFilesystem.FileMutation.Interface)? = nil,
             fileWrite: (any CoreFilesystem.FileWrite.Interface)? = nil,
-            readFileSystem: (any CoreToolOutput.ReadFilesystem.Interface)? = nil,
             ripgrep: (any CoreRipgrep.Interface)? = nil,
             formatter: (any CoreFormatter.Interface)? = nil,
             permission: any CorePermission.Interface = CorePermission.Service(),
@@ -77,7 +84,10 @@ extension CoreTool {
             model: (any CoreModel.Model.Interface)? = nil,
             provider: (any CoreProvider.Provider.Interface)? = nil,
             agent: (any CoreAgent.Agent.Interface)? = nil,
-            generate: (any CoreIntegration.Generate.Interface)? = nil
+            generate: (any CoreIntegration.Generate.Interface)? = nil,
+            videoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
+            blobStore: (any CoreBlobStore.Interface)? = nil,
+            jobs: (any CoreJob.Interface)? = nil
         ) {
             let normDir = CoreConfigDiscovery.resolvePath(base: "/", relative: directory)
             let resolvedAccess = fileAccess ?? CoreFilesystem.FileAccess.Service(
@@ -95,7 +105,6 @@ extension CoreTool {
                 permission: permission,
                 formatFile: { path in await resolvedFormatter.file(path) }
             )
-            let resolvedRead = readFileSystem ?? CoreToolOutput.ReadFilesystem.Service(fileSystem: fileSystem)
             let resolvedRipgrep = ripgrep ?? CoreRipgrep.Service(fileSystem: fileSystem)
             let resolvedShell = shell ?? CoreShell.Service(
                 directory: normDir,
@@ -114,7 +123,6 @@ extension CoreTool {
             self.fileAccess = resolvedAccess
             self.fileMutation = resolvedMutation
             self.fileWrite = resolvedFileWrite
-            self.readFileSystem = resolvedRead
             self.ripgrep = resolvedRipgrep
             self.formatter = resolvedFormatter
             self.permission = permission
@@ -138,6 +146,9 @@ extension CoreTool {
             self.provider = provider
             self.agent = agent
             self.generate = generate
+            self.videoGeneration = videoGeneration
+            self.blobStore = blobStore
+            self.jobs = jobs
         }
     }
 
@@ -246,14 +257,27 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=6310df65001f]
+        /// The tool description; inside Code Mode a read image or PDF is attached to the `execute` result instead of
+        /// showing line-numbered text.
+        public static func description(codemode: Bool) -> String {
+            [
+                "Read the contents of a file or directory. Supports text files, images, and PDFs.",
+                codemode
+                    ? "Reading an image or PDF automatically attaches it to the execute result, even if the program doesn't return or print the media reference."
+                    : "Each text line is prefixed by its 1-based line number as <line>: <content>. The prefix is for reference and is not part of the file content. Directory entries are returned one per line.",
+                "Use offset and limit to read large files or directories in sections. Prefer one larger read over many small slices, and use grep to find specific content in large files.",
+            ].joined(separator: " ")
+        }
+
+        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=5dfa5b9acaf6]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.read") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
-                description: "Read the contents of a file or directory. Supports text files, images, and PDFs. Each text line is prefixed by its 1-based line number as <line>: <content>. The prefix is for reference and is not part of the file content. Directory entries are returned one per line. Use offset and limit to read large files or directories in sections. Prefer one larger read over many small slices, and use grep to find specific content in large files.",
+                description: description(codemode: false),
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(codemode: false)
+                options: env.fullCodeMode ? ToolSchema.Options(codemode: true, pinned: true) : ToolSchema.Options(codemode: false),
+                codemode: env.fullCodeMode ? CodeModeOverrides(description: description(codemode: true)) : nil
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 if input.limit == 0 {
@@ -270,8 +294,9 @@ extension CoreTool {
 
                 let readOutput: CoreToolOutput.ReadFilesystem.Output
                 do {
-                    readOutput = try await env.readFileSystem.read(
-                        target.absolute,
+                    readOutput = try await CoreToolOutput.ReadFilesystem.read(
+                        fileSystem: env.fileSystem,
+                        path: target.absolute,
                         resource: target.resource,
                         page: CoreToolOutput.ReadFilesystem.PageInput(offset: input.offset, limit: input.limit)
                     )
@@ -428,14 +453,19 @@ extension CoreTool {
             "required": .array([.string("path"), .string("content")]),
         ]
 
-        // parity: core/src/tool/plugin/write.ts#Plugin [status=adapted hash=4574d97f5d3a]
+        // parity: core/src/tool/plugin/write.ts#Plugin [status=adapted hash=3fef41f3de71]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.write") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
                 description: "Writes a file to the local filesystem, overwriting if one exists.\n\nMissing parent directories are created automatically.\n\nUse this tool to create new files or overwrite existing files. For partial changes, use the edit tool instead.",
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("string")],
-                options: ToolSchema.Options(permission: "edit", codemode: false)
+                options: env.fullCodeMode
+                    ? ToolSchema.Options(permission: "edit", codemode: true, pinned: true)
+                    : ToolSchema.Options(permission: "edit", codemode: false),
+                codemode: env.fullCodeMode
+                    ? CodeModeOverrides(description: "Create a new file or overwrite an existing file on the local filesystem, creating missing parent directories automatically. Prefer `edit` for partial changes to existing files.")
+                    : nil
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 do {
@@ -489,14 +519,27 @@ extension CoreTool {
             "required": .array([.string("path"), .string("oldString"), .string("newString")]),
         ]
 
-        // parity: core/src/tool/plugin/edit.ts#Plugin [status=adapted hash=20fa8b1dc786]
+        /// Upstream `FileMutation.InvalidUtf8Error.message`: decoding would replace every invalid byte with U+FFFD.
+        static let invalidUtf8Message =
+            "file is not valid UTF-8. It was left unchanged because rewriting it as text would replace every byte that is not UTF-8 with U+FFFD; change it with a tool that preserves its bytes, or convert it to UTF-8 first"
+
+        static func isValidUTF8(_ bytes: [UInt8]) -> Bool {
+            String(decoding: bytes, as: UTF8.self).utf8.elementsEqual(bytes)
+        }
+
+        // parity: core/src/tool/plugin/edit.ts#Plugin [status=adapted hash=c7949b603e17]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.edit") { editor, env in
             editor.add(RegisteredTool(
                 name: name,
                 description: "Edit the contents of a file by finding and replacing exact text. If there is no exact match, retries ignoring typographic quote, dash, and space variants, then trailing whitespace on each line. By default oldString must match uniquely unless replaceAll is true.",
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("string")],
-                options: ToolSchema.Options(codemode: false)
+                options: env.fullCodeMode
+                    ? ToolSchema.Options(permission: "edit", codemode: true, pinned: true)
+                    : ToolSchema.Options(permission: "edit", codemode: false),
+                codemode: env.fullCodeMode
+                    ? CodeModeOverrides(description: "Edit a file by replacing `oldString` with `newString` (must differ). Preserve exact indentation without line-number prefixes. Use `\\n` for line breaks; existing LF/CRLF endings are preserved unless `oldString` and `newString` differ only in `\\r`. `oldString` must match once unless `replaceAll` is true; add context to disambiguate.")
+                    : nil
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 if input.oldString == input.newString {
@@ -512,6 +555,16 @@ extension CoreTool {
                 }
 
                 return try await env.fileMutation.withLock([target.absolute.rawValue]) {
+                    // Read text that will be rewritten; decoding replaces invalid bytes with U+FFFD, so refuse those files.
+                    let raw: [UInt8]
+                    do {
+                        raw = try await env.fileSystem.readFile(at: target.absolute.rawValue)
+                    } catch {
+                        throw AISchema.ToolFailure(message: "File not found: \(input.path)")
+                    }
+                    if !isValidUTF8(raw) {
+                        throw AISchema.ToolFailure(message: "Unable to edit \(input.path): \(invalidUtf8Message)")
+                    }
                     let current: BomSplitResult
                     do {
                         current = try await CoreFilesystem.FileMutation.readText(
@@ -752,14 +805,20 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=69fa2a5988e2]
+        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=6ef30bacb9d5]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.patch") { editor, env in
+            // Which editing tools a model sees (patch vs edit/write) is `ModelPolicy.modelTools`, not a session hook.
             editor.add(RegisteredTool(
                 name: name,
                 description: "Apply a multi-file patch in `*** Begin Patch` / `*** End Patch` format supporting `*** Add File:`, `*** Update File:` (with optional `*** Move to:`), and `*** Delete File:` hunks.",
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(permission: "edit", codemode: false)
+                options: env.fullCodeMode
+                    ? ToolSchema.Options(permission: "edit", codemode: true, pinned: true)
+                    : ToolSchema.Options(permission: "edit", codemode: false),
+                codemode: env.fullCodeMode
+                    ? CodeModeOverrides(description: "Apply multi-file edits inside `*** Begin Patch` ... `*** End Patch`. Start each operation with `*** Add File: <path>` (every content line prefixed with `+`), `*** Delete File: <path>`, or `*** Update File: <path>` (optional `*** Move to: <path>`, then `@@ [context]` hunks with space/`-`/`+` line prefixes).")
+                    : nil
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 guard !input.patchText.isEmpty else {
@@ -1006,8 +1065,11 @@ extension CoreTool {
             return lines.joined(separator: "\n")
         }
 
-        // parity: core/src/tool/plugin/glob.ts#Plugin [status=adapted hash=49995db27250]
+        // parity: core/src/tool/plugin/glob.ts#Plugin [status=adapted hash=15a88bf8fa14]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.glob") { editor, env in
+            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode. Every target
+            // resolves on this server's own environment here, so the "Search is not available on <machine>" refusal for
+            // another machine's files cannot arise.
             editor.add(RegisteredTool(
                 name: name,
                 description: "Search file paths using a glob pattern (examples: \"**/*.ts\", \"src/**/*.tsx\").",
@@ -1145,8 +1207,11 @@ extension CoreTool {
             return lines.joined(separator: "\n")
         }
 
-        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=84a3990d8b04]
+        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=4a7c569308c7]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.grep") { editor, env in
+            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode. Every target
+            // resolves on this server's own environment here, so the "Search is not available on <machine>" refusal for
+            // another machine's files cannot arise.
             editor.add(RegisteredTool(
                 name: name,
                 description: "Search file contents using ripgrep's regular expression syntax or literal text matching. Use it to locate specific code, symbols, or text patterns, and narrow searches with `path` or `include`. Returns matching file paths, line numbers, and line previews.",
@@ -1245,6 +1310,55 @@ extension CoreTool {
         // parity: core/src/tool/plugin/shell.ts#DEFAULT_TIMEOUT_MS [status=implemented hash=efc6d7daaa35]
         public static let DEFAULT_TIMEOUT_MS: Int = 2 * 60 * 1_000
 
+        /// The foreground timeout a call from inside Code Mode gets by default.
+        public static let CODE_MODE_TIMEOUT_MS: Int = 10 * 60 * 1_000
+
+        /// The tool description. `shell` names the shell commands run with; Code Mode has no background parameter.
+        public static func description(shell: String? = nil, codeMode: Bool = false) -> String {
+            var parts = ["Execute a shell command and return its output."]
+            if let shell { parts.append("Commands run on \(osName) using \(shell).") }
+            parts.append(contentsOf: [
+                "Quote file paths containing spaces or special characters.",
+                "Prefer dedicated tools over shell commands when possible.",
+                "When output is large, the full result is saved to a file and a truncated preview is returned.",
+                "Rely on automatic truncation unless filtering the output is more useful.",
+                "Commands still running after their timeout move to the background.",
+            ])
+            if !codeMode { parts.append("Background commands return immediately, and you will be notified when they complete.") }
+            parts.append("The current session ID is available in the OPENCODE_SESSION_ID environment variable.")
+            return parts.joined(separator: " ")
+        }
+
+        private static let osName: String = {
+            #if os(macOS)
+            return "macOS"
+            #elseif os(Windows)
+            return "Windows"
+            #elseif os(Linux)
+            return "Linux"
+            #else
+            return "this platform"
+            #endif
+        }()
+
+        private static func timeoutDescription(_ foreground: Int) -> String {
+            "Optional timeout in milliseconds (default \(foreground)). When it expires, a foreground command moves to the background and a background command is stopped."
+        }
+
+        private static let workdirDescription =
+            "Working directory to execute the command in. Defaults to the current working directory. When possible, avoid changing directories in the command and set the working directory here instead."
+
+        /// Code Mode input: the direct input without `background`, with the Code Mode default timeout.
+        public static let codeModeInputSchema: AISchema.JsonSchema = [
+            "type": .string("object"),
+            "properties": .object([
+                "command": .object(["type": .string("string"), "description": .string("Shell command string to execute")]),
+                "workdir": .object(["type": .string("string"), "description": .string(workdirDescription)]),
+                "timeout": .object(["type": .string("integer"), "minimum": .int(0), "description": .string(timeoutDescription(CODE_MODE_TIMEOUT_MS))]),
+            ]),
+            "required": .array([.string("command")]),
+        ]
+
         private static let backgroundInstruction =
             "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue."
 
@@ -1267,9 +1381,9 @@ extension CoreTool {
             "type": .string("object"),
             "properties": .object([
                 "command": .object(["type": .string("string"), "description": .string("Shell command string to execute")]),
-                "workdir": .object(["type": .string("string"), "description": .string("Working directory to execute the command in.")]),
-                "timeout": .object(["type": .string("integer"), "description": .string("Optional timeout in milliseconds (default 120000).")]),
-                "background": .object(["type": .string("boolean"), "description": .string("Run the command in the background and return immediately.")]),
+                "workdir": .object(["type": .string("string"), "description": .string(workdirDescription)]),
+                "timeout": .object(["type": .string("integer"), "minimum": .int(0), "description": .string(timeoutDescription(DEFAULT_TIMEOUT_MS))]),
+                "background": .object(["type": .string("boolean"), "description": .string("Run the command in the background and return immediately (useful for dev servers and long-running builds). You do not need to use '&' at the end of the command when using this parameter. You will be notified when it completes. DO NOT poll for completion.")]),
             ]),
             "required": .array([.string("command")]),
         ]
@@ -1320,22 +1434,34 @@ extension CoreTool {
             await onCompleted(payload)
         }
 
-        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=353a34748e7b]
+        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=5240fe810411]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.shell") { editor, env in
+            // With full_codemode, shell is allowed in Code Mode and pinned so the catalog always lists it.
             editor.add(RegisteredTool(
                 name: name,
-                description: "Execute a shell command and return its output. Prefer dedicated tools over shell commands when possible.",
+                description: description(),
                 inputSchema: inputSchema,
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(codemode: false)
+                options: env.fullCodeMode ? ToolSchema.Options(codemode: true, pinned: true) : ToolSchema.Options(codemode: false),
+                codemode: env.fullCodeMode
+                    ? CodeModeOverrides(description: description(codeMode: true), input: codeModeInputSchema)
+                    : nil
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 let shellBin = await env.shellSelect.resolve(CoreShell.Select.ResolveInput(priority: .compat))
-                let timeoutMs = input.timeout ?? DEFAULT_TIMEOUT_MS
+                // Code Mode input has no background parameter.
+                let background = input.background == true && !Runtime.inCodeMode
+                // A foreground timeout of 0 falls back to the default, so a call can't block until the command exits.
+                let foreground = (input.timeout ?? 0) != 0
+                    ? input.timeout!
+                    : (Runtime.inCodeMode ? CODE_MODE_TIMEOUT_MS : DEFAULT_TIMEOUT_MS)
+                let timeoutMs = background ? (input.timeout ?? 0) : foreground
+                // The same default `Shell.create` gives the hooks, so the hook can tell whether one moved it.
+                let cwd = input.workdir ?? env.directory
                 let info = try await env.shell.create(
                     CoreShell.CreateRequest(
                         command: input.command,
-                        cwd: input.workdir,
+                        cwd: cwd,
                         timeout: timeoutMs,
                         shell: shellBin,
                         metadata: ["sessionID": .string(context.sessionID.rawValue)],
@@ -1344,7 +1470,7 @@ extension CoreTool {
                             assistantMessageID: context.messageID,
                             callID: context.id.rawValue
                         ),
-                        waited: input.background != true
+                        waited: !background
                     )
                 ) { invocation in
                     let target = try await env.fileAccess.resolve(
@@ -1380,7 +1506,7 @@ extension CoreTool {
 
                 await context.progress(["shellID": .string(info.id.rawValue)])
 
-                if input.background == true {
+                if background {
                     return backgroundToolResult(info)
                 }
 

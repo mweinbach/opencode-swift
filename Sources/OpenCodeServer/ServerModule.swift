@@ -1930,6 +1930,11 @@ public final class ServerNoopPluginUpdateService: CorePlugin.Update.Interface, S
     public func update(_ target: String) async throws {
         _ = target
     }
+
+    /// No checks run, so no check interval ever starts.
+    public func intervals() async -> AsyncStream<Int> {
+        AsyncStream { _ in }
+    }
 }
 
 public final class ServerUnsupportedBlobStore: CoreBlobStore.Interface, Sendable {
@@ -1953,7 +1958,7 @@ public final class ServerUnsupportedVideoGeneration: CoreIntegration.VideoGenera
     public init() {}
 
     public func start(
-        _ input: GenerateSchema.VideoRequest,
+        _ input: CoreIntegration.Generate.VideoInput,
         options: CoreIntegration.VideoGeneration.StartOptions?
     ) async throws -> GenerateSchema.VideoRunning {
         _ = (input, options)
@@ -1961,6 +1966,14 @@ public final class ServerUnsupportedVideoGeneration: CoreIntegration.VideoGenera
     }
 
     public func get(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
+        throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
+    }
+
+    public func wait(_ id: GenerateSchema.VideoID) async throws -> GenerateSchema.VideoJob {
+        throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
+    }
+
+    public func cancel(_ id: GenerateSchema.VideoID) async throws {
         throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
     }
 }

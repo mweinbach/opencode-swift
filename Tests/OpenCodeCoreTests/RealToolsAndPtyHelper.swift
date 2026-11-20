@@ -249,6 +249,10 @@ enum RealToolsAndPtyHelper {
         func videoResult(model: ModelSchema.Ref, id: String) async throws -> [CoreIntegration.Generate.VideoFile] {
             throw CoreIntegration.Generate.UnavailableError(message: "video unused in test")
         }
+
+        func videoCancel(model: ModelSchema.Ref, id: String) async throws {
+            throw CoreIntegration.Generate.UnavailableError(message: "video unused in test")
+        }
     }
 
     /// Helper to insert a project row in SQLite for `CoreWorktree.Service` tests.

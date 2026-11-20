@@ -1330,7 +1330,7 @@ public let GenerateHandler = ServerHandlerGroup(
                 throw ForbiddenError(message: "Video generation is disabled; enable experimental.video_generate")
             }
             let started = try await mapGenerateError {
-                try await ctx.runtime.videoGeneration.start(payload, options: nil)
+                try await ctx.runtime.videoGeneration.start(CoreIntegration.Generate.videoInput(payload), options: nil)
             }
             return ServerHTTPResponse.json(ServerDataWrapper(data: started))
         },

@@ -4044,7 +4044,8 @@ public enum CoreModel {
 
         private static func decodeV2Pairs(
             _ v2Pairs: [(String, OrderedJSON)],
-            preserveAPIOrder: Bool
+            preserveAPIOrder: Bool,
+            recommended: Bool = false
         ) -> [Snapshot] {
             var snapshots: [Snapshot] = []
             snapshots.reserveCapacity(v2Pairs.count)
@@ -4057,6 +4058,8 @@ public enum CoreModel {
                 else { continue }
                 let pid = ProviderSchema.ID(rawValue: pidStr)
                 let env: [String] = arrayField(prov, "env")?.compactMap(\.stringValue) ?? []
+                // Vertex needs separate handling for location and Express Mode.
+                let prefer = recommended && pid != .googleVertex
 
                 // Pass 1: route every model in source order and compute provider-level defaults.
                 var routed: [RoutedSource] = []
@@ -4109,22 +4112,34 @@ public enum CoreModel {
                     var chosenProto: String?
                     var chosenApiObj: [(String, OrderedJSON)]?
                     var chosenOpencodeAI: String?
-                    for (protoKey, apiObj) in apiEntries {
-                        guard let sdk = objectField(apiObj, "sdk") else { continue }
+                    // A chat model uses an API with a package; other types only their own `/<type>s` entrypoint.
+                    func eligible(_ apiObj: [(String, OrderedJSON)]) -> (ok: Bool, opencodeAI: String?) {
+                        guard let sdk = objectField(apiObj, "sdk") else { return (false, nil) }
                         let opencodeAI = loadableOpencodeAI(stringField(sdk, "opencodeai"))
                         let aisdk = stringField(sdk, "aisdk")
                         if modelTypeStr == "chat" {
-                            if opencodeAI != nil || (aisdk != nil && !aisdk!.isEmpty) {
+                            return (opencodeAI != nil || (aisdk != nil && !aisdk!.isEmpty), opencodeAI)
+                        }
+                        if let oc = opencodeAI, oc.hasSuffix("/\(modelTypeStr)s") { return (true, oc) }
+                        return (false, nil)
+                    }
+                    // With `recommended_api`, the model's recommended API wins when it is eligible.
+                    if prefer, let wanted = stringField(m, "recommended_api"),
+                       let match = apiEntries.first(where: { $0.protoKey == wanted && eligible($0.apiObj).ok })
+                    {
+                        chosenProto = match.protoKey
+                        chosenApiObj = match.apiObj
+                        chosenOpencodeAI = eligible(match.apiObj).opencodeAI
+                    }
+                    if chosenProto == nil {
+                        for (protoKey, apiObj) in apiEntries {
+                            let check = eligible(apiObj)
+                            if check.ok {
                                 chosenProto = protoKey
                                 chosenApiObj = apiObj
-                                chosenOpencodeAI = opencodeAI
+                                chosenOpencodeAI = check.opencodeAI
                                 break
                             }
-                        } else if let oc = opencodeAI, oc.hasSuffix("/\(modelTypeStr)s") {
-                            chosenProto = protoKey
-                            chosenApiObj = apiObj
-                            chosenOpencodeAI = oc
-                            break
                         }
                     }
 
@@ -4356,16 +4371,18 @@ public enum CoreModel {
             return snapshots
         }
 
-        private static func decodeSnapshot(catalogObject: [String: JSONValue]) -> [Snapshot] {
+        private static func decodeSnapshot(catalogObject: [String: JSONValue], recommended: Bool = false) -> [Snapshot] {
             let v2 = V1.isV1(catalogObject) ? V1.toV2(catalogObject) : catalogObject
             let orderedPairs: [(String, OrderedJSON)] = v2
                 .sorted(by: { $0.key < $1.key })
                 .map { ($0.key, OrderedJSON.fromJSONValue($0.value)) }
-            return decodeV2Pairs(orderedPairs, preserveAPIOrder: false)
+            return decodeV2Pairs(orderedPairs, preserveAPIOrder: false, recommended: recommended)
         }
 
-        // parity: core/src/models-dev.ts#decodeSnapshot [status=implemented hash=3365142ba603]
-        public static func decodeSnapshot(_ text: String) throws -> [Snapshot] {
+        /// `recommended` routes each model through its models.dev `recommended_api` when that API is usable, instead
+        /// of the first usable API it lists (the `recommended_api` flag).
+        // parity: core/src/models-dev.ts#decodeSnapshot [status=implemented hash=ef394d67ecaf]
+        public static func decodeSnapshot(_ text: String, recommended: Bool = false) throws -> [Snapshot] {
             let root = try OrderedJSON.parse(text)
             guard case .object(let rootPairs) = root else {
                 throw DecodeError.expectedObject
@@ -4382,14 +4399,15 @@ public enum CoreModel {
                 let v2Pairs: [(String, OrderedJSON)] = converted
                     .sorted(by: { $0.key < $1.key })
                     .map { ($0.key, OrderedJSON.fromJSONValue($0.value)) }
-                return decodeV2Pairs(v2Pairs, preserveAPIOrder: true)
+                return decodeV2Pairs(v2Pairs, preserveAPIOrder: true, recommended: recommended)
             }
-            return decodeV2Pairs(rootPairs, preserveAPIOrder: true)
+            return decodeV2Pairs(rootPairs, preserveAPIOrder: true, recommended: recommended)
         }
 
-        // parity: core/src/models-dev.ts#Interface [status=implemented hash=08a58c77c944]
+        // parity: core/src/models-dev.ts#Interface [status=implemented hash=4f5d4ac52127]
         public protocol Interface: Sendable {
-            func get() async throws -> [Snapshot]
+            /// The catalog, routed through each model's recommended API when `recommended` is set.
+            func get(recommended: Bool) async throws -> [Snapshot]
             func refresh(force: Bool) async
         }
 
@@ -4402,7 +4420,23 @@ public enum CoreModel {
             public static let defaultTimeoutMs: Int64 = 10_000
             public static let defaultUserAgent = "opencode/2.3.2"
 
+            /// The catalog the cached snapshots were decoded from, kept so the other routing can be decoded from it.
+            private enum CatalogSource: Sendable {
+                case text(String)
+                case object([String: JSONValue])
+
+                func decode(recommended: Bool) -> [Snapshot]? {
+                    switch self {
+                    case .text(let text): return try? ModelsDev.decodeSnapshot(text, recommended: recommended)
+                    case .object(let object): return ModelsDev.decodeSnapshot(catalogObject: object, recommended: recommended)
+                    }
+                }
+            }
+
             private struct CacheState: Sendable {
+                var source: CatalogSource?
+                /// Decoded once per flag value from `source`; cleared whenever the catalog changes.
+                var recommendedSnapshots: [Snapshot]?
                 var snapshots: [Snapshot]?
                 var updatedAt: Int64?
                 var digest: String?
@@ -4417,12 +4451,14 @@ public enum CoreModel {
             }
 
             private struct KVHit: Sendable {
+                let source: CatalogSource
                 let snapshots: [Snapshot]
                 let updatedAt: Int64
                 let digest: String?
             }
 
             private struct DiskHit: Sendable {
+                let text: String
                 let snapshots: [Snapshot]
                 let updatedAt: Int64?
                 let digest: String
@@ -4544,13 +4580,14 @@ public enum CoreModel {
                         return nil
                     }
                     return KVHit(
+                        source: .text(rawText),
                         snapshots: snapshots,
                         updatedAt: updatedAt,
                         digest: digest ?? ModelsDev.bodyDigest(rawText)
                     )
                 case .object(let catalogDict):
                     let snapshots = ModelsDev.decodeSnapshot(catalogObject: catalogDict)
-                    return KVHit(snapshots: snapshots, updatedAt: updatedAt, digest: digest)
+                    return KVHit(source: .object(catalogDict), snapshots: snapshots, updatedAt: updatedAt, digest: digest)
                 default:
                     try? await kv.remove(catalogKVKey)
                     try? await kv.remove(metaKVKey)
@@ -4567,7 +4604,7 @@ public enum CoreModel {
                 guard let snapshots = try? ModelsDev.decodeSnapshot(text) else { return nil }
                 let mtime = (try? await fileSystem.stat(at: path))?.modifiedAtMs
                 let updatedAt: Int64? = (mtime ?? 0) > 0 ? mtime : nil
-                return DiskHit(snapshots: snapshots, updatedAt: updatedAt, digest: ModelsDev.bodyDigest(text))
+                return DiskHit(text: text, snapshots: snapshots, updatedAt: updatedAt, digest: ModelsDev.bodyDigest(text))
             }
 
             private func writeMeta(updatedAt: Int64, digest: String?, etag: String?) async {
@@ -4667,7 +4704,20 @@ public enum CoreModel {
                 }
             }
 
-            public func get() async throws -> [Snapshot] {
+            public func get(recommended: Bool) async throws -> [Snapshot] {
+                let snapshots = try await getDefault()
+                guard recommended else { return snapshots }
+                if let cached = cacheState.withLock({ $0.recommendedSnapshots }) { return cached }
+                guard let source = cacheState.withLock({ $0.source }), let decoded = source.decode(recommended: true) else {
+                    return snapshots
+                }
+                cacheState.withLock { s in
+                    if s.recommendedSnapshots == nil { s.recommendedSnapshots = decoded }
+                }
+                return decoded
+            }
+
+            private func getDefault() async throws -> [Snapshot] {
                 // Explicit `options.file` takes precedence over KV/disk cache and network.
                 if let file = options.file {
                     if let cached = cacheState.withLock({ $0.snapshots }) {
@@ -4678,6 +4728,8 @@ public enum CoreModel {
                         let parsed = try ModelsDev.decodeSnapshot(text)
                         cacheState.withLock { s in
                             s.snapshots = parsed
+                            s.source = .text(text)
+                            s.recommendedSnapshots = nil
                             s.updatedAt = nowMs()
                             s.digest = ModelsDev.bodyDigest(text)
                         }
@@ -4704,6 +4756,8 @@ public enum CoreModel {
                     cacheState.withLock { s in
                         if s.snapshots == nil {
                             s.snapshots = kvHit.snapshots
+                            s.source = kvHit.source
+                            s.recommendedSnapshots = nil
                             s.updatedAt = effectiveUpdatedAt
                             s.digest = effectiveDigest
                             s.etag = effectiveEtag
@@ -4724,6 +4778,8 @@ public enum CoreModel {
                     cacheState.withLock { s in
                         if s.snapshots == nil {
                             s.snapshots = diskHit.snapshots
+                            s.source = .text(diskHit.text)
+                            s.recommendedSnapshots = nil
                             s.updatedAt = effectiveUpdatedAt
                             s.digest = diskHit.digest
                             s.etag = effectiveEtag
@@ -4785,7 +4841,11 @@ public enum CoreModel {
 
                     if !force && !digestChanged && previousDigest != nil {
                         cacheState.withLock { s in
-                            if s.snapshots == nil { s.snapshots = parsed }
+                            if s.snapshots == nil {
+                                s.snapshots = parsed
+                                s.source = .text(text)
+                                s.recommendedSnapshots = nil
+                            }
                             s.updatedAt = now
                             s.digest = digest
                             s.etag = nextEtag
@@ -4796,6 +4856,8 @@ public enum CoreModel {
 
                     cacheState.withLock { s in
                         s.snapshots = parsed
+                        s.source = .text(text)
+                        s.recommendedSnapshots = nil
                         s.updatedAt = now
                         s.digest = digest
                         s.etag = nextEtag
@@ -4816,7 +4878,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#layer [status=implemented hash=4ca434b56360]
+        // parity: core/src/models-dev.ts#layer [status=implemented hash=b6bce9765788]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)
@@ -4850,6 +4912,7 @@ public enum CoreModel {
         // parity: core/src/models-dev.ts#node [status=implemented hash=aea3814ebc3b]
         public static let node: LayerNode.Provider = configured()
     }
+
 
     // MARK: - core/src/github-copilot/models.ts
 
@@ -5157,5 +5220,12 @@ extension CoreModel.Resolver.Interface {
     ) async throws -> AISchema.LanguageModel {
         let resolved = try await resolveModel(model, variant: variant)
         return try resolved.makeLanguageModel(transport: transport, environment: environment, clock: clock)
+    }
+}
+
+extension CoreModel.ModelsDev.Interface {
+    /// The catalog with each model on the first usable API it lists.
+    public func get() async throws -> [CoreModel.ModelsDev.Snapshot] {
+        try await get(recommended: false)
     }
 }
