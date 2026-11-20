@@ -29,7 +29,7 @@ extension CodemodeLanguage {
                 return .object(copy)
             }
             if let date = obj as? DateObj { return .object(remember(DateObj(proto: builtins.Date, epochMs: date.epochMs))) }
-            if let rx = obj as? RegExpObj { return .object(remember(RegExpObj(proto: builtins.RegExp, pattern: rx.pattern, flags: rx.flags))) }
+            if let rx = obj as? RegExpObj { return .object(remember(RegExpObj(proto: builtins.RegExp, compiled: rx.compiled))) }
             if let bytes = obj as? Bytes { return .object(remember(Bytes(proto: builtins.Uint8Array, data: bytes.data))) }
             if let err = obj as? ErrorObj {
                 let name = get(err, "name")

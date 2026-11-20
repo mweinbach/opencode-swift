@@ -1674,53 +1674,64 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/runtime/objects.ts#RegExpObj [status=implemented hash=ac7016e48125]
     public final class RegExpObj: Wrapper, @unchecked Sendable {
-        public let pattern: String
+        public let pattern: JSString
         public let flags: String
-        private let lastIndexBox = Mutex<Int>(0)
+        public let compiled: ECMAScriptRegExp
+        private let lastIndexBox = Mutex<Double>(0)
 
-        public init(proto: Obj?, pattern: String, flags: String) {
-            self.pattern = pattern
-            self.flags = String(Set(flags).sorted())
+        public init(proto: Obj?, compiled: ECMAScriptRegExp) {
+            self.compiled = compiled
+            self.pattern = JSString(utf16: compiled.patternUnits)
+            self.flags = compiled.flags.canonicalString
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "source", .string(JSString(CodemodeLanguage.escapeRegExpPattern(pattern))), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "flags", .string(JSString(self.flags)), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "global", .bool(flags.contains("g")), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "ignoreCase", .bool(flags.contains("i")), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "multiline", .bool(flags.contains("m")), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "dotAll", .bool(flags.contains("s")), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "unicode", .bool(flags.contains("u")), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "sticky", .bool(flags.contains("y")), CodemodeLanguage.readonly)
+        }
+
+        public init(proto: Obj?, pattern: JSString, flags: String) {
+            let compiled = (try? ECMAScriptRegExp(pattern: pattern.utf16Units, flags: Array(flags.utf16)))
+                ?? (try! ECMAScriptRegExp(pattern: [], flags: []))
+            self.compiled = compiled
+            self.pattern = pattern
+            self.flags = compiled.flags.canonicalString
+            super.init(proto: proto)
+        }
+
+        public convenience init(proto: Obj?, pattern: String, flags: String) {
+            self.init(proto: proto, pattern: JSString(pattern), flags: flags)
         }
 
         /// The pattern as `RegExp.prototype.source` shows it (EscapeRegExpPattern).
-        public var source: String { CodemodeLanguage.escapeRegExpPattern(pattern) }
+        public var source: JSString { JSString(utf16: compiled.escapedSourceUnits) }
+
+        public var lastIndexNumber: Double {
+            get { lastIndexBox.withLock { $0 } }
+            set { lastIndexBox.withLock { $0 = newValue } }
+        }
 
         public var lastIndex: Int {
-            get { lastIndexBox.withLock { $0 } }
-            set { lastIndexBox.withLock { $0 = max(0, newValue) } }
+            get {
+                let n = lastIndexNumber
+                if n.isNaN || n <= 0 { return 0 }
+                if !n.isFinite { return Int.max }
+                return Int(min(n.rounded(.towardZero), Double(Int.max)))
+            }
+            set { lastIndexNumber = Double(max(0, newValue)) }
         }
 
         public override var tag: String { "RegExp" }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.regex [status=implemented hash=d5d239be00bb]
-        public var regex: NSRegularExpression? {
-            var opts: NSRegularExpression.Options = []
-            if flags.contains("i") { opts.insert(.caseInsensitive) }
-            if flags.contains("m") { opts.insert(.anchorsMatchLines) }
-            if flags.contains("s") { opts.insert(.dotMatchesLineSeparators) }
-            return try? NSRegularExpression(pattern: pattern.isEmpty ? "(?:)" : pattern, options: opts)
-        }
+        public var regex: ECMAScriptRegExp { compiled }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.use [status=implemented hash=4494333ab316]
-        public func use<T>(_ work: (NSRegularExpression?, inout Int) throws -> T) rethrows -> T {
-            var idx = lastIndex
-            defer { lastIndex = idx }
-            return try work(regex, &idx)
+        public func use<T>(_ work: (ECMAScriptRegExp, inout Double) throws -> T) rethrows -> T {
+            var idx = lastIndexNumber
+            defer { lastIndexNumber = idx }
+            return try work(compiled, &idx)
         }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toString [status=implemented hash=0e8045c353fa]
         public override func jsToString() -> JSString {
-            JSString("/\(source)/\(flags)")
+            JSString("/") + source + JSString("/" + flags)
         }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toHost [status=implemented hash=cb210836aa66]
@@ -6887,21 +6898,22 @@ extension CodemodeLanguage {
                 let end: Int? = args.count > 1 && !args[1].isUndefined ? coerceToInteger(args[1]) : nil
                 return .bool(hay.endsWith(needle, endPosition: end))
             },
-            Method("split", 2) { thisVal, args, _, _ in
+            Method("split", 2) { thisVal, args, _, eval in
                 let str = coerceToString(thisVal)
                 let limit: Int
                 if args.count > 1 && !args[1].isUndefined {
                     limit = Int(toUInt32(coerceToNumber(args[1])))
                 } else {
-                    limit = Int.max
+                    limit = Int(UInt32.max)
                 }
                 if limit == 0 { return .object(Arr(proto: builtins.Array)) }
                 guard let sepArg = args.first, !sepArg.isUndefined else {
                     return .object(Arr(proto: builtins.Array, items: [.string(str)]))
                 }
                 if case .object(let rx as RegExpObj) = sepArg {
-                    let parts = try regexSplit(str, regex: rx, limit: limit)
-                    return .object(Arr(proto: builtins.Array, items: parts.map { .string($0) }))
+                    let parts = try regexSplit(str, regex: rx, limit: limit, eval: eval)
+                    try checkArrayLength(parts.count)
+                    return .object(Arr(proto: builtins.Array, items: parts))
                 }
                 let sep = coerceToString(sepArg)
                 let parts = str.split(separator: sep, limit: limit).map { Value.string($0) }
@@ -6979,33 +6991,33 @@ extension CodemodeLanguage {
                 let rep = args.count > 1 ? args[1] : .undefined
                 if case .object(let rx as RegExpObj) = search {
                     guard rx.flags.contains("g") else {
-                        throw typeError("String.replaceAll requires a regular expression with the global (g) flag: write /\(rx.source)/\(rx.flags)g, or use String.replace to replace only the first match.")
+                        throw typeError("String.replaceAll requires a regular expression with the global (g) flag: write /\(rx.source.toHostString())/\(rx.flags)g, or use String.replace to replace only the first match.")
                     }
                     return .string(try await regexReplace(str, regex: rx, replacement: rep, replaceAll: true, eval: eval))
                 }
                 return .string(try await stringReplace(str, needle: coerceToString(search), replacement: rep, all: true, eval: eval))
             },
-            Method("match", 1) { thisVal, args, _, _ in
+            Method("match", 1) { thisVal, args, _, eval in
                 let str = coerceToString(thisVal)
                 let rx: RegExpObj
                 if case .object(let r as RegExpObj) = args.first {
                     rx = r
                 } else {
-                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0).toWellFormedString() } ?? ""
-                    rx = RegExpObj(proto: builtins.RegExp, pattern: pat, flags: "")
+                    let pat: JSString = args.first.map { $0.isUndefined ? .empty : coerceToString($0) } ?? .empty
+                    rx = try compileStringPattern(builtins, source: pat, method: "match", extraFlags: "")
                 }
-                return try regexMatch(str, regex: rx, builtins: builtins)
+                return try regexMatch(str, regex: rx, builtins: builtins, eval: eval)
             },
-            Method("search", 1) { thisVal, args, _, _ in
+            Method("search", 1) { thisVal, args, _, eval in
                 let str = coerceToString(thisVal)
                 let rx: RegExpObj
                 if case .object(let r as RegExpObj) = args.first {
                     rx = r
                 } else {
-                    let pat = args.first.map { $0.isUndefined ? "" : coerceToString($0).toWellFormedString() } ?? ""
-                    rx = RegExpObj(proto: builtins.RegExp, pattern: pat, flags: "")
+                    let pat: JSString = args.first.map { $0.isUndefined ? .empty : coerceToString($0) } ?? .empty
+                    rx = try compileStringPattern(builtins, source: pat, method: "search", extraFlags: "")
                 }
-                return .number(Double(try regexSearch(str, regex: rx)))
+                return .number(Double(try regexSearch(str, regex: rx, eval: eval)))
             },
             Method("concat", 1) { thisVal, args, _, _ in
                 var parts: [JSString] = [coerceToString(thisVal)]
@@ -7940,112 +7952,87 @@ extension CodemodeLanguage {
     // MARK: RegExp (src/language/stdlib/regexp.ts)
 
     // parity: psychoscript/src/stdlib/regexp.ts#withHostRegex [status=adapted hash=976b7d368513]
-    public static func withHostRegex<T>(_ pattern: String, flags: String, _ body: (NSRegularExpression) throws -> T) throws -> T {
-        let regex = try compileHostRegex(pattern, flags: flags)
+    public static func withHostRegex<T>(_ pattern: String, flags: String, _ body: (ECMAScriptRegExp) throws -> T) throws -> T {
+        let regex = try ECMAScriptRegExp(pattern: pattern, flags: flags)
         return try body(regex)
     }
 
-    /// The host (ICU) form of a JavaScript pattern: `(?:)` for the empty pattern, and `\u{...}` code point escapes
-    /// as ICU's `\x{...}` under the `u` flag.
-    static func icuPattern(_ pattern: String, flags: String) -> String {
-        if pattern.isEmpty { return "(?:)" }
-        guard flags.contains("u") || flags.contains("v"), pattern.contains("\\u{") else { return pattern }
-        var out = ""
-        var chars = Array(pattern)[...]
-        while let c = chars.first {
-            chars = chars.dropFirst()
-            if c == "\\", let next = chars.first {
-                if next == "u", chars.dropFirst().first == "{" {
-                    out += "\\x"
-                    chars = chars.dropFirst()
-                    continue
-                }
-                out.append(c)
-                out.append(next)
-                chars = chars.dropFirst()
-                continue
-            }
-            out.append(c)
+    static func makeRegexInterruptCheck(_ eval: Evaluator?) -> (() throws -> Void)? {
+        guard let eval else { return nil }
+        return {
+            if Task.isCancelled { throw Interruption("cancelled") }
+            try eval.checkDeadline()
         }
-        return out
     }
 
-    static func compileHostRegex(_ pattern: String, flags: String) throws -> NSRegularExpression {
-        var opts: NSRegularExpression.Options = []
-        if flags.contains("i") { opts.insert(.caseInsensitive) }
-        if flags.contains("m") { opts.insert(.anchorsMatchLines) }
-        if flags.contains("s") { opts.insert(.dotMatchesLineSeparators) }
-        return try NSRegularExpression(pattern: icuPattern(pattern, flags: flags), options: opts)
+    static func compileStringPattern(_ builtins: Builtins, source: JSString, method: String, extraFlags: String) throws -> RegExpObj {
+        do {
+            let compiled = try ECMAScriptRegExp(pattern: source.utf16Units, flags: Array(extraFlags.utf16))
+            return RegExpObj(proto: builtins.RegExp, compiled: compiled)
+        } catch let err {
+            throw syntaxError("String.\(method) received the string \(jsonQuote(source)), which is not a valid regular expression pattern (\(err.reason)). \(escapeRegexHint)")
+        }
     }
 
-    /// The names of a pattern's named groups, in group order.
-    static func namedGroups(_ pattern: String) -> [String] {
-        var names: [String] = []
-        let chars = Array(pattern)
-        var i = 0
-        var inClass = false
-        while i < chars.count {
-            let c = chars[i]
-            if c == "\\" { i += 2; continue }
-            if c == "[" { inClass = true } else if c == "]" { inClass = false }
-            if !inClass, c == "(", i + 2 < chars.count, chars[i + 1] == "?", chars[i + 2] == "<", i + 3 < chars.count, chars[i + 3] != "=", chars[i + 3] != "!" {
-                var j = i + 3
-                var name = ""
-                while j < chars.count, chars[j] != ">" { name.append(chars[j]); j += 1 }
-                names.append(name)
-                i = j
-            }
-            i += 1
-        }
-        return names
+    private static func sliceUTF16(_ units: [UInt16], _ range: Range<Int>) -> JSString {
+        if range.isEmpty { return .empty }
+        return JSString(utf16: units[range])
     }
 
-    /// A match as `exec` returns it: the groups, `index`, `input`, and `groups` (named groups, or undefined).
-    // parity: psychoscript/src/stdlib/regexp.ts#matchToValue [status=implemented hash=36713a943eac]
-    public static func matchToValue(
-        _ match: NSTextCheckingResult,
-        in string: JSString,
-        builtins: Builtins,
-        pattern: String = ""
-    ) -> Value {
-        var items: [Value] = []
-        for idx in 0..<match.numberOfRanges {
-            let r = match.range(at: idx)
-            items.append(r.location == NSNotFound ? .undefined : .string(string.sliceUTF16(from: r.location, to: r.location + r.length)))
+    private static func indicesToValue(_ match: ECMAScriptRegExpMatch, builtins: Builtins) -> Value {
+        func pair(_ r: Range<Int>?) -> Value {
+            guard let r else { return .undefined }
+            return .object(Arr(proto: builtins.Array, items: [.number(Double(r.lowerBound)), .number(Double(r.upperBound))]))
         }
-        let arr = Arr(proto: builtins.Array, items: items)
-        define(arr, "index", .number(Double(match.range.location)))
-        define(arr, "input", .string(string))
-        let names = namedGroups(pattern)
-        if names.isEmpty {
-            define(arr, "groups", .undefined)
+        let items = match.captures.map(pair)
+        let result = Arr(proto: builtins.Array, items: items)
+        if match.namedGroupNames.isEmpty {
+            define(result, "groups", .undefined)
         } else {
             let groups = Obj(proto: builtins.Object)
-            for name in names {
-                let r = match.range(withName: name)
-                define(groups, JSString(name), r.location == NSNotFound ? .undefined : .string(string.sliceUTF16(from: r.location, to: r.location + r.length)))
+            for name in match.namedGroupNames {
+                define(groups, JSString(name), pair(match.namedCaptures[name] ?? nil))
+            }
+            define(result, "groups", .object(groups))
+        }
+        return .object(result)
+    }
+
+    /// A match as `exec` returns it: the groups, `index`, `input`, `groups` (when named groups exist), and `indices` (when `d` is set).
+    // parity: psychoscript/src/stdlib/regexp.ts#matchToValue [status=implemented hash=36713a943eac]
+    public static func matchToValue(
+        _ match: ECMAScriptRegExpMatch,
+        in string: JSString,
+        units: [UInt16],
+        builtins: Builtins
+    ) -> Value {
+        var items: [Value] = []
+        items.reserveCapacity(match.captures.count)
+        for cap in match.captures {
+            if let r = cap {
+                items.append(.string(sliceUTF16(units, r)))
+            } else {
+                items.append(.undefined)
+            }
+        }
+        let arr = Arr(proto: builtins.Array, items: items)
+        define(arr, "index", .number(Double(match.range.lowerBound)))
+        define(arr, "input", .string(string))
+        if !match.namedGroupNames.isEmpty {
+            let groups = Obj(proto: builtins.Object)
+            for name in match.namedGroupNames {
+                if let r = match.namedCaptures[name] ?? nil {
+                    define(groups, JSString(name), .string(sliceUTF16(units, r)))
+                } else {
+                    define(groups, JSString(name), .undefined)
+                }
             }
             define(arr, "groups", .object(groups))
         }
-        return .object(arr)
-    }
-
-    /// Why a pattern does not compile, as upstream shows the host engine's reason.
-    static func regexFailureReason(_ pattern: String) -> String {
-        var depth = 0
-        var inClass = false
-        let chars = Array(pattern)
-        var i = 0
-        while i < chars.count {
-            let c = chars[i]
-            if c == "\\" { i += 2; continue }
-            if inClass { if c == "]" { inClass = false } } else if c == "[" { inClass = true } else if c == "(" { depth += 1 } else if c == ")" { depth -= 1; if depth < 0 { return "unmatched parentheses" } }
-            i += 1
+        if match.hasIndices {
+            define(arr, "indices", indicesToValue(match, builtins: builtins))
         }
-        if depth > 0 { return "missing )" }
-        if inClass { return "missing terminating ] for character class" }
-        if pattern.hasSuffix("\\") { return "\\ at end of pattern" }
-        return "invalid pattern"
+        return .object(arr)
     }
 
     static let escapeRegexHint = "To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead."
@@ -8054,166 +8041,151 @@ extension CodemodeLanguage {
     public static func constructRegExp(_ builtins: Builtins, args: [Value]) throws -> RegExpObj {
         let patternArg = args.first ?? .undefined
         let flagsArg = args.count > 1 ? args[1] : .undefined
-        let pattern: String
-        let flags: String
+        let pattern: JSString
+        let flags: JSString
         if !flagsArg.isUndefined, case .string = flagsArg {} else if !flagsArg.isUndefined {
             throw syntaxError("RegExp flags must be a string of flag characters (e.g. \"g\", \"gi\"), not \(flagsArg.isNullish ? "null" : typeofValue(flagsArg)).")
         }
         if case .object(let existing as RegExpObj) = patternArg {
-            pattern = existing.pattern
-            flags = flagsArg.isUndefined ? existing.flags : coerceToString(flagsArg).toWellFormedString()
+            pattern = existing.source
+            flags = flagsArg.isUndefined ? JSString(existing.flags) : coerceToString(flagsArg)
         } else {
-            pattern = patternArg.isUndefined ? "" : coerceToString(patternArg).toWellFormedString()
-            flags = flagsArg.isUndefined ? "" : coerceToString(flagsArg).toWellFormedString()
-        }
-        let validFlags = Set("dgimsuvy")
-        if flags.contains(where: { !validFlags.contains($0) }) || Set(flags).count != flags.count {
-            throw syntaxError("new RegExp(...) received invalid flags \(jsonQuote(flags)) (Invalid flags supplied to RegExp constructor '\(flags)'). Valid flags are d, g, i, m, s, u, v, and y.")
+            pattern = patternArg.isUndefined ? .empty : coerceToString(patternArg)
+            flags = flagsArg.isUndefined ? .empty : coerceToString(flagsArg)
         }
         do {
-            _ = try compileHostRegex(pattern, flags: flags)
-        } catch {
-            throw syntaxError("new RegExp(...) received \(jsonQuote(pattern)), which is not a valid regular expression pattern (\(regexFailureReason(pattern))). \(escapeRegexHint)")
+            let compiled = try ECMAScriptRegExp(pattern: pattern.utf16Units, flags: flags.utf16Units)
+            return RegExpObj(proto: builtins.RegExp, compiled: compiled)
+        } catch let err {
+            if err.kind == .invalidFlags {
+                throw syntaxError("new RegExp(...) received invalid flags \(jsonQuote(flags)) (\(err.reason)). Valid flags are d, g, i, m, s, u, v, and y.")
+            }
+            throw syntaxError("new RegExp(...) received \(jsonQuote(pattern)), which is not a valid regular expression pattern (\(err.reason)). \(escapeRegexHint)")
         }
-        return RegExpObj(proto: builtins.RegExp, pattern: pattern, flags: flags)
     }
 
-    /// One `RegExpBuiltinExec` step: a match starting at or after `lastIndex` (exactly at it with `y`), updating
-    /// `lastIndex` for global and sticky expressions.
-    static func regexExec(_ regex: RegExpObj, _ input: JSString) throws -> NSTextCheckingResult? {
-        let hostInput = input.toWellFormedString()
-        let re = try compileHostRegex(regex.pattern, flags: regex.flags)
-        let ns = hostInput as NSString
-        let tracksIndex = regex.flags.contains("g") || regex.flags.contains("y")
+    /// One `RegExpBuiltinExec` step on UTF-16 code units: a match starting at or after `lastIndex`
+    /// (exactly at it with `y`), updating `lastIndex` for global and sticky expressions.
+    static func regexExec(_ regex: RegExpObj, units: [UInt16], eval: Evaluator? = nil) throws -> ECMAScriptRegExpMatch? {
+        let compiled = regex.compiled
+        let tracksIndex = compiled.flags.contains(.global) || compiled.flags.contains(.sticky)
         let start = tracksIndex ? regex.lastIndex : 0
-        if start > ns.length {
-            if tracksIndex { regex.lastIndex = 0 }
+        if start > units.count {
+            if tracksIndex { regex.lastIndexNumber = 0 }
             return nil
         }
-        let options: NSRegularExpression.MatchingOptions = regex.flags.contains("y") ? [.anchored] : []
-        guard let m = re.firstMatch(in: hostInput, options: options.union(.withTransparentBounds), range: NSRange(location: start, length: ns.length - start)) else {
-            if tracksIndex { regex.lastIndex = 0 }
+        guard let m = try compiled.exec(in: units, startIndex: start, checkInterrupt: makeRegexInterruptCheck(eval)) else {
+            if tracksIndex { regex.lastIndexNumber = 0 }
             return nil
         }
-        if tracksIndex { regex.lastIndex = m.range.location + m.range.length }
+        if tracksIndex { regex.lastIndexNumber = Double(m.range.upperBound) }
         return m
     }
 
-    internal static func regexMatch(_ input: JSString, regex: RegExpObj, builtins: Builtins) throws -> Value {
-        if regex.flags.contains("g") {
-            regex.lastIndex = 0
+    static func regexExec(_ regex: RegExpObj, _ input: JSString, eval: Evaluator? = nil) throws -> ECMAScriptRegExpMatch? {
+        try regexExec(regex, units: input.utf16Units, eval: eval)
+    }
+
+    internal static func regexMatch(_ input: JSString, regex: RegExpObj, builtins: Builtins, eval: Evaluator? = nil) throws -> Value {
+        let units = input.utf16Units
+        if regex.compiled.flags.contains(.global) {
+            regex.lastIndexNumber = 0
+            let unicode = regex.compiled.flags.isUnicodeMode
             var found: [Value] = []
-            while let m = try regexExec(regex, input) {
-                found.append(.string(input.sliceUTF16(from: m.range.location, to: m.range.location + m.range.length)))
-                if m.range.length == 0 { regex.lastIndex = advanceIndex(input, m.range.location, unicode: regex.flags.contains("u")) }
+            while let m = try regexExec(regex, units: units, eval: eval) {
+                found.append(.string(sliceUTF16(units, m.range)))
+                if m.range.isEmpty {
+                    regex.lastIndexNumber = Double(ECMAScriptRegExp.advanceIndex(in: units, from: m.range.lowerBound, unicode: unicode))
+                }
             }
             return found.isEmpty ? .null : .object(Arr(proto: builtins.Array, items: found))
         }
-        guard let m = try regexExec(regex, input) else { return .null }
-        return matchToValue(m, in: input, builtins: builtins, pattern: regex.pattern)
+        guard let m = try regexExec(regex, units: units, eval: eval) else { return .null }
+        return matchToValue(m, in: input, units: units, builtins: builtins)
     }
 
-    /// AdvanceStringIndex: one code unit, or one code point under the `u` flag.
+    /// AdvanceStringIndex: one code unit, or one code point under the `u`/`v` flag.
     static func advanceIndex(_ input: JSString, _ index: Int, unicode: Bool) -> Int {
-        let units = input.utf16Units
-        guard unicode, index >= 0, index + 1 < units.count else { return index + 1 }
-        if UTF16.isLeadSurrogate(units[index]), UTF16.isTrailSurrogate(units[index + 1]) { return index + 2 }
-        return index + 1
+        ECMAScriptRegExp.advanceIndex(in: input.utf16Units, from: index, unicode: unicode)
     }
 
-    internal static func regexSearch(_ input: JSString, regex: RegExpObj) throws -> Int {
-        let hostInput = input.toWellFormedString()
-        let re = try compileHostRegex(regex.pattern, flags: regex.flags)
-        let ns = hostInput as NSString
-        guard let m = re.firstMatch(in: hostInput, range: NSRange(location: 0, length: ns.length)) else { return -1 }
-        return m.range.location
+    internal static func regexSearch(_ input: JSString, regex: RegExpObj, eval: Evaluator? = nil) throws -> Int {
+        let units = input.utf16Units
+        let prev = regex.lastIndexNumber
+        regex.lastIndexNumber = 0
+        defer { regex.lastIndexNumber = prev }
+        guard let m = try regexExec(regex, units: units, eval: eval) else { return -1 }
+        return m.range.lowerBound
     }
 
     // Upstream: psychoscript/src/stdlib/regexp.ts#split (implemented).
-    /// RegExp.prototype[Symbol.split]: sticky matching at each position, with captures spliced in.
-    internal static func regexSplit(_ input: JSString, regex: RegExpObj, limit: Int) throws -> [JSString] {
-        let splitter = RegExpObj(proto: nil, pattern: regex.pattern, flags: regex.flags.contains("y") ? regex.flags : regex.flags + "y")
-        let size = input.utf16Count
-        let unicode = regex.flags.contains("u") || regex.flags.contains("v")
-        var parts: [JSString] = []
+    /// RegExp.prototype[Symbol.split]: sticky matching at each position, with captures spliced in (unmatched -> undefined).
+    internal static func regexSplit(_ input: JSString, regex: RegExpObj, limit: Int, eval: Evaluator? = nil) throws -> [Value] {
+        let units = input.utf16Units
+        let size = units.count
+        let compiled = regex.compiled
+        let unicode = compiled.flags.isUnicodeMode
+        let check = makeRegexInterruptCheck(eval)
+        var parts: [Value] = []
         if limit == 0 { return [] }
         if size == 0 {
-            splitter.lastIndex = 0
-            return try regexExec(splitter, input) == nil ? [input] : []
+            let m = try compiled.exec(in: units, startIndex: 0, anchored: true, checkInterrupt: check)
+            return m == nil ? [.string(input)] : []
         }
         var p = 0
         var q = 0
         while q < size {
-            splitter.lastIndex = q
-            guard let m = try regexExec(splitter, input) else {
-                q = advanceIndex(input, q, unicode: unicode)
+            try check?()
+            guard let m = try compiled.exec(in: units, startIndex: q, anchored: true, checkInterrupt: check) else {
+                q = ECMAScriptRegExp.advanceIndex(in: units, from: q, unicode: unicode)
                 continue
             }
-            let e = min(splitter.lastIndex, size)
+            let e = min(m.range.upperBound, size)
             if e == p {
-                q = advanceIndex(input, q, unicode: unicode)
+                q = ECMAScriptRegExp.advanceIndex(in: units, from: q, unicode: unicode)
                 continue
             }
-            parts.append(input.sliceUTF16(from: p, to: q))
+            parts.append(.string(sliceUTF16(units, p..<q)))
             if parts.count == limit { return parts }
             p = e
-            for idx in 1..<max(1, m.numberOfRanges) {
-                let r = m.range(at: idx)
-                parts.append(r.location == NSNotFound ? .empty : input.sliceUTF16(from: r.location, to: r.location + r.length))
+            for idx in 1..<m.captures.count {
+                if let r = m.captures[idx] {
+                    parts.append(.string(sliceUTF16(units, r)))
+                } else {
+                    parts.append(.undefined)
+                }
                 if parts.count == limit { return parts }
             }
             q = p
         }
-        parts.append(input.sliceUTF16(from: p, to: size))
+        parts.append(.string(sliceUTF16(units, p..<size)))
         return parts
     }
 
     /// GetSubstitution: `$$`, `$&`, `` $` ``, `$'`, `$n`/`$nn`, and `$<name>`.
     static func expandReplacement(_ template: JSString, matched: JSString, position: Int, input: JSString, captures: [Value], groups: Value) -> JSString {
-        let t = template.utf16Units
         let inputUnits = input.utf16Units
-        var out: [UInt16] = []
-        var i = 0
-        let tailStart = min(position + matched.utf16Count, inputUnits.count)
-        while i < t.count {
-            let c = t[i]
-            guard c == 0x24, i + 1 < t.count else { out.append(c); i += 1; continue }
-            let n = t[i + 1]
-            switch n {
-            case 0x24: out.append(0x24); i += 2
-            case 0x26: out += matched.utf16Units; i += 2
-            case 0x60: out += inputUnits[0..<min(position, inputUnits.count)]; i += 2
-            case 0x27: out += inputUnits[tailStart...]; i += 2
-            case 0x30...0x39:
-                let d1 = Int(n - 0x30)
-                var consumed = 2
-                var index = d1
-                if i + 2 < t.count, (0x30...0x39).contains(t[i + 2]) {
-                    let two = d1 * 10 + Int(t[i + 2] - 0x30)
-                    if two >= 1 && two <= captures.count { index = two; consumed = 3 }
-                }
-                if index >= 1 && index <= captures.count {
-                    if case .string(let s) = captures[index - 1] { out += s.utf16Units }
-                    i += consumed
-                } else {
-                    out.append(c)
-                    i += 1
-                }
-            case 0x3C:
-                guard case .object(let groupsObj) = groups, let close = t[(i + 2)...].firstIndex(of: 0x3E) else {
-                    out.append(c)
-                    i += 1
-                    continue
-                }
-                let name = JSString(utf16: t[(i + 2)..<close])
-                let value = get(groupsObj, name)
-                if !value.isUndefined { out += coerceToString(value).utf16Units }
-                i = close + 1
-            default:
-                out.append(c)
-                i += 1
-            }
+        let endPos = min(position + matched.utf16Count, inputUnits.count)
+        let capUnits: [[UInt16]?] = captures.map { v in
+            if case .string(let s) = v { return s.utf16Units }
+            return nil
         }
+        var namedMap: [String: [UInt16]?]? = nil
+        if case .object(let groupsObj) = groups {
+            var dict: [String: [UInt16]?] = [:]
+            for key in ownKeys(groupsObj) {
+                let val = get(groupsObj, key)
+                dict[key.toWellFormedString()] = val.isUndefined ? nil : coerceToString(val).utf16Units
+            }
+            namedMap = dict
+        }
+        let out = ECMAScriptRegExp.expandReplacement(
+            template: template.utf16Units,
+            input: inputUnits,
+            matchRange: position..<endPos,
+            captures: capUnits,
+            namedCaptures: namedMap
+        )
         return JSString(utf16: out)
     }
 
@@ -8224,80 +8196,130 @@ extension CodemodeLanguage {
         replaceAll: Bool,
         eval: Evaluator
     ) async throws -> JSString {
-        var matches: [NSTextCheckingResult] = []
+        let units = input.utf16Units
+        let unicode = regex.compiled.flags.isUnicodeMode
+        var matches: [ECMAScriptRegExpMatch] = []
         if replaceAll {
-            regex.lastIndex = 0
-            while let m = try regexExec(regex, input) {
+            regex.lastIndexNumber = 0
+            while let m = try regexExec(regex, units: units, eval: eval) {
                 matches.append(m)
-                if m.range.length == 0 { regex.lastIndex = advanceIndex(input, m.range.location, unicode: regex.flags.contains("u")) }
+                if m.range.isEmpty {
+                    regex.lastIndexNumber = Double(ECMAScriptRegExp.advanceIndex(in: units, from: m.range.lowerBound, unicode: unicode))
+                }
             }
-        } else if let m = try regexExec(regex, input) {
+        } else if let m = try regexExec(regex, units: units, eval: eval) {
             matches.append(m)
         }
         if matches.isEmpty { return input }
-        let names = namedGroups(regex.pattern)
-        var out: [UInt16] = []
-        let inputUnits = input.utf16Units
+        let hasNamed = !regex.compiled.namedGroupNames.isEmpty
+        var outUnits: [UInt16] = []
         var cursor = 0
         for m in matches {
-            if cursor < m.range.location {
-                out.append(contentsOf: inputUnits[cursor..<m.range.location])
+            let start = m.range.lowerBound
+            let end = m.range.upperBound
+            if start > cursor {
+                outUnits.append(contentsOf: units[cursor..<start])
             }
-            let matched = input.sliceUTF16(from: m.range.location, to: m.range.location + m.range.length)
+            let matched = sliceUTF16(units, m.range)
             var captures: [Value] = []
-            for idx in 1..<max(1, m.numberOfRanges) {
-                let r = m.range(at: idx)
-                captures.append(r.location == NSNotFound ? .undefined : .string(input.sliceUTF16(from: r.location, to: r.location + r.length)))
-            }
-            var groups: Value = .undefined
-            if !names.isEmpty {
-                let g = Obj(proto: eval.builtins.Object)
-                for name in names {
-                    let r = m.range(withName: name)
-                    define(g, JSString(name), r.location == NSNotFound ? .undefined : .string(input.sliceUTF16(from: r.location, to: r.location + r.length)))
+            captures.reserveCapacity(max(0, m.captures.count - 1))
+            var capUnits: [[UInt16]?] = []
+            for idx in 1..<m.captures.count {
+                if let r = m.captures[idx] {
+                    captures.append(.string(sliceUTF16(units, r)))
+                    capUnits.append(Array(units[r]))
+                } else {
+                    captures.append(.undefined)
+                    capUnits.append(nil)
                 }
-                groups = .object(g)
+            }
+            var groupsVal: Value = .undefined
+            var namedUnits: [String: [UInt16]?]? = nil
+            if hasNamed {
+                let g = Obj(proto: eval.builtins.Object)
+                var dict: [String: [UInt16]?] = [:]
+                for name in m.namedGroupNames {
+                    if let r = m.namedCaptures[name] ?? nil {
+                        define(g, JSString(name), .string(sliceUTF16(units, r)))
+                        dict[name] = Array(units[r])
+                    } else {
+                        define(g, JSString(name), .undefined)
+                        dict[name] = nil
+                    }
+                }
+                groupsVal = .object(g)
+                namedUnits = dict
             }
             if case .object(let cb as Callable) = replacement {
                 var cbArgs: [Value] = [.string(matched)] + captures
-                cbArgs.append(.number(Double(m.range.location)))
+                cbArgs.append(.number(Double(start)))
                 cbArgs.append(.string(input))
-                if !names.isEmpty { cbArgs.append(groups) }
-                out.append(contentsOf: coerceToString(try await eval.callCallable(.object(cb), thisValue: .undefined, args: cbArgs, site: nil)).utf16Units)
+                if hasNamed { cbArgs.append(groupsVal) }
+                let repStr = coerceToString(try await eval.callCallable(.object(cb), thisValue: .undefined, args: cbArgs, site: nil))
+                outUnits.append(contentsOf: repStr.utf16Units)
             } else {
-                out.append(contentsOf: expandReplacement(coerceToString(replacement), matched: matched, position: m.range.location, input: input, captures: captures, groups: groups).utf16Units)
+                let templateUnits = coerceToString(replacement).utf16Units
+                let expanded = ECMAScriptRegExp.expandReplacement(
+                    template: templateUnits,
+                    input: units,
+                    matchRange: m.range,
+                    captures: capUnits,
+                    namedCaptures: namedUnits
+                )
+                outUnits.append(contentsOf: expanded)
             }
-            cursor = m.range.location + m.range.length
+            cursor = end
         }
-        if cursor < inputUnits.count {
-            out.append(contentsOf: inputUnits[cursor...])
+        if cursor < units.count {
+            outUnits.append(contentsOf: units[cursor..<units.count])
         }
-        return JSString(utf16: out)
+        return JSString(utf16: outUnits)
     }
 
     // parity: psychoscript/src/stdlib/regexp.ts#regexpGlobal [status=implemented hash=38dcf3d03ad1]
     public static func regexpGlobal(_ builtins: Builtins) -> Native {
+        defineAccessor(builtins.RegExp, "source", get: { thisVal in
+            .string(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.source").source)
+        })
+        defineAccessor(builtins.RegExp, "flags", get: { thisVal in
+            .string(JSString(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.flags").flags))
+        })
         defineAccessor(
             builtins.RegExp,
             "lastIndex",
-            get: { thisVal in .number(Double((try? receiver(RegExpObj.self, thisVal, "RegExp.prototype.lastIndex"))?.lastIndex ?? 0)) },
+            get: { thisVal in .number(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.lastIndex").lastIndexNumber) },
             set: { thisVal, val in
-                if let rx = try? receiver(RegExpObj.self, thisVal, "RegExp.prototype.lastIndex") {
-                    rx.lastIndex = max(0, coerceToInteger(val))
-                }
+                let rx = try receiver(RegExpObj.self, thisVal, "RegExp.prototype.lastIndex")
+                rx.lastIndexNumber = coerceToNumber(val)
             }
         )
+        let flagGetters: [(String, ECMAScriptRegExpFlags)] = [
+            ("hasIndices", .hasIndices),
+            ("global", .global),
+            ("ignoreCase", .ignoreCase),
+            ("multiline", .multiline),
+            ("sticky", .sticky),
+            ("unicode", .unicode),
+            ("unicodeSets", .unicodeSets),
+            ("dotAll", .dotAll),
+        ]
+        for (propName, flagBit) in flagGetters {
+            defineAccessor(builtins.RegExp, JSString(propName), get: { thisVal in
+                .bool(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.\(propName)").compiled.flags.contains(flagBit))
+            })
+        }
         methods(builtins, builtins.RegExp, [
-            Method("test", 1) { thisVal, args, _, _ in
+            Method("test", 1) { thisVal, args, _, eval in
                 let rx = try receiver(RegExpObj.self, thisVal, "RegExp.prototype.test")
                 let str = coerceToString(args.first ?? .undefined)
-                return .bool(try regexExec(rx, str) != nil)
+                return .bool(try regexExec(rx, str, eval: eval) != nil)
             },
-            Method("exec", 1) { thisVal, args, _, _ in
+            Method("exec", 1) { thisVal, args, _, eval in
                 let rx = try receiver(RegExpObj.self, thisVal, "RegExp.prototype.exec")
                 let str = coerceToString(args.first ?? .undefined)
-                guard let m = try regexExec(rx, str) else { return .null }
-                return matchToValue(m, in: str, builtins: builtins, pattern: rx.pattern)
+                let units = str.utf16Units
+                guard let m = try regexExec(rx, units: units, eval: eval) else { return .null }
+                return matchToValue(m, in: str, units: units, builtins: builtins)
             },
             Method("toString", 0) { thisVal, _, _, _ in
                 .string(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.toString").jsToString())

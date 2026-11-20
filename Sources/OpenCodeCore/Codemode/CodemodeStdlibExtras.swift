@@ -316,36 +316,31 @@ extension CodemodeLanguage {
             Method("toWellFormed", 0) { thisVal, _, _, _ in
                 .string(coerceToString(thisVal).toWellFormed())
             },
-            Method("matchAll", 1) { thisVal, args, site, eval in
+            Method("matchAll", 1) { thisVal, args, _, eval in
                 let s = coerceToString(thisVal)
                 let arg = args.first ?? .undefined
                 let rx: RegExpObj
                 if case .object(let existing as RegExpObj) = arg {
                     guard existing.flags.contains("g") else {
-                        throw typeError("String.matchAll requires a regular expression with the global (g) flag: write /\(existing.source)/\(existing.flags)g, or use String.match for a single match.")
+                        throw typeError("String.matchAll requires a regular expression with the global (g) flag: write /\(existing.source.toHostString())/\(existing.flags)g, or use String.match for a single match.")
                     }
-                    rx = RegExpObj(proto: builtins.RegExp, pattern: existing.pattern, flags: existing.flags)
-                    rx.lastIndex = existing.lastIndex
+                    rx = RegExpObj(proto: builtins.RegExp, compiled: existing.compiled)
+                    rx.lastIndexNumber = existing.lastIndexNumber
                 } else {
-                    rx = try constructRegExp(builtins, args: [arg.isUndefined ? .string("") : .string(coerceToString(arg)), .string("g")])
+                    let pat: JSString = arg.isUndefined ? .empty : coerceToString(arg)
+                    rx = try compileStringPattern(builtins, source: pat, method: "matchAll", extraFlags: "g")
                 }
+                let units = s.utf16Units
+                let unicode = rx.compiled.flags.isUnicodeMode
                 var matches: [Value] = []
-                while true {
-                    let m = try await invokeMethod(eval, target: .object(rx), name: "exec", args: [.string(s)], site: site)
-                    guard case .object(let mObj) = m else { break }
-                    matches.append(m)
-                    if case .string(let whole) = get(mObj, "0"), whole.isEmpty { rx.lastIndex += 1 }
-                }
-                let list = matches
-                let index = Mutex(0)
-                let cursor = Cursor {
-                    index.withLock { i in
-                        guard i < list.count else { return Step(value: .undefined, done: true) }
-                        defer { i += 1 }
-                        return Step(value: list[i], done: false)
+                while let m = try regexExec(rx, units: units, eval: eval) {
+                    try checkArrayLength(matches.count + 1)
+                    matches.append(matchToValue(m, in: s, units: units, builtins: builtins))
+                    if m.range.isEmpty {
+                        rx.lastIndexNumber = Double(ECMAScriptRegExp.advanceIndex(in: units, from: m.range.lowerBound, unicode: unicode))
                     }
                 }
-                return .object(IteratorObj(proto: builtins.Iterator, cursor: cursor))
+                return .object(Arr(proto: builtins.Array, items: matches))
             },
         ])
 
@@ -584,54 +579,9 @@ extension CodemodeLanguage {
     }
 
     // Upstream: psychoscript/src/stdlib/regexp.ts#escape (implemented).
-    /// ES2025 RegExp.escape (handles lone UTF-16 surrogates as `\udxxx` while preserving valid pairs).
+    /// ES2025 RegExp.escape (operates directly on UTF-16 code units, escaping lone surrogates as `\udxxx`).
     static func regexpEscape(_ s: JSString) -> JSString {
-        let units = s.utf16Units
-        var out = ""
-        let syntax: Set<UInt16> = Set("^$\\.*+?()[]{}|/".utf16)
-        let other: Set<UInt16> = Set(",-=<>#&!%:;@~'`\"".utf16)
-        var i = 0
-        var cpIndex = 0
-        while i < units.count {
-            let u = units[i]
-            if u >= 0xD800 && u <= 0xDBFF, i + 1 < units.count {
-                let lo = units[i + 1]
-                if lo >= 0xDC00 && lo <= 0xDFFF {
-                    let cp = 0x10000 + ((UInt32(u - 0xD800) << 10) | UInt32(lo - 0xDC00))
-                    out.unicodeScalars.append(Unicode.Scalar(cp)!)
-                    i += 2
-                    cpIndex += 1
-                    continue
-                }
-            }
-            if u >= 0xD800 && u <= 0xDFFF {
-                out += String(format: "\\u%04x", u)
-                i += 1
-                cpIndex += 1
-                continue
-            }
-            let scalar = Unicode.Scalar(u)!
-            if cpIndex == 0,
-               (u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A) || (u >= 0x30 && u <= 0x39) {
-                out += String(format: "\\x%02x", u)
-            } else if syntax.contains(u) {
-                out += "\\\(Character(scalar))"
-            } else if other.contains(u) || u == 0x20 {
-                out += String(format: "\\x%02x", u)
-            } else if u == 0x09 { out += "\\t" }
-            else if u == 0x0A { out += "\\n" }
-            else if u == 0x0B { out += "\\v" }
-            else if u == 0x0C { out += "\\f" }
-            else if u == 0x0D { out += "\\r" }
-            else if JSString.isJSWhitespace(u) || scalar.properties.isWhitespace {
-                out += u <= 0xFF ? String(format: "\\x%02x", u) : String(format: "\\u%04x", u)
-            } else {
-                out.unicodeScalars.append(scalar)
-            }
-            i += 1
-            cpIndex += 1
-        }
-        return JSString(out)
+        JSString(utf16: ECMAScriptRegExp.escape(s.utf16Units))
     }
 
     // MARK: Date

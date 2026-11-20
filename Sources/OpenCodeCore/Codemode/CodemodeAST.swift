@@ -1123,10 +1123,15 @@ public enum CodemodeLanguage {
             // RegExp literal when allowed by parser context
             if ch == "/" && allowRegex && peek(1) != "/" && peek(1) != "*" {
                 let (pattern, flags) = try readRegExp(startLoc: startLoc)
-                // As acorn does: unknown or repeated flags are a syntax error, reported just past the opening slash.
-                let validFlags = Set("dgimsuvy")
-                if flags.contains(where: { !validFlags.contains($0) }) || Set(flags).count != flags.count {
-                    throw makeSyntaxFailure("Invalid regular expression flag", at: SourceLocation(line: startLoc.line, column: startLoc.column + 1))
+                // As acorn does: invalid flags or invalid regex literal syntax is a parse error, reported just past the opening slash.
+                let errLoc = SourceLocation(line: startLoc.line, column: startLoc.column + 1)
+                do {
+                    _ = try ECMAScriptRegExp(pattern: pattern, flags: flags)
+                } catch let err {
+                    if err.kind == .invalidFlags {
+                        throw makeSyntaxFailure("Invalid regular expression flag", at: errLoc)
+                    }
+                    throw makeSyntaxFailure("Invalid regular expression: /\(pattern)/: \(err.reason)", at: errLoc)
                 }
                 return Token(kind: .regExp(pattern: pattern, flags: flags), location: startLoc, precededByNewline: sawNewline)
             }
@@ -1396,12 +1401,16 @@ public enum CodemodeLanguage {
             var inClass = false
             while !isAtEnd {
                 let sc = scalars[index]
-                if sc == "\n" || sc == "\r" {
+                if sc == "\n" || sc == "\r" || sc == "\u{2028}" || sc == "\u{2029}" {
                     throw makeSyntaxFailure("Unterminated regular expression", at: startLoc)
                 }
                 if sc == "\\" {
                     pattern.unicodeScalars.append(advance())
                     guard !isAtEnd else { throw makeSyntaxFailure("Unterminated regular expression", at: startLoc) }
+                    let esc = scalars[index]
+                    if esc == "\n" || esc == "\r" || esc == "\u{2028}" || esc == "\u{2029}" {
+                        throw makeSyntaxFailure("Unterminated regular expression", at: startLoc)
+                    }
                     pattern.unicodeScalars.append(advance())
                 } else if sc == "[" {
                     inClass = true

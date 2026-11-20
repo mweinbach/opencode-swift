@@ -123,18 +123,25 @@ struct CodemodeUTF16Tests {
         #expect(err4.message == "Uncaught: \u{FFFD}")
     }
 
-    @Test("RegExp built-ins continue working cleanly on strings containing lone surrogates")
+    @Test("RegExp built-ins flow lone UTF-16 surrogates losslessly through ECMAScriptRegExp")
     func regexCallSiteCompatibility() async throws {
         let res = try await run(#"""
         const s = "a\ud800b123c\udc00d";
         const m = s.match(/b(\d+)c/);
         const rep = s.replace(/\d+/, "X");
         const sp = "x\ud800,y\udc00".split(/,/);
+        const rx = new RegExp("\ud800");
+        const repaired = "\ud83dX".replace(/X/, "\ude00");
+        const halves = "😀".match(/./g).map(c => c.charCodeAt(0));
         return [
             m[0], m[1], m.index, m.input.charCodeAt(1),
             rep.charCodeAt(1), rep.slice(2, 5), rep.charCodeAt(5),
             sp.length, sp[0].charCodeAt(1), sp[1].charCodeAt(1),
-            /\d+/.test(s), s.search(/\d+/)
+            /\d+/.test(s), s.search(/\d+/),
+            /\ud800/.test("\ud800"), /\ud800/.test("\uFFFD"),
+            rx.test("\ud800"), rx.source.charCodeAt(0),
+            /\ud83d/u.test("\ud83d"), /\ud83d/u.test("😀"),
+            repaired === "😀", halves[0], halves[1]
         ];
         """#)
         guard case .success(let val, _, _, _, _) = res else {
@@ -146,6 +153,10 @@ struct CodemodeUTF16Tests {
             .int(0xD800), .string("bXc"), .int(0xDC00),
             .int(2), .int(0xD800), .int(0xDC00),
             .bool(true), .int(3),
+            .bool(true), .bool(false),
+            .bool(true), .int(0xD800),
+            .bool(true), .bool(false),
+            .bool(true), .int(0xD83D), .int(0xDE00),
         ]))
     }
 }
