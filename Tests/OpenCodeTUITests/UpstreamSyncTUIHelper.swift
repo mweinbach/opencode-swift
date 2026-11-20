@@ -29,3 +29,24 @@ enum UpstreamSyncTUIHelper {
         """)
     }
 }
+
+extension UpstreamSyncTUIHelper {
+    /// An assistant message with one text part and one reasoning part; `completed` sets `time.completed`.
+    static func assistant(text: String, reasoning: String, completed: Bool) throws -> SessionMessageSchema.Assistant {
+        let textJSON = String(decoding: try JSONEncoder().encode(text), as: UTF8.self)
+        let reasoningJSON = String(decoding: try JSONEncoder().encode(reasoning), as: UTF8.self)
+        let info = try decode(SessionMessageSchema.Info.self, """
+        {
+          "id": "msg_2", "type": "assistant", "agent": "build",
+          "model": { "id": "m", "providerID": "p" },
+          "time": { "created": 1\(completed ? ", \"completed\": 2" : "") },
+          "content": [
+            { "type": "reasoning", "id": "part_r", "text": \(reasoningJSON), "time": { "created": 1 } },
+            { "type": "text", "id": "part_t", "text": \(textJSON) }
+          ]
+        }
+        """)
+        guard case .assistant(let message) = info else { throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "not assistant")) }
+        return message
+    }
+}

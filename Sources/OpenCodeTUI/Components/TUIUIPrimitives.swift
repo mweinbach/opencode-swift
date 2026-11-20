@@ -80,7 +80,66 @@ public enum TUIPrimitive {
         .tween(duration: duration, ease: ease ?? defaultSmoothstep)
     }
 
+    /// A renderer an animatable runs on, held weakly so a handle never keeps its renderer alive.
+    public final class AnimatableRenderer: @unchecked Sendable {
+        public weak var ctx: (any RenderContext)?
+
+        public init(_ ctx: any RenderContext) {
+            self.ctx = ctx
+        }
+
+        public func now() -> Double { ctx?.clock.now() ?? 0 }
+    }
+
+    /// One 60 fps subscription on each renderer's shared animation clock while any of its tasks runs. Tasks belong to
+    /// no node, so a hidden view's tween runs to its end; it stops early only when its handle jumps or stops.
+    private final class AnimationClock: @unchecked Sendable {
+        let tasks = Mutex<[ObjectIdentifier: AnimatableHandle]>([:])
+        var stop: (() -> Void)?
+
+        private static let clocks = Mutex<[ObjectIdentifier: AnimationClock]>([:])
+
+        static func schedule(_ renderer: AnimatableRenderer, _ task: AnimatableHandle) {
+            guard let ctx = renderer.ctx else { return }
+            let key = ObjectIdentifier(ctx)
+            let (clock, created) = clocks.withLock { clocks -> (AnimationClock, Bool) in
+                if let clock = clocks[key] { return (clock, false) }
+                let clock = AnimationClock()
+                clocks[key] = clock
+                return (clock, true)
+            }
+            clock.tasks.withLock { $0[ObjectIdentifier(task)] = task }
+            guard created else { return }
+            clock.stop = ctx.onAnimationTick(fps: 60) { [weak renderer] _, _, now in
+                guard let renderer else { return }
+                for task in clock.tasks.withLock({ Array($0.values) }) where !task.step(at: now) {
+                    unschedule(renderer, task)
+                }
+                renderer.ctx?.requestRender()
+            }
+        }
+
+        static func unschedule(_ renderer: AnimatableRenderer, _ task: AnimatableHandle) {
+            guard let ctx = renderer.ctx else { return }
+            let key = ObjectIdentifier(ctx)
+            let emptied = clocks.withLock { clocks -> AnimationClock? in
+                guard let clock = clocks[key] else { return nil }
+                let removed = clock.tasks.withLock { tasks -> Bool in
+                    guard tasks.removeValue(forKey: ObjectIdentifier(task)) != nil else { return false }
+                    return tasks.isEmpty
+                }
+                guard removed else { return nil }
+                clocks.removeValue(forKey: key)
+                return clock
+            }
+            emptied?.stop?()
+        }
+    }
+
     /// Deterministic frame-stepped animatable state controller supporting spring and tween transitions.
+    ///
+    /// Bound to a renderer, it reads time from the renderer's clock and steps itself on the renderer's shared 60 fps
+    /// animation clock while it moves; without one, the caller steps it with ``step(at:)``.
     public final class AnimatableHandle: Sendable {
         private struct ChannelState: Sendable {
             var scalar: Bool
@@ -101,21 +160,27 @@ public enum TUIPrimitive {
         private let transition: Transition
         private let enabledProvider: @Sendable () -> Bool
         private let nowProvider: @Sendable () -> Double
+        private let renderer: AnimatableRenderer?
         private let storage: Mutex<Storage>
 
         public init(
             initial: AnimatableTarget,
             transition: Transition,
             enabled: (@Sendable () -> Bool)? = nil,
-            now: (@Sendable () -> Double)? = nil
+            now: (@Sendable () -> Double)? = nil,
+            renderer: (any RenderContext)? = nil
         ) {
-            let clock = now ?? { Double(ContinuousClock.now.duration(to: .now).components.seconds) * -1000.0 }
-            let start = now?() ?? 0.0
+            let bound = renderer.map(AnimatableRenderer.init)
+            let start = now?() ?? bound?.now() ?? 0.0
             self.transition = transition
             self.enabledProvider = enabled ?? { true }
-            self.nowProvider = now ?? {
-                _ = clock
-                return Date().timeIntervalSinceReferenceDate * 1000.0
+            self.renderer = bound
+            if let now {
+                self.nowProvider = now
+            } else if let bound {
+                self.nowProvider = { bound.now() }
+            } else {
+                self.nowProvider = { Date().timeIntervalSinceReferenceDate * 1000.0 }
             }
             var channels: [String: ChannelState] = [:]
             for (k, v) in initial {
@@ -156,13 +221,13 @@ public enum TUIPrimitive {
         public func animate(to next: AnimatableTarget, at nowMs: Double? = nil) {
             let timestamp = nowMs ?? nowProvider()
             let isEnabled = enabledProvider()
-            storage.withLock { state in
-                if Self.sameTarget(next, in: state.channels) { return }
+            let active = storage.withLock { state -> Bool? in
+                if Self.sameTarget(next, in: state.channels) { return nil }
                 state.target = next
                 if !isEnabled || !Self.sameShape(next, in: state.channels) {
                     Self.rebuild(&state, with: next, at: timestamp)
                     state.active = false
-                    return
+                    return false
                 }
                 state.startedMs = timestamp
                 state.previousMs = timestamp
@@ -176,9 +241,16 @@ public enum TUIPrimitive {
                 if Self.isSettled(state.channels) {
                     Self.rebuild(&state, with: next, at: timestamp)
                     state.active = false
-                    return
+                    return false
                 }
                 state.active = true
+                return true
+            }
+            guard let active, let renderer else { return }
+            if active {
+                AnimationClock.schedule(renderer, self)
+            } else {
+                AnimationClock.unschedule(renderer, self)
             }
         }
 
@@ -189,10 +261,12 @@ public enum TUIPrimitive {
                 Self.rebuild(&state, with: next, at: timestamp)
                 state.active = false
             }
+            if let renderer { AnimationClock.unschedule(renderer, self) }
         }
 
         public func stop() {
             storage.withLock { $0.active = false }
+            if let renderer { AnimationClock.unschedule(renderer, self) }
         }
 
         /// Advances the animation to `nowMs`. Returns `true` while still moving.
@@ -295,14 +369,18 @@ public enum TUIPrimitive {
     }
 
     /// Creates a spring/tween `AnimatableHandle` matching `ui/animation.ts#createAnimatable`.
-    // parity: tui/src/ui/animation.ts#createAnimatable [status=adapted hash=5255adc6d488]
+    ///
+    /// Pass `renderer` (upstream's `useRenderer()`) to time the animation with `renderer.clock` and step it on the
+    /// renderer's shared 60 fps animation clock; without it, the caller drives ``AnimatableHandle/step(at:)``.
+    // parity: tui/src/ui/animation.ts#createAnimatable [status=adapted hash=263b35f5f5c9]
     public static func createAnimatable(
         _ initial: AnimatableTarget,
         transition: Transition,
         enabled: (@Sendable () -> Bool)? = nil,
-        now: (@Sendable () -> Double)? = nil
+        now: (@Sendable () -> Double)? = nil,
+        renderer: (any RenderContext)? = nil
     ) -> AnimatableHandle {
-        AnimatableHandle(initial: initial, transition: transition, enabled: enabled, now: now)
+        AnimatableHandle(initial: initial, transition: transition, enabled: enabled, now: now, renderer: renderer)
     }
 
     // MARK: - Borders (`src/ui/border.ts`)
@@ -2633,7 +2711,7 @@ public enum TUIPrimitive {
         )
     }
 
-    // parity: tui/src/ui/dialog-export-result.tsx#DialogExportResult [status=adapted hash=196747255d48]
+    // parity: tui/src/ui/dialog-export-result.tsx#DialogExportResult [status=adapted hash=36d821cb1464]
     public static func DialogExportResult(
         ctx: any RenderContext,
         path: String,

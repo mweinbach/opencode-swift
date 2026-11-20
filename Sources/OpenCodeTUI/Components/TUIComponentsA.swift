@@ -184,24 +184,32 @@ public enum TUIComponent {
     }
 
     /// Renders a spinner with optional label text (or static `⋯` fallback when animations are disabled).
-    // parity: tui/src/component/spinner.tsx#Spinner [status=adapted hash=d2e8b20f939c]
+    ///
+    /// With `shimmer`, the frame and label are drawn as one `ShimmerText` whose frame advances on the renderer's
+    /// shared animation clock (``ShimmerSpinnerRenderable``) instead of a private timer.
+    // parity: tui/src/component/spinner.tsx#Spinner [status=adapted hash=b85871b676b4]
     public static func Spinner(
         ctx: any RenderContext,
         label: String? = nil,
         color: RGBA? = nil,
+        shimmer: RGBA? = nil,
         animations: Bool = true,
         theme: ResolvedTheme
     ) -> BoxRenderable {
         let fg = color ?? theme.text.muted
-        let row = BoxRenderable(
-            ctx: ctx,
-            options: BoxOptions(flexDirection: .row, gap: .point(1))
-        )
         if !animations {
+            let row = BoxRenderable(ctx: ctx, options: BoxOptions(flexDirection: .row, gap: .point(1)))
             let text = label.map { "⋯ \($0)" } ?? "⋯"
             row.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(text), fg: .rgba(fg))))
             return row
         }
+        if let shimmer {
+            return ShimmerSpinnerRenderable(ctx: ctx, label: label, fg: fg, shimmer: shimmer)
+        }
+        let row = BoxRenderable(
+            ctx: ctx,
+            options: BoxOptions(flexDirection: .row, gap: .point(1))
+        )
         let spin = SpinnerRenderable(
             ctx: ctx,
             options: SpinnerOptions(frames: SPINNER_FRAMES, interval: 80, autoplay: true, color: .fixed(fg))
@@ -213,8 +221,138 @@ public enum TUIComponent {
         return row
     }
 
+    /// A shimmering spinner: `SPINNER_FRAMES[frame] label` drawn as one ``ShimmerText``.
+    ///
+    /// The frame advances on the renderer's shared animation clock at 1000 / 80 fps, by the number of ticks since the
+    /// last one, so a late tick never slows the spin. The tick is bound to the node's draw: a hidden or undrawn
+    /// spinner stops ticking (upstream's Solid hook keeps ticking until the owner is disposed).
+    public final class ShimmerSpinnerRenderable: BoxRenderable, @unchecked Sendable {
+        public static let fps: Double = 1000.0 / 80.0
+
+        public private(set) var frame = 0
+        private let label: String?
+        private let text: MaskedTextRenderable
+
+        public init(ctx: any RenderContext, label: String?, fg: RGBA, shimmer: RGBA) {
+            self.label = label
+            self.text = TUIComponent.ShimmerText(ctx: ctx, text: Self.content(frame: 0, label: label), fg: fg, shimmer: shimmer)
+            super.init(ctx: ctx, options: BoxOptions(flexShrink: label == nil ? 0 : 1, flexDirection: .row))
+            add(text)
+            animationFps = Self.fps
+        }
+
+        public var currentText: String { Self.content(frame: frame, label: label) }
+
+        private static func content(frame: Int, label: String?) -> String {
+            "\(SPINNER_FRAMES[frame % SPINNER_FRAMES.count]) \(label ?? "")"
+        }
+
+        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
+            frame = (frame + max(0, ticks)) % SPINNER_FRAMES.count
+            text.content = stringToStyledText(currentText)
+            requestRender()
+        }
+    }
+
+    /// A 1x1 `OneCellMotion` spinner. Looping clips play through `SpinnerRenderable`'s own autoplay; sequenced clips
+    /// (intro, once or pace) advance `elapsed` on the renderer's shared animation clock.
+    ///
+    /// Each tick adds `ticks * step * speed` ms, where `step` is the clip's interval at its initial pace clamped to
+    /// 60-25 fps; ticking stops once the clip completes or the spinner pauses, and the last frame is redrawn.
+    public final class OneCellSpinnerRenderable: BoxRenderable, @unchecked Sendable {
+        private let animation: TUIPrimitive.OneCellMotion
+        private let base: RGBA
+        private let glow: Bool
+        private let speed: Double
+        private let paused: Bool
+        private let spin: SpinnerRenderable
+        public private(set) var elapsed: Double
+
+        public init(
+            ctx: any RenderContext,
+            animation: TUIPrimitive.OneCellMotion,
+            base: RGBA,
+            speed: Double,
+            paused: Bool,
+            glow: Bool,
+            age: Double
+        ) {
+            self.animation = animation
+            self.base = base
+            self.glow = glow
+            self.speed = speed
+            self.paused = paused
+            self.elapsed = age
+            let sequenced = Self.sequenced(animation)
+            let frame = TUIPrimitive.oneCellFrame(animation, elapsed: age)
+            self.spin = SpinnerRenderable(
+                ctx: ctx,
+                options: SpinnerOptions(
+                    frames: sequenced ? [frame.glyph] : animation.frames,
+                    interval: animation.interval / max(0.01, speed),
+                    autoplay: !paused && !sequenced,
+                    color: Self.color(animation, base: base, glow: glow, frame: frame)
+                )
+            )
+            super.init(ctx: ctx, options: BoxOptions(width: .point(1), height: .point(1), flexShrink: 0))
+            add(spin)
+            animationFps = step(frame).map { 1000.0 / $0 }
+        }
+
+        public var currentFrame: TUIPrimitive.OneCellFrameResult {
+            TUIPrimitive.oneCellFrame(animation, elapsed: elapsed)
+        }
+
+        public var currentGlyph: String { spin.currentFrameText }
+
+        private static func sequenced(_ animation: TUIPrimitive.OneCellMotion) -> Bool {
+            animation.intro != nil || animation.once == true || animation.pace != nil
+        }
+
+        /// Milliseconds per tick while a sequenced clip plays, else nil.
+        private func step(_ frame: TUIPrimitive.OneCellFrameResult) -> Double? {
+            guard Self.sequenced(animation), !paused, !frame.complete else { return nil }
+            return max(
+                1000.0 / 60.0,
+                min(40.0, animation.interval / max(0.01, speed) / (animation.pace?.initial ?? 1))
+            )
+        }
+
+        private static func color(
+            _ animation: TUIPrimitive.OneCellMotion,
+            base: RGBA,
+            glow: Bool,
+            frame: TUIPrimitive.OneCellFrameResult
+        ) -> SpinnerColorSource {
+            if !glow { return .fixed(base) }
+            if sequenced(animation) {
+                return .fixed(RGBA.fromValues(base.r, base.g, base.b, base.a * frame.level))
+            }
+            if let levels = animation.levels {
+                let palette = levels.map { RGBA.fromValues(base.r, base.g, base.b, base.a * $0) }
+                return .generator { fIdx, _, _, _ in
+                    .rgba(palette[fIdx % max(1, palette.count)])
+                }
+            }
+            return .fixed(base)
+        }
+
+        public override func onAnimationTick(deltaTime: Double, ticks: Int, time: Double) {
+            guard let ms = step(currentFrame) else {
+                animationFps = nil
+                return
+            }
+            elapsed += Double(max(0, ticks)) * ms * speed
+            let frame = currentFrame
+            spin.frames = [frame.glyph]
+            spin.color = Self.color(animation, base: base, glow: glow, frame: frame)
+            if step(frame) == nil { animationFps = nil }
+            requestRender()
+        }
+    }
+
     /// Renders a 1-cell `OneCellMotion` animated spinner into a 1x1 `BoxRenderable`.
-    // parity: tui/src/component/one-cell-spinner.tsx#OneCellSpinner [status=adapted hash=f5a65509759c]
+    // parity: tui/src/component/one-cell-spinner.tsx#OneCellSpinner [status=adapted hash=10cdcee94577]
     public static func OneCellSpinner(
         ctx: any RenderContext,
         animation: TUIPrimitive.OneCellMotion,
@@ -226,41 +364,24 @@ public enum TUIComponent {
         elapsedMs: Double = 0,
         still: String = "\u{25AA}"
     ) -> BoxRenderable {
-        let box = BoxRenderable(
-            ctx: ctx,
-            options: BoxOptions(width: .point(1), height: .point(1), flexShrink: 0)
-        )
         let base = color.resolved()
         if !animations {
+            let box = BoxRenderable(
+                ctx: ctx,
+                options: BoxOptions(width: .point(1), height: .point(1), flexShrink: 0)
+            )
             box.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(still), fg: .rgba(base))))
             return box
         }
-        let sequenced = animation.intro != nil || animation.once == true || animation.pace != nil
-        let frame = TUIPrimitive.oneCellFrame(animation, elapsed: elapsedMs)
-        let colorSource: SpinnerColorSource
-        if !glow {
-            colorSource = .fixed(base)
-        } else if sequenced {
-            colorSource = .fixed(RGBA.fromValues(base.r, base.g, base.b, base.a * frame.level))
-        } else if let levels = animation.levels {
-            let palette = levels.map { RGBA.fromValues(base.r, base.g, base.b, base.a * $0) }
-            colorSource = .generator { fIdx, _, _, _ in
-                .rgba(palette[fIdx % max(1, palette.count)])
-            }
-        } else {
-            colorSource = .fixed(base)
-        }
-        let spin = SpinnerRenderable(
+        return OneCellSpinnerRenderable(
             ctx: ctx,
-            options: SpinnerOptions(
-                frames: sequenced ? [frame.glyph] : animation.frames,
-                interval: animation.interval / max(0.01, speed),
-                autoplay: !paused && !sequenced,
-                color: colorSource
-            )
+            animation: animation,
+            base: base,
+            speed: speed,
+            paused: paused,
+            glow: glow,
+            age: elapsedMs
         )
-        box.add(spin)
-        return box
     }
 
     // MARK: - Permanent Experiments Framework (`src/component/dialog-experiments.tsx`)
@@ -284,7 +405,7 @@ public enum TUIComponent {
     }
 
     /// Permanent opt-in UI experiments registry (`src/component/dialog-experiments.tsx#experiments`).
-    // parity: tui/src/component/dialog-experiments.tsx#experiments [status=implemented hash=bceccc57d93c]
+    // parity: tui/src/component/dialog-experiments.tsx#experiments [status=implemented hash=f2c9b6ee7f2b]
     public static let experiments: [ExperimentDefinition] = [
         ExperimentDefinition(
             id: "new-designs",
@@ -485,11 +606,25 @@ public enum TUIComponent {
         setting.path.joined(separator: ".")
     }
 
-    // parity: tui/src/component/dialog-config.tsx#DialogConfig [status=adapted hash=48377c529314]
+    /// The value a setting row shows: the configured value, else the default. The theme row shows
+    /// `selectedTheme`, what the theme context resolved (aliases and missing themes included), since that names
+    /// what is actually on screen; the config value is used only when no theme context is supplied.
+    public static func settingValue(
+        _ setting: SettingDefinition,
+        values: [String: String],
+        selectedTheme: String? = nil
+    ) -> String {
+        let id = settingID(setting)
+        if id == "theme.name", let selectedTheme { return selectedTheme }
+        return values[id] ?? setting.defaultValue
+    }
+
+    // parity: tui/src/component/dialog-config.tsx#DialogConfig [status=adapted hash=7fc6d6075be9]
     public static func DialogConfig(
         ctx: any RenderContext,
         current: String? = nil,
         values: [String: String] = [:],
+        selectedTheme: String? = nil,
         dialog: TUIPrimitive.DialogContext,
         theme: ResolvedTheme,
         onSelect: (@Sendable (SettingDefinition) -> Void)? = nil
@@ -497,7 +632,7 @@ public enum TUIComponent {
         let initialIdx = current.flatMap { cur in settings.firstIndex { settingID($0) == cur } } ?? 0
         let options = settings.map { setting -> TUIPrimitive.DialogSelectOption<String> in
             let id = settingID(setting)
-            let rawVal = values[id] ?? setting.defaultValue
+            let rawVal = settingValue(setting, values: values, selectedTheme: selectedTheme)
             let display: String
             if let idx = setting.values.firstIndex(of: rawVal), setting.labels.indices.contains(idx) {
                 display = setting.labels[idx]
@@ -879,7 +1014,7 @@ public enum TUIComponent {
         _ = goUpsellWaiter.withLock { $0 }
     }
 
-    // parity: tui/src/component/dialog-go-upsell.tsx#DialogGoUpsell [status=adapted hash=632854028a84]
+    // parity: tui/src/component/dialog-go-upsell.tsx#DialogGoUpsell [status=adapted hash=b3a61e546647]
     public static func DialogGoUpsell(
         ctx: any RenderContext,
         resetText: String? = nil,

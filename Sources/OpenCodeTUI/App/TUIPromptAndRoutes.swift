@@ -3023,8 +3023,41 @@ public enum TUIRoutes {
         return root
     }
 
+    /// The session route's composer picker state: whether it is open and which tab it asks for.
+    public struct SessionComposerState: Equatable, Hashable, Sendable {
+        public var open: Bool
+        public var tab: String?
+
+        public init(open: Bool = false, tab: String? = nil) {
+            self.open = open
+            self.tab = tab
+        }
+    }
+
+    /// `session.child.first`: a named picker tab (`shell`, `subagents`, `scripts`) opens the picker on it. Otherwise
+    /// the command toggles: an open picker, or any picker in a child session, closes (keeping its tab); a closed one
+    /// opens on `openingTab`, the first tab with something running (``busyTab(_:)``).
+    public static func sessionChildFirst(
+        tab: String?,
+        composer: SessionComposerState,
+        hasParent: Bool,
+        openingTab: () -> String
+    ) -> SessionComposerState {
+        if let tab, tab == "shell" || tab == "subagents" || tab == "scripts" {
+            return SessionComposerState(open: true, tab: tab)
+        }
+        if composer.open || hasParent {
+            return SessionComposerState(open: false, tab: composer.tab)
+        }
+        return SessionComposerState(open: true, tab: openingTab())
+    }
+
     /// Builds the OpenTUI renderable tree for the Session route (header + transcript rows + optional sidebar + prompt).
-    // parity: tui/src/routes/session/index.tsx#Session [status=adapted hash=d706cdd70ba1]
+    ///
+    /// The route's commands and data sync are split out: ``sessionChildFirst(tab:composer:hasParent:openingTab:)``
+    /// is the `session.child.first` command, and the host syncs the session tree's jobs (`data.job.sync(root)`) once
+    /// the session loads, so busy counts and the Scripts tab see running jobs.
+    // parity: tui/src/routes/session/index.tsx#Session [status=adapted hash=fee75fcd6007]
     public static func Session(
         ctx: any RenderContext,
         sessionID: String,
@@ -3032,6 +3065,7 @@ public enum TUIRoutes {
         messages: [SessionMessageSchema.Info] = [],
         showSidebar: Bool = false,
         promptText: String = "",
+        markdownMode: String = "rendered",
         theme: ResolvedTheme? = nil
     ) -> BoxRenderable {
         let t = defaultTheme(theme)
@@ -3060,6 +3094,8 @@ public enum TUIRoutes {
             id: "session-transcript",
             flexGrow: 1,
             flexDirection: .column,
+            // Rows never grow or shrink, so a change to one row lays out only that row.
+            layoutMode: .list,
             gap: .point(1)
         ))
         for msg in messages {
@@ -3073,9 +3109,9 @@ public enum TUIRoutes {
                 for part in a.content {
                     switch part {
                     case .text(let tp):
-                        transcript.add(TextPart(ctx: ctx, part: tp, theme: t))
+                        transcript.add(TextPart(ctx: ctx, part: tp, message: a, markdownMode: markdownMode, theme: t))
                     case .reasoning(let rp):
-                        transcript.add(ReasoningPart(ctx: ctx, part: rp, message: a, theme: t))
+                        transcript.add(ReasoningPart(ctx: ctx, part: rp, message: a, markdownMode: markdownMode, theme: t))
                     case .tool(let tool):
                         transcript.add(InlineToolRow(
                             ctx: ctx,
@@ -3143,12 +3179,18 @@ public enum TUIRoutes {
         return sidebar
     }
 
-    // parity: tui/src/routes/session/message-parts.tsx#ReasoningPart [status=adapted hash=4e247eb66643]
+    /// A reasoning part: its header, then (unless thinking is hidden and the part collapsed) its body through
+    /// ``ReasoningBody(ctx:content:streaming:sourceStreaming:markdownMode:syntax:theme:)``, which streams until the
+    /// part or its message completes.
+    // parity: tui/src/routes/session/message-parts.tsx#ReasoningPart [status=adapted hash=98ff14bf3f8e]
     public static func ReasoningPart(
         ctx: any RenderContext,
         part: SessionMessageSchema.AssistantReasoning,
         message: SessionMessageSchema.Assistant,
         thinkingMode: TUIContext.ThinkingMode = .show,
+        expanded: Bool = false,
+        markdownMode: String = "rendered",
+        syntax: SyntaxStyle? = nil,
         theme: ResolvedTheme? = nil
     ) -> BoxRenderable {
         let t = defaultTheme(theme)
@@ -3167,11 +3209,16 @@ public enum TUIRoutes {
             content: .string(header),
             fg: .rgba(t.text.feedback.warning.base)
         )))
-        if thinkingMode == .show && !content.isEmpty {
-            box.add(TextRenderable(ctx: ctx, options: TextOptions(
-                content: .string(content),
-                fg: .rgba(t.text.muted)
-            )))
+        if (thinkingMode != .hide || expanded) && !content.isEmpty {
+            box.add(ReasoningBody(
+                ctx: ctx,
+                content: content,
+                streaming: !done,
+                sourceStreaming: true,
+                markdownMode: markdownMode,
+                syntax: syntax,
+                theme: t
+            ))
         }
         return box
     }
@@ -3211,10 +3258,16 @@ public enum TUIRoutes {
         ))
     }
 
-    // parity: tui/src/routes/session/message-parts.tsx#TextPart [status=adapted hash=782a9fa5bc2d]
+    /// An answer part as Markdown: grid tables, concealed in rendered mode, streaming until its message completes, and
+    /// `renderBlock` (the plugin block renderer, e.g. Mermaid and LaTeX fences) for custom blocks.
+    // parity: tui/src/routes/session/message-parts.tsx#TextPart [status=adapted hash=20cb201fa8ae]
     public static func TextPart(
         ctx: any RenderContext,
         part: SessionMessageSchema.AssistantText,
+        message: SessionMessageSchema.Assistant? = nil,
+        markdownMode: String = "rendered",
+        syntax: SyntaxStyle? = nil,
+        renderBlock: MarkdownRenderBlockCallback? = nil,
         theme: ResolvedTheme? = nil
     ) -> BoxRenderable {
         let t = defaultTheme(theme)
@@ -3225,9 +3278,15 @@ public enum TUIRoutes {
         ))
         let trimmed = part.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            box.add(TextRenderable(ctx: ctx, options: TextOptions(
-                content: .string(trimmed),
-                fg: .rgba(t.markdown.text)
+            box.add(MarkdownRenderable(ctx: ctx, options: MarkdownOptions(
+                content: trimmed,
+                syntaxStyle: syntax ?? generateSyntax(t),
+                fg: .rgba(t.markdown.text),
+                bg: .rgba(t.background.base),
+                conceal: markdownMode == "rendered",
+                streaming: message.map { $0.time.completed == nil } ?? false,
+                tableOptions: MarkdownTableOptions(style: .grid, cellPaddingX: 1),
+                renderBlock: renderBlock
             )))
         }
         return box
@@ -3450,17 +3509,183 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/composer/subagents-tab.tsx#SubagentsTab [status=adapted hash=82fb4df4148f]
+    /// One row of the Subagents tab.
+    public struct SubagentEntry: Equatable, Hashable, Sendable {
+        public var sessionID: String
+        public var agent: String
+        public var title: String
+        public var status: String
+        /// Running jobs in its tree. A subagent stays active while any of them runs.
+        public var jobs: [String]
+        public var current: Bool
+        public var prefix: String
+
+        public init(
+            sessionID: String,
+            agent: String,
+            title: String,
+            status: String,
+            jobs: [String] = [],
+            current: Bool = false,
+            prefix: String = ""
+        ) {
+            self.sessionID = sessionID
+            self.agent = agent
+            self.title = title
+            self.status = status
+            self.jobs = jobs
+            self.current = current
+            self.prefix = prefix
+        }
+
+        /// Running, or owning a running job somewhere in its tree.
+        public var busy: Bool { status == "running" || !jobs.isEmpty }
+    }
+
+    /// The Subagents tab's rows: the session's family (``TUIUtil/sessionFamily(sessions:sessionID:)``), each with its
+    /// agent (the session's, else the `@agent subagent` in its title, else "Subagent"), its title without that
+    /// marker, and the ids of the running jobs it owns (``TUIUtil/ownedJobs(_:sessionID:parentID:)``). `active`
+    /// keeps the busy rows, else the idle ones.
+    ///
+    /// - Parameters:
+    ///   - jobs: `data.job.list(data.session.root(sessionID))`.
+    ///   - title: `withTimestampedFallback(session)`.
+    public static func subagentEntries(
+        family: [TUIUtil.SessionFamilyEntry],
+        currentSessionID: String,
+        jobs: [JobSchema.Info],
+        active: Bool,
+        title: (TUIUtil.SessionTreeNode) -> String = { $0.title ?? $0.id },
+        agent: (String) -> String? = { _ in nil },
+        status: (String) -> String,
+        parentID: (String) -> String?
+    ) -> [SubagentEntry] {
+        family.map { item -> SubagentEntry in
+            let session = item.session
+            let fullTitle = title(session)
+            let agentMatch = subagentTitleAgent(fullTitle)
+            let name: String
+            if let sessionAgent = agent(session.id), !sessionAgent.isEmpty {
+                name = TUIUtil.titlecase(sessionAgent)
+            } else if let agentMatch {
+                name = TUIUtil.titlecase(agentMatch.agent)
+            } else {
+                name = "Subagent"
+            }
+            let stripped = agentMatch.map { fullTitle.replacingOccurrences(of: $0.marker, with: "").trimmingCharacters(in: .whitespaces) }
+            return SubagentEntry(
+                sessionID: session.id,
+                agent: name,
+                title: stripped.map { $0.isEmpty ? fullTitle : $0 } ?? fullTitle,
+                status: status(session.id),
+                jobs: TUIUtil.ownedJobs(jobs, sessionID: session.id, parentID: parentID).map { TUIUtil.JobFields($0).id },
+                current: session.id == currentSessionID,
+                prefix: item.prefix
+            )
+        }.filter { $0.busy == active }
+    }
+
+    /// The first `@word subagent` in a title (`/@(\w+) subagent/`): the matched marker and the agent name.
+    private static func subagentTitleAgent(_ title: String) -> (marker: String, agent: String)? {
+        var search = title[...]
+        while let at = search.firstIndex(of: "@") {
+            let rest = title[title.index(after: at)...]
+            let word = rest.prefix { $0 == "_" || (($0.isLetter || $0.isNumber) && $0.isASCII) }
+            let after = rest.dropFirst(word.count)
+            if !word.isEmpty, after.hasPrefix(" subagent") {
+                return ("@\(word) subagent", String(word))
+            }
+            search = title[title.index(after: at)...]
+        }
+        return nil
+    }
+
+    /// The Subagents tab's footer hints: interrupt while the selected row is busy, then the activity filter toggle.
+    public static func subagentHints(
+        selected: SubagentEntry?,
+        filterActive: Bool,
+        interruptShortcut: String?,
+        toggleShortcut: String?
+    ) -> [ComposerHint] {
+        var hints: [ComposerHint] = []
+        if let selected, selected.busy {
+            hints.append(ComposerHint(label: "interrupt", shortcut: interruptShortcut ?? ""))
+        }
+        hints.append(ComposerHint(label: "show \(filterActive ? "inactive" : "active")", shortcut: toggleShortcut ?? ""))
+        return hints
+    }
+
+    /// `composer.subagent.interrupt`: interrupts the selected subagent if it runs, and cancels every running job it owns.
+    public static func interruptSubagent(
+        _ entry: SubagentEntry?,
+        interrupt: (String) -> Void,
+        cancelJob: (String) -> Void
+    ) {
+        guard let entry else { return }
+        if entry.status == "running" { interrupt(entry.sessionID) }
+        entry.jobs.forEach(cancelJob)
+    }
+
+    /// Builds the Subagents tab rows (``subagentEntries(family:currentSessionID:jobs:active:title:agent:status:parentID:)``):
+    /// `prefix agent: title`, with "Running" for a running subagent; the selected row is focused, the current session
+    /// selected.
+    // parity: tui/src/routes/session/composer/subagents-tab.tsx#SubagentsTab [status=adapted hash=6dff62603696]
     public static func SubagentsTab(
         ctx: any RenderContext,
         sessionID: String,
-        subagents: [String] = [],
+        entries: [SubagentEntry] = [],
+        filterActive: Bool = true,
+        selected: Int = 0,
+        active: Bool = true,
         theme: ResolvedTheme? = nil
     ) -> BoxRenderable {
         let t = defaultTheme(theme)
-        let box = BoxRenderable(ctx: ctx, options: BoxOptions(id: "composer-subagents-\(sessionID)", flexDirection: .column))
-        for sub in subagents {
-            box.add(TextRenderable(ctx: ctx, options: TextOptions(content: .string(sub), fg: .rgba(t.text.base))))
+        let box = BoxRenderable(ctx: ctx, options: BoxOptions(
+            id: "composer-subagents-\(sessionID)",
+            maxHeight: .point(5),
+            flexDirection: .column,
+            visible: active
+        ))
+        guard active else { return box }
+        guard !entries.isEmpty else {
+            box.add(TextRenderable(ctx: ctx, options: TextOptions(
+                content: .string(" No \(filterActive ? "active" : "inactive") subagents"),
+                fg: .rgba(t.text.muted)
+            )))
+            return box
+        }
+        for (index, entry) in entries.enumerated() {
+            let isActive = index == selected
+            let row = BoxRenderable(ctx: ctx, options: BoxOptions(
+                flexDirection: .row,
+                paddingRight: .point(1),
+                paddingLeft: .point(1),
+                backgroundColor: .rgba(
+                    isActive
+                        ? t.background.action.primary.focused
+                        : entry.current ? t.background.action.primary.selected : t.background.action.primary.base
+                )
+            ))
+            let labelBox = BoxRenderable(ctx: ctx, options: BoxOptions(minWidth: .point(0), flexGrow: 1, flexDirection: .row))
+            labelBox.add(TextRenderable(ctx: ctx, options: TextOptions(
+                content: .string("\(entry.prefix)\(entry.agent): \(entry.title)"),
+                fg: .rgba(
+                    isActive
+                        ? t.text.action.primary.focused
+                        : entry.current ? t.text.action.primary.selected : t.text.action.primary.base
+                ),
+                attributes: isActive ? TextAttributes.bold : TextAttributes.none,
+                wrapMode: TextWrapMode.none
+            )))
+            row.add(labelBox)
+            if entry.status == "running" {
+                row.add(TextRenderable(ctx: ctx, options: TextOptions(
+                    content: .string("Running"),
+                    fg: .rgba(isActive ? t.text.action.primary.focused : t.text.muted),
+                    wrapMode: TextWrapMode.none
+                )))
+            }
+            box.add(row)
         }
         return box
     }
