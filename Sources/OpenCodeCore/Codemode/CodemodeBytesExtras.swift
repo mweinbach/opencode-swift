@@ -11,7 +11,7 @@ extension CodemodeLanguage {
 
     static func bufferEncoding(_ value: Value?, _ builtins: Builtins) throws -> String {
         guard let value, !value.isUndefined else { return "utf8" }
-        let name = coerceToString(value).lowercased()
+        let name = coerceToString(value).lowercased().toWellFormedString()
         guard bufferEncodings.contains(name) else {
             let error = createErrorValue(builtins.TypeError, message: "Unknown encoding: \(coerceToString(value))")
             define(error, "code", .string("ERR_UNKNOWN_ENCODING"))
@@ -21,14 +21,16 @@ extension CodemodeLanguage {
     }
 
     /// Node's Buffer.from(string, encoding).
-    static func encodeString(_ text: String, encoding: String) -> [UInt8] {
+    static func encodeString(_ text: JSString, encoding: String) -> [UInt8] {
         switch encoding {
         case "hex":
             var out: [UInt8] = []
-            let units = Array(text.utf8)
+            let units = text.utf16Units
             var i = 0
             while i + 1 < units.count {
-                guard let hi = Character(UnicodeScalar(units[i])).hexDigitValue, let lo = Character(UnicodeScalar(units[i + 1])).hexDigitValue else { break }
+                guard units[i] <= 0x7F, units[i + 1] <= 0x7F,
+                      let hi = Character(UnicodeScalar(UInt8(units[i]))).hexDigitValue,
+                      let lo = Character(UnicodeScalar(UInt8(units[i + 1]))).hexDigitValue else { break }
                 out.append(UInt8(hi * 16 + lo))
                 i += 2
             }
@@ -36,17 +38,17 @@ extension CodemodeLanguage {
         case "base64", "base64url":
             // Node decodes leniently: either alphabet, padding optional, other characters skipped.
             var sextets: [UInt8] = []
-            for scalar in text.unicodeScalars {
-                switch scalar {
-                case "A"..."Z": sextets.append(UInt8(scalar.value - 65))
-                case "a"..."z": sextets.append(UInt8(scalar.value - 71))
-                case "0"..."9": sextets.append(UInt8(scalar.value + 4))
-                case "+", "-": sextets.append(62)
-                case "/", "_": sextets.append(63)
-                case "=": break
+            for unit in text.utf16Units {
+                switch unit {
+                case 0x41...0x5A: sextets.append(UInt8(unit - 65))
+                case 0x61...0x7A: sextets.append(UInt8(unit - 71))
+                case 0x30...0x39: sextets.append(UInt8(unit + 4))
+                case 0x2B, 0x2D: sextets.append(62)
+                case 0x2F, 0x5F: sextets.append(63)
+                case 0x3D: break
                 default: continue
                 }
-                if scalar == "=" { break }
+                if unit == 0x3D { break }
             }
             var out: [UInt8] = []
             var i = 0
@@ -59,22 +61,22 @@ extension CodemodeLanguage {
             }
             return out
         case "latin1", "binary", "ascii":
-            return text.utf16.map { UInt8(truncatingIfNeeded: $0) }
+            return text.utf16Units.map { UInt8(truncatingIfNeeded: $0) }
         case "ucs2", "ucs-2", "utf16le", "utf-16le":
-            return text.utf16.flatMap { [UInt8(truncatingIfNeeded: $0), UInt8(truncatingIfNeeded: $0 >> 8)] }
+            return text.utf16Units.flatMap { [UInt8(truncatingIfNeeded: $0), UInt8(truncatingIfNeeded: $0 >> 8)] }
         default:
-            return Array(text.utf8)
+            return text.utf8BytesReplacingSurrogates()
         }
     }
 
     /// Node's buffer.toString(encoding).
-    static func decodeBytes(_ bytes: [UInt8], encoding: String) -> String {
+    static func decodeBytes(_ bytes: [UInt8], encoding: String) -> JSString {
         switch encoding {
-        case "hex": return bytes.map { String(format: "%02x", $0) }.joined()
-        case "base64": return encodeBase64(bytes, alphabet: "base64", omitPadding: false)
-        case "base64url": return encodeBase64(bytes, alphabet: "base64url", omitPadding: true)
-        case "latin1", "binary": return String(decoding: bytes.map { UInt16($0) }, as: UTF16.self)
-        case "ascii": return String(decoding: bytes.map { UInt16($0 & 0x7F) }, as: UTF16.self)
+        case "hex": return JSString(bytes.map { String(format: "%02x", $0) }.joined())
+        case "base64": return JSString(encodeBase64(bytes, alphabet: "base64", omitPadding: false))
+        case "base64url": return JSString(encodeBase64(bytes, alphabet: "base64url", omitPadding: true))
+        case "latin1", "binary": return JSString(utf16: bytes.map { UInt16($0) })
+        case "ascii": return JSString(utf16: bytes.map { UInt16($0 & 0x7F) })
         case "ucs2", "ucs-2", "utf16le", "utf-16le":
             var units: [UInt16] = []
             var i = 0
@@ -82,8 +84,8 @@ extension CodemodeLanguage {
                 units.append(UInt16(bytes[i]) | UInt16(bytes[i + 1]) << 8)
                 i += 2
             }
-            return String(decoding: units, as: UTF16.self)
-        default: return String(decoding: bytes, as: UTF8.self)
+            return JSString(utf16: units)
+        default: return JSString(String(decoding: bytes, as: UTF8.self))
         }
     }
 
@@ -114,8 +116,8 @@ extension CodemodeLanguage {
         methods(builtins, builtins.Uint8Array, [
             Method("join", 1) { tv, args, _, _ in
                 let b = try receiver(Bytes.self, tv, "Uint8Array.prototype.join")
-                let sep = args.first.map { $0.isUndefined ? "," : coerceToString($0) } ?? ","
-                return .string(b.data.map(String.init).joined(separator: sep))
+                let sep: JSString = args.first.map { $0.isUndefined ? "," : coerceToString($0) } ?? ","
+                return .string(b.data.map { JSString(String($0)) }.joinedJS(separator: sep))
             },
             Method("set", 2) { tv, args, _, eval in
                 let b = try receiver(Bytes.self, tv, "Uint8Array.prototype.set")
@@ -201,7 +203,7 @@ extension CodemodeLanguage {
                         items = b.data.map { .number(Double($0)) }
                     } else if case .object(let obj) = source, (try? requireIteratorMethod(source)) == nil {
                         let length = coerceToInteger(get(obj, "length"))
-                        items = (0..<max(0, length)).map { get(obj, String($0)) }
+                        items = (0..<max(0, length)).map { get(obj, JSString(String($0))) }
                     } else {
                         items = try await eval.collectIterable(source)
                     }
@@ -221,7 +223,11 @@ extension CodemodeLanguage {
                     guard case .string(let text) = args.first ?? .undefined else {
                         throw typeError("Uint8Array.fromHex expects a string.")
                     }
-                    guard text.utf16.count % 2 == 0, text.allSatisfy({ $0.isHexDigit }) else {
+                    let units = text.utf16Units
+                    let isAsciiHex: (UInt16) -> Bool = { u in
+                        (u >= 0x30 && u <= 0x39) || (u >= 0x41 && u <= 0x46) || (u >= 0x61 && u <= 0x66)
+                    }
+                    guard units.count % 2 == 0, units.allSatisfy(isAsciiHex) else {
                         throw syntaxError("Uint8Array.fromHex received an invalid hex string.")
                     }
                     return .object(Bytes(proto: builtins.Uint8Array, data: encodeString(text, encoding: "hex")))
@@ -321,8 +327,8 @@ extension CodemodeLanguage {
                     return .number(Double(compareBytes(a.data, b.data)))
                 },
                 Method("isEncoding", 1) { _, args, _, _ in
-                    guard case .string(let s) = args.first ?? .undefined else { return .bool(false) }
-                    return .bool(bufferEncodings.contains(s.lowercased()))
+                    guard case .string(let s) = args.first ?? .undefined, let wf = s.wellFormedString else { return .bool(false) }
+                    return .bool(bufferEncodings.contains(wf.lowercased()))
                 },
             ])
         }

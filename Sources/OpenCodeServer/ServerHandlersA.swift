@@ -1258,9 +1258,6 @@ private func matchesFileIfRange(_ ifRange: String?, etag: String, lastModified: 
 // MARK: - 13. Generate Handler (server/src/handlers/generate.ts)
 
 /// Handlers for `server.generate` (`text`, `textLegacy`, `image`, `decisions`, `video.create`, `video.get`).
-// `video.create`: upstream converts the wire request with `Generate.videoInput` (base64 `start`/`end`/`references`
-// become media) because `VideoGeneration.start` takes a `Generate.VideoInput`. This port's
-// `VideoGeneration.Interface.start` still takes the wire `VideoRequest`, so that conversion belongs to its implementation.
 // parity: server/src/handlers/generate.ts#GenerateHandler [status=implemented hash=e11faf3a273d]
 public let GenerateHandler = ServerHandlerGroup(
     groupIdentifier: "server.generate",
@@ -1330,7 +1327,7 @@ public let GenerateHandler = ServerHandlerGroup(
                 throw ForbiddenError(message: "Video generation is disabled; enable experimental.video_generate")
             }
             let started = try await mapGenerateError {
-                try await ctx.runtime.videoGeneration.start(CoreIntegration.Generate.videoInput(payload), options: nil)
+                try await ctx.runtime.videoGeneration.start(CoreIntegration.Generate.videoInputOrInvalid(payload), options: nil)
             }
             return ServerHTTPResponse.json(ServerDataWrapper(data: started))
         },

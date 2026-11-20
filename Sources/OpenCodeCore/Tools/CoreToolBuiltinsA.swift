@@ -54,6 +54,7 @@ extension CoreTool {
         public let videoGeneration: (any CoreIntegration.VideoGeneration.Interface)?
         public let blobStore: (any CoreBlobStore.Interface)?
         public let jobs: (any CoreJob.Interface)?
+        public let config: (any CoreConfig.Interface)?
 
         public init(
             directory: String = "/",
@@ -91,7 +92,8 @@ extension CoreTool {
             generate: (any CoreIntegration.Generate.Interface)? = nil,
             videoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
             blobStore: (any CoreBlobStore.Interface)? = nil,
-            jobs: (any CoreJob.Interface)? = nil
+            jobs: (any CoreJob.Interface)? = nil,
+            config: (any CoreConfig.Interface)? = nil
         ) {
             let normDir = CoreConfigDiscovery.resolvePath(base: "/", relative: directory)
             let resolvedEnvironment = environment ?? CoreLocation.Environment.local(fileSystem: fileSystem)
@@ -163,6 +165,7 @@ extension CoreTool {
             self.videoGeneration = videoGeneration
             self.blobStore = blobStore
             self.jobs = jobs
+            self.config = config
         }
     }
 

@@ -670,7 +670,7 @@ extension CodemodeLanguage.Evaluator {
         if obj is L.Callable { return false }
         if obj is L.Arr { return true }
         for name in ["valueOf", "toString"] {
-            if let slot = L.lookup(obj, .string(name)) {
+            if let slot = L.lookup(obj, .string(L.JSString(name))) {
                 if L.isProgramAccessor(slot) { return true }
                 if case .data(.object(let fn), _, _, _) = slot, fn is L.Fn { return true }
             }
@@ -687,15 +687,15 @@ extension CodemodeLanguage.Evaluator {
         }
         let order = hint == .string ? ["toString", "valueOf"] : ["valueOf", "toString"]
         for name in order {
-            let method = try await getValue(obj, .string(name), receiver: value)
+            let method = try await getValue(obj, .string(L.JSString(name)), receiver: value)
             guard case .object(let fnObj) = method, fnObj is L.Callable else { continue }
             if let arr = obj as? L.Arr, fnObj is L.Builtin, name == "toString" {
                 // Array.prototype.toString joins the elements, each converted as a string.
-                var parts: [String] = []
+                var parts: [L.JSString] = []
                 for item in arr.items {
                     parts.append(item.isNullish ? "" : try await toStringValue(item))
                 }
-                return .string(parts.joined(separator: ","))
+                return .string(parts.joinedJS(separator: ","))
             }
             let result = try await callCallable(method, thisValue: value, args: [], site: nil)
             if case .object = result { continue }
@@ -705,7 +705,7 @@ extension CodemodeLanguage.Evaluator {
     }
 
     /// ToString, running program conversions.
-    public func toStringValue(_ value: L.Value) async throws -> String {
+    public func toStringValue(_ value: L.Value) async throws -> L.JSString {
         if case .object(let obj) = value, convertsInProgram(obj) {
             return L.coerceToString(try await toPrimitive(value, hint: .string))
         }

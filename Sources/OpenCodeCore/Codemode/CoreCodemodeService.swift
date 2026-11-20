@@ -511,11 +511,11 @@ public enum CoreCodemode {
 
         // parity: core/src/codemode/fetch.ts#display [status=implemented hash=fd7e1776f3c7]
         public static func display(_ args: [CodemodeLanguage.Value]) -> [String: JSONValue] {
-            let inputStr = args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
+            let inputStr = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
             var method = "GET"
             if args.count > 1, case .object(let initObj) = args[1] {
                 if case .string(let m) = CodemodeLanguage.get(initObj, "method") {
-                    method = m.uppercased()
+                    method = m.toHostString().uppercased()
                 }
             }
             return ["method": .string(method), "url": .string(inputStr)]
@@ -531,7 +531,7 @@ public enum CoreCodemode {
                 guard let first = args.first, !first.isUndefined else {
                     throw CodemodeLanguage.typeError("fetch requires a URL argument.")
                 }
-                let rawUrl = CodemodeLanguage.coerceToString(first)
+                let rawUrl = CodemodeLanguage.coerceToString(first).toHostString()
                 let cleanUrl = String(rawUrl.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? Substring(rawUrl))
                 guard let parsed = URL(string: cleanUrl), let scheme = parsed.scheme?.lowercased() else {
                     throw CodemodeLanguage.typeError("Invalid URL: \(cleanUrl)")
@@ -548,27 +548,27 @@ public enum CoreCodemode {
                 var headers: [String: String] = [:]
                 var bodyBytes: [UInt8]? = nil
                 if args.count > 1, case .object(let initObj) = args[1] {
-                    if case .string(let m) = CodemodeLanguage.get(initObj, "method") { method = m.uppercased() }
+                    if case .string(let m) = CodemodeLanguage.get(initObj, "method") { method = m.toHostString().uppercased() }
                     let hVal = CodemodeLanguage.get(initObj, "headers")
                     if case .object(let hObj as CodemodeLanguage.HeadersObj) = hVal {
                         headers = hObj.asDictionary()
                     } else if case .object(let hArr as CodemodeLanguage.Arr) = hVal {
                         for pair in hArr.items {
                             if case .object(let pArr as CodemodeLanguage.Arr) = pair, pArr.count >= 2 {
-                                headers[CodemodeLanguage.coerceToString(pArr.item(at: 0)).lowercased()] = CodemodeLanguage.coerceToString(pArr.item(at: 1))
+                                headers[CodemodeLanguage.coerceToString(pArr.item(at: 0)).toHostString().lowercased()] = CodemodeLanguage.coerceToString(pArr.item(at: 1)).toHostString()
                             }
                         }
                     } else if case .object(let hObj) = hVal {
                         for (k, v) in CodemodeLanguage.entries(hObj) {
-                            headers[k.lowercased()] = CodemodeLanguage.coerceToString(v)
+                            headers[k.toHostString().lowercased()] = CodemodeLanguage.coerceToString(v).toHostString()
                         }
                     }
                     let bVal = CodemodeLanguage.get(initObj, "body")
                     switch bVal {
-                    case .string(let s): bodyBytes = Array(s.utf8)
+                    case .string(let s): bodyBytes = s.utf8BytesReplacingSurrogates()
                     case .object(let b as CodemodeLanguage.Bytes): bodyBytes = b.data
                     case .object(let sp as CodemodeLanguage.URLSearchParamsObj):
-                        bodyBytes = Array(sp.jsToString().utf8)
+                        bodyBytes = sp.jsToString().utf8BytesReplacingSurrogates()
                         if headers["content-type"] == nil { headers["content-type"] = "application/x-www-form-urlencoded;charset=UTF-8" }
                     default: break
                     }
@@ -630,7 +630,7 @@ public enum CoreCodemode {
                         throw CodemodeLanguage.HostFailure(kind: "ExecutionFailure", message: "fetch cannot follow a redirect with credentials in the URL.")
                     }
                     let nextHref = String(nextURL.absoluteString.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? Substring(nextURL.absoluteString))
-                    var hopMeta = display([.string(nextHref)])
+                    var hopMeta = display([.string(CodemodeLanguage.JSString(nextHref))])
                     hopMeta["redirectedFrom"] = .string(cleanUrl)
                     try await execution.permission.assertNotDenied(PermissionRequest(
                         action: "webfetch",
@@ -712,9 +712,9 @@ public enum CoreCodemode {
             let used = Mutex<Bool>(false)
             let respObj = CodemodeLanguage.Obj(proto: builtins.Object)
             let headersObj = CodemodeLanguage.HeadersObj(proto: builtins.Headers, initial: streaming.headers)
-            CodemodeLanguage.define(respObj, "url", .string(streaming.url))
+            CodemodeLanguage.define(respObj, "url", .string(CodemodeLanguage.JSString(streaming.url)))
             CodemodeLanguage.define(respObj, "status", .number(Double(streaming.status)))
-            CodemodeLanguage.define(respObj, "statusText", .string(streaming.statusText))
+            CodemodeLanguage.define(respObj, "statusText", .string(CodemodeLanguage.JSString(streaming.statusText)))
             CodemodeLanguage.define(respObj, "ok", .bool(streaming.ok))
             CodemodeLanguage.define(respObj, "redirected", .bool(streaming.redirected))
             CodemodeLanguage.define(respObj, "headers", .object(headersObj))
@@ -743,7 +743,7 @@ public enum CoreCodemode {
                     let bytes = try consumeBody()
                     return .object(CodemodeLanguage.PromiseObj(
                         proto: builtins.Promise,
-                        status: .fulfilled(.string(String(decoding: bytes, as: UTF8.self)))
+                        status: .fulfilled(.string(CodemodeLanguage.JSString(String(decoding: bytes, as: UTF8.self))))
                     ))
                 },
                 CodemodeLanguage.Method("json", 0) { _, _, _, _ in
@@ -811,54 +811,57 @@ public enum CoreCodemode {
 
         private static func flavorItems(baseDirectory: String, sep: String, delimiter: String) -> [String: CodemodeEngine.Extension.GlobalItem] {
             let joinFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let raw = args.map { CodemodeLanguage.coerceToString($0) }.filter { !$0.isEmpty }.joined(separator: "/")
-                return .string(normalizePosix(raw))
+                let raw = args.map { CodemodeLanguage.coerceToString($0).toHostString() }.filter { !$0.isEmpty }.joined(separator: "/")
+                return .string(CodemodeLanguage.JSString(normalizePosix(raw)))
             }
             let resolveFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let parts = args.map { CodemodeLanguage.coerceToString($0) }
-                return .string(resolvePath(base: baseDirectory, parts: parts))
+                let parts = args.map { CodemodeLanguage.coerceToString($0).toHostString() }
+                return .string(CodemodeLanguage.JSString(resolvePath(base: baseDirectory, parts: parts)))
             }
             let relativeFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let from = resolvePath(base: baseDirectory, parts: [args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""])
-                let to = resolvePath(base: baseDirectory, parts: [args.count > 1 ? CodemodeLanguage.coerceToString(args[1]) : ""])
+                let from = resolvePath(base: baseDirectory, parts: [args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""])
+                let to = resolvePath(base: baseDirectory, parts: [args.count > 1 ? CodemodeLanguage.coerceToString(args[1]).toHostString() : ""])
                 let fromParts = from.split(separator: "/").map(String.init)
                 let toParts = to.split(separator: "/").map(String.init)
                 var common = 0
                 while common < fromParts.count && common < toParts.count && fromParts[common] == toParts[common] { common += 1 }
                 let ups = Array(repeating: "..", count: fromParts.count - common)
                 let downs = Array(toParts[common...])
-                return .string((ups + downs).joined(separator: sep))
+                return .string(CodemodeLanguage.JSString((ups + downs).joined(separator: sep)))
             }
             let dirnameFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let p = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0) } ?? "")
+                let p = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? "")
                 if p == "/" { return .string("/") }
                 guard let slash = p.lastIndex(of: "/") else { return .string(".") }
                 let head = String(p[..<slash])
-                return .string(head.isEmpty ? "/" : head)
+                return .string(CodemodeLanguage.JSString(head.isEmpty ? "/" : head))
             }
             let basenameFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let p = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0) } ?? "")
+                let p = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? "")
                 var base = p.split(separator: "/").last.map(String.init) ?? ""
-                if args.count > 1, case .string(let ext) = args[1], !ext.isEmpty, base.hasSuffix(ext) {
-                    base = String(base.dropLast(ext.count))
+                if args.count > 1, case .string(let ext) = args[1] {
+                    let extStr = ext.toHostString()
+                    if !extStr.isEmpty && base.hasSuffix(extStr) {
+                        base = String(base.dropLast(extStr.count))
+                    }
                 }
-                return .string(base)
+                return .string(CodemodeLanguage.JSString(base))
             }
             let extnameFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let base = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0) } ?? "").split(separator: "/").last.map(String.init) ?? ""
+                let base = normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? "").split(separator: "/").last.map(String.init) ?? ""
                 guard let dot = base.lastIndex(of: "."), dot != base.startIndex else { return .string("") }
-                return .string(String(base[dot...]))
+                return .string(CodemodeLanguage.JSString(String(base[dot...])))
             }
             let isAbsFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                let p = args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
+                let p = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                 return .bool(p.hasPrefix("/") || (sep == "\\" && p.count >= 2 && p[p.index(after: p.startIndex)] == ":"))
             }
             let normFn = CodemodeEngine.Extension.MarkedFunction { args, _ in
-                .string(normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""))
+                .string(CodemodeLanguage.JSString(normalizePosix(args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? "")))
             }
             return [
-                "sep": .constant(.string(sep)),
-                "delimiter": .constant(.string(delimiter)),
+                "sep": .constant(.string(CodemodeLanguage.JSString(sep))),
+                "delimiter": .constant(.string(CodemodeLanguage.JSString(delimiter))),
                 "join": .function(joinFn),
                 "resolve": .function(resolveFn),
                 "relative": .function(relativeFn),
@@ -933,7 +936,7 @@ public enum CoreCodemode {
 
         public static func makeExtension(services: Services, execution: Execution.Service) -> CodemodeEngine.Extension.Definition {
             let fileFn = CodemodeEngine.Extension.MarkedFunction { args, builtins in
-                let name = args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
+                let name = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                 let absPath = resolveInDir(name, directory: services.directory)
                 try await services.permission.assertAllowed(PermissionRequest(
                     action: "read",
@@ -945,14 +948,14 @@ public enum CoreCodemode {
                 ))
                 let stat = try? await services.fileSystem.stat(at: absPath)
                 let handle = CodemodeLanguage.Obj(proto: builtins.Object)
-                CodemodeLanguage.define(handle, "name", .string(name))
-                CodemodeLanguage.define(handle, "type", .string(mimeFor(name)))
+                CodemodeLanguage.define(handle, "name", .string(CodemodeLanguage.JSString(name)))
+                CodemodeLanguage.define(handle, "type", .string(CodemodeLanguage.JSString(mimeFor(name))))
                 CodemodeLanguage.define(handle, "size", .number(Double(stat?.size ?? 0)))
                 CodemodeLanguage.define(handle, "lastModified", .number(Double(stat?.modifiedAtMs ?? 0)))
                 CodemodeLanguage.methods(builtins, handle, [
                     CodemodeLanguage.Method("text", 0) { _, _, _, _ in
                         let data = try await services.fileSystem.readFile(at: absPath)
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.string(String(decoding: data, as: UTF8.self)))))
+                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.string(CodemodeLanguage.JSString(String(decoding: data, as: UTF8.self))))))
                     },
                     CodemodeLanguage.Method("bytes", 0) { _, _, _, _ in
                         let data = try await services.fileSystem.readFile(at: absPath)
@@ -989,9 +992,9 @@ public enum CoreCodemode {
             let writeFn = CodemodeEngine.Extension.async { args, _ in
                 let destName: String
                 if case .object(let obj) = args.first, case .string(let n) = CodemodeLanguage.get(obj, "name") {
-                    destName = n
+                    destName = n.toHostString()
                 } else {
-                    destName = args.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
+                    destName = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                 }
                 let absPath = resolveInDir(destName, directory: services.directory)
                 try await services.permission.assertAllowed(PermissionRequest(
@@ -1005,7 +1008,7 @@ public enum CoreCodemode {
                 let dataArg = args.count > 1 ? args[1] : .undefined
                 let bytes: [UInt8]
                 switch dataArg {
-                case .string(let s): bytes = Array(s.utf8)
+                case .string(let s): bytes = s.utf8BytesReplacingSurrogates()
                 case .number(let n): bytes = Array(CodemodeLanguage.formatJSNumber(n).utf8)
                 case .bool(let b): bytes = Array((b ? "true" : "false").utf8)
                 case .object(let b as CodemodeLanguage.Bytes): bytes = b.data
@@ -1017,22 +1020,23 @@ public enum CoreCodemode {
             }
 
             let globCtor = CodemodeEngine.Extension.constructible { args, builtins in
-                guard case .string(let pattern) = args.first else {
+                guard case .string(let patternJS) = args.first else {
                     throw CodemodeLanguage.typeError("Bun.Glob expects a pattern string.")
                 }
+                let pattern = patternJS.toHostString()
                 let globObj = CodemodeLanguage.Obj(proto: builtins.Object)
                 CodemodeLanguage.methods(builtins, globObj, [
                     CodemodeLanguage.Method("match", 1) { _, mArgs, _, _ in
-                        let target = mArgs.first.map { CodemodeLanguage.coerceToString($0) } ?? ""
+                        let target = mArgs.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                         return .bool(Glob.match(pattern, filepath: target, dot: true))
                     },
                     CodemodeLanguage.Method("scan", 1) { _, sArgs, _, _ in
                         var cwd = services.directory
                         var dot = false
                         if let opt = sArgs.first {
-                            if case .string(let c) = opt { cwd = resolveInDir(c, directory: services.directory) }
+                            if case .string(let c) = opt { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
                             else if case .object(let o) = opt {
-                                if case .string(let c) = CodemodeLanguage.get(o, "cwd") { cwd = resolveInDir(c, directory: services.directory) }
+                                if case .string(let c) = CodemodeLanguage.get(o, "cwd") { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
                                 dot = CodemodeLanguage.get(o, "dot").isTruthy
                             }
                         }
@@ -1048,7 +1052,7 @@ public enum CoreCodemode {
                         let entries = (try? await services.fileSystem.readDirectory(at: cwd)) ?? []
                         for name in entries.sorted() {
                             if Glob.match(pattern, filepath: name, dot: dot) {
-                                matched.append(.string(name))
+                                matched.append(.string(CodemodeLanguage.JSString(name)))
                             }
                         }
                         return .object(CodemodeLanguage.Arr(proto: builtins.Array, items: matched))
@@ -1089,7 +1093,7 @@ public enum CoreCodemode {
             else {
                 return nil
             }
-            return name
+            return name.toHostString()
         }
 
         /// Formats a Bun call for user display: method name, path/pattern, and optional `from` file handle for `Bun.write`.
@@ -1102,7 +1106,7 @@ public enum CoreCodemode {
                 method = name
             }
             let firstArg = args.first
-            let path = handleName(of: firstArg) ?? firstArg.map { CodemodeLanguage.coerceToString($0) } ?? "undefined"
+            let path = handleName(of: firstArg) ?? firstArg.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? "undefined"
             var result: [String: JSONValue] = [
                 "method": .string(method),
                 "path": .string(path),

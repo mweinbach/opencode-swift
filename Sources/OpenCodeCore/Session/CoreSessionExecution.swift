@@ -161,6 +161,7 @@ public enum CoreSessionJobTypes {
             notificationID: SessionMessageSchema.ID?,
             run: @escaping @Sendable () async throws -> String
         ) async throws -> BackgroundJobInfo
+        func liveStatus(_ jobID: String) async -> Status?
     }
 
     public final class NoopJobBridge: JobBridge, Sendable {
@@ -191,7 +192,13 @@ public enum CoreSessionJobTypes {
                 recovery: .subagent(recovery)
             )
         }
+
+        public func liveStatus(_ jobID: String) async -> Status? { nil }
     }
+}
+
+extension CoreSessionJobTypes.JobBridge {
+    public func liveStatus(_ jobID: String) async -> CoreSessionJobTypes.Status? { nil }
 }
 
 // MARK: - session/background.ts
@@ -1303,6 +1310,11 @@ public enum CoreSessionRestart {
         public let execution: any CoreSessionExecution.Interface
         public let bus: CoreBus.Service
         public let jobs: any CoreSessionJobTypes.JobBridge
+        public let sessions: (any CoreSession.Interface)?
+        public let jobService: (any CoreJob.Interface)?
+        public let videoGeneration: (any CoreIntegration.VideoGeneration.Interface)?
+        public let blobStore: (any CoreBlobStore.Interface)?
+        public let resolveLocationFileSystem: (@Sendable (LocationSchema.Ref) async throws -> any OpenCodeFileSystem)?
         public let options: Options
 
         public init(
@@ -1311,6 +1323,11 @@ public enum CoreSessionRestart {
             execution: any CoreSessionExecution.Interface,
             bus: CoreBus.Service,
             jobs: any CoreSessionJobTypes.JobBridge = CoreSessionJobTypes.NoopJobBridge(),
+            sessions: (any CoreSession.Interface)? = nil,
+            jobService: (any CoreJob.Interface)? = nil,
+            videoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
+            blobStore: (any CoreBlobStore.Interface)? = nil,
+            resolveLocationFileSystem: (@Sendable (LocationSchema.Ref) async throws -> any OpenCodeFileSystem)? = nil,
             options: Options = Options()
         ) {
             self.db = db
@@ -1318,7 +1335,39 @@ public enum CoreSessionRestart {
             self.execution = execution
             self.bus = bus
             self.jobs = jobs
+            self.sessions = sessions
+            self.jobService = jobService
+            self.videoGeneration = videoGeneration
+            self.blobStore = blobStore
+            self.resolveLocationFileSystem = resolveLocationFileSystem
             self.options = options
+        }
+
+        /// Coordinates deferred session wakeups during restart recovery so sessions count their restart attempt
+        /// before any completion notice wakes them (matching upstream `restart.ts` `notices` gate).
+        private final class DeferredWakeGate: Sendable {
+            private struct State: Sendable {
+                var ready = false
+                var pending: Set<SessionID> = []
+            }
+            private let state = Mutex(State())
+
+            func shouldDefer(_ sessionID: SessionID) -> Bool {
+                state.withLock { s in
+                    if s.ready { return false }
+                    s.pending.insert(sessionID)
+                    return true
+                }
+            }
+
+            func markReadyAndDrain() -> [SessionID] {
+                state.withLock { s in
+                    s.ready = true
+                    let out = Array(s.pending)
+                    s.pending.removeAll()
+                    return out
+                }
+            }
         }
 
         private func wakeIfActiveOwner(_ sessionID: SessionID) async {
@@ -1411,23 +1460,37 @@ public enum CoreSessionRestart {
             )
         }
 
-        /// No video service keeps polling a running video in this host, so a recovered video job is reported with
-        /// its restart notice and its outbox row acknowledged (upstream `recoverVideoJob` without the session's
-        /// video services falls back to `recoverToolJob`).
-        private func recoverVideoJob(_ background: CoreSessionJobTypes.BackgroundJobInfo, sessionID: SessionID, path: String) async {
+        private func deliverVideoRestartNotice(
+            _ background: CoreSessionJobTypes.BackgroundJobInfo,
+            sessionID: SessionID,
+            path: String
+        ) async {
             let notice = Self.videoRestartNotice(background, path: path)
             do {
                 if try store.get(sessionID) != nil {
-                    _ = try await bus.publish(
-                        SessionEventSchema.Synthetic,
-                        data: SessionEventSchema.SyntheticData(
+                    if let sessions {
+                        _ = try await sessions.synthetic(CoreSessionSynthetic.Request(
                             sessionID: sessionID,
+                            id: background.notificationID,
                             text: notice.text,
                             description: notice.description,
-                            metadata: notice.metadata
+                            metadata: notice.metadata,
+                            resume: false
+                        ))
+                    } else {
+                        _ = try await bus.publish(
+                            SessionEventSchema.Synthetic,
+                            data: SessionEventSchema.SyntheticData(
+                                sessionID: sessionID,
+                                text: notice.text,
+                                description: notice.description,
+                                metadata: notice.metadata
+                            )
                         )
-                    )
+                    }
                 }
+            } catch is CoreSessionErrors.NotFoundError {
+                // Session was deleted; acknowledge the outbox row.
             } catch {
                 // Unexpected failure delivering the recovered notice: keep the row for the next sweep.
                 return
@@ -1437,13 +1500,96 @@ public enum CoreSessionRestart {
             }
         }
 
+        /// Recovers a persisted background video job on startup (upstream `recoverVideoJob`):
+        /// skips already-running live jobs, keeps tracking running jobs via `VideoGenerateTool.track` when
+        /// the session's location and video services are available, and falls back to a restart notice otherwise.
+        private func recoverVideoJob(
+            _ background: CoreSessionJobTypes.BackgroundJobInfo,
+            sessionID: SessionID,
+            path: String,
+            videoID: String,
+            gate: DeferredWakeGate
+        ) async {
+            if await jobs.liveStatus(background.id) == .running {
+                return
+            }
+            guard background.status == .running else {
+                await deliverVideoRestartNotice(background, sessionID: sessionID, path: path)
+                return
+            }
+            guard let session = try? store.get(sessionID) else {
+                if let notificationID = background.notificationID {
+                    try? await jobs.completeBackground(notificationID)
+                }
+                return
+            }
+            if let jobService,
+               let videoGeneration,
+               let blobStore,
+               let resolveLocationFileSystem,
+               let parsedVideoID = GenerateSchema.VideoID(rawValue: videoID)
+            {
+                let locRef = LocationSchema.Ref(
+                    directory: SchemaPrimitive.AbsolutePath(rawValue: session.location.directory),
+                    workspaceID: session.location.workspaceID
+                )
+                do {
+                    let fs = try await resolveLocationFileSystem(locRef)
+                    let notifID = background.notificationID ?? SessionMessageSchema.ID.create()
+                    let sessionsService = self.sessions
+                    let busService = self.bus
+                    try await CoreTool.VideoGenerateTool.track(CoreTool.VideoGenerateTool.TrackInput(
+                        jobs: jobService,
+                        sessions: sessionsService,
+                        videos: videoGeneration,
+                        blobs: blobStore,
+                        fileSystem: fs,
+                        notificationID: notifID,
+                        sessionID: sessionID,
+                        videoID: parsedVideoID,
+                        path: path,
+                        title: background.title,
+                        notify: { req in
+                            let deferred = gate.shouldDefer(req.sessionID)
+                            if let sessionsService {
+                                _ = try await sessionsService.synthetic(CoreSessionSynthetic.Request(
+                                    sessionID: req.sessionID,
+                                    id: req.id,
+                                    text: req.text,
+                                    description: req.description,
+                                    metadata: req.metadata,
+                                    delivery: req.delivery,
+                                    resume: deferred ? false : req.resume
+                                ))
+                            } else {
+                                _ = try await busService.publish(
+                                    SessionEventSchema.Synthetic,
+                                    data: SessionEventSchema.SyntheticData(
+                                        sessionID: req.sessionID,
+                                        text: req.text,
+                                        description: req.description,
+                                        metadata: req.metadata
+                                    )
+                                )
+                            }
+                        }
+                    ))
+                    return
+                } catch {
+                    // Location missing or tracking failed to start: fall back to lost-job restart notice.
+                }
+            }
+            await deliverVideoRestartNotice(background, sessionID: sessionID, path: path)
+        }
+
         public func resumeSuspendedSessions() async throws {
             // Release claims of orphaned child sessions whose parent was deleted.
             try store.releaseOrphanedChildClaims()
 
+            let gate = DeferredWakeGate()
             for bg in await jobs.backgroundJobs() {
-                if case .video(let sessionID, let path, _) = bg.recovery {
-                    await recoverVideoJob(bg, sessionID: sessionID, path: path)
+                if case .video(let sessionID, let path, let videoID) = bg.recovery {
+                    await recoverVideoJob(bg, sessionID: sessionID, path: path, videoID: videoID, gate: gate)
                 }
             }
 
@@ -1472,6 +1618,10 @@ public enum CoreSessionRestart {
                     await wakeIfActiveOwner(sessionID)
                 }
             }
+
+            for deferredSession in gate.markReadyAndDrain() {
+                await wakeIfActiveOwner(deferredSession)
+            }
         }
     }
 
@@ -1485,16 +1635,54 @@ public enum CoreSessionRestart {
             else {
                 throw SQLiteError.databaseClosed
             }
-            let jobs = deps.get("@opencode/JobBridge", as: (any CoreSessionJobTypes.JobBridge).self)
-                ?? CoreSessionJobTypes.NoopJobBridge()
-            return LayerNode.Output([Service.serviceKey: Service(
+            let jobService = deps.get(CoreJob.Service.serviceKey, as: CoreJob.Service.self)
+            let jobs: any CoreSessionJobTypes.JobBridge
+            if let existing = deps.get("@opencode/JobBridge", as: (any CoreSessionJobTypes.JobBridge).self) {
+                jobs = existing
+            } else if let jobService {
+                jobs = CoreJob.SessionBridge(service: jobService, database: db)
+            } else {
+                jobs = CoreSessionJobTypes.NoopJobBridge()
+            }
+            let sessions = deps.get(CoreSession.Service.serviceKey, as: CoreSession.Service.self)
+            let videoGeneration: (any CoreIntegration.VideoGeneration.Interface)? =
+                deps.get(CoreIntegration.VideoGeneration.Service.serviceKey, as: (any CoreIntegration.VideoGeneration.Interface).self)
+                ?? deps.get(CoreIntegration.VideoGeneration.Service.serviceKey, as: CoreIntegration.VideoGeneration.Service.self)
+            let blobStore: (any CoreBlobStore.Interface)? =
+                deps.get(CoreBlobStore.Service.serviceKey, as: (any CoreBlobStore.Interface).self)
+                ?? deps.get(CoreBlobStore.Service.serviceKey, as: CoreBlobStore.Service.self)
+            let locations = deps.get(CoreLocation.ServiceMap.Service.serviceKey, as: CoreLocation.ServiceMap.Service.self)
+            let defaultFS: any OpenCodeFileSystem =
+                deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)?.fileSystem ?? LocalFileSystem.shared
+            let resolveFS: (@Sendable (LocationSchema.Ref) async throws -> any OpenCodeFileSystem)?
+            if let locMap = locations {
+                resolveFS = { (ref: LocationSchema.Ref) async throws -> any OpenCodeFileSystem in
+                    let out = try await locMap.get(CoreLocation.ServiceMap.canonical(ref))
+                    if let fs = out.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)?.fileSystem {
+                        return fs
+                    }
+                    if let fs = out.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) {
+                        return fs
+                    }
+                    return defaultFS
+                }
+            } else {
+                resolveFS = nil
+            }
+            let service = Service(
                 db: db,
                 store: store,
                 execution: execution,
                 bus: bus,
                 jobs: jobs,
+                sessions: sessions,
+                jobService: jobService,
+                videoGeneration: videoGeneration,
+                blobStore: blobStore,
+                resolveLocationFileSystem: resolveFS,
                 options: options
-            )])
+            )
+            return LayerNode.Output([Service.serviceKey: service])
         }
     }
 

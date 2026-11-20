@@ -1563,17 +1563,312 @@ public enum CoreFilesystem {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Watcher"
 
-            private struct SubscriptionSlot: Sendable {
-                var subscription: NativeSubscription?
-                var terminated: Bool = false
+            private static let subscribeTimeout: Duration = .seconds(10)
+
+            private struct TargetKey: Hashable, Sendable {
+                enum Kind: Hashable, Sendable {
+                    case file
+                    case entries
+                    case directory
+                }
+
+                let kind: Kind
+                let target: String
+                let ignore: [String]
+                let names: [String]
+
+                var watchInput: WatchInput {
+                    switch kind {
+                    case .file: return .file(path: target)
+                    case .entries: return .entries(path: target, names: names)
+                    case .directory: return .directory(path: target, ignore: ignore)
+                    }
+                }
+            }
+
+            private final class SharedEntry: Sendable {
+                struct BroadcastState: Sendable {
+                    var subscribers: [UInt64: AsyncStream<Update>.Continuation] = [:]
+                    var shutdown: Bool = false
+                }
+
+                let id: UInt64
+                let key: TargetKey
+                let broadcast = Mutex(BroadcastState())
+
+                init(id: UInt64, key: TargetKey) {
+                    self.id = id
+                    self.key = key
+                }
+
+                func addSubscriber(id: UInt64, continuation: AsyncStream<Update>.Continuation) -> Bool {
+                    broadcast.withLock { s in
+                        guard !s.shutdown else { return false }
+                        s.subscribers[id] = continuation
+                        return true
+                    }
+                }
+
+                func removeSubscriber(id: UInt64) -> Bool {
+                    broadcast.withLock { s in
+                        _ = s.subscribers.removeValue(forKey: id)
+                        return s.subscribers.isEmpty
+                    }
+                }
+
+                var isEmpty: Bool {
+                    broadcast.withLock { $0.subscribers.isEmpty }
+                }
+
+                func publish(_ update: Update) {
+                    let continuations = broadcast.withLock { s -> [AsyncStream<Update>.Continuation] in
+                        guard !s.shutdown else { return [] }
+                        return Array(s.subscribers.values)
+                    }
+                    for continuation in continuations {
+                        continuation.yield(update)
+                    }
+                }
+
+                func finishAll() {
+                    let continuations = broadcast.withLock { s -> [AsyncStream<Update>.Continuation] in
+                        s.shutdown = true
+                        let all = Array(s.subscribers.values)
+                        s.subscribers.removeAll()
+                        return all
+                    }
+                    for continuation in continuations {
+                        continuation.finish()
+                    }
+                }
+            }
+
+            private actor Registry {
+                private enum AcquireState {
+                    case acquiring(task: Task<Void, Never>, waiters: [CheckedContinuation<Bool, Never>])
+                    case ready(NativeSubscription)
+                    case unavailable
+                }
+
+                private struct Slot {
+                    let entry: SharedEntry
+                    var state: AcquireState
+                }
+
+                private let native: any NativeInterface
+                private var closed: Bool = false
+                private var nextEntryID: UInt64 = 1
+                private var nextSubscriberID: UInt64 = 1
+                private var slots: [TargetKey: Slot] = [:]
+
+                init(native: any NativeInterface) {
+                    self.native = native
+                }
+
+                func allocateSubscriberID() -> UInt64 {
+                    let id = nextSubscriberID
+                    nextSubscriberID &+= 1
+                    return id
+                }
+
+                func attach(
+                    key: TargetKey,
+                    subscriberID: UInt64,
+                    continuation: AsyncStream<Update>.Continuation
+                ) async -> (entryID: UInt64, ready: Bool) {
+                    guard !closed else {
+                        continuation.finish()
+                        return (0, false)
+                    }
+
+                    if var existing = slots[key] {
+                        guard existing.entry.addSubscriber(id: subscriberID, continuation: continuation) else {
+                            continuation.finish()
+                            return (existing.entry.id, false)
+                        }
+                        switch existing.state {
+                        case .ready:
+                            return (existing.entry.id, true)
+                        case .unavailable:
+                            continuation.finish()
+                            return (existing.entry.id, false)
+                        case .acquiring(let task, var waiters):
+                            let entryID = existing.entry.id
+                            let ready = await withCheckedContinuation { waiter in
+                                waiters.append(waiter)
+                                existing.state = .acquiring(task: task, waiters: waiters)
+                                slots[key] = existing
+                            }
+                            return (entryID, ready)
+                        }
+                    }
+
+                    let entryID = nextEntryID
+                    nextEntryID &+= 1
+                    let entry = SharedEntry(id: entryID, key: key)
+                    _ = entry.addSubscriber(id: subscriberID, continuation: continuation)
+
+                    let native = self.native
+                    let watchInput = key.watchInput
+                    let acquireTask = Task { [weak self] in
+                        let sub = await Self.acquireWithTimeout(native: native, input: watchInput) { update in
+                            entry.publish(update)
+                        }
+                        await self?.finishAcquire(key: key, entryID: entryID, subscription: sub)
+                    }
+
+                    let ready = await withCheckedContinuation { waiter in
+                        slots[key] = Slot(entry: entry, state: .acquiring(task: acquireTask, waiters: [waiter]))
+                    }
+                    return (entryID, ready)
+                }
+
+                private func finishAcquire(key: TargetKey, entryID: UInt64, subscription: NativeSubscription?) async {
+                    guard var slot = slots[key], slot.entry.id == entryID else {
+                        await subscription?.unsubscribe()
+                        return
+                    }
+                    let waiters: [CheckedContinuation<Bool, Never>]
+                    if case .acquiring(_, let list) = slot.state {
+                        waiters = list
+                    } else {
+                        waiters = []
+                    }
+
+                    if closed || slot.entry.isEmpty {
+                        slots.removeValue(forKey: key)
+                        slot.entry.finishAll()
+                        for waiter in waiters { waiter.resume(returning: false) }
+                        await subscription?.unsubscribe()
+                        return
+                    }
+
+                    guard let subscription else {
+                        slots.removeValue(forKey: key)
+                        slot.entry.finishAll()
+                        for waiter in waiters { waiter.resume(returning: false) }
+                        return
+                    }
+
+                    slot.state = .ready(subscription)
+                    slots[key] = slot
+                    for waiter in waiters { waiter.resume(returning: true) }
+                }
+
+                func release(key: TargetKey, entryID: UInt64, subscriberID: UInt64) async {
+                    guard let slot = slots[key], slot.entry.id == entryID else { return }
+                    let nowEmpty = slot.entry.removeSubscriber(id: subscriberID)
+                    guard nowEmpty else { return }
+                    guard let removed = slots.removeValue(forKey: key) else { return }
+                    removed.entry.finishAll()
+                    switch removed.state {
+                    case .ready(let sub):
+                        await sub.unsubscribe()
+                    case .acquiring(let task, let waiters):
+                        task.cancel()
+                        for waiter in waiters { waiter.resume(returning: false) }
+                    case .unavailable:
+                        break
+                    }
+                }
+
+                func close() async {
+                    closed = true
+                    let active = Array(slots.values)
+                    slots.removeAll()
+                    for slot in active {
+                        slot.entry.finishAll()
+                        switch slot.state {
+                        case .ready(let sub):
+                            await sub.unsubscribe()
+                        case .acquiring(let task, let waiters):
+                            task.cancel()
+                            for waiter in waiters { waiter.resume(returning: false) }
+                        case .unavailable:
+                            break
+                        }
+                    }
+                }
+
+                private static func acquireWithTimeout(
+                    native: any NativeInterface,
+                    input: WatchInput,
+                    publish: @escaping @Sendable (Update) -> Void
+                ) async -> NativeSubscription? {
+                    final class AcquireRace: Sendable {
+                        struct State: Sendable {
+                            var done = false
+                            var continuation: CheckedContinuation<NativeSubscription?, Never>?
+                            var workTask: Task<Void, Never>?
+                            var timeoutTask: Task<Void, Never>?
+                        }
+                        let state = Mutex(State())
+
+                        func resolve(_ sub: NativeSubscription?) -> Bool {
+                            let (cont, workTask, timeoutTask) = state.withLock { s -> (CheckedContinuation<NativeSubscription?, Never>?, Task<Void, Never>?, Task<Void, Never>?) in
+                                guard !s.done else { return (nil, nil, nil) }
+                                s.done = true
+                                let c = s.continuation
+                                s.continuation = nil
+                                let w = s.workTask
+                                let t = s.timeoutTask
+                                s.workTask = nil
+                                s.timeoutTask = nil
+                                return (c, w, t)
+                            }
+                            workTask?.cancel()
+                            timeoutTask?.cancel()
+                            guard let cont else { return false }
+                            cont.resume(returning: sub)
+                            return true
+                        }
+                    }
+
+                    let race = AcquireRace()
+                    return await withTaskCancellationHandler {
+                        await withCheckedContinuation { continuation in
+                            let alreadyDone = race.state.withLock { s -> Bool in
+                                if s.done { return true }
+                                s.continuation = continuation
+                                return false
+                            }
+                            if alreadyDone {
+                                continuation.resume(returning: nil)
+                                return
+                            }
+                            let workTask = Task {
+                                let sub = await native.subscribe(input, publish: publish)
+                                if !race.resolve(sub) {
+                                    await sub?.unsubscribe()
+                                }
+                            }
+                            let timeoutTask = Task {
+                                try? await Task.sleep(for: Service.subscribeTimeout)
+                                _ = race.resolve(nil)
+                            }
+                            let cancelNow = race.state.withLock { s -> Bool in
+                                if s.done { return true }
+                                s.workTask = workTask
+                                s.timeoutTask = timeoutTask
+                                return false
+                            }
+                            if cancelNow {
+                                workTask.cancel()
+                                timeoutTask.cancel()
+                            }
+                        }
+                    } onCancel: {
+                        _ = race.resolve(nil)
+                    }
+                }
             }
 
             private let enabled: Bool
-            private let native: any NativeInterface
+            private let registry: Registry
 
             public init(enabled: Bool = true, native: any NativeInterface = Watcher.defaultNative()) {
                 self.enabled = enabled
-                self.native = native
+                self.registry = Registry(native: native)
             }
 
             public func subscribe(
@@ -1583,44 +1878,62 @@ public enum CoreFilesystem {
                 guard enabled else {
                     return AsyncStream { $0.finish() }
                 }
-                let native = self.native
-                return AsyncStream { continuation in
-                    let slot = Mutex(SubscriptionSlot())
-                    let task = Task {
-                        let sub = await native.subscribe(input) { update in
-                            continuation.yield(update)
-                        }
-                        guard let sub else {
-                            continuation.finish()
-                            return
-                        }
-                        let alreadyTerminated = slot.withLock { s -> Bool in
-                            if s.terminated {
-                                return true
-                            }
-                            s.subscription = sub
-                            return false
-                        }
-                        if alreadyTerminated {
-                            await sub.unsubscribe()
-                            return
-                        }
-                        await onReady?()
-                    }
-                    continuation.onTermination = { _ in
-                        task.cancel()
-                        let activeSub = slot.withLock { s -> NativeSubscription? in
-                            s.terminated = true
-                            let current = s.subscription
-                            s.subscription = nil
-                            return current
-                        }
-                        if let activeSub {
-                            Task {
-                                await activeSub.unsubscribe()
-                            }
+
+                let key = Self.normalizeKey(input)
+                let subscriberID = await registry.allocateSubscriberID()
+                let entryIDBox = Mutex<UInt64>(0)
+                let terminatedEarly = Mutex(false)
+                let registry = self.registry
+
+                let (stream, continuation) = AsyncStream<Update>.makeStream(bufferingPolicy: .unbounded)
+                continuation.onTermination = { _ in
+                    terminatedEarly.withLock { $0 = true }
+                    let entryID = entryIDBox.withLock { $0 }
+                    if entryID != 0 {
+                        Task {
+                            await registry.release(key: key, entryID: entryID, subscriberID: subscriberID)
                         }
                     }
+                }
+
+                let (entryID, ready) = await registry.attach(
+                    key: key,
+                    subscriberID: subscriberID,
+                    continuation: continuation
+                )
+                entryIDBox.withLock { $0 = entryID }
+
+                if terminatedEarly.withLock({ $0 }) || Task.isCancelled {
+                    if entryID != 0 {
+                        await registry.release(key: key, entryID: entryID, subscriberID: subscriberID)
+                    }
+                    continuation.finish()
+                    return stream
+                }
+
+                guard ready else {
+                    continuation.finish()
+                    return stream
+                }
+
+                await onReady?()
+                return stream
+            }
+
+            /// Stops all shared native subscriptions and finishes all active consumer streams.
+            public func close() async {
+                await registry.close()
+            }
+
+            private static func normalizeKey(_ input: WatchInput) -> TargetKey {
+                let target = Watcher.normalizeWatchPath(input.path)
+                switch input {
+                case .file:
+                    return TargetKey(kind: .file, target: target, ignore: [], names: [])
+                case .entries(_, let names):
+                    return TargetKey(kind: .entries, target: target, ignore: [], names: Array(Set(names)).sorted())
+                case .directory(_, let ignore):
+                    return TargetKey(kind: .directory, target: target, ignore: Array(Set(ignore)).sorted(), names: [])
                 }
             }
         }
@@ -1649,7 +1962,7 @@ public enum CoreFilesystem {
                 _ input: WatchInput,
                 onReady: (@Sendable () async -> Void)? = nil
             ) async -> AsyncStream<Update> {
-                let resolvedTarget = CoreConfigDiscovery.resolvePath(base: "/", relative: input.path)
+                let resolvedTarget = Watcher.normalizeWatchPath(input.path)
                 let matcher: @Sendable (String) -> Bool
                 switch input {
                 case .file:
@@ -1657,11 +1970,17 @@ public enum CoreFilesystem {
                 case .entries(_, let names):
                     let allowed = Set(names)
                     matcher = { target in
-                        CoreConfigDiscovery.dirname(target) == resolvedTarget &&
-                            allowed.contains(CoreConfigDiscovery.basename(target))
+                        Watcher.dirnameOfWatchPath(target) == resolvedTarget &&
+                            allowed.contains(Watcher.basenameOfWatchPath(target))
                     }
                 case .directory(_, let ignore):
-                    let ignoredRoots = ignore.map { CoreConfigDiscovery.resolvePath(base: resolvedTarget, relative: $0) }
+                    let ignoredRoots = ignore.map { entry -> String in
+                        let clean = entry.replacing("\\", with: "/")
+                        if Watcher.isAbsoluteWatchPath(clean) {
+                            return Watcher.normalizeWatchPath(clean)
+                        }
+                        return Watcher.normalizeWatchPath(CoreConfigDiscovery.joinPath(resolvedTarget, clean))
+                    }
                     matcher = { target in
                         FSPathUtil.contains(parent: resolvedTarget, child: target) &&
                             !ignoredRoots.contains(where: { FSPathUtil.contains(parent: $0, child: target) })
@@ -1687,7 +2006,7 @@ public enum CoreFilesystem {
             }
 
             public func emit(_ update: Update) async {
-                let resolved = CoreConfigDiscovery.resolvePath(base: "/", relative: update.path)
+                let resolved = Watcher.normalizeWatchPath(update.path)
                 let entries = state.withLock { Array($0.active.values) }
                 for entry in entries where entry.matcher(resolved) {
                     entry.continuation.yield(update)
@@ -1697,12 +2016,86 @@ public enum CoreFilesystem {
             public func subscriptions() async -> [WatchInput] {
                 state.withLock { $0.recorded }
             }
+
+            public func activeSubscriptionCount() -> Int {
+                state.withLock { $0.active.count }
+            }
         }
 
-        /// Creates the default live native watcher backend powered by ``NativeFileWatcher``.
+        /// Selects the appropriate live native watcher backend for `fileSystem` (`inMemoryNative` for
+        /// `InMemoryFileSystem`, otherwise `defaultNative` backed by ``NativeFileWatcher``).
+        public static func native(for fileSystem: any OpenCodeFileSystem) -> Native {
+            if let memory = fileSystem as? InMemoryFileSystem {
+                return inMemoryNative(fileSystem: memory)
+            }
+            return defaultNative()
+        }
+
+        /// Creates an in-memory watcher backend wired directly to `InMemoryFileSystem` mutations.
+        public static func inMemoryNative(fileSystem: InMemoryFileSystem) -> Native {
+            Native { input, publish in
+                let resolvedPath = normalizeWatchPath(input.path)
+                let watchedDir: String
+                switch input {
+                case .file:
+                    watchedDir = dirnameOfWatchPath(resolvedPath)
+                case .entries, .directory:
+                    watchedDir = resolvedPath
+                }
+
+                // Missing watched directory behaves like ENOENT: end stream cleanly without failing.
+                guard let dirStat = try? await fileSystem.stat(at: watchedDir), dirStat.type == .directory else {
+                    return nil
+                }
+
+                let filter: @Sendable (NativeFileEvent) -> Update?
+                switch input {
+                case .file:
+                    filter = { event in
+                        guard normalizeWatchPath(event.path) == resolvedPath else { return nil }
+                        return Update(path: resolvedPath, type: mapNativeEventKind(event.kind, renamedAsUpdate: true))
+                    }
+                case .entries(_, let names):
+                    let allowed = Set(names)
+                    filter = { event in
+                        let normEvent = normalizeWatchPath(event.path)
+                        guard dirnameOfWatchPath(normEvent) == resolvedPath,
+                              allowed.contains(basenameOfWatchPath(normEvent))
+                        else { return nil }
+                        return Update(path: normEvent, type: mapNativeEventKind(event.kind, renamedAsUpdate: true))
+                    }
+                case .directory(_, let ignore):
+                    let ignoreMatcher = NativeFileWatcher(
+                        path: resolvedPath,
+                        recursive: true,
+                        ignore: ignore,
+                        includeDefaultIgnores: true
+                    )
+                    filter = { event in
+                        let normEvent = normalizeWatchPath(event.path)
+                        guard normEvent != resolvedPath,
+                              FSPathUtil.contains(parent: resolvedPath, child: normEvent),
+                              !ignoreMatcher.isIgnored(normEvent)
+                        else { return nil }
+                        return Update(path: normEvent, type: mapNativeEventKind(event.kind, renamedAsUpdate: false))
+                    }
+                }
+
+                let cancel = fileSystem.observe { event in
+                    if let update = filter(event) {
+                        publish(update)
+                    }
+                }
+                return NativeSubscription(backend: "memory") {
+                    cancel()
+                }
+            }
+        }
+
+        /// Creates the default live OS watcher backend powered by ``NativeFileWatcher``.
         public static func defaultNative() -> Native {
             Native { input, publish in
-                guard NativeFileWatcher.isNativelySupported else {
+                guard NativeFileWatcher.isSupported else {
                     return nil
                 }
 
@@ -1712,8 +2105,9 @@ public enum CoreFilesystem {
 
                 switch input {
                 case .file(let rawFilePath):
-                    let directory = CoreConfigDiscovery.dirname(rawFilePath)
-                    let targetName = CoreConfigDiscovery.basename(rawFilePath)
+                    let resolved = normalizeWatchPath(rawFilePath)
+                    let directory = dirnameOfWatchPath(resolved)
+                    let targetName = basenameOfWatchPath(resolved)
                     watcher = NativeFileWatcher(
                         path: directory,
                         recursive: false,
@@ -1721,26 +2115,30 @@ public enum CoreFilesystem {
                         includeDefaultIgnores: false
                     )
                     handler = { event in
-                        guard CoreConfigDiscovery.basename(event.path) == targetName else { return }
-                        publish(Update(path: event.path, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
+                        guard basenameOfWatchPath(event.path) == targetName else { return }
+                        publish(Update(path: resolved, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
                     }
 
                 case .entries(let rawDirPath, let names):
+                    let resolvedDir = normalizeWatchPath(rawDirPath)
                     let allowed = Set(names)
                     watcher = NativeFileWatcher(
-                        path: rawDirPath,
+                        path: resolvedDir,
                         recursive: false,
                         ignore: [],
                         includeDefaultIgnores: false
                     )
                     handler = { event in
-                        guard allowed.contains(CoreConfigDiscovery.basename(event.path)) else { return }
-                        publish(Update(path: event.path, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
+                        let base = basenameOfWatchPath(event.path)
+                        guard allowed.contains(base) else { return }
+                        let outPath = CoreConfigDiscovery.joinPath(resolvedDir, base)
+                        publish(Update(path: outPath, type: mapNativeEventKind(event.kind, renamedAsUpdate: true)))
                     }
 
                 case .directory(let rawDirPath, let ignore):
+                    let resolvedDir = normalizeWatchPath(rawDirPath)
                     watcher = NativeFileWatcher(
-                        path: rawDirPath,
+                        path: resolvedDir,
                         recursive: true,
                         ignore: ignore,
                         includeDefaultIgnores: true
@@ -1760,6 +2158,71 @@ public enum CoreFilesystem {
                     watcher.stop()
                 }
             }
+        }
+
+        private static func isWindowsDrivePath(_ path: String) -> Bool {
+            let chars = Array(path)
+            guard chars.count >= 2, let ascii = chars[0].asciiValue else { return false }
+            let isAlpha = (ascii >= 65 && ascii <= 90) || (ascii >= 97 && ascii <= 122)
+            return isAlpha && chars[1] == ":"
+        }
+
+        private static func isAbsoluteWatchPath(_ path: String) -> Bool {
+            path.hasPrefix("/") || isWindowsDrivePath(path)
+        }
+
+        private static func normalizeWatchPath(_ raw: String) -> String {
+            let slashed = FSPathUtil.windowsPath(raw).replacing("\\", with: "/")
+            var prefix = "/"
+            var remainder = slashed
+            if isWindowsDrivePath(slashed) {
+                let idx = slashed.index(slashed.startIndex, offsetBy: 2)
+                prefix = String(slashed[..<idx]).uppercased() + "/"
+                let rest = String(slashed[idx...])
+                remainder = rest.hasPrefix("/") ? String(rest.dropFirst()) : rest
+            } else if slashed.hasPrefix("/") {
+                prefix = "/"
+                remainder = String(slashed.dropFirst())
+            }
+            var parts: [String] = []
+            for seg in remainder.split(separator: "/") {
+                if seg.isEmpty || seg == "." { continue }
+                if seg == ".." {
+                    if !parts.isEmpty { parts.removeLast() }
+                } else {
+                    parts.append(String(seg))
+                }
+            }
+            var result = prefix + parts.joined(separator: "/")
+            while result.count > 1 && result.hasSuffix("/") {
+                if result.count == 3 && isWindowsDrivePath(result) { break }
+                result.removeLast()
+            }
+            return result
+        }
+
+        private static func dirnameOfWatchPath(_ path: String) -> String {
+            var p = path.replacing("\\", with: "/")
+            while p.count > 1 && p.hasSuffix("/") {
+                if p.count == 3 && isWindowsDrivePath(p) { break }
+                p.removeLast()
+            }
+            guard let slash = p.lastIndex(of: "/") else { return "." }
+            if slash == p.startIndex { return "/" }
+            if p.count >= 3 && isWindowsDrivePath(p) && slash == p.index(p.startIndex, offsetBy: 2) {
+                return String(p[...slash])
+            }
+            return String(p[..<slash])
+        }
+
+        private static func basenameOfWatchPath(_ path: String) -> String {
+            var p = path.replacing("\\", with: "/")
+            while p.count > 1 && p.hasSuffix("/") {
+                if p.count == 3 && isWindowsDrivePath(p) { break }
+                p.removeLast()
+            }
+            guard let slash = p.lastIndex(of: "/") else { return p }
+            return String(p[p.index(after: slash)...])
         }
 
         private static func mapNativeEventKind(
@@ -1782,10 +2245,13 @@ public enum CoreFilesystem {
 
         // parity: core/src/filesystem/watcher.ts#layer [status=adapted hash=4fa5f06d5d85]
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
-            LayerNode.ExecutableLayer { deps, _ in
+            LayerNode.ExecutableLayer { deps, scope in
                 let native = deps.get(Native.serviceKey, as: (any NativeInterface).self)
                     ?? defaultNative()
                 let svc = Service(enabled: options?.enabled ?? true, native: native)
+                scope.addFinalizer {
+                    await svc.close()
+                }
                 return LayerNode.Output([Service.serviceKey: svc as any Interface])
             }
         }
@@ -2045,83 +2511,292 @@ public enum CoreFilesystem {
             public static let serviceKey = "@opencode/FileWatch"
 
             private struct Entry: Sendable {
+                let generation: UInt64
                 var expiresAtMs: Int64
+                let task: Task<Void, Never>?
+            }
+
+            private struct State: Sendable {
+                var locations: [String: [String: Entry]] = [:]
+                var nextGeneration: UInt64 = 1
+                var sweepTask: Task<Void, Never>?
+                var closed: Bool = false
+            }
+
+            private actor SerialGate {
+                private var locked = false
+                private var waiters: [CheckedContinuation<Void, Never>] = []
+
+                func acquire() async {
+                    if !locked {
+                        locked = true
+                        return
+                    }
+                    await withCheckedContinuation { continuation in
+                        waiters.append(continuation)
+                    }
+                }
+
+                func release() {
+                    if !waiters.isEmpty {
+                        let next = waiters.removeFirst()
+                        next.resume()
+                    } else {
+                        locked = false
+                    }
+                }
             }
 
             private let enabled: Bool
+            private let watcher: (any Watcher.Interface)?
+            private let bus: (any CoreBus.Interface)?
+            private let fs: FSUtil.Service
             private let nowMs: @Sendable () -> Int64
-            private let locations = Mutex<[String: [String: Entry]]>([:])
+            private let state = Mutex(State())
+            private let gate = SerialGate()
 
             public init(
                 enabled: Bool = true,
-                nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() }
+                watcher: (any Watcher.Interface)? = nil,
+                bus: (any CoreBus.Interface)? = nil,
+                fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+                nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
+                sweepIntervalMs: Int64 = FileWatch.SWEEP_INTERVAL
             ) {
                 self.enabled = enabled
+                self.watcher = watcher
+                self.bus = bus
+                self.fs = FSUtil.Service(fileSystem: fileSystem)
                 self.nowMs = nowMs
+
+                if enabled && sweepIntervalMs > 0 {
+                    let interval = max(1, sweepIntervalMs)
+                    let sweep = Task.detached(priority: .utility) { [weak self] in
+                        while let self, !Task.isCancelled {
+                            do {
+                                try await Task.sleep(for: .milliseconds(interval))
+                            } catch {
+                                break
+                            }
+                            if Task.isCancelled { break }
+                            _ = self.sweepExpired()
+                        }
+                    }
+                    state.withLock { $0.sweepTask = sweep }
+                }
+            }
+
+            deinit {
+                let (sweep, tasks): (Task<Void, Never>?, [Task<Void, Never>]) = state.withLock { s in
+                    s.closed = true
+                    let sw = s.sweepTask
+                    s.sweepTask = nil
+                    var list: [Task<Void, Never>] = []
+                    for files in s.locations.values {
+                        for entry in files.values {
+                            if let t = entry.task { list.append(t) }
+                        }
+                    }
+                    s.locations.removeAll()
+                    return (sw, list)
+                }
+                sweep?.cancel()
+                for t in tasks { t.cancel() }
             }
 
             public func watch(_ input: Input) async throws {
                 guard enabled else { throw DisabledError() }
-                let key = "\(input.location.directory.rawValue)|\(input.location.workspaceID?.rawValue ?? "")"
+                await gate.acquire()
+                await watchLocked(input)
+                await gate.release()
+            }
+
+            private func watchLocked(_ input: Input) async {
+                let key = Self.locationKey(input.location)
                 let expires = nowMs() + TTL
-                locations.withLock { map in
-                    var files = map[key] ?? [:]
-                    if files[input.file] != nil {
-                        files[input.file] = Entry(expiresAtMs: expires)
-                        map[key] = files
-                        return
+
+                let alreadyWatched = state.withLock { s -> Bool in
+                    guard !s.closed else { return true }
+                    if var files = s.locations[key], var existing = files[input.file] {
+                        existing.expiresAtMs = expires
+                        files[input.file] = existing
+                        s.locations[key] = files
+                        return true
                     }
-                    if files.count >= MAX_PER_LOCATION,
-                       let soonest = files.min(by: { $0.value.expiresAtMs < $1.value.expiresAtMs })
-                    {
-                        files.removeValue(forKey: soonest.key)
-                    }
-                    files[input.file] = Entry(expiresAtMs: expires)
-                    map[key] = files
+                    return false
                 }
+                if alreadyWatched { return }
+
+                let evictedTask: Task<Void, Never>? = state.withLock { s in
+                    guard var files = s.locations[key], files.count >= MAX_PER_LOCATION else { return nil }
+                    guard let soonest = files.min(by: { $0.value.expiresAtMs < $1.value.expiresAtMs }) else { return nil }
+                    let removed = files.removeValue(forKey: soonest.key)
+                    s.locations[key] = files
+                    return removed?.task
+                }
+                evictedTask?.cancel()
+
+                let generation = state.withLock { s -> UInt64 in
+                    let gen = s.nextGeneration
+                    s.nextGeneration &+= 1
+                    return gen
+                }
+
+                let watchTask: Task<Void, Never>?
+                if let watcher {
+                    let updates = await watcher.subscribe(.file(path: input.file), onReady: nil)
+                    let fs = self.fs
+                    let bus = self.bus
+                    let location = OpenCodeLocation(
+                        directory: input.location.directory.rawValue,
+                        workspaceID: input.location.workspaceID
+                    )
+                    let targetFile = input.file
+                    let fileChangedDef = EventSchema.EphemeralDefinition<FileSystemSchema.Event.ChangedPayload>(
+                        type: FileSystemSchema.Event.changed.type
+                    ).descriptor
+                    watchTask = Task { [weak self] in
+                        for await _ in updates {
+                            if Task.isCancelled { break }
+                            let exists = await fs.existsSafe(targetFile)
+                            let payload = FileSystemSchema.Event.ChangedPayload(
+                                file: targetFile,
+                                event: exists ? .change : .unlink
+                            )
+                            let encoded = (try? CoreBusJSON.encodeToJSONValue(payload)) ?? .object([
+                                "file": .string(targetFile),
+                                "event": .string(exists ? "change" : "unlink"),
+                            ])
+                            _ = try? await bus?.publishRaw(
+                                definition: fileChangedDef,
+                                data: encoded,
+                                options: CoreBus.PublishOptions(location: location)
+                            )
+                        }
+                        if !Task.isCancelled {
+                            self?.removeIfMatching(key: key, file: targetFile, generation: generation)
+                        }
+                    }
+                } else {
+                    watchTask = nil
+                }
+
+                let cancelIfClosed: Task<Void, Never>? = state.withLock { s in
+                    if s.closed { return watchTask }
+                    var files = s.locations[key] ?? [:]
+                    files[input.file] = Entry(generation: generation, expiresAtMs: expires, task: watchTask)
+                    s.locations[key] = files
+                    return nil
+                }
+                cancelIfClosed?.cancel()
             }
 
             public func unwatch(_ input: Input) async {
-                let key = "\(input.location.directory.rawValue)|\(input.location.workspaceID?.rawValue ?? "")"
-                locations.withLock { map in
-                    var files = map[key] ?? [:]
-                    files.removeValue(forKey: input.file)
-                    if files.isEmpty {
-                        map.removeValue(forKey: key)
-                    } else {
-                        map[key] = files
+                await gate.acquire()
+                let key = Self.locationKey(input.location)
+                let task: Task<Void, Never>? = state.withLock { s in
+                    guard var files = s.locations[key], let removed = files.removeValue(forKey: input.file) else {
+                        return nil
                     }
+                    if files.isEmpty {
+                        s.locations.removeValue(forKey: key)
+                    } else {
+                        s.locations[key] = files
+                    }
+                    return removed.task
                 }
+                task?.cancel()
+                await gate.release()
             }
 
             public func sweepExpired() -> Int {
                 let now = nowMs()
-                return locations.withLock { map in
+                let (removedCount, cancelledTasks): (Int, [Task<Void, Never>]) = state.withLock { s in
                     var removed = 0
-                    for (locKey, files) in map {
-                        let remaining = files.filter { $0.value.expiresAtMs > now }
-                        removed += files.count - remaining.count
+                    var tasks: [Task<Void, Never>] = []
+                    for (locKey, files) in s.locations {
+                        var remaining: [String: Entry] = [:]
+                        for (file, entry) in files {
+                            if entry.expiresAtMs <= now {
+                                removed += 1
+                                if let t = entry.task { tasks.append(t) }
+                            } else {
+                                remaining[file] = entry
+                            }
+                        }
                         if remaining.isEmpty {
-                            map.removeValue(forKey: locKey)
+                            s.locations.removeValue(forKey: locKey)
                         } else {
-                            map[locKey] = remaining
+                            s.locations[locKey] = remaining
                         }
                     }
-                    return removed
+                    return (removed, tasks)
                 }
+                for t in cancelledTasks { t.cancel() }
+                return removedCount
+            }
+
+            /// Stops the background sweep loop and cancels every active file watch.
+            public func close() async {
+                let (sweep, tasks): (Task<Void, Never>?, [Task<Void, Never>]) = state.withLock { s in
+                    s.closed = true
+                    let sw = s.sweepTask
+                    s.sweepTask = nil
+                    var list: [Task<Void, Never>] = []
+                    for files in s.locations.values {
+                        for entry in files.values {
+                            if let t = entry.task { list.append(t) }
+                        }
+                    }
+                    s.locations.removeAll()
+                    return (sw, list)
+                }
+                sweep?.cancel()
+                for t in tasks { t.cancel() }
+            }
+
+            private func removeIfMatching(key: String, file: String, generation: UInt64) {
+                state.withLock { s in
+                    guard var files = s.locations[key],
+                          let entry = files[file],
+                          entry.generation == generation
+                    else { return }
+                    files.removeValue(forKey: file)
+                    if files.isEmpty {
+                        s.locations.removeValue(forKey: key)
+                    } else {
+                        s.locations[key] = files
+                    }
+                }
+            }
+
+            private static func locationKey(_ location: LocationSchema.Ref) -> String {
+                "\(location.directory.rawValue)|\(location.workspaceID?.rawValue ?? "")"
             }
         }
 
         // parity: core/src/filesystem/file-watch.ts#layer [status=adapted hash=83179527e28f]
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
-            LayerNode.ExecutableLayer { _, _ in
-                LayerNode.Output([Service.serviceKey: Service(enabled: options?.enabled ?? true) as any Interface])
+            LayerNode.ExecutableLayer { deps, scope in
+                let watcher = deps.get(Watcher.Service.serviceKey, as: (any Watcher.Interface).self)
+                let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+                let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
+                let service = Service(
+                    enabled: options?.enabled ?? true,
+                    watcher: watcher,
+                    bus: bus,
+                    fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared
+                )
+                scope.addFinalizer {
+                    await service.close()
+                }
+                return LayerNode.Output([Service.serviceKey: service as any Interface])
             }
         }
 
         // parity: core/src/filesystem/file-watch.ts#configured [status=adapted hash=f7c41fdfc4ff]
         public static func configured(_ options: Options? = nil) -> LayerNode.Provider {
-            AppNode.makeGlobalNode(Service.serviceKey, layer(options), [Watcher.node, FSUtil.node])
+            AppNode.makeGlobalNode(Service.serviceKey, layer(options), [Watcher.node, CoreBus.node, FSUtil.node])
         }
 
         // parity: core/src/filesystem/file-watch.ts#node [status=adapted hash=aea3814ebc3b]

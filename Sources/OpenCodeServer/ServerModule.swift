@@ -687,6 +687,8 @@ public final class ServerLocationBundle: Sendable {
     public let command: any CoreSubsystems.Command.Interface
     public let skill: any CoreSkill.Interface
     public let reference: any CoreInstruction.Reference.Interface
+    public let instructionDiscovery: CoreInstruction.Discovery.Service
+    public let instructionLoader: CoreConfigPlugin.Instruction.Loader?
     public let fileSystem: any CoreFilesystem.Interface
     public let fileSystemSearch: any CoreFilesystem.Search.Interface
     public let shell: any CoreShell.Interface
@@ -727,6 +729,7 @@ public final class ServerLocationBundle: Sendable {
             CoreSubsystems.Command.Service.serviceKey: command,
             CoreSkill.Service.serviceKey: skill,
             CoreInstruction.Reference.Service.serviceKey: reference,
+            CoreInstruction.Discovery.Service.serviceKey: instructionDiscovery,
             CoreFilesystem.Service.serviceKey: fileSystem,
             CoreFilesystem.Search.Service.serviceKey: fileSystemSearch,
             CoreShell.Service.serviceKey: shell,
@@ -791,6 +794,8 @@ public final class ServerLocationBundle: Sendable {
         snapshot: any CoreSnapshot.Interface,
         worktreeStrategies: any CoreWorktree.Strategies.Interface,
         tool: any CoreTool.Interface = CoreTool.Service(),
+        instructionDiscovery: CoreInstruction.Discovery.Service = CoreInstruction.Discovery.Service(),
+        instructionLoader: CoreConfigPlugin.Instruction.Loader? = nil,
         sessionRunner: (any CoreSessionRunner.Interface)? = nil,
         sessionTitle: (any CoreSessionTitle.Interface)? = nil
     ) {
@@ -805,6 +810,8 @@ public final class ServerLocationBundle: Sendable {
         self.command = command
         self.skill = skill
         self.reference = reference
+        self.instructionDiscovery = instructionDiscovery
+        self.instructionLoader = instructionLoader
         self.fileSystem = fileSystem
         self.fileSystemSearch = fileSystemSearch
         self.shell = shell
@@ -1010,6 +1017,7 @@ public final class ServerAppRuntime: Sendable {
     public let job: CoreJob.Service
     public let ptyTicket: CorePty.Ticket.Service
     public let persistentPty: any CorePty.Persistent.Interface
+    public let watcher: any CoreFilesystem.Watcher.Interface
     public let fileWatch: CoreFilesystem.FileWatch.Service
     public let pluginUpdate: any CorePlugin.Update.Interface
     public let wellKnown: any CoreIntegration.WellKnown.Interface
@@ -1065,6 +1073,7 @@ public final class ServerAppRuntime: Sendable {
         job: CoreJob.Service,
         ptyTicket: CorePty.Ticket.Service,
         persistentPty: any CorePty.Persistent.Interface,
+        watcher: any CoreFilesystem.Watcher.Interface = CoreFilesystem.Watcher.Service(enabled: false),
         fileWatch: CoreFilesystem.FileWatch.Service,
         pluginUpdate: any CorePlugin.Update.Interface,
         wellKnown: any CoreIntegration.WellKnown.Interface,
@@ -1112,6 +1121,7 @@ public final class ServerAppRuntime: Sendable {
         self.job = job
         self.ptyTicket = ptyTicket
         self.persistentPty = persistentPty
+        self.watcher = watcher
         self.fileWatch = fileWatch
         self.pluginUpdate = pluginUpdate
         self.wellKnown = wellKnown
@@ -1282,6 +1292,10 @@ public final class ServerAppRuntime: Sendable {
             await sessionExecution.awaitIdle(sid)
         }
         await locations.closeAll()
+        await fileWatch.close()
+        if let watcherService = watcher as? CoreFilesystem.Watcher.Service {
+            await watcherService.close()
+        }
         await eventFeed.close()
         await scope.close()
     }
@@ -1304,7 +1318,11 @@ public final class ServerAppRuntime: Sendable {
         customVideoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
         customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
         customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
+        customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+        instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
         workerdProfile: Bool = false,
+        videoGenerationPollIntervalMs: UInt64? = nil,
         onLocationBoot: LocationCustomizer? = nil
     ) async throws -> ServerAppRuntime {
         let scope = LayerNode.ResourceScope()
@@ -1378,24 +1396,66 @@ public final class ServerAppRuntime: Sendable {
                 ? ServerUnsupportedBlobStore()
                 : CoreBlobStore.Service(globalPaths: globalPaths, fileSystem: fileSystem)
         )
-        let videoGeneration: any CoreIntegration.VideoGeneration.Interface = customVideoGeneration ?? (
-            workerdProfile
-                ? ServerUnsupportedVideoGeneration()
-                : CoreIntegration.VideoGeneration.Service(
-                    start: { _, _ in
-                        throw CoreIntegration.Generate.UnavailableError(message: "Video generation provider not configured", service: "video")
-                    },
-                    get: { id in
-                        throw CoreIntegration.VideoGeneration.NotFoundError(id: id.rawValue)
+        let resolvedDefaultDir = defaultDirectory ?? ServerHostInfo.currentWorkingDirectory()
+        // Weak indirection box avoids retain cycles between process-global session/video/automation
+        // services and location-scoped tool environments while letting built-in tools receive
+        // real `session`, `sessionMove`, `videoGeneration`, and `automation` instances directly.
+        let locationsBox = LateBoundLocationMap()
+
+        let videoGeneration: any CoreIntegration.VideoGeneration.Interface
+        if let customVideoGeneration {
+            videoGeneration = customVideoGeneration
+        } else if workerdProfile {
+            videoGeneration = ServerUnsupportedVideoGeneration()
+        } else {
+            let pollInterval = videoGenerationPollIntervalMs ?? CoreIntegration.VideoGeneration.INTERVAL_MS
+            let liveVideo = CoreIntegration.VideoGeneration.Service(
+                database: db,
+                kv: kv,
+                blobs: blobStore,
+                defaultLocation: {
+                    if await fileSystem.exists(at: globalPaths.config) {
+                        return LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: globalPaths.config))
                     }
-                )
-        )
+                    return LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: resolvedDefaultDir))
+                },
+                resolveGenerate: { ref in
+                    guard let locations = locationsBox.value else {
+                        throw CoreIntegration.Generate.UnavailableError(message: "Location service map is not ready", service: "video")
+                    }
+                    let canonical = CoreLocation.ServiceMap.canonical(ref)
+                    let out = try await locations.get(canonical)
+                    guard let bundle = ServerLocationBundle.from(out) else {
+                        throw CoreIntegration.Generate.UnavailableError(
+                            message: "Location services unavailable for \(ref.directory.rawValue)",
+                            service: "video"
+                        )
+                    }
+                    return bundle.generate
+                },
+                intervalMs: pollInterval
+            )
+            scope.addFinalizer {
+                await liveVideo.close()
+            }
+            videoGeneration = liveVideo
+        }
         let job = try CoreJob.Service(database: db, bus: bus)
         let ptyTicket = CorePty.Ticket.make()
         let persistentPty: any CorePty.Persistent.Interface = customPersistentPty ?? CorePty.Persistent.Service(
             options: options.pty
         )
-        let fileWatch = CoreFilesystem.FileWatch.Service(enabled: options.fs?.filewatcher ?? true)
+        let watcherEnabled = (options.fs?.filewatcher ?? true) && !workerdProfile
+        let watcher: any CoreFilesystem.Watcher.Interface = customWatcher ?? CoreFilesystem.Watcher.Service(
+            enabled: watcherEnabled,
+            native: CoreFilesystem.Watcher.native(for: fileSystem)
+        )
+        let fileWatch = CoreFilesystem.FileWatch.Service(
+            enabled: watcherEnabled,
+            watcher: watcher,
+            bus: bus,
+            fileSystem: fileSystem
+        )
         let pluginUpdate: any CorePlugin.Update.Interface = customPluginUpdate ?? ServerNoopPluginUpdateService()
         let wellKnown: any CoreIntegration.WellKnown.Interface = customWellKnown ?? CoreIntegration.WellKnown.Service(
             transport: httpTransport,
@@ -1412,7 +1472,6 @@ public final class ServerAppRuntime: Sendable {
             paths: ServerInfo.Paths(tmp: globalPaths.tmp)
         )
         let authConfig = ServerAuth.Info(password: options.password, username: "opencode")
-        let resolvedDefaultDir = defaultDirectory ?? ServerHostInfo.currentWorkingDirectory()
 
         let locationActivity = CoreLocation.Activity.Service()
         let capturedConfigOpts = options.config
@@ -1463,11 +1522,6 @@ public final class ServerAppRuntime: Sendable {
             workerdProfile: workerdProfile
         )
 
-        // Weak indirection box avoids retain cycles between process-global session/automation
-        // services and location-scoped tool environments while letting built-in tools receive
-        // real `session`, `sessionMove`, and `automation` instances directly.
-        let locationsBox = LateBoundLocationMap()
-
         // Process-global live SessionExecution wired to Location-scoped LiveSessionRunner.
         let coreSessionExecution = CoreSessionExecution.Service(
             db: db,
@@ -1505,12 +1559,6 @@ public final class ServerAppRuntime: Sendable {
             execution: sessionExecution,
             fileSystem: fileSystem
         )
-        let sessionRestart = CoreSessionRestart.Service(
-            db: db,
-            store: sessionStore,
-            execution: sessionExecution,
-            bus: bus
-        )
         let appVersion = options.app?.version ?? "unknown"
         let session = CoreSession.Service(
             db: db,
@@ -1521,6 +1569,32 @@ public final class ServerAppRuntime: Sendable {
             environment: sessionEnv,
             fileSystem: fileSystem,
             version: appVersion
+        )
+        let jobBridge = CoreJob.SessionBridge(service: job, database: db)
+        let restartResolveFS: (@Sendable (LocationSchema.Ref) async throws -> any OpenCodeFileSystem)?
+        if workerdProfile {
+            restartResolveFS = nil
+        } else {
+            restartResolveFS = { (ref: LocationSchema.Ref) async throws -> any OpenCodeFileSystem in
+                guard let locations = locationsBox.value else {
+                    throw CoreFilesystem.DirectoryNotFoundError(directory: ref.directory)
+                }
+                let canonical = CoreLocation.ServiceMap.canonical(ref)
+                _ = try await locations.get(canonical)
+                return fileSystem
+            }
+        }
+        let sessionRestart = CoreSessionRestart.Service(
+            db: db,
+            store: sessionStore,
+            execution: sessionExecution,
+            bus: bus,
+            jobs: jobBridge,
+            sessions: session,
+            jobService: job,
+            videoGeneration: workerdProfile ? nil : videoGeneration,
+            blobStore: workerdProfile ? nil : blobStore,
+            resolveLocationFileSystem: restartResolveFS
         )
 
         let automation = try CoreAutomation.Service(
@@ -1581,6 +1655,7 @@ public final class ServerAppRuntime: Sendable {
                 file: capturedConfigOpts?.file,
                 content: capturedConfigOpts?.content
             )
+            let locationBusRoute = OpenCodeLocation(directory: ref.directory.rawValue, workspaceID: ref.workspaceID)
             let configUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: ConfigSchema.Event.updated.type)
             let configService = await CoreConfig.Service(
                 directory: dirPath,
@@ -1589,7 +1664,11 @@ public final class ServerAppRuntime: Sendable {
                 fileSystem: capturedFs,
                 environment: capturedEnv,
                 onUpdated: {
-                    await bus.emit(configUpdatedDef, data: JSONValue.object([:]))
+                    await bus.emit(
+                        configUpdatedDef,
+                        data: JSONValue.object([:]),
+                        options: CoreBus.PublishOptions(location: locationBusRoute)
+                    )
                 }
             )
             let configEntries = await configService.entries()
@@ -1711,7 +1790,8 @@ public final class ServerAppRuntime: Sendable {
             let modelResolver = CoreModel.Resolver.Service(
                 providers: providerService,
                 models: modelService,
-                integrations: integrationService
+                integrations: integrationService,
+                dependencies: CoreModel.Resolver.Dependencies(environment: capturedEnv)
             )
             let mcpService = CoreMCP.Registry.Service(
                 directory: dirPath,
@@ -1723,7 +1803,12 @@ public final class ServerAppRuntime: Sendable {
                 integrations: integrationService,
                 http: capturedHttp
             )
-            let generateService = CoreIntegration.Generate.Service(resolver: modelResolver)
+            let generateService = CoreIntegration.Generate.Service(
+                resolver: modelResolver,
+                models: modelService,
+                http: capturedHttp,
+                environment: capturedEnv
+            )
             let voiceService = CoreIntegration.Voice.Service(integrations: integrationService)
             let artifactService = CoreArtifact.Service(
                 directory: dirPath,
@@ -1834,15 +1919,58 @@ public final class ServerAppRuntime: Sendable {
                 model: modelService,
                 provider: providerService,
                 agent: agentService,
-                generate: generateService
+                generate: generateService,
+                videoGeneration: videoGeneration,
+                blobStore: blobStore,
+                jobs: job,
+                config: configService
             )
-            _ = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+            let initialBuiltinsReg = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+            let builtinsRegBox = Mutex<CoreFilesystem.LocationWatcherPolicy.Registration?>(initialBuiltinsReg)
+            let refreshBuiltins: @Sendable () async -> Void = {
+                let next = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
+                let prev = builtinsRegBox.withLock { box -> CoreFilesystem.LocationWatcherPolicy.Registration? in
+                    let old = box
+                    box = next
+                    return old
+                }
+                prev?.dispose()
+                await toolService.reload()
+            }
+            let modelUpdatedStream = bus.subscribe(types: [ModelSchema.Event.updated.type])
+            let modelWatchTask = Task {
+                for await _ in modelUpdatedStream {
+                    if Task.isCancelled { break }
+                    await refreshBuiltins()
+                }
+            }
+            locScope.addFinalizer {
+                modelWatchTask.cancel()
+                let reg = builtinsRegBox.withLock { box -> CoreFilesystem.LocationWatcherPolicy.Registration? in
+                    let old = box
+                    box = nil
+                    return old
+                }
+                reg?.dispose()
+            }
 
             // core/src/session/context.ts: the Location's instruction services, combined per Session step.
-            let instructionDiscovery = CoreInstruction.Discovery.Service(options: CoreInstruction.Discovery.Options(
-                project: capturedConfigOpts?.project,
-                claude: capturedOptions.instructions?.claude
-            ))
+            let instructionDiscoveryUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(
+                type: CoreInstruction.Discovery.Event.updated.type
+            )
+            let instructionDiscovery = CoreInstruction.Discovery.Service(
+                options: CoreInstruction.Discovery.Options(
+                    project: capturedConfigOpts?.project,
+                    claude: capturedOptions.instructions?.claude
+                ),
+                onUpdated: {
+                    await bus.emit(
+                        instructionDiscoveryUpdatedDef,
+                        data: JSONValue.object([:]),
+                        options: CoreBus.PublishOptions(location: locationBusRoute)
+                    )
+                }
+            )
             let instructionLoader = CoreConfigPlugin.Instruction.Loader(
                 discovery: instructionDiscovery,
                 paths: CoreConfigPlugin.Instruction.Loader.Paths(
@@ -1852,10 +1980,34 @@ public final class ServerAppRuntime: Sendable {
                     globalConfig: capturedGlobal.config
                 ),
                 fileSystem: capturedFs,
+                watcher: watcher,
                 http: capturedHttp,
-                entries: { await configService.entries() }
+                entries: { await configService.entries() },
+                configUpdates: {
+                    let stream = bus.subscribe(
+                        types: [ConfigSchema.Event.updated.type],
+                        location: locationBusRoute
+                    )
+                    return AsyncStream { continuation in
+                        let task = Task {
+                            for await _ in stream {
+                                continuation.yield(())
+                            }
+                            continuation.finish()
+                        }
+                        continuation.onTermination = { _ in task.cancel() }
+                    }
+                },
+                debounce: instructionDebounce,
+                urlFetchTimeout: instructionURLTimeout
             )
-            await instructionLoader.refresh()
+            // Start instruction watching asynchronously so server handlers never block on slow URL fetches
+            // or filesystem scans, while `SessionRunner` / `awaitActivation()` wait for initial activation.
+            let releaseInstructionHold = pluginService.hold()
+            let instructionStartTask = Task {
+                defer { releaseInstructionHold() }
+                await instructionLoader.start()
+            }
             let instructionBuiltIns = CoreInstruction.BuiltIns.Service(
                 workingDirectory: dirPath,
                 workspaceRoot: resolvedProject.directory.rawValue,
@@ -1868,10 +2020,10 @@ public final class ServerAppRuntime: Sendable {
             let machineInstructions = MachineInstructions.Service(flags: flagService, machines: machines)
             let instructionSources = CoreSessionContext.InstructionSources(
                 builtins: { await instructionBuiltIns.load() },
-                // No file watcher here: rescan the instruction files before each read, so an edit reaches the
-                // next step as an instruction update.
+                // Watcher-driven invalidation updates `instructionDiscovery` asynchronously; steps read the
+                // current state after one-time initial activation without rescanning per step.
                 discovery: {
-                    await instructionLoader.refresh()
+                    await instructionLoader.awaitReady()
                     return await instructionDiscovery.load()
                 },
                 skills: { permissions in await skillInstructions.load(permissions: permissions) },
@@ -1905,6 +2057,8 @@ public final class ServerAppRuntime: Sendable {
 
             locScope.addFinalizer {
                 closedFlag.withLock { $0 = true }
+                instructionStartTask.cancel()
+                await instructionLoader.close()
                 await sessionRunner.modelTransport.closeAll()
                 await permissionService.close()
                 await formService.close()
@@ -1945,6 +2099,8 @@ public final class ServerAppRuntime: Sendable {
                 snapshot: snapshotService,
                 worktreeStrategies: worktreeStrategies,
                 tool: toolService,
+                instructionDiscovery: instructionDiscovery,
+                instructionLoader: instructionLoader,
                 sessionRunner: sessionRunner,
                 sessionTitle: sessionRunner.sessionTitle
             )
@@ -1958,6 +2114,7 @@ public final class ServerAppRuntime: Sendable {
                     await providerService.reload()
                     await modelService.reload()
                 }
+                await refreshBuiltins()
             }
             return bundle.layerOutput
         }
@@ -1998,6 +2155,7 @@ public final class ServerAppRuntime: Sendable {
             job: job,
             ptyTicket: ptyTicket,
             persistentPty: persistentPty,
+            watcher: watcher,
             fileWatch: fileWatch,
             pluginUpdate: pluginUpdate,
             wellKnown: wellKnown,

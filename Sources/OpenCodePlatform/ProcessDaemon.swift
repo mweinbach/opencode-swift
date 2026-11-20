@@ -2880,14 +2880,14 @@ extension ProcessDaemon {
 
     // parity: process-daemon/src/client.rs#TerminalSubscription [status=implemented hash=3f0e80fce854]
     public final class TerminalSubscription: @unchecked Sendable {
-        private let stream: Transport.Unix.Connection
+        private let stream: any Transport.StreamConnection
         public let terminal: ProcessInfo
         public let role: AttachmentRole
         public let generation: UInt64
         public let replay: RemoteReplay
 
         internal init(
-            stream: Transport.Unix.Connection,
+            stream: any Transport.StreamConnection,
             terminal: ProcessInfo,
             role: AttachmentRole,
             generation: UInt64,
@@ -2917,7 +2917,7 @@ extension ProcessDaemon {
     // parity: process-daemon/src/client.rs#TerminalClient [status=implemented hash=624e251a8311]
     public final class TerminalClient: @unchecked Sendable {
         public let registration: Registration
-        private var ownerStream: Transport.Unix.Connection?
+        private var ownerStream: (any Transport.StreamConnection)?
         private var ownedServer: Daemon.Server.RunningInstance?
 
         public init(registration: Registration) {
@@ -2926,7 +2926,7 @@ extension ProcessDaemon {
 
         internal init(
             registration: Registration,
-            ownerStream: Transport.Unix.Connection?,
+            ownerStream: (any Transport.StreamConnection)?,
             ownedServer: Daemon.Server.RunningInstance? = nil
         ) {
             self.registration = registration
@@ -2938,7 +2938,7 @@ extension ProcessDaemon {
             ownerStream?.closeConnection()
         }
 
-        /// Starts a daemon server for `directory` (in-memory or Unix socket) and claims ownership.
+        /// Starts a daemon server for `directory` (in-memory, Unix socket, or Windows named pipe) and claims ownership.
         // parity: process-daemon/src/client.rs#start [status=adapted hash=3281286e811e]
         public static func start(
             _ directory: String,
@@ -2952,7 +2952,7 @@ extension ProcessDaemon {
                 service: service
             )
             let reg = server.registration
-            let stream = try Transport.Unix.Connection.connect(reg.socket)
+            let stream = try Transport.connect(registration: reg)
             try stream.set_read_timeout(5_000)
             try stream.set_write_timeout(5_000)
             try ProcessDaemon.write_frame(
@@ -3019,7 +3019,7 @@ extension ProcessDaemon {
 
         /// Claims ownership of an existing daemon instance using an optional handoff ticket.
         public func claimOwnership(ticket: String? = nil) throws -> TerminalClient {
-            let stream = try Transport.Unix.Connection.connect(registration.socket)
+            let stream = try Transport.connect(registration: registration)
             try ProcessDaemon.write_frame(
                 stream,
                 value: Envelope(
@@ -3225,7 +3225,7 @@ extension ProcessDaemon {
             role: AttachmentRole,
             takeover: Bool
         ) throws -> TerminalSubscription {
-            let stream = try Transport.Unix.Connection.connect(registration.socket)
+            let stream = try Transport.connect(registration: registration)
             try ProcessDaemon.write_frame(
                 stream,
                 value: Envelope(
@@ -3285,7 +3285,7 @@ extension ProcessDaemon {
         }
 
         private func sendRequest(_ request: Request) throws -> Response {
-            let stream = try Transport.Unix.Connection.connect(registration.socket)
+            let stream = try Transport.connect(registration: registration)
             defer { stream.closeConnection() }
             try ProcessDaemon.write_frame(
                 stream,

@@ -64,15 +64,33 @@ struct NativeFileWatcherTests {
         #if os(macOS)
         #expect(NativeFileWatcher.backend == .fsEvents)
         #expect(NativeFileWatcher.isNativelySupported == true)
-        #elseif os(Linux)
+        #expect(NativeFileWatcher.isSupported == true)
+        #elseif os(Linux) || os(Android)
         #expect(NativeFileWatcher.backend == .inotify)
         #expect(NativeFileWatcher.isNativelySupported == true)
+        #expect(NativeFileWatcher.isSupported == true)
         #elseif os(Windows)
         #expect(NativeFileWatcher.backend == .windows)
         #expect(NativeFileWatcher.isNativelySupported == true)
+        #expect(NativeFileWatcher.isSupported == true)
+        #elseif os(iOS) || os(tvOS) || os(watchOS) || os(visionOS) || os(FreeBSD) || os(OpenBSD)
+        #expect(NativeFileWatcher.backend == .kqueue)
+        #expect(NativeFileWatcher.isNativelySupported == true)
+        #expect(NativeFileWatcher.isSupported == true)
+        #elseif os(WASI)
+        #if canImport(WASILibc)
+        #expect(NativeFileWatcher.backend == .polling)
+        #expect(NativeFileWatcher.isNativelySupported == false)
+        #expect(NativeFileWatcher.isSupported == true)
         #else
         #expect(NativeFileWatcher.backend == .fallback)
         #expect(NativeFileWatcher.isNativelySupported == false)
+        #expect(NativeFileWatcher.isSupported == false)
+        #endif
+        #else
+        #expect(NativeFileWatcher.backend == .polling)
+        #expect(NativeFileWatcher.isNativelySupported == false)
+        #expect(NativeFileWatcher.isSupported == true)
         #endif
 
         #if os(macOS) || os(Linux) || os(Windows)
@@ -508,6 +526,112 @@ struct NativeFileWatcherTests {
             await t.value
             #expect(!cycleWatcher.isRunning)
         }
+        #endif
+    }
+
+    @Test("kqueue driver delivers create, modify, rename, delete events and cleans up on stop")
+    func kqueueDriverLiveLifecycle() async throws {
+        #if canImport(Darwin) || os(FreeBSD) || os(OpenBSD)
+        let dir = try NativeFileWatcherHelper.makeTempDirectory(prefix: "opencode-watcher-kqueue")
+        defer { NativeFileWatcherHelper.removeItemIfExists(at: dir) }
+
+        let watcher = NativeFileWatcher(
+            configuration: NativeFileWatcher.Configuration(path: dir, recursive: true, coalesceIntervalMs: 15),
+            driverOverride: .kqueue
+        )
+        let collector = CollectedEvents()
+        let stream = watcher.events
+        let consumer = Task {
+            for await event in stream {
+                collector.append(event)
+            }
+            collector.markFinished()
+        }
+
+        try watcher.start()
+        defer {
+            watcher.stop()
+            consumer.cancel()
+        }
+        #expect(watcher.isRunning)
+
+        let fileA = "\(watcher.path)/AGENTS.md"
+        try NativeFileWatcherHelper.writeFileInPlace("v1", to: fileA)
+        let created = await collector.waitFor { $0.path == fileA && $0.kind == .created }
+        #expect(created != nil)
+
+        try NativeFileWatcherHelper.writeFileInPlace("v2 updated content", to: fileA)
+        let modified = await collector.waitFor { $0.path == fileA && $0.kind == .modified }
+        #expect(modified != nil)
+
+        let tmpFile = "\(watcher.path)/.AGENTS.tmp"
+        try NativeFileWatcherHelper.writeFileInPlace("v3 atomic", to: tmpFile)
+        try NativeFileWatcherHelper.renameItem(from: tmpFile, to: fileA)
+        let replaced = await collector.waitFor { $0.path == fileA && ($0.kind == .renamed || $0.kind == .modified) }
+        #expect(replaced != nil)
+
+        try NativeFileWatcherHelper.deleteFile(at: fileA)
+        let deleted = await collector.waitFor { $0.path == fileA && $0.kind == .deleted }
+        #expect(deleted != nil)
+
+        watcher.stop()
+        #expect(!watcher.isRunning)
+        #expect(await collector.waitUntilFinished())
+        await consumer.value
+        #endif
+    }
+
+    @Test("Polling fallback driver delivers create, modify, delete events, respects ignores, and stops cleanly")
+    func pollingFallbackDriverLiveLifecycle() async throws {
+        #if !os(WASI)
+        let dir = try NativeFileWatcherHelper.makeTempDirectory(prefix: "opencode-watcher-poll")
+        defer { NativeFileWatcherHelper.removeItemIfExists(at: dir) }
+
+        let watcher = NativeFileWatcher(
+            configuration: NativeFileWatcher.Configuration(
+                path: dir,
+                recursive: true,
+                ignore: ["**/*.tmp"],
+                coalesceIntervalMs: 0
+            ),
+            driverOverride: .polling(intervalMs: 25)
+        )
+        let collector = CollectedEvents()
+        let stream = watcher.events
+        let consumer = Task {
+            for await event in stream {
+                collector.append(event)
+            }
+            collector.markFinished()
+        }
+
+        try watcher.start()
+        defer {
+            watcher.stop()
+            consumer.cancel()
+        }
+        #expect(watcher.isRunning)
+
+        let fileA = "\(watcher.path)/AGENTS.md"
+        let ignoredFile = "\(watcher.path)/scratch.tmp"
+        try NativeFileWatcherHelper.writeFileInPlace("ignored", to: ignoredFile)
+        try NativeFileWatcherHelper.writeFileInPlace("v1", to: fileA)
+        let created = await collector.waitFor { $0.path == fileA && $0.kind == .created }
+        #expect(created != nil)
+        #expect(collector.count { $0.path == ignoredFile } == 0)
+
+        try NativeFileWatcherHelper.writeFileInPlace("v2 longer content", to: fileA)
+        let modified = await collector.waitFor { $0.path == fileA && $0.kind == .modified }
+        #expect(modified != nil)
+
+        try NativeFileWatcherHelper.deleteFile(at: fileA)
+        let deleted = await collector.waitFor { $0.path == fileA && $0.kind == .deleted }
+        #expect(deleted != nil)
+
+        watcher.stop()
+        #expect(!watcher.isRunning)
+        #expect(await collector.waitUntilFinished())
+        await consumer.value
         #endif
     }
 }
