@@ -305,11 +305,12 @@ struct OpenCodeServerPluginInvariantTests {
     @Test("Server handlers NEVER block waiting for async plugin loading")
     func serverNeverBlocksOnAsyncPluginLoading() async throws {
         let harness = try await ServerTestFixture.makeHarness(onLocationBoot: { loc in
-            // Simulate a slow background plugin activation that takes 10 seconds!
+            // Simulate a slow background plugin activation that takes 30 seconds, so even a heavily loaded
+            // run (location boot under full parallel tests) stays far below it unless a handler truly blocks.
             let slowPlugin = PluginEffect.Plugin(
                 id: "slow-bg-plugin",
                 effect: { _ in
-                    try? await Task.sleep(for: .seconds(10))
+                    try? await Task.sleep(for: .seconds(30))
                 }
             )
             let gen = CorePlugin.Generation(
@@ -337,7 +338,7 @@ struct OpenCodeServerPluginInvariantTests {
         }
 
         let elapsedMs = Flock.currentEpochMs() - startMs
-        #expect(elapsedMs < 3_000, "Handlers must return immediately without waiting for slow plugins (took \(elapsedMs)ms)")
+        #expect(elapsedMs < 10_000, "Handlers must return immediately without waiting for slow plugins (took \(elapsedMs)ms)")
         #expect(plugins.location.directory.rawValue == harness.rootDir)
         #expect(agents.data.isEmpty)
         #expect(models.data.isEmpty)
