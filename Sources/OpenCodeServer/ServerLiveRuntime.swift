@@ -3860,6 +3860,7 @@ public enum ServerLiveRuntime {
         into vcsService: any CoreVcs.Vcs.Interface,
         directory: SchemaPrimitive.AbsolutePath,
         projectDirectory: SchemaPrimitive.AbsolutePath,
+        vcsStore: SchemaPrimitive.AbsolutePath? = nil,
         fileSystem: any OpenCodeFileSystem,
         spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
     ) async {
@@ -3867,6 +3868,7 @@ public enum ServerLiveRuntime {
         let gitService = CoreVcs.Git.Service(spawner: spawner, fileSystem: fileSystem, executable: gitExe)
         let workDir = directory.rawValue
         let projDir = projectDirectory.rawValue
+        let storePath = vcsStore?.rawValue
 
         @Sendable
         func runGit(_ args: [String], cwd: String = workDir) async -> ProcessOutput? {
@@ -3878,19 +3880,52 @@ public enum ServerLiveRuntime {
         }
 
         @Sendable
+        func readGitHeadBranchFromFileSystem() async -> String? {
+            var gitDir = storePath ?? "\(projDir)/.git"
+            if let st = try? await fileSystem.stat(at: gitDir),
+               st.type == .file,
+               let pointerBytes = try? await fileSystem.readFile(at: gitDir)
+            {
+                let pointer = String(decoding: pointerBytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                if pointer.lowercased().hasPrefix("gitdir:") {
+                    let rawTarget = pointer.dropFirst("gitdir:".count).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !rawTarget.isEmpty {
+                        gitDir = serverResolvePath(base: projDir, relative: rawTarget)
+                    }
+                }
+            }
+            let headPath = gitDir.hasSuffix("/") ? "\(gitDir)HEAD" : "\(gitDir)/HEAD"
+            guard let bytes = try? await fileSystem.readFile(at: headPath) else { return nil }
+            let raw = String(decoding: bytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            let prefix = "ref: refs/heads/"
+            guard raw.hasPrefix(prefix) else { return nil }
+            let branch = String(raw.dropFirst(prefix.count))
+            return branch.isEmpty ? nil : branch
+        }
+
+        @Sendable
         func detectCurrentBranch() async -> String? {
-            if let out = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]), out.exitCode == 0 {
+            let revParse = await runGit(["rev-parse", "--abbrev-ref", "HEAD"])
+            if let out = revParse, out.exitCode == 0 {
                 let raw = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !raw.isEmpty && raw != "HEAD" {
+                if raw == "HEAD" {
+                    return nil
+                }
+                if !raw.isEmpty {
                     return raw
                 }
             }
             // Fallback for unborn branches (fresh `git init` before first commit)
-            if let out = await runGit(["symbolic-ref", "--short", "HEAD"]), out.exitCode == 0 {
+            let symRef = await runGit(["symbolic-ref", "--short", "HEAD"])
+            if let out = symRef, out.exitCode == 0 {
                 let raw = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !raw.isEmpty {
                     return raw
                 }
+            }
+            // Fallback when the git executable/spawner is unavailable (e.g. InMemoryFileSystem tests).
+            if revParse == nil && symRef == nil {
+                return await readGitHeadBranchFromFileSystem()
             }
             return nil
         }
@@ -4050,6 +4085,77 @@ public enum ServerLiveRuntime {
                     executable: gitExe,
                     arguments: ["init"],
                     workingDirectory: projDir
+                ))
+                guard out.exitCode == 0 else {
+                    throw CoreVcs.Vcs.InitializeError(kind: .failed)
+                }
+            }
+        )
+
+        _ = try? await vcsService.transform { editor in
+            editor.add(provider)
+        }
+    }
+
+    /// Registers a live Mercurial VCS provider on `vcsService` (when `!workerdProfile` and `.hg` is detected),
+    /// reading branch metadata via `hg` or `.hg/branch` fallback when `ProcessSpawner` is unavailable.
+    public static func registerLiveHgVcs(
+        into vcsService: any CoreVcs.Vcs.Interface,
+        directory: SchemaPrimitive.AbsolutePath,
+        projectDirectory: SchemaPrimitive.AbsolutePath,
+        vcsStore: SchemaPrimitive.AbsolutePath? = nil,
+        fileSystem: any OpenCodeFileSystem,
+        spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
+    ) async {
+        let workDir = directory.rawValue
+        let projDir = projectDirectory.rawValue
+        let storePath = vcsStore?.rawValue ?? "\(projDir)/.hg"
+
+        @Sendable
+        func runHg(_ args: [String], cwd: String = workDir) async -> ProcessOutput? {
+            try? await spawner.run(ProcessSpec(
+                executable: "hg",
+                arguments: args,
+                workingDirectory: cwd,
+                environment: ["HGPLAIN": "1"]
+            ))
+        }
+
+        @Sendable
+        func detectHgBranch() async -> String? {
+            let out = await runHg(["branch"])
+            if let out, out.exitCode == 0 {
+                let raw = String(decoding: out.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !raw.isEmpty { return raw }
+            }
+            if out == nil {
+                let branchFile = storePath.hasSuffix("/") ? "\(storePath)branch" : "\(storePath)/branch"
+                if let bytes = try? await fileSystem.readFile(at: branchFile) {
+                    let raw = String(decoding: bytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                    return raw.isEmpty ? "default" : raw
+                }
+                if await fileSystem.exists(at: storePath) {
+                    return "default"
+                }
+            }
+            return nil
+        }
+
+        let provider = CoreVcs.Vcs.ProviderDefinition(
+            id: "hg",
+            info: {
+                let current = await detectHgBranch()
+                return VcsSchema.Info(
+                    provider: "hg",
+                    branch: VcsSchema.Branch(current: current, defaultBranch: "default")
+                )
+            },
+            initialize: {
+                let out = try await spawner.run(ProcessSpec(
+                    executable: "hg",
+                    arguments: ["init"],
+                    workingDirectory: projDir,
+                    environment: ["HGPLAIN": "1"]
                 ))
                 guard out.exitCode == 0 else {
                     throw CoreVcs.Vcs.InitializeError(kind: .failed)

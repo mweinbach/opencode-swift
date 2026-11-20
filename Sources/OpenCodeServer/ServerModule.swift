@@ -689,6 +689,8 @@ public final class ServerLocationBundle: Sendable {
     public let reference: any CoreInstruction.Reference.Interface
     public let instructionDiscovery: CoreInstruction.Discovery.Service
     public let instructionLoader: CoreConfigPlugin.Instruction.Loader?
+    public let locationWatcherPolicy: any CoreFilesystem.LocationWatcherPolicy.Interface
+    public let locationWatcher: CoreFilesystem.LocationWatcher.Service?
     public let fileSystem: any CoreFilesystem.Interface
     public let fileSystemSearch: any CoreFilesystem.Search.Interface
     public let shell: any CoreShell.Interface
@@ -730,6 +732,7 @@ public final class ServerLocationBundle: Sendable {
             CoreSkill.Service.serviceKey: skill,
             CoreInstruction.Reference.Service.serviceKey: reference,
             CoreInstruction.Discovery.Service.serviceKey: instructionDiscovery,
+            CoreFilesystem.LocationWatcherPolicy.Service.serviceKey: locationWatcherPolicy,
             CoreFilesystem.Service.serviceKey: fileSystem,
             CoreFilesystem.Search.Service.serviceKey: fileSystemSearch,
             CoreShell.Service.serviceKey: shell,
@@ -752,6 +755,9 @@ public final class ServerLocationBundle: Sendable {
             CoreWorktree.Strategies.Service.serviceKey: worktreeStrategies,
             CoreTool.Service.serviceKey: tool,
         ]
+        if let locationWatcher {
+            map[CoreFilesystem.LocationWatcher.Service.serviceKey] = locationWatcher as any CoreFilesystem.LocationWatcher.Interface
+        }
         if let sessionRunner {
             map[CoreSessionRunner.Service.serviceKey] = sessionRunner
         }
@@ -796,6 +802,8 @@ public final class ServerLocationBundle: Sendable {
         tool: any CoreTool.Interface = CoreTool.Service(),
         instructionDiscovery: CoreInstruction.Discovery.Service = CoreInstruction.Discovery.Service(),
         instructionLoader: CoreConfigPlugin.Instruction.Loader? = nil,
+        locationWatcherPolicy: any CoreFilesystem.LocationWatcherPolicy.Interface = CoreFilesystem.LocationWatcherPolicy.Service(),
+        locationWatcher: CoreFilesystem.LocationWatcher.Service? = nil,
         sessionRunner: (any CoreSessionRunner.Interface)? = nil,
         sessionTitle: (any CoreSessionTitle.Interface)? = nil
     ) {
@@ -812,6 +820,8 @@ public final class ServerLocationBundle: Sendable {
         self.reference = reference
         self.instructionDiscovery = instructionDiscovery
         self.instructionLoader = instructionLoader
+        self.locationWatcherPolicy = locationWatcherPolicy
+        self.locationWatcher = locationWatcher
         self.fileSystem = fileSystem
         self.fileSystemSearch = fileSystemSearch
         self.shell = shell
@@ -1319,6 +1329,7 @@ public final class ServerAppRuntime: Sendable {
         customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
         customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
         customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        configDebounce: Duration = CoreConfig.Service.defaultDebounce,
         instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
         instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
         workerdProfile: Bool = false,
@@ -1663,6 +1674,10 @@ public final class ServerAppRuntime: Sendable {
                 globalPaths: capturedGlobal,
                 fileSystem: capturedFs,
                 environment: capturedEnv,
+                watcher: capturedWorkerd ? nil : watcher,
+                bus: bus,
+                location: locationBusRoute,
+                debounce: configDebounce,
                 onUpdated: {
                     await bus.emit(
                         configUpdatedDef,
@@ -1716,6 +1731,7 @@ public final class ServerAppRuntime: Sendable {
             let fsSearchService: any CoreFilesystem.Search.Interface
             let ptyService: any CorePty.Interface
             let vcsService: any CoreVcs.Vcs.Interface
+            let liveVcsService: CoreVcs.Vcs.Service?
             let snapshotService: any CoreSnapshot.Interface
 
             if capturedWorkerd {
@@ -1723,6 +1739,7 @@ public final class ServerAppRuntime: Sendable {
                 fsSearchService = ServerWorkerdUnavailableFileSystemSearch()
                 ptyService = ServerWorkerdUnavailablePty()
                 vcsService = ServerWorkerdNoopVcs()
+                liveVcsService = nil
                 snapshotService = CoreSnapshot.Service(directory: dirPath, fileSystem: capturedFs, enabled: false)
             } else {
                 let search = CoreFilesystem.Search.Service(directory: dirPath, fileSystem: capturedFs)
@@ -1732,16 +1749,31 @@ public final class ServerAppRuntime: Sendable {
                 let liveVcs = CoreVcs.Vcs.Service(
                     projectDirectory: resolvedProject.directory,
                     detectedVcsType: resolvedProject.vcs?.type.rawValue,
+                    vcs: resolvedProject.vcs,
+                    location: locationBusRoute,
+                    bus: bus,
                     fileSystem: capturedFs
                 )
                 await ServerLiveRuntime.registerLiveGitVcs(
                     into: liveVcs,
                     directory: ref.directory,
                     projectDirectory: resolvedProject.directory,
+                    vcsStore: resolvedProject.vcs?.store,
                     fileSystem: capturedFs,
                     spawner: hostSpawner
                 )
+                if resolvedProject.vcs?.type.rawValue == "hg" {
+                    await ServerLiveRuntime.registerLiveHgVcs(
+                        into: liveVcs,
+                        directory: ref.directory,
+                        projectDirectory: resolvedProject.directory,
+                        vcsStore: resolvedProject.vcs?.store,
+                        fileSystem: capturedFs,
+                        spawner: hostSpawner
+                    )
+                }
                 vcsService = liveVcs
+                liveVcsService = liveVcs
                 snapshotService = CoreSnapshot.Service(directory: dirPath, fileSystem: capturedFs, enabled: true)
                 await CoreConfigPlugin.Snapshot.apply(entries: configEntries, to: snapshotService)
             }
@@ -2032,6 +2064,33 @@ public final class ServerAppRuntime: Sendable {
                 machines: { await machineInstructions.load() }
             )
 
+            // LocationWatcherPolicy + ConfigLocationWatcherPlugin + LocationWatcher (`core/src/filesystem/location-watcher.ts`).
+            let locationWatcherPolicy = CoreFilesystem.LocationWatcherPolicy.Service()
+            let configLocationWatcherObserver: CoreConfigPlugin.LocationWatcher.Observer?
+            let locationWatcherService: CoreFilesystem.LocationWatcher.Service?
+            if capturedWorkerd {
+                configLocationWatcherObserver = nil
+                locationWatcherService = nil
+            } else {
+                configLocationWatcherObserver = await CoreConfigPlugin.LocationWatcher.start(
+                    config: configService,
+                    bus: bus,
+                    location: locationBusRoute,
+                    policy: locationWatcherPolicy
+                )
+                let locWatcher = CoreFilesystem.LocationWatcher.Service(
+                    location: locationService,
+                    watcher: watcher,
+                    bus: bus,
+                    fileSystem: capturedFs,
+                    git: gitService,
+                    policy: locationWatcherPolicy,
+                    plugin: pluginService
+                )
+                locWatcher.start()
+                locationWatcherService = locWatcher
+            }
+
             let closedFlag = Mutex(false)
             let sessionRunner = ServerLiveRuntime.makeSessionRunner(
                 db: db,
@@ -2059,6 +2118,10 @@ public final class ServerAppRuntime: Sendable {
                 closedFlag.withLock { $0 = true }
                 instructionStartTask.cancel()
                 await instructionLoader.close()
+                await locationWatcherService?.close()
+                await configLocationWatcherObserver?.close()
+                await liveVcsService?.close()
+                await configService.close()
                 await sessionRunner.modelTransport.closeAll()
                 await permissionService.close()
                 await formService.close()
@@ -2101,6 +2164,8 @@ public final class ServerAppRuntime: Sendable {
                 tool: toolService,
                 instructionDiscovery: instructionDiscovery,
                 instructionLoader: instructionLoader,
+                locationWatcherPolicy: locationWatcherPolicy,
+                locationWatcher: locationWatcherService,
                 sessionRunner: sessionRunner,
                 sessionTitle: sessionRunner.sessionTitle
             )

@@ -1857,6 +1857,16 @@ public enum CoreConfigWatch {
                 return "entries:\(p):\(names.joined(separator: ","))"
             }
         }
+
+        /// Converts this watch plan target into a shared `CoreFilesystem.Watcher.WatchInput`.
+        public var watchInput: CoreFilesystem.Watcher.WatchInput {
+            switch self {
+            case .directory(let p, let ignore):
+                return .directory(path: p, ignore: ignore)
+            case .entries(let p, let names):
+                return .entries(path: p, names: names)
+            }
+        }
     }
 
     private static func normalizeKey(_ file: String) -> String {
@@ -2050,14 +2060,59 @@ public enum CoreConfig {
     public final class Service: Interface, Sendable {
         public static let serviceKey = "@opencode/Config"
 
+        /// Trailing-edge debounce window for config reload bursts (upstream: `Stream.debounce("100 millis")`).
+        public static let defaultDebounce: Duration = .milliseconds(100)
+
+        private struct WatchEntry: Sendable {
+            let generation: UInt64
+            let task: Task<Void, Never>
+        }
+
         private struct State: Sendable {
             var sources: CoreConfigDiscovery.Sources
             var entries: [CoreConfigEntry]
+            var isInput: @Sendable (String) -> Bool
             var integrations: [IntegrationID: CoreConfigIntegration.Document] = [:]
             var integrationOrder: [IntegrationID] = []
             var subscribers: [UInt64: AsyncStream<WatchUpdate>.Continuation] = [:]
             var nextSubscriberID: UInt64 = 1
+            var watched: [String: WatchEntry] = [:]
+            var nextWatchGeneration: UInt64 = 1
+            var debounceTask: Task<Void, Never>?
+            var debounceGeneration: UInt64 = 0
+            var reloadInProgress: Bool = false
+            var pendingReloadAfterCurrent: Bool = false
+            var reloadCount: Int = 0
+            var closed: Bool = false
         }
+
+        private actor SerialGate {
+            private var locked = false
+            private var waiters: [CheckedContinuation<Void, Never>] = []
+
+            func acquire() async {
+                if !locked {
+                    locked = true
+                    return
+                }
+                await withCheckedContinuation { continuation in
+                    waiters.append(continuation)
+                }
+            }
+
+            func release() {
+                if !waiters.isEmpty {
+                    let next = waiters.removeFirst()
+                    next.resume()
+                } else {
+                    locked = false
+                }
+            }
+        }
+
+        private static let configUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(
+            type: ConfigSchema.Event.updated.type
+        ).descriptor
 
         private let directory: String
         private let options: Options?
@@ -2065,8 +2120,14 @@ public enum CoreConfig {
         private let fileSystem: any OpenCodeFileSystem
         private let environment: any EnvironmentProviding
         private let platform: PlatformOS
+        private let watcher: (any CoreFilesystem.Watcher.Interface)?
+        private let bus: (any CoreBus.Interface)?
+        private let location: OpenCodeLocation?
+        private let debounce: Duration
         private let onUpdated: (@Sendable () async -> Void)?
         private let state: Mutex<State>
+        private let reloadLock = SerialGate()
+        private let updateLock = SerialGate()
 
         public init(
             directory: String,
@@ -2075,6 +2136,10 @@ public enum CoreConfig {
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             environment: any EnvironmentProviding = SystemEnvironment.shared,
             platform: PlatformOS = Platform.current,
+            watcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+            bus: (any CoreBus.Interface)? = nil,
+            location: OpenCodeLocation? = nil,
+            debounce: Duration = CoreConfig.Service.defaultDebounce,
             onUpdated: (@Sendable () async -> Void)? = nil
         ) async {
             let resolvedGlobal = globalPaths ?? Global.make(environment: environment, os: platform)
@@ -2084,6 +2149,10 @@ public enum CoreConfig {
             self.fileSystem = fileSystem
             self.environment = environment
             self.platform = platform
+            self.watcher = watcher
+            self.bus = bus
+            self.location = location ?? OpenCodeLocation(directory: directory)
+            self.debounce = debounce
             self.onUpdated = onUpdated
 
             let discovered = await CoreConfigDiscovery.discover(
@@ -2098,11 +2167,59 @@ public enum CoreConfig {
                 sources: discovered,
                 directory: directory,
                 options: options,
+                globalPaths: resolvedGlobal,
                 integrations: [],
                 fileSystem: fileSystem,
                 environment: environment
             )
-            self.state = Mutex(State(sources: discovered, entries: loaded))
+            self.state = Mutex(State(sources: discovered, entries: loaded.entries, isInput: loaded.isInput))
+
+            if watcher != nil {
+                state.withLock { $0.reloadInProgress = true }
+                await reloadLock.acquire()
+                await reconcileWatchesLocked(discovered)
+                let needsReload = state.withLock { s -> Bool in
+                    s.reloadInProgress = false
+                    let pending = s.pendingReloadAfterCurrent && !s.closed
+                    s.pendingReloadAfterCurrent = false
+                    return pending
+                }
+                await reloadLock.release()
+                if needsReload {
+                    requestReload()
+                }
+            }
+        }
+
+        deinit {
+            let (debounceTask, watchTasks, subs): (
+                Task<Void, Never>?,
+                [Task<Void, Never>],
+                [AsyncStream<WatchUpdate>.Continuation]
+            ) = state.withLock { s in
+                s.closed = true
+                s.pendingReloadAfterCurrent = false
+                let d = s.debounceTask
+                s.debounceTask = nil
+                let tasks = s.watched.values.map(\.task)
+                s.watched.removeAll()
+                let continuations = Array(s.subscribers.values)
+                s.subscribers.removeAll()
+                return (d, tasks, continuations)
+            }
+            debounceTask?.cancel()
+            for task in watchTasks { task.cancel() }
+            for sub in subs { sub.finish() }
+        }
+
+        /// Number of completed `reload()` executions after initial construction (for diagnostics and tests).
+        public var reloadCount: Int {
+            state.withLock { $0.reloadCount }
+        }
+
+        /// Number of currently attached config filesystem watch tasks.
+        public var activeWatchCount: Int {
+            state.withLock { $0.watched.count }
         }
 
         public func entries() async -> [CoreConfigEntry] {
@@ -2125,11 +2242,16 @@ public enum CoreConfig {
 
         public func changes() -> AsyncStream<WatchUpdate> {
             AsyncStream { continuation in
-                let id = state.withLock { s -> UInt64 in
+                let registeredID: UInt64? = state.withLock { s in
+                    guard !s.closed else { return nil }
                     let id = s.nextSubscriberID
                     s.nextSubscriberID &+= 1
                     s.subscribers[id] = continuation
                     return id
+                }
+                guard let id = registeredID else {
+                    continuation.finish()
+                    return
                 }
                 continuation.onTermination = { [weak self] _ in
                     self?.state.withLock { s in
@@ -2139,69 +2261,96 @@ public enum CoreConfig {
             }
         }
 
+        /// Stops all config watches, pending debounce timers, and raw change streams for this Location.
+        public func close() async {
+            let (debounceTask, watchTasks, subs): (
+                Task<Void, Never>?,
+                [Task<Void, Never>],
+                [AsyncStream<WatchUpdate>.Continuation]
+            ) = state.withLock { s in
+                s.closed = true
+                s.pendingReloadAfterCurrent = false
+                let d = s.debounceTask
+                s.debounceTask = nil
+                let tasks = s.watched.values.map(\.task)
+                s.watched.removeAll()
+                let continuations = Array(s.subscribers.values)
+                s.subscribers.removeAll()
+                return (d, tasks, continuations)
+            }
+            debounceTask?.cancel()
+            for task in watchTasks { task.cancel() }
+            for sub in subs { sub.finish() }
+        }
+
         public func reload() async {
-            let discovered = await CoreConfigDiscovery.discover(
-                directory: directory,
-                options: options,
-                global: globalPaths,
-                fileSystem: fileSystem,
-                environment: environment,
-                platform: platform
-            )
-            let orderedIntegrations: [CoreConfigIntegration.Document] = state.withLock { s in
-                s.integrationOrder.compactMap { s.integrations[$0] }
+            await reloadLock.acquire()
+            let (shouldRun, cancelledTimer): (Bool, Task<Void, Never>?) = state.withLock { s in
+                guard !s.closed else { return (false, nil) }
+                s.reloadInProgress = true
+                s.pendingReloadAfterCurrent = false
+                let timer = s.debounceTask
+                s.debounceTask = nil
+                s.debounceGeneration &+= 1
+                return (true, timer)
             }
-            let nextEntries = await Self.loadAll(
-                sources: discovered,
-                directory: directory,
-                options: options,
-                integrations: orderedIntegrations,
-                fileSystem: fileSystem,
-                environment: environment
-            )
-            let changed: Bool = state.withLock { s in
-                let diff = s.entries != nextEntries || s.sources.claude != discovered.claude || s.sources.agents != discovered.agents
-                if diff {
-                    s.sources = discovered
-                    s.entries = nextEntries
-                }
-                return diff
+            cancelledTimer?.cancel()
+            await finishReloadLocked(shouldRun: shouldRun)
+        }
+
+        private func finishReloadLocked(shouldRun: Bool) async {
+            if shouldRun {
+                await performReloadLocked()
             }
-            if changed {
-                await onUpdated?()
+            let needsReschedule = state.withLock { s -> Bool in
+                s.reloadInProgress = false
+                let pending = s.pendingReloadAfterCurrent && !s.closed
+                s.pendingReloadAfterCurrent = false
+                return pending
+            }
+            await reloadLock.release()
+            if needsReschedule {
+                requestReload()
             }
         }
 
         public func update(_ patch: ConfigSchema.Patch) async throws {
-            let globalDir = state.withLock { $0.sources.global?.rawValue } ?? globalPaths.config
-            let fsUtil = FSUtil.Service(fileSystem: fileSystem)
-            var chosenPath: String? = nil
-            for name in CoreConfigDiscovery.names {
-                let candidate = CoreConfigDiscovery.joinPath(globalDir, name)
-                if await fsUtil.isFile(candidate) {
-                    chosenPath = candidate
+            await updateLock.acquire()
+            do {
+                let globalDir = state.withLock { $0.sources.global?.rawValue } ?? globalPaths.config
+                let fsUtil = FSUtil.Service(fileSystem: fileSystem)
+                var chosenPath: String? = nil
+                for name in CoreConfigDiscovery.names {
+                    let candidate = CoreConfigDiscovery.joinPath(globalDir, name)
+                    if await fsUtil.isFile(candidate) {
+                        chosenPath = candidate
+                    }
                 }
+                let filepath = chosenPath ?? CoreConfigDiscovery.joinPath(globalDir, "opencode.jsonc")
+                let existingText = (try? await fsUtil.readFileStringSafe(filepath)) ?? "{}\n"
+                var rootObj: [String: JSONValue]
+                if let parsed = try? CoreConfigJSONC.parse(existingText), case .object(let obj) = parsed {
+                    rootObj = obj
+                } else {
+                    rootObj = [:]
+                }
+                if let shell = patch.shell {
+                    rootObj["shell"] = .string(shell)
+                } else {
+                    rootObj.removeValue(forKey: "shell")
+                }
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let data = try encoder.encode(JSONValue.object(rootObj))
+                var outputText = String(decoding: data, as: UTF8.self)
+                if !outputText.hasSuffix("\n") { outputText += "\n" }
+                try await fileSystem.writeFile(Array(outputText.utf8), to: filepath, createDirectories: true)
+                await reload()
+                await updateLock.release()
+            } catch {
+                await updateLock.release()
+                throw error
             }
-            let filepath = chosenPath ?? CoreConfigDiscovery.joinPath(globalDir, "opencode.jsonc")
-            let existingText = (try? await fsUtil.readFileStringSafe(filepath)) ?? "{}\n"
-            var rootObj: [String: JSONValue]
-            if let parsed = try? CoreConfigJSONC.parse(existingText), case .object(let obj) = parsed {
-                rootObj = obj
-            } else {
-                rootObj = [:]
-            }
-            if let shell = patch.shell {
-                rootObj["shell"] = .string(shell)
-            } else {
-                rootObj.removeValue(forKey: "shell")
-            }
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(JSONValue.object(rootObj))
-            var outputText = String(decoding: data, as: UTF8.self)
-            if !outputText.hasSuffix("\n") { outputText += "\n" }
-            try await fileSystem.writeFile(Array(outputText.utf8), to: filepath, createDirectories: true)
-            await reload()
         }
 
         public func integration(
@@ -2223,21 +2372,226 @@ public enum CoreConfig {
             }
         }
 
+        // MARK: - Live Self-Watching & Coalesced Reloads
+
+        private func performReloadLocked() async {
+            guard !state.withLock({ $0.closed }) else { return }
+            let discovered = await CoreConfigDiscovery.discover(
+                directory: directory,
+                options: options,
+                global: globalPaths,
+                fileSystem: fileSystem,
+                environment: environment,
+                platform: platform
+            )
+            let orderedIntegrations: [CoreConfigIntegration.Document] = state.withLock { s in
+                s.integrationOrder.compactMap { s.integrations[$0] }
+            }
+            let next = await Self.loadAll(
+                sources: discovered,
+                directory: directory,
+                options: options,
+                globalPaths: globalPaths,
+                integrations: orderedIntegrations,
+                fileSystem: fileSystem,
+                environment: environment
+            )
+            state.withLock { s in
+                s.isInput = next.isInput
+                s.reloadCount += 1
+            }
+            await reconcileWatchesLocked(discovered)
+
+            let changed: Bool = state.withLock { s in
+                guard !s.closed else { return false }
+                let compatibilityChanged = s.sources.claude != discovered.claude || s.sources.agents != discovered.agents
+                let diff = s.entries != next.entries || compatibilityChanged
+                if diff {
+                    s.sources = discovered
+                    s.entries = next.entries
+                }
+                return diff
+            }
+            if changed {
+                await emitUpdated()
+            }
+        }
+
+        private func emitUpdated() async {
+            if let onUpdated {
+                await onUpdated()
+                return
+            }
+            guard let bus else { return }
+            _ = try? await bus.publishRaw(
+                definition: Self.configUpdatedDef,
+                data: .object([:]),
+                options: CoreBus.PublishOptions(location: location)
+            )
+        }
+
+        private func reconcileWatchesLocked(_ sources: CoreConfigDiscovery.Sources) async {
+            guard let watcher, !state.withLock({ $0.closed }) else { return }
+            let plan = CoreConfigWatch.plan(sources)
+
+            let removedTasks: [Task<Void, Never>] = state.withLock { s in
+                var tasks: [Task<Void, Never>] = []
+                for key in Array(s.watched.keys) where plan[key] == nil {
+                    if let removed = s.watched.removeValue(forKey: key) {
+                        tasks.append(removed.task)
+                    }
+                }
+                return tasks
+            }
+            for task in removedTasks { task.cancel() }
+
+            let fsUtil = FSUtil.Service(fileSystem: fileSystem)
+            for key in plan.keys.sorted() {
+                guard let target = plan[key] else { continue }
+                let skip = state.withLock { s in
+                    s.closed || s.watched[key] != nil
+                }
+                if skip || Task.isCancelled { continue }
+
+                let targetPath = target.path
+                let realBox = Mutex(targetPath)
+                let updates = await watcher.subscribe(target.watchInput) { [weak self] in
+                    let resolved = await fsUtil.resolve(targetPath)
+                    realBox.withLock { $0 = resolved }
+                    // Readiness rescans recover writes made before a watch attached.
+                    self?.requestReload()
+                }
+
+                if state.withLock({ $0.closed }) || Task.isCancelled {
+                    break
+                }
+
+                let generation = state.withLock { s -> UInt64 in
+                    let gen = s.nextWatchGeneration
+                    s.nextWatchGeneration &+= 1
+                    return gen
+                }
+
+                let task = Task { [weak self] in
+                    for await update in updates {
+                        if Task.isCancelled { break }
+                        guard let self else { break }
+                        self.publishRawChange(update)
+                        if self.matchesInput(update.path, targetPath: targetPath, realPath: realBox.withLock { $0 }) {
+                            self.requestReload()
+                        }
+                    }
+                    self?.removeWatchIfMatching(key: key, generation: generation)
+                }
+
+                let cancelNow: Task<Void, Never>? = state.withLock { s in
+                    if s.closed || s.watched[key] != nil {
+                        return task
+                    }
+                    s.watched[key] = WatchEntry(generation: generation, task: task)
+                    return nil
+                }
+                cancelNow?.cancel()
+            }
+        }
+
+        private func publishRawChange(_ update: WatchUpdate) {
+            let subs = state.withLock { s -> [AsyncStream<WatchUpdate>.Continuation] in
+                guard !s.closed else { return [] }
+                return Array(s.subscribers.values)
+            }
+            for sub in subs {
+                sub.yield(update)
+            }
+        }
+
+        private func matchesInput(_ updatePath: String, targetPath: String, realPath: String) -> Bool {
+            let predicate = state.withLock { $0.isInput }
+            if predicate(updatePath) { return true }
+            // Native watches can report the canonical path even after the root was deleted.
+            if realPath == targetPath || !FSPathUtil.contains(parent: realPath, child: updatePath) {
+                return false
+            }
+            let rel = FSPathUtil.posixRelative(from: realPath, to: updatePath)
+            let mapped = rel.isEmpty ? targetPath : CoreConfigDiscovery.joinPath(targetPath, rel)
+            return predicate(mapped)
+        }
+
+        private func requestReload() {
+            let delay = self.debounce
+            let previousTask: Task<Void, Never>? = state.withLock { s in
+                guard !s.closed else { return nil }
+                if s.reloadInProgress {
+                    s.pendingReloadAfterCurrent = true
+                    return nil
+                }
+                let prev = s.debounceTask
+                s.debounceGeneration &+= 1
+                let generation = s.debounceGeneration
+                s.debounceTask = Task { [weak self] in
+                    do {
+                        try await Task.sleep(for: delay)
+                    } catch {
+                        return
+                    }
+                    await self?.flushDebouncedReload(generation: generation)
+                }
+                return prev
+            }
+            previousTask?.cancel()
+        }
+
+        private func flushDebouncedReload(generation: UInt64) async {
+            let claimed: Bool = state.withLock { s in
+                guard !s.closed, s.debounceGeneration == generation else { return false }
+                s.debounceTask = nil
+                if s.reloadInProgress {
+                    s.pendingReloadAfterCurrent = true
+                    return false
+                }
+                s.reloadInProgress = true
+                s.pendingReloadAfterCurrent = false
+                return true
+            }
+            guard claimed else { return }
+            await reloadLock.acquire()
+            let stillOpen: Bool = state.withLock { s in
+                guard !s.closed else { return false }
+                s.reloadInProgress = true
+                return true
+            }
+            await finishReloadLocked(shouldRun: stillOpen)
+        }
+
+        private func removeWatchIfMatching(key: String, generation: UInt64) {
+            state.withLock { s in
+                guard let entry = s.watched[key], entry.generation == generation else { return }
+                s.watched.removeValue(forKey: key)
+            }
+        }
+
+        // MARK: - Config Loading
+
         private static func loadFile(
             _ filepath: String,
+            references: inout Set<String>,
+            home: String,
             fileSystem: any OpenCodeFileSystem,
             environment: any EnvironmentProviding
         ) async -> ConfigSchema.Document? {
             let fsUtil = FSUtil.Service(fileSystem: fileSystem)
             guard let text = try? await fsUtil.readFileStringSafe(filepath) else { return nil }
+            references.insert(filepath)
             let sub = await CoreConfigVariable.substitute(
                 CoreConfigVariable.SubstituteInput(
                     source: .path(filepath),
                     text: text,
+                    home: home,
                     environment: environment
                 ),
                 fileSystem: fileSystem
             )
+            references.formUnion(sub.references)
             guard let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) else { return nil }
             return ConfigSchema.Document(
                 path: SchemaPrimitive.AbsolutePath(rawValue: filepath),
@@ -2247,13 +2601,21 @@ public enum CoreConfig {
 
         private static func loadDirectory(
             _ dir: SchemaPrimitive.AbsolutePath,
+            references: inout Set<String>,
+            home: String,
             fileSystem: any OpenCodeFileSystem,
             environment: any EnvironmentProviding
         ) async -> [CoreConfigEntry] {
             var out: [CoreConfigEntry] = []
             for name in CoreConfigDiscovery.names {
                 let filepath = CoreConfigDiscovery.joinPath(dir.rawValue, name)
-                if let doc = await loadFile(filepath, fileSystem: fileSystem, environment: environment) {
+                if let doc = await loadFile(
+                    filepath,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                ) {
                     out.append(.document(doc))
                 }
             }
@@ -2265,20 +2627,36 @@ public enum CoreConfig {
             sources: CoreConfigDiscovery.Sources,
             directory: String,
             options: Options?,
+            globalPaths: Global.Interface,
             integrations: [CoreConfigIntegration.Document],
             fileSystem: any OpenCodeFileSystem,
             environment: any EnvironmentProviding
-        ) async -> [CoreConfigEntry] {
+        ) async -> (entries: [CoreConfigEntry], isInput: @Sendable (String) -> Bool) {
+            var references: Set<String> = []
+            let home = globalPaths.home
+
             var directDocs: [CoreConfigEntry] = []
             for path in sources.direct {
-                if let doc = await loadFile(path.rawValue, fileSystem: fileSystem, environment: environment) {
+                if let doc = await loadFile(
+                    path.rawValue,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                ) {
                     directDocs.append(.document(doc))
                 }
             }
 
             var explicitDocs: [CoreConfigEntry] = []
             if let exp = sources.explicit,
-               let doc = await loadFile(exp.rawValue, fileSystem: fileSystem, environment: environment)
+               let doc = await loadFile(
+                   exp.rawValue,
+                   references: &references,
+                   home: home,
+                   fileSystem: fileSystem,
+                   environment: environment
+               )
             {
                 explicitDocs.append(.document(doc))
             }
@@ -2289,10 +2667,12 @@ public enum CoreConfig {
                     CoreConfigVariable.SubstituteInput(
                         source: .virtual(source: "OPENCODE_CONFIG_CONTENT", dir: directory),
                         text: contentText,
+                        home: home,
                         environment: environment
                     ),
                     fileSystem: fileSystem
                 )
+                references.formUnion(sub.references)
                 if let (info, _) = try? CoreConfigJSONC.parseInfo(sub.text) {
                     contentDocs.append(.document(ConfigSchema.Document(path: nil, info: info)))
                 }
@@ -2301,7 +2681,13 @@ public enum CoreConfig {
             // Managed settings & split managed policies (exact upstream precedence).
             var managedRaw: [CoreConfigEntry] = []
             if let sys = sources.system, sys.present {
-                managedRaw.append(contentsOf: await loadDirectory(sys.path, fileSystem: fileSystem, environment: environment))
+                managedRaw.append(contentsOf: await loadDirectory(
+                    sys.path,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                ))
             }
             var managedPolicies: [CoreConfigEntry] = []
             for entry in managedRaw.reversed() {
@@ -2352,14 +2738,26 @@ public enum CoreConfig {
             }
 
             let globalEntries: [CoreConfigEntry] = if let glob = sources.global {
-                await loadDirectory(glob, fileSystem: fileSystem, environment: environment)
+                await loadDirectory(
+                    glob,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                )
             } else {
                 []
             }
 
             var projectEntries: [CoreConfigEntry] = []
             for root in sources.project where root.present {
-                projectEntries.append(contentsOf: await loadDirectory(root.path, fileSystem: fileSystem, environment: environment))
+                projectEntries.append(contentsOf: await loadDirectory(
+                    root.path,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment
+                ))
             }
 
             let integrationEntries = integrations.map { CoreConfigEntry.integration($0) }
@@ -2373,7 +2771,13 @@ public enum CoreConfig {
             result.append(contentsOf: projectEntries)
             result.append(contentsOf: contentDocs)
             result.append(contentsOf: managedSettings)
-            return result
+
+            let isInput = await CoreConfigWatch.inputs(
+                sources: sources,
+                references: references,
+                fileSystem: fileSystem
+            )
+            return (result, isInput)
         }
     }
 
@@ -2473,16 +2877,30 @@ public enum CoreConfig {
 
     // parity: core/src/config.ts#layer [status=adapted hash=880f93656adb]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
-        LayerNode.ExecutableLayer { deps, _ in
+        LayerNode.ExecutableLayer { deps, scope in
             let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
             let globalSvc = deps.get(Global.Service.serviceKey, as: Global.Service.self)
-            let directory = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
+            let locationSvc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
+            let watcher = deps.get(CoreFilesystem.Watcher.Service.serviceKey, as: (any CoreFilesystem.Watcher.Interface).self)
+            let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+            let directory = locationSvc?.info.directory.rawValue
+                ?? deps.get("@opencode/Location.directory", as: String.self)
+                ?? "/"
+            let locRoute = locationSvc.map {
+                OpenCodeLocation(directory: $0.info.directory.rawValue, workspaceID: $0.info.workspaceID)
+            } ?? OpenCodeLocation(directory: directory)
             let service = await Service(
                 directory: directory,
                 options: options,
                 globalPaths: globalSvc?.paths,
-                fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared
+                fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared,
+                watcher: watcher,
+                bus: bus,
+                location: locRoute
             )
+            scope.addFinalizer {
+                await service.close()
+            }
             return LayerNode.Output([Service.serviceKey: service as any Interface])
         }
     }
@@ -2492,7 +2910,7 @@ public enum CoreConfig {
         AppNode.makeLocationNode(
             Service.serviceKey,
             layer(options),
-            [FSUtil.node, Global.node]
+            [CoreFilesystem.Watcher.node, CoreBus.node, FSUtil.node, Global.node]
         )
     }
 
