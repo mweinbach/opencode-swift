@@ -57,6 +57,7 @@ if [[ "${UPDATE_LATEST}" -eq 1 ]]; then
   fi
   echo "Updated upstream.lock.json to ${NEW_COMMIT} (${NEW_SUBJECT})"
   "${ROOT_DIR}/scripts/sync-psychoscript.sh" --update
+  "${ROOT_DIR}/scripts/sync-oracle-deps.sh"
   exit 0
 fi
 
@@ -69,3 +70,4 @@ fi
 
 echo "Upstream checkout ready at $(git -C "${TARGET_DIR}" rev-parse HEAD)"
 "${ROOT_DIR}/scripts/sync-psychoscript.sh"
+"${ROOT_DIR}/scripts/sync-oracle-deps.sh"
