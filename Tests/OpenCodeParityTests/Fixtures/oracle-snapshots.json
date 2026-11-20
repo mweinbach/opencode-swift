@@ -1,6 +1,6 @@
 {
   "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "generatedAt": "2026-11-20T22:27:57.247Z",
+  "generatedAt": "2026-11-20T22:42:13.071Z",
   "vectorCount": 1572,
   "cases": [
     {
@@ -10166,7 +10166,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001ck9p901u8pw2Eg"
+      "expectedValue": "bcfe56800001VFijbgA5DdhC63"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10177,7 +10177,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe568000023Ml7lLbedCArIa"
+      "expectedValue": "bcfe56800002l4NNcd7oeF31hI"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10188,7 +10188,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeiGA6xznQMgatjU"
+      "expectedValue": "4301a97feffe7eTHZeMV3TG1wQ"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10199,7 +10199,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdvsI40yPngrH3FT"
+      "expectedValue": "4301a97feffdLi555OPKz304Ux"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10207,7 +10207,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1fb12b6ee001dE6aDF8rnjNq77"
+      "expectedValue": "1fb1fc361001H9hKRJyIOfKzBJ"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10215,7 +10215,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e04ed4911ffdRCJ5tDA47R7ObS"
+      "expectedValue": "e04e03c9effdyyAUyICZuChfxa"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10223,7 +10223,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "cfe0ec1d-a8df-4295-9160-ee11909c938a"
+      "expectedValue": "4f4a9aa0-1a9a-4b8a-ba19-ef1f8e1338fa"
     },
     {
       "fn": "jsonc-parser#modifyAndApply",
