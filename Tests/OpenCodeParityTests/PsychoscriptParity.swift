@@ -45,7 +45,8 @@ enum PsychoscriptParity {
         case .bool(let b)?: return b ? 1 : 0
         case .null?: return 0
         case .string(let s)?:
-            return s.isEmpty ? 0 : (Double(s) ?? .nan)
+            guard let wf = s.wellFormedString else { return .nan }
+            return wf.isEmpty ? 0 : (Double(wf) ?? .nan)
         default: return .nan
         }
     }
@@ -62,7 +63,7 @@ enum PsychoscriptParity {
             if case .string(let name)? = args.first, name == "a" || name == "b" { return .string("item:\(name)") }
             let shown: String
             switch args.first {
-            case .string(let s)?: shown = s
+            case .string(let s)?: shown = s.toHostString()
             case .number(let d)?: shown = d == d.rounded() && abs(d) < 1e15 ? String(Int64(d)) : String(d)
             case .null?: shown = "null"
             case .bool(let b)?: shown = b ? "true" : "false"

@@ -29,12 +29,12 @@ extension CodemodeLanguage {
                 return .object(copy)
             }
             if let date = obj as? DateObj { return .object(remember(DateObj(proto: builtins.Date, epochMs: date.epochMs))) }
-            if let rx = obj as? RegExpObj { return .object(remember(RegExpObj(proto: builtins.RegExp, pattern: rx.pattern, flags: rx.flags))) }
+            if let rx = obj as? RegExpObj { return .object(remember(RegExpObj(proto: builtins.RegExp, compiled: rx.compiled))) }
             if let bytes = obj as? Bytes { return .object(remember(Bytes(proto: builtins.Uint8Array, data: bytes.data))) }
             if let err = obj as? ErrorObj {
                 let name = get(err, "name")
                 let message = get(err, "message")
-                let proto: Obj = if case .string(let n) = name, let type = ErrorType(rawValue: n) { builtins.errorProto(type) } else { builtins.Error }
+                let proto: Obj = if case .string(let n) = name, let type = ErrorType(rawValue: n.toWellFormedString()) { builtins.errorProto(type) } else { builtins.Error }
                 let copy = remember(createErrorValue(proto, message: message.isUndefined ? nil : coerceToString(message)))
                 if case .string(let stack) = getOwn(err, "stack") { define(copy, "stack", .string(stack), hidden) }
                 if hasOwn(err, "cause") { define(copy, "cause", try structuredCloneValue(getOwn(err, "cause"), builtins: builtins, memo: &memo), hidden) }
@@ -62,6 +62,12 @@ extension CodemodeLanguage {
     /// A host call's argument as the host receives it: a copy, so neither side sees the other's later changes
     /// (upstream `toHost`). A program function is dropped (`translate.functions == .drop`; nil here) or fails the
     /// call; a promise is awaited (`translate.promises == .await`) or fails it; values nest at most 32 deep.
+    ///
+    /// UTF-16 lone surrogates: within `CodemodeLanguage.Value`, `JSString` strings and object property keys are
+    /// copied losslessly across `Host.Fn` boundaries (matching upstream JS `toHost`/`fromHost`, where host functions
+    /// receive and return JS strings directly). Only when crossing out into Swift `String` / `OpenCodeSchema.JSONValue`
+    /// (`toJsonValue`, `tryFastBoundaryOrJson`, `CodemodeEngine.Tool`, `Result.logs`, `Diagnostic.message`) are lone
+    /// surrogates replaced with U+FFFD (`JSString.toHostString()`) because Swift `String` cannot hold unpaired surrogates.
     // Upstream: psychoscript/src/runtime/extensions.ts#toHost (adapted).
     static func copyToHost(
         _ value: Value,
@@ -122,7 +128,7 @@ extension CodemodeLanguage {
         if let err = obj as? ErrorObj {
             let name = coerceToString(get(err, "name"))
             let message = get(err, "message")
-            let proto: Obj = if let type = ErrorType(rawValue: name) { builtins.errorProto(type) } else { builtins.Error }
+            let proto: Obj = if let type = ErrorType(rawValue: name.toWellFormedString()) { builtins.errorProto(type) } else { builtins.Error }
             let copy = createErrorValue(proto, message: message.isUndefined ? "" : coerceToString(message))
             for (k, v) in entries(err) where k != "stack" {
                 if let item = try await next(v) { define(copy, k, item) }

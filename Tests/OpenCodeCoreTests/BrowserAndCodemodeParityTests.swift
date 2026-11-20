@@ -792,7 +792,7 @@ struct BrowserAndCodemodeParityTests {
         #expect(arr.describe == "an array")
         #expect(arr.jsToString() == "1,,x")
         #expect(arr.toHost { v in
-            if case .string(let s) = v { return .string(s) }
+            if case .string(let s) = v { return .string(s.toHostString()) }
             if case .number(let n) = v { return .int(Int64(n)) }
             return nil
         } == .array([.int(1), .null, .string("x")]))

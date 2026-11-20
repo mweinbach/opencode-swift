@@ -1484,6 +1484,186 @@
         ]
       },
       {
+        "name": "utf16: indexing astral emoji and lone surrogate units",
+        "args": [
+          "const s = \"😀\"; return [s.length, s[0].length, s[0].charCodeAt(0), s[1].charCodeAt(0), s[2], s.at(-1).charCodeAt(0), s.at(-2).charCodeAt(0)]"
+        ]
+      },
+      {
+        "name": "utf16: split empty separator on astral text and lone surrogates",
+        "args": [
+          "return [\"a😀b\".split(\"\").map(c => c.charCodeAt(0)), \"a\\ud800\\udc00b\".split(\"\").map(c => c.charCodeAt(0)), \"\\ud800\\ud83d\\ude00\".split(\"\").map(c => c.charCodeAt(0))]"
+        ]
+      },
+      {
+        "name": "utf16: split on surrogate code unit separator and negative limit",
+        "args": [
+          "const parts = \"a😀b\".split(\"\\ud83d\"); return [parts.length, parts[0], parts[1].length, parts[1].charCodeAt(0), parts[1].charCodeAt(1), \"a\\ud800b\\ud800c\".split(\"\\ud800\"), \"a,b,c\".split(\",\", -1)]"
+        ]
+      },
+      {
+        "name": "utf16: String.fromCharCode lone surrogates and re-pairing",
+        "args": [
+          "const hi = String.fromCharCode(0xD83D); const lo = String.fromCharCode(0xDE00); const lone = String.fromCharCode(0xD800, 0xDC00, 0xD800); return [hi.length, hi.charCodeAt(0), hi + lo === \"😀\", String.fromCharCode(0xD83D, 0xDE00) === \"😀\", lone.length, lone.charCodeAt(2), lone.isWellFormed()]"
+        ]
+      },
+      {
+        "name": "utf16: String.fromCodePoint lone surrogates, astral, and range errors",
+        "args": [
+          "const s = String.fromCodePoint(0xD800, 0xD83D, 0xDE00, 0x1F600); const errs = []; for (const bad of [-1, 0x110000, 1.5, NaN]) { try { String.fromCodePoint(bad) } catch (e) { errs.push([e.name, e.message]) } } return [s.length, s.charCodeAt(0), s.slice(1, 3) === \"😀\", s.slice(3) === \"😀\", s.isWellFormed(), errs]"
+        ]
+      },
+      {
+        "name": "utf16: string and template literals with \\uXXXX and \\u{...} lone surrogates",
+        "args": [
+          "const a = \"\\ud800\"; const b = \"\\u{d800}\"; const c = `\\ud83d${\"\\ude00\"}`; const d = `\\udc00`; return [a === b, a.length, a.charCodeAt(0), c === \"😀\", d.charCodeAt(0), d.isWellFormed()]"
+        ]
+      },
+      {
+        "name": "utf16: charAt, slice, substring, and substr cutting surrogate pairs",
+        "args": [
+          "const s = \"a😀b\"; return [s.charAt(1).charCodeAt(0), s.charAt(2).charCodeAt(0), s.slice(1, 2).charCodeAt(0), s.slice(2, 3).charCodeAt(0), s.substring(2, 1).charCodeAt(0), s.substr(1, 1).charCodeAt(0), s.substr(2, 1).charCodeAt(0), s.slice(1, 2) + s.slice(2, 3) === \"😀\"]"
+        ]
+      },
+      {
+        "name": "utf16: charCodeAt and codePointAt on pairs, lone surrogates, and bounds",
+        "args": [
+          "const s = \"😀\\ud800\\udc00\\ud83d\\ud83d\\ude00\"; return [s.codePointAt(0), s.codePointAt(1), s.codePointAt(2), s.codePointAt(3), s.codePointAt(4), s.codePointAt(5), s.codePointAt(6), s.codePointAt(7), Number.isNaN(s.charCodeAt(99))]"
+        ]
+      },
+      {
+        "name": "utf16: concatenation, concat, join, and String.raw re-pairing halves",
+        "args": [
+          "const hi = \"\\ud83d\", lo = \"\\ude00\"; return [hi + lo === \"😀\", hi.concat(lo) === \"😀\", [hi, lo].join(\"\") === \"😀\", String.raw({ raw: [hi, \"\"] }, lo) === \"😀\", `${hi}${lo}` === \"😀\", (hi + lo).isWellFormed(), (lo + hi).isWellFormed(), (lo + hi).length]"
+        ]
+      },
+      {
+        "name": "utf16: indexOf, lastIndexOf, includes, startsWith, endsWith on UTF-16 halves",
+        "args": [
+          "const s = \"a😀b😀\"; return [s.indexOf(\"\\ude00\"), s.indexOf(\"\\ud83d\", 2), s.indexOf(\"b\", 99), s.lastIndexOf(\"\\ud83d\"), s.lastIndexOf(\"\\ud83d\", NaN), s.lastIndexOf(\"x\", -5), s.includes(\"\\ude00\"), s.includes(\"\\ud800\"), \"😀\".startsWith(\"\\ud83d\"), \"😀\".endsWith(\"\\ude00\")]"
+        ]
+      },
+      {
+        "name": "utf16: includes, startsWith, endsWith reject RegExp argument",
+        "args": [
+          "const out = []; for (const m of [\"includes\", \"startsWith\", \"endsWith\"]) { try { \"a\"[m](/a/) } catch (e) { out.push([e.name, e.message]) } } return out"
+        ]
+      },
+      {
+        "name": "utf16: padStart and padEnd cutting and re-pairing surrogate pairs",
+        "args": [
+          "const a = \"x\".padStart(2, \"😀\"); const b = \"x\".padEnd(2, \"😀\"); return [a.length, a.charCodeAt(0), a.charCodeAt(1), b.length, b.charCodeAt(0), b.charCodeAt(1), \"\\ude00\".padStart(2, \"\\ud83d\") === \"😀\", \"\\ud83d\".padEnd(2, \"\\ude00\") === \"😀\"]"
+        ]
+      },
+      {
+        "name": "utf16: repeat creating surrogate pairs across repetition boundaries",
+        "args": [
+          "const r = \"\\ude00\\ud83d\".repeat(2); return [r.length, r.charCodeAt(0), r.slice(1, 3) === \"😀\", r.charCodeAt(3), \"\\ud800\".repeat(3).split(\"\").map(c => c.charCodeAt(0))]"
+        ]
+      },
+      {
+        "name": "utf16: replace and replaceAll with string patterns on surrogate halves",
+        "args": [
+          "const a = \"a😀b\".replace(\"\\ude00\", \"!\"); const b = \"😀😀\".replaceAll(\"\\ud83d\", \"\\ud83d\"); const c = \"a😀b\".replace(\"\\ud83d\", (m, pos) => m.charCodeAt(0) + \"@\" + pos + \":\"); return [a.length, a.charCodeAt(1), a.charCodeAt(2), b === \"😀😀\", c.slice(0, 8), c.charCodeAt(8)]"
+        ]
+      },
+      {
+        "name": "utf16: UTF-16 code-unit comparison, equality, and Array.prototype.sort",
+        "args": [
+          "const arr = [\"\\udfff\", \"\\ud800\", \"a\", \"\\uE000\", \"\\uD7FF\", \"😀\"]; const sorted = arr.slice().sort().map(s => s.codePointAt(0)); return [sorted, \"\\ud800\" < \"\\ud801\", \"\\uD7FF\" < \"\\ud800\", \"\\udfff\" < \"\\uE000\", \"😀\" < \"\\uE000\", \"\\u00e9\" === \"e\\u0301\", \"\\ud800\" === \"\\uFFFD\", Object.is(\"\\ud800\", \"\\ud800\"), Object.is(\"\\ud800\", \"\\ud801\")]"
+        ]
+      },
+      {
+        "name": "utf16: object property keys with lone surrogates and re-paired keys",
+        "args": [
+          "const o = { [\"\\ud83d\" + \"\\ude00\"]: \"emoji\", [\"\\ud800\"]: \"hi\", [\"\\udc00\"]: \"lo\", \"\\ud801\": \"lit\" }; return [o[\"😀\"], o[\"\\ud800\"], o[\"\\udc00\"], o[\"\\ud801\"], o[\"\\uFFFD\"], Object.keys(o).map(k => k.codePointAt(0)), JSON.stringify(o)]"
+        ]
+      },
+      {
+        "name": "utf16: Map and Set keys distinguish lone surrogates and re-paired pairs",
+        "args": [
+          "const m = new Map([[\"\\ud800\", 1], [\"\\ud801\", 2], [\"\\ud83d\" + \"\\ude00\", 3]]); const s = new Set([\"\\ud800\", \"\\ud800\", \"\\ud801\", \"\\uFFFD\"]); return [m.get(\"\\ud800\"), m.get(\"\\ud801\"), m.get(\"😀\"), m.get(\"\\uFFFD\"), m.size, s.size, s.has(\"\\ud800\"), s.has(\"\\ud801\"), s.has(\"\\uFFFD\")]"
+        ]
+      },
+      {
+        "name": "utf16: JSON.stringify escapes lone surrogates in strings and keys",
+        "args": [
+          "return [JSON.stringify(\"\\ud800\"), JSON.stringify(\"\\udc00\\ud800\"), JSON.stringify(\"\\ud83d\\ude00\"), JSON.stringify(\"\\ud83d\\ud83d\\ude00\"), JSON.stringify({ [\"\\ud800\"]: \"\\udc00\", pair: \"😀\" })]"
+        ]
+      },
+      {
+        "name": "utf16: JSON.stringify replacer array and unescaped space with lone surrogates",
+        "args": [
+          "const spaced = JSON.stringify({ a: 1 }, null, \"\\ud800\"); const filtered = JSON.stringify({ [\"\\ud800\"]: 1, [\"\\ud801\"]: 2, ok: 3 }, [\"\\ud800\", \"ok\"]); return [spaced.length, Array.from({ length: spaced.length }, (_, i) => spaced.charCodeAt(i)), filtered]"
+        ]
+      },
+      {
+        "name": "utf16: JSON.parse escaped and raw lone surrogates and reviver keys",
+        "args": [
+          "const a = JSON.parse('\"\\\\ud800\"'); const b = JSON.parse('\"\\\\udc00\\\\ud800\"'); const c = JSON.parse('\"\\\\ud83d\\\\ude00\"'); const raw = JSON.parse('\"' + \"\\ud800\" + '\"'); const keys = []; JSON.parse('{\"\\\\ud800\":\"\\\\udc00\"}', (k, v) => { keys.push([k.length, k.length ? k.charCodeAt(0) : -1]); return v }); return [a.length, a.charCodeAt(0), a.isWellFormed(), b.charCodeAt(0), b.charCodeAt(1), c === \"😀\", raw.charCodeAt(0), keys]"
+        ]
+      },
+      {
+        "name": "utf16: isWellFormed and toWellFormed across valid, reversed, and nested surrogates",
+        "args": [
+          "const samples = [\"\", \"abc\", \"😀\", \"\\ud800\", \"\\udc00\", \"\\udc00\\ud800\", \"\\ud83d\\ud83d\\ude00\", \"\\ud83d\\ude00\\ud800\"]; return [samples.map(s => s.isWellFormed()), samples.map(s => s.toWellFormed()), \"\\ud83d\\ud83d\\ude00\".toWellFormed() === \"\\uFFFD😀\"]"
+        ]
+      },
+      {
+        "name": "utf16: String.prototype.normalize preserves lone surrogates between spans",
+        "args": [
+          "const s = \"e\\u0301\\ud800e\\u0301\\udc00\\ud83d\\ude00\"; const nfc = s.normalize(\"NFC\"); const nfd = \"\\u00e9\\ud800\".normalize(\"NFD\"); let err; try { \"a\".normalize(\"BAD\") } catch (e) { err = [e.name, e.message] } return [Array.from({ length: nfc.length }, (_, i) => nfc.charCodeAt(i)), Array.from({ length: nfd.length }, (_, i) => nfd.charCodeAt(i)), err]"
+        ]
+      },
+      {
+        "name": "utf16: String.prototype.localeCompare with lone surrogates",
+        "args": [
+          "return [\"\\ud800\".localeCompare(\"\\ud801\"), \"\\ud800\".localeCompare(\"\\udfff\"), \"\\ud800\".localeCompare(\"\\uD7FF\"), \"\\ud800\".localeCompare(\"\\uE000\"), \"😀\".localeCompare(\"\\ud800\"), \"\\ud800\".localeCompare(\"😀\"), \"A\\ud800\".localeCompare(\"a\\ud801\"), \"A\\ud800\".localeCompare(\"a\\ud800\")]"
+        ]
+      },
+      {
+        "name": "utf16: case conversion and trim preserve lone surrogates",
+        "args": [
+          "return [\"a\\ud800b\".toUpperCase().split(\"\").map(c => c.charCodeAt(0)), \"A\\udc00B\".toLowerCase().split(\"\").map(c => c.charCodeAt(0)), \" \\t\\uFEFF\\ud800\\u00A0 \".trim().charCodeAt(0), \"  \\ud800  \".trimLeft().length, \"  \\ud800  \".trimRight().length]"
+        ]
+      },
+      {
+        "name": "utf16: TextEncoder replaces lone surrogates with U+FFFD and preserves pairs",
+        "args": [
+          "const enc = new TextEncoder(); return [Array.from(enc.encode(\"\\ud800\")), Array.from(enc.encode(\"\\udc00\")), Array.from(enc.encode(\"\\ud83d\\ude00\")), Array.from(enc.encode(\"\\ude00\\ud83d\")), Array.from(enc.encode(\"a\\ud800b\"))]"
+        ]
+      },
+      {
+        "name": "utf16: Buffer utf8 vs utf16le with lone surrogates",
+        "args": [
+          "const u8 = Buffer.from(\"\\ud800\", \"utf8\"); const u16 = Buffer.from(\"\\ud800\", \"utf16le\"); const rt = u16.toString(\"utf16le\"); return [Array.from(u8), Buffer.byteLength(\"\\ud800\", \"utf8\"), Array.from(u16), Buffer.byteLength(\"\\ud800\", \"utf16le\"), rt.length, rt.charCodeAt(0), rt.isWellFormed()]"
+        ]
+      },
+      {
+        "name": "utf16: encodeURIComponent and encodeURI throw URIError on lone surrogates",
+        "args": [
+          "const out = []; for (const [name, fn] of [[\"encodeURIComponent\", encodeURIComponent], [\"encodeURI\", encodeURI]]) { for (const bad of [\"\\ud800\", \"\\udc00\", \"a\\ud83db\", \"\\ude00\\ud83d\"]) { try { fn(bad); out.push(\"ok\") } catch (e) { out.push([name, e.name, e.message]) } } } return [out, encodeURIComponent(\"\\ud83d\\ude00\"), encodeURI(\"https://a.test/😀\")]"
+        ]
+      },
+      {
+        "name": "utf16: decodeURIComponent and decodeURI with raw and percent-encoded surrogates",
+        "args": [
+          "const raw1 = decodeURIComponent(\"\\ud800%20\\udc00\"); const raw2 = decodeURI(\"\\ud800%2F\"); const errs = []; for (const fn of [decodeURIComponent, decodeURI]) { try { fn(\"%ED%A0%80\") } catch (e) { errs.push([e.name, e.message]) } } return [Array.from({ length: raw1.length }, (_, i) => raw1.charCodeAt(i)), Array.from({ length: raw2.length }, (_, i) => raw2.charCodeAt(i)), errs]"
+        ]
+      },
+      {
+        "name": "utf16: string iteration, Object enumeration, spread, and property descriptors",
+        "args": [
+          "const s = \"\\ud800😀a\"; const ofArr = []; for (const c of s) ofArr.push([c.length, c.codePointAt(0)]); const inArr = []; for (const k in s) inArr.push(k); const sp = { ...s }; const { 0: first, ...rest } = s; return [ofArr, inArr, Object.keys(s), Object.values(s).map(v => v.codePointAt(0)), Object.getOwnPropertyNames(s), Object.hasOwn(s, 2), Object.hasOwn(s, 3), Object.getOwnPropertyDescriptor(s, 2).value.charCodeAt(0), Object.keys(sp), first.charCodeAt(0), Object.keys(rest)]"
+        ]
+      },
+      {
+        "name": "utf16: btoa, RegExp.escape, URLSearchParams, structuredClone, echo, and console.log",
+        "args": [
+          "let btoaErr; try { btoa(\"\\ud800\") } catch (e) { btoaErr = [e.name, e.message] } const cloned = structuredClone({ [\"\\ud800\"]: \"\\udc00\", s: \"\\ud83d\" }); const echoed = echo({ [\"\\ud800\"]: \"\\udc00\", s: \"\\ud83d\" }); const usp = new URLSearchParams([[\"\\ud800\", \"\\udc00\"]]); console.log({ [\"\\ud800\"]: \"\\udc00\" }); return [btoaErr, RegExp.escape(\"\\ud800\"), RegExp.escape(\"😀\"), RegExp.escape(\"\\ude00\\ud83d\"), cloned[\"\\ud800\"].charCodeAt(0), cloned.s.charCodeAt(0), echoed[\"\\ud800\"].charCodeAt(0), echoed.s.charCodeAt(0), usp.toString(), usp.get(\"\\uFFFD\")]"
+        ]
+      },
+      {
         "name": "regexp: non-unicode dot vs unicode dot on emoji",
         "args": [
           "return [/^.$/.test(\"😀\"), /^..$/.test(\"😀\"), /^.$/u.test(\"😀\"), /^.$/v.test(\"😀\"), /^.$/.test(\"a\")]"
@@ -1937,6 +2117,42 @@
         "name": "regexp: constructor undefined vs null and omitted exec/test arg",
         "args": [
           "return [new RegExp().source, new RegExp(undefined).source, new RegExp(null).source, /undefined/.test(), /undefined/.exec()[0]]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: lone surrogate literals and RegExp constructor matching",
+        "args": [
+          "const rx1 = /\\ud800/; const rx2 = new RegExp(\"\\ud800\"); const rx3 = /\\ud83d/u; const rx4 = /\\ude00/u; const rx5 = new RegExp(\"\\ud800\", \"u\"); return [rx1.test(\"\\ud800\"), rx1.test(\"\\uFFFD\"), rx2.test(\"\\ud800\"), rx2.source.charCodeAt(0), rx2.toString().charCodeAt(1), rx3.test(\"\\ud83d\"), rx3.test(\"😀\"), rx4.test(\"\\ude00\"), rx4.test(\"😀\"), rx5.test(\"\\ud800\"), rx5.test(\"\\ud800\\udc00\"), new RegExp(rx2).test(\"\\ud800\")]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: non-u dot matches surrogate halves and u-mode dot matches whole pair",
+        "args": [
+          "const halves = \"a😀b\".match(/./g); const points = \"a😀b\".match(/./gu); const lone = \"\\ud800\\udc01\\ud800\".match(/./gu); return [halves.length, halves.map(c => c.charCodeAt(0)), halves[1] + halves[2] === \"😀\", points.length, points[1] === \"😀\", lone.length, lone[0].codePointAt(0), lone[1].charCodeAt(0)]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: exec, match, matchAll, and search with lone surrogates and indices",
+        "args": [
+          "const s = \"x\\ud800y\\udc00z\"; const m = /(\\ud800)y(\\udc00)/d.exec(s); const all = Array.from(s.matchAll(/[\\ud800-\\udfff]/g)).map(x => [x[0].charCodeAt(0), x.index, x.input.charCodeAt(1)]); const nm = /(?<hi>\\ud800).(?<lo>\\udc00)/.exec(s); return [m[0].length, m[1].charCodeAt(0), m[2].charCodeAt(0), m.index, m.input === s, m.indices[1], m.indices[2], nm.groups.hi.charCodeAt(0), nm.groups.lo.charCodeAt(0), all, s.search(\"\\udc00\"), s.match(\"\\ud800\")[0].charCodeAt(0)]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: replace and replaceAll with lone surrogates, templates, callbacks, and re-pairing",
+        "args": [
+          "const repaired = \"a\\ud83dXb\".replace(/X/, \"\\ude00\"); const swapped = \"\\ud800-\\udc00\".replace(/(\\ud800)-(\\udc00)/, \"$2$1\"); const cb = \"a\\ud800b\\udc00\".replace(/[\\ud800\\udc00]/g, (m, off) => m + \"@\" + off); const allRep = \"\\ud800,\\ud800\".replaceAll(/\\ud800/g, \"\\udc00\"); return [repaired === \"a😀b\", repaired.isWellFormed(), swapped.length, swapped.charCodeAt(0), swapped.charCodeAt(1), cb.charCodeAt(1), cb.charCodeAt(5), cb.slice(2, 5), allRep.split(\",\").map(c => c.charCodeAt(0))]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: split with lone surrogates, captures, and splitting through a surrogate pair",
+        "args": [
+          "const sp1 = \"a\\ud800b\\udc00c\".split(/([\\ud800\\udc00])/); const sp2 = \"😀\".split(/(?=.)/); const sp3 = \"😀\".split(/(?=.)/u); const sp4 = \"a\\ud800b\\ud800c\".split(new RegExp(\"\\ud800\")); return [sp1.length, sp1[0], sp1[1].charCodeAt(0), sp1[2], sp1[3].charCodeAt(0), sp1[4], sp2.length, sp2.map(c => c.charCodeAt(0)), sp2[0] + sp2[1] === \"😀\", sp3, sp4]"
+        ]
+      },
+      {
+        "name": "utf16+regexp: backreferences, lookbehind, and structuredClone on lone-surrogate RegExp",
+        "args": [
+          "const dup = /(\\ud800)\\1/.test(\"\\ud800\\ud800\"); const nonDup = /(\\ud800)\\1/.test(\"\\ud800\\ud801\"); const lb = /(?<=\\ud800)a/.exec(\"\\ud800a\"); const lbPair = /(?<=\\ud83d)a/u.exec(\"😀a\"); const cloned = structuredClone(new RegExp(\"\\ud800\")); return [dup, nonDup, lb ? lb.index : -1, lbPair, cloned.source.charCodeAt(0), cloned.test(\"\\ud800\"), cloned.test(\"\\uFFFD\")]"
         ]
       }
     ]
