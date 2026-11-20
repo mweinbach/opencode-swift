@@ -317,13 +317,13 @@ struct CoreGapCompletionsTests {
 
     // MARK: - Database Migrations, schemaBootstrap & Drizzle Query Builders
 
-    @Test("Database migrations registry contains all 62 canonical definitions and executes real SQL")
+    @Test("Database migrations registry contains all 64 canonical definitions and executes real SQL")
     func databaseMigrationsAndSchemaBootstrap() throws {
         let all = CoreDatabaseMigration.migrations
-        #expect(all.count == 62)
-        #expect(Set(all.map(\.id)).count == 62)
+        #expect(all.count == 64)
+        #expect(Set(all.map(\.id)).count == 64)
         #expect(all.first?.id == "20260127222353_familiar_lady_ursula")
-        #expect(all.last?.id == "20261116213417_automation_active_index")
+        #expect(all.last?.id == "20261120004954_machine-key")
         #expect(CoreDatabaseMigration.Migrations.m_20260823191254_nullable_workspace_binding.foreignKeys == false)
 
         // Fresh DB bootstrap via schemaBootstrap
@@ -342,7 +342,7 @@ struct CoreGapCompletionsTests {
         let cols = try db2.query("PRAGMA table_info('project')").compactMap { $0.string("name") }
         #expect(cols.contains("commands"))
         let appliedCount = try db2.queryScalar("SELECT count(*) FROM migration")?.int64Value
-        #expect(appliedCount == 62)
+        #expect(appliedCount == 64)
         let db2Tables = try db2.query("SELECT name FROM sqlite_master WHERE type = 'table'").compactMap { $0.string("name") }
         #expect(db2Tables.contains("session_v2"))
         #expect(db2Tables.contains("automation"))

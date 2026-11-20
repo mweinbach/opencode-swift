@@ -424,6 +424,13 @@ public enum CoreDatabaseSchema {
         );
         """,
         """
+        CREATE TABLE `machine` (
+          `id` text PRIMARY KEY,
+          `key` text,
+          `time_created` integer NOT NULL
+        );
+        """,
+        """
         CREATE TABLE `permission` (
           `id` text PRIMARY KEY,
           `project_id` text NOT NULL,
@@ -621,6 +628,7 @@ public enum CoreDatabaseSchema {
         "CREATE INDEX `job_session_idx` ON `job` (`session_id`);",
         "CREATE INDEX `job_child_session_idx` ON `job` (`child_session_id`);",
         "CREATE INDEX `job_id_idx` ON `job` (`id`);",
+        "CREATE UNIQUE INDEX `machine_key_idx` ON `machine` (`key`);",
         "CREATE UNIQUE INDEX `permission_project_action_resource_idx` ON `permission` (`project_id`,`action`,`resource`);",
         "CREATE INDEX `blob_ref_hash_idx` ON `blob_ref` (`hash`);",
         "CREATE INDEX `blob_ref_session_seq_idx` ON `blob_ref` (`session_id`,`seq`);",
@@ -638,7 +646,7 @@ public enum CoreDatabaseSchema {
     ]
 
     /// Fresh-database schema bootstrap migration executing all canonical DDL statements (`core/src/database/schema.gen.ts#default`).
-    // parity: core/src/database/schema.gen.ts#default [status=implemented hash=617ccef3d64a]
+    // parity: core/src/database/schema.gen.ts#default [status=implemented hash=3b0df281f363]
     public static let schemaBootstrap = CoreDatabaseMigration.Migration(id: "schema.gen") { tx, _ in
         for statement in bootstrapStatements {
             _ = try tx.execute(statement)
