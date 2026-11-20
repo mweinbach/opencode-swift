@@ -423,8 +423,9 @@ struct RealPlatformFixesTests {
 
 // MARK: - Serialized Suite for Live OS POSIX Signal Delivery
 
-@Suite("Real POSIX Signal Delivery Tests", .serialized)
-struct RealPosixSignalDeliveryTests {
+// Lives in the serialized `ProcessSignalTests` suite: both tests reset the process-global signal registry,
+// so they must never run concurrently.
+extension ProcessSignalTests {
     @Test("ProcessSignal.install dispatches real OS SIGUSR1 signal to registered Swift subscriber")
     func realPosixSIGUSR1DispatchesToSubscriber() async throws {
         #if os(macOS) || os(Linux)

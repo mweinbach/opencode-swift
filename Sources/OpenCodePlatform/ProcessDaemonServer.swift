@@ -182,10 +182,12 @@ extension ProcessDaemon {
                             #endif
                         }
                     }
-                    if inbound.cancelled {
-                        throw DaemonError("connection cancelled")
-                    }
+                    // Like a real socket or pipe, bytes the peer wrote before it cancelled stay readable;
+                    // cancellation is only reported once the buffer is drained.
                     if inbound.bytes.isEmpty {
+                        if inbound.cancelled {
+                            throw DaemonError("connection cancelled")
+                        }
                         return []
                     }
                     let count = min(maxCount, inbound.bytes.count)
