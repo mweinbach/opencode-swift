@@ -83,7 +83,7 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Context [status=adapted hash=a4eb9e6b76e3]
+    // parity: schema/src/tool.ts#Context [status=adapted hash=5d22f8d429b3]
     public struct Context: Sendable {
         public let sessionID: SessionID
         public let agent: AgentSchema.ID
@@ -91,6 +91,8 @@ public enum ToolSchema {
         public let id: CallID
         public let progress: @Sendable (Metadata) async -> Void
         public let cancel: (@Sendable () async -> Void)?
+        /// True when the tool is invoked from inside Code Mode (`execute`).
+        public let codemode: Bool?
 
         public init(
             sessionID: SessionID,
@@ -98,7 +100,8 @@ public enum ToolSchema {
             messageID: String,
             id: CallID,
             progress: @escaping @Sendable (Metadata) async -> Void,
-            cancel: (@Sendable () async -> Void)? = nil
+            cancel: (@Sendable () async -> Void)? = nil,
+            codemode: Bool? = nil
         ) {
             self.sessionID = sessionID
             self.agent = agent
@@ -106,6 +109,7 @@ public enum ToolSchema {
             self.id = id
             self.progress = progress
             self.cancel = cancel
+            self.codemode = codemode
         }
     }
 
@@ -120,12 +124,78 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Options [status=implemented hash=02e6733edd01]
+    /// The object form of `Options.codemode`: Code Mode settings that may override the direct tool's
+    /// description and input/output schemas inside Code Mode.
+    public struct CodeModeOptions: Equatable, Hashable, Sendable, Codable {
+        public let pinned: Bool?
+        public let description: String?
+        public let input: ValueSchema?
+        public let output: ValueSchema?
+
+        public init(
+            pinned: Bool? = nil,
+            description: String? = nil,
+            input: ValueSchema? = nil,
+            output: ValueSchema? = nil
+        ) {
+            self.pinned = pinned
+            self.description = description
+            self.input = input
+            self.output = output
+        }
+    }
+
+    /// `Options.codemode`: `boolean | { pinned?, description?, input?, output? }`.
+    public enum CodeModeSetting: Equatable, Hashable, Sendable, Codable {
+        case enabled(Bool)
+        case configured(CodeModeOptions)
+
+        public init(from decoder: Decoder) throws {
+            let single = try decoder.singleValueContainer()
+            if let flag = try? single.decode(Bool.self) {
+                self = .enabled(flag)
+            } else {
+                self = .configured(try single.decode(CodeModeOptions.self))
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var single = encoder.singleValueContainer()
+            switch self {
+            case .enabled(let flag): try single.encode(flag)
+            case .configured(let options): try single.encode(options)
+            }
+        }
+    }
+
+    // parity: schema/src/tool.ts#Options [status=implemented hash=e038aa8a25d1]
     public struct Options: Equatable, Hashable, Sendable, Codable {
         public let namespace: String?
         public let permission: String?
-        public let codemode: Bool?
-        public let pinned: Bool?
+        /// `codemode` exactly as declared: a boolean, or an object of Code Mode settings.
+        public let codemodeSetting: CodeModeSetting?
+        /// Deprecated: use `codemode.pinned` instead. Removed in the next minor.
+        public let legacyPinned: Bool?
+
+        /// The boolean view of `codemode`: an object form leaves Code Mode on.
+        public var codemode: Bool? {
+            switch codemodeSetting {
+            case .enabled(let flag): return flag
+            case .configured: return true
+            case nil: return nil
+            }
+        }
+
+        /// The Code Mode settings object, when `codemode` is one.
+        public var codemodeOptions: CodeModeOptions? {
+            if case .configured(let options) = codemodeSetting { return options }
+            return nil
+        }
+
+        /// `codemode.pinned`, falling back to the deprecated top-level `pinned`.
+        public var pinned: Bool? {
+            codemodeOptions?.pinned ?? legacyPinned
+        }
 
         public init(
             namespace: String? = nil,
@@ -135,8 +205,47 @@ public enum ToolSchema {
         ) {
             self.namespace = namespace
             self.permission = permission
-            self.codemode = codemode
-            self.pinned = (codemode == false) ? nil : pinned
+            if let pinned, codemode != false {
+                self.codemodeSetting = .configured(CodeModeOptions(pinned: pinned))
+            } else {
+                self.codemodeSetting = codemode.map { .enabled($0) }
+            }
+            self.legacyPinned = nil
+        }
+
+        public init(
+            namespace: String? = nil,
+            permission: String? = nil,
+            codemodeSetting: CodeModeSetting?,
+            legacyPinned: Bool? = nil
+        ) {
+            self.namespace = namespace
+            self.permission = permission
+            self.codemodeSetting = codemodeSetting
+            self.legacyPinned = legacyPinned
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case namespace
+            case permission
+            case codemode
+            case pinned
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.namespace = try container.decodeIfPresent(String.self, forKey: .namespace)
+            self.permission = try container.decodeIfPresent(String.self, forKey: .permission)
+            self.codemodeSetting = try container.decodeIfPresent(CodeModeSetting.self, forKey: .codemode)
+            self.legacyPinned = try container.decodeIfPresent(Bool.self, forKey: .pinned)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(namespace, forKey: .namespace)
+            try container.encodeIfPresent(permission, forKey: .permission)
+            try container.encodeIfPresent(codemodeSetting, forKey: .codemode)
+            try container.encodeIfPresent(legacyPinned, forKey: .pinned)
         }
     }
 
