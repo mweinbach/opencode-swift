@@ -1705,7 +1705,10 @@ extension ProcessDaemon {
                 public func accept() throws -> Connection? {
                     #if os(Windows)
                     return try state.withLock { s -> Connection? in
-                        if s.stopped || !(try s.pending.ready()) {
+                        if s.stopped {
+                            return nil
+                        }
+                        guard try s.pending.ready() else {
                             return nil
                         }
                         // Create the next instance BEFORE handing off the connected one so the

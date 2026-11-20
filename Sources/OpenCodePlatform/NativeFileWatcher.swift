@@ -1967,8 +1967,11 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
         lifecycle.stopEvent = stopEv
         cond.unlock()
 
+        let stopEvBits = UInt(bitPattern: stopEv)
         Thread.detachNewThread { [self] in
-            self.runEventLoop(stopEvent: stopEv)
+            if let ev = HANDLE(bitPattern: stopEvBits) {
+                self.runEventLoop(stopEvent: ev)
+            }
         }
     }
 

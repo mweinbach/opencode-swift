@@ -7,6 +7,11 @@ shift || true
 
 EXTRA_FLAGS=(--disable-xctest --enable-swift-testing)
 
+# Avoid Swift cooperative-pool starvation on 3-4 vCPU CI runners when running >1,100 tests.
+if [[ "${CI:-}" == "true" ]]; then
+  EXTRA_FLAGS+=(--no-parallel)
+fi
+
 # On macOS with Command Line Tools (without full Xcode.app), Testing.framework lives under
 # CommandLineTools/Library/Developer/Frameworks and is not added to SwiftPM's default search paths.
 if [[ "$(uname -s)" == "Darwin" ]] && command -v xcode-select >/dev/null 2>&1; then

@@ -2610,7 +2610,7 @@ extension ProcessDaemon {
             return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
             #else
             let url = URL(fileURLWithPath: path)
-            FileManager.default.createFile(atPath: path, contents: Data())
+            _ = FileManager.default.createFile(atPath: path, contents: Data())
             return try FileHandle(forWritingTo: url)
             #endif
         }
