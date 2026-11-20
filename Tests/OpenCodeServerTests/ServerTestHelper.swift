@@ -210,16 +210,22 @@ enum ServerTestFixture {
     }
 
     /// Collects the first `count` events from an `AsyncThrowingStream` safely with a timeout.
+    /// Optionally invokes `onFirstEvent` immediately after the first event (e.g. `server.connected`)
+    /// is observed so callers can deterministically trigger follow-up actions without arbitrary sleeps.
     static func collectEvents<T: Sendable>(
         from stream: AsyncThrowingStream<T, any Error>,
         count: Int,
-        timeoutMs: Int = 5_000
+        timeoutMs: Int = 5_000,
+        onFirstEvent: (@Sendable () -> Void)? = nil
     ) async throws -> [T] {
         try await withThrowingTaskGroup(of: [T]?.self) { group in
             group.addTask {
                 var items: [T] = []
                 for try await item in stream {
                     items.append(item)
+                    if items.count == 1 {
+                        onFirstEvent?()
+                    }
                     if items.count >= count { break }
                 }
                 return items
