@@ -102,12 +102,12 @@ public enum MachineIdentity {
         public init(
             state: String,
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
-            modeReader: @escaping ModeReader = MachineIdentity.defaultModeReader,
+            modeReader: ModeReader? = nil,
             platform: PlatformOS = Platform.current
         ) {
             self.file = state.hasSuffix("/") ? state + MachineIdentity.file : state + "/" + MachineIdentity.file
             self.fileSystem = fileSystem
-            self.modeReader = modeReader
+            self.modeReader = modeReader ?? (fileSystem is InMemoryFileSystem ? { @Sendable _ in nil } : MachineIdentity.defaultModeReader)
             self.platform = platform
         }
 

@@ -143,7 +143,10 @@ public enum CoreTool {
             } catch let err as CorePermission.DeclinedError {
                 throw err
             } catch {
-                throw AISchema.ToolFailure(message: String(describing: error))
+                if let machine = CoreSessionErrorMapping.machineMessage(error) {
+                    throw AISchema.ToolFailure(message: machine, error: .string(String(describing: error)), cause: error)
+                }
+                throw AISchema.ToolFailure(message: String(describing: error), cause: error)
             }
 
             if (overrides?.output ?? tool.outputSchema) == nil {
@@ -219,7 +222,12 @@ public enum CoreTool {
         public static func toolFailure(_ message: String) -> @Sendable (any Swift.Error) -> AISchema.ToolFailure {
             { error in
                 if let failure = error as? AISchema.ToolFailure { return failure }
-                return AISchema.ToolFailure(message: message, error: .string(String(describing: error)))
+                let effectiveMessage = CoreSessionErrorMapping.machineMessage(error) ?? message
+                return AISchema.ToolFailure(
+                    message: effectiveMessage,
+                    error: .string(String(describing: error)),
+                    cause: error
+                )
             }
         }
     }

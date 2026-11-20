@@ -41,17 +41,17 @@ struct EnvironmentFilesystemParityTests {
 
     @Test("Machine paths parse only with a valid machine name")
     func machinePathParse() {
-        let parsed = FileAccess.parseMachinePath("gpu:/work/train.py")
+        let parsed = MachinePath.parse("gpu:/work/train.py")
         #expect(parsed?.machine == "gpu")
         #expect(parsed?.path == "/work/train.py")
-        #expect(FileAccess.parseMachinePath("gpu:~/a")?.path == "~/a")
-        #expect(FileAccess.parseMachinePath("C:/Windows") == nil)
-        #expect(FileAccess.parseMachinePath("local:/x") == nil)
-        #expect(FileAccess.parseMachinePath("https://example.com") == nil)
-        #expect(FileAccess.parseMachinePath("gpu:relative") == nil)
-        #expect(FileAccess.parseMachinePath("Gpu:/x") == nil)
-        #expect(FileAccess.isMachineName("gpu-2"))
-        #expect(!FileAccess.isMachineName("g"))
+        #expect(MachinePath.parse("gpu:~/a")?.path == "~/a")
+        #expect(MachinePath.parse("C:/Windows") == nil)
+        #expect(MachinePath.parse("local:/x") == nil)
+        #expect(MachinePath.parse("https://example.com") == nil)
+        #expect(MachinePath.parse("gpu:relative") == nil)
+        #expect(MachinePath.parse("Gpu:/x") == nil)
+        #expect(Machines.Name.isValid("gpu-2"))
+        #expect(!Machines.Name.isValid("g"))
     }
 
     @Test("Local targets carry the Location's environment; locate resolves text without touching disk")

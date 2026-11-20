@@ -598,17 +598,27 @@ public enum AppProcess {
         public let exitCode: Int32?
         public let stderr: String?
         public let causeMessage: String?
+        public let cause: (any Error)?
 
         public init(
             command: String,
             exitCode: Int32? = nil,
             stderr: String? = nil,
-            causeMessage: String? = nil
+            causeMessage: String? = nil,
+            cause: (any Error)? = nil
         ) {
             self.command = command
             self.exitCode = exitCode
             self.stderr = stderr
-            self.causeMessage = causeMessage
+            self.causeMessage = causeMessage ?? cause.map { String(describing: $0) }
+            self.cause = cause
+        }
+
+        public static func == (lhs: AppProcessError, rhs: AppProcessError) -> Bool {
+            lhs.command == rhs.command
+                && lhs.exitCode == rhs.exitCode
+                && lhs.stderr == rhs.stderr
+                && lhs.causeMessage == rhs.causeMessage
         }
 
         // parity: util/src/process.ts#AppProcessError.message [status=implemented hash=e05a55cbbc95]

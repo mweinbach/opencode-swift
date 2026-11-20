@@ -74,20 +74,25 @@ public enum CoreLocation {
             }
 
             // parity: core/src/environment/files.ts#Failed [status=implemented hash=3844cbc6030f]
-            public struct Failed: Swift.Error, Sendable, CustomStringConvertible {
+            public struct Failed: Swift.Error, Sendable, CustomStringConvertible, CoreSessionErrorMapping.CauseWrapping {
                 public static let tag = "Environment.Failed"
                 public let path: String
                 public let causeMessage: String
+                public let cause: (any Swift.Error)?
 
                 public init(path: String, cause: any Error) {
                     self.path = path
                     self.causeMessage = String(describing: cause)
+                    self.cause = cause
                 }
 
                 public init(path: String, message: String) {
                     self.path = path
                     self.causeMessage = message
+                    self.cause = nil
                 }
+
+                public var wrappedCause: (any Swift.Error)? { cause }
 
                 public var description: String { "Environment operation failed for \(path): \(causeMessage)" }
             }
@@ -744,6 +749,28 @@ public enum CoreLocation {
         /// The server's own machine.
         // parity: core/src/environment/environment.ts#localID [status=implemented hash=8b4e2b8c4caf]
         public static let localID: ID = ID.make("local")
+
+        /// A two-phase process handle for spawners (like `MachineDriver`) that report start failures (`NotSent`,
+        /// `Unknown`, `StartFailed`) before returning a running process handle whose exit can be awaited separately.
+        public struct SpawnedProcess: Sendable {
+            public let pid: Int?
+            public let wait: @Sendable () async throws -> ProcessOutput
+            public let stop: @Sendable () async -> Void
+
+            public init(
+                pid: Int?,
+                wait: @escaping @Sendable () async throws -> ProcessOutput,
+                stop: @escaping @Sendable () async -> Void
+            ) {
+                self.pid = pid
+                self.wait = wait
+                self.stop = stop
+            }
+        }
+
+        public protocol SpawnableProcessSpawner: ProcessSpawner {
+            func spawn(_ spec: ProcessSpec) async throws -> SpawnedProcess
+        }
 
         // parity: core/src/environment/environment.ts#Interface [status=implemented hash=28fec2c5f219]
         public protocol Interface: Sendable {

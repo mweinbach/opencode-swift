@@ -4655,6 +4655,70 @@ public enum CoreAutomation {
         func remove(_ id: AutomationSchema.ID) async throws
         func enabled(directory: String) async -> Bool
         func tick() async throws
+        /// Long-running application loop (`Automation.Service.run` upstream): claims leader lease, ticks due
+        /// automations, sleeps until the next due slot or doorbell ring, and releases leadership on cancellation.
+        func run() async
+    }
+
+    /// Cancellable wake latch for `CoreAutomation.Service.run`.
+    private final class Doorbell: Sendable {
+        private struct State {
+            var open = false
+            var nextID = 0
+            var waiters: [Int: CheckedContinuation<Void, Never>] = [:]
+        }
+
+        private let state = Mutex(State())
+
+        func close() {
+            state.withLock { $0.open = false }
+        }
+
+        func ring() {
+            let waiters: [CheckedContinuation<Void, Never>] = state.withLock { s in
+                s.open = true
+                let list = Array(s.waiters.values)
+                s.waiters.removeAll()
+                return list
+            }
+            for waiter in waiters { waiter.resume() }
+        }
+
+        func wait(timeoutMs: Int64) async {
+            if Task.isCancelled { return }
+            let clamped = max(0, timeoutMs)
+            if clamped == 0 { return }
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await self.awaitOpen()
+                }
+                group.addTask {
+                    try? await Task.sleep(for: .milliseconds(clamped))
+                }
+                await group.next()
+                group.cancelAll()
+            }
+        }
+
+        private func awaitOpen() async {
+            let id = state.withLock { s -> Int in
+                s.nextID += 1
+                return s.nextID
+            }
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                    let resumeNow = state.withLock { s -> Bool in
+                        if s.open || Task.isCancelled { return true }
+                        s.waiters[id] = cont
+                        return false
+                    }
+                    if resumeNow { cont.resume() }
+                }
+            } onCancel: {
+                let cont = state.withLock { $0.waiters.removeValue(forKey: id) }
+                cont?.resume()
+            }
+        }
     }
 
     // parity: core/src/automation.ts#Service [status=implemented hash=4ff78dd06d5d]
@@ -4663,11 +4727,20 @@ public enum CoreAutomation {
         private static let minPromptIntervalMs: Int64 = 60_000
         private static let minCodeIntervalMs: Int64 = 15_000
         private static let lateAfterMs: Int64 = 60_000
+        private static let leaseMs: Int64 = 30_000
+        private static let maxSleepMs: Int64 = 30_000
+        private static let leaderKey = "automation:leader"
 
         private let db: any SQLiteDatabase
         private let clock: @Sendable () -> Int64
         private let isEnabledCheck: @Sendable (String) async -> Bool
         private let onFire: (@Sendable (AutomationSchema.Info) async throws -> (outcome: AutomationSchema.Outcome, output: String?, nextState: JSONValue?, done: Bool))?
+        private let doorbell = Doorbell()
+        private let runningCount = Mutex(0)
+        private let leaseOwner = uuid()
+
+        /// Whether at least one `run()` loop is currently active on this service.
+        public var isRunning: Bool { runningCount.withLock { $0 > 0 } }
 
         public init(
             database: any SQLiteDatabase,
@@ -4798,6 +4871,7 @@ public enum CoreAutomation {
                     .integer(now),
                 ]
             )
+            doorbell.ring()
             return try await get(id)
         }
 
@@ -4845,6 +4919,7 @@ public enum CoreAutomation {
                     "UPDATE automation SET status = 'active', next_due_at = ?, time_updated = ? WHERE id = ?",
                     parameters: [nextDue.map(SQLiteValue.integer) ?? .null, .integer(now), .text(id.rawValue)]
                 )
+                doorbell.ring()
             }
             return try await get(id)
         }
@@ -4925,6 +5000,130 @@ public enum CoreAutomation {
                     ]
                 )
             }
+        }
+
+        /// Wakes `run()` immediately (e.g. after external table updates).
+        public func wake() {
+            doorbell.ring()
+        }
+
+        public func run() async {
+            runningCount.withLock { $0 += 1 }
+            var leadership: String = "unchecked"
+            defer {
+                releaseLeader()
+                runningCount.withLock { $0 -= 1 }
+            }
+            while !Task.isCancelled {
+                doorbell.close()
+                let active = hasActiveRows()
+                if !active && leadership != "unchecked" {
+                    if leadership == "leader" {
+                        releaseLeader()
+                        leadership = "follower"
+                    }
+                    await doorbell.wait(timeoutMs: Self.maxSleepMs)
+                    continue
+                }
+                let now = clock()
+                if !claimLeader(now: now) {
+                    leadership = "follower"
+                    await doorbell.wait(timeoutMs: Self.maxSleepMs)
+                    continue
+                }
+                leadership = "leader"
+                if !active {
+                    releaseLeader()
+                    leadership = "follower"
+                    await doorbell.wait(timeoutMs: Self.maxSleepMs)
+                    continue
+                }
+                try? await tick()
+                if Task.isCancelled { break }
+                if !hasActiveRows() {
+                    releaseLeader()
+                    leadership = "follower"
+                    await doorbell.wait(timeoutMs: Self.maxSleepMs)
+                    continue
+                }
+                let waitMs = nextWakeMs(now: clock())
+                if waitMs > 0 {
+                    await doorbell.wait(timeoutMs: waitMs)
+                }
+            }
+        }
+
+        private func hasActiveRows() -> Bool {
+            guard let row = try? db.queryOne("SELECT 1 FROM automation WHERE status = 'active' LIMIT 1", parameters: []) else {
+                return false
+            }
+            return row.columns.first != nil
+        }
+
+        private func nextWakeMs(now: Int64) -> Int64 {
+            guard let row = try? db.queryOne(
+                "SELECT min(next_due_at) AS next_due FROM automation WHERE status = 'active' AND next_due_at IS NOT NULL",
+                parameters: []
+            ), let nextDue = row.int64("next_due") else {
+                return Self.maxSleepMs
+            }
+            return min(Self.maxSleepMs, max(0, nextDue - now))
+        }
+
+        private func hasKVTable() -> Bool {
+            guard let row = try? db.queryOne(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kv' LIMIT 1",
+                parameters: []
+            ) else {
+                return false
+            }
+            return row.columns.first != nil
+        }
+
+        private func claimLeader(now: Int64) -> Bool {
+            guard hasKVTable() else { return true }
+            let until = now + Self.leaseMs
+            let value = #"{"owner":"\#(leaseOwner)","until":\#(until)}"#
+            if let existing = try? db.queryOne("SELECT value FROM kv WHERE key = ?", parameters: [.text(Self.leaderKey)]),
+               let raw = existing.string("value"),
+               let data = raw.data(using: .utf8),
+               let obj = try? JSONDecoder().decode([String: JSONValue].self, from: data),
+               case .string(let currentOwner)? = obj["owner"],
+               currentOwner != leaseOwner
+            {
+                let currentUntil: Int64
+                switch obj["until"] {
+                case .int(let n)?: currentUntil = n
+                case .double(let d)?: currentUntil = Int64(d)
+                default: currentUntil = 0
+                }
+                if currentUntil > now {
+                    return false
+                }
+            }
+            _ = try? db.execute(
+                """
+                INSERT INTO kv (key, value, time_created, time_updated)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, time_updated = excluded.time_updated
+                """,
+                parameters: [.text(Self.leaderKey), .text(value), .integer(now), .integer(now)]
+            )
+            return true
+        }
+
+        private func releaseLeader() {
+            guard hasKVTable() else { return }
+            if let existing = try? db.queryOne("SELECT value FROM kv WHERE key = ?", parameters: [.text(Self.leaderKey)]),
+               let raw = existing.string("value"),
+               let data = raw.data(using: .utf8),
+               let obj = try? JSONDecoder().decode([String: JSONValue].self, from: data),
+               case .string(let currentOwner)? = obj["owner"],
+               currentOwner != leaseOwner
+            {
+                return
+            }
+            _ = try? db.execute("DELETE FROM kv WHERE key = ?", parameters: [.text(Self.leaderKey)])
         }
 
         private static func computeNextDue(

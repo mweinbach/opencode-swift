@@ -222,7 +222,11 @@ public enum MachineDriver {
         }
 
         var environment: any CoreLocation.Environment.Interface {
-            CoreLocation.Environment.Service(files: Files(machine: self), spawner: Spawner(machine: self))
+            CoreLocation.Environment.Service(
+                id: CoreLocation.Environment.ID.make(id),
+                files: Files(machine: self),
+                spawner: Spawner(machine: self)
+            )
         }
 
         func hello() -> MachineWire.Hello? {
@@ -408,7 +412,7 @@ public enum MachineDriver {
             _ = state.withLock { $0.processes.removeValue(forKey: processID) }
         }
 
-        func run(_ spec: ProcessSpec) async throws -> ProcessOutput {
+        func spawn(_ spec: ProcessSpec) async throws -> CoreLocation.Environment.SpawnedProcess {
             if let stdin = spec.stdin, !stdin.isEmpty { throw Unsupported(machine: id, what: "stdin is") }
             guard let cwd = spec.workingDirectory else {
                 throw Unsupported(machine: id, what: "a command without a working directory is")
@@ -430,8 +434,9 @@ public enum MachineDriver {
                 link.send(start)
                 return link
             }
+            let pid: Int
             do {
-                _ = try await withThrowingTaskGroup(of: Int.self) { group in
+                pid = try await withThrowingTaskGroup(of: Int.self) { group in
                     group.addTask { try await process.started.wait() }
                     group.addTask {
                         try await live.lost.wait()
@@ -449,17 +454,30 @@ public enum MachineDriver {
                 state.withLock { s in Self.gone(processID, error: error, in: &s) }
                 throw error
             }
-            let finished: Finished
-            do {
-                finished = try await process.exited.wait()
-            } catch is CancellationError {
-                await cancelled(processID, process, killSignal: killSignal)
-                throw CancellationError()
-            }
-            guard let code = finished.exit.code else {
-                throw CrossSpawnSpawner.KilledBySignal(signal: finished.exit.signal ?? killSignal.rawValue)
-            }
-            return ProcessOutput(exitCode: Int32(truncatingIfNeeded: code), stdout: finished.output, stderr: [])
+            return CoreLocation.Environment.SpawnedProcess(
+                pid: pid,
+                wait: { [self] in
+                    let finished: Finished
+                    do {
+                        finished = try await process.exited.wait()
+                    } catch is CancellationError {
+                        await self.cancelled(processID, process, killSignal: killSignal)
+                        throw CancellationError()
+                    }
+                    guard let code = finished.exit.code else {
+                        throw CrossSpawnSpawner.KilledBySignal(signal: finished.exit.signal ?? killSignal.rawValue)
+                    }
+                    return ProcessOutput(exitCode: Int32(truncatingIfNeeded: code), stdout: finished.output, stderr: [])
+                },
+                stop: { [self] in
+                    await self.release(processID, process, killSignal: killSignal)
+                }
+            )
+        }
+
+        func run(_ spec: ProcessSpec) async throws -> ProcessOutput {
+            let handle = try await spawn(spec)
+            return try await handle.wait()
         }
 
         /// Runs the release in a task of its own, so the cancellation that called for it cannot cut it short.
@@ -513,8 +531,11 @@ public enum MachineDriver {
         return [0..<8, 8..<12, 12..<16, 16..<20, 20..<32].map { String(chars[$0]) }.joined(separator: "-")
     }
 
-    struct Spawner: ProcessSpawner {
+    struct Spawner: CoreLocation.Environment.SpawnableProcessSpawner {
         let machine: Machine
+        func spawn(_ spec: ProcessSpec) async throws -> CoreLocation.Environment.SpawnedProcess {
+            try await machine.spawn(spec)
+        }
         func run(_ spec: ProcessSpec) async throws -> ProcessOutput {
             try await machine.run(spec)
         }

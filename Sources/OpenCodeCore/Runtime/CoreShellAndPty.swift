@@ -979,6 +979,7 @@ public enum CoreShell {
             var info: ShellSchema.Info
             var toolCall: ToolCall?
             var task: Task<Void, Never>?
+            var stopRemote: (@Sendable () async -> Void)?
             var waiters: [CheckedContinuation<ShellSchema.Info, any Swift.Error>] = []
             var terminated: Bool = false
             /// Why its exit could not be read, such as a machine's worker restarting: the driver's own sentence.
@@ -1069,6 +1070,31 @@ public enum CoreShell {
             try await fileSystem.writeFile([], to: outputFile, createDirectories: true)
 
             let startedAt = Double(Flock.currentEpochMs())
+            let procService = self.processes
+            let fs = self.fileSystem
+            let finalInvocation = invocation
+            let remote: (any CoreLocation.Environment.Interface)? = target.id == environment.id ? nil : target
+            let spec = ProcessSpec(
+                executable: finalInvocation.shell,
+                arguments: Select.args(finalInvocation.shell, command: finalInvocation.command),
+                workingDirectory: finalInvocation.cwd,
+                environment: finalInvocation.env.isEmpty ? nil : finalInvocation.env
+            )
+
+            // Two-phase spawners (like `MachineDriver`) report start failures (`NotSent`, `Unknown`, `StartFailed`)
+            // before `create` returns, matching upstream `Shell.create` awaiting `spawner.spawn` before `ready`.
+            let spawnedRemote: CoreLocation.Environment.SpawnedProcess?
+            if let remote, let spawnable = remote.spawner as? any CoreLocation.Environment.SpawnableProcessSpawner {
+                do {
+                    spawnedRemote = try await spawnable.spawn(spec)
+                } catch {
+                    throw AppProcess.AppProcessError(command: finalInvocation.command, cause: error)
+                }
+            } else {
+                spawnedRemote = nil
+            }
+
+            let initialPid = spawnedRemote?.pid.flatMap { SchemaPrimitive.NonNegativeInt(rawValue: $0) }
             let initialInfo = ShellSchema.Info(
                 id: id,
                 status: .running,
@@ -1076,30 +1102,27 @@ public enum CoreShell {
                 cwd: invocation.cwd,
                 shell: invocation.shell,
                 file: outputFile,
-                pid: nil,
+                pid: initialPid,
                 exit: nil,
                 signal: nil,
                 metadata: input.metadata,
                 time: ShellSchema.Time(started: startedAt, completed: nil)
             )
             let entry = Entry(info: initialInfo, toolCall: input.toolCall)
+            if let stopRemote = spawnedRemote?.stop {
+                entry.lock.withLock { _ in entry.stopRemote = stopRemote }
+            }
             state.withLock { $0[id] = entry }
 
-            let procService = self.processes
-            let fs = self.fileSystem
-            let finalInvocation = invocation
-            let remote: (any CoreLocation.Environment.Interface)? = target.id == environment.id ? nil : target
             let runnerTask = Task {
-                let spec = ProcessSpec(
-                    executable: finalInvocation.shell,
-                    arguments: Select.args(finalInvocation.shell, command: finalInvocation.command),
-                    workingDirectory: finalInvocation.cwd,
-                    environment: finalInvocation.env.isEmpty ? nil : finalInvocation.env
-                )
                 do {
                     let combined: [UInt8]
                     let exitCode: Int32
-                    if let remote {
+                    if let spawnedRemote {
+                        let output = try await spawnedRemote.wait()
+                        combined = output.stdout + output.stderr
+                        exitCode = output.exitCode
+                    } else if let remote {
                         // A working directory in another environment runs there, through its spawner.
                         let output = try await remote.spawner.run(spec)
                         combined = output.stdout + output.stderr
@@ -1118,9 +1141,25 @@ public enum CoreShell {
                         cwd: finalInvocation.cwd,
                         shell: finalInvocation.shell,
                         file: outputFile,
-                        pid: nil,
+                        pid: initialPid,
                         exit: Double(exitCode),
                         signal: nil,
+                        metadata: input.metadata,
+                        time: ShellSchema.Time(started: startedAt, completed: completedAt)
+                    )
+                    Self.completeEntry(entry, with: finishedInfo)
+                } catch let killedBySignal as CrossSpawnSpawner.KilledBySignal {
+                    let completedAt = Double(Flock.currentEpochMs())
+                    let finishedInfo = ShellSchema.Info(
+                        id: id,
+                        status: .exited,
+                        command: finalInvocation.command,
+                        cwd: finalInvocation.cwd,
+                        shell: finalInvocation.shell,
+                        file: outputFile,
+                        pid: initialPid,
+                        exit: nil,
+                        signal: killedBySignal.signal,
                         metadata: input.metadata,
                         time: ShellSchema.Time(started: startedAt, completed: completedAt)
                     )
@@ -1142,7 +1181,7 @@ public enum CoreShell {
                         cwd: finalInvocation.cwd,
                         shell: finalInvocation.shell,
                         file: outputFile,
-                        pid: nil,
+                        pid: initialPid,
                         exit: remote == nil ? 1 : nil,
                         signal: nil,
                         metadata: input.metadata,
@@ -1220,11 +1259,14 @@ public enum CoreShell {
             guard let entry = state.withLock({ $0[id] }) else {
                 throw NotFoundError(id: id)
             }
-            let current = entry.lock.withLock { _ -> (ShellSchema.Info, Task<Void, Never>?) in
-                (entry.info, entry.task)
+            let current = entry.lock.withLock { _ -> (ShellSchema.Info, Task<Void, Never>?, (@Sendable () async -> Void)?) in
+                (entry.info, entry.task, entry.stopRemote)
             }
             if current.0.status != .running { return current.0 }
             current.1?.cancel()
+            if let stopRemote = current.2 {
+                Task.detached { await stopRemote() }
+            }
             let updated = ShellSchema.Info(
                 id: current.0.id,
                 status: reason == .timeout ? .timeout : .killed,

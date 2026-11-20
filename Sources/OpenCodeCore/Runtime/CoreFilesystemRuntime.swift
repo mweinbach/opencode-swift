@@ -339,60 +339,6 @@ public enum CoreFilesystem {
             ) async throws -> Target
         }
 
-        /// The machines registry FileAccess consults for a machine path (`Machines.Service` upstream): the machine's
-        /// environment, and the home directory from its live hello. Looked up under `machinesServiceKey`; without one,
-        /// every machine is unknown.
-        public protocol Machines: Sendable {
-            func get(_ id: CoreLocation.Environment.ID) async throws -> any CoreLocation.Environment.Interface
-            func home(_ id: CoreLocation.Environment.ID) async throws -> String
-        }
-
-        public static let machinesServiceKey = "@opencode/Machines"
-
-        /// No machine is known.
-        public struct UnknownMachine: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
-            public let machine: CoreLocation.Environment.ID
-
-            public init(machine: CoreLocation.Environment.ID) {
-                self.machine = machine
-            }
-
-            public var description: String { "No machine named \"\(machine.rawValue)\"." }
-        }
-
-        /// A machine path that is neither absolute nor rooted at the machine's home (`Machine.NotAbsolute` upstream).
-        public struct MachinePathNotAbsolute: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
-            public let machine: CoreLocation.Environment.ID
-
-            public init(machine: CoreLocation.Environment.ID) {
-                self.machine = machine
-            }
-
-            public var description: String {
-                "A \(machine.rawValue) path must be absolute or start with ~/, as in \(machine.rawValue):/work/file."
-            }
-        }
-
-        /// Splits `gpu:/work/a` or `gpu:~/a` into a machine and the rest. A Windows drive or any URL is not one.
-        /// Mirrors `MachinePath.parse` with the `Machines.Name` rule: 2 to 63 of `[a-z0-9-]`, starting with a letter, and
-        /// never `local`.
-        public static func parseMachinePath(_ text: String) -> (machine: CoreLocation.Environment.ID, path: String)? {
-            guard let colon = text.firstIndex(of: ":"), colon != text.startIndex else { return nil }
-            let machine = String(text[..<colon])
-            guard isMachineName(machine) else { return nil }
-            let rest = String(text[text.index(after: colon)...])
-            if !rest.hasPrefix("/") && !rest.hasPrefix("~") { return nil }
-            if rest.hasPrefix("//") { return nil }
-            return (CoreLocation.Environment.ID.make(machine), rest)
-        }
-
-        public static func isMachineName(_ name: String) -> Bool {
-            let scalars = Array(name.unicodeScalars)
-            guard scalars.count >= 2, scalars.count <= 63, name != CoreLocation.Environment.localID.rawValue else { return false }
-            guard let first = scalars.first, first >= "a", first <= "z" else { return false }
-            return scalars.dropFirst().allSatisfy { ($0 >= "a" && $0 <= "z") || ($0 >= "0" && $0 <= "9") || $0 == "-" }
-        }
-
         /// `path.posix.normalize` for an absolute path: collapses `.`, `..` and repeated slashes, keeping a trailing one.
         static func posixNormalize(_ path: String) -> String {
             let absolute = path.hasPrefix("/")
@@ -462,7 +408,7 @@ public enum CoreFilesystem {
             private let permission: any CorePermission.Interface
             private let home: String
             private let flags: (any CoreFlag.Interface)?
-            private let machines: (any Machines)?
+            private let machines: (any Machines.Interface)?
 
             public init(
                 directory: String,
@@ -472,7 +418,7 @@ public enum CoreFilesystem {
                 home: String = Global.Path.home,
                 environment: (any CoreLocation.Environment.Interface)? = nil,
                 flags: (any CoreFlag.Interface)? = nil,
-                machines: (any Machines)? = nil
+                machines: (any Machines.Interface)? = nil
             ) {
                 self.directory = CoreConfigDiscovery.resolvePath(base: "/", relative: directory)
                 self.worktree = CoreConfigDiscovery.resolvePath(base: "/", relative: worktree ?? directory)
@@ -490,16 +436,16 @@ public enum CoreFilesystem {
                 return await flags.enabled(key)
             }
 
-            private func machine(_ id: CoreLocation.Environment.ID) throws -> any Machines {
-                guard let machines else { throw UnknownMachine(machine: id) }
+            private func machine(_ id: CoreLocation.Environment.ID) throws -> any Machines.Interface {
+                guard let machines else { throw Machines.NotFound(machine: id.rawValue) }
                 return machines
             }
 
             private func place(_ text: String, base: Place?, enabled: Bool) async throws -> Place {
                 // Only text the model typed can name a machine: text derived from a target is a plain path on that
                 // target's machine, and a shell there does not understand `gpu:`.
-                let parsed = base == nil && enabled ? FileAccess.parseMachinePath(text) : nil
-                let id = parsed?.machine ?? base?.environment.id ?? environment.id
+                let parsed = base == nil && enabled ? MachinePath.parse(text) : nil
+                let id = parsed.map { CoreLocation.Environment.ID.make($0.machine) } ?? base?.environment.id ?? environment.id
                 if parsed == nil && id == environment.id {
                     return Place(
                         absolute: FileAccess.resolvePath(directory: base?.absolute.rawValue ?? directory, input: text, home: home),
@@ -514,7 +460,7 @@ public enum CoreFilesystem {
                 if enabled && (written == "~" || written.hasPrefix("~/")) {
                     let machineHome: String
                     do {
-                        machineHome = try await machine(id).home(id)
+                        machineHome = try await machine(id).home(id.rawValue)
                     } catch {
                         throw CoreLocation.Environment.Files.Failed(path: text, cause: error)
                     }
@@ -523,7 +469,7 @@ public enum CoreFilesystem {
                     rooted = written
                 }
                 if rooted.hasPrefix("~") {
-                    throw CoreLocation.Environment.Files.Failed(path: text, cause: MachinePathNotAbsolute(machine: id))
+                    throw CoreLocation.Environment.Files.Failed(path: text, cause: MachinePath.NotAbsolute(machine: id.rawValue))
                 }
                 let absolute = base.map { FileAccess.posixResolve($0.absolute.rawValue, rooted) } ?? FileAccess.posixNormalize(rooted)
                 return Place(absolute: absolute, environment: id)
@@ -553,7 +499,7 @@ public enum CoreFilesystem {
                         absolute: absolute,
                         // With machines on, a local folder can be named like a machine path; `./` keeps its permission
                         // name its own.
-                        resource: enabled && FileAccess.parseMachinePath(relative) != nil ? "./\(relative)" : relative,
+                        resource: enabled && MachinePath.parse(relative) != nil ? "./\(relative)" : relative,
                         externalDirectory: nil,
                         environment: environment
                     )
@@ -588,7 +534,7 @@ public enum CoreFilesystem {
                 let id = place.environment.id
                 let machineEnvironment: any CoreLocation.Environment.Interface
                 do {
-                    machineEnvironment = try await machine(id).get(id)
+                    machineEnvironment = try await machine(id).get(id.rawValue)
                 } catch {
                     throw CoreLocation.Environment.Files.Failed(path: place.absolute.rawValue, cause: error)
                 }
@@ -658,14 +604,16 @@ public enum CoreFilesystem {
                     options.siblingOf.environment.id == environment.id
                         ? nil
                         : Place(
-                            absolute: CoreConfigDiscovery.dirname(options.siblingOf.absolute.rawValue),
+                            absolute: FileAccess.posixDirname(options.siblingOf.absolute.rawValue),
                             environment: options.siblingOf.environment.id
                         )
                 }
                 let target = try await resolve(ResolveInput(path: file, kind: options != nil ? .file : nil, base: base))
-                let isSibling = options.map {
-                    target.environment.id == $0.siblingOf.environment.id
-                        && CoreConfigDiscovery.dirname(target.absolute.rawValue) == CoreConfigDiscovery.dirname($0.siblingOf.absolute.rawValue)
+                let isSibling = options.map { sibling in
+                    let remote = target.environment.id != environment.id
+                    let targetDir = remote ? FileAccess.posixDirname(target.absolute.rawValue) : CoreConfigDiscovery.dirname(target.absolute.rawValue)
+                    let siblingDir = remote ? FileAccess.posixDirname(sibling.siblingOf.absolute.rawValue) : CoreConfigDiscovery.dirname(sibling.siblingOf.absolute.rawValue)
+                    return target.environment.id == sibling.siblingOf.environment.id && targetDir == siblingDir
                 } ?? false
                 // Filename recovery shares the directory approval, but checks the recovered file's own read rules.
                 if !isSibling {
@@ -699,11 +647,11 @@ public enum CoreFilesystem {
                     permission: perm,
                     environment: deps.get(CoreLocation.Environment.Service.serviceKey, as: (any CoreLocation.Environment.Interface).self),
                     flags: deps.get(CoreFlag.Service.serviceKey, as: (any CoreFlag.Interface).self),
-                    machines: deps.get(machinesServiceKey, as: (any Machines).self)
+                    machines: deps.get(Machines.Service.serviceKey, as: (any Machines.Interface).self)
                 )
                 return LayerNode.Output([Service.serviceKey: service as any Interface])
             },
-            [FSUtil.node, CorePermission.node]
+            [FSUtil.node, CorePermission.node, Machines.node]
         )
     }
 

@@ -17,6 +17,8 @@ extension CoreTool {
         public let projectID: ProjectID
         public let globalPaths: Global.Interface
         public let fileSystem: any OpenCodeFileSystem
+        public let environment: any CoreLocation.Environment.Interface
+        public let machines: (any Machines.Interface)?
         public let fileAccess: any CoreFilesystem.FileAccess.Interface
         public let fileMutation: any CoreFilesystem.FileMutation.Interface
         public let fileWrite: any CoreFilesystem.FileWrite.Interface
@@ -56,6 +58,8 @@ extension CoreTool {
         public init(
             directory: String = "/",
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+            environment: (any CoreLocation.Environment.Interface)? = nil,
+            machines: (any Machines.Interface)? = nil,
             fileAccess: (any CoreFilesystem.FileAccess.Interface)? = nil,
             fileMutation: (any CoreFilesystem.FileMutation.Interface)? = nil,
             fileWrite: (any CoreFilesystem.FileWrite.Interface)? = nil,
@@ -90,13 +94,20 @@ extension CoreTool {
             jobs: (any CoreJob.Interface)? = nil
         ) {
             let normDir = CoreConfigDiscovery.resolvePath(base: "/", relative: directory)
+            let resolvedEnvironment = environment ?? CoreLocation.Environment.local(fileSystem: fileSystem)
             let resolvedAccess = fileAccess ?? CoreFilesystem.FileAccess.Service(
                 directory: normDir,
                 fileSystem: fileSystem,
                 permission: permission,
-                home: globalPaths.home
+                home: globalPaths.home,
+                environment: resolvedEnvironment,
+                flags: flags,
+                machines: machines
             )
-            let resolvedMutation = fileMutation ?? CoreFilesystem.FileMutation.Service(fileSystem: fileSystem)
+            let resolvedMutation = fileMutation ?? CoreFilesystem.FileMutation.Service(
+                fileSystem: fileSystem,
+                access: resolvedAccess
+            )
             let resolvedFormatter = formatter ?? CoreFormatter.Service(directory: normDir, processes: processes)
             let resolvedFileWrite = fileWrite ?? CoreFilesystem.FileWrite.Service(
                 fileSystem: fileSystem,
@@ -112,7 +123,8 @@ extension CoreTool {
                 globalPaths: globalPaths,
                 fileSystem: fileSystem,
                 processes: processes,
-                shellSelect: shellSelect
+                shellSelect: shellSelect,
+                environment: resolvedEnvironment
             )
             let resolvedOutput = toolOutput ?? CoreToolOutput.Service(globalPaths: globalPaths, fileSystem: fileSystem)
 
@@ -120,6 +132,8 @@ extension CoreTool {
             self.projectID = projectID
             self.globalPaths = globalPaths
             self.fileSystem = fileSystem
+            self.environment = resolvedEnvironment
+            self.machines = machines
             self.fileAccess = resolvedAccess
             self.fileMutation = resolvedMutation
             self.fileWrite = resolvedFileWrite
@@ -283,23 +297,56 @@ extension CoreTool {
                 if input.limit == 0 {
                     throw AISchema.ToolFailure(message: "Limit must be a positive integer")
                 }
-                let target: CoreFilesystem.FileAccess.Target
+                let requested: CoreFilesystem.FileAccess.Target
                 do {
-                    target = try await env.fileAccess.authorizeRead(input.path, context: context, options: nil)
+                    requested = try await env.fileAccess.authorizeRead(input.path, context: context, options: nil)
                 } catch let err as CorePermission.DeclinedError {
                     throw err
                 } catch {
-                    throw AISchema.ToolFailure(message: "Unable to read \(input.path): \(error)")
+                    throw Runtime.toolFailure("Unable to read \(input.path)")(error)
                 }
 
+                let page = CoreToolOutput.ReadFilesystem.PageInput(offset: input.offset, limit: input.limit)
                 let readOutput: CoreToolOutput.ReadFilesystem.Output
+                var displayPath = input.path
                 do {
-                    readOutput = try await CoreToolOutput.ReadFilesystem.read(
-                        fileSystem: env.fileSystem,
-                        path: target.absolute,
-                        resource: target.resource,
-                        page: CoreToolOutput.ReadFilesystem.PageInput(offset: input.offset, limit: input.limit)
-                    )
+                    do {
+                        readOutput = try await CoreToolOutput.ReadFilesystem.read(
+                            files: requested.environment.files,
+                            path: requested.absolute,
+                            resource: requested.resource,
+                            page: page
+                        )
+                    } catch CoreToolOutput.ReadFilesystem.ReadError.notFound {
+                        if let alternate = await alternatePath(for: requested, localID: env.environment.id) {
+                            let recovered = try await env.fileAccess.authorizeRead(
+                                alternate,
+                                context: context,
+                                options: CoreFilesystem.FileAccess.ReadOptions(siblingOf: requested)
+                            )
+                            displayPath = alternate
+                            readOutput = try await CoreToolOutput.ReadFilesystem.read(
+                                files: recovered.environment.files,
+                                path: recovered.absolute,
+                                resource: recovered.resource,
+                                page: page
+                            )
+                        } else {
+                            let suggestions = await suggestSimilarFiles(
+                                for: requested,
+                                inputPath: input.path,
+                                localID: env.environment.id
+                            )
+                            let msg = suggestions.isEmpty
+                                ? "File not found: \(input.path)"
+                                : "File not found: \(input.path)\n\nDid you mean one of these?\n\(suggestions.joined(separator: "\n"))"
+                            throw AISchema.ToolFailure(message: msg)
+                        }
+                    }
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
                 } catch let err as CoreToolOutput.ReadFilesystem.BinaryFileError {
                     throw AISchema.ToolFailure(message: err.message)
                 } catch let err as CoreToolOutput.ReadFilesystem.MediaIngestLimitError {
@@ -308,14 +355,8 @@ extension CoreTool {
                     throw AISchema.ToolFailure(message: err.message)
                 } catch let err as CoreToolOutput.ReadFilesystem.DirectoryOffsetError {
                     throw AISchema.ToolFailure(message: err.message)
-                } catch CoreToolOutput.ReadFilesystem.ReadError.notFound {
-                    let suggestions = await suggestSimilarFiles(for: target.absolute.rawValue, inputPath: input.path, fileSystem: env.fileSystem)
-                    let msg = suggestions.isEmpty
-                        ? "File not found: \(input.path)"
-                        : "File not found: \(input.path)\n\nDid you mean one of these?\n\(suggestions.joined(separator: "\n"))"
-                    throw AISchema.ToolFailure(message: msg)
                 } catch {
-                    throw AISchema.ToolFailure(message: "Unable to read \(input.path): \(error)")
+                    throw Runtime.toolFailure("Unable to read \(input.path)")(error)
                 }
 
                 let structured: JSONValue
@@ -351,19 +392,55 @@ extension CoreTool {
 
                 return ToolSchema.Result(
                     output: structured,
-                    content: toModelContent(path: input.path, offset: input.offset, output: readOutput),
+                    content: toModelContent(path: displayPath, offset: input.offset, output: readOutput),
                     metadata: ["truncated": .bool(isTruncated)]
                 )
             })
         }
 
+        private static func canonicalFilename(_ value: String) -> String {
+            var out = ""
+            out.unicodeScalars.reserveCapacity(value.unicodeScalars.count)
+            for scalar in value.precomposedStringWithCanonicalMapping.unicodeScalars {
+                switch scalar.value {
+                case 0x2018, 0x2019, 0x201A, 0x201B: out.unicodeScalars.append("'")
+                case 0x201C, 0x201D, 0x201E, 0x201F: out.unicodeScalars.append("\"")
+                case 0x2010, 0x2011, 0x2012, 0x2013, 0x2014, 0x2015, 0x2212: out.unicodeScalars.append("-")
+                case 0x00A0, 0x2002...0x200A, 0x202F, 0x205F, 0x3000: out.unicodeScalars.append(" ")
+                default: out.unicodeScalars.append(scalar)
+                }
+            }
+            return out
+        }
+
+        private static func alternatePath(
+            for target: CoreFilesystem.FileAccess.Target,
+            localID: CoreLocation.Environment.ID
+        ) async -> String? {
+            let remote = target.environment.id != localID
+            let folder = remote
+                ? CoreFilesystem.FileAccess.posixDirname(target.absolute.rawValue)
+                : CoreConfigDiscovery.dirname(target.absolute.rawValue)
+            guard let entries = try? await target.environment.files.list(folder) else { return nil }
+            let base = canonicalFilename(CoreConfigDiscovery.basename(target.absolute.rawValue))
+            let matches = entries.filter { $0.type == .file && canonicalFilename($0.name) == base }
+            guard matches.count == 1 else { return nil }
+            return remote
+                ? CoreFilesystem.FileAccess.posixJoin(folder, matches[0].name)
+                : CoreConfigDiscovery.joinPath(folder, matches[0].name)
+        }
+
         private static func suggestSimilarFiles(
-            for absolute: String,
+            for target: CoreFilesystem.FileAccess.Target,
             inputPath: String,
-            fileSystem: any OpenCodeFileSystem
+            localID: CoreLocation.Environment.ID
         ) async -> [String] {
-            let folder = CoreConfigDiscovery.dirname(absolute)
-            guard let names = try? await fileSystem.readDirectory(at: folder) else { return [] }
+            let remote = target.environment.id != localID
+            let folder = remote
+                ? CoreFilesystem.FileAccess.posixDirname(target.absolute.rawValue)
+                : CoreConfigDiscovery.dirname(target.absolute.rawValue)
+            guard let entries = try? await target.environment.files.list(folder) else { return [] }
+            let names = entries.map(\.name)
             let requestedRaw = CoreConfigDiscovery.basename(inputPath)
             let name = requestedRaw.lowercased()
             let wanted = stem(name)
@@ -478,7 +555,7 @@ extension CoreTool {
                 } catch let err as CorePermission.DeclinedError {
                     throw err
                 } catch {
-                    throw AISchema.ToolFailure(message: "Unable to write \(input.path): \(error)")
+                    throw Runtime.toolFailure("Unable to write \(input.path)")(error)
                 }
             })
         }
@@ -545,73 +622,65 @@ extension CoreTool {
                 if input.oldString == input.newString {
                     throw AISchema.ToolFailure(message: "No changes to apply: oldString and newString are identical")
                 }
-                let target: CoreFilesystem.FileAccess.Target
                 do {
-                    target = try await env.fileWrite.target(input.path, context: context)
+                    return try await env.fileMutation.withLock([CoreFilesystem.FileMutation.LockTarget.path(input.path)]) {
+                        let target = try await env.fileWrite.target(input.path, context: context)
+                        // Read text that will be rewritten; decoding replaces invalid bytes with U+FFFD, so refuse those files.
+                        let current: BomSplitResult
+                        do {
+                            current = try await CoreFilesystem.FileMutation.readEditableText(
+                                files: target.environment.files,
+                                target: target.absolute.rawValue
+                            )
+                        } catch is CoreLocation.Environment.Files.NotFound {
+                            throw AISchema.ToolFailure(message: "File not found: \(input.path)")
+                        } catch let err as CoreFilesystem.FileMutation.InvalidUtf8Error {
+                            throw AISchema.ToolFailure(message: "Unable to edit \(input.path): \(err.message)")
+                        } catch let err as CoreLocation.Environment.Files.WrongKind {
+                            if err.actual == .directory {
+                                throw AISchema.ToolFailure(message: "Path is a directory, not a file: \(input.path)")
+                            }
+                            throw Runtime.toolFailure("Unable to edit \(input.path)")(err)
+                        }
+
+                        let source = current.text
+                        let nextText: String
+                        let matchCount: Int
+                        if input.oldString.isEmpty {
+                            nextText = input.newString
+                            matchCount = 1
+                        } else {
+                            let applied = try applyEdit(
+                                source: source,
+                                oldString: input.oldString,
+                                newString: input.newString,
+                                replaceAll: input.replaceAll ?? false
+                            )
+                            nextText = applied.result
+                            matchCount = applied.count
+                        }
+
+                        let preview = CoreTool.fileDiff(file: target.resource, before: source, after: nextText, status: .modified)
+                        try await env.fileWrite.authorize(target, context: context, preview: preview)
+
+                        let written = try await env.fileWrite.commit(target, content: nextText)
+                        let finalAfter = written.formatted ?? nextText
+                        let finalDiff = CoreTool.fileDiff(file: target.resource, before: source, after: finalAfter, status: .modified)
+                        let msg = "Edited \(target.resource) (\(matchCount) replacement\(matchCount == 1 ? "" : "s"))"
+                        var meta: [String: JSONValue] = ["replacements": .int(Int64(matchCount))]
+                        if let encoded = try? JSONEncoder().encode([finalDiff]),
+                           let jsonVal = try? JSONDecoder().decode(JSONValue.self, from: encoded)
+                        {
+                            meta["files"] = jsonVal
+                        }
+                        return ToolSchema.Result(output: .string(msg), content: .text(msg), metadata: meta)
+                    }
                 } catch let err as CorePermission.DeclinedError {
                     throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
                 } catch {
-                    throw AISchema.ToolFailure(message: "Unable to resolve \(input.path): \(error)")
-                }
-
-                return try await env.fileMutation.withLock([target.absolute.rawValue]) {
-                    // Read text that will be rewritten; decoding replaces invalid bytes with U+FFFD, so refuse those files.
-                    let raw: [UInt8]
-                    do {
-                        raw = try await env.fileSystem.readFile(at: target.absolute.rawValue)
-                    } catch {
-                        throw AISchema.ToolFailure(message: "File not found: \(input.path)")
-                    }
-                    if !isValidUTF8(raw) {
-                        throw AISchema.ToolFailure(message: "Unable to edit \(input.path): \(invalidUtf8Message)")
-                    }
-                    let current: BomSplitResult
-                    do {
-                        current = try await CoreFilesystem.FileMutation.readText(
-                            fileSystem: env.fileSystem,
-                            target: target.absolute.rawValue
-                        )
-                    } catch {
-                        throw AISchema.ToolFailure(message: "File not found: \(input.path)")
-                    }
-
-                    let source = current.text
-                    let nextText: String
-                    let matchCount: Int
-                    if input.oldString.isEmpty {
-                        nextText = input.newString
-                        matchCount = 1
-                    } else {
-                        let applied = try applyEdit(
-                            source: source,
-                            oldString: input.oldString,
-                            newString: input.newString,
-                            replaceAll: input.replaceAll ?? false
-                        )
-                        nextText = applied.result
-                        matchCount = applied.count
-                    }
-
-                    let preview = CoreTool.fileDiff(file: target.resource, before: source, after: nextText, status: .modified)
-                    do {
-                        try await env.fileWrite.authorize(target, context: context, preview: preview)
-                    } catch let err as CorePermission.DeclinedError {
-                        throw err
-                    } catch {
-                        throw AISchema.ToolFailure(message: "Permission denied editing \(input.path): \(error)")
-                    }
-
-                    let written = try await env.fileWrite.commit(target, content: nextText)
-                    let finalAfter = written.formatted ?? nextText
-                    let finalDiff = CoreTool.fileDiff(file: target.resource, before: source, after: finalAfter, status: .modified)
-                    let msg = "Edited \(target.resource) (\(matchCount) replacement\(matchCount == 1 ? "" : "s"))"
-                    var meta: [String: JSONValue] = ["replacements": .int(Int64(matchCount))]
-                    if let encoded = try? JSONEncoder().encode([finalDiff]),
-                       let jsonVal = try? JSONDecoder().decode(JSONValue.self, from: encoded)
-                    {
-                        meta["files"] = jsonVal
-                    }
-                    return ToolSchema.Result(output: .string(msg), content: .text(msg), metadata: meta)
+                    throw Runtime.toolFailure("Unable to edit \(input.path)")(error)
                 }
             })
         }
@@ -835,174 +904,230 @@ extension CoreTool {
                     throw AISchema.ToolFailure(message: "patch rejected: empty patch")
                 }
 
-                var lockPaths: [String] = []
+                var lockTargets: [CoreFilesystem.FileMutation.LockTarget] = []
                 for hunk in hunks {
                     switch hunk {
                     case .add(let p, _), .delete(let p):
-                        lockPaths.append(CoreFilesystem.FileAccess.resolvePath(directory: env.directory, input: p))
+                        lockTargets.append(.path(p))
                     case .update(let p, let movePath, _):
-                        lockPaths.append(CoreFilesystem.FileAccess.resolvePath(directory: env.directory, input: p))
+                        lockTargets.append(.path(p))
                         if let movePath {
-                            lockPaths.append(CoreFilesystem.FileAccess.resolvePath(directory: env.directory, input: movePath))
+                            lockTargets.append(.path(movePath))
                         }
                     }
                 }
 
-                return try await env.fileMutation.withLock(lockPaths) {
-                    var prepared: [PreparedChange] = []
-                    var virtualUpdates: [String: String?] = [:]
+                do {
+                    return try await env.fileMutation.withLock(lockTargets) {
+                        var prepared: [PreparedChange] = []
+                        var virtualUpdates: [String: (target: CoreFilesystem.FileAccess.Target, content: String?)] = [:]
 
-                    func resolveTarget(_ path: String) async throws -> CoreFilesystem.FileAccess.Target {
-                        let t = try await env.fileAccess.resolve(CoreFilesystem.FileAccess.ResolveInput(path: path, kind: .file))
-                        if let ext = t.externalDirectory {
-                            try await env.fileAccess.authorizeExternal(
-                                [t],
-                                context: context,
-                                metadata: [
-                                    "filepath": .string(t.absolute.rawValue),
-                                    "parentDir": .string(ext.directory.rawValue),
-                                ]
-                            )
+                        func resolveTarget(_ path: String) async throws -> CoreFilesystem.FileAccess.Target {
+                            let t = try await env.fileAccess.resolve(CoreFilesystem.FileAccess.ResolveInput(path: path, kind: .file))
+                            if let ext = t.externalDirectory {
+                                try await env.fileAccess.authorizeExternal(
+                                    [t],
+                                    context: context,
+                                    metadata: [
+                                        "filepath": .string(t.absolute.rawValue),
+                                        "parentDir": .string(ext.directory.rawValue),
+                                    ]
+                                )
+                            }
+                            return t
                         }
-                        return t
-                    }
 
-                    for hunk in hunks {
-                        switch hunk {
-                        case .add(let path, let rawContents):
-                            let target = try await resolveTarget(path)
-                            let content = (rawContents.isEmpty || rawContents.hasSuffix("\n")) ? rawContents : "\(rawContents)\n"
-                            let after = Bom.split(content).text
-                            prepared.append(.add(target: target, content: content, before: "", after: after))
-                            virtualUpdates[target.absolute.rawValue] = content
+                        for hunk in hunks {
+                            switch hunk {
+                            case .add(let path, let rawContents):
+                                let target = try await resolveTarget(path)
+                                let fileKey = CoreFilesystem.FileAccess.key(target)
+                                let content = (rawContents.isEmpty || rawContents.hasSuffix("\n")) ? rawContents : "\(rawContents)\n"
+                                let after = Bom.split(content).text
+                                prepared.append(.add(target: target, content: content, before: "", after: after))
+                                virtualUpdates[fileKey] = (target: target, content: content)
 
-                        case .delete(let path):
-                            let target = try await resolveTarget(path)
-                            let before: String
-                            if let tracked = virtualUpdates[target.absolute.rawValue] {
-                                guard let existing = tracked else {
-                                    throw AISchema.ToolFailure(message: "patch verification failed: Failed to delete \(target.resource): file does not exist")
+                            case .delete(let path):
+                                let target = try await resolveTarget(path)
+                                let fileKey = CoreFilesystem.FileAccess.key(target)
+                                let before: String
+                                if let tracked = virtualUpdates[fileKey] {
+                                    guard let existing = tracked.content else {
+                                        throw AISchema.ToolFailure(message: "patch verification failed: Failed to delete \(target.resource): file does not exist")
+                                    }
+                                    before = Bom.split(existing).text
+                                } else {
+                                    do {
+                                        let bytes = try await target.environment.files.read(target.absolute.rawValue, range: nil).bytes
+                                        before = Bom.decodeBytes(bytes).text
+                                    } catch {
+                                        if let machine = CoreSessionErrorMapping.machineMessage(error) {
+                                            throw AISchema.ToolFailure(message: machine, error: .string(String(describing: error)), cause: error)
+                                        }
+                                        throw AISchema.ToolFailure(
+                                            message: "patch verification failed: Failed to delete \(target.resource): \(error)",
+                                            cause: error
+                                        )
+                                    }
                                 }
-                                before = Bom.split(existing).text
-                            } else {
+                                prepared.append(.delete(target: target, before: before))
+                                virtualUpdates[fileKey] = (target: target, content: nil)
+
+                            case .update(let path, let movePath, let chunks):
+                                let target = try await resolveTarget(path)
+                                let fileKey = CoreFilesystem.FileAccess.key(target)
+                                let original: String
+                                if let tracked = virtualUpdates[fileKey] {
+                                    guard let existing = tracked.content else {
+                                        throw AISchema.ToolFailure(message: "patch verification failed: Failed to read file to update \(target.absolute.rawValue): file does not exist")
+                                    }
+                                    original = existing
+                                } else {
+                                    do {
+                                        let read = try await CoreFilesystem.FileMutation.readEditableText(
+                                            files: target.environment.files,
+                                            target: target.absolute.rawValue
+                                        )
+                                        original = Bom.join(read.text, bom: read.bom)
+                                    } catch {
+                                        if let machine = CoreSessionErrorMapping.machineMessage(error) {
+                                            throw AISchema.ToolFailure(message: machine, error: .string(String(describing: error)), cause: error)
+                                        }
+                                        throw AISchema.ToolFailure(
+                                            message: "patch verification failed: Failed to read file to update \(target.absolute.rawValue): \(error)",
+                                            cause: error
+                                        )
+                                    }
+                                }
+                                let before = Bom.split(original).text
+                                let derived: Patch.FileUpdate
                                 do {
-                                    before = try await CoreFilesystem.FileMutation.readText(fileSystem: env.fileSystem, target: target.absolute.rawValue).text
+                                    derived = try Patch.derive(path: path, chunks: chunks, original: original)
                                 } catch {
-                                    throw AISchema.ToolFailure(message: "patch verification failed: Failed to delete \(target.resource): \(error)")
+                                    throw AISchema.ToolFailure(message: "patch verification failed: \(error)")
+                                }
+                                let resolvedMove = try await movePath.asyncMap { try await resolveTarget($0) }
+                                let moveTarget = resolvedMove.flatMap { CoreFilesystem.FileAccess.key($0) != fileKey ? $0 : nil }
+                                let next = Patch.joinBom(derived.content, bom: derived.bom)
+                                prepared.append(.update(
+                                    target: target,
+                                    moveTarget: moveTarget,
+                                    content: next,
+                                    before: before,
+                                    after: derived.content
+                                ))
+                                if let moveTarget {
+                                    virtualUpdates[fileKey] = (target: target, content: nil)
+                                    virtualUpdates[CoreFilesystem.FileAccess.key(moveTarget)] = (target: moveTarget, content: next)
+                                } else {
+                                    virtualUpdates[fileKey] = (target: target, content: next)
                                 }
                             }
-                            prepared.append(.delete(target: target, before: before))
-                            virtualUpdates[target.absolute.rawValue] = .some(nil)
+                        }
 
-                        case .update(let path, let movePath, let chunks):
-                            let target = try await resolveTarget(path)
-                            let original: String
-                            if let tracked = virtualUpdates[target.absolute.rawValue] {
-                                guard let existing = tracked else {
-                                    throw AISchema.ToolFailure(message: "patch verification failed: Failed to read file to update \(target.absolute.rawValue): file does not exist")
+                        let previewDiffs = prepared.map { Self.makeDiff($0) }
+                        var allResources: [String] = []
+                        var seenRes: Set<String> = []
+                        for change in prepared {
+                            let r1 = change.primaryTarget.resource
+                            if seenRes.insert(r1).inserted { allResources.append(r1) }
+                            if case .update(_, let move?, _, _, _) = change, seenRes.insert(move.resource).inserted {
+                                allResources.append(move.resource)
+                            }
+                        }
+
+                        let inv = CorePermission.invocation(context)
+                        var permMeta: [String: JSONValue] = [
+                            "filepath": .string(allResources.joined(separator: ", ")),
+                            "diff": .string(previewDiffs.map { "\($0.patch)\n" }.joined()),
+                        ]
+                        if let encoded = try? JSONEncoder().encode(previewDiffs),
+                           let val = try? JSONDecoder().decode(JSONValue.self, from: encoded)
+                        {
+                            permMeta["files"] = val
+                        }
+                        try await env.permission.assert(CorePermission.AssertInput(
+                            sessionID: inv.sessionID,
+                            agent: inv.agent,
+                            action: "edit",
+                            resources: allResources,
+                            save: ["*"],
+                            metadata: permMeta,
+                            source: inv.source
+                        ))
+
+                        for change in prepared {
+                            switch change {
+                            case .add(let target, let content, _, _):
+                                try await target.environment.files.write(target.absolute.rawValue, bytes: Array(content.utf8))
+                            case .delete(let target, _):
+                                try await target.environment.files.remove(target.absolute.rawValue)
+                            case .update(let target, let moveTarget, let content, _, _):
+                                if let moveTarget {
+                                    let recased: Bool
+                                    if moveTarget.environment.id == target.environment.id,
+                                       moveTarget.absolute.rawValue.lowercased() == target.absolute.rawValue.lowercased(),
+                                       let srcStat = try? await target.environment.files.stat(target.absolute.rawValue),
+                                       srcStat.type == .file,
+                                       (try? await moveTarget.environment.files.stat(moveTarget.absolute.rawValue)) != nil
+                                    {
+                                        recased = true
+                                    } else {
+                                        recased = false
+                                    }
+                                    if recased {
+                                        try await target.environment.files.write(target.absolute.rawValue, bytes: Array(content.utf8))
+                                        try await target.environment.files.move(from: target.absolute.rawValue, to: moveTarget.absolute.rawValue)
+                                    } else {
+                                        try await moveTarget.environment.files.write(moveTarget.absolute.rawValue, bytes: Array(content.utf8))
+                                        try await target.environment.files.remove(target.absolute.rawValue)
+                                    }
+                                } else {
+                                    try await target.environment.files.write(target.absolute.rawValue, bytes: Array(content.utf8))
                                 }
-                                original = existing
-                            } else {
-                                do {
-                                    let read = try await CoreFilesystem.FileMutation.readText(fileSystem: env.fileSystem, target: target.absolute.rawValue)
-                                    original = Bom.join(read.text, bom: read.bom)
-                                } catch {
-                                    throw AISchema.ToolFailure(message: "patch verification failed: Failed to read file to update \(target.absolute.rawValue): \(error)")
-                                }
-                            }
-                            let before = Bom.split(original).text
-                            let derived: Patch.FileUpdate
-                            do {
-                                derived = try Patch.derive(path: path, chunks: chunks, original: original)
-                            } catch {
-                                throw AISchema.ToolFailure(message: "patch verification failed: \(error)")
-                            }
-                            let resolvedMove = try await movePath.asyncMap { try await resolveTarget($0) }
-                            let moveTarget = resolvedMove.flatMap { $0.absolute != target.absolute ? $0 : nil }
-                            let next = Patch.joinBom(derived.content, bom: derived.bom)
-                            prepared.append(.update(
-                                target: target,
-                                moveTarget: moveTarget,
-                                content: next,
-                                before: before,
-                                after: derived.content
-                            ))
-                            if let moveTarget {
-                                virtualUpdates[target.absolute.rawValue] = .some(nil)
-                                virtualUpdates[moveTarget.absolute.rawValue] = next
-                            } else {
-                                virtualUpdates[target.absolute.rawValue] = next
                             }
                         }
-                    }
 
-                    let previewDiffs = prepared.map { Self.makeDiff($0) }
-                    var allResources: [String] = []
-                    var seenRes: Set<String> = []
-                    for change in prepared {
-                        let r1 = change.primaryTarget.resource
-                        if seenRes.insert(r1).inserted { allResources.append(r1) }
-                        if case .update(_, let move?, _, _, _) = change, seenRes.insert(move.resource).inserted {
-                            allResources.append(move.resource)
-                        }
-                    }
-
-                    let inv = CorePermission.invocation(context)
-                    var permMeta: [String: JSONValue] = [
-                        "filepath": .string(allResources.joined(separator: ", ")),
-                        "diff": .string(previewDiffs.map { "\($0.patch)\n" }.joined()),
-                    ]
-                    if let encoded = try? JSONEncoder().encode(previewDiffs),
-                       let val = try? JSONDecoder().decode(JSONValue.self, from: encoded)
-                    {
-                        permMeta["files"] = val
-                    }
-                    try await env.permission.assert(CorePermission.AssertInput(
-                        sessionID: inv.sessionID,
-                        agent: inv.agent,
-                        action: "edit",
-                        resources: allResources,
-                        save: ["*"],
-                        metadata: permMeta,
-                        source: inv.source
-                    ))
-
-                    for change in prepared {
-                        switch change {
-                        case .add(let target, let content, _, _):
-                            try await env.fileSystem.writeFile(Array(content.utf8), to: target.absolute.rawValue, createDirectories: true)
-                        case .delete(let target, _):
-                            try await env.fileSystem.remove(at: target.absolute.rawValue)
-                        case .update(let target, let moveTarget, let content, _, _):
-                            if let moveTarget {
-                                try await env.fileSystem.writeFile(Array(content.utf8), to: moveTarget.absolute.rawValue, createDirectories: true)
-                                try await env.fileSystem.remove(at: target.absolute.rawValue)
-                            } else {
-                                try await env.fileSystem.writeFile(Array(content.utf8), to: target.absolute.rawValue, createDirectories: true)
+                        // Format updated targets (remote environments are skipped by `env.formatter.file`).
+                        for (_, update) in virtualUpdates where update.content != nil {
+                            if await env.formatter.file(update.target) {
+                                let bytes = try await update.target.environment.files.read(update.target.absolute.rawValue, range: nil).bytes
+                                let currentBom = Bom.decodeBytes(bytes).bom
+                                _ = try await CoreFilesystem.FileMutation.syncTextBom(
+                                    fileSystem: CoreFilesystem.FileMutation.fileSystem(for: update.target.environment, local: env.fileSystem),
+                                    target: update.target.absolute.rawValue,
+                                    bom: currentBom
+                                )
                             }
                         }
-                    }
 
-                    let summaryLines = ["Success. Updated the following files:"] + previewDiffs.map { file in
-                        let prefix: String
-                        switch file.status {
-                        case .added: prefix = "A"
-                        case .deleted: prefix = "D"
-                        case .modified: prefix = "M"
+                        let summaryLines = ["Success. Updated the following files:"] + previewDiffs.map { file in
+                            let prefix: String
+                            switch file.status {
+                            case .added: prefix = "A"
+                            case .deleted: prefix = "D"
+                            case .modified: prefix = "M"
+                            }
+                            return "\(prefix) \(file.file)"
                         }
-                        return "\(prefix) \(file.file)"
+                        var resultMeta: [String: JSONValue] = [:]
+                        if let encoded = try? JSONEncoder().encode(previewDiffs),
+                           let val = try? JSONDecoder().decode(JSONValue.self, from: encoded)
+                        {
+                            resultMeta["files"] = val
+                        }
+                        return ToolSchema.Result(
+                            output: .object([:]),
+                            content: .text(summaryLines.joined(separator: "\n")),
+                            metadata: resultMeta
+                        )
                     }
-                    var resultMeta: [String: JSONValue] = [:]
-                    if let encoded = try? JSONEncoder().encode(previewDiffs),
-                       let val = try? JSONDecoder().decode(JSONValue.self, from: encoded)
-                    {
-                        resultMeta["files"] = val
-                    }
-                    return ToolSchema.Result(
-                        output: .object([:]),
-                        content: .text(summaryLines.joined(separator: "\n")),
-                        metadata: resultMeta
-                    )
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw Runtime.toolFailure("Unable to apply patch")(error)
                 }
             })
         }
@@ -1067,9 +1192,7 @@ extension CoreTool {
 
         // parity: core/src/tool/plugin/glob.ts#Plugin [status=adapted hash=15a88bf8fa14]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.glob") { editor, env in
-            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode. Every target
-            // resolves on this server's own environment here, so the "Search is not available on <machine>" refusal for
-            // another machine's files cannot arise.
+            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode.
             editor.add(RegisteredTool(
                 name: name,
                 description: "Search file paths using a glob pattern (examples: \"**/*.ts\", \"src/**/*.tsx\").",
@@ -1079,9 +1202,17 @@ extension CoreTool {
             ) { rawInput, context in
                 let input = try decodeToolJSON(Input.self, from: rawInput, toolName: name)
                 let searchPath = (input.path == "undefined" || input.path == "null") ? nil : input.path
-                let target = try await env.fileAccess.resolve(
-                    CoreFilesystem.FileAccess.ResolveInput(path: searchPath ?? ".", kind: .directory)
-                )
+                let target: CoreFilesystem.FileAccess.Target
+                do {
+                    target = try await env.fileAccess.resolve(
+                        CoreFilesystem.FileAccess.ResolveInput(path: searchPath ?? ".", kind: .directory)
+                    )
+                } catch {
+                    throw Runtime.toolFailure("Unable to find files matching \(input.pattern)")(error)
+                }
+                if target.environment.id != env.environment.id {
+                    throw AISchema.ToolFailure(message: "Search is not available on \(target.environment.id.rawValue) yet.")
+                }
                 try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
@@ -1209,9 +1340,7 @@ extension CoreTool {
 
         // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=4a7c569308c7]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.grep") { editor, env in
-            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode. Every target
-            // resolves on this server's own environment here, so the "Search is not available on <machine>" refusal for
-            // another machine's files cannot arise.
+            // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode.
             editor.add(RegisteredTool(
                 name: name,
                 description: "Search file contents using ripgrep's regular expression syntax or literal text matching. Use it to locate specific code, symbols, or text patterns, and narrow searches with `path` or `include`. Returns matching file paths, line numbers, and line previews.",
@@ -1223,9 +1352,17 @@ extension CoreTool {
                 guard !input.pattern.isEmpty else {
                     throw AISchema.ToolFailure(message: "Pattern must not be empty")
                 }
-                let target = try await env.fileAccess.resolve(
-                    CoreFilesystem.FileAccess.ResolveInput(path: input.path ?? ".")
-                )
+                let target: CoreFilesystem.FileAccess.Target
+                do {
+                    target = try await env.fileAccess.resolve(
+                        CoreFilesystem.FileAccess.ResolveInput(path: input.path ?? ".")
+                    )
+                } catch {
+                    throw Runtime.toolFailure("Unable to grep for \(input.pattern)")(error)
+                }
+                if target.environment.id != env.environment.id {
+                    throw AISchema.ToolFailure(message: "Search is not available on \(target.environment.id.rawValue) yet.")
+                }
                 try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
@@ -1458,50 +1595,90 @@ extension CoreTool {
                 let timeoutMs = background ? (input.timeout ?? 0) : foreground
                 // The same default `Shell.create` gives the hooks, so the hook can tell whether one moved it.
                 let cwd = input.workdir ?? env.directory
-                let info = try await env.shell.create(
-                    CoreShell.CreateRequest(
-                        command: input.command,
-                        cwd: cwd,
-                        timeout: timeoutMs,
-                        shell: shellBin,
-                        metadata: ["sessionID": .string(context.sessionID.rawValue)],
-                        toolCall: CoreShell.ToolCall(
-                            sessionID: context.sessionID.rawValue,
-                            assistantMessageID: context.messageID,
-                            callID: context.id.rawValue
-                        ),
-                        waited: !background
+                let info: ShellSchema.Info
+                do {
+                    let initialTarget = try await env.fileAccess.resolve(
+                        CoreFilesystem.FileAccess.ResolveInput(path: cwd, kind: .directory)
                     )
-                ) { invocation in
-                    let target = try await env.fileAccess.resolve(
-                        CoreFilesystem.FileAccess.ResolveInput(path: invocation.cwd, kind: .directory)
-                    )
-                    invocation.cwd = target.absolute.rawValue
-                    invocation.env["AGENT"] = "1"
-                    invocation.env["OPENCODE"] = "1"
-                    invocation.env["AI_AGENT"] = "opencode"
-                    invocation.env["OPENCODE_SESSION_ID"] = context.sessionID.rawValue
-
-                    let parsed = try CoreShell.Parse.scan(command: invocation.command, shell: invocation.shell, cwd: target.absolute.rawValue)
-                    var externalTargets = [target]
-                    for dir in parsed.directories {
-                        let dirTarget = try await env.fileAccess.resolve(
-                            CoreFilesystem.FileAccess.ResolveInput(path: dir, kind: .directory)
+                    info = try await env.shell.create(
+                        CoreShell.CreateRequest(
+                            command: input.command,
+                            cwd: cwd,
+                            timeout: timeoutMs,
+                            shell: shellBin,
+                            metadata: ["sessionID": .string(context.sessionID.rawValue)],
+                            toolCall: CoreShell.ToolCall(
+                                sessionID: context.sessionID.rawValue,
+                                assistantMessageID: context.messageID,
+                                callID: context.id.rawValue
+                            ),
+                            waited: !background,
+                            environment: initialTarget.environment
                         )
-                        externalTargets.append(dirTarget)
+                    ) { invocation in
+                        let target: CoreFilesystem.FileAccess.Target
+                        if invocation.cwd == cwd {
+                            target = initialTarget
+                        } else {
+                            let base = initialTarget.environment.id == env.environment.id
+                                ? CoreFilesystem.FileAccess.Place(absolute: env.directory, environment: env.environment.id)
+                                : initialTarget.place
+                            target = try await env.fileAccess.resolve(
+                                CoreFilesystem.FileAccess.ResolveInput(path: invocation.cwd, kind: .directory, base: base)
+                            )
+                        }
+                        invocation.cwd = target.absolute.rawValue
+                        let local = target.environment.id == env.environment.id
+                        invocation.env["AGENT"] = "1"
+                        invocation.env["OPENCODE"] = "1"
+                        invocation.env["AI_AGENT"] = "opencode"
+                        invocation.env["OPENCODE_SESSION_ID"] = context.sessionID.rawValue
+
+                        let parsed = try CoreShell.Parse.scan(
+                            command: invocation.command,
+                            shell: invocation.shell,
+                            cwd: target.absolute.rawValue,
+                            home: local ? .server : .unknown
+                        )
+                        var externalTargets = [target]
+                        for dir in parsed.directories {
+                            let dirTarget = try await env.fileAccess.resolve(
+                                CoreFilesystem.FileAccess.ResolveInput(path: dir, kind: .directory, base: target.place)
+                            )
+                            externalTargets.append(dirTarget)
+                        }
+                        try await env.fileAccess.authorizeExternal(externalTargets, context: context, metadata: nil)
+                        if !parsed.commands.isEmpty {
+                            let inv = CorePermission.invocation(context)
+                            try await env.permission.assert(CorePermission.AssertInput(
+                                sessionID: inv.sessionID,
+                                agent: inv.agent,
+                                action: name,
+                                resources: parsed.commands.map(\.resource),
+                                save: parsed.commands.map(\.save),
+                                source: inv.source
+                            ))
+                        }
+                        // Approval can outlive the directory, so validate immediately before spawning.
+                        let workdirType: CoreLocation.Environment.Files.FileType
+                        do {
+                            workdirType = try await CoreLocation.Environment.Files.typeFollowing(
+                                target.environment.files,
+                                path: target.absolute.rawValue
+                            )
+                        } catch is CoreLocation.Environment.Files.NotFound {
+                            throw AISchema.ToolFailure(message: "Working directory does not exist: \(target.absolute.rawValue)")
+                        }
+                        guard workdirType == .directory else {
+                            throw AISchema.ToolFailure(message: "Working directory is not a directory: \(target.absolute.rawValue)")
+                        }
                     }
-                    try await env.fileAccess.authorizeExternal(externalTargets, context: context, metadata: nil)
-                    if !parsed.commands.isEmpty {
-                        let inv = CorePermission.invocation(context)
-                        try await env.permission.assert(CorePermission.AssertInput(
-                            sessionID: inv.sessionID,
-                            agent: inv.agent,
-                            action: name,
-                            resources: parsed.commands.map(\.resource),
-                            save: parsed.commands.map(\.save),
-                            source: inv.source
-                        ))
-                    }
+                } catch let err as CorePermission.DeclinedError {
+                    throw err
+                } catch let err as AISchema.ToolFailure {
+                    throw err
+                } catch {
+                    throw Runtime.toolFailure("Unable to execute command: \(input.command)")(error)
                 }
 
                 await context.progress(["shellID": .string(info.id.rawValue)])
