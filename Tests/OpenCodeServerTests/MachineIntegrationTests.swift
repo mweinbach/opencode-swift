@@ -384,7 +384,10 @@ struct MachineIntegrationTests {
 
     @Test("ServerProcess starts Automation.run and stops it cleanly on close")
     func automationRunStartsWithServerAndStopsOnClose() async throws {
-        let fs = InMemoryFileSystem(initialFiles: ["/workspace/README.md": Helper.utf8Bytes("ok\n")])
+        let fs = InMemoryFileSystem(initialFiles: [
+            "/workspace/README.md": Helper.utf8Bytes("ok\n"),
+            "/workspace/opencode.json": Helper.utf8Bytes(#"{"experimental":{"automations":true,"mcp_events":true}}"#),
+        ])
         let server = try await ServerProcess.start(
             options: ServerOptions(hostname: "127.0.0.1", port: 0, password: "server-password"),
             fileSystem: fs,
@@ -404,11 +407,19 @@ struct MachineIntegrationTests {
         ))
         #expect(linkCheck.head.statusCode == 426)
 
+        // Create a real session so Automation.run can deliver the due prompt to it.
+        let targetSession = try await server.router.runtime.session.create(CoreSession.CreateInput(
+            location: OpenCodeLocation(directory: "/workspace"),
+            permissions: [SessionSchema.PermissionRule(action: "*", resource: "*", effect: .allow)]
+        ))
+
         // Insert a due automation row and wake the loop: Automation.run must fire it without any manual tick().
         let autoID = "aut_server_run_test"
         try Helper.insertDueAutomation(
             db: server.router.runtime.db,
             id: autoID,
+            projectID: targetSession.projectID.rawValue,
+            sessionID: targetSession.id.rawValue,
             directory: "/workspace",
             name: "due-job",
             nowMs: Flock.currentEpochMs()
@@ -423,9 +434,45 @@ struct MachineIntegrationTests {
         }
         #expect(fired)
 
-        // Closing the server cancels and awaits Automation.run and releases the leader lease.
+        // Also start an event-triggered automation backed by CoreBus and verify server.stop() cancels its watch.
+        let locOut = try await server.router.runtime.locations.get(
+            CoreLocation.ServiceMap.canonical(LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: "/workspace")))
+        )
+        let bundle = try #require(ServerLocationBundle.from(locOut))
+        let busEvents = CoreMCP.Client.BusEvents(
+            server: "ci",
+            types: [
+                CoreMCP.Client.EventType(
+                    name: "deploy.done",
+                    delivery: ["push"],
+                    inputSchema: ["type": .string("object"), "additionalProperties": .bool(false)],
+                    payloadSchema: ["type": .string("object"), "properties": .object(["env": .object(["type": .string("string")])]), "required": .array([.string("env")])]
+                ),
+            ],
+            bus: server.router.runtime.bus
+        )
+        let mcpRegistry = try #require(bundle.mcp as? CoreMCP.Registry.Service)
+        mcpRegistry.registerEvents(server: "ci", events: busEvents)
+        let eventAuto = try await server.router.runtime.automation.create(
+            AutomationSchema.CreateInput(
+                sessionID: targetSession.id,
+                name: "watch-deploy",
+                trigger: .event(.init(server: "ci", event: "deploy.done")),
+                action: .prompt(.init(prompt: "Deploy finished"))
+            ),
+            projectID: targetSession.projectID,
+            directory: "/workspace",
+            invocation: CoreAutomation.Author.Invocation(sessionID: targetSession.id, agent: CoreAgent.Agent.defaultID)
+        )
+        let watching = await Helper.eventually {
+            server.router.runtime.automation.activeWatchIDs.contains(eventAuto.id)
+        }
+        #expect(watching)
+
+        // Closing the server cancels and awaits Automation.run, cancels active watches, and releases the leader lease.
         await server.stop()
         #expect(server.router.runtime.automation.isRunning == false)
+        #expect(server.router.runtime.automation.activeWatchIDs.isEmpty)
         #expect(Helper.automationLeaderRowExists(db: server.router.runtime.db) == false)
     }
 

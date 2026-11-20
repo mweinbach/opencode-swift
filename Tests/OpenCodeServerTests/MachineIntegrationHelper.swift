@@ -345,22 +345,26 @@ enum MachineIntegrationHelper {
     static func insertDueAutomation(
         db: any SQLiteDatabase,
         id: String,
+        projectID: String = "global",
+        sessionID: String = "ses_auto_int",
         directory: String,
         name: String,
         nowMs: Int64
     ) throws {
         let pastDue = nowMs - 5_000
         let trigger = #"{"type":"at","at":"2020-01-01T00:00:00Z"}"#
-        let action = #"{"type":"prompt","prompt":"ping","to":{"session":"ses_auto_int"}}"#
+        let action = #"{"type":"prompt","prompt":"ping","to":{"session":"\#(sessionID)"}}"#
         _ = try db.execute(
             """
             INSERT INTO automation (
                 id, project_id, session_id, directory, name, trigger, tz, action,
                 status, next_due_at, expires_at, run_count, failures, time_created, time_updated
-            ) VALUES (?, 'global', 'ses_auto_int', ?, ?, ?, 'UTC', ?, 'active', ?, NULL, 0, 0, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, 'UTC', ?, 'active', ?, NULL, 0, 0, ?, ?)
             """,
             parameters: [
                 .text(id),
+                .text(projectID),
+                .text(sessionID),
                 .text(directory),
                 .text(name),
                 .text(trigger),

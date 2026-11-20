@@ -1533,6 +1533,39 @@ public final class ServerAppRuntime: Sendable {
                     return false
                 }
                 return await bundle.flag.enabled(.automations)
+            },
+            sessions: session,
+            execution: sessionExecution,
+            bus: bus,
+            resolveLocation: { dir in
+                guard let locations = locationsBox.value else {
+                    return CoreAutomation.LocationContext(enabled: false, mcpEventsEnabled: false)
+                }
+                let ref = CoreLocation.ServiceMap.canonical(
+                    LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
+                )
+                let out = try await locations.get(ref)
+                guard let bundle = ServerLocationBundle.from(out) else {
+                    return CoreAutomation.LocationContext(enabled: false, mcpEventsEnabled: false)
+                }
+                let entries = await bundle.config.entries()
+                let tz = entries.compactMap { $0.info?.timezone }.last
+                let depthLimit = entries.compactMap { $0.info?.experimental?.subagentDepth?.rawValue }.last ?? 1
+                let enabled = await bundle.flag.enabled(.automations)
+                let mcpEventsEnabled = await bundle.flag.enabled(.mcpEvents)
+                return CoreAutomation.LocationContext(
+                    enabled: enabled,
+                    mcpEventsEnabled: mcpEventsEnabled,
+                    timezone: tz,
+                    projectID: bundle.location.info.project.id,
+                    mcp: bundle.mcp,
+                    lifecycle: bundle.lifecycle,
+                    agents: bundle.agent,
+                    permission: bundle.permission,
+                    tools: bundle.tool,
+                    awaitPluginActivation: { await bundle.plugin.awaitActivation() },
+                    subagentDepthLimit: depthLimit
+                )
             }
         )
 
@@ -1715,7 +1748,8 @@ public final class ServerAppRuntime: Sendable {
             )
             let mcpService = CoreMCP.Registry.Service(
                 directory: dirPath,
-                http: capturedHttp
+                http: capturedHttp,
+                bus: bus
             )
             let rpcService = CoreIntegration.Rpc.Service()
             let webSearchService = CoreIntegration.WebSearch.Service(kv: kv)
