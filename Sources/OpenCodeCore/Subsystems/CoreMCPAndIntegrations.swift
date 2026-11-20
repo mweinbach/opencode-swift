@@ -1303,6 +1303,77 @@ public enum CoreMCP {
             ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error>
         }
 
+        /// Bus-backed `CoreMCP.Client.Events` producer bridging `McpEventSchema.ExperimentalEvent`
+        /// (`experimental.mcp.event`) published on `CoreBus.Service` into MCP push event streams.
+        public final class BusEvents: Events, Sendable {
+            public let server: String
+            public let types: [EventType]
+            public let bus: CoreBus.Service
+            public let location: OpenCodeLocation?
+            public let initialCursor: String?
+
+            public init(
+                server: String,
+                types: [EventType],
+                bus: CoreBus.Service,
+                location: OpenCodeLocation? = nil,
+                initialCursor: String? = "0"
+            ) {
+                self.server = server
+                self.types = types
+                self.bus = bus
+                self.location = location
+                self.initialCursor = initialCursor
+            }
+
+            public func list() async throws -> [EventType] {
+                types
+            }
+
+            public func stream(
+                name: String,
+                arguments: [String: JSONValue]?,
+                cursor: String?
+            ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error> {
+                _ = arguments
+                // Subscribe synchronously BEFORE returning so no bus event published right after open is missed.
+                let busStream = bus.subscribe(
+                    types: Set([McpEventSchema.ExperimentalEvent.type]),
+                    location: location
+                )
+                let serverName = self.server
+                let initial = cursor ?? self.initialCursor
+                return AsyncThrowingStream { continuation in
+                    let task = Task {
+                        continuation.yield(.active(cursor: initial, truncated: false))
+                        for await payload in busStream {
+                            if Task.isCancelled { break }
+                            guard let decoded = try? CoreBusJSON.decodeFromJSONValue(
+                                payload.data,
+                                as: McpEventSchema.ExperimentalEventData.self
+                            ) else { continue }
+                            guard decoded.server == serverName, decoded.name == name else { continue }
+                            if decoded.truncated == true {
+                                continuation.yield(.active(cursor: decoded.cursor, truncated: true))
+                                continue
+                            }
+                            continuation.yield(.event(
+                                eventId: decoded.eventId,
+                                name: decoded.name,
+                                timestamp: decoded.timestamp,
+                                data: decoded.data,
+                                cursor: decoded.cursor
+                            ))
+                        }
+                        continuation.finish()
+                    }
+                    continuation.onTermination = { _ in
+                        task.cancel()
+                    }
+                }
+            }
+        }
+
         // parity: core/src/mcp/client.ts#Connection [status=implemented hash=c9459625f817]
         public protocol Connection: Sendable {
             var modern: Bool { get }
@@ -2279,13 +2350,16 @@ public enum CoreMCP {
             private struct RuntimeState: Sendable {
                 var entries: [ServerName: RuntimeEntry] = [:]
                 var attached: [ServerName: [Client.LiveConnection]] = [:]
+                var customEvents: [ServerName: any Client.Events] = [:]
                 var subs: [String: Subscription] = [:]
+                var subTasks: [String: Task<Void, Never>] = [:]
             }
 
             private let options: Options
             private let directory: String
             private let http: (any HTTPTransport)?
             private let spawner: (any ProcessSpawner)?
+            private let bus: CoreBus.Service?
             private let state: CoreState.Store<Data, Editor>
             private let runtime = Mutex(RuntimeState())
 
@@ -2293,18 +2367,32 @@ public enum CoreMCP {
                 options: Options = Options(),
                 directory: String = "/",
                 http: (any HTTPTransport)? = nil,
-                spawner: (any ProcessSpawner)? = nil
+                spawner: (any ProcessSpawner)? = nil,
+                bus: CoreBus.Service? = nil
             ) {
                 self.options = options
                 self.directory = directory
                 self.http = http
                 self.spawner = spawner
+                self.bus = bus
                 self.state = CoreState.create(CoreState.Options(
                     name: "mcp",
                     initial: { Data() },
                     makeEditor: { Editor(data: $0) },
                     commitEditor: { $0.data }
                 ))
+            }
+
+            /// Registers or clears a direct `Client.Events` producer for `server` (used by local adapters and tests).
+            public func registerEvents(server: String, events: (any Client.Events)?) {
+                let key = ServerName(rawValue: server)
+                runtime.withLock { r in
+                    if let events {
+                        r.customEvents[key] = events
+                    } else {
+                        r.customEvents.removeValue(forKey: key)
+                    }
+                }
             }
 
             @discardableResult
@@ -2522,10 +2610,18 @@ public enum CoreMCP {
 
             public func events(server: String) async throws -> (any Client.Events)? {
                 let key = ServerName(rawValue: server)
-                guard let entry = runtime.withLock({ $0.entries[key] }) else {
+                return try runtime.withLock { r in
+                    if let custom = r.customEvents[key] {
+                        return custom
+                    }
+                    if let entry = r.entries[key] {
+                        return entry.connection.client?.events
+                    }
+                    if let attachedConn = r.attached[key]?.last {
+                        return attachedConn.events
+                    }
                     throw NotFoundError(server: key)
                 }
-                return entry.connection.client?.events
             }
 
             public func subscribe(
@@ -2535,7 +2631,13 @@ public enum CoreMCP {
                 cursor: String? = nil
             ) async throws -> Subscription {
                 let key = ServerName(rawValue: server)
-                guard runtime.withLock({ $0.entries[key] != nil }) else {
+                let (exists, eventsProvider): (Bool, (any Client.Events)?) = runtime.withLock { r in
+                    if let custom = r.customEvents[key] { return (true, custom) }
+                    if let entry = r.entries[key] { return (true, entry.connection.client?.events) }
+                    if let attachedConn = r.attached[key]?.last { return (true, attachedConn.events) }
+                    return (false, nil)
+                }
+                guard exists else {
                     throw NotFoundError(server: key)
                 }
                 let subID = Hash.sha256(CoreSubsystems.Util.canonicalJson(.array([
@@ -2543,16 +2645,89 @@ public enum CoreMCP {
                     .string(name),
                     arguments.map(JSONValue.object) ?? .null,
                 ])))
-                return runtime.withLock { r in
-                    if let existing = r.subs[subID] { return existing }
-                    let sub = Subscription(id: subID, server: key, name: name, arguments: arguments, status: .pending, cursor: cursor)
-                    r.subs[subID] = sub
-                    return sub
+                let (sub, isNew): (Subscription, Bool) = runtime.withLock { r in
+                    if let existing = r.subs[subID] { return (existing, false) }
+                    let created = Subscription(id: subID, server: key, name: name, arguments: arguments, status: .pending, cursor: cursor)
+                    r.subs[subID] = created
+                    return (created, true)
                 }
+                if isNew, let eventsProvider, let bus {
+                    let loc = OpenCodeLocation(directory: directory)
+                    let task = Task { [weak self] in
+                        guard let stream = try? await eventsProvider.stream(name: name, arguments: arguments, cursor: cursor) else { return }
+                        var gap = false
+                        do {
+                            for try await msg in stream {
+                                if Task.isCancelled { break }
+                                switch msg {
+                                case .error:
+                                    continue
+                                case .heartbeat(let cur):
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
+                                        }
+                                    }
+                                case .active(let cur, let truncated):
+                                    if cur != nil && truncated { gap = true }
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .active, cursor: cur)
+                                        }
+                                    }
+                                    await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                                case .event(let eventId, let eventName, let ts, let data, let cur):
+                                    await bus.emit(
+                                        McpEventSchema.ExperimentalEvent,
+                                        data: McpEventSchema.ExperimentalEventData(
+                                            id: subID,
+                                            server: server,
+                                            name: eventName,
+                                            eventId: eventId,
+                                            timestamp: ts,
+                                            data: data,
+                                            cursor: cur,
+                                            truncated: gap ? true : nil
+                                        ),
+                                        options: CoreBus.PublishOptions(location: loc)
+                                    )
+                                    gap = false
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
+                                        }
+                                    }
+                                }
+                            }
+                        } catch let err as Client.EventStreamRejectedError {
+                            self?.runtime.withLock { r in
+                                if let s = r.subs[subID] {
+                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .rejected(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
+                                }
+                            }
+                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                        } catch let err as Client.EventStreamTerminatedError {
+                            self?.runtime.withLock { r in
+                                if let s = r.subs[subID] {
+                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .terminated(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
+                                }
+                            }
+                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                        } catch {
+                            // Stream disconnected/closed
+                        }
+                    }
+                    runtime.withLock { r in r.subTasks[subID] = task }
+                }
+                return sub
             }
 
             public func unsubscribe(id: String) async {
-                runtime.withLock { _ = $0.subs.removeValue(forKey: id) }
+                let task = runtime.withLock { r -> Task<Void, Never>? in
+                    _ = r.subs.removeValue(forKey: id)
+                    return r.subTasks.removeValue(forKey: id)
+                }
+                task?.cancel()
             }
 
             public func subscriptions() async -> [Subscription] {

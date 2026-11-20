@@ -1403,7 +1403,11 @@ extension CoreTool {
                         ),
                         projectID: caller.projectID,
                         directory: caller.directory,
-                        invocation: CoreAutomation.Author.Invocation(sessionID: context.sessionID, agent: context.agent)
+                        invocation: CoreAutomation.Author.Invocation(
+                            sessionID: context.sessionID,
+                            agent: context.agent,
+                            source: CorePermission.invocation(context).source
+                        )
                     )
                     let view = toView(info)
                     return ToolSchema.Result(
