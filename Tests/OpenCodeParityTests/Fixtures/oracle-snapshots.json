@@ -1,6 +1,6 @@
 {
   "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "generatedAt": "2026-11-20T20:14:49.232Z",
+  "generatedAt": "2026-11-20T20:20:50.735Z",
   "vectorCount": 1349,
   "cases": [
     {
@@ -10166,7 +10166,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001y89v4NLYz3ZlCD"
+      "expectedValue": "bcfe56800001jiABmqw9Due9RY"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10177,7 +10177,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002Cl0P4hBQQbLJ1v"
+      "expectedValue": "bcfe56800002Ge9LO81gR1GI7c"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10188,7 +10188,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffe04ZXozdkNZAysN"
+      "expectedValue": "4301a97feffeDnYP5E7iDDiaFD"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10199,7 +10199,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdljiBvU2hF4gIWC"
+      "expectedValue": "4301a97feffdNOTOdXQXw5swKJ"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10207,7 +10207,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1fa98daf3001yecgsL25ksVjCv"
+      "expectedValue": "1fa9e5f51001c9RZrtUt1rQdFj"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10215,7 +10215,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e0567250cffddotiU1404AcVm4"
+      "expectedValue": "e0561a0aeffdwDdE3kmM14Uo62"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10223,7 +10223,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "9fb1caad-ddd8-48c5-a4ae-4416682907c6"
+      "expectedValue": "d21586bc-0268-4742-906c-16544b18ef5e"
     },
     {
       "fn": "latex/src/render.ts#renderLatexToString",
