@@ -1249,7 +1249,7 @@ public enum CoreSessionInstructionEntry {
         func list(_ sessionID: SessionID) throws -> [Info]
         func put(sessionID: SessionID, key: Key, value: JSONValue) throws
         func remove(sessionID: SessionID, key: Key) throws
-        func load(_ sessionID: SessionID) throws -> [CoreSessionInstructionState.Source]
+        func load(_ sessionID: SessionID) throws -> CoreInstruction.Instructions.List
     }
 
     // parity: core/src/session/instruction-entry.ts#Service [status=implemented hash=fca79d25d218]
@@ -1305,19 +1305,24 @@ public enum CoreSessionInstructionEntry {
             )
         }
 
-        public func load(_ sessionID: SessionID) throws -> [CoreSessionInstructionState.Source] {
-            try fetchRows(db: db, sessionID: sessionID, includeRemoved: true).map { entry in
+        /// One `api/<key>` instruction source per entry row; a removed row reads as `Instructions.removed`.
+        public func load(_ sessionID: SessionID) throws -> CoreInstruction.Instructions.List {
+            typealias Instructions = CoreInstruction.Instructions
+            let sources: [Instructions.List] = try fetchRows(db: db, sessionID: sessionID, includeRemoved: true).compactMap { entry in
+                guard let sourceKey = Instructions.Key(rawValue: "api/\(entry.key)") else { return nil }
                 let key = entry.key
-                return CoreSessionInstructionState.Source(
-                    key: "api/\(key)",
-                    value: entry.removed ? nil : entry.value,
-                    renderInitial: { val in Self.renderBlock(key: key, value: val) },
-                    renderChanged: { _, val in
+                let observed: Instructions.Observation<JSONValue> = entry.removed ? .removed : .value(entry.value)
+                return [Instructions.Source(
+                    key: sourceKey,
+                    read: { observed },
+                    initial: { val in Self.renderBlock(key: key, value: val) },
+                    changed: { _, val in
                         "The context under \"\(key)\" changed and supersedes the previous value:\n\(Self.renderBlock(key: key, value: val))"
                     },
-                    renderRemoved: { "The context under \"\(key)\" no longer applies. Disregard it." }
-                )
+                    removed: { _ in "The context under \"\(key)\" no longer applies. Disregard it." }
+                )]
             }
+            return (try? Instructions.combine(sources)) ?? sources.flatMap { $0 }
         }
 
         private static func renderBlock(key: String, value: JSONValue) -> String {
@@ -1349,12 +1354,20 @@ public enum CoreSessionInstructionEntry {
 /// Epoch-based instruction baseline, hash-blob deduplication, delta observation, and rewind
 /// (`packages/core/src/session/instruction-state.ts`).
 public enum CoreSessionInstructionState {
+    /// One observed instruction source: an `Instructions.Source` after `read`, with its renderers. An empty
+    /// rendering means the source contributes no text (upstream's `undefined`).
     public struct Source: Sendable {
         public let key: String
+        /// The observed value; nil when the source reads as removed or is unavailable.
         public let value: JSONValue?
+        /// The source could not be read (`Instructions.unavailable`): its previous value stands, and a Session's
+        /// first baseline waits for it (`Instructions.InitializationBlocked`).
+        public let unavailable: Bool
         public let renderInitial: @Sendable (JSONValue) -> String
+        /// Renders a replacement; when there is no previous value the update restates the source with `renderInitial`.
         public let renderChanged: @Sendable (JSONValue?, JSONValue) -> String
         public let renderRemoved: @Sendable () -> String
+        private let renderRemovedFrom: @Sendable (JSONValue) -> String
 
         public static func defaultRender(_ val: JSONValue) -> String {
             if case .string(let s) = val { return s }
@@ -1366,13 +1379,61 @@ public enum CoreSessionInstructionState {
             value: JSONValue?,
             renderInitial: @escaping @Sendable (JSONValue) -> String = { CoreSessionInstructionState.Source.defaultRender($0) },
             renderChanged: @escaping @Sendable (JSONValue?, JSONValue) -> String = { _, val in CoreSessionInstructionState.Source.defaultRender(val) },
-            renderRemoved: @escaping @Sendable () -> String = { "" }
+            renderRemoved: @escaping @Sendable () -> String = { "" },
+            unavailable: Bool = false
         ) {
             self.key = key
             self.value = value
+            self.unavailable = unavailable
             self.renderInitial = renderInitial
             self.renderChanged = renderChanged
             self.renderRemoved = renderRemoved
+            self.renderRemovedFrom = { _ in renderRemoved() }
+        }
+
+        private init(observing source: CoreInstruction.Instructions.Source, observed: CoreInstruction.Instructions.Observation<JSONValue>) {
+            self.key = source.key.rawValue
+            switch observed {
+            case .value(let value):
+                self.value = value
+                self.unavailable = false
+            case .removed:
+                self.value = nil
+                self.unavailable = false
+            case .unavailable:
+                self.value = nil
+                self.unavailable = true
+            }
+            self.renderInitial = { source.initial($0) ?? "" }
+            self.renderChanged = { previous, next in
+                guard let previous else { return source.initial(next) ?? "" }
+                return source.changed(previous, next) ?? ""
+            }
+            self.renderRemoved = { "" }
+            self.renderRemovedFrom = { source.removed($0) ?? "" }
+        }
+
+        /// Reads one `Instructions.Source` (`Instructions.read`) into an observed source.
+        public static func read(_ source: CoreInstruction.Instructions.Source) async -> Source {
+            Source(observing: source, observed: await source.read())
+        }
+
+        /// The text that retires this source, given the value the model last saw.
+        public func renderRemoved(previous: JSONValue) -> String {
+            renderRemovedFrom(previous)
+        }
+    }
+
+    /// Reads every source of an `Instructions.List` concurrently, keeping list order (`Instructions.read`).
+    public static func read(_ list: CoreInstruction.Instructions.List) async -> [Source] {
+        await withTaskGroup(of: (Int, Source).self) { group in
+            for (index, source) in list.enumerated() {
+                group.addTask { (index, await Source.read(source)) }
+            }
+            var observed: [(Int, Source)] = []
+            observed.reserveCapacity(list.count)
+            for await item in group { observed.append(item) }
+            return observed.sorted { $0.0 < $1.0 }.map(\.1)
         }
     }
 
@@ -1466,24 +1527,21 @@ public enum CoreSessionInstructionState {
         _ sources: [Source],
         previous: [String: String]
     ) throws -> (current: [String: String], delta: [String: SessionEventSchema.InstructionDeltaValue], blobs: [String: JSONValue]) {
+        // `Instructions.diff`: an unavailable source keeps its previous value, a removed one retires a value the
+        // model saw, and only changed values are admitted as blobs. Keys no source reports are left as they are.
         var delta: [String: SessionEventSchema.InstructionDeltaValue] = [:]
         var blobs: [String: JSONValue] = [:]
-        var presentKeys = Set<String>()
 
-        for source in sources {
+        for source in sources where !source.unavailable {
             if let val = source.value {
-                presentKeys.insert(source.key)
                 let h = try hashJSONValue(val)
-                blobs[h] = val
                 if previous[source.key] != h {
                     delta[source.key] = .hash(h)
+                    blobs[h] = val
                 }
             } else if previous[source.key] != nil {
                 delta[source.key] = .removed
             }
-        }
-        for key in previous.keys where !presentKeys.contains(key) {
-            delta[key] = .removed
         }
         let current = applyHashDelta(previous, delta: delta)
         return (current, delta, blobs)
@@ -1530,23 +1588,35 @@ public enum CoreSessionInstructionState {
         }
     }
 
+    /// `Instructions.diff` without a stored baseline: an unavailable source blocks the first baseline.
+    private static func assertInitializable(_ sources: [Source]) throws(CoreInstruction.Instructions.InitializationBlocked) {
+        let blocked = sources.filter(\.unavailable).compactMap { CoreInstruction.Instructions.Key(rawValue: $0.key) }
+        if !blocked.isEmpty { throw CoreInstruction.Instructions.InitializationBlocked(keys: blocked) }
+    }
+
+    /// `Instructions.renderUpdate`: changed sources in list order; a source new to the Session restates its
+    /// initial text, and a removed one renders against the value the model last saw.
     private static func renderUpdate(
         sources: [Source],
         previous: [String: JSONValue],
         delta: [String: SessionEventSchema.InstructionDeltaValue],
         blobs: [String: JSONValue]
     ) -> String {
-        let byKey = Dictionary(uniqueKeysWithValues: sources.map { ($0.key, $0) })
         var chunks: [String] = []
-        for key in delta.keys.sorted() {
-            guard let source = byKey[key], let change = delta[key] else { continue }
+        for source in sources {
+            guard let change = delta[source.key] else { continue }
             let rendered: String
             switch change {
             case .removed:
-                rendered = source.renderRemoved()
+                guard let before = previous[source.key] else { continue }
+                rendered = source.renderRemoved(previous: before)
             case .hash(let h):
                 guard let nextVal = blobs[h] else { continue }
-                rendered = source.renderChanged(previous[key], nextVal)
+                if let before = previous[source.key] {
+                    rendered = source.renderChanged(before, nextVal)
+                } else {
+                    rendered = source.renderInitial(nextVal)
+                }
             }
             if !rendered.isEmpty { chunks.append(rendered) }
         }
@@ -1560,6 +1630,7 @@ public enum CoreSessionInstructionState {
         sessionID: SessionID
     ) throws -> Observation {
         let stored = try findState(db: db, sessionID: sessionID)
+        if stored == nil { try assertInitializable(sources) }
         let prev = stored?.currentValues ?? [:]
         let diff = try diffSources(sources, previous: prev)
         return Observation(
@@ -1714,6 +1785,7 @@ public enum CoreSessionInstructionState {
         sources: [Source]
     ) throws -> (initial: [RenderedInstruction], update: String) {
         let stored = try findState(db: db, sessionID: sessionID)
+        if stored == nil { try assertInitializable(sources) }
         let diff = try diffSources(sources, previous: stored?.currentValues ?? [:])
         guard let stored else {
             return (renderInitial(sources: sources, values: diff.current, blobs: diff.blobs), "")

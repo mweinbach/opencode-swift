@@ -407,8 +407,315 @@ public enum CoreConfigPlugin {
     }
 
     public enum Instruction {
+        /// Adapted: the plugin's sources are ported by `Loader`, but there is no file watcher or `config.updated`
+        /// subscription here. The host calls `Loader.refresh` before it reads `InstructionDiscovery`, which rescans
+        /// the files and picks up a changed `instructions` config list.
         // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=0a7d4cb2760b]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.instruction")
+
+        /// Feeds one Location's `InstructionDiscovery`: the global AGENTS.md (or `~/.claude/CLAUDE.md` in its
+        /// place), the AGENTS.md / CLAUDE.md files from the Location up to the project root (or the home directory
+        /// when the Location sits beneath it), and the files and URLs named by config `instructions` entries.
+        public actor Loader {
+            public typealias File = CoreInstruction.Discovery.File
+
+            public struct Paths: Sendable {
+                public let directory: String
+                public let projectDirectory: String
+                public let home: String
+                public let globalConfig: String
+
+                public init(directory: String, projectDirectory: String, home: String, globalConfig: String) {
+                    self.directory = directory
+                    self.projectDirectory = projectDirectory
+                    self.home = home
+                    self.globalConfig = globalConfig
+                }
+            }
+
+            enum Loaded: Equatable, Sendable {
+                case available([File])
+                case unavailable
+            }
+
+            private enum Read {
+                case file(File)
+                case missing
+                case denied
+            }
+
+            private struct Resolved: Sendable {
+                let start: String
+                let root: String
+                let home: String
+                let stop: String
+                let project: Bool
+                let names: [String]
+                let globalFiles: [String]
+            }
+
+            private final class Current: Sendable {
+                let value = Mutex<Loaded>(.available([]))
+            }
+
+            private let discovery: CoreInstruction.Discovery.Service
+            private let fs: FSUtil.Service
+            private let http: (any HTTPTransport)?
+            private let entries: @Sendable () async -> [CoreConfigEntry]
+            private let paths: Paths
+            private let current = Current()
+            private var resolved: Resolved?
+            private var registered = false
+            private var published: Loaded?
+            private var configured: (sources: [String], matches: [String: [String]], remote: [String: File])?
+
+            public init(
+                discovery: CoreInstruction.Discovery.Service,
+                paths: Paths,
+                fileSystem: any OpenCodeFileSystem,
+                http: (any HTTPTransport)? = nil,
+                entries: @escaping @Sendable () async -> [CoreConfigEntry]
+            ) {
+                self.discovery = discovery
+                self.paths = paths
+                self.fs = FSUtil.Service(fileSystem: fileSystem)
+                self.http = http
+                self.entries = entries
+            }
+
+            /// Rescans the instruction files (re-reading configured sources when the config list changed) and
+            /// reloads `InstructionDiscovery` when what it lists changed.
+            public func refresh() async {
+                let resolved = await resolve()
+                let sources = Self.unique(await entries().flatMap { $0.info?.instructions ?? [] })
+                if configured?.sources != sources { await reconfigure(sources, resolved: resolved) }
+                let loaded = await load(resolved)
+                current.value.withLock { $0 = loaded }
+                if !registered {
+                    registered = true
+                    published = loaded
+                    let current = self.current
+                    _ = try? await discovery.transform { editor in
+                        switch current.value.withLock({ $0 }) {
+                        case .unavailable:
+                            editor.unavailable()
+                        case .available(let files):
+                            for file in files { editor.add(file) }
+                        }
+                    }
+                } else if published != loaded {
+                    published = loaded
+                    await discovery.reload()
+                }
+            }
+
+            private func resolve() async -> Resolved {
+                if let resolved { return resolved }
+                let start = await fs.resolve(paths.directory)
+                let root = await fs.resolve(paths.projectDirectory)
+                let home = await fs.resolve(paths.home)
+                let globalFile = await fs.resolve(Self.join(paths.globalConfig, "AGENTS.md"))
+                // ~/.claude/CLAUDE.md stands in for the global AGENTS.md when it is missing.
+                let claudeGlobalFile = await fs.resolve(Self.join(Self.join(home, ".claude"), "CLAUDE.md"))
+                let value = Resolved(
+                    start: start,
+                    root: root,
+                    home: home,
+                    stop: FSPathUtil.contains(parent: home, child: start) ? home : root,
+                    project: discovery.project && FSPathUtil.contains(parent: root, child: start),
+                    names: CoreInstruction.Discovery.filenames(claude: discovery.claude),
+                    globalFiles: discovery.claude ? [globalFile, claudeGlobalFile] : [globalFile]
+                )
+                resolved = value
+                return value
+            }
+
+            // A missing file may be mid-save and is transient; a denied file stays absent.
+            private func read(_ filepath: String) async -> Read? {
+                do {
+                    let bytes = try await fs.fileSystem.readFile(at: filepath)
+                    return .file(File(path: filepath, content: String(decoding: bytes, as: UTF8.self)))
+                } catch let error as PlatformError {
+                    if case .notFound = error { return .missing }
+                    if FSUtil.isAccessDenied(error) { return .denied }
+                    return nil
+                } catch {
+                    return nil
+                }
+            }
+
+            private func load(_ r: Resolved) async -> Loaded {
+                guard let global = await globalSource(r),
+                      let project = await projectSource(r),
+                      let configured = await configuredSource()
+                else { return .unavailable }
+                return .available(global + project + configured)
+            }
+
+            private func globalSource(_ r: Resolved) async -> [File]? {
+                if !discovery.global { return [] }
+                for candidate in r.globalFiles {
+                    guard await fs.isFile(candidate) else { continue }
+                    switch await read(candidate) {
+                    case .file(let file): return [file]
+                    case .missing, .denied: return []
+                    case nil: return nil
+                    }
+                }
+                return []
+            }
+
+            private func projectSource(_ r: Resolved) async -> [File]? {
+                if !r.project { return [] }
+                guard let found = try? await fs.up(FSPathUtil.UpOptions(targets: r.names, start: r.start, stop: r.stop, type: .file)) else {
+                    return nil
+                }
+                var discovered: [String] = []
+                for path in CoreInstruction.Discovery.preferAgents(found) {
+                    let walked = await fs.resolve(path)
+                    // The ancestor walk can reach the global file; global: false excludes it there too.
+                    if !discovery.global && r.globalFiles.contains(walked) { continue }
+                    if !discovered.contains(walked) { discovered.append(walked) }
+                }
+                var files: [File] = []
+                for path in discovered {
+                    switch await read(path) {
+                    case .file(let file): files.append(file)
+                    case .denied: continue
+                    case .missing, nil: return nil
+                    }
+                }
+                return files
+            }
+
+            private func configuredSource() async -> [File]? {
+                guard let configured else { return [] }
+                var files: [File] = []
+                var seen: Set<String> = []
+                for source in configured.sources {
+                    if Self.isURL(source) {
+                        if let file = configured.remote[source] { files.append(file) }
+                        continue
+                    }
+                    for item in configured.matches[source] ?? [] {
+                        let resolved = await fs.resolve(item)
+                        if !seen.insert(resolved).inserted { continue }
+                        if case .file(let file) = await read(resolved) { files.append(file) }
+                    }
+                }
+                return files
+            }
+
+            /// Remote instructions are fetched only when the config list changes; a failed fetch keeps the last
+            /// good copy or skips the URL. Path patterns are matched here too, since walking directories for
+            /// every refresh would cost a scan per model step; each refresh re-reads the matched files.
+            private func reconfigure(_ sources: [String], resolved r: Resolved) async {
+                var remote: [String: File] = [:]
+                var matches: [String: [String]] = [:]
+                for source in sources {
+                    if Self.isURL(source) {
+                        if let file = await fetch(source) {
+                            remote[source] = file
+                        } else if let previous = configured?.remote[source] {
+                            remote[source] = previous
+                        }
+                        continue
+                    }
+                    matches[source] = await match(source, r).sorted()
+                }
+                configured = (sources, matches, remote)
+            }
+
+            private func fetch(_ url: String) async -> File? {
+                guard let http,
+                      let response = try? await http.send(HTTPRequest(method: "GET", url: url)),
+                      (200..<300).contains(response.head.statusCode)
+                else { return nil }
+                return File(path: url, content: String(decoding: response.body, as: UTF8.self))
+            }
+
+            // Relative patterns search upward from the location to the project root. Without project discovery
+            // they resolve against the global config directory instead.
+            private func match(_ source: String, _ r: Resolved) async -> [String] {
+                let expanded = source.hasPrefix("~/") ? Self.join(r.home, String(source.dropFirst(2))) : source
+                func options(_ cwd: String) -> Glob.Options {
+                    Glob.Options(cwd: cwd, absolute: true, include: .file, dot: true)
+                }
+                if expanded.hasPrefix("/") {
+                    if !Self.hasGlob(expanded) { return await fs.isFile(expanded) ? [expanded] : [] }
+                    let directory = Self.dirname(expanded)
+                    if await fs.isDir(directory) {
+                        return (try? await fs.scan(pattern: Self.basename(expanded), options: options(directory))) ?? []
+                    }
+                    // No literal parent (`~/notes/**/*.md`): scan from the longest literal prefix.
+                    let (base, rest) = Self.literalPrefix(expanded)
+                    return (try? await fs.scan(pattern: rest, options: options(base))) ?? []
+                }
+                if r.project {
+                    if Self.hasGlob(expanded) {
+                        return (try? await fs.globUp(pattern: expanded, start: r.start, stop: r.root)) ?? []
+                    }
+                    var found: [String] = []
+                    var directory = r.start
+                    while true {
+                        let candidate = Self.join(directory, expanded)
+                        if await fs.isFile(candidate) { found.append(candidate) }
+                        if sameDirectory(directory, r.root) { break }
+                        let parent = Self.dirname(directory)
+                        if parent == directory { break }
+                        directory = parent
+                    }
+                    return found
+                }
+                if !discovery.global { return [] }
+                if !Self.hasGlob(expanded) {
+                    let candidate = Self.join(paths.globalConfig, expanded)
+                    return await fs.isFile(candidate) ? [candidate] : []
+                }
+                return (try? await fs.scan(pattern: expanded, options: options(paths.globalConfig))) ?? []
+            }
+
+            private static func unique(_ values: [String]) -> [String] {
+                var seen: Set<String> = []
+                return values.filter { seen.insert($0).inserted }
+            }
+
+            private static func isURL(_ source: String) -> Bool {
+                source.hasPrefix("http://") || source.hasPrefix("https://")
+            }
+
+            private static func hasGlob(_ pattern: String) -> Bool {
+                pattern.contains { "*?[]{}".contains($0) }
+            }
+
+            private static func join(_ base: String, _ child: String) -> String {
+                if child.isEmpty { return base }
+                return base.hasSuffix("/") ? base + child : base + "/" + child
+            }
+
+            private static func dirname(_ path: String) -> String {
+                guard let index = path.lastIndex(of: "/") else { return "." }
+                if index == path.startIndex { return "/" }
+                return String(path[..<index])
+            }
+
+            private static func basename(_ path: String) -> String {
+                guard let index = path.lastIndex(of: "/") else { return path }
+                return String(path[path.index(after: index)...])
+            }
+
+            private static func literalPrefix(_ path: String) -> (base: String, rest: String) {
+                let segments = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+                var base: [String] = []
+                var index = 0
+                while index < segments.count - 1, !hasGlob(segments[index]) {
+                    base.append(segments[index])
+                    index += 1
+                }
+                let joined = base.joined(separator: "/")
+                return (joined.isEmpty ? "/" : joined, segments[index...].joined(separator: "/"))
+            }
+        }
     }
 
     public enum LocationWatcher {

@@ -1083,15 +1083,19 @@ public enum CoreSessionModelRequest {
 
     public struct ToolSnapshot: Sendable {
         public let definitions: [AISchema.ToolEntry]
+        /// The Code Mode catalog (`Tool.Snapshot.codeModeCatalog`), present exactly when `execute` is offered.
+        public let codeModeCatalog: CoreCodemode.Catalog.Inventory?
         public let execute: @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult
 
         public init(
             definitions: [AISchema.ToolEntry] = [],
+            codeModeCatalog: CoreCodemode.Catalog.Inventory? = nil,
             execute: @escaping @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult = { input in
                 throw ToolSchema.ToolError(message: "Unknown tool: \(input.call.name)")
             }
         ) {
             self.definitions = definitions
+            self.codeModeCatalog = codeModeCatalog
             self.execute = execute
         }
     }
@@ -1103,6 +1107,8 @@ public enum CoreSessionModelRequest {
         public let temperature: Double?
         public let topP: Double?
         public let model: SessionSchema.ModelRef?
+        /// The agent's permission ruleset (`Agent.Info.permissions`); session rules are merged on top at selection.
+        public let permissions: PermissionSchema.Ruleset
 
         public init(
             id: String,
@@ -1110,7 +1116,8 @@ public enum CoreSessionModelRequest {
             maxSteps: Int? = nil,
             temperature: Double? = nil,
             topP: Double? = nil,
-            model: SessionSchema.ModelRef? = nil
+            model: SessionSchema.ModelRef? = nil,
+            permissions: PermissionSchema.Ruleset = []
         ) {
             self.id = id
             self.system = system
@@ -1118,6 +1125,7 @@ public enum CoreSessionModelRequest {
             self.temperature = temperature
             self.topP = topP
             self.model = model
+            self.permissions = permissions
         }
     }
 
@@ -1538,6 +1546,93 @@ public enum CoreSessionContext {
         var request: any CoreSessionModelRequest.Interface { get }
     }
 
+    /// The Location-scoped instruction services `select` combines into a Session's baseline (upstream's
+    /// `InstructionBuiltIns`, `InstructionDiscovery`, `SkillInstructions`, `ReferenceInstructions`,
+    /// `McpInstructions` and `MachineInstructions`). A missing service contributes no sources.
+    public struct InstructionSources: Sendable {
+        public typealias List = CoreInstruction.Instructions.List
+        public let builtins: (@Sendable () async -> List)?
+        public let discovery: (@Sendable () async -> List)?
+        public let skills: (@Sendable (PermissionSchema.Ruleset) async -> List)?
+        public let references: (@Sendable () async -> List)?
+        public let mcp: (@Sendable (CoreMCP.Instructions.ToolReach) async -> List)?
+        public let machines: (@Sendable () async -> List)?
+
+        public init(
+            builtins: (@Sendable () async -> List)? = nil,
+            discovery: (@Sendable () async -> List)? = nil,
+            skills: (@Sendable (PermissionSchema.Ruleset) async -> List)? = nil,
+            references: (@Sendable () async -> List)? = nil,
+            mcp: (@Sendable (CoreMCP.Instructions.ToolReach) async -> List)? = nil,
+            machines: (@Sendable () async -> List)? = nil
+        ) {
+            self.builtins = builtins
+            self.discovery = discovery
+            self.skills = skills
+            self.references = references
+            self.mcp = mcp
+            self.machines = machines
+        }
+
+        /// Sources backed by the instruction services themselves.
+        public static func services(
+            builtins: (any CoreInstruction.BuiltIns.Interface)? = nil,
+            discovery: (any CoreInstruction.Discovery.Interface)? = nil,
+            skills: (any CoreSkill.SkillInstructions.Interface)? = nil,
+            references: (any CoreInstruction.Reference.ReferenceInstructions.Interface)? = nil,
+            mcp: (any CoreMCP.Instructions.Interface)? = nil,
+            machines: (any MachineInstructions.Interface)? = nil
+        ) -> InstructionSources {
+            var loadBuiltins: (@Sendable () async -> List)?
+            if let builtins { loadBuiltins = { await builtins.load() } }
+            var loadDiscovery: (@Sendable () async -> List)?
+            if let discovery { loadDiscovery = { await discovery.load() } }
+            var loadSkills: (@Sendable (PermissionSchema.Ruleset) async -> List)?
+            if let skills { loadSkills = { permissions in await skills.load(permissions: permissions) } }
+            var loadReferences: (@Sendable () async -> List)?
+            if let references { loadReferences = { await references.load() } }
+            var loadMcp: (@Sendable (CoreMCP.Instructions.ToolReach) async -> List)?
+            if let mcp { loadMcp = { tools in await mcp.load(tools: tools) } }
+            var loadMachines: (@Sendable () async -> List)?
+            if let machines { loadMachines = { await machines.load() } }
+            return InstructionSources(
+                builtins: loadBuiltins,
+                discovery: loadDiscovery,
+                skills: loadSkills,
+                references: loadReferences,
+                mcp: loadMcp,
+                machines: loadMachines
+            )
+        }
+    }
+
+    /// `Permission.merge(agent.info.permissions, session.permissions ?? [])`.
+    static func permissions(agent: CoreSessionModelRequest.AgentProfile, session: SessionSchema.Info) -> PermissionSchema.Ruleset {
+        agent.permissions + (session.permissions ?? []).map { rule in
+            PermissionSchema.Rule(
+                action: rule.action,
+                resource: rule.resource,
+                effect: PermissionSchema.Effect(rawValue: rule.effect.rawValue) ?? .ask
+            )
+        }
+    }
+
+    /// The Session's instruction baseline, ordered from most to least shared across Sessions so it stays a
+    /// reusable prompt-cache prefix: user-level catalog and guidance, then project instructions, then the date
+    /// and environment, which vary by day and directory, then the Session's own entries.
+    public static func combine(
+        codeMode: CoreInstruction.Instructions.List,
+        mcp: CoreInstruction.Instructions.List,
+        references: CoreInstruction.Instructions.List,
+        skills: CoreInstruction.Instructions.List,
+        machines: CoreInstruction.Instructions.List,
+        discovery: CoreInstruction.Instructions.List,
+        builtins: CoreInstruction.Instructions.List,
+        entries: CoreInstruction.Instructions.List
+    ) throws(CoreInstruction.Instructions.DuplicateKeyError) -> CoreInstruction.Instructions.List {
+        try CoreInstruction.Instructions.combine([codeMode, mcp, references, skills, machines, discovery, builtins, entries])
+    }
+
     // parity: core/src/session/context.ts#Service [status=implemented hash=4016e4c1a48b]
     public final class Service: Interface, Sendable {
         public static let serviceKey = "@opencode/SessionContext"
@@ -1546,6 +1641,7 @@ public enum CoreSessionContext {
         public let models: any CoreSessionRunnerModel.Interface
         public let request: any CoreSessionModelRequest.Interface
         public let entries: any CoreSessionInstructionEntry.Interface
+        public let instructionSources: InstructionSources
         public let selectAgent: @Sendable (SessionSchema.Info) async throws -> CoreSessionModelRequest.AgentProfile
         /// Builds the tool snapshot for the session's agent. The selected model (nil when none can be selected yet)
         /// decides which tools the model policy offers.
@@ -1564,13 +1660,15 @@ public enum CoreSessionContext {
             selectTools: @escaping @Sendable (SessionSchema.Info, CoreSessionModelRequest.AgentProfile, ModelSchema.Info?) async throws -> CoreSessionModelRequest.ToolSnapshot = { _, _, _ in
                 CoreSessionModelRequest.ToolSnapshot()
             },
-            availableModels: @escaping @Sendable () async throws -> [ModelSchema.Info] = { [] }
+            availableModels: @escaping @Sendable () async throws -> [ModelSchema.Info] = { [] },
+            instructions: InstructionSources = InstructionSources()
         ) {
             self.db = db
             self.store = store
             self.models = models
             self.request = request
             self.entries = entries ?? CoreSessionInstructionEntry.Service(db: db)
+            self.instructionSources = instructions
             self.selectAgent = selectAgent
             self.selectTools = selectTools
             self.availableModels = availableModels
@@ -1581,6 +1679,8 @@ public enum CoreSessionContext {
                 throw CoreSessionErrors.NotFoundError(sessionID: sessionID)
             }
             let agent = try await selectAgent(session)
+            // Session permissions narrow discovery the same way they narrow the tool snapshot.
+            let permissions = CoreSessionContext.permissions(agent: agent, session: session)
             // The tool policy depends on the model the session would run on; an unselectable model falls back to
             // the session's (or agent's) explicit reference so the policy still sees its provider and id.
             let selected = try? await models.select(session: session, available: availableModels)
@@ -1591,8 +1691,31 @@ public enum CoreSessionContext {
                 )
             }
             let tools = try await selectTools(session, agent, policyModel)
-            let instructionSources = try entries.load(sessionID)
-            return Selection(session: session, agent: agent, instructions: instructionSources, tools: tools)
+            let sources = instructionSources
+            let reach = CoreMCP.Instructions.ToolReach(
+                definitions: tools.definitions.map(\.name),
+                codeModeCatalog: tools.codeModeCatalog
+            )
+            async let builtins: CoreInstruction.Instructions.List = sources.builtins?() ?? []
+            async let discovery: CoreInstruction.Instructions.List = sources.discovery?() ?? []
+            async let skills: CoreInstruction.Instructions.List = sources.skills?(permissions) ?? []
+            async let references: CoreInstruction.Instructions.List = sources.references?() ?? []
+            async let mcp: CoreInstruction.Instructions.List = sources.mcp?(reach) ?? []
+            async let machines: CoreInstruction.Instructions.List = sources.machines?() ?? []
+            let sessionEntries = try entries.load(sessionID)
+            let instructions = try await CoreSessionContext.combine(
+                codeMode: CoreCodemode.Instructions.make(tools.codeModeCatalog),
+                mcp: mcp,
+                references: references,
+                skills: skills,
+                machines: machines,
+                discovery: discovery,
+                builtins: builtins,
+                entries: sessionEntries
+            )
+            // Read once per selection; the same observation feeds `InstructionState.prepare` and history assembly.
+            let observed = await CoreSessionInstructionState.read(instructions)
+            return Selection(session: session, agent: agent, instructions: observed, tools: tools)
         }
 
         public func resolveModel(
@@ -1639,8 +1762,9 @@ public enum CoreSessionContext {
     }
 
     /// Tool snapshots are chosen for the selected model (`SessionRunnerModel.select`); the model policy, web search
-    /// availability and the `full_codemode` flag live behind the injected `selectTools`.
-    // parity: core/src/session/context.ts#node [status=adapted hash=162dfb3e4163]
+    /// availability and the `full_codemode` flag live behind the injected `selectTools`. `select` combines the
+    /// Location's instruction services in upstream's prompt-cache order (`InstructionSources`).
+    // parity: core/src/session/context.ts#node [status=implemented hash=162dfb3e4163]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1652,9 +1776,40 @@ public enum CoreSessionContext {
             }
             let req = deps.get(CoreSessionModelRequest.Service.serviceKey, as: (any CoreSessionModelRequest.Interface).self)
                 ?? CoreSessionModelRequest.Service()
-            return LayerNode.Output([Service.serviceKey: Service(db: db, store: store, models: models, request: req)])
+            let entries = deps.get(CoreSessionInstructionEntry.Service.serviceKey, as: (any CoreSessionInstructionEntry.Interface).self)
+            let instructions = InstructionSources.services(
+                builtins: deps.get(CoreInstruction.BuiltIns.Service.serviceKey, as: (any CoreInstruction.BuiltIns.Interface).self),
+                discovery: deps.get(CoreInstruction.Discovery.Service.serviceKey, as: CoreInstruction.Discovery.Service.self),
+                skills: deps.get(CoreSkill.SkillInstructions.Service.serviceKey, as: (any CoreSkill.SkillInstructions.Interface).self),
+                references: deps.get(
+                    CoreInstruction.Reference.ReferenceInstructions.Service.serviceKey,
+                    as: (any CoreInstruction.Reference.ReferenceInstructions.Interface).self
+                ),
+                mcp: deps.get(CoreMCP.Instructions.Service.serviceKey, as: (any CoreMCP.Instructions.Interface).self),
+                machines: deps.get(MachineInstructions.Service.serviceKey, as: (any MachineInstructions.Interface).self)
+            )
+            return LayerNode.Output([Service.serviceKey: Service(
+                db: db,
+                store: store,
+                models: models,
+                request: req,
+                entries: entries,
+                instructions: instructions
+            )])
         },
-        [CoreDatabaseStore.node, CoreSessionStore.node, CoreSessionRunnerModel.node, CoreSessionModelRequest.node]
+        [
+            CoreDatabaseStore.node,
+            CoreSessionStore.node,
+            CoreSessionRunnerModel.node,
+            CoreSessionModelRequest.node,
+            CoreSessionInstructionEntry.node,
+            CoreInstruction.BuiltIns.node,
+            CoreInstruction.Discovery.node,
+            CoreInstruction.Reference.ReferenceInstructions.node,
+            CoreSkill.SkillInstructions.node,
+            CoreMCP.Instructions.node,
+            MachineInstructions.node,
+        ]
     )
 }
 

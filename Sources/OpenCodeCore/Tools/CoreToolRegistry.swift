@@ -407,13 +407,17 @@ public enum CoreTool {
     // parity: core/src/tool.ts#Snapshot [status=adapted hash=d7ce31a23629]
     public struct Snapshot: Sendable {
         public let definitions: [AISchema.ToolDefinition]
+        /// The catalog of tools placed inside Code Mode, present exactly when the snapshot offers `execute`.
+        public let codeModeCatalog: CoreCodemode.Catalog.Inventory?
         private let executeImpl: @Sendable (ExecuteCallInput) async throws -> NormalizedResult
 
         public init(
             definitions: [AISchema.ToolDefinition],
+            codeModeCatalog: CoreCodemode.Catalog.Inventory? = nil,
             execute: @escaping @Sendable (ExecuteCallInput) async throws -> NormalizedResult
         ) {
             self.definitions = definitions
+            self.codeModeCatalog = codeModeCatalog
             self.executeImpl = execute
         }
 
@@ -573,7 +577,7 @@ public enum CoreTool {
                     return (direct, codemodeEntries, defs, s.namespaces)
                 }
 
-            let executeTool: RegisteredTool? = codeModeEnabled
+            let codemode: (tool: RegisteredTool, catalog: CoreCodemode.Catalog.Inventory)? = codeModeEnabled
                 ? codeMode.map { host in
                     Self.makeCodeModeTool(
                         entries: codemodeEntries,
@@ -583,9 +587,10 @@ public enum CoreTool {
                     )
                 }
                 : nil
+            let executeTool = codemode?.tool
             let definitions = directDefs + (executeTool.map { [Runtime.definition($0)] } ?? [])
 
-            return Snapshot(definitions: definitions) { call in
+            return Snapshot(definitions: definitions, codeModeCatalog: codemode?.catalog) { call in
                 let tool: RegisteredTool
                 if call.name == "execute", let executeTool {
                     tool = executeTool
@@ -615,7 +620,7 @@ public enum CoreTool {
             namespaces: [String: ToolSchema.Namespace],
             host: CodeModeHost,
             services: CoreCodemode.Tool.Services?
-        ) -> RegisteredTool {
+        ) -> (tool: RegisteredTool, catalog: CoreCodemode.Catalog.Inventory) {
             var registrations: [String: CoreCodemode.Tool.ToolRegistration] = [:]
             for (name, tool) in entries {
                 let def = Runtime.definition(tool, codemode: true)
@@ -641,8 +646,9 @@ public enum CoreTool {
                     }
                 }
             }
+            let inventory = CoreCodemode.Tool.Inventory(tools: registrations, namespaces: namespaces)
             let info = CoreCodemode.Tool.create(
-                inventory: CoreCodemode.Tool.Inventory(tools: registrations, namespaces: namespaces),
+                inventory: inventory,
                 transport: host.transport,
                 permission: host.permission,
                 services: services
@@ -653,7 +659,7 @@ public enum CoreTool {
             } else {
                 inputSchema = ["type": .string("object")]
             }
-            return RegisteredTool(
+            let tool = RegisteredTool(
                 id: info.name,
                 name: info.name,
                 description: info.description,
@@ -669,6 +675,7 @@ public enum CoreTool {
                     metadata: result.metadata
                 )
             }
+            return (tool, CoreCodemode.Tool.catalog(inventory))
         }
 
         public func check(_ input: CheckInput) async -> CheckResult {

@@ -1339,6 +1339,12 @@ public final class ServerAppRuntime: Sendable {
         let sessionEnv = CoreSessionEnvironment.Service()
         let sessionTransfer = CoreSessionTransfer.Service(db: db, bus: bus, store: sessionStore)
         let sessionInstructions = CoreSessionInstructionEntry.Service(db: db)
+        // core/src/machine/machines.ts is process-global; MachineInstructions lists its machines per Location
+        // (behind the `machines` flag). The home key loads lazily, only when a machine is invited.
+        let machines: (any Machines.Interface)? = try? Machines.Service(
+            database: db,
+            identity: MachineIdentity.Service(state: globalPaths.state, fileSystem: fileSystem)
+        )
 
         // Install session event projectors transactionally on the bus.
         CoreSessionProjector.register(bus: bus, db: db)
@@ -1815,6 +1821,52 @@ public final class ServerAppRuntime: Sendable {
             )
             _ = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
 
+            // core/src/session/context.ts: the Location's instruction services, combined per Session step.
+            let instructionDiscovery = CoreInstruction.Discovery.Service(options: CoreInstruction.Discovery.Options(
+                project: capturedConfigOpts?.project,
+                claude: capturedOptions.instructions?.claude
+            ))
+            let instructionLoader = CoreConfigPlugin.Instruction.Loader(
+                discovery: instructionDiscovery,
+                paths: CoreConfigPlugin.Instruction.Loader.Paths(
+                    directory: dirPath,
+                    projectDirectory: resolvedProject.directory.rawValue,
+                    home: capturedGlobal.home,
+                    globalConfig: capturedGlobal.config
+                ),
+                fileSystem: capturedFs,
+                http: capturedHttp,
+                entries: { await configService.entries() }
+            )
+            await instructionLoader.refresh()
+            let instructionBuiltIns = CoreInstruction.BuiltIns.Service(
+                workingDirectory: dirPath,
+                workspaceRoot: resolvedProject.directory.rawValue,
+                isGitRepo: resolvedProject.vcs?.type.rawValue == "git",
+                tmpDirectory: capturedGlobal.tmp
+            )
+            let referenceInstructions = CoreInstruction.Reference.ReferenceInstructions.Service(references: referenceService)
+            let skillInstructions = CoreSkill.SkillInstructions.Service(skills: skillService)
+            let mcpInstructions = CoreMCP.Instructions.Service(mcp: mcpService)
+            var loadMachineInstructions: (@Sendable () async -> CoreInstruction.Instructions.List)?
+            if let machines {
+                let machineInstructions = MachineInstructions.Service(flags: flagService, machines: machines)
+                loadMachineInstructions = { await machineInstructions.load() }
+            }
+            let instructionSources = CoreSessionContext.InstructionSources(
+                builtins: { await instructionBuiltIns.load() },
+                // No file watcher here: rescan the instruction files before each read, so an edit reaches the
+                // next step as an instruction update.
+                discovery: {
+                    await instructionLoader.refresh()
+                    return await instructionDiscovery.load()
+                },
+                skills: { permissions in await skillInstructions.load(permissions: permissions) },
+                references: { await referenceInstructions.load() },
+                mcp: { tools in await mcpInstructions.load(tools: tools) },
+                machines: loadMachineInstructions
+            )
+
             let closedFlag = Mutex(false)
             let sessionRunner = ServerLiveRuntime.makeSessionRunner(
                 db: db,
@@ -1834,6 +1886,7 @@ public final class ServerAppRuntime: Sendable {
                 webSearch: webSearchService,
                 flags: flagService,
                 codeModeServices: codeModeServices,
+                instructions: instructionSources,
                 isLocationClosed: { closedFlag.withLock { $0 } }
             )
 

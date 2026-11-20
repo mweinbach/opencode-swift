@@ -5503,6 +5503,7 @@ public enum ServerLiveRuntime {
         webSearch: (any CoreIntegration.WebSearch.Interface)? = nil,
         flags: (any CoreFlag.Interface)? = nil,
         codeModeServices: CoreCodemode.Tool.Services? = nil,
+        instructions: CoreSessionContext.InstructionSources = CoreSessionContext.InstructionSources(),
         isLocationClosed: @escaping @Sendable () -> Bool
     ) -> LiveSessionRunner {
         let llmClient = makeLLMClient(transport: httpTransport)
@@ -5548,7 +5549,9 @@ public enum ServerLiveRuntime {
                     id: selection.id.rawValue,
                     system: systemPrompt,
                     maxSteps: info?.steps?.rawValue,
-                    model: modelRef
+                    model: modelRef,
+                    // The same ruleset the tool snapshot is built from; `select` merges the Session's rules on top.
+                    permissions: effectivePermissionRuleset(agent: info, configEntries: await configService.entries())
                 )
             },
             selectTools: { session, agentProfile, policyModel in
@@ -5575,6 +5578,7 @@ public enum ServerLiveRuntime {
                 let entries: [AISchema.ToolEntry] = snap.definitions.map { .tool($0) }
                 return CoreSessionModelRequest.ToolSnapshot(
                     definitions: entries,
+                    codeModeCatalog: snap.codeModeCatalog,
                     execute: { toolInput in
                         do {
                             let normalized = try await snap.execute(CoreTool.ExecuteCallInput(
@@ -5596,7 +5600,8 @@ public enum ServerLiveRuntime {
             },
             availableModels: {
                 (try? await modelService.available(types: nil)) ?? []
-            }
+            },
+            instructions: instructions
         )
 
         let liveContext = LiveSessionContext(inner: sessionContext, agentService: agentService)
