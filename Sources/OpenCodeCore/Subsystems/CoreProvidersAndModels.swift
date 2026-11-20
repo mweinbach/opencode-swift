@@ -666,12 +666,6 @@ public enum CoreProvider {
                     } else {
                         currentActiveID = nil
                     }
-                    let integrationRaw = row.string("integration_id") ?? ""
-                    let activeRow = integrationRaw.isEmpty ? nil : try db.queryOne(
-                        "SELECT id FROM credential WHERE integration_id = ? ORDER BY active DESC, time_created DESC, id DESC",
-                        parameters: [.text(integrationRaw)]
-                    )
-                    let wasActive = !integrationRaw.isEmpty && (activeRow?.string("id") == id.rawValue || row.int64("active") == 1)
                     _ = try db.execute("DELETE FROM credential WHERE id = ?", parameters: [.text(id.rawValue)])
                     guard let integrationRaw, !integrationRaw.isEmpty else { return nil }
                     let integrationID = IntegrationID(rawValue: integrationRaw)
