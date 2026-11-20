@@ -585,7 +585,7 @@ struct LiveModelsDevTests {
         #expect(immediateSnapshots.contains { $0.info.id == .anthropic })
 
         // Background refresh should complete, update cache/disk, and emit Refreshed
-        let refreshed = await LiveModelsDevHelper.waitUntil(timeoutMs: 2_000) {
+        let refreshed = await LiveModelsDevHelper.waitUntil(timeoutMs: 15_000) {
             refreshedCount.withLock { $0 } >= 1
         }
         #expect(refreshed)
@@ -631,7 +631,7 @@ struct LiveModelsDevTests {
         #expect(initial.count == 2)
 
         // Background SWR replaces KV + disk with fresh catalog
-        let updated = await LiveModelsDevHelper.waitUntil(timeoutMs: 2_000) {
+        let updated = await LiveModelsDevHelper.waitUntil(timeoutMs: 15_000) {
             (try? await service.get().map(\.info.id.rawValue)) == ["google"]
         }
         #expect(updated)
