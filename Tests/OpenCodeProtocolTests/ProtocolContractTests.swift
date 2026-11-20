@@ -13,13 +13,13 @@ struct ProtocolContractTests {
         #expect(Set(ProtocolCatalog.upstreamGroups).count == 38)
     }
 
-    @Test("ClientApi composes all 32 API groups and all 173 upstream endpoints")
+    @Test("ClientApi composes all 32 API groups and all 174 upstream endpoints")
     func clientApiComposition() {
         #expect(ClientApi.identifier == "server")
         #expect(ClientApi.title == "opencode HttpApi")
         #expect(ClientApi.version == "0.0.1")
         #expect(ClientApi.groups.count == 32)
-        #expect(ClientApi.endpoints.count == 173)
+        #expect(ClientApi.endpoints.count == 174)
         #expect(groupNames.count == 32)
 
         let composedGroupIDs = Set(ClientApi.groups.map(\.identifier))
@@ -144,7 +144,7 @@ struct ProtocolContractTests {
             sessionLocationMiddleware: customSession
         )
         #expect(api.groups.count == 32)
-        #expect(api.endpoints.count == 173)
+        #expect(api.endpoints.count == 174)
 
         let formList = try #require(api.endpoint(openAPIIdentifier: "session.form.list"))
         #expect(formList.middlewares.contains(customForm))
