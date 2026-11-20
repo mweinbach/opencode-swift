@@ -1110,8 +1110,10 @@ public final class ServerAppRuntime: Sendable {
         self.locationActivity = locationActivity
         self.instance = instance
         self.serverInfo = serverInfo
+        let trimmedCacheDir = global.cache.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let defaultCachePath = "\(trimmedCacheDir.isEmpty ? "" : "/\(trimmedCacheDir)")/models.json"
         let effectiveModelsOpts = modelsDevOptions ?? options.models ?? CoreModel.ModelsDev.Options(
-            file: "\(global.cache)/models.json",
+            file: nil,
             fetch: allowLiveNetwork
         )
         self.modelsDevOptions = effectiveModelsOpts
@@ -1120,7 +1122,10 @@ public final class ServerAppRuntime: Sendable {
             options: effectiveModelsOpts,
             http: httpTransport,
             fileSystem: fileSystem,
-            kv: kv
+            kv: kv,
+            bus: bus,
+            cacheFilePath: effectiveModelsOpts.file ?? defaultCachePath,
+            userAgent: "\(options.app?.name ?? "opencode")/\(options.app?.version ?? "2.3.2")"
         )
         self.oauthManager = oauthManager ?? ServerLiveOAuthManager(
             credential: credential,
@@ -1386,19 +1391,22 @@ public final class ServerAppRuntime: Sendable {
         let modelsCachePath = options.models?.file ?? "\(trimmedCacheDir)/models.json"
         let effectiveModelsOptions = CoreModel.ModelsDev.Options(
             url: options.models?.url,
-            file: modelsCachePath,
+            file: options.models?.file,
             fetch: allowLiveNetwork,
             snapshot: options.models?.snapshot
         )
+        let appName = options.app?.name ?? "opencode"
+        let appVersionForUA = options.app?.version ?? "2.3.2"
+        let userAgent = "\(appName)/\(appVersionForUA)"
         let modelsDev = CoreModel.ModelsDev.Service(
             options: effectiveModelsOptions,
             http: httpTransport,
             fileSystem: fileSystem,
-            kv: kv
+            kv: kv,
+            bus: bus,
+            cacheFilePath: modelsCachePath,
+            userAgent: userAgent
         )
-        let appName = options.app?.name ?? "opencode"
-        let appVersionForUA = options.app?.version ?? "2.0.0"
-        let userAgent = "\(appName)/\(appVersionForUA)"
         let oauthManager = ServerLiveOAuthManager(
             credential: credential,
             httpTransport: httpTransport,

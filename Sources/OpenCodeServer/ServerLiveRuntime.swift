@@ -1469,6 +1469,35 @@ public enum ServerLiveRuntime {
         return "\(globalPaths.cache.trimmingTrailingSlashes())/models.json"
     }
 
+    private static func extractKVCatalogText(_ value: JSONValue) -> String? {
+        switch value {
+        case .string(let text):
+            return text.isEmpty ? nil : text
+        case .object(let obj):
+            if let body = obj["body"] {
+                switch body {
+                case .string(let text):
+                    return text.isEmpty ? nil : text
+                case .object:
+                    return (try? JSONEncoder().encode(body)).map { String(decoding: $0, as: UTF8.self) }
+                default:
+                    return nil
+                }
+            }
+            return (try? JSONEncoder().encode(value)).map { String(decoding: $0, as: UTF8.self) }
+        default:
+            return nil
+        }
+    }
+
+    private static func extractEpochMs(_ value: JSONValue?) -> Int64? {
+        switch value {
+        case .int(let i): return i
+        case .double(let d): return Int64(d)
+        default: return nil
+        }
+    }
+
     /// Returns `true` when the ModelsDev catalog cache is absent or older than 1 hour.
     public static func isModelsDevCacheColdOrStale(
         kv: CoreKV.Service,
@@ -1477,23 +1506,24 @@ public enum ServerLiveRuntime {
         options: CoreModel.ModelsDev.Options?
     ) async -> Bool {
         let now = Flock.currentEpochMs()
+        var updatedAt: Int64? = nil
         if let meta = try? await kv.get(modelsDevMetaKVKey),
            case .object(let obj) = meta
         {
-            let updatedAt: Int64? = switch obj["updatedAt"] {
-            case .int(let i): i
-            case .double(let d): Int64(d)
-            default: nil
+            updatedAt = extractEpochMs(obj["updatedAt"])
+        }
+        let kvRaw = try? await kv.get(modelsDevCatalogKVKey)
+        if updatedAt == nil, case .object(let obj) = kvRaw {
+            updatedAt = extractEpochMs(obj["updatedAt"])
+        }
+        if let updatedAt {
+            if now - updatedAt >= modelsDevStaleMs {
+                return true
             }
-            if let updatedAt {
-                if now - updatedAt >= modelsDevStaleMs {
-                    return true
-                }
-                let hasKV = (try? await kv.get(modelsDevCatalogKVKey)) != nil
-                let cacheFile = modelsDevCacheFilePath(globalPaths: globalPaths, options: options)
-                let hasDisk = if let cacheFile { await fileSystem.exists(at: cacheFile) } else { false }
-                return !(hasKV || hasDisk)
-            }
+            let hasKV = kvRaw.flatMap(extractKVCatalogText) != nil
+            let cacheFile = modelsDevCacheFilePath(globalPaths: globalPaths, options: options)
+            let hasDisk = if let cacheFile { await fileSystem.exists(at: cacheFile) } else { false }
+            return !(hasKV || hasDisk)
         }
         // When KV meta has not been written yet (e.g., fresh :memory: DB with warm disk cache),
         // honor the on-disk `<cache>/models.json` modification time so fresh caches avoid redundant fetches.
@@ -1509,8 +1539,9 @@ public enum ServerLiveRuntime {
         return true
     }
 
-    /// Fetches the live ModelsDev v2 catalog, persists it to KV (`models-dev:v2:catalog` + `:meta`)
-    /// and disk (`<cache>/models.json`), refreshes `modelsDev`, and returns `true` if catalog content changed.
+    /// Fetches the live ModelsDev v2 catalog (falling back to models.dev v1 on failure), persists it
+    /// to KV (`models-dev:v2:catalog` + `:meta` in upstream envelope format) and disk (`<cache>/models.json`),
+    /// refreshes `modelsDev`, and returns `true` if catalog content changed.
     @discardableResult
     public static func refreshModelsDevCatalog(
         modelsDev: CoreModel.ModelsDev.Service?,
@@ -1522,33 +1553,57 @@ public enum ServerLiveRuntime {
     ) async -> Bool {
         guard let httpTransport else { return false }
         let source = (options?.url ?? "https://models.opencode.ai").trimmingTrailingSlashes()
-        let url = "\(source)\(CoreModel.ModelsDev.catalogPath)"
-        let response = await withHTTPTimeout(milliseconds: 10_000) {
-            try await httpTransport.send(HTTPRequest(
-                method: "GET",
-                url: url,
-                headers: ["accept": "application/json"]
-            ))
+        let primaryURL = "\(source)\(CoreModel.ModelsDev.catalogPath)"
+        let fallbackURL = source == "https://models.opencode.ai"
+            ? "https://models.dev/api.json"
+            : "\(source)/api.json"
+
+        var fetchedText: String? = nil
+        for candidateURL in [primaryURL, fallbackURL] {
+            let response = await withHTTPTimeout(milliseconds: 10_000) {
+                try await httpTransport.send(HTTPRequest(
+                    method: "GET",
+                    url: candidateURL,
+                    headers: [
+                        "accept": "application/json",
+                        "user-agent": "opencode/2.3.2",
+                    ]
+                ))
+            }
+            guard let response, (200..<300).contains(response.head.statusCode) else {
+                continue
+            }
+            let text = String(decoding: response.body, as: UTF8.self)
+            let parsed = decodeAndFilterCached(text: text)
+            if !parsed.isEmpty {
+                fetchedText = text
+                break
+            }
         }
-        guard let response, (200..<300).contains(response.head.statusCode) else {
-            return false
-        }
-        let text = String(decoding: response.body, as: UTF8.self)
-        let parsed = decodeAndFilterCached(text: text)
-        guard !parsed.isEmpty else {
+        guard let text = fetchedText else {
             return false
         }
         let digest = CoreModel.ModelsDev.bodyDigest(text)
+        let now = Flock.currentEpochMs()
         var previousDigest: String? = nil
         if let kv, let meta = try? await kv.get(modelsDevMetaKVKey),
            case .object(let obj) = meta, case .string(let d) = obj["digest"]
         {
             previousDigest = d
+        } else if let kv, let existing = try? await kv.get(modelsDevCatalogKVKey),
+                  case .object(let obj) = existing, case .string(let d) = obj["digest"]
+        {
+            previousDigest = d
         }
         if let kv {
-            try? await kv.set(modelsDevCatalogKVKey, value: .string(text))
+            // Write upstream's exact `{ updatedAt, digest, body }` envelope so real ~/.local/share/opencode/opencode.db stays 100% compatible.
+            try? await kv.set(modelsDevCatalogKVKey, value: .object([
+                "updatedAt": .int(now),
+                "digest": .string(digest),
+                "body": .string(text),
+            ]))
             try? await kv.set(modelsDevMetaKVKey, value: .object([
-                "updatedAt": .int(Flock.currentEpochMs()),
+                "updatedAt": .int(now),
                 "digest": .string(digest),
             ]))
         }
@@ -1584,9 +1639,9 @@ public enum ServerLiveRuntime {
             )
         }
 
-        // 2. Check KV cache (`models-dev:v2:catalog`)
+        // 2. Check KV cache (`models-dev:v2:catalog` — supports both upstream `{ updatedAt, digest, body }` envelope and legacy string)
         if let kv, let raw = try? await kv.get(modelsDevCatalogKVKey),
-           case .string(let text) = raw
+           let text = extractKVCatalogText(raw)
         {
             let decoded = decodeAndFilterCached(text: text)
             if !decoded.isEmpty { return decoded }
@@ -1609,7 +1664,7 @@ public enum ServerLiveRuntime {
                 options: options
             )
             if let kv, let raw = try? await kv.get(modelsDevCatalogKVKey),
-               case .string(let text) = raw
+               let text = extractKVCatalogText(raw)
             {
                 let decoded = decodeAndFilterCached(text: text)
                 if !decoded.isEmpty { return decoded }

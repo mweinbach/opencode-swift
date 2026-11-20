@@ -632,32 +632,36 @@ public final class ServerLiveOAuthManager: Sendable {
             activate: true
         )
 
-        let callback: (@Sendable (IntegrationID) async -> Void)? = state.withLock { s in
+        let (srvToStop, callback): (POSIXHTTPServer?, (@Sendable (IntegrationID) async -> Void)?) = state.withLock { s in
+            var srv: POSIXHTTPServer? = nil
             if var entry = s.attempts[key] {
                 entry.status = .complete(time: entry.time)
                 entry.settled = true
                 entry.pollTask = nil
-                let srv = entry.callbackServer
+                srv = entry.callbackServer
                 entry.callbackServer = nil
                 s.attempts[key] = entry
-                if let srv {
-                    if deferServerStop {
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(100))
-                            srv.stop()
-                        }
-                    } else {
-                        srv.stop()
-                    }
-                }
             }
-            return s.onCredentialActivated
+            return (srv, s.onCredentialActivated)
         }
 
         if let callback {
             await callback(integrationID)
         }
         await emitCatalogUpdated()
+
+        if let srv = srvToStop {
+            if deferServerStop {
+                // Schedule teardown strictly AFTER token exchange & location reload finish so slow
+                // upstream model discovery never drops the loopback HTML response socket mid-flight.
+                Task.detached {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    srv.stop()
+                }
+            } else {
+                srv.stop()
+            }
+        }
     }
 
     private func finalizeFailure(
@@ -677,8 +681,8 @@ public final class ServerLiveOAuthManager: Sendable {
             s.attempts[key] = entry
             if let srv {
                 if deferServerStop {
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(100))
+                    Task.detached {
+                        try? await Task.sleep(for: .milliseconds(500))
                         srv.stop()
                     }
                 } else {
