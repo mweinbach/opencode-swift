@@ -14,19 +14,30 @@ enum EnvironmentFilesystemHelper {
     typealias Environment = CoreLocation.Environment
 
     /// A machine registry over in-memory environments.
-    struct StubMachines: CoreFilesystem.FileAccess.Machines {
+    struct StubMachines: Machines.Interface {
         let environments: [Environment.ID: any Environment.Interface]
         let homes: [Environment.ID: String]
 
-        func get(_ id: Environment.ID) async throws -> any Environment.Interface {
-            guard let environment = environments[id] else { throw CoreFilesystem.FileAccess.UnknownMachine(machine: id) }
+        func add(_ name: String) async throws -> String { name }
+        func remove(_ id: String) async throws {}
+        func list() async -> [Machines.Info] {
+            environments.keys.sorted().map { Machines.Info(id: $0.rawValue, online: homes[$0] != nil, paired: true) }
+        }
+
+        func get(_ id: String) async throws -> any Environment.Interface {
+            guard let environment = environments[Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
             return environment
         }
 
-        func home(_ id: Environment.ID) async throws -> String {
-            guard let home = homes[id] else { throw CoreFilesystem.FileAccess.UnknownMachine(machine: id) }
+        func home(_ id: String) async throws -> String {
+            guard let home = homes[Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
             return home
         }
+
+        func connect(_ connection: MachineDriver.Connection) async throws {}
+        func invite(_ id: String, options: Machines.InviteOptions) async throws -> String { "" }
+        func join(secret: [UInt8], key: [UInt8]) async throws -> String { throw Machines.InvalidJoin() }
+        func identify(_ key: [UInt8]) async throws -> String { throw Machines.UnknownKey() }
     }
 
     /// Records every spec it runs and answers with a fixed output, or fails with `failure`.

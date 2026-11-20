@@ -1025,10 +1025,14 @@ public final class ServerAppRuntime: Sendable {
     public let modelsDevOptions: CoreModel.ModelsDev.Options
     public let defaultDirectory: String
     public let scope: LayerNode.ResourceScope
+    /// The server's long-term Ed25519 identity (`MachineIdentity.node`, loaded lazily on invite/accept).
+    public let machineIdentity: any MachineIdentity.Interface
+    /// The process-global machine registry (`Machines.node`, an application service upstream): known machines,
+    /// pairing keys, and live worker connections.
+    public let machines: any Machines.Interface
     /// The one-time session search build (`SessionSearchBuild.node`, an application service upstream). Its `run` is
-    /// forked once per server process and waits until a location with `sqlite_fts` on starts it.
+    /// forked by `ServerProcess.start` via `applicationRuns` and waits until a location with `sqlite_fts` on starts it.
     public let sessionSearchBuild: any SessionSearchBuild.Interface
-    private let sessionSearchTask = Mutex<Task<Void, Never>?>(nil)
     private let sessionSearchStarted = Mutex(false)
     private let backgroundRefreshTask = Mutex<Task<Void, Never>?>(nil)
     private let isClosed = Mutex(false)
@@ -1075,7 +1079,9 @@ public final class ServerAppRuntime: Sendable {
         allowLiveNetwork: Bool = false,
         modelsDevOptions: CoreModel.ModelsDev.Options? = nil,
         defaultDirectory: String,
-        scope: LayerNode.ResourceScope
+        scope: LayerNode.ResourceScope,
+        machineIdentity: (any MachineIdentity.Interface)? = nil,
+        machines: (any Machines.Interface)? = nil
     ) {
         self.options = options
         self.authConfig = authConfig
@@ -1140,9 +1146,18 @@ public final class ServerAppRuntime: Sendable {
         )
         self.defaultDirectory = defaultDirectory
         self.scope = scope
-        let build = SessionSearchBuild.Service(db: databaseService.db)
-        self.sessionSearchBuild = build
-        sessionSearchTask.withLock { $0 = Task(priority: .utility) { await build.run() } }
+        let resolvedIdentity = machineIdentity ?? MachineIdentity.Service(state: global.state, fileSystem: fileSystem)
+        self.machineIdentity = resolvedIdentity
+        if let machines {
+            self.machines = machines
+        } else if let created = try? Machines.Service(database: databaseService.db, identity: resolvedIdentity) {
+            self.machines = created
+        } else {
+            let fallbackDB = try! SQLiteDatabaseFactory.open(path: ":memory:")
+            try! fallbackDB.executeScript(MachineSQL.MachineTable.createTableSQL)
+            self.machines = try! Machines.Service(database: fallbackDB, identity: resolvedIdentity)
+        }
+        self.sessionSearchBuild = SessionSearchBuild.Service(db: databaseService.db)
     }
 
     /// `ConfigSessionSearchPlugin`: starts the session search build once a booted location has the `sqlite_fts` flag
@@ -1248,10 +1263,6 @@ public final class ServerAppRuntime: Sendable {
             task?.cancel()
             task = nil
         }
-        sessionSearchTask.withLock { task in
-            task?.cancel()
-            task = nil
-        }
         await oauthManager.close()
         let activeSessions = await sessionExecution.active()
         if let liveExec = sessionExecution as? ServerLiveRuntime.LiveSessionExecution {
@@ -1340,10 +1351,15 @@ public final class ServerAppRuntime: Sendable {
         let sessionTransfer = CoreSessionTransfer.Service(db: db, bus: bus, store: sessionStore)
         let sessionInstructions = CoreSessionInstructionEntry.Service(db: db)
         // core/src/machine/machines.ts is process-global; MachineInstructions lists its machines per Location
-        // (behind the `machines` flag). The home key loads lazily, only when a machine is invited.
-        let machines: (any Machines.Interface)? = try? Machines.Service(
+        // (behind the `machines` flag) and FileAccess / tools resolve machine paths through it. The home key loads
+        // lazily, only when a machine is invited or dials in.
+        let machineIdentity: any MachineIdentity.Interface = MachineIdentity.Service(
+            state: globalPaths.state,
+            fileSystem: fileSystem
+        )
+        let machines: any Machines.Interface = try Machines.Service(
             database: db,
-            identity: MachineIdentity.Service(state: globalPaths.state, fileSystem: fileSystem)
+            identity: machineIdentity
         )
 
         // Install session event projectors transactionally on the bus.
@@ -1796,6 +1812,7 @@ public final class ServerAppRuntime: Sendable {
             let toolEnv = CoreTool.BuiltinEnvironment(
                 directory: dirPath,
                 fileSystem: capturedFs,
+                machines: machines,
                 permission: permissionService,
                 shell: shellService,
                 shellSelect: shellSelectService,
@@ -1848,11 +1865,7 @@ public final class ServerAppRuntime: Sendable {
             let referenceInstructions = CoreInstruction.Reference.ReferenceInstructions.Service(references: referenceService)
             let skillInstructions = CoreSkill.SkillInstructions.Service(skills: skillService)
             let mcpInstructions = CoreMCP.Instructions.Service(mcp: mcpService)
-            var loadMachineInstructions: (@Sendable () async -> CoreInstruction.Instructions.List)?
-            if let machines {
-                let machineInstructions = MachineInstructions.Service(flags: flagService, machines: machines)
-                loadMachineInstructions = { await machineInstructions.load() }
-            }
+            let machineInstructions = MachineInstructions.Service(flags: flagService, machines: machines)
             let instructionSources = CoreSessionContext.InstructionSources(
                 builtins: { await instructionBuiltIns.load() },
                 // No file watcher here: rescan the instruction files before each read, so an edit reaches the
@@ -1864,7 +1877,7 @@ public final class ServerAppRuntime: Sendable {
                 skills: { permissions in await skillInstructions.load(permissions: permissions) },
                 references: { await referenceInstructions.load() },
                 mcp: { tools in await mcpInstructions.load(tools: tools) },
-                machines: loadMachineInstructions
+                machines: { await machineInstructions.load() }
             )
 
             let closedFlag = Mutex(false)
@@ -1999,7 +2012,9 @@ public final class ServerAppRuntime: Sendable {
             allowLiveNetwork: allowLiveNetwork,
             modelsDevOptions: effectiveModelsOptions,
             defaultDirectory: resolvedDefaultDir,
-            scope: scope
+            scope: scope,
+            machineIdentity: machineIdentity,
+            machines: machines
         )
         return runtime
     }

@@ -336,3 +336,25 @@ public enum Machines {
         public var description: String { "\(service) is missing a dependency" }
     }
 }
+
+// MARK: - Session Error Mapping Conformances (`core/src/session/to-session-error.ts`)
+
+extension MachineDriver.NotSent: CoreSessionErrorMapping.MachineFailure {
+    public var machineMessage: String { message }
+}
+
+extension MachineDriver.Unknown: CoreSessionErrorMapping.MachineFailure {
+    public var machineMessage: String { message }
+}
+
+extension MachineDriver.ProcessLost: CoreSessionErrorMapping.MachineFailure {
+    public var machineMessage: String { message }
+}
+
+extension Machines.NotFound: CoreSessionErrorMapping.MachineFailure {
+    public var machineMessage: String { message }
+}
+
+extension MachinePath.NotAbsolute: CoreSessionErrorMapping.MachineFailure {
+    public var machineMessage: String { message }
+}

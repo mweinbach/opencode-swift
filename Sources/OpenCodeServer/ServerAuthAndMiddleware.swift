@@ -973,7 +973,14 @@ private func authorizedSessionCookie(
     return ServerAuth.verifySession(token, config: config, nowMs: nowMs)
 }
 
-/// Authorization middleware checking route exemptions (pairing connect, ticketed PTY/MCP WebSockets) and auth credentials.
+/// WebSocket endpoint path where remote machine workers dial in to authenticate via Noise XX (`MachineLink.accept`).
+public let MACHINE_LINK_PATH = "/api/machine/link"
+
+public func isMachineLinkURL(_ urlString: String) -> Bool {
+    ServerParsedURL(urlString).pathname == MACHINE_LINK_PATH
+}
+
+/// Authorization middleware checking route exemptions (pairing connect, machine Noise link, ticketed PTY/MCP WebSockets) and auth credentials.
 // parity: server/src/middleware/authorization.ts#authorizationLayer [status=implemented hash=c1b59186de32]
 public let authorizationLayer: @Sendable (
     ServerAuth.Info,
@@ -985,7 +992,8 @@ public let authorizationLayer: @Sendable (
     if ((routePath == PTY_CONNECT_PATH
         || routePath == PERSISTENT_PTY_CONNECT_PATH
         || routePath == MCP_CLIENT_PATH) && hasTicket)
-        || routePath == PAIRING_CONNECT_PATH {
+        || routePath == PAIRING_CONNECT_PATH
+        || routePath == MACHINE_LINK_PATH {
         return nil
     }
     if authorizedRequest(request, config: config) {
@@ -1303,6 +1311,7 @@ public enum ServerProcess {
         public let status: ServiceStatus.Store
         public let transport: ServerInProcessTransport
         private let shutdownFlag: Mutex<Bool>
+        private let stopRunsHook: (@Sendable () async -> Void)?
         private let cleanupHook: (@Sendable () async -> Void)?
 
         internal init(
@@ -1311,6 +1320,7 @@ public enum ServerProcess {
             router: ServerRouter,
             status: ServiceStatus.Store,
             handler: @escaping ServerHTTPHandler,
+            stopRunsHook: (@Sendable () async -> Void)? = nil,
             cleanupHook: (@Sendable () async -> Void)?
         ) {
             self.address = address
@@ -1319,6 +1329,7 @@ public enum ServerProcess {
             self.status = status
             self.transport = ServerInProcessTransport(handler: handler)
             self.shutdownFlag = Mutex(false)
+            self.stopRunsHook = stopRunsHook
             self.cleanupHook = cleanupHook
         }
 
@@ -1345,6 +1356,9 @@ public enum ServerProcess {
             guard !already else { return }
             status.beginStopping()
             server.stop()
+            if let stopRunsHook {
+                await stopRunsHook()
+            }
             await router.runtime.close()
             if let cleanupHook {
                 await cleanupHook()
@@ -1356,6 +1370,13 @@ public enum ServerProcess {
     /// server (upstream `Automation.Service.run` and the one-time `SessionSearchBuild.Service.run`, forked into the
     /// application scope from any server process).
     public typealias ApplicationRun = @Sendable (ServerAppRuntime) async -> Void
+
+    /// Default application-scoped service loops forked by `ServerProcess.start`, matching upstream
+    /// `server/src/process.ts#start` (`Automation.Service.run` and `SessionSearchBuild.Service.run`).
+    public static let defaultApplicationRuns: [ApplicationRun] = [
+        { runtime in await runtime.automation.run() },
+        { runtime in await runtime.sessionSearchBuild.run() },
+    ]
 
     /// Starts the real HTTP/1.1 + SSE + WebSocket TCP server process with startup/ready/stopping lifecycle dispatch.
     // parity: server/src/process.ts#start [status=adapted hash=d786fa4dc2d5]
@@ -1370,7 +1391,7 @@ public enum ServerProcess {
         globalOverrides: Global.Overrides? = nil,
         defaultDirectory: String? = nil,
         onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil,
-        applicationRuns: [ApplicationRun] = []
+        applicationRuns: [ApplicationRun] = ServerProcess.defaultApplicationRuns
     ) async throws -> RunningServer {
         guard let password = options.password, !password.isEmpty else {
             throw InvalidRequestError(message: "Missing server password")
@@ -1406,7 +1427,7 @@ public enum ServerProcess {
                 && (hasPtyConnectTicketURL(fullURL)
                     || hasPersistentPtyConnectTicketURL(fullURL)
                     || hasMcpClientTicketURL(fullURL))
-            if !isPairingConnectURL(fullURL) && !ticketExempt && !authorizedRequest(request, config: authInfo) {
+            if !isPairingConnectURL(fullURL) && !isMachineLinkURL(fullURL) && !ticketExempt && !authorizedRequest(request, config: authInfo) {
                 return unauthorizedResponse(request)
             }
 
@@ -1459,16 +1480,9 @@ public enum ServerProcess {
             // Application-scoped service loops run from any server process; they stop with the server.
             let runtime = router.runtime
             let runs = applicationRuns.map { run in Task.detached { await run(runtime) } }
-            let previousCleanup = cleanupHook
-            let stopRuns: (@Sendable () async -> Void)?
-            if runs.isEmpty {
-                stopRuns = previousCleanup
-            } else {
-                let cancelRuns: @Sendable () async -> Void = {
-                    for run in runs { run.cancel() }
-                    await previousCleanup?()
-                }
-                stopRuns = cancelRuns
+            let stopRuns: (@Sendable () async -> Void)? = runs.isEmpty ? nil : { @Sendable in
+                for run in runs { run.cancel() }
+                for run in runs { await run.value }
             }
             routerBox.withLock { $0 = router }
             status.ready()
@@ -1478,7 +1492,8 @@ public enum ServerProcess {
                 router: router,
                 status: status,
                 handler: finalHandler,
-                cleanupHook: stopRuns
+                stopRunsHook: stopRuns,
+                cleanupHook: cleanupHook
             )
         } catch {
             status.fail()

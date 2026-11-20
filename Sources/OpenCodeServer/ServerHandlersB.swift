@@ -1228,9 +1228,204 @@ public let RpcHandler = ServerHandlerGroup(
     ]
 )
 
-// MARK: - 12. Server Handler (server/src/handlers/server.ts)
+// MARK: - 12. Server Handler (server/src/handlers/server.ts) & Machine Link Carrier
 
-/// Handlers for `server.server` (`GET /api/info`, `POST /api/pair`, `GET /auth/connect/:code`).
+/// `MachineLink.Carrier` backed by any `ServerWebSocketConnection`, carrying binary frames in order and honoring
+/// task cancellation on `receive()`.
+public final class ServerWebSocketCarrier: MachineLink.Carrier, Sendable {
+    private struct QueueState {
+        var buffered: [[UInt8]] = []
+        var waiters: [(id: Int, continuation: CheckedContinuation<[UInt8], any Error>)] = []
+        var nextWaiterID = 0
+        var closed = false
+    }
+
+    private let socket: any ServerWebSocketConnection
+    private let state = Mutex(QueueState())
+    private let pumpTask: Mutex<Task<Void, Never>?> = Mutex(nil)
+
+    public init(socket: any ServerWebSocketConnection) {
+        self.socket = socket
+        let task = Task { [weak self] in
+            for await frame in socket.incoming {
+                guard let self else { break }
+                switch frame {
+                case .binary(let bytes):
+                    self.enqueue(bytes)
+                case .text:
+                    // Binary frames only; ignore unexpected text frames.
+                    continue
+                case .close:
+                    self.markClosed()
+                    return
+                }
+            }
+            self?.markClosed()
+        }
+        pumpTask.withLock { $0 = task }
+    }
+
+    deinit {
+        stop()
+    }
+
+    public func stop() {
+        let task = pumpTask.withLock { current -> Task<Void, Never>? in
+            let existing = current
+            current = nil
+            return existing
+        }
+        task?.cancel()
+        markClosed()
+    }
+
+    private func enqueue(_ bytes: [UInt8]) {
+        let waiter: CheckedContinuation<[UInt8], any Error>? = state.withLock { s in
+            if s.closed { return nil }
+            if !s.waiters.isEmpty {
+                return s.waiters.removeFirst().continuation
+            }
+            s.buffered.append(bytes)
+            return nil
+        }
+        waiter?.resume(returning: bytes)
+    }
+
+    private func markClosed() {
+        let waiters: [CheckedContinuation<[UInt8], any Error>] = state.withLock { s in
+            guard !s.closed else { return [] }
+            s.closed = true
+            let pending = s.waiters.map(\.continuation)
+            s.waiters.removeAll()
+            return pending
+        }
+        for waiter in waiters {
+            waiter.resume(throwing: MachineLink.Closed())
+        }
+    }
+
+    public func send(_ message: [UInt8]) async {
+        try? await socket.send(.binary(message))
+    }
+
+    public func receive() async throws -> [UInt8] {
+        let id = state.withLock { s -> Int in
+            s.nextWaiterID += 1
+            return s.nextWaiterID
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[UInt8], any Error>) in
+                let immediate: Result<[UInt8], any Error>? = state.withLock { s in
+                    if !s.buffered.isEmpty {
+                        return .success(s.buffered.removeFirst())
+                    }
+                    if s.closed {
+                        return .failure(MachineLink.Closed())
+                    }
+                    if Task.isCancelled {
+                        return .failure(CancellationError())
+                    }
+                    s.waiters.append((id: id, continuation: continuation))
+                    return nil
+                }
+                if let immediate {
+                    continuation.resume(with: immediate)
+                }
+            }
+        } onCancel: {
+            let cancelled: CheckedContinuation<[UInt8], any Error>? = state.withLock { s in
+                guard let idx = s.waiters.firstIndex(where: { $0.id == id }) else { return nil }
+                return s.waiters.remove(at: idx).continuation
+            }
+            cancelled?.resume(throwing: CancellationError())
+        }
+    }
+}
+
+/// Bridges a WebSocket connection into `MachineLink` + encrypted `MachineWire` + `Machines.Service.connect`.
+public enum ServerMachineLink {
+    /// Home side: authenticates the worker via `MachineLink.accept`, reads its encrypted `MachineWire.Hello`,
+    /// verifies the machine name matches the authenticated identity, and serves the connection through `machines`.
+    public static func serve(
+        socket: any ServerWebSocketConnection,
+        identity: any MachineIdentity.Interface,
+        machines: any Machines.Interface
+    ) async {
+        let carrier = ServerWebSocketCarrier(socket: socket)
+        defer { carrier.stop() }
+
+        let established: MachineLink.Established
+        do {
+            established = try await MachineLink.accept(carrier, identity: identity, machines: machines)
+        } catch {
+            await socket.close(code: 1008, reason: "")
+            return
+        }
+
+        let hello: MachineWire.Hello
+        do {
+            let firstFrame = try await carrier.receive()
+            let plain = try established.receive.decrypt(firstFrame)
+            let decoded = try JSONDecoder().decode(MachineWire.FromWorker.self, from: Data(plain))
+            guard case .hello(let receivedHello) = decoded, receivedHello.name == established.machine else {
+                await socket.close(code: 1008, reason: "")
+                return
+            }
+            hello = receivedHello
+        } catch {
+            await socket.close(code: 1008, reason: "")
+            return
+        }
+
+        let (outbox, outboxCont) = AsyncStream<MachineWire.ToWorker>.makeStream()
+        let (inbound, inboundCont) = AsyncStream<MachineWire.FromWorker>.makeStream()
+
+        // Serialize outbound encryption and socket writes so Noise transport nonces stay strictly in order.
+        let writer = Task {
+            let encoder = JSONEncoder()
+            for await message in outbox {
+                if Task.isCancelled { break }
+                guard let plain = try? encoder.encode(message),
+                      let cipher = try? established.send.encrypt(Array(plain))
+                else {
+                    break
+                }
+                do {
+                    try await socket.send(.binary(cipher))
+                } catch {
+                    break
+                }
+            }
+        }
+
+        let reader = Task {
+            let decoder = JSONDecoder()
+            defer { inboundCont.finish() }
+            while !Task.isCancelled {
+                guard let frame = try? await carrier.receive(),
+                      let plain = try? established.receive.decrypt(frame),
+                      let decoded = try? decoder.decode(MachineWire.FromWorker.self, from: Data(plain))
+                else {
+                    break
+                }
+                inboundCont.yield(decoded)
+            }
+        }
+
+        let connection = MachineDriver.Connection(
+            hello: hello,
+            send: { message in outboxCont.yield(message) },
+            messages: inbound
+        )
+        try? await machines.connect(connection)
+        outboxCont.finish()
+        reader.cancel()
+        writer.cancel()
+        await socket.close(code: 1000, reason: "")
+    }
+}
+
+/// Handlers for `server.server` (`GET /api/info`, `POST /api/pair`, `GET /auth/connect/:code`, `GET /api/machine/link`).
 // parity: server/src/handlers/server.ts#ServerHandler [status=implemented hash=d694cd8def2c]
 public let ServerHandler = ServerHandlerGroup(
     groupIdentifier: "server.server",
@@ -1294,6 +1489,23 @@ public let ServerHandler = ServerHandlerGroup(
                     sameSite: "Lax",
                     maxAgeSeconds: ServerAuth.SESSION_TTL_SECONDS
                 )
+        },
+        ServerRoute(
+            method: .get,
+            pathTemplate: MACHINE_LINK_PATH,
+            endpointName: "server.machine.link",
+            groupIdentifier: "server.server"
+        ) { ctx in
+            guard let upgrade = ctx.request.upgradeWebSocket else {
+                return ServerHTTPResponse.empty(statusCode: 426)
+            }
+            let socket = try await upgrade()
+            await ServerMachineLink.serve(
+                socket: socket,
+                identity: ctx.runtime.machineIdentity,
+                machines: ctx.runtime.machines
+            )
+            return ServerHTTPResponse(statusCode: 101, webSocketUpgraded: true)
         },
     ]
 )

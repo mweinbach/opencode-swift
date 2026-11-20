@@ -836,6 +836,73 @@ public enum CoreToolOutput {
             }
         }
 
+        /// Reads a file (text with pagination/clamping, or inline media) or directory listing through an
+        /// environment's `Files.Interface` (local or remote machine).
+        public static func read(
+            files: any CoreLocation.Environment.Files.Interface,
+            path: SchemaPrimitive.AbsolutePath,
+            resource: String,
+            page: PageInput = PageInput()
+        ) async throws -> Output {
+            let fileType: CoreLocation.Environment.Files.FileType
+            do {
+                fileType = try await CoreLocation.Environment.Files.typeFollowing(files, path: path.rawValue)
+            } catch is CoreLocation.Environment.Files.NotFound {
+                throw ReadError.notFound(resource)
+            }
+
+            if fileType == .directory {
+                if let off = page.offset, off < 0 {
+                    throw DirectoryOffsetError(resource: resource)
+                }
+                let rawEntries: [CoreLocation.Environment.Files.DirEntry]
+                do {
+                    rawEntries = try await files.list(path.rawValue)
+                } catch is CoreLocation.Environment.Files.NotFound {
+                    throw ReadError.notFound(resource)
+                }
+                var entries: [(name: String, isDir: Bool)] = []
+                for entry in rawEntries {
+                    let resolvedType: CoreLocation.Environment.Files.FileType
+                    if entry.type == .symlink {
+                        let childPath = path.rawValue.hasSuffix("/")
+                            ? path.rawValue + entry.name
+                            : path.rawValue + "/" + entry.name
+                        resolvedType = (try? await CoreLocation.Environment.Files.typeFollowing(files, path: childPath)) ?? .other
+                    } else {
+                        resolvedType = entry.type
+                    }
+                    if resolvedType == .other { continue }
+                    let isDir = resolvedType == .directory
+                    entries.append((name: entry.name + (isDir ? "/" : ""), isDir: isDir))
+                }
+                entries.sort { lhs, rhs in
+                    if lhs.isDir != rhs.isDir { return lhs.isDir }
+                    return lhs.name < rhs.name
+                }
+                let offset = max(1, page.offset ?? 1)
+                let limit = min(page.limit ?? MAX_READ_LINES, MAX_READ_LINES)
+                let startIdx = min(entries.count, offset - 1)
+                let endIdx = min(entries.count, startIdx + limit)
+                let selected = Array(entries[startIdx..<endIdx]).map(\.name)
+                let next: Int? = endIdx < entries.count ? (offset + selected.count) : nil
+                return .directory(DirectoryContent(entries: selected, next: next))
+            }
+
+            guard fileType == .file else {
+                throw PathKindError(resource: resource, expected: .fileOrDirectory)
+            }
+
+            let bytes: [UInt8]
+            do {
+                bytes = try await files.read(path.rawValue, range: nil).bytes
+            } catch is CoreLocation.Environment.Files.NotFound {
+                throw ReadError.notFound(resource)
+            }
+
+            return try formatFileBytes(bytes, path: path, resource: resource, page: page)
+        }
+
         /// Reads a file (text with pagination/clamping, or inline media) or directory listing.
         // parity: core/src/tool/read-filesystem.ts#read [status=implemented hash=885f6d3de44d]
         public static func read(
@@ -849,7 +916,10 @@ public enum CoreToolOutput {
                 st = try await fileSystem.stat(at: path.rawValue)
             } catch PlatformError.notFound {
                 throw ReadError.notFound(resource)
+            } catch let failed as CoreLocation.Environment.Files.Failed {
+                throw failed
             } catch {
+                if error is any CoreSessionErrorMapping.MachineFailure { throw error }
                 throw ReadError.failed(String(describing: error))
             }
 
@@ -888,9 +958,22 @@ public enum CoreToolOutput {
                 bytes = try await fileSystem.readFile(at: path.rawValue)
             } catch PlatformError.notFound {
                 throw ReadError.notFound(resource)
+            } catch let failed as CoreLocation.Environment.Files.Failed {
+                throw failed
             } catch {
+                if error is any CoreSessionErrorMapping.MachineFailure { throw error }
                 throw ReadError.failed(String(describing: error))
             }
+
+            return try formatFileBytes(bytes, path: path, resource: resource, page: page)
+        }
+
+        private static func formatFileBytes(
+            _ bytes: [UInt8],
+            path: SchemaPrimitive.AbsolutePath,
+            resource: String,
+            page: PageInput
+        ) throws -> Output {
 
             if let mediaMime = CoreFilesystem.Mime.detectMedia(bytes), MEDIA_MIMES.contains(mediaMime) {
                 if bytes.count > MAX_MEDIA_INGEST_BYTES {

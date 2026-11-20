@@ -92,7 +92,7 @@ public enum CoreSessionErrorMapping {
 
     /// The message of a machine failure, through the wrappers a tool may have put around it. A local failure has no
     /// machine error anywhere in its cause, so its text is untouched.
-    static func machineMessage(_ error: (any Swift.Error)?) -> String? {
+    public static func machineMessage(_ error: (any Swift.Error)?) -> String? {
         guard let error else { return nil }
         if let machine = error as? any MachineFailure { return machine.machineMessage }
         if let wrapper = error as? any CauseWrapping { return machineMessage(wrapper.wrappedCause) }
@@ -155,9 +155,6 @@ public enum CoreSessionErrorMapping {
         if let structured = cause as? SessionErrorSchema.Error {
             return structured
         }
-        if let toolErr = cause as? ToolSchema.ToolError {
-            return SessionErrorSchema.Error(type: "tool.execution", message: toolErr.message)
-        }
         if let failure = cause as? any ToolFailureCause {
             guard let inner = failure.toolCause else {
                 return SessionErrorSchema.Error(type: "tool.execution", message: failure.toolMessage)
@@ -166,17 +163,19 @@ public enum CoreSessionErrorMapping {
             if let machine = machineMessage(inner) {
                 return SessionErrorSchema.Error(type: "tool.execution", message: machine)
             }
-            // The canonical error is the sole model-visible representation, so a cause with no message must not
-            // erase the tool's curated failure message.
+            // The canonical error is the sole model-visible representation, so a cause with no message (or an
+            // unmapped local/platform failure) must not erase the tool's curated failure message.
             let unwrapped = toSessionError(inner)
-            guard unwrapped.message.isEmpty else { return unwrapped }
-            return SessionErrorSchema.Error(
-                type: "tool.execution",
-                message: failure.toolMessage,
-                status: unwrapped.status,
-                response: unwrapped.response,
-                retryAfterMs: unwrapped.retryAfterMs
-            )
+            if unwrapped.message.isEmpty || unwrapped.type == "unknown" {
+                return SessionErrorSchema.Error(
+                    type: "tool.execution",
+                    message: failure.toolMessage,
+                    status: unwrapped.status,
+                    response: unwrapped.response,
+                    retryAfterMs: unwrapped.retryAfterMs
+                )
+            }
+            return unwrapped
         }
         if let agentNotFound = cause as? CoreSessionErrors.AgentNotFoundError {
             return SessionErrorSchema.Error(type: "unknown", message: agentNotFound.message)
@@ -202,6 +201,15 @@ public enum CoreSessionErrorMapping {
         let message = [head, reason.explanation].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
         return SessionErrorSchema.Error(type: "provider.content-filter", message: message)
     }
+}
+
+extension ToolSchema.ToolError: CoreSessionErrorMapping.ToolFailureCause {
+    public var toolMessage: String { message }
+    public var toolCause: (any Swift.Error)? { cause }
+}
+
+extension AppProcess.AppProcessError: CoreSessionErrorMapping.CauseWrapping {
+    public var wrappedCause: (any Swift.Error)? { cause }
 }
 
 // MARK: - session/usage.ts

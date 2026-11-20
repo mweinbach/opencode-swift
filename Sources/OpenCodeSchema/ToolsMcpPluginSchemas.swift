@@ -293,11 +293,28 @@ public enum ToolSchema {
         public let message: String
         public let error: JSONValue?
         public let metadata: [String: JSONValue]?
+        public let cause: (any Swift.Error)?
 
-        public init(message: String, error: JSONValue? = nil, metadata: [String: JSONValue]? = nil) {
+        public init(
+            message: String,
+            error: JSONValue? = nil,
+            metadata: [String: JSONValue]? = nil,
+            cause: (any Swift.Error)? = nil
+        ) {
             self.message = message
             self.error = error
             self.metadata = metadata
+            self.cause = cause
+        }
+
+        public static func == (lhs: ToolError, rhs: ToolError) -> Bool {
+            lhs.message == rhs.message && lhs.error == rhs.error && lhs.metadata == rhs.metadata
+        }
+
+        public func hash(into hasher: inout Hasher) {
+            hasher.combine(message)
+            hasher.combine(error)
+            hasher.combine(metadata)
         }
 
         public init(from decoder: Decoder) throws {
@@ -308,6 +325,7 @@ public enum ToolSchema {
             self.message = try container.decode(String.self, forKey: .message)
             self.error = try container.decodeIfPresent(JSONValue.self, forKey: .error)
             self.metadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .metadata)
+            self.cause = nil
         }
 
         public func encode(to encoder: Encoder) throws {
