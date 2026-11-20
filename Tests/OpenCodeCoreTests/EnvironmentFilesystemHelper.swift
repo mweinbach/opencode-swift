@@ -105,8 +105,11 @@ enum EnvironmentFilesystemHelper {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: data, options: [.sortedKeys]), as: UTF8.self)
         if try hasColumn(db, table: "session_message", column: "seq") {
             _ = try db.execute(
-                "INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data) VALUES (?, ?, ?, 0, 1, 1, ?)",
-                parameters: [.text(id), .text(session), .text(type), .text(json)]
+                """
+                INSERT INTO session_message (id, session_id, type, seq, time_created, time_updated, data)
+                VALUES (?, ?, ?, (SELECT coalesce(max(seq), 0) + 1 FROM session_message WHERE session_id = ?), 1, 1, ?)
+                """,
+                parameters: [.text(id), .text(session), .text(type), .text(session), .text(json)]
             )
         } else {
             _ = try db.execute(
