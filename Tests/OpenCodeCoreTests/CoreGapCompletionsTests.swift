@@ -342,7 +342,7 @@ struct CoreGapCompletionsTests {
         let cols = try db2.query("PRAGMA table_info('project')").compactMap { $0.string("name") }
         #expect(cols.contains("commands"))
         let appliedCount = try db2.queryScalar("SELECT count(*) FROM migration")?.int64Value
-        #expect(appliedCount == 62)
+        #expect(appliedCount == 64)
         let db2Tables = try db2.query("SELECT name FROM sqlite_master WHERE type = 'table'").compactMap { $0.string("name") }
         #expect(db2Tables.contains("session_v2"))
         #expect(db2Tables.contains("automation"))
