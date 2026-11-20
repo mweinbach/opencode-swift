@@ -1309,9 +1309,35 @@ public enum CLIServices {
             mismatch: MismatchPolicy,
             context: CLIContext
         ) async throws -> ServiceEndpoint {
+            // When both client and managed daemon are "local" dev builds, automatically restart
+            // the background daemon if the executable on disk was rebuilt after service registration.
+            if context.version == "local",
+               let rawExec = options.command?.first, !rawExec.isEmpty,
+               let existing = await probeRegisteredService(file: options.file, context: context),
+               existing.compatible,
+               existing.state == .ready || existing.state == .waiting,
+               existing.version == context.version
+            {
+                let resolvedFile = options.file ?? fallback(environment: context.environment)
+                let resolvedExec = (try? await context.fileSystem.realPath(at: rawExec)) ?? rawExec
+                if let execStat = try? await context.fileSystem.stat(at: resolvedExec),
+                   let regStat = try? await context.fileSystem.stat(at: resolvedFile),
+                   execStat.modifiedAtMs > 0,
+                   regStat.modifiedAtMs > 0,
+                   execStat.modifiedAtMs > regStat.modifiedAtMs
+                {
+                    try? await EffectClient.Service.stop(
+                        options: ServiceStopOptions(file: options.file, pty: .handoff),
+                        fileSystem: context.fileSystem,
+                        transport: context.transport,
+                        signaler: context.signaler,
+                        environment: context.environment
+                    )
+                }
+            }
+
             switch mismatch {
             case .replace:
-                // Never kill an already-running server from another channel/release when running a local dev build.
                 if context.version == "local",
                    let existing = await probeRegisteredService(file: options.file, context: context),
                    existing.compatible,
@@ -1323,6 +1349,7 @@ public enum CLIServices {
                        installedVersion: context.version
                    )
                 {
+                    // Never kill an already-running server from another channel/release when running a local dev build.
                     let versionLabel = existing.version ?? "unknown"
                     context.io.writeStderr(
                         "Warning: Background server at \(existing.endpoint.url) has version \(versionLabel); this client is \(context.version). Continuing without replacing it.\n"

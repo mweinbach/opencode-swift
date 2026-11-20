@@ -89,8 +89,14 @@ final class MockServiceChild: ServiceChildProcessHandle, Sendable {
 }
 
 struct MockServiceLauncher: ServiceProcessLauncher, Sendable {
+    let onSpawn: (@Sendable (String, [String], [String: String]) -> Void)?
+
+    init(onSpawn: (@Sendable (String, [String], [String: String]) -> Void)? = nil) {
+        self.onSpawn = onSpawn
+    }
+
     func spawn(command: String, args: [String], env: [String: String]) throws -> any ServiceChildProcessHandle {
-        _ = (command, args, env)
+        onSpawn?(command, args, env)
         return MockServiceChild()
     }
 }
@@ -405,6 +411,106 @@ enum CLITestFixtures {
             ]
         )
         return (try? encodeJSON(envelope)) ?? "{}"
+    }
+
+    /// Creates a real temp directory containing an older `service-local.json` and a newer dummy executable
+    /// so tests can deterministically exercise stale `"local"` daemon auto-restart on rebuild.
+    static func makeStaleLocalServiceFixture(
+        oldPID: Int,
+        newPID: Int,
+        oldPort: Int = 49375,
+        newPort: Int = 49376
+    ) throws -> (
+        tempRoot: String,
+        serviceFile: String,
+        executablePath: String,
+        context: CLIContext,
+        signaler: MockServiceSignaler,
+        spawnCount: @Sendable () -> Int
+    ) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("opencode-stale-local-\(UUID().uuidString)")
+        let stateDir = root.appendingPathComponent("state/opencode")
+        let binDir = root.appendingPathComponent("bin")
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
+
+        let serviceFileURL = stateDir.appendingPathComponent("service-local.json")
+        let execURL = binDir.appendingPathComponent("opencode")
+        let oldJSON = """
+        {"pid":\(oldPID),"url":"http://127.0.0.1:\(oldPort)","password":"oldpw","version":"local"}
+        """
+        try Data(oldJSON.utf8).write(to: serviceFileURL)
+        try Data("#!/bin/sh\n".utf8).write(to: execURL)
+
+        let olderDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let newerDate = Date(timeIntervalSince1970: 1_700_005_000)
+        try FileManager.default.setAttributes([.modificationDate: olderDate], ofItemAtPath: serviceFileURL.path)
+        try FileManager.default.setAttributes([.modificationDate: newerDate], ofItemAtPath: execURL.path)
+
+        let signaler = MockServiceSignaler(running: [oldPID])
+        final class SpawnCounter: Sendable {
+            let value = Mutex(0)
+        }
+        let counter = SpawnCounter()
+        let serviceFilePath = serviceFileURL.path
+        let launcher = MockServiceLauncher { _, _, _ in
+            counter.value.withLock { $0 += 1 }
+            let freshJSON = """
+            {"pid":\(newPID),"url":"http://127.0.0.1:\(newPort)","password":"newpw","version":"local"}
+            """
+            try? Data(freshJSON.utf8).write(to: URL(fileURLWithPath: serviceFilePath))
+            try? FileManager.default.setAttributes(
+                [.modificationDate: Date(timeIntervalSince1970: 1_700_009_000)],
+                ofItemAtPath: serviceFilePath
+            )
+        }
+        let transport = MockCLIHTTPTransport { req in
+            if req.url.contains(":\(oldPort)/api/info") {
+                return jsonResponse(200, json: "{\"version\":\"local\",\"pid\":\(oldPID),\"urls\":[\"http://127.0.0.1:\(oldPort)\"],\"paths\":{\"tmp\":\"/tmp\"}}")
+            }
+            if req.url.contains(":\(newPort)/api/info") {
+                return jsonResponse(200, json: "{\"version\":\"local\",\"pid\":\(newPID),\"urls\":[\"http://127.0.0.1:\(newPort)\"],\"paths\":{\"tmp\":\"/tmp\"}}")
+            }
+            return jsonResponse(404, json: "{}")
+        }
+        let env = DictionaryEnvironment(
+            variables: [
+                "HOME": root.path,
+                "XDG_STATE_HOME": root.appendingPathComponent("state").path,
+                "XDG_CONFIG_HOME": root.appendingPathComponent("config").path,
+                "XDG_DATA_HOME": root.appendingPathComponent("data").path,
+                "XDG_CACHE_HOME": root.appendingPathComponent("cache").path,
+            ],
+            homeDirectory: root.path,
+            temporaryDirectory: root.path
+        )
+        let ctx = CLIContext(
+            io: CLIIO(
+                writeStdout: { _ in },
+                writeStderr: { _ in },
+                readStdinAll: { "" },
+                readStdinLine: { _ in nil },
+                isStdinTTY: { false },
+                isStdoutTTY: { false }
+            ),
+            environment: env,
+            fileSystem: LocalFileSystem.shared,
+            transport: transport,
+            spawner: MockCLIProcessSpawner { _ in ProcessOutput(exitCode: 0, stdout: [], stderr: []) },
+            launcher: launcher,
+            signaler: signaler,
+            cwd: root.path,
+            executablePath: execURL.path,
+            rawArguments: [],
+            version: "local",
+            channel: "local"
+        )
+        return (root.path, serviceFilePath, execURL.path, ctx, signaler, { counter.value.withLock { $0 } })
+    }
+
+    static func removeTempPath(_ path: String) {
+        try? FileManager.default.removeItem(atPath: path)
     }
 
     static func sampleSessionInfoJSON(id: String = "ses_test0001", title: String = "Demo session") -> String {

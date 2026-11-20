@@ -570,6 +570,20 @@ struct CLIServicesTests {
         #expect(output.stderr.contains("has version 1.9.0; this client is 2.1.0"))
     }
 
+    @Test("ServerConnection restarts stale local background daemon when executable is newer than service-local.json")
+    func serverConnectionRestartsStaleLocalBinary() async throws {
+        let fixture = try CLITestFixtures.makeStaleLocalServiceFixture(oldPID: 70920, newPID: 81234)
+        defer { CLITestFixtures.removeTempPath(fixture.tempRoot) }
+
+        let resolved = try await CLIServices.ServerConnection.resolve(
+            CLIServices.ServerConnection.Args(),
+            context: fixture.context
+        )
+        #expect(fixture.signaler.signals.contains(where: { $0.0 == 70920 && $0.1 == "SIGTERM" }))
+        #expect(fixture.spawnCount() == 1)
+        #expect(resolved.endpoint.url == "http://127.0.0.1:49376")
+    }
+
     @Test("ServerProcess.run outputs URL + password in default mode and JSON in stdio mode")
     func serverProcessModes() async throws {
         let starter: CLIServices.ServerProcess.Starter = { req in
