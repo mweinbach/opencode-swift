@@ -65,10 +65,10 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=f13f874b0229]
+    // parity: psychoscript/src/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=d7914b39a121]
     public static let AsyncIteratorSymbol = RuntimeSymbol("Symbol.asyncIterator")
 
-    // parity: psychoscript/src/runtime/model.ts#IteratorSymbol [status=implemented hash=a59775398783]
+    // parity: psychoscript/src/runtime/model.ts#IteratorSymbol [status=implemented hash=2d12c1440ccc]
     public static let IteratorSymbol = RuntimeSymbol("Symbol.iterator")
 
     // parity: psychoscript/src/runtime/model.ts#Throw [status=implemented hash=13d2a2781ff8]
@@ -181,9 +181,9 @@ public enum CodemodeLanguage {
         PendingThrow(type: .uriError, message: message, node: node)
     }
 
-    // parity: psychoscript/src/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=2936dd03bd3a]
+    // parity: psychoscript/src/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=a1c2de2e65cb]
     public static let supportedSyntaxMessage: String =
-        "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: classes, getters/setters, BigInt, and custom Symbols. Use plain functions and data objects instead."
+        "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
 
     // parity: psychoscript/src/runtime/model.ts#sourceLocation [status=implemented hash=f075447b8fab]
     public static func sourceLocation(_ node: AstNode) -> SourceLocation {
@@ -3914,6 +3914,18 @@ public enum CodemodeLanguage {
         }
     }
 
+    // parity: psychoscript/src/runtime/signals.ts#Prefetch [status=adapted hash=08c1d410b667]
+    /// A built-in met program getters it cannot call (see `withReads`): `reads` (receiver, key, receiver, key, …) are
+    /// read in program code, then the built-in runs again from the start, and its reads of them get those values.
+    /// Upstream returns it to the VM; here `withReads` carries it out through the evaluator.
+    public struct Prefetch: Sendable {
+        public let reads: [Value]
+
+        public init(reads: [Value]) {
+            self.reads = reads
+        }
+    }
+
     // parity: psychoscript/src/runtime/signals.ts#MAX_CALL_DEPTH [status=implemented hash=101eadd2b440]
     public static let MAX_CALL_DEPTH: Int = 10_000
 
@@ -3987,7 +3999,7 @@ public enum CodemodeLanguage {
         public init() {}
     }
 
-    // parity: psychoscript/src/runtime/table.ts#deleted [status=implemented hash=20fb9493d06a]
+    // parity: psychoscript/src/runtime/table.ts#deleted [status=implemented hash=4fd98185703e]
     public static let deleted = DeletedSentinel()
 
     // parity: psychoscript/src/runtime/table.ts#TableCursor [status=implemented hash=3f26d3d2e8d8]
@@ -4244,7 +4256,10 @@ public enum CodemodeLanguage {
             guard case .object(let obj) = current, !skip(current) else { continue }
             let id = ObjectIdentifier(obj)
             if !seen.insert(id).inserted { continue }
+            // A structural check, so it never runs program code: program accessors are left out.
+            let hasAccessors = obj.hasProgramAccessors
             for key in ownKeys(obj) {
+                if hasAccessors, let slot = own(obj, .string(key)), isProgramAccessor(slot) { continue }
                 stack.append(getOwn(obj, key))
             }
         }
@@ -4261,16 +4276,23 @@ public enum CodemodeLanguage {
         findInValue(value, match: isOpaque, skip: { isRuntimeReference($0) && !isOpaque($0) })
     }
 
-    // parity: psychoscript/src/runtime/references.ts#rejectCircularInsertion [status=implemented hash=ed06903d1915]
+    // parity: psychoscript/src/runtime/references.ts#rejectCircularInsertion [status=implemented hash=d7ccda8f43c8]
     public static func rejectCircularInsertion(_ container: Obj, _ value: Value, label: String) throws {
-        let matched = findInValue(
+        if hasCircularReference(container, value) { throw circularValue(label) }
+    }
+
+    // parity: psychoscript/src/runtime/references.ts#hasCircularReference [status=implemented hash=807701fca078]
+    public static func hasCircularReference(_ container: Obj, _ value: Value) -> Bool {
+        findInValue(
             value,
             match: { if case .object(let o) = $0 { return o === container } else { return false } },
             skip: isRuntimeReference
         )
-        if matched {
-            throw invalidData("\(label) contains a circular value.")
-        }
+    }
+
+    // parity: psychoscript/src/runtime/references.ts#circularValue [status=implemented hash=7ff49c7f4bd8]
+    public static func circularValue(_ label: String) -> PendingThrow {
+        invalidData("\(label) contains a circular value.")
     }
 
     // parity: psychoscript/src/runtime/references.ts#describeValue [status=implemented hash=63563bdb6e3a]
