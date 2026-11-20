@@ -868,6 +868,52 @@ public final class OpenCodeAppStore {
                 }
             }
 
+        case "session.step.failed":
+            if let sid = eventSessionID {
+                runningSessionIDs.remove(sid)
+                retryingSessions.removeValue(forKey: sid)
+                syncSessionBadges()
+                if isForActive {
+                    let msgID = Self.stringField(obj, "assistantMessageID")
+                    finalizeAssistantMessage(id: msgID, cost: nil, tokens: nil)
+                    if let errMsg = Self.stringField(Self.jsonObject(obj["error"]), "message") ?? Self.stringField(obj, "error") {
+                        messages.append(.system(
+                            id: "err-\(event.id)",
+                            text: errMsg,
+                            isError: true,
+                            timestampMs: nowMs
+                        ))
+                    }
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.retry.scheduled":
+            if let sid = eventSessionID {
+                let msg = Self.stringField(obj, "message") ?? Self.stringField(Self.jsonObject(obj["error"]), "message") ?? "Retrying…"
+                retryingSessions[sid] = msg
+                runningSessionIDs.insert(sid)
+                syncSessionBadges()
+            }
+
+        case "session.shell.started":
+            if let sid = eventSessionID {
+                runningSessionIDs.insert(sid)
+                syncSessionBadges()
+                if isForActive {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
+        case "session.shell.ended":
+            if let sid = eventSessionID {
+                runningSessionIDs.remove(sid)
+                syncSessionBadges()
+                if isForActive {
+                    effect.refreshMessagesForSession = sid
+                }
+            }
+
         case "session.text.started":
             guard isForActive else { break }
             let msgID = Self.stringField(obj, "assistantMessageID") ?? Self.stringField(obj, "messageID") ?? "stream"
@@ -1456,12 +1502,22 @@ public final class OpenCodeAppStore {
 
     public func refreshMessages(for sessionID: String) async {
         guard let client else { return }
-        async let msgTask = try? client.message.list(MessageListInput(sessionID: sessionID, limit: 200))
+        async let msgTask = try? client.message.list(MessageListInput(sessionID: sessionID, limit: 200, order: .desc))
         async let infoTask = try? client.session.get(SessionGetInput(sessionID: sessionID))
+        async let activeTask = try? client.session.active()
         let msgResp = await msgTask
         let sessionInfo = await infoTask
+        let activeMap = await activeTask
 
         guard activeSessionID == sessionID else { return }
+
+        if let activeMap {
+            runningSessionIDs = Set(activeMap.keys)
+            if !runningSessionIDs.contains(sessionID) {
+                retryingSessions.removeValue(forKey: sessionID)
+            }
+            syncSessionBadges()
+        }
 
         if let info = sessionInfo {
             let summary = AppSessionSummary(from: info, badge: badgeForSession(sessionID))
@@ -1481,7 +1537,9 @@ public final class OpenCodeAppStore {
             activeSessionCost = info.cost
         }
 
-        guard let rawMessages = msgResp?.data else { return }
+        guard let rawMessagesDesc = msgResp?.data else { return }
+        // `GET /api/session/:id/message` returns newest-first (`order=desc`); reverse into chronological oldest→newest order.
+        let rawMessages = Array(rawMessagesDesc.reversed())
 
         var totalCost = 0.0
         var latestTokens = 0
