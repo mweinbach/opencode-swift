@@ -113,7 +113,7 @@ struct CodemodeTests {
         #expect(dict["optMiss"] == .string("fallback"))
     }
 
-    @Test("Const reassignment and unsupported syntax diagnostics (export, class, BigInt)")
+    @Test("Const reassignment and unsupported syntax diagnostics (export, private class member, BigInt)")
     func syntaxAndRuntimeErrors() async throws {
         let exportRes = try await CodemodeEngine.execute(.init(code: "export const x = 1;"))
         if case .failure(let f) = exportRes {
@@ -123,12 +123,12 @@ struct CodemodeTests {
             Issue.record("Expected ParseError for export")
         }
 
-        let classRes = try await CodemodeEngine.execute(.init(code: "class Foo {}"))
+        let classRes = try await CodemodeEngine.execute(.init(code: "class Foo { #hidden = 1 }"))
         if case .failure(let f) = classRes {
             #expect(f.error.kind == "UnsupportedSyntax")
             #expect(f.error.suggestions?.isEmpty == false)
         } else {
-            Issue.record("Expected UnsupportedSyntax for class")
+            Issue.record("Expected UnsupportedSyntax for a private class member")
         }
 
         let bigIntRes = try await CodemodeEngine.execute(.init(code: "const n = 123n;"))
@@ -704,9 +704,10 @@ struct CodemodeTests {
 
         // Job notice formatting
         let runningNotice = CoreCodemode.Job.notice(.init(id: "cm_1", status: "running"))
-        #expect(runningNotice.text == "<codemode id=\"cm_1\" state=\"cancelled\">\nInterrupted by server restart.\n</codemode>")
+        #expect(runningNotice.text == "<background-result kind=\"codemode\" id=\"cm_1\" state=\"cancelled\">\nInterrupted by server restart.\n</background-result>")
+        #expect(runningNotice.description == "Script")
         let doneNotice = CoreCodemode.Job.notice(.init(id: "cm_2", status: "completed", output: "ok"))
-        #expect(doneNotice.text == "<codemode id=\"cm_2\" state=\"completed\">\nok\n</codemode>")
+        #expect(doneNotice.text == "<background-result kind=\"codemode\" id=\"cm_2\" state=\"completed\">\nok\n</background-result>")
 
         // Full `execute` tool run using Bun.file, Bun.write, Bun.Glob, path, and browser.screenshot attachment
         let progressSnapshots = Mutex<Int>(0)

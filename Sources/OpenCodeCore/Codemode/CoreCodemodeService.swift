@@ -477,7 +477,7 @@ public enum CoreCodemode {
             }
         }
 
-        // parity: core/src/codemode/instructions.ts#make [status=adapted hash=6372275d91ae]
+        // parity: core/src/codemode/instructions.ts#make [status=adapted hash=bccc95c0eaac]
         public static func make(_ inventory: Catalog.Inventory? = nil) -> ListDescriptor {
             let summary = inventory.map { Catalog.summarize($0) }
             let lookupFn: @Sendable (String) -> Catalog.Listing?
@@ -491,7 +491,7 @@ public enum CoreCodemode {
                 summary: summary,
                 renderInitial: render,
                 renderChanged: { prev, curr in update(previous: prev, current: curr, lookup: lookupFn) },
-                renderRemoved: { "Code Mode tools are no longer available. Do not use any previously listed Code Mode tools." }
+                renderRemoved: { "The `execute` tool is no longer available. Permitted tools are now available as direct tool calls." }
             )
         }
     }
@@ -877,7 +877,9 @@ public enum CoreCodemode {
     // MARK: - Bun File & Glob Extension (core/src/codemode/bun.ts)
 
     public enum Bun {
-        // parity: core/src/codemode/bun.ts#Services [status=adapted hash=39bfb7766325]
+        /// The session's file services that the `Bun` global reads and writes through. Each file is reached through its
+        /// target's own environment (here the injected file system), so there is no separate environment service.
+        // parity: core/src/codemode/bun.ts#Services [status=adapted hash=99c960df0b05]
         public struct Services: Sendable {
             public let directory: String
             public let fileSystem: any OpenCodeFileSystem
@@ -1130,13 +1132,19 @@ public enum CoreCodemode {
             }
         }
 
-        // parity: core/src/codemode/job.ts#notice [status=implemented hash=8d20f62c2b99]
+        /// `<background-result attributes>\nbody\n</background-result>`, the session's wrapper for work that finished in
+        /// the background (upstream `BackgroundResult.render` in core/src/session/background-result.ts).
+        static func backgroundResult(_ attributes: String, _ body: String) -> String {
+            "<background-result \(attributes)>\n\(body)\n</background-result>"
+        }
+
+        // parity: core/src/codemode/job.ts#notice [status=implemented hash=643c21dfd255]
         public static func notice(_ job: Info) -> Notice {
             let state = job.status == "running" ? "cancelled" : job.status
             let body = job.status == "running" ? "Interrupted by server restart." : (job.output ?? job.error ?? state)
             return Notice(
-                description: "Code Mode script",
-                text: "<codemode id=\"\(job.id)\" state=\"\(state)\">\n\(body)\n</codemode>",
+                description: "Script",
+                text: backgroundResult("kind=\"codemode\" id=\"\(job.id)\" state=\"\(state)\"", body),
                 metadata: [
                     "source": .string("codemode"),
                     "jobID": .string(job.id),
@@ -1145,6 +1153,9 @@ public enum CoreCodemode {
             )
         }
 
+        /// How long a Code Mode script blocks its tool call before it moves to the background (upstream `BLOCK_TIMEOUT`).
+        public static let blockTimeoutMs: Int = 2 * 60 * 1000
+
         public typealias RunFn = @Sendable (ToolSchema.Context, @escaping @Sendable (ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>) async throws -> ToolSchema.Result<JSONValue>
 
         // parity: core/src/codemode/job.ts#Current [status=adapted hash=f98d3ac7c70d]
@@ -1152,9 +1163,61 @@ public enum CoreCodemode {
             @TaskLocal public static var run: RunFn? = nil
         }
 
-        // parity: core/src/codemode/job.ts#make [status=adapted hash=c0d8f0048fe8]
+        private enum Settled: Sendable {
+            case finished(Result<ToolSchema.Result<JSONValue>, any Error>)
+            case timedOut
+        }
+
+        /// The script's outcome, shared by the blocking tool call and the background notice.
+        private final class Outcome: Sendable {
+            private struct State: Sendable {
+                var result: Result<ToolSchema.Result<JSONValue>, any Error>?
+                var waiters: [CheckedContinuation<Result<ToolSchema.Result<JSONValue>, any Error>, Never>] = []
+                var detached = false
+            }
+
+            private let state = Mutex(State())
+
+            var detached: Bool { state.withLock { $0.detached } }
+
+            func detach() { state.withLock { $0.detached = true } }
+
+            func finish(_ result: Result<ToolSchema.Result<JSONValue>, any Error>) {
+                let waiters = state.withLock { s -> [CheckedContinuation<Result<ToolSchema.Result<JSONValue>, any Error>, Never>] in
+                    s.result = result
+                    defer { s.waiters.removeAll() }
+                    return s.waiters
+                }
+                for waiter in waiters { waiter.resume(returning: result) }
+            }
+
+            func wait() async -> Result<ToolSchema.Result<JSONValue>, any Error> {
+                await withCheckedContinuation { continuation in
+                    let ready = state.withLock { s -> Result<ToolSchema.Result<JSONValue>, any Error>? in
+                        if let result = s.result { return result }
+                        s.waiters.append(continuation)
+                        return nil
+                    }
+                    if let ready { continuation.resume(returning: ready) }
+                }
+            }
+        }
+
+        private static func text(of result: ToolSchema.Result<JSONValue>) -> String {
+            switch result.content {
+            case .text(let s): return s
+            case .parts(let parts):
+                return parts.compactMap { if case .text(let tc) = $0 { return tc.text } else { return nil } }.joined(separator: "\n")
+            case nil: return ""
+            }
+        }
+
+        /// With `full_codemode`, a script runs as a job: its tool call blocks for up to `blockTimeoutMs`, then moves to the
+        /// background (the call returns at once) and its result arrives later as a session notice.
+        // parity: core/src/codemode/job.ts#make [status=adapted hash=edbddb970e12]
         public static func make(
             fullCodemode: Bool,
+            blockTimeoutMs: Int = Job.blockTimeoutMs,
             onBackgroundNotice: (@Sendable (Notice) async -> Void)? = nil
         ) -> RunFn {
             { context, execute in
@@ -1162,31 +1225,72 @@ public enum CoreCodemode {
                     return try await execute(context)
                 }
                 let jobId = "cm_\(Identifier.ascending())"
-                do {
-                    let result = try await execute(context)
-                    if let onBackgroundNotice {
-                        let text: String
-                        switch result.content {
-                        case .text(let s): text = s
-                        case .parts(let parts):
-                            text = parts.compactMap { if case .text(let tc) = $0 { return tc.text } else { return nil } }.joined(separator: "\n")
-                        case nil: text = ""
-                        }
-                        let isErr = result.metadata?["error"] == .bool(true)
-                        await onBackgroundNotice(notice(Info(
-                            id: jobId,
-                            status: isErr ? "failed" : "completed",
-                            output: isErr ? nil : text,
-                            error: isErr ? text : nil
-                        )))
+                let outcome = Outcome()
+                // The background flag tells clients this script can move to the background.
+                await context.progress(["background": .bool(true)])
+                let jobContext = ToolSchema.Context(
+                    sessionID: context.sessionID,
+                    agent: context.agent,
+                    messageID: context.messageID,
+                    id: context.id,
+                    progress: { update in
+                        if outcome.detached { return }
+                        var flagged = update
+                        flagged["background"] = .bool(true)
+                        await context.progress(flagged)
+                    },
+                    cancel: context.cancel
+                )
+                let job = Task {
+                    do {
+                        outcome.finish(.success(try await execute(jobContext)))
+                    } catch {
+                        outcome.finish(.failure(error))
                     }
-                    return result
-                } catch {
-                    if let onBackgroundNotice {
-                        await onBackgroundNotice(notice(Info(id: jobId, status: "failed", error: String(describing: error))))
-                    }
-                    throw error
                 }
+                let settled = await withTaskCancellationHandler {
+                    await withTaskGroup(of: Settled.self) { group -> Settled in
+                        group.addTask { .finished(await outcome.wait()) }
+                        group.addTask {
+                            try? await Task.sleep(for: .milliseconds(blockTimeoutMs))
+                            return .timedOut
+                        }
+                        let first = await group.next() ?? .timedOut
+                        group.cancelAll()
+                        return first
+                    }
+                } onCancel: {
+                    job.cancel()
+                }
+                if case .finished(let result) = settled {
+                    return try result.get()
+                }
+                // Drain the last progress publication before the tool row becomes terminal.
+                outcome.detach()
+                Task {
+                    let info: Info
+                    switch await outcome.wait() {
+                    case .success(let result):
+                        let body = text(of: result)
+                        info = result.metadata?["error"] == .bool(true)
+                            ? Info(id: jobId, status: "failed", error: body)
+                            : Info(id: jobId, status: "completed", output: body)
+                    case .failure(let error):
+                        if error is CancellationError { return }
+                        info = Info(id: jobId, status: "failed", error: String(describing: error))
+                    }
+                    await onBackgroundNotice?(notice(info))
+                }
+                let message = "Script \(jobId) is still running; its result will arrive in this session."
+                return ToolSchema.Result(
+                    output: .object([
+                        "output": .string(message),
+                        "toolCalls": .array([]),
+                        "files": .array([]),
+                    ]),
+                    content: .text(message),
+                    metadata: ["jobID": .string(jobId)]
+                )
             }
         }
     }
@@ -1271,7 +1375,9 @@ public enum CoreCodemode {
             }
         }
 
-        // parity: core/src/codemode/tool.ts#services [status=adapted hash=303610d77465]
+        /// Those services alone (location and the file services; no environment service, since each file target carries
+        /// its environment), so a run they are given to keeps its own scope.
+        // parity: core/src/codemode/tool.ts#services [status=adapted hash=c1a25f495fc3]
         public static func services(
             location: OpenCodeLocation,
             fileSystem: any OpenCodeFileSystem,
@@ -1336,6 +1442,26 @@ public enum CoreCodemode {
             }
         }
 
+        /// A Code Mode setting's schema as JSON Schema (a named contract carries its schema when it has one).
+        private static func jsonSchema(_ schema: ToolSchema.ValueSchema?) -> CodemodeEngine.Tool.JsonSchema? {
+            switch schema {
+            case .jsonSchema(let json)?: return json
+            case .named(_, let json)?: return json
+            case nil: return nil
+            }
+        }
+
+        /// The tool as Code Mode presents it (`definition(registration, true)`): its `codemode` settings may override
+        /// the direct tool's description and input/output schemas.
+        static func codemodeDefinition(_ reg: ToolRegistration) -> (description: String, input: CodemodeEngine.Tool.JsonSchema, output: CodemodeEngine.Tool.JsonSchema?) {
+            let overrides = reg.options?.codemodeOptions
+            return (
+                overrides?.description ?? reg.description,
+                jsonSchema(overrides?.input) ?? reg.inputSchema,
+                jsonSchema(overrides?.output) ?? reg.outputSchema
+            )
+        }
+
         private static func buildToolsTree(
             _ inventory: Inventory,
             executor: @escaping @Sendable (String, ToolRegistration, JSONValue) async throws -> JSONValue
@@ -1344,11 +1470,12 @@ public enum CoreCodemode {
             for name in inventory.tools.keys.sorted() {
                 guard let reg = inventory.tools[name] else { continue }
                 let qName = qualifiedName(reg)
+                let definition = codemodeDefinition(reg)
                 let def = CodemodeEngine.Tool.make(CodemodeEngine.Tool.Options(
-                    description: reg.description,
-                    input: reg.inputSchema,
+                    description: definition.description,
+                    input: definition.input,
                     freeform: reg.freeform != nil,
-                    output: reg.outputSchema ?? ["type": .array([.string("string"), .string("null")])],
+                    output: definition.output ?? ["type": .array([.string("string"), .string("null")])],
                     execute: { input, _ in
                         try await executor(name, reg, input)
                     }
@@ -1368,9 +1495,15 @@ public enum CoreCodemode {
             return root
         }
 
-        // parity: core/src/codemode/tool.ts#catalog [status=implemented hash=8a1ef8196c93]
+        /// Whether a tool is pinned in the catalog: `codemode.pinned`, or the deprecated top-level `pinned`
+        /// (`ToolSchema.Options.pinned` resolves that fallback).
+        static func isPinned(_ registration: ToolRegistration) -> Bool {
+            registration.options?.pinned == true
+        }
+
+        // parity: core/src/codemode/tool.ts#catalog [status=implemented hash=d9123c90fa74]
         public static func catalog(_ inventory: Inventory) -> Catalog.Inventory {
-            let pinnedSet = Set(inventory.tools.values.filter { $0.options?.pinned == true }.map(qualifiedName))
+            let pinnedSet = Set(inventory.tools.values.filter(isPinned).map(qualifiedName))
             let prepared = CodemodeEngine.ToolRuntime.prepare(buildToolsTree(inventory) { _, _, _ in .null })
 
             final class Node {
@@ -1415,7 +1548,7 @@ public enum CoreCodemode {
             return Catalog.Inventory(tools: render(root))
         }
 
-        // parity: core/src/codemode/tool.ts#create [status=adapted hash=13a29b18c4fc]
+        // parity: core/src/codemode/tool.ts#create [status=adapted hash=1ee5996bd6f5]
         public static func create(
             inventory: Inventory,
             transport: any HTTPTransport,
@@ -1513,7 +1646,9 @@ public enum CoreCodemode {
                             messageID: context.messageID,
                             id: nestedID,
                             progress: { _ in },
-                            cancel: nil
+                            cancel: nil,
+                            // The tool runs inside Code Mode, so its `codemode` overrides apply.
+                            codemode: true
                         )
                         do {
                             let executed = try await reg.execute(toolInput, nestedCtx)

@@ -1391,7 +1391,21 @@ public enum CodemodeEngine {
                         if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
                         if let err = visitExpr(v) { return err }
                     case .spread(let e, _): if let err = visitExpr(e) { return err }
+                    case .accessor(_, let k, let fn, _):
+                        if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
+                        if let err = visitFunctionPayload(fn) { return err }
                     }
+                }
+                return nil
+            case .classExpr(let cls):
+                return visitClass(cls)
+            case .superMember(let prop, _):
+                if case .computed(let ce, _) = prop { return visitExpr(ce) }
+                return nil
+            case .superCall(let args, _, _):
+                for a in args {
+                    if case .expr(let e) = a, let err = visitExpr(e) { return err }
+                    if case .spread(let e, _) = a, let err = visitExpr(e) { return err }
                 }
                 return nil
             case .templateLiteral(_, let es, _):
@@ -1424,6 +1438,33 @@ public enum CodemodeEngine {
             default:
                 return nil
             }
+        }
+
+        func visitFunctionPayload(_ fn: CodemodeLanguage.FunctionPayload) -> CodemodeLanguage.Diagnostic? {
+            var fnScope = Set<String>()
+            if let n = fn.name { fnScope.insert(n) }
+            for p in fn.params { for n in CodemodeLanguage.collectPatternNames(p) { fnScope.insert(n) } }
+            if case .block(let stmts) = fn.body { fnScope.formUnion(collectStmtNames(stmts, includeVar: true)) }
+            scopes.append(fnScope)
+            defer { scopes.removeLast() }
+            switch fn.body {
+            case .block(let stmts): return visitStmts(stmts)
+            case .expression(let e): return visitExpr(e)
+            }
+        }
+
+        // A class body: its name binding, `extends`, member keys, methods, and field initializers.
+        func visitClass(_ cls: CodemodeLanguage.ClassPayload) -> CodemodeLanguage.Diagnostic? {
+            scopes.append(cls.name.map { [$0] } ?? [])
+            defer { scopes.removeLast() }
+            if let superClass = cls.superClass, let err = visitExpr(superClass) { return err }
+            if let err = visitFunctionPayload(cls.constructor) { return err }
+            for member in cls.members {
+                if case .computed(let ce, _) = member.key, let err = visitExpr(ce) { return err }
+                if let fn = member.function, let err = visitFunctionPayload(fn) { return err }
+                if let value = member.value, let err = visitExpr(value) { return err }
+            }
+            return nil
         }
 
         func visitStmts(_ stmts: [CodemodeLanguage.Statement]) -> CodemodeLanguage.Diagnostic? {
@@ -1507,6 +1548,8 @@ public enum CodemodeEngine {
                 return fin.flatMap(visitStmts)
             case .labeled(_, let b, _):
                 return visitStmt(b)
+            case .classDecl(let cls):
+                return visitClass(cls)
             case .empty, .breakStmt, .continueStmt:
                 return nil
             }
@@ -1523,6 +1566,7 @@ public enum CodemodeEngine {
         for stmt in stmts {
             switch stmt {
             case .functionDecl(let fn): if let n = fn.name { names.insert(n) }
+            case .classDecl(let cls): if let n = cls.name { names.insert(n) }
             case .variable(let kind, let decls, _) where includeVar || kind != .var:
                 for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
             default: break
@@ -1571,23 +1615,23 @@ public enum CodemodeEngine {
     // parity: codemode/src/codemode/codemode.ts#SnapshotHeader [status=implemented hash=ef64402c2c5c]
     public typealias SnapshotHeader = CodemodeLanguage.Header
 
-    // parity: codemode/src/codemode/codemode.ts#SnapshotError [status=implemented hash=3b5dae691337]
+    // parity: codemode/src/codemode/codemode.ts#SnapshotError [status=implemented hash=75e512c824a9]
     public typealias SnapshotError = CodemodeLanguage.SnapshotError
 
-    // parity: codemode/src/codemode/codemode.ts#SuspendError [status=implemented hash=3b5dae691337]
+    // parity: codemode/src/codemode/codemode.ts#SuspendError [status=implemented hash=7d9909c4d067]
     public typealias SuspendError = CodemodeLanguage.SuspendError
 
-    // parity: codemode/src/codemode/codemode.ts#fromBytes [status=implemented hash=3b5dae691337]
+    // parity: codemode/src/codemode/codemode.ts#fromBytes [status=implemented hash=75e512c824a9]
     public static func fromBytes(_ bytes: [UInt8]) throws -> Snapshot {
         try CodemodeLanguage.fromBytes(bytes)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#toBytes [status=implemented hash=3b5dae691337]
+    // parity: codemode/src/codemode/codemode.ts#toBytes [status=implemented hash=75e512c824a9]
     public static func toBytes(_ snapshot: Snapshot) throws -> [UInt8] {
         try CodemodeLanguage.toBytes(snapshot)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#scanTools [status=implemented hash=3b5dae691337]
+    // parity: codemode/src/codemode/codemode.ts#scanTools [status=implemented hash=75e512c824a9]
     public static let scanCodeModeTools: @Sendable (String) -> Result<[String], CodemodeLanguage.Diagnostic> = scanTools
 
     // parity: codemode/src/codemode/codemode.ts#RunOptions [status=implemented hash=e17ea202c38d]

@@ -4071,10 +4071,12 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/host.ts#ENTERED [status=implemented hash=76b018ac576f]
     public static let ENTERED = RuntimeSymbol("codemode.host.entered")
 
-    // parity: psychoscript/src/host.ts#HostResult [status=implemented hash=fba154b75227]
+    // parity: psychoscript/src/host.ts#HostResult [status=implemented hash=9a8db9347a85]
     public enum HostResult: Sendable {
         case value(Value)
         case error(Error)
+        /// The arguments hold program getters to run first (as program code); then the call is made again.
+        case prefetch(Prefetch)
     }
 
     // parity: psychoscript/src/host.ts#HostVm [status=implemented hash=8191b2aefeb4]
@@ -4082,7 +4084,8 @@ extension CodemodeLanguage {
         var builtins: Builtins { get }
     }
 
-    // parity: psychoscript/src/host.ts#HostTarget [status=implemented hash=619922b4e44c]
+    /// Where a host function is; the program names it in errors by its label (for example `sleep` or `store.get`).
+    // parity: psychoscript/src/host.ts#HostTarget [status=implemented hash=2cabac2c0723]
     public enum HostTarget: Sendable {
         case fn(Host.Fn)
         case durable(Host.DurableFn)
@@ -4091,7 +4094,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/host.ts#VISIT_BUDGET [status=implemented hash=95912b9e09cc]
     public static let VISIT_BUDGET: Int = 100_000
 
-    // parity: psychoscript/src/host.ts#HostCalls [status=implemented hash=c6090d519890]
+    // parity: psychoscript/src/host.ts#HostCalls [status=implemented hash=4d1c074b748a]
     public final class HostCalls: Sendable {
         public struct InboxDelivery: Sendable {
             public let call: HostCall
@@ -4170,13 +4173,17 @@ extension CodemodeLanguage {
         }
 
         /// Enqueues a host function call, returning its promise for async/durable targets or `BLOCK` for blocking calls.
-        // parity: psychoscript/src/host.ts#HostCalls.call [status=implemented hash=d00285755372]
+        /// Program getters in the arguments (`values`) run first, as program code, before anything else happens for
+        /// the call: no promise and no call id, only a `prefetch` the caller runs before calling again.
+        // parity: psychoscript/src/host.ts#HostCalls.call [status=implemented hash=8b477b22f2dd]
         public func call(
             target: HostTarget,
             label: String,
             path: String? = nil,
-            builtins: Builtins
+            builtins: Builtins,
+            values: [Value] = []
         ) -> HostResult {
+            if let prefetch = cross(values) { return .prefetch(prefetch) }
             let (id, key) = state.withLock { s -> (Int, String) in
                 let id = s.nextId
                 s.nextId += 1
@@ -4211,6 +4218,20 @@ extension CodemodeLanguage {
                 }
                 return .value(.symbol(CodemodeLanguage.BLOCK))
             }
+        }
+
+        /// Copies the arguments to the host ahead of the call: a `Prefetch` while program getters in them are still to run.
+        private func cross(_ values: [Value]) -> Prefetch? {
+            var budget = CodemodeLanguage.VISIT_BUDGET
+            var seen = Set<ObjectIdentifier>()
+            func hasProgramGetter(_ value: Value) -> Bool {
+                guard case .object(let obj) = value, budget > 0, seen.insert(ObjectIdentifier(obj)).inserted else { return false }
+                budget -= 1
+                if obj.hasProgramAccessors { return true }
+                if let arr = obj as? Arr { return arr.items.contains(where: hasProgramGetter) }
+                return CodemodeLanguage.entries(obj).contains { hasProgramGetter($0.1) }
+            }
+            return values.contains(where: hasProgramGetter) ? Prefetch(reads: []) : nil
         }
 
         /// Continues a blocked host call with its completion outcome.
@@ -4401,10 +4422,43 @@ extension CodemodeLanguage {
         )
     }
 
+    /// A host call's arguments with their program getters run ahead, as program code and in order, so the host only
+    /// ever reads data (upstream `HostCalls.cross` plus `$vmReplay`). Objects without program getters are kept.
+    static func crossProgramGetters(_ value: Value, eval: Evaluator, seen: inout Set<ObjectIdentifier>) async throws -> Value {
+        guard case .object(let obj) = value, !(obj is Callable), seen.insert(ObjectIdentifier(obj)).inserted else { return value }
+        if let arr = obj as? Arr {
+            var items = arr.items
+            var changed = false
+            for index in items.indices {
+                let crossed = try await crossProgramGetters(items[index], eval: eval, seen: &seen)
+                if case .object(let a) = crossed, case .object(let b) = items[index], a === b { continue }
+                items[index] = crossed
+                changed = true
+            }
+            return changed ? .object(Arr(proto: arr.proto, items: items)) : value
+        }
+        guard type(of: obj) == Obj.self else { return value }
+        var pairs: [(String, Value)] = []
+        var changed = obj.hasProgramAccessors
+        for key in keys(obj) {
+            let raw = try await eval.getValue(obj, .string(key), receiver: value)
+            let crossed = try await crossProgramGetters(raw, eval: eval, seen: &seen)
+            if case .object(let a) = crossed, case .object(let b) = raw, a !== b { changed = true }
+            pairs.append((key, crossed))
+        }
+        guard changed else { return value }
+        let copy = Obj(proto: obj.proto)
+        for (key, item) in pairs { define(copy, key, item) }
+        return .object(copy)
+    }
+
     private static func prepareHostArgs(_ args: [Value], translate: Translate, eval: Evaluator) async throws -> [Value] {
+        var seen = Set<ObjectIdentifier>()
+        var crossedArgs: [Value] = []
+        for arg in args { crossedArgs.append(try await crossProgramGetters(arg, eval: eval, seen: &seen)) }
         var out: [Value] = []
         out.reserveCapacity(args.count)
-        for arg in args {
+        for arg in crossedArgs {
             if translate.promises == .await, case .object(let p as PromiseObj) = arg {
                 let settled = await p.awaitOutcome()
                 switch settled {
@@ -4619,7 +4673,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/async.ts#VmScheduler [status=implemented hash=e5e2a4446ca1]
+    // parity: psychoscript/src/async.ts#VmScheduler [status=implemented hash=bcc865ac8a77]
     public final class VmScheduler: Sendable {
         public struct ParkedEntry: Sendable {
             public let promise: PromiseObj
@@ -4641,10 +4695,55 @@ extension CodemodeLanguage {
             var reactions: [ObjectIdentifier: [Reaction]] = [:]
             var parked: [(frame: Frame, entry: ParkedEntry)] = []
             var unhandled: [(id: Int, promise: ObjectIdentifier, diagnostic: Diagnostic)] = []
+            var callProgram: (@Sendable (Callable, Value, [Value]) async throws -> Value)? = nil
         }
 
         private let state = Mutex(State())
         public let builtins: Builtins?
+
+        /// Calls a program function (`callee`, `this`, arguments) as program code: how a thenable's `then` getter runs.
+        public var callProgram: (@Sendable (Callable, Value, [Value]) async throws -> Value)? {
+            get { state.withLock { $0.callProgram } }
+            set { state.withLock { $0.callProgram = newValue } }
+        }
+
+        /// The `thenable-get` job: reads a thenable's program `then` getter, then adopts the thenable through it once.
+        private func resolveThenableGet(_ promise: PromiseObj, thenable: Value, getter: Callable) async {
+            guard let call = callProgram else {
+                settle(promise, completion: .ok(thenable))
+                return
+            }
+            do {
+                let then = try await call(getter, thenable, [])
+                guard case .object(let thenObj) = then, let thenFn = thenObj as? Callable else {
+                    settle(promise, completion: .ok(thenable))
+                    return
+                }
+                let settled = Mutex(false)
+                let once: @Sendable (Completion) -> Void = { [weak self] completion in
+                    let first = settled.withLock { done -> Bool in
+                        defer { done = true }
+                        return !done
+                    }
+                    if first { self?.settle(promise, completion: completion) }
+                }
+                let resolve = Native(proto: builtins?.Function, options: NativeOptions(name: "", length: 1, call: { _, args, _, _ in
+                    once(.ok(args.first ?? .undefined))
+                    return .undefined
+                }))
+                let reject = Native(proto: builtins?.Function, options: NativeOptions(name: "", length: 1, call: { _, args, _, _ in
+                    once(.error(Throw(args.first ?? .undefined)))
+                    return .undefined
+                }))
+                do {
+                    _ = try await call(thenFn, thenable, [.object(resolve), .object(reject)])
+                } catch {
+                    once(.error(error))
+                }
+            } catch {
+                settle(promise, completion: .error(error))
+            }
+        }
 
         public init(builtins: Builtins? = nil) {
             self.builtins = builtins
@@ -4721,7 +4820,7 @@ extension CodemodeLanguage {
             settle(promise, completion: .error(reason))
         }
 
-        // parity: psychoscript/src/async.ts#VmScheduler.resolveWith [status=implemented hash=5df64a1ff21b]
+        // parity: psychoscript/src/async.ts#VmScheduler.resolveWith [status=implemented hash=2ce10452c5aa]
         public func resolveWith(_ promise: PromiseObj, resolution: Value, site: AstNode? = nil) {
             if case .object(let obj) = resolution, obj === promise {
                 let cycle = CodemodeLanguage.typeError("Chaining cycle detected: a promise cannot resolve with itself.", node: site)
@@ -4729,7 +4828,22 @@ extension CodemodeLanguage {
                 return
             }
             if case .object(let thenable) = resolution {
-                let thenProp = CodemodeLanguage.get(thenable, "then")
+                let access: Access
+                do {
+                    access = try CodemodeLanguage.access(thenable, .string("then"), receiver: resolution)
+                } catch {
+                    settle(promise, completion: .error(error))
+                    return
+                }
+                if case .getter(let call) = access {
+                    // A program `then` getter is program code, so it runs in a job of its own.
+                    enqueue(Job(description: "thenable-get") { [weak self] in
+                        guard let self else { return }
+                        await self.resolveThenableGet(promise, thenable: resolution, getter: call.getter)
+                    })
+                    return
+                }
+                let thenProp: Value = if case .value(let v) = access { v } else { .undefined }
                 if CodemodeLanguage.typeofValue(thenProp) == "function" {
                     enqueue(Job(description: "thenable") { [weak self] in
                         if let resolvedPromise = thenable as? PromiseObj {
@@ -4867,12 +4981,17 @@ extension CodemodeLanguage {
             }
         }
 
-        // parity: psychoscript/src/async.ts#VmScheduler.beginJob [status=implemented hash=3d8368036492]
+        /// Runs one job: a reaction, a thenable's adoption, or a thenable's program `then` getter (`thenable-get`),
+        /// each of which carries its own work.
+        // parity: psychoscript/src/async.ts#VmScheduler.beginJob [status=implemented hash=85d509240aad]
         public func beginJob(_ job: Job) async {
             await job.run()
         }
 
-        // parity: psychoscript/src/async.ts#VmScheduler.enterSettlingCall [status=implemented hash=d97929d3c34f]
+        /// Calls a settling callable (a Promise executor or `Promise.try` function): a resolver function settles at
+        /// once; anything else (an async or generator function, or a class constructor, which throws when called) is
+        /// called as a frame that settles `target`.
+        // parity: psychoscript/src/async.ts#VmScheduler.enterSettlingCall [status=implemented hash=93ff3c26cb89]
         @discardableResult
         public func enterSettlingCall(
             callable: Value,
@@ -4880,6 +4999,9 @@ extension CodemodeLanguage {
             mode: FrameMode,
             target: SettlingTarget
         ) -> Int {
+            if case .object(let fn as Fn) = callable, case .classConstructor = fn.payload.kind {
+                return 1
+            }
             if case .object(let resolver as Resolver) = callable {
                 let res = resolver.invoke(thisValue: .undefined, args: args)
                 if mode == .normal {
@@ -4918,11 +5040,22 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/async.ts#registerAsyncIntrinsics [status=implemented hash=04e7fbd41587]
+    // parity: psychoscript/src/async.ts#registerAsyncIntrinsics [status=implemented hash=5b8678a06993]
     public static func registerAsyncIntrinsics(_ registry: inout [String: VmIntrinsic]) {
         registry["isPromise"] = VmIntrinsic(name: "isPromise") { args in
             if case .object(let obj) = args.first { return .bool(obj is PromiseObj) }
             return .bool(false)
+        }
+        // Only whether there is an iterator method: the for...of that combines reads it (a getter too) in program
+        // code, so a program accessor counts without running.
+        registry["$IsIterable"] = VmIntrinsic(name: "$IsIterable") { args in
+            guard case .object(let obj) = args.first else { return .bool(false) }
+            if obj is Arr || obj is SetObj || obj is MapObj || obj is Bytes || obj is IteratorObj || obj is GeneratorObj {
+                return .bool(true)
+            }
+            guard let slot = lookup(obj, .symbol(IteratorSymbol)) else { return .bool(false) }
+            if isProgramAccessor(slot) { return .bool(true) }
+            return .bool(!peek(obj, .symbol(IteratorSymbol)).isNullish)
         }
     }
 
@@ -5287,7 +5420,10 @@ extension CodemodeLanguage {
         try generatorStep(gen, request: request, builtins: builtins)
     }
 
-    // parity: psychoscript/src/generators.ts#execAwait [status=implemented hash=c4d2224e34ec]
+    /// `await` in a job: only a host call waiting on its arguments awaits under synchronous code (a getter an iterator
+    /// op runs, a constructor, a synchronous generator's body), and then the whole job waits, as here the awaiting task
+    /// suspends its whole call chain.
+    // parity: psychoscript/src/generators.ts#execAwait [status=implemented hash=d5bdbf047158]
     public static func execAwait(_ value: Value) async throws -> Value {
         if case .object(let p as PromiseObj) = value {
             switch await p.awaitOutcome() {
@@ -5298,15 +5434,21 @@ extension CodemodeLanguage {
         return value
     }
 
-    // parity: psychoscript/src/generators.ts#execYstar [status=implemented hash=23e40a376e13]
+    /// `yield*`: the iterator protocol's reads (`next`, `done`, `value`) may meet program getters, which run as
+    /// program code (`Evaluator.collectIterable` reads through `redoRead`).
+    // parity: psychoscript/src/generators.ts#execYstar [status=implemented hash=2347e2a4041f]
     public static func execYstar(_ iterable: Value, eval: Evaluator, into buffer: inout [Value]) async throws {
         let items = try await eval.collectIterable(iterable)
         buffer.append(contentsOf: items)
     }
 
-    // parity: psychoscript/src/generators.ts#execYstarResult [status=implemented hash=919e782dd821]
-    public static func execYstarResult(_ value: Value) -> Value {
-        value
+    /// A delegate's step result: `done` then `value`, each read through a program getter when there is one.
+    // parity: psychoscript/src/generators.ts#execYstarResult [status=implemented hash=3b6b177c7993]
+    public static func execYstarResult(_ result: Value, eval: Evaluator) async throws -> (done: Bool, value: Value) {
+        let obj = try requireIteratorObject(result)
+        let done = try await eval.redoRead(obj, .string("done"), receiver: result)
+        let value = try await eval.redoRead(obj, .string("value"), receiver: result)
+        return (done.isTruthy, value)
     }
 
     // parity: psychoscript/src/generators.ts#resumeVmGenerator [status=implemented hash=85a51ee5d16a]
@@ -5330,11 +5472,25 @@ extension CodemodeLanguage {
         push.slots.first ?? .undefined
     }
 
-    // parity: psychoscript/src/generators.ts#registerGeneratorIntrinsics [status=implemented hash=e941144522d8]
+    // parity: psychoscript/src/generators.ts#registerGeneratorIntrinsics [status=implemented hash=0126aa74c5a5]
     public static func registerGeneratorIntrinsics(_ registry: inout [String: VmIntrinsic]) {
         registry["isGenerator"] = VmIntrinsic(name: "isGenerator") { args in
             if case .object(let obj) = args.first { return .bool(obj is GeneratorObj) }
             return .bool(false)
+        }
+        // An async-from-sync iterator: the sync iterator method's result must be an object.
+        registry["$AfsRequireObj"] = VmIntrinsic(name: "$AfsRequireObj") { args in
+            .object(try requireIteratorObject(args.first ?? .undefined))
+        }
+        // An iterator method the prelude read (a getter too): undefined when absent, else it must be a function.
+        registry["$AfsMethod"] = VmIntrinsic(name: "$AfsMethod") { args in
+            let method = args.count > 1 ? args[1] : .undefined
+            if method.isNullish { return .undefined }
+            guard case .object(let fn) = method, fn is Callable else {
+                let kind = args.count > 2 ? coerceToString(args[2]) : "method"
+                throw typeError("Iterator \(kind) is not a function.")
+            }
+            return method
         }
     }
 
@@ -8549,7 +8705,7 @@ extension CodemodeLanguage {
             ("structuredClone", .object(structuredCloneGlobal(builtins))),
         ]
         for et in errorTypes {
-            list.append((et.rawValue, .object(errorGlobal(et, builtins: builtins))))
+            list.append((et.rawValue, .object(errorGlobal(et, builtins: builtins, trace: { $0.stackTrace() }))))
         }
         return list
     }
@@ -9038,18 +9194,52 @@ extension CodemodeLanguage {
         return (snap, [])
     }
 
-    // parity: psychoscript/src/snapshot.ts#restoreVm [status=implemented hash=627fe3b46080]
+    // parity: psychoscript/src/snapshot.ts#restoreVm [status=adapted hash=ef2fb724c0ff]
     public static func restoreVm(_ vm: Vm, saved: Snapshot, options: RestoreOptions) throws -> Snapshot {
         let checked = try validate(saved)
-        guard checked.header.build == buildId() else {
-            throw SnapshotError("Snapshot belongs to another build.")
+        let expected = buildId()
+        guard checked.format == FORMAT, checked.header.build == expected else {
+            throw SnapshotError(
+                "This state was saved by another psychoscript build (\(checked.header.build)); this runtime is \(expected), so it can't resume it."
+            )
         }
+        guard checked.header.hosts == hostsId(vm.interpreter) else {
+            throw SnapshotError("This state was saved by a runtime with other host globals; resume it with the same ones.")
+        }
+        let known = Set(vm.sources.map(\.id))
         for src in checked.header.sources {
+            guard snapshotHash(src.code) == src.hash else {
+                throw SnapshotError("Source \(src.id) does not match its hash.")
+            }
             let parsed = try options.parse(src.code)
+            guard parsed.id == src.id, !known.contains(src.id) else {
+                throw SnapshotError("Source \(src.id) is not a program source.")
+            }
+            guard hashOf(compileSource(parsed)) == src.bytecode else {
+                throw SnapshotError("Source \(src.id) compiles to other bytecode in this build, so it can't resume.")
+            }
             vm.registerSource(parsed)
         }
         vm.hostCalls.runId = checked.header.runId
         return checked
+    }
+
+    /// For tests: the frames a saved state holds (the job stack, parked awaits, suspended generators), each as its
+    /// function's name or the internal helper it runs, with " (redo)" for a getter an iterator op is running
+    /// (`Mode.redo`). It reads `Frame` records as the codec writes them: `{"t": "Frame", "name": …, "mode": …}`.
+    // parity: psychoscript/src/snapshot.ts#savedFrames [status=adapted hash=e1e6e2f93302]
+    public static func savedFrames(_ snapshot: Snapshot) -> [String] {
+        snapshot.records.compactMap { record -> String? in
+            guard record["t"] == .string("Frame") else { return nil }
+            let redo: String
+            switch record["mode"] {
+            case .int(let mode) where Int(mode) == Mode.redo.rawValue: redo = " (redo)"
+            case .double(let mode) where Int(mode) == Mode.redo.rawValue: redo = " (redo)"
+            default: redo = ""
+            }
+            guard case .string(let name) = record["name"] else { return "<anonymous>\(redo)" }
+            return "\(name)\(redo)"
+        }
     }
 
     // MARK: - Lexical Environment & Real AST Evaluator
@@ -9110,6 +9300,11 @@ extension CodemodeLanguage {
                 current = env.parent
             }
             throw CodemodeLanguage.referenceError("\(name) is not defined.", node: node)
+        }
+
+        /// Whether this environment itself binds `name` (nil when it doesn't), and whether that binding is initialized.
+        func initializedState(_ name: String) -> Bool? {
+            slots.withLock { $0[name]?.initialized }
         }
 
         public func hasBinding(_ name: String) -> Bool {
@@ -9235,6 +9430,22 @@ extension CodemodeLanguage {
             return interruptedCount
         }
 
+        /// Counts a call against the nesting limit; `exitCall` undoes it.
+        func enterCall(site: AstNode?) throws {
+            let depth = state.withLock { s -> Int in
+                s.callDepth += 1
+                return s.callDepth
+            }
+            guard depth <= maxCallDepth else {
+                state.withLock { $0.callDepth -= 1 }
+                throw PendingThrow(type: .rangeError, message: "Execution exceeded the maximum nesting depth.", node: site)
+            }
+        }
+
+        func exitCall() {
+            state.withLock { $0.callDepth -= 1 }
+        }
+
         public func checkLimits(at loc: SourceLocation? = nil) throws {
             if Task.isCancelled {
                 throw Interruption("cancelled")
@@ -9306,6 +9517,12 @@ extension CodemodeLanguage {
         }
 
         public func evaluateProgram(_ program: ProgramAST) async throws -> Value {
+            try await withFrame(nil) {
+                try await evaluateProgramBody(program)
+            }
+        }
+
+        private func evaluateProgramBody(_ program: ProgramAST) async throws -> Value {
             let programEnv = LexEnv(parent: globalEnv, isFunctionScope: true)
             hoistStatements(program.body, into: programEnv)
             var lastValue: Value = .undefined
@@ -9331,6 +9548,11 @@ extension CodemodeLanguage {
                     if let name = fn.name {
                         let fnObj = Fn(proto: builtins.Function, payload: fn, closure: env)
                         env.declare(name, value: .object(fnObj), isConst: false, initialized: true)
+                    }
+                case .classDecl(let cls):
+                    // A class declaration binds like `let`: uninitialized until the class is defined.
+                    if let name = cls.name {
+                        env.declare(name, value: .undefined, isConst: false, initialized: false)
                     }
                 case .variable(let kind, let decls, _):
                     for d in decls {
@@ -9399,6 +9621,10 @@ extension CodemodeLanguage {
             switch stmt {
             case .empty, .functionDecl:
                 return nil
+            case .classDecl(let cls):
+                let ctor = try await evalClass(cls, env: env, thisValue: thisValue)
+                if let name = cls.name { env.initialize(name, value: ctor) }
+                return nil
             case .expression(let expr, _):
                 return try await evalExpression(expr, env: env, thisValue: thisValue)
             case .block(let stmts, _):
@@ -9413,7 +9639,11 @@ extension CodemodeLanguage {
                 for d in decls {
                     let val: Value
                     if let initExpr = d.initializer {
-                        val = try await evalExpression(initExpr, env: env, thisValue: thisValue)
+                        if case .identifier(let name, _) = d.id {
+                            val = try await evalNamedExpression(initExpr, name: name, env: env, thisValue: thisValue)
+                        } else {
+                            val = try await evalExpression(initExpr, env: env, thisValue: thisValue)
+                        }
                     } else {
                         val = .undefined
                     }
@@ -9532,7 +9762,8 @@ extension CodemodeLanguage {
                     if let handler {
                         let catchEnv = LexEnv(parent: env, isFunctionScope: false)
                         if let param = handler.param {
-                            let errVal = materialize(builtins, error)
+                            // A host failure has no site of its own: its `stack` names where it was observed.
+                            let errVal = materialize(builtins, error, site: EvalFrames.current?.site)
                             for n in collectPatternNames(param) {
                                 catchEnv.declare(n, value: .undefined, isConst: false, initialized: false)
                             }
@@ -9730,22 +9961,24 @@ extension CodemodeLanguage {
                 for prop in props {
                     let key = try await evalPropertyKey(prop.key, env: env, thisValue: thisValue)
                     if let s = key.stringKey { usedKeys.insert(s) }
-                    let propVal = try destructuredProperty(value, key, builtins: builtins, node: AstNode(type: "ObjectPattern", location: loc))
+                    let propVal = try await readMember(value, key, node: AstNode(type: "ObjectPattern", location: loc))
                     try await bindPattern(prop.value, value: propVal, kind: kind, env: env, thisValue: thisValue, isInit: isInit)
                 }
                 if let rest {
                     let restObj = Obj(proto: builtins.Object)
                     if case .object(let src) = value {
-                        for (k, v) in entries(src) where !usedKeys.contains(k) {
-                            define(restObj, k, v)
-                        }
+                        try await copyDataPropertiesAsync(restObj, src, skip: Set(usedKeys.map { PropertyKey.string($0) }))
                     }
                     try await bindPattern(rest, value: .object(restObj), kind: kind, env: env, thisValue: thisValue, isInit: isInit)
                 }
             case .member(let objExpr, let propKey, let loc):
                 let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                try assignToReference(base, key, value, node: AstNode(type: "MemberExpression", location: loc))
+                try await writeMember(base, key, value, node: AstNode(type: "MemberExpression", location: loc))
+            case .superMember(let propKey, let loc):
+                let node = AstNode(type: "MemberExpression", location: loc)
+                let ref = try await superReference(propKey, env: env, thisValue: thisValue, node: node)
+                try await writeSuper(base: ref.base, key: ref.key, receiver: ref.receiver, value: value, node: node)
             }
         }
 
@@ -9769,8 +10002,8 @@ extension CodemodeLanguage {
                 return .object(try constructRegExp(builtins, args: [.string(p), .string(f)]))
             case .identifier(let name, let loc):
                 return try env.get(name, node: AstNode(type: "Identifier", location: loc))
-            case .thisExpr:
-                return thisValue
+            case .thisExpr(let loc):
+                return try resolveThis(env, thisValue, node: AstNode(type: "ThisExpression", location: loc))
             case .array(let elements, _):
                 var items: [Value] = []
                 for el in elements {
@@ -9790,18 +10023,45 @@ extension CodemodeLanguage {
                     switch p {
                     case .property(let keyExpr, let valExpr, _, _):
                         let k = try await evalPropertyKey(keyExpr, env: env, thisValue: thisValue)
-                        let v = try await evalExpression(valExpr, env: env, thisValue: thisValue)
+                        let v: Value
+                        if case .function(let payload) = valExpr, payload.kind == .method {
+                            // A method has the object as its home, for `super`.
+                            let fn = makeMethod(payload, home: obj, env: env)
+                            if payload.name == nil { define(fn, "name", .string(methodName(k)), readonly) }
+                            v = .object(fn)
+                        } else {
+                            v = try await evalNamedExpression(valExpr, name: methodName(k), env: env, thisValue: thisValue)
+                        }
                         if k != .string("__proto__") { define(obj, k, v) }
+                    case .accessor(let kind, let keyExpr, let payload, _):
+                        // An object literal's `get x() {}` / `set x(v) {}`, named `get x` / `set x`.
+                        let k = try await evalPropertyKey(keyExpr, env: env, thisValue: thisValue)
+                        let fn = makeMethod(payload, home: obj, env: env)
+                        define(fn, "name", .string("\(kind.rawValue) \(methodName(k))"), readonly)
+                        defineAccessorHalf(obj, k, half: kind == .get ? .get : .set, fn: fn)
                     case .spread(let e, _):
                         let v = try await evalExpression(e, env: env, thisValue: thisValue)
                         if case .object(let src) = v {
-                            for (k, val) in entries(src) where k != "__proto__" { define(obj, k, val) }
+                            // Program getters in the source run as the copy reads them.
+                            try await copyDataPropertiesAsync(obj, src, skip: [.string("__proto__")])
                         }
                     }
                 }
                 return .object(obj)
             case .function(let payload):
+                if payload.isArrow {
+                    // An arrow keeps the `this` of where it is made.
+                    let arrowEnv = LexEnv(parent: env, isFunctionScope: false)
+                    arrowEnv.declare("%arrowThis", value: thisValue, isConst: true)
+                    return .object(Fn(proto: builtins.Function, payload: payload, closure: arrowEnv))
+                }
                 return .object(Fn(proto: builtins.Function, payload: payload, closure: env))
+            case .classExpr(let cls):
+                return try await evalClass(cls, env: env, thisValue: thisValue)
+            case .superMember(let propKey, let loc):
+                return try await readSuper(propKey, env: env, thisValue: thisValue, loc: loc).value
+            case .superCall(let argSpecs, let passThrough, let loc):
+                return try await evalSuperCall(argSpecs, passThrough: passThrough, env: env, thisValue: thisValue, loc: loc)
             case .templateLiteral(let quasis, let exprs, _):
                 var out = quasis.first?.cooked ?? ""
                 for (idx, e) in exprs.enumerated() {
@@ -9824,7 +10084,7 @@ extension CodemodeLanguage {
                 let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                 if optional && base.isNullish { return .undefined }
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                return try resolveProperty(base, key, builtins: builtins, node: AstNode(type: "MemberExpression", location: loc))
+                return try await readMember(base, key, node: AstNode(type: "MemberExpression", location: loc))
             case .call(let calleeExpr, let argSpecs, let optional, let loc):
                 let (calleeVal, recvVal) = try await evalCallee(calleeExpr, env: env, thisValue: thisValue)
                 if optional && calleeVal.isNullish { return .undefined }
@@ -9833,9 +10093,14 @@ extension CodemodeLanguage {
             case .newExpr(let calleeExpr, let argSpecs, let loc):
                 let calleeVal = try await evalExpression(calleeExpr, env: env, thisValue: thisValue)
                 let args = try await evalCallArgs(argSpecs, env: env, thisValue: thisValue)
-                guard case .object(let b as Builtin) = calleeVal, let ctor = b.constructFn else {
-                    throw notConstructible(calleeVal, node: AstNode(type: "NewExpression", location: loc))
+                let node = AstNode(type: "NewExpression", location: loc)
+                if case .object(let classCtor as Fn) = calleeVal, classCtor.klass != nil {
+                    return try await constructClass(classCtor, args: args, newTarget: classCtor, site: node)
                 }
+                guard case .object(let b as Builtin) = calleeVal, let ctor = b.constructFn else {
+                    throw notConstructible(calleeVal, node: node)
+                }
+                markSite(node)
                 return try await ctor(args, b, self)
             case .unary(let op, let arg, _):
                 switch op {
@@ -9845,6 +10110,13 @@ extension CodemodeLanguage {
                     }
                     return .string(typeofValue(try await evalExpression(arg, env: env, thisValue: thisValue)))
                 case .delete:
+                    if case .superMember(let propKey, let loc) = arg {
+                        // `delete super.x` evaluates the reference (`this` first, then the key) and always throws.
+                        let node = AstNode(type: "UnaryExpression", location: loc)
+                        _ = try resolveThis(env, thisValue, node: node)
+                        _ = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
+                        throw referenceError("Unsupported reference to 'super'.", node: node)
+                    }
                     if case .member(let objExpr, let propKey, _, _) = arg {
                         let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                         let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
@@ -9874,9 +10146,17 @@ extension CodemodeLanguage {
                 case .member(let objExpr, let propKey, false, _):
                     let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                     let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                    let oldNum = coerceToNumber(try resolveProperty(base, key, builtins: builtins))
+                    let node = AstNode(type: "UpdateExpression", location: loc)
+                    let oldNum = coerceToNumber(try await readMember(base, key, node: node))
                     let newNum = oldNum + delta
-                    try assignToReference(base, key, .number(newNum), node: AstNode(type: "UpdateExpression", location: loc))
+                    try await writeMember(base, key, .number(newNum), node: node)
+                    return .number(prefix ? newNum : oldNum)
+                case .superMember(let propKey, let sl):
+                    let node = AstNode(type: "UpdateExpression", location: sl ?? loc)
+                    let ref = try await superReference(propKey, env: env, thisValue: thisValue, node: node)
+                    let oldNum = coerceToNumber(try await getValue(ref.base, ref.key, receiver: ref.receiver))
+                    let newNum = oldNum + delta
+                    try await writeSuper(base: ref.base, key: ref.key, receiver: ref.receiver, value: .number(newNum), node: node)
                     return .number(prefix ? newNum : oldNum)
                 default:
                     throw syntaxError("Invalid left-hand side expression in update operation", node: AstNode(type: "UpdateExpression", location: loc))
@@ -9884,6 +10164,10 @@ extension CodemodeLanguage {
             case .binary(let op, let left, let right, let loc):
                 let l = try await evalExpression(left, env: env, thisValue: thisValue)
                 let r = try await evalExpression(right, env: env, thisValue: thisValue)
+                if op == .instanceof {
+                    // A program `Symbol.hasInstance` or `prototype` getter runs as program code.
+                    return .bool(try await instanceOf(l, r, node: AstNode(type: "BinaryExpression", location: loc)))
+                }
                 return try applyBinaryOperator(op, l, r, node: AstNode(type: "BinaryExpression", location: loc))
             case .logical(let op, let left, let right, _):
                 let l = try await evalExpression(left, env: env, thisValue: thisValue)
@@ -9899,7 +10183,12 @@ extension CodemodeLanguage {
                 return try await evalExpression(alt, env: env, thisValue: thisValue)
             case .assignment(let op, let left, let right, let loc):
                 if op == .assign {
-                    let rVal = try await evalExpression(right, env: env, thisValue: thisValue)
+                    let rVal: Value
+                    if case .identifier(let name, _) = left {
+                        rVal = try await evalNamedExpression(right, name: name, env: env, thisValue: thisValue)
+                    } else {
+                        rVal = try await evalExpression(right, env: env, thisValue: thisValue)
+                    }
                     try await bindPattern(left, value: rVal, kind: nil, env: env, thisValue: thisValue, isInit: false)
                     return rVal
                 }
@@ -9908,8 +10197,9 @@ extension CodemodeLanguage {
                 var last: Value = .undefined
                 for e in exprs { last = try await evalExpression(e, env: env, thisValue: thisValue) }
                 return last
-            case .awaitExpr(let arg, _):
+            case .awaitExpr(let arg, let loc):
                 let val = try await evalExpression(arg, env: env, thisValue: thisValue)
+                markSite(AstNode(type: "AwaitExpression", location: loc))
                 return try await awaitValue(val)
             case .yieldExpr(let arg, let delegate, _):
                 let val: Value = if let arg { try await evalExpression(arg, env: env, thisValue: thisValue) } else { .undefined }
@@ -9941,7 +10231,7 @@ extension CodemodeLanguage {
                     return .undefined
                 }
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                return try resolveProperty(base, key, builtins: builtins, node: AstNode(type: "MemberExpression", location: loc))
+                return try await readMember(base, key, node: AstNode(type: "MemberExpression", location: loc))
             case .call(let calleeExpr, let argSpecs, let optional, let loc):
                 let (calleeVal, recvVal) = try await evalOptionalCallee(calleeExpr, env: env, thisValue: thisValue)
                 if calleeVal.isNullish {
@@ -9960,8 +10250,12 @@ extension CodemodeLanguage {
                 let base = try await evalOptionalChain(objExpr, env: env, thisValue: thisValue)
                 if base.isNullish { return (.undefined, .undefined) }
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                let fn = try resolveProperty(base, key, builtins: builtins, node: AstNode(type: "MemberExpression", location: loc))
+                let fn = try await readMember(base, key, node: AstNode(type: "MemberExpression", location: loc))
                 return (fn, base)
+            }
+            if case .superMember(let propKey, let loc) = expr {
+                let read = try await readSuper(propKey, env: env, thisValue: thisValue, loc: loc)
+                return (read.value, read.receiver)
             }
             let fn = try await evalOptionalChain(expr, env: env, thisValue: thisValue)
             return (fn, .undefined)
@@ -9976,7 +10270,7 @@ extension CodemodeLanguage {
             loc: SourceLocation?
         ) async throws -> Value {
             let currentVal: Value
-            let writeBack: (Value) throws -> Void
+            let writeBack: (Value) async throws -> Void
             let node = AstNode(type: "AssignmentExpression", location: loc)
 
             switch left {
@@ -9986,8 +10280,12 @@ extension CodemodeLanguage {
             case .member(let objExpr, let propKey, _):
                 let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                currentVal = try resolveProperty(base, key, builtins: builtins, node: node)
-                writeBack = { try assignToReference(base, key, $0, node: node) }
+                currentVal = try await readMember(base, key, node: node)
+                writeBack = { try await self.writeMember(base, key, $0, node: node) }
+            case .superMember(let propKey, _):
+                let ref = try await superReference(propKey, env: env, thisValue: thisValue, node: node)
+                currentVal = try await getValue(ref.base, ref.key, receiver: ref.receiver)
+                writeBack = { try await self.writeSuper(base: ref.base, key: ref.key, receiver: ref.receiver, value: $0, node: node) }
             default:
                 throw syntaxError("Invalid left-hand side in compound assignment", node: node)
             }
@@ -9996,17 +10294,17 @@ extension CodemodeLanguage {
             case .andAssign:
                 if !currentVal.isTruthy { return currentVal }
                 let rv = try await evalExpression(right, env: env, thisValue: thisValue)
-                try writeBack(rv)
+                try await writeBack(rv)
                 return rv
             case .orAssign:
                 if currentVal.isTruthy { return currentVal }
                 let rv = try await evalExpression(right, env: env, thisValue: thisValue)
-                try writeBack(rv)
+                try await writeBack(rv)
                 return rv
             case .nullishAssign:
                 if !currentVal.isNullish { return currentVal }
                 let rv = try await evalExpression(right, env: env, thisValue: thisValue)
-                try writeBack(rv)
+                try await writeBack(rv)
                 return rv
             default:
                 let rVal = try await evalExpression(right, env: env, thisValue: thisValue)
@@ -10027,7 +10325,7 @@ extension CodemodeLanguage {
                 default: binOp = .add
                 }
                 let result = try applyBinaryOperator(binOp, currentVal, rVal, node: node)
-                try writeBack(result)
+                try await writeBack(result)
                 return result
             }
         }
@@ -10037,14 +10335,19 @@ extension CodemodeLanguage {
                 let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                 if optional && base.isNullish { return (.undefined, .undefined) }
                 let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                let fn = try resolveProperty(base, key, builtins: builtins, node: AstNode(type: "MemberExpression", location: loc))
+                let fn = try await readMember(base, key, node: AstNode(type: "MemberExpression", location: loc))
                 return (fn, base)
+            }
+            if case .superMember(let propKey, let loc) = expr {
+                // `super.m()` calls the parent's method with this method's `this`.
+                let read = try await readSuper(propKey, env: env, thisValue: thisValue, loc: loc)
+                return (read.value, read.receiver)
             }
             let fn = try await evalExpression(expr, env: env, thisValue: thisValue)
             return (fn, .undefined)
         }
 
-        private func evalCallArgs(_ specs: [CallArgument], env: LexEnv, thisValue: Value) async throws -> [Value] {
+        func evalCallArgs(_ specs: [CallArgument], env: LexEnv, thisValue: Value) async throws -> [Value] {
             var out: [Value] = []
             for spec in specs {
                 switch spec {
@@ -10076,14 +10379,9 @@ extension CodemodeLanguage {
         }
 
         public func callCallable(_ callee: Value, thisValue: Value, args: [Value], site: AstNode?) async throws -> Value {
-            let depth = state.withLock { s -> Int in
-                s.callDepth += 1
-                return s.callDepth
-            }
-            defer { state.withLock { $0.callDepth -= 1 } }
-            guard depth <= maxCallDepth else {
-                throw PendingThrow(type: .rangeError, message: "Execution exceeded the maximum nesting depth.", node: site)
-            }
+            try enterCall(site: site)
+            defer { exitCall() }
+            markSite(site)
 
             if case .hostNamespace(let ns) = callee {
                 let target = ns.handler.resolve(ns.path)
@@ -10130,6 +10428,9 @@ extension CodemodeLanguage {
 
             if let fnObj = obj as? Fn {
                 let payload = fnObj.payload
+                if case .classConstructor = payload.kind {
+                    throw typeError("Class constructor \(coerceToString(peek(fnObj, .string("name")))) cannot be invoked without 'new'", node: site)
+                }
                 if payload.isGenerator {
                     let prevBuf = state.withLock { s -> [Value]? in
                         let old = s.yieldBuffer
@@ -10171,11 +10472,45 @@ extension CodemodeLanguage {
         }
 
         private func executeFunctionBody(_ fnObj: Fn, thisValue: Value, args: [Value]) async throws -> Value {
-            let payload = fnObj.payload
+            if fnObj.payload.kind == .fieldInit {
+                return try await withFrame(fnObj) {
+                    try await runFieldInitializer(fnObj, thisValue: thisValue)
+                }
+            }
+            return try await runFunctionBody(fnObj, thisValue: thisValue, args: args).value
+        }
+
+        /// Runs a function's body as a new program frame: `prepare` sees its environment before the parameters are
+        /// bound, and `beforeBody` after (a base class constructor defines its fields there). Answers the return value
+        /// and the environment.
+        func runFunctionBody(
+            _ fnObj: Fn,
+            thisValue: Value,
+            args: [Value],
+            prepare: (LexEnv) -> Void = { _ in },
+            beforeBody: (LexEnv) async throws -> Void = { _ in }
+        ) async throws -> (value: Value, env: LexEnv) {
             let fnEnv = LexEnv(parent: fnObj.closure, isFunctionScope: true)
-            let effectiveThis = payload.isArrow ? thisValue : thisValue
+            prepare(fnEnv)
+            let value = try await withFrame(fnObj) {
+                try await runBody(fnObj, fnEnv: fnEnv, thisValue: thisValue, args: args, beforeBody: beforeBody)
+            }
+            return (value, fnEnv)
+        }
+
+        private func runBody(
+            _ fnObj: Fn,
+            fnEnv: LexEnv,
+            thisValue: Value,
+            args: [Value],
+            beforeBody: (LexEnv) async throws -> Void
+        ) async throws -> Value {
+            let payload = fnObj.payload
+            // An arrow runs with the `this` of where it was made.
+            let effectiveThis = payload.isArrow ? ((try? fnObj.closure.get("%arrowThis")) ?? thisValue) : thisValue
             if !payload.isArrow {
-                if let selfName = payload.name {
+                // Only a named function expression binds its own name; a method's name is just its key.
+                if payload.kind == .normal, let selfName = payload.name {
                     fnEnv.declare(selfName, value: .object(fnObj), isConst: true, initialized: true)
                 }
                 fnEnv.declare("arguments", value: .object(Arguments(proto: builtins.Object, values: args)), isConst: false, initialized: true)
@@ -10195,6 +10530,7 @@ extension CodemodeLanguage {
                 }
             }
 
+            try await beforeBody(fnEnv)
             switch payload.body {
             case .expression(let expr):
                 return try await evalExpression(expr, env: fnEnv, thisValue: effectiveThis)
@@ -10222,18 +10558,31 @@ extension CodemodeLanguage {
                 }
                 return out
             }
-            let iterFn = try requireIteratorMethod(value, async: isAsync)
-            let iterVal = try await callCallable(.object(iterFn), thisValue: value, args: [], site: nil)
+            // Each read of the iterator protocol may meet a program getter, which runs as program code (`redoRead`).
+            var iterFn: Value = .undefined
+            if case .object(let source) = value {
+                if isAsync {
+                    iterFn = try await redoRead(source, .symbol(AsyncIteratorSymbol), receiver: value)
+                }
+                if iterFn.isNullish {
+                    iterFn = try await redoRead(source, .symbol(IteratorSymbol), receiver: value)
+                }
+            }
+            guard case .object(let iterCallable) = iterFn, iterCallable is Callable else {
+                _ = try requireIteratorMethod(value, async: isAsync)
+                throw typeError("\(describeValue(value)) is not iterable.")
+            }
+            let iterVal = try await callCallable(iterFn, thisValue: value, args: [], site: nil)
             let iterObj = try requireIteratorObject(iterVal)
-            let nextFn = get(iterObj, "next")
+            let nextFn = try await redoRead(iterObj, .string("next"), receiver: .object(iterObj))
             var out: [Value] = []
             while true {
                 try checkLimits()
                 var stepVal = try await callCallable(nextFn, thisValue: .object(iterObj), args: [], site: nil)
                 if isAsync { stepVal = try await awaitValue(stepVal) }
                 let stepObj = try requireIteratorObject(stepVal)
-                if get(stepObj, "done").isTruthy { break }
-                out.append(get(stepObj, "value"))
+                if try await redoRead(stepObj, .string("done"), receiver: stepVal).isTruthy { break }
+                out.append(try await redoRead(stepObj, .string("value"), receiver: stepVal))
                 try checkArrayLength(out.count)
             }
             return out
@@ -10242,12 +10591,15 @@ extension CodemodeLanguage {
 
     // MARK: - VM, Interpreter, Driver, Execute & Runtime (vm.ts, interpreter.ts, driver.ts, execute.ts, runtime.ts)
 
-    // parity: psychoscript/src/vm.ts#Mode [status=implemented hash=30dcad6c606a]
+    // parity: psychoscript/src/vm.ts#Mode [status=adapted hash=da23ff16c148]
     public enum Mode: Int, Equatable, Hashable, Sendable, Codable {
         case normal = 0
+        /// A class constructor run by `new`: hands the caller its result if that is an object, else its `this`.
         case construct = 1
         case generator = 2
         case asyncFn = 3
+        /// Runs a program getter an iterator op met, then runs the op again with the reads it had made (`redoRead`).
+        case redo = 7
     }
 
     // parity: psychoscript/src/vm.ts#FrameMode [status=implemented hash=ad67f6e3b617]
@@ -10375,7 +10727,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/vm.ts#Vm [status=adapted hash=9dd9c9e7cd18]
+    // parity: psychoscript/src/vm.ts#Vm [status=adapted hash=b6d00af2d76d]
     public final class Vm: HostVm, Sendable {
         private struct ExecutionState: Sendable {
             var sources: [Source] = []
@@ -10398,6 +10750,10 @@ extension CodemodeLanguage {
             self.interpreter = interpreter
             self.scheduler = VmScheduler(builtins: interpreter.builtins)
             self.tripEvery = tripEvery
+            let evaluator = interpreter.evaluator
+            scheduler.callProgram = { callee, thisValue, args in
+                try await evaluator.callCallable(.object(callee), thisValue: thisValue, args: args, site: nil)
+            }
         }
 
         public var sources: [Source] { state.withLock { $0.sources } }
@@ -10570,8 +10926,21 @@ extension CodemodeLanguage {
             return nil
         }
 
+        /// The program frames on the stack as `stack` lines, innermost first, at most 10 as V8's
+        /// `Error.stackTraceLimit`: the evaluator's frames of the running task.
+        // parity: psychoscript/src/vm.ts#Vm.stackTrace [status=adapted hash=51c86bd8a6a2]
+        public func stackTrace() -> String {
+            interpreter.evaluator.stackTrace()
+        }
+
+        /// One property read of an iterator op that may meet a program getter; see `Evaluator.redoRead`.
+        public func redoRead(_ target: Obj, _ key: PropertyKey, receiver: Value, site: AstNode? = nil) async throws -> Value {
+            try await interpreter.evaluator.redoRead(target, key, receiver: receiver, site: site)
+        }
+
         /// Unwinds active call frames looking for an exception handler matching `pc`, settling target frames along the way.
-        // parity: psychoscript/src/vm.ts#Vm.unwind [status=implemented hash=127a2b31a196]
+        /// A handler in program code gets the failure with the faulting site, so a host failure's `stack` names it.
+        // parity: psychoscript/src/vm.ts#Vm.unwind [status=implemented hash=7481dd7b5f03]
         @discardableResult
         public func unwind(_ rawError: Error) -> Bool {
             while let frame = state.withLock({ $0.frames.last }) {
@@ -10584,9 +10953,10 @@ extension CodemodeLanguage {
                     let target = Int(handlers[i + 2])
                     let depth = Int(handlers[i + 3])
                     if pc >= start && pc < end {
+                        let site = (frame.code.flags & CodeFlags.INTERNAL) == 0 ? frame.code.siteAt(pc) : nil
                         frame.pc = target
                         frame.sp = frame.code.locals + depth
-                        frame.pushReg(CodemodeLanguage.materialize(builtins, rawError))
+                        frame.pushReg(CodemodeLanguage.materialize(builtins, rawError, site: site))
                         return true
                     }
                     i += 4
@@ -11397,7 +11767,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime.ts#Globals [status=implemented hash=a53794fae07b]
     public typealias Globals = [String: HostGlobalValue]
 
-    // parity: psychoscript/src/runtime.ts#Options [status=implemented hash=b06d3e43250b]
+    // parity: psychoscript/src/runtime.ts#Options [status=implemented hash=711bf87070b1]
     public struct RuntimeOptions: Sendable {
         public let globals: (@Sendable (Run) -> Globals)?
         public let modules: [String: String]
@@ -11442,7 +11812,7 @@ extension CodemodeLanguage {
         public init() {}
     }
 
-    // parity: psychoscript/src/runtime.ts#Program [status=implemented hash=148ac04fdacc]
+    // parity: psychoscript/src/runtime.ts#Program [status=implemented hash=a26101024aed]
     public struct Program: Sendable {
         public let run: @Sendable () async throws -> Outcome
         public let suspend: @Sendable (SuspendOptions?) throws -> Outcome
@@ -11473,7 +11843,8 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime.ts#validateLimit [status=implemented hash=39cd8158eb53]
+    /// A limit must be a safe integer at least `minimum`: `Runtime.make` checks its own, and Code Mode's
+    /// `resolveExecutionLimits` checks the execution limits with the same rule.
     public static func validateLimit(_ name: String, _ value: Int?, minimum: Int) throws -> Int? {
         guard let value else { return nil }
         guard value >= minimum else {
