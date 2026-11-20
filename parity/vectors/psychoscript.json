@@ -1482,6 +1482,462 @@
         "args": [
           "const o = { n: 1 }; const r = echo(o); r.n = 2; return [o.n, r.n, r === o]"
         ]
+      },
+      {
+        "name": "regexp: non-unicode dot vs unicode dot on emoji",
+        "args": [
+          "return [/^.$/.test(\"😀\"), /^..$/.test(\"😀\"), /^.$/u.test(\"😀\"), /^.$/v.test(\"😀\"), /^.$/.test(\"a\")]"
+        ]
+      },
+      {
+        "name": "regexp: quantifier on surrogate pair non-u vs u/v",
+        "args": [
+          "return [/^😀+$/.test(\"😀😀\"), /^😀+$/u.test(\"😀😀\"), /^😀+$/v.test(\"😀😀\"), /^😀{2}$/u.test(\"😀😀\")]"
+        ]
+      },
+      {
+        "name": "regexp: unicode escaped surrogate pair and astral range",
+        "args": [
+          "return [/^\\uD83D\\uDE00$/u.test(\"😀\"), /^[\\uD83D\\uDE00]$/u.test(\"😀\"), /^[\\u{1F600}-\\u{1F64F}]$/u.test(\"😀\"), /^[\\u{1F600}-\\u{1F64F}]$/u.test(\"a\")]"
+        ]
+      },
+      {
+        "name": "regexp: mid-surrogate lastIndex backs up in u-mode",
+        "args": [
+          "const r1 = /./gu; r1.lastIndex = 1; const m1 = r1.exec(\"😀\"); const r2 = /./yu; r2.lastIndex = 1; const m2 = r2.exec(\"😀\"); return [m1[0], m1.index, r1.lastIndex, m2[0], m2.index, r2.lastIndex]"
+        ]
+      },
+      {
+        "name": "regexp: empty-match advancement non-u vs u/v on emoji",
+        "args": [
+          "return [[...\"a😀b\".matchAll(/(?:)/g)].map(m => m.index), [...\"a😀b\".matchAll(/(?:)/gu)].map(m => m.index), [...\"a😀b\".matchAll(/(?:)/gv)].map(m => m.index), \"a😀b\".replace(/(?:)/gu, \"|\"), \"a😀b\".split(/(?:)/u)]"
+        ]
+      },
+      {
+        "name": "regexp: \\d and \\D are strictly ASCII-only",
+        "args": [
+          "return [/^\\d+$/.test(\"0123456789\"), /^\\d$/.test(\"\\u0660\"), /^\\d$/u.test(\"\\u0660\"), /^\\d$/u.test(\"\\uFF12\"), /^\\d$/u.test(\"\\u0967\"), /^\\D$/u.test(\"\\u0660\"), /^\\D$/.test(\"5\")]"
+        ]
+      },
+      {
+        "name": "regexp: \\w and \\W ASCII-only except iu/iv Kelvin and long-s",
+        "args": [
+          "return [/^\\w+$/.test(\"azAZ09_\"), /^\\w$/.test(\"é\"), /^\\w$/u.test(\"é\"), /^\\w$/i.test(\"\\u212A\"), /^\\w$/iu.test(\"\\u212A\"), /^\\w$/iu.test(\"\\u017F\"), /^\\W$/iu.test(\"\\u212A\"), /^\\w$/iv.test(\"\\u212A\"), /^\\W$/iv.test(\"\\u017F\")]"
+        ]
+      },
+      {
+        "name": "regexp: \\b and \\B word boundaries non-u vs iu",
+        "args": [
+          "return [\"café\".match(/\\b\\w+\\b/g), /\\b\\u212A\\b/i.test(\" \\u212A \"), /\\b\\u{212A}\\b/iu.test(\" \\u212A \"), /\\B\\u{212A}\\B/iu.test(\"a\\u212Ab\"), /\\b/.test(\"\"), /\\B/.test(\"\"), \"a-b_c\".match(/\\b\\w+\\b/g)]"
+        ]
+      },
+      {
+        "name": "regexp: \\s and \\S ECMAScript whitespace excludes NEL",
+        "args": [
+          "return [/^\\s+$/.test(\" \\t\\n\\r\\v\\f\\u00A0\\u1680\\u2000\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF\"), /^\\s$/.test(\"\\u0085\"), /^\\s$/u.test(\"\\u0085\"), /^\\S$/.test(\"\\u0085\"), /^\\S$/.test(\"\\uFEFF\")]"
+        ]
+      },
+      {
+        "name": "regexp: shorthand classes inside bracket classes",
+        "args": [
+          "return [/[\\d\\w]/.test(\"_\"), /[^\\d]/.test(\"a\"), /[^\\d]/.test(\"5\"), /[\\W]/iu.test(\"\\u212A\"), /[\\W]/i.test(\"\\u212A\"), /[\\S]/.test(\"\\u0085\"), /[\\D]/.test(\"\\u0660\")]"
+        ]
+      },
+      {
+        "name": "regexp: case folding non-u blocks non-ASCII to ASCII",
+        "args": [
+          "return [/k/i.test(\"\\u212A\"), /k/iu.test(\"\\u212A\"), /s/i.test(\"\\u017F\"), /s/iu.test(\"\\u017F\"), /[a-z]/i.test(\"\\u212A\"), /[a-z]/iu.test(\"\\u212A\"), /[^a-z]/iu.test(\"\\u212A\"), /[^a-z]/i.test(\"\\u212A\")]"
+        ]
+      },
+      {
+        "name": "regexp: case folding non-u simple uppercase on non-ASCII",
+        "args": [
+          "return [/\\u00e9/i.test(\"\\u00c9\"), /\\u03c3/i.test(\"\\u03c2\"), /\\u03c3/i.test(\"\\u03a3\"), /\\u03c3/iu.test(\"\\u03c2\"), /\\u00df/i.test(\"SS\"), /\\u00df/iu.test(\"SS\"), /\\u0130/i.test(\"i\"), /\\u0131/i.test(\"I\")]"
+        ]
+      },
+      {
+        "name": "regexp: case folding astral plane characters in u-mode",
+        "args": [
+          "return [/\\u{10400}/iu.test(\"\\u{10428}\"), /[\\u{10400}-\\u{10410}]/iu.test(\"\\u{10428}\"), /\\u{1E900}/iu.test(\"\\u{1E922}\"), /\\u{10400}/u.test(\"\\u{10428}\")]"
+        ]
+      },
+      {
+        "name": "regexp: /iu vs /iv complement and set-op case folding",
+        "args": [
+          "return [/[\\P{Lowercase}]/iu.test(\"a\"), /[\\P{Lowercase}]/iv.test(\"a\"), /[^\\P{Lowercase}]/iu.test(\"a\"), /[^\\P{Lowercase}]/iv.test(\"a\"), /[[a-z]--[A]]/iv.test(\"a\"), /[\\p{Lowercase}&&[A]]/iv.test(\"a\")]"
+        ]
+      },
+      {
+        "name": "regexp: case-insensitive backreferences non-u and u",
+        "args": [
+          "return [/(a)\\1/i.test(\"aA\"), /(k)\\1/i.test(\"k\\u212A\"), /(k)\\1/iu.test(\"k\\u212A\"), /(\\u{10400})\\1/iu.test(\"\\u{10400}\\u{10428}\"), /(\\u03c3)\\1/i.test(\"\\u03c3\\u03c2\")]"
+        ]
+      },
+      {
+        "name": "regexp: named groups with Unicode identifiers and escapes",
+        "args": [
+          "const m1 = /(?<αβ>\\w+)/.exec(\"hi\"); const m2 = /(?<\\u0061\\u{62}>xy)/.exec(\"xy\"); return [m1.groups.αβ, m2.groups.ab]"
+        ]
+      },
+      {
+        "name": "regexp: ES2025 duplicate named groups in separate alternatives",
+        "args": [
+          "const r = /(?:(?<a>x)|(?<a>y))\\k<a>/d; const m1 = r.exec(\"xx\"); const m2 = r.exec(\"yy\"); const m3 = r.exec(\"xy\"); return [m1[0], m1.groups, m1.indices.groups, m2[0], m2.groups, m2.indices.groups, m3]"
+        ]
+      },
+      {
+        "name": "regexp: duplicate named groups in same alternative or nested throw",
+        "args": [
+          "const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; return [\"(?<a>x)(?<a>y)\", \"(?<a>(?<a>x))\", \"(?<a>x)(?:(?<b>y)|(?<a>z))\"].map(p => { try { new RegExp(p); return \"ok\" } catch (e) { return [e.name, e.message.startsWith(\"new RegExp(...) received \" + JSON.stringify(p)), e.message.endsWith(hint)] } })"
+        ]
+      },
+      {
+        "name": "regexp: numbered backreferences and multi-digit group 10",
+        "args": [
+          "return [/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\\10/.exec(\"abcdefghijj\")?.[0], /(a)\\10/.exec(\"a\\x08\")?.[0], /(a)(b)\\2\\1/.exec(\"abba\")?.[0]]"
+        ]
+      },
+      {
+        "name": "regexp: forward and self backreferences",
+        "args": [
+          "return [/(?:\\2a|(b))+/.exec(\"ba\"), /(a\\1)/.exec(\"a\"), /(?:\\k<a>x|(?<a>y))+/.exec(\"yx\")?.groups]"
+        ]
+      },
+      {
+        "name": "regexp: empty and unmatched backreferences match empty string",
+        "args": [
+          "return [/(a)?\\1/.exec(\"\"), /(?:(a)|(b))\\1\\2/.exec(\"bb\"), /(a*)b\\1/.exec(\"b\"), /\\1(a)/.exec(\"a\")]"
+        ]
+      },
+      {
+        "name": "regexp: \\k without named groups is literal in non-u",
+        "args": [
+          "let err; try { new RegExp(\"\\\\k<a>(?<b>x)\") } catch (e) { err = e.name } return [/\\k/.test(\"k\"), /\\k<a>/.test(\"k<a>\"), err]"
+        ]
+      },
+      {
+        "name": "regexp: backreference after quantifier capture reset",
+        "args": [
+          "return [/(?:(a)|(b))+\\1/.exec(\"aba\")?.[0], /(?:(a)|(b))+\\1/.exec(\"ab\")?.[0], /(?:(a)|(b))+\\2/.exec(\"abb\")?.[0]]"
+        ]
+      },
+      {
+        "name": "regexp: positive and negative lookbehind including variable length",
+        "args": [
+          "return [/(?<=foo)bar/.exec(\"foobar\")?.[0], /(?<=foo)bar/.exec(\"bazbar\"), /(?<!foo)bar/.exec(\"bazbar\")?.[0], /(?<!foo)bar/.exec(\"foobar\"), /(?<=a+)b/.exec(\"aaab\")?.index, /(?<!a+)b/.exec(\"aaab\"), /(?<!a+)b/.exec(\"cb\")?.index]"
+        ]
+      },
+      {
+        "name": "regexp: lookbehind right-to-left capture order",
+        "args": [
+          "const m1 = /(?<=(\\w+)(\\w+))!/.exec(\"abcd!\"); const m2 = /(?<=(a|ab))c/.exec(\"abc\"); const m3 = /(?<=(ab|a))c/.exec(\"abc\"); return [[m1[0], m1[1], m1[2]], m2[1], m3[1]]"
+        ]
+      },
+      {
+        "name": "regexp: lookbehind backreferences numbered and named",
+        "args": [
+          "return [/(?<=\\1(a))b/.exec(\"aab\")?.[0], /(?<=(a)\\1)b/.exec(\"aab\")?.[0], /(?<=\\k<x>(?<x>\\w))!/.exec(\"aa!\")?.groups, /(?<=\\k<x>(?<x>\\w))!/.exec(\"ab!\")]"
+        ]
+      },
+      {
+        "name": "regexp: lookbehind with unicode surrogate pairs",
+        "args": [
+          "return [/(?<=😀)a/u.exec(\"😀a\")?.index, /(?<=.)a/u.exec(\"😀a\")?.index, /(?<=(.))a/u.exec(\"😀a\")?.[1], /(?<=😀)a/.exec(\"😀a\")?.index]"
+        ]
+      },
+      {
+        "name": "regexp: lookahead captures, atomic behavior, and backtrack capture reset",
+        "args": [
+          "const m1 = /(?=(a+))\\1b/.exec(\"aaab\"); const m2 = /(?=(a+))a+b/.exec(\"aaab\"); const m3 = /(?=(a))b|c/.exec(\"ac\"); return [m1, [m2[0], m2[1]], [m3[0], m3[1], m3.index]]"
+        ]
+      },
+      {
+        "name": "regexp: negative lookahead and lookbehind discard captures",
+        "args": [
+          "const m1 = /(?!(a)b)ac/.exec(\"ac\"); const m2 = /(?<!(a)b)ac/.exec(\"ac\"); return [[m1[0], m1[1]], [m2[0], m2[1]]]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B quantifiable lookahead in non-u",
+        "args": [
+          "return [/(?=a)?a/.exec(\"a\")?.[0], /(?=a)+a/.exec(\"a\")?.[0], /(?!b)?a/.exec(\"a\")?.[0], /(?=(a))?b/.exec(\"b\")?.[1]]"
+        ]
+      },
+      {
+        "name": "regexp: capture reset per quantifier iteration (test262 classic)",
+        "args": [
+          "const m1 = /(?:(a)|(b))+/.exec(\"ab\"); const m2 = /(?:(a)|b){2}/.exec(\"ab\"); const m3 = /(z)((a+)?(b+)?(c))*/.exec(\"zaacbbbcac\"); return [[...m1], [...m2], [...m3]]"
+        ]
+      },
+      {
+        "name": "regexp: zero-width repeat termination min 0 vs min 1",
+        "args": [
+          "return [[.../(a*)*/.exec(\"b\")], [.../(a*)+/.exec(\"b\")], [.../(a*)*/.exec(\"a\")], [.../(a*)?/.exec(\"\")], [.../(a*){0,1}/.exec(\"\")]]"
+        ]
+      },
+      {
+        "name": "regexp: zero-width lazy, fixed, and {0} quantifiers",
+        "args": [
+          "return [[.../(a*?){2}/.exec(\"aa\")], [.../(?:(a?)){2}/.exec(\"a\")], [.../(a){0}/.exec(\"a\")], [.../(a*)*?b/.exec(\"ab\")]]"
+        ]
+      },
+      {
+        "name": "regexp: greedy vs lazy bounded quantifiers",
+        "args": [
+          "return [/a{2,4}/.exec(\"aaaaa\")[0], /a{2,4}?/.exec(\"aaaaa\")[0], /a{2,}/.exec(\"aaaaa\")[0], /a{2,}?/.exec(\"aaaaa\")[0], /a{3}/.exec(\"aaaaa\")[0]]"
+        ]
+      },
+      {
+        "name": "regexp: ordered disjunction and nested backtracking",
+        "args": [
+          "return [/(?:a|ab)c/.exec(\"abc\")[0], /(?:ab|a)c/.exec(\"abc\")[0], [.../(a|ab)(c|bc)/.exec(\"abc\")], /a|ab/.exec(\"ab\")[0]]"
+        ]
+      },
+      {
+        "name": "regexp: zero-width alternative inside bounded quantifier",
+        "args": [
+          "return [[.../(a|){1,2}b/.exec(\"ab\")], /(?:a?)+/.exec(\"\")[0], [.../((?:a|b?)*)/.exec(\"aba\")]]"
+        ]
+      },
+      {
+        "name": "regexp: sticky y across exec, test, match, search, replace",
+        "args": [
+          "const r1 = /b/y; r1.lastIndex = 1; const a = \"ab\".match(r1); const li1 = r1.lastIndex; r1.lastIndex = 1; const s = \"ab\".search(r1); const li2 = r1.lastIndex; r1.lastIndex = 1; const rep1 = \"ab\".replace(r1, \"X\"); const li3 = r1.lastIndex; r1.lastIndex = 0; const rep2 = \"ab\".replace(r1, \"X\"); const li4 = r1.lastIndex; return [a?.[0], li1, s, li2, rep1, li3, rep2, li4]"
+        ]
+      },
+      {
+        "name": "regexp: global + sticky (gy) on match and replaceAll",
+        "args": [
+          "return [\"aab\".match(/a/gy), \"baa\".match(/a/gy), \"aab\".replaceAll(/a/gy, \"X\"), \"aaba\".replace(/a/gy, \"X\")]"
+        ]
+      },
+      {
+        "name": "regexp: d flag hasIndices with captures, unmatched, and named groups",
+        "args": [
+          "const m = /(?<head>a)(b)?(c)/d.exec(\"zzac\"); return [m[0], m.indices, m.indices.groups, m.groups, /a/d.hasIndices, /a/.hasIndices, /a/d.exec(\"a\").indices.groups === undefined]"
+        ]
+      },
+      {
+        "name": "regexp: d flag UTF-16 indices with emoji and matchAll",
+        "args": [
+          "const m = \"a😀b\".match(/(?<e>😀)(b)/d); const all = [...\"a😀b\".matchAll(/(?<ch>.)/dgu)].map(x => [x[0], x.indices[0], x.indices.groups.ch]); return [m.indices, m.indices.groups, all]"
+        ]
+      },
+      {
+        "name": "regexp: s dotAll and m multiline across all 4 line terminators",
+        "args": [
+          "const lts = [\"\\n\", \"\\r\", \"\\u2028\", \"\\u2029\"]; return lts.map(lt => [/^.$/.test(lt), /^.$/s.test(lt), /^b$/m.test(\"a\" + lt + \"b\" + lt + \"c\"), /^b$/.test(\"a\" + lt + \"b\" + lt + \"c\")])"
+        ]
+      },
+      {
+        "name": "regexp: empty class [] and negated empty class [^]",
+        "args": [
+          "return [/[]/.test(\"a\"), /[]/.test(\"\"), /[^]/.test(\"\\n\"), /[^]/.test(\"\\r\"), /[^]/.test(\"\\u2028\"), /[^]/.test(\"\\u2029\"), /^[^]$/.test(\"😀\"), /^[^]$/u.test(\"😀\")]"
+        ]
+      },
+      {
+        "name": "regexp: flag accessors on prototype and canonical flag order",
+        "args": [
+          "const r = new RegExp(\"a\", \"ysmigd\"); return [r.flags, r.hasIndices, r.global, r.ignoreCase, r.multiline, r.dotAll, r.unicode, r.unicodeSets, r.sticky, Object.keys(r), Object.getOwnPropertyNames(r), /a/v.unicodeSets, /a/v.unicode]"
+        ]
+      },
+      {
+        "name": "regexp: ES2025 inline modifiers i m s",
+        "args": [
+          "return [/(?i:a)b/.test(\"Ab\"), /(?i:a)b/.test(\"AB\"), /(?-i:a)/i.test(\"A\"), /(?-i:a)/i.test(\"a\"), /(?m:^a)/.test(\"\\na\"), /(?-m:^a)/m.test(\"\\na\"), /(?s:.)/.test(\"\\n\"), /(?-s:.)/s.test(\"\\n\"), /(?i-:a)/.test(\"A\"), /(a)(?i:\\1)/.test(\"aA\"), /(a)(?-i:\\1)/i.test(\"aA\")]"
+        ]
+      },
+      {
+        "name": "regexp: v flag set subtraction and intersection",
+        "args": [
+          "return [/[\\w--\\d]/v.test(\"a\"), /[\\w--\\d]/v.test(\"5\"), /[\\p{ASCII}&&\\p{Decimal_Number}]/v.test(\"7\"), /[\\p{ASCII}&&\\p{Decimal_Number}]/v.test(\"a\"), /[[a-z]--[aeiou]]/v.test(\"b\"), /[[a-z]--[aeiou]]/v.test(\"e\"), /[[a-z]&&[m-z]&&[a-p]]/v.test(\"n\"), /[[a-z]&&[m-z]&&[a-p]]/v.test(\"z\")]"
+        ]
+      },
+      {
+        "name": "regexp: v flag string disjunction \\q longest-first and backtracking",
+        "args": [
+          "return [/[\\q{ab|cd}]/v.test(\"ab\"), /[\\q{ab|a}]/v.exec(\"ab\")[0], /[\\q{ab|a}]b/v.exec(\"ab\")[0], /[\\q{abc|a}]/iv.test(\"ABC\"), /[\\q{}]/v.exec(\"\")[0]]"
+        ]
+      },
+      {
+        "name": "regexp: v flag properties of strings",
+        "args": [
+          "return [/^\\p{Basic_Emoji}$/v.test(\"😀\"), /^\\p{Basic_Emoji}$/v.test(\"a\"), /^\\p{Emoji_Keycap_Sequence}$/v.test(\"1\\uFE0F\\u20E3\"), /^\\p{RGI_Emoji_Flag_Sequence}$/v.test(\"🇺🇸\"), /^\\p{RGI_Emoji_Modifier_Sequence}$/v.test(\"👍🏽\")]"
+        ]
+      },
+      {
+        "name": "regexp: unicode General_Category leaf and compound aliases",
+        "args": [
+          "return [/^\\p{Lu}$/u.test(\"Ä\"), /^\\p{Ll}$/u.test(\"ä\"), /^\\p{Nd}$/u.test(\"\\u0665\"), /^\\p{Sc}$/u.test(\"€\"), /^\\p{Po}$/u.test(\"!\"), /^\\p{L}+$/u.test(\"hélloαβγ漢字\"), /^\\p{Letter}+$/u.test(\"abc\"), /^\\p{LC}$/u.test(\"A\"), /^\\p{gc=N}$/u.test(\"²\"), /^\\P{L}$/u.test(\"5\"), /^\\P{L}$/u.test(\"é\")]"
+        ]
+      },
+      {
+        "name": "regexp: unicode Script properties across major scripts",
+        "args": [
+          "return [/\\p{Script=Greek}+/u.exec(\"123αβγ456\")[0], /\\p{sc=Cyrillic}+/u.exec(\"привет\")[0], /\\p{sc=Han}+/u.exec(\"漢字\")[0], /\\p{sc=Hiragana}+/u.exec(\"ひらがな\")[0], /\\p{sc=Katakana}+/u.exec(\"カタカナ\")[0], /\\p{sc=Arabic}+/u.exec(\"مرحبا\")[0], /\\p{sc=Hebrew}+/u.exec(\"שלום\")[0], /\\p{sc=Devanagari}+/u.exec(\"नमस्ते\")[0], /\\p{sc=Thai}+/u.exec(\"สวัสดี\")[0], /\\p{sc=Latn}+/u.exec(\"café\")[0]]"
+        ]
+      },
+      {
+        "name": "regexp: unicode Script vs Script_Extensions distinction",
+        "args": [
+          "return [/^\\p{sc=Han}$/u.test(\"\\u3001\"), /^\\p{scx=Han}$/u.test(\"\\u3001\"), /^\\p{sc=Common}$/u.test(\"\\u3001\"), /^\\p{scx=Common}$/u.test(\"\\u3001\"), /^\\p{sc=Arab}$/u.test(\"\\u0640\"), /^\\p{scx=Arab}$/u.test(\"\\u0640\"), /^\\p{scx=Deva}$/u.test(\"\\u0964\")]"
+        ]
+      },
+      {
+        "name": "regexp: unicode binary properties coverage",
+        "args": [
+          "return [/^\\p{ASCII}+$/u.test(\"abc123!\"), /^\\p{ASCII}$/u.test(\"é\"), /^\\p{ASCII_Hex_Digit}+$/u.test(\"09afAF\"), /^\\p{Alphabetic}$/u.test(\"α\"), /^\\p{White_Space}$/u.test(\"\\u3000\"), /^\\p{Emoji}$/u.test(\"😀\"), /^\\p{Emoji_Presentation}$/u.test(\"😀\"), /^\\p{Extended_Pictographic}$/u.test(\"😀\"), /^\\p{ID_Start}\\p{ID_Continue}*$/u.test(\"α1_\"), /^\\p{Uppercase}$/u.test(\"Ω\"), /^\\p{Lowercase}$/u.test(\"ω\"), /^\\p{Math}$/u.test(\"∑\"), /^\\p{Quotation_Mark}$/u.test(\"«\"), /^\\p{Dash}$/u.test(\"—\"), /^\\p{Regional_Indicator}$/u.test(\"\\u{1F1FA}\"), /^\\p{Assigned}$/u.test(\"a\"), /^\\p{Any}$/u.test(\"😀\")]"
+        ]
+      },
+      {
+        "name": "regexp: \\p and \\P in non-u mode are literal identity escapes",
+        "args": [
+          "return [/\\p{L}/.test(\"p{L}\"), /\\P/.test(\"P\"), /\\p{2}/.test(\"pp\")]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B \\c control letters outside and inside classes",
+        "args": [
+          "return [/^\\cA$/.test(\"\\x01\"), /^\\cz$/.test(\"\\x1a\"), /^\\c1$/.test(\"\\\\c1\"), /^\\c$/.test(\"\\\\c\"), /^[\\c1]$/.test(\"\\x11\"), /^[\\c_]$/.test(\"\\x1f\"), /[\\c!]/.test(\"\\\\\"), /[\\c!]/.test(\"c\"), /[\\c!]/.test(\"!\")]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B legacy octal escapes and \\0",
+        "args": [
+          "return [/^\\0$/.test(\"\\x00\"), /^\\01$/.test(\"\\x01\"), /^\\101$/.test(\"A\"), /^\\377$/.test(\"\\xff\"), /^\\400$/.test(\"\\x200\"), /^\\08$/.test(\"\\x008\"), /^\\0101$/.test(\"\\x081\"), /^\\8$/.test(\"8\"), /^\\9$/.test(\"9\"), /[\\101]/.test(\"A\"), /[\\0101]/.test(\"\\x08\"), /[\\0101]/.test(\"1\")]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B literal ] { } and malformed quantifiers",
+        "args": [
+          "return [/^]$/.test(\"]\"), /^{$/.test(\"{\"), /^}$/.test(\"}\"), /^a{b}$/.test(\"a{b}\"), /^a{1,2$/.test(\"a{1,2\"), /^a{,2}$/.test(\"a{,2}\")]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B class ranges with shorthands, hyphens, and \\b",
+        "args": [
+          "return [/[\\d-a]/.test(\"5\"), /[\\d-a]/.test(\"-\"), /[\\d-a]/.test(\"a\"), /[\\d-a]/.test(\"b\"), /[a-\\d]/.test(\"-\"), /[-a]/.test(\"-\"), /[a-]/.test(\"-\"), /[a-b-c]/.test(\"-\"), /[\\b]/.test(\"\\x08\")]"
+        ]
+      },
+      {
+        "name": "regexp: Annex B identity escapes and invalid hex/unicode",
+        "args": [
+          "return [/^\\a$/.test(\"a\"), /^\\x$/.test(\"x\"), /^\\xG$/.test(\"xG\"), /^\\u$/.test(\"u\"), /^\\u12$/.test(\"u12\"), /^\\u{2}$/.test(\"uu\")]"
+        ]
+      },
+      {
+        "name": "regexp: u-mode syntax errors check prefix and suffix",
+        "args": [
+          "const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; const bad = [\"\\\\a\", \"]\", \"{\", \"}\", \"\\\\01\", \"\\\\1\", \"\\\\c1\", \"\\\\x1\", \"\\\\u123\", \"\\\\u{110000}\", \"[\\\\d-a]\", \"(?=a)+\", \"\\\\p{NoSuchProp}\", \"\\\\k<missing>\"]; return bad.map(p => { try { new RegExp(p, \"u\"); return \"ok:\" + p } catch (e) { const pre = \"new RegExp(...) received \" + JSON.stringify(p) + \", which is not a valid regular expression pattern (\"; return [e.name, e.message.startsWith(pre), e.message.endsWith(hint)] } })"
+        ]
+      },
+      {
+        "name": "regexp: v-mode syntax errors check prefix and suffix",
+        "args": [
+          "const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; const bad = [\"[a-z--b]\", \"[^\\\\q{ab}]\", \"\\\\P{Basic_Emoji}\", \"[a&&b--c]\", \"[&&]\", \"[a(b]\"]; return bad.map(p => { try { new RegExp(p, \"v\"); return \"ok:\" + p } catch (e) { const pre = \"new RegExp(...) received \" + JSON.stringify(p) + \", which is not a valid regular expression pattern (\"; return [e.name, e.message.startsWith(pre), e.message.endsWith(hint)] } })"
+        ]
+      },
+      {
+        "name": "regexp: modifier and quantifier syntax errors check prefix and suffix",
+        "args": [
+          "const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; const bad = [\"(?-:a)\", \"(?ii:a)\", \"(?i-i:a)\", \"(?g:a)\", \"a{3,2}\", \"[z-a]\", \"*\", \"a**\", \"^+\", \"\\\\\"]; return bad.map(p => { try { new RegExp(p); return \"ok:\" + p } catch (e) { const pre = \"new RegExp(...) received \" + JSON.stringify(p) + \", which is not a valid regular expression pattern (\"; return [e.name, e.message.startsWith(pre), e.message.endsWith(hint)] } })"
+        ]
+      },
+      {
+        "name": "regexp: invalid flags and non-string flags errors",
+        "args": [
+          "const res = []; for (const f of [\"uv\", \"gg\", \"z\"]) { try { new RegExp(\"a\", f) } catch (e) { const pre = \"new RegExp(...) received invalid flags \" + JSON.stringify(f) + \" (\"; const suf = \"). Valid flags are d, g, i, m, s, u, v, and y.\"; res.push([e.name, e.message.startsWith(pre), e.message.endsWith(suf)]) } } for (const f of [123, null]) { try { new RegExp(\"a\", f) } catch (e) { res.push([e.name, e.message]) } } return res"
+        ]
+      },
+      {
+        "name": "regexp: String.match, search, matchAll invalid string pattern errors",
+        "args": [
+          "const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; return [\"match\", \"search\", \"matchAll\"].map(m => { try { \"a\"[m](\"(\"); return \"ok\" } catch (e) { const pre = \"String.\" + m + ' received the string \"(\", which is not a valid regular expression pattern ('; return [e.name, e.message.startsWith(pre), e.message.endsWith(hint)] } })"
+        ]
+      },
+      {
+        "name": "regexp: parse-time regex literal uv flag is parse error",
+        "args": [
+          "return /a/uv"
+        ]
+      },
+      {
+        "name": "regexp: EscapeRegExpPattern source normalization and RegExp cloning",
+        "args": [
+          "const r1 = new RegExp(\"a/b\", \"g\"); const r2 = new RegExp(r1); const r3 = new RegExp(r1, \"m\"); return [new RegExp(\"\").source, new RegExp(\"/\").source, new RegExp(\"\\\\/\").source, new RegExp(\"\\n\").source, new RegExp(\"\\\\\\n\").source, new RegExp(\"\\\\\\\\\\n\").source, new RegExp(\"[/]\").source, r1.source, r2.source, r2.flags, r3.source, r3.flags, RegExp(r1) === r1]"
+        ]
+      },
+      {
+        "name": "regexp: lastIndex edge values negative, fractional, NaN, past end",
+        "args": [
+          "const r = /a/g; r.lastIndex = -5; const rawNeg = r.lastIndex; const m1 = r.exec(\"ba\"); r.lastIndex = 1.9; const rawFrac = r.lastIndex; const m2 = r.exec(\"ba\"); r.lastIndex = NaN; const rawNaN = String(r.lastIndex); const m3 = r.exec(\"ba\"); r.lastIndex = 100; const m4 = r.exec(\"ba\"); return [rawNeg, m1.index, rawFrac, m2.index, rawNaN, m3.index, m4, r.lastIndex]"
+        ]
+      },
+      {
+        "name": "regexp: matchAll returns array, starts at lastIndex, preserves original, rejects non-global",
+        "args": [
+          "const r = /a/g; r.lastIndex = 1; const ms = \"aba\".matchAll(r); let err; try { \"a\".matchAll(/a/i) } catch (e) { err = [e.name, e.message] } return [Array.isArray(ms), ms.map(m => m.index), r.lastIndex, \"ab\".matchAll(\"a\").map(m => m.index), err]"
+        ]
+      },
+      {
+        "name": "regexp: split with undefined captures, limits, empty string, lastIndex preserved",
+        "args": [
+          "const r = /,/g; r.lastIndex = 5; const p = \"a,b,c\".split(r); return [p, r.lastIndex, \"a1b\".split(/(1)|(2)/), \"a,b,c\".split(/,/, 0), \"a,b,c\".split(/,/, -1), \"a,b,c\".split(/,/, 2), \"\".split(/(?:)/), \"\".split(/a/)]"
+        ]
+      },
+      {
+        "name": "regexp: search preserves lastIndex and accepts string pattern",
+        "args": [
+          "const r = /b/g; r.lastIndex = 5; return [\"abc\".search(r), r.lastIndex, \"abc\".search(\"b\"), \"abc\".search(/z/), \"abc\".search()]"
+        ]
+      },
+      {
+        "name": "regexp: replace substitution patterns $0 $01 $10 $99 $$ $& $` $' $<name>",
+        "args": [
+          "return [\"ab\".replace(/(a)(b)/, \"$0|$01|$02|$10|$99|$$|$&|$`|$\\x27|$<x>\"), \"xaby\".replace(/(?<k>a)(b)/, \"$`[$<k>|$<missing>|$<unclosed]$\\x27\")]"
+        ]
+      },
+      {
+        "name": "regexp: replace and replaceAll with callbacks with and without named groups",
+        "args": [
+          "return [\"ab\".replace(/(a)/, (...a) => JSON.stringify(a)), \"ab\".replace(/(?<k>a)/, (...a) => JSON.stringify(a)), \"a1b2\".replaceAll(/(?<c>[a-z])(\\d)/g, (m, c, d, off, s, g) => `${g.c}:${d}@${off}`)]"
+        ]
+      },
+      {
+        "name": "regexp: RegExp.escape full ES2025 coverage and non-string TypeError",
+        "args": [
+          "let err; try { RegExp.escape(123) } catch (e) { err = [e.name, e.message] } return [RegExp.escape(\"\"), RegExp.escape(\"a1\"), RegExp.escape(\"A\"), RegExp.escape(\"0\"), RegExp.escape(\"_\"), RegExp.escape(\"\\t\\n\\v\\f\\r \"), RegExp.escape(\"^$\\\\.*+?()[]{}|/\"), RegExp.escape(\",-=#&!%:;@~\\x27\\x60\\\"\"), RegExp.escape(\"\\u00a0\\u1680\\u2000\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"), RegExp.escape(\"😀\"), err]"
+        ]
+      },
+      {
+        "name": "regexp: forward backreference single-pass and quantified reset",
+        "args": [
+          "return [[.../(?:\\1a|(b))/.exec(\"a\")], [.../(?:\\1a|(b))+/.exec(\"ba\")], /(?:\\2a|(b))/.exec(\"\\x02a\")?.[0]]"
+        ]
+      },
+      {
+        "name": "regexp: global+sticky empty matches non-u vs u on emoji",
+        "args": [
+          "return [\"a😀b\".match(/(?:)/gy).length, \"a😀b\".match(/(?:)/gyu).length]"
+        ]
+      },
+      {
+        "name": "regexp: lookbehind with anchors, word boundaries, and modifier classes",
+        "args": [
+          "return [/(?<=^a)b/m.exec(\"x\\nab\")?.index, /(?<=\\ba)b/.exec(\" ab\")?.index, /(?<=\\ba)b/.exec(\"xab\"), /(?i:[a-z])/.test(\"A\"), /(?-i:[a-z])/i.test(\"A\"), /(?i:\\w)/u.test(\"\\u212A\"), /(?-i:\\w)/iu.test(\"\\u212A\")]"
+        ]
+      },
+      {
+        "name": "regexp: v-mode case-insensitive string set subtraction and intersection",
+        "args": [
+          "return [/[\\q{ab}--\\q{AB}]/iv.test(\"ab\"), /[\\q{ab}&&\\q{AB}]/iv.test(\"aB\"), /[\\q{ab}--\\q{AB}]/v.test(\"ab\"), /(?<=[\\q{ab}])c/v.exec(\"abc\")?.index]"
+        ]
+      },
+      {
+        "name": "regexp: constructor undefined vs null and omitted exec/test arg",
+        "args": [
+          "return [new RegExp().source, new RegExp(undefined).source, new RegExp(null).source, /undefined/.test(), /undefined/.exec()[0]]"
+        ]
       }
     ]
   }

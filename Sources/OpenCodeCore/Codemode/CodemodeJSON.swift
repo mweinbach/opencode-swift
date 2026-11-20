@@ -255,28 +255,6 @@ extension CodemodeLanguage {
     /// EscapeRegExpPattern: `(?:)` for the empty pattern; `/` outside a class and line terminators escaped, so the
     /// source reads back as a regular expression literal.
     static func escapeRegExpPattern(_ pattern: String) -> String {
-        if pattern.isEmpty { return "(?:)" }
-        var out = ""
-        var inClass = false
-        var escaped = false
-        for ch in pattern.unicodeScalars {
-            if escaped {
-                out.unicodeScalars.append(ch)
-                escaped = false
-                continue
-            }
-            switch ch {
-            case "\\": out += "\\"; escaped = true
-            case "[": inClass = true; out += "["
-            case "]": inClass = false; out += "]"
-            case "/": out += inClass ? "/" : "\\/"
-            case "\n": out += "\\n"
-            case "\r": out += "\\r"
-            case "\u{2028}": out += "\\u2028"
-            case "\u{2029}": out += "\\u2029"
-            default: out.unicodeScalars.append(ch)
-            }
-        }
-        return out
+        String(decoding: ECMAScriptRegExp.escapePattern(Array(pattern.utf16)), as: UTF16.self)
     }
 }
