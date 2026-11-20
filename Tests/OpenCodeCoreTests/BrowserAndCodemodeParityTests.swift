@@ -175,10 +175,10 @@ struct BrowserAndCodemodeParityTests {
 
     // MARK: - 1. BrowserPlugin RPC, Skill & URL Normalization
 
-    @Test("BrowserPlugin defines 45 operations, experimental.browser RPC contract, and browser skill")
+    @Test("BrowserPlugin defines 44 operations, 2 file actions, experimental.browser RPC contract, and browser skill")
     func browserRPCAndSkillContract() throws {
-        #expect(BrowserPlugin.Browser.Operations.count == 45)
-        #expect(BrowserPlugin.Browser.Method.allCases.count == 45)
+        #expect(BrowserPlugin.Browser.Operations.count == 44)
+        #expect(BrowserPlugin.Browser.Method.allCases.count == 46)
         #expect(BrowserPlugin.Browser.Definition.id == "experimental.browser")
         #expect(BrowserPlugin.Browser.Definition.methods.count == 8)
         #expect(BrowserPlugin.Browser.Definition.events["control"] != nil)
@@ -212,31 +212,28 @@ struct BrowserAndCodemodeParityTests {
 
     @Test("BrowserTools.normalizeAction resolves local/remote URLs and rejects paths, file://, and credentials")
     func browserURLNormalization() throws {
-        let local = try BrowserPlugin.BrowserTools.normalizeAction(
-            BrowserPlugin.Browser.Action(type: .navigate, fields: ["url": .string("localhost:3000/app")])
-        )
+        func normalize(_ type: BrowserPlugin.Browser.Method, _ fields: [String: JSONValue]) throws -> BrowserPlugin.Browser.Action {
+            try BrowserPlugin.BrowserTools.normalizeAction(BrowserPlugin.Browser.Input(type: type, fields: fields))
+        }
+        let local = try normalize(.navigate, ["tabID": .string("tab_x"), "url": .string("localhost:3000/app")])
         #expect(local.url == "http://localhost:3000/app")
 
-        let remote = try BrowserPlugin.BrowserTools.normalizeAction(
-            BrowserPlugin.Browser.Action(type: .tabsOpen, fields: ["url": .string("Example.COM")])
-        )
+        let remote = try normalize(.tabsOpen, ["url": .string("Example.COM")])
         #expect(remote.url == "https://example.com/")
 
-        let blank = try BrowserPlugin.BrowserTools.normalizeAction(
-            BrowserPlugin.Browser.Action(type: .navigate, fields: ["url": .string("   ")])
-        )
+        let blank = try normalize(.navigate, ["tabID": .string("tab_x"), "url": .string("   ")])
         #expect(blank.url == "about:blank")
 
-        let omitted = try BrowserPlugin.BrowserTools.normalizeAction(
-            BrowserPlugin.Browser.Action(type: .tabsOpen, fields: [:])
-        )
+        let omitted = try normalize(.tabsOpen, [:])
         #expect(omitted.url == nil)
 
-        for bad in ["/tmp/index.html", "./local.html", #"C:\page.html"#, "file:///etc/passwd", "https://user:secret@example.com"] {
-            #expect(throws: BrowserPlugin.Browser.ValidationError.self) {
-                _ = try BrowserPlugin.BrowserTools.normalizeAction(
-                    BrowserPlugin.Browser.Action(type: .navigate, fields: ["url": .string(bad)])
-                )
+        // A file: address names a workspace file and takes the path route.
+        let file = try normalize(.navigate, ["tabID": .string("tab_x"), "url": .string("file:///etc/passwd")])
+        #expect(file.type == .navigatePath)
+
+        for bad in ["/tmp/index.html", "./local.html", #"C:\page.html"#, "https://user:secret@example.com"] {
+            #expect(throws: ToolSchema.ToolError.self) {
+                _ = try normalize(.navigate, ["tabID": .string("tab_x"), "url": .string(bad)])
             }
         }
     }
@@ -263,8 +260,8 @@ struct BrowserAndCodemodeParityTests {
         )
 
         let uploaded = try await BrowserPlugin.BrowserFiles.read(
-            paths: ["shot.png", "/work/data.json"],
-            directory: "/work",
+            paths: ["/work/shot.png", "/work/data.json"],
+            names: ["shot.png", "/work/data.json"],
             fileSystem: fs
         )
         #expect(uploaded.count == 2)
@@ -274,11 +271,12 @@ struct BrowserAndCodemodeParityTests {
 
         // Directory path must fail
         await #expect(throws: ToolSchema.ToolError.self) {
-            _ = try await BrowserPlugin.BrowserFiles.read(paths: ["subdir"], directory: "/work", fileSystem: fs)
+            _ = try await BrowserPlugin.BrowserFiles.read(paths: ["/work/subdir"], names: ["subdir"], fileSystem: fs)
         }
 
         // Save files into isolated indexed subdirectories
-        let saved = try await BrowserPlugin.BrowserFiles.save(files: uploaded, tempDirectory: "/tmp", fileSystem: fs)
+        let plan = BrowserPlugin.BrowserFiles.exportPaths(uploaded, root: BrowserPlugin.BrowserFiles.exportRoot("ses_1", cache: "/tmp"))
+        let saved = try await BrowserPlugin.BrowserFiles.save(files: uploaded, plan: plan, fileSystem: fs)
         #expect(saved.count == 2)
         #expect(saved[0].path.contains("/0/shot.png"))
         #expect(saved[1].path.contains("/1/data.json"))
@@ -442,9 +440,13 @@ struct BrowserAndCodemodeParityTests {
             location: OpenCodeLocation(directory: "/workspace")
         ))
 
+        // The agent must resolve: core (and the browser's own rule check) denies everything to an unknown agent.
+        try await env.activatePlugin(PluginEffect.define(PluginEffect.Plugin(id: "test.agents") { ctx in
+            _ = await ctx.agent.transform { editor in editor.update("build") { _ in } }
+        }))
         try await env.activatePlugin(BrowserPlugin.Plugin)
         #expect(env.registeredSkills().contains { $0.id.rawValue == "browser" })
-        #expect(env.registeredTools().count == 45)
+        #expect(env.registeredTools().count == 44)
         #expect(env.registeredToolNamespaces().contains { $0.name == "browser" })
 
         // Subscribe to RPC control stream before attaching

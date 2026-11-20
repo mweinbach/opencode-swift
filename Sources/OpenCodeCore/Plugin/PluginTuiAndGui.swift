@@ -50,26 +50,30 @@ public enum PluginTui {
     }
 
     /// Synchronized TUI data snapshot & event listener handle.
-    // parity: plugin/src/tui/context.ts#Data [status=adapted hash=c22b9e3f790b]
+    // parity: plugin/src/tui/context.ts#Data [status=adapted hash=b482a7db0c9d]
     public struct Data: Sendable {
         public let on: @Sendable (_ type: String, _ handler: @escaping @Sendable (PluginSDK.EventPayload) -> Void) -> @Sendable () -> Void
         public let listen: @Sendable (_ handler: @escaping @Sendable (PluginSDK.EventPayload) -> Void) -> @Sendable () -> Void
         public let sessionList: @Sendable () -> [SessionSchema.Info]
         public let sessionStatus: @Sendable (SessionID) -> String
         public let defaultLocation: @Sendable () -> LocationSchema.Ref
+        /// `job.list(sessionID)`: running background jobs owned by the session or any session below it. Experimental.
+        public let jobList: @Sendable (_ sessionID: String) -> [JobSchema.Info]
 
         public init(
             on: @escaping @Sendable (_ type: String, _ handler: @escaping @Sendable (PluginSDK.EventPayload) -> Void) -> @Sendable () -> Void,
             listen: @escaping @Sendable (_ handler: @escaping @Sendable (PluginSDK.EventPayload) -> Void) -> @Sendable () -> Void,
             sessionList: @escaping @Sendable () -> [SessionSchema.Info],
             sessionStatus: @escaping @Sendable (SessionID) -> String,
-            defaultLocation: @escaping @Sendable () -> LocationSchema.Ref
+            defaultLocation: @escaping @Sendable () -> LocationSchema.Ref,
+            jobList: @escaping @Sendable (_ sessionID: String) -> [JobSchema.Info] = { _ in [] }
         ) {
             self.on = on
             self.listen = listen
             self.sessionList = sessionList
             self.sessionStatus = sessionStatus
             self.defaultLocation = defaultLocation
+            self.jobList = jobList
         }
     }
 
@@ -2458,8 +2462,10 @@ public enum PluginGui {
         }
     }
 
-    /// Cross-platform clipboard, file save, and external URL opening services.
-    // parity: plugin/src/gui/host-apis.ts#System [status=implemented hash=4fb9a736b5bb]
+    /// Cross-platform clipboard, file save, and external URL opening services. `openExternal` opens an HTTP, HTTPS or
+    /// mail URL in the system application; files and other schemes are not launched (`System.isExternalURL`). For
+    /// links inside the app, use `Links.open`.
+    // parity: plugin/src/gui/host-apis.ts#System [status=implemented hash=64f6896d468a]
     public struct System: Sendable {
         public let copy: @Sendable (String) async throws -> Void
         public let save: @Sendable (_ name: String, _ content: String) async throws -> Bool
@@ -2472,7 +2478,17 @@ public enum PluginGui {
         ) {
             self.copy = copy
             self.save = save
-            self.openExternal = openExternal
+            self.openExternal = { url in
+                guard System.isExternalURL(url) else { return }
+                openExternal(url)
+            }
+        }
+
+        /// Whether `openExternal` may launch `url`: an `http:`, `https:` or `mailto:` address. Files and other schemes
+        /// are not launched.
+        public static func isExternalURL(_ url: String) -> Bool {
+            let lowered = url.trimmingCharacters(in: .whitespaces).lowercased()
+            return lowered.hasPrefix("http://") || lowered.hasPrefix("https://") || lowered.hasPrefix("mailto:")
         }
     }
 
@@ -4440,25 +4456,71 @@ public enum PluginGui {
 
     // MARK: - gui/browser.ts
 
-    /// Built-in browser contract (`browser`) exposed via `ctx.use(Browser.contract)`.
-    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=6fb8c5357cfd]
+    /// Experimental: an opaque close right for a tab a plugin instance opened, not an agent or layout tab ID. May
+    /// change without compatibility guarantees.
+    // parity: plugin/src/gui/browser.ts#ExperimentalBrowserTab [status=implemented hash=da37dc1ea18a]
+    public struct ExperimentalBrowserTab: RawRepresentable, Equatable, Hashable, Sendable, Codable {
+        public let rawValue: String
+
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+
+        public init(from decoder: Decoder) throws {
+            rawValue = try decoder.singleValueContainer().decode(String.self)
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
+    }
+
+    /// Built-in browser contract (`browser`) exposed via `ctx.use(Browser.contract)`: a session's desktop browser pane.
+    /// `open` takes an HTTP(S) page without embedded credentials; a `file://` URL opens as a scoped preview only on the
+    /// built-in local server inside the session's workspace, and other `file://` URLs are refused (use `openFile`).
+    /// `openFile` shows a workspace file: local tabs display `file:` addresses, remote tabs `workspace:` addresses.
+    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=f39ce7dedf8f]
     public struct Browser: Sendable {
         public static let contract = Contract<Browser>.define("browser")
+
+        /// Experimental tab handles: may change without compatibility guarantees.
+        public struct Experimental: Sendable {
+            /// Opens a new tab and returns an opaque handle for this plugin instance. Throws if the pane is unavailable
+            /// or the session is not on screen.
+            public let open: @Sendable (SessionRef, String) async throws -> ExperimentalBrowserTab
+            /// Requests closure of a tab this instance opened. True if closed now; false for unknown, foreign, revoked
+            /// or already closed handles, or if `beforeunload` asks for confirmation.
+            public let close: @Sendable (ExperimentalBrowserTab) async -> Bool
+
+            public init(
+                open: @escaping @Sendable (SessionRef, String) async throws -> ExperimentalBrowserTab = { _, _ in
+                    throw ToolSchema.ToolError(message: "The browser pane is unavailable.")
+                },
+                close: @escaping @Sendable (ExperimentalBrowserTab) async -> Bool = { _ in false }
+            ) {
+                self.open = open
+                self.close = close
+            }
+        }
 
         public let attached: @Sendable (SessionRef) -> Bool
         public let canOpen: @Sendable (SessionRef, String?) -> Bool
         public let open: @Sendable (SessionRef, String) -> Void
+        public let experimental: Experimental
         public let openFile: @Sendable (SessionRef, String) -> Void
 
         public init(
             attached: @escaping @Sendable (SessionRef) -> Bool = { _ in false },
             canOpen: @escaping @Sendable (SessionRef, String?) -> Bool = { _, _ in false },
             open: @escaping @Sendable (SessionRef, String) -> Void = { _, _ in },
+            experimental: Experimental = Experimental(),
             openFile: @escaping @Sendable (SessionRef, String) -> Void = { _, _ in }
         ) {
             self.attached = attached
             self.canOpen = canOpen
             self.open = open
+            self.experimental = experimental
             self.openFile = openFile
         }
     }
@@ -5366,6 +5428,71 @@ public enum PluginGui {
         return { task.cancel() }
     }
 
+    /// Receives a person's activation of an application link on the desktop session screen. Unlike `Links.open`, this
+    /// registry is not a programmatic way to open a URL: `review` reviews the written target and never launches it.
+    // parity: plugin/src/gui/builtin.ts#BuiltinAppLink [status=implemented hash=0cc67113261d]
+    public struct BuiltinAppLink: Sendable {
+        public static let registry = Registry<BuiltinAppLink>.define("app-link")
+
+        /// Reviews the target; never launches the address directly. `href` is the written target, not the label.
+        public let review: @Sendable (_ href: String) -> Void
+
+        public init(review: @escaping @Sendable (_ href: String) -> Void) {
+            self.review = review
+        }
+    }
+
+    /// Work a built-in finishes before the host sends a prompt or a command to a session. The host waits for every
+    /// gate at the same time, for at most one second, then sends whatever they did; a gate that throws is ignored, and
+    /// only a plugin that ships with the app is asked. Use it for what the session's first step must already find,
+    /// such as a desktop attachment that adds tools; never for work that can finish later.
+    // parity: plugin/src/gui/builtin.ts#BuiltinPromptGate [status=implemented hash=e5c32df10e31]
+    public struct BuiltinPromptGate: Sendable {
+        public static let registry = Registry<BuiltinPromptGate>.define("prompt-gate")
+
+        public struct Input: Sendable {
+            /// The session the prompt goes to. It may not be routed or mounted yet.
+            public let session: SessionRef
+            /// Aborts when the host stops waiting: every gate settled, or the second passed.
+            public let signal: AbortSignal
+
+            public init(session: SessionRef, signal: AbortSignal) {
+                self.session = session
+                self.signal = signal
+            }
+        }
+
+        public let ready: @Sendable (Input) async throws -> Void
+
+        public init(ready: @escaping @Sendable (Input) async throws -> Void) {
+            self.ready = ready
+        }
+
+        /// How long the host waits for every gate before it sends.
+        public static let timeoutMs = 1_000
+
+        /// Waits for every gate concurrently, for at most `timeoutMs`; failures are ignored, then the signal aborts.
+        public static func waitAll(_ gates: [BuiltinPromptGate], session: SessionRef) async {
+            let controller = AbortController()
+            let input = Input(session: session, signal: controller.signal)
+            await withTaskGroup(of: Bool.self) { group in
+                group.addTask {
+                    await withTaskGroup(of: Void.self) { inner in
+                        for gate in gates { inner.addTask { try? await gate.ready(input) } }
+                    }
+                    return true
+                }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: UInt64(timeoutMs) * 1_000_000)
+                    return false
+                }
+                _ = await group.next()
+                group.cancelAll()
+            }
+            controller.abort()
+        }
+    }
+
     /// Built-in command contribution supporting `follows` shortcut inheritance.
     // parity: plugin/src/gui/builtin.ts#BuiltinCommand [status=implemented hash=f823e8c11f44]
     public struct BuiltinCommand: Sendable {
@@ -5516,14 +5643,47 @@ public enum PluginGui {
         }
     }
 
-    /// Layout API extended with `command` dispatch for built-in plugins.
-    // parity: plugin/src/gui/builtin.ts#BuiltinLayout [status=implemented hash=700caa394088]
+    /// `OpenOptions` with the placement only built-ins use.
+    // parity: plugin/src/gui/builtin.ts#BuiltinOpenOptions [status=implemented hash=1932f5032f9e]
+    public struct BuiltinOpenOptions: Equatable, Hashable, Sendable, Codable {
+        public let tab: OpenOptions.TabMode?
+        public let background: Bool?
+        /// With `tab: .append` or `.select`, the stored tab (`<plugin>:<tab id>`) the new tab lands directly after.
+        /// Defaults to the end of the strip, which is also where it lands when the strip does not store that key. A tab
+        /// the strip stores already does not move.
+        public let after: String?
+
+        public init(tab: OpenOptions.TabMode? = nil, background: Bool? = nil, after: String? = nil) {
+            self.tab = tab
+            self.background = background
+            self.after = after
+        }
+
+        /// The public `OpenOptions` part.
+        public var base: OpenOptions {
+            OpenOptions(tab: tab, background: background)
+        }
+    }
+
+    /// Layout API extended with `open` placement, `fitsSide` and `command` dispatch for built-in plugins.
+    // parity: plugin/src/gui/builtin.ts#BuiltinLayout [status=implemented hash=5bffc09d2b60]
     public struct BuiltinLayout: Sendable {
         public let base: Layout
+        /// `Layout.open`, which can also place the tab after another one (`key` is `<plugin>:<tab id>`).
+        public let open: @Sendable (_ key: String, _ session: SessionRef, _ options: BuiltinOpenOptions?) -> Void
+        /// Whether the current session row can fit a readable conversation beside the minimum side pane.
+        public let fitsSide: @Sendable () -> Bool
         public let command: @Sendable (String) -> Void
 
-        public init(base: Layout, command: @escaping @Sendable (String) -> Void = { _ in }) {
+        public init(
+            base: Layout,
+            open: (@Sendable (_ key: String, _ session: SessionRef, _ options: BuiltinOpenOptions?) -> Void)? = nil,
+            fitsSide: @escaping @Sendable () -> Bool = { true },
+            command: @escaping @Sendable (String) -> Void = { _ in }
+        ) {
             self.base = base
+            self.open = open ?? { key, session, options in base.open(key, session, options?.base) }
+            self.fitsSide = fitsSide
             self.command = command
         }
     }
@@ -5540,10 +5700,16 @@ public enum PluginGui {
         }
     }
 
-    /// Built-in window context with desktop/locale/layout/storage extensions.
-    // parity: plugin/src/gui/builtin.ts#BuiltinContext [status=implemented hash=b5f0895298dd]
+    /// Built-in window context with per-consumer contracts and desktop/locale/layout/storage extensions.
+    // parity: plugin/src/gui/builtin.ts#BuiltinContext [status=implemented hash=7483e309ce19]
     public struct BuiltinContext: Sendable {
         public let base: Context
+        /// Provides a separate implementation to each consuming plugin instance (type-erased; see `provideFor(_:bind:)`).
+        /// The host supplies the consumer's identity and lifetime; the returned cleanup withdraws the contract early.
+        public let provideForContract: @Sendable (
+            _ contractID: String,
+            _ bind: @escaping @Sendable (_ consumer: String, _ signal: AbortSignal) -> any Sendable
+        ) -> Cleanup
         public let desktop: BuiltinDesktop?
         public let locale: BuiltinLocale
         public let layout: BuiltinLayout
@@ -5551,12 +5717,20 @@ public enum PluginGui {
 
         public init(
             base: Context,
+            provideForContract: (@Sendable (
+                _ contractID: String,
+                _ bind: @escaping @Sendable (_ consumer: String, _ signal: AbortSignal) -> any Sendable
+            ) -> Cleanup)? = nil,
             desktop: BuiltinDesktop? = nil,
             locale: BuiltinLocale? = nil,
             layout: BuiltinLayout? = nil,
             storage: BuiltinStorage? = nil
         ) {
             self.base = base
+            // Without a host that knows its consumers, every consumer shares one binding for this plugin.
+            self.provideForContract = provideForContract ?? { contractID, bind in
+                base.provideContract(contractID, bind(base.id, base.signal))
+            }
             self.desktop = desktop ?? base.desktop.map { BuiltinDesktop(base: $0) }
             self.locale = locale ?? BuiltinLocale(base: base.locale)
             self.layout = layout ?? BuiltinLayout(base: base.layout)
@@ -6316,5 +6490,15 @@ public enum PluginGui {
         public func activePluginIDs() -> [String] {
             state.withLock { s in Array(s.active.keys).sorted() }
         }
+    }
+}
+
+extension PluginGui.BuiltinContext {
+    /// Provides a separate implementation of `token` to each consuming plugin instance, until its signal aborts.
+    public func provideFor<T: Sendable>(
+        _ token: PluginGui.Contract<T>,
+        bind: @escaping @Sendable (_ consumer: String, _ signal: AbortSignal) -> T
+    ) -> PluginGui.Cleanup {
+        provideForContract(token.id) { consumer, signal in bind(consumer, signal) }
     }
 }

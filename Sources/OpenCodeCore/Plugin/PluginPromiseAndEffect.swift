@@ -473,12 +473,15 @@ public enum PluginEffect {
     }
 
     /// OAuth method implementation registration.
-    // parity: plugin/src/effect/integration.ts#IntegrationOAuthMethodRegistration [status=implemented hash=48ca6fef173e]
+    // parity: plugin/src/effect/integration.ts#IntegrationOAuthMethodRegistration [status=implemented hash=0dafba238ed2]
     public struct IntegrationOAuthMethodRegistration: Sendable {
         public let integrationID: String
         public let method: IntegrationOAuthMethod
         public let authorize: @Sendable (FormSchema.Answer) async throws -> IntegrationOAuthAuthorization
         public let refresh: (@Sendable (CredentialSchema.OAuth) async throws -> CredentialSchema.OAuth)?
+        /// Signs the credential out remotely before it is removed. A failure is logged and the credential is still
+        /// removed.
+        public let revoke: (@Sendable (CredentialSchema.OAuth) async throws -> Void)?
         public let label: (@Sendable (CredentialSchema.OAuth) -> String?)?
 
         public init(
@@ -486,12 +489,14 @@ public enum PluginEffect {
             method: IntegrationOAuthMethod,
             authorize: @escaping @Sendable (FormSchema.Answer) async throws -> IntegrationOAuthAuthorization,
             refresh: (@Sendable (CredentialSchema.OAuth) async throws -> CredentialSchema.OAuth)? = nil,
+            revoke: (@Sendable (CredentialSchema.OAuth) async throws -> Void)? = nil,
             label: (@Sendable (CredentialSchema.OAuth) -> String?)? = nil
         ) {
             self.integrationID = integrationID
             self.method = method
             self.authorize = authorize
             self.refresh = refresh
+            self.revoke = revoke
             self.label = label
         }
     }
@@ -1611,8 +1616,10 @@ public enum PluginEffect {
         }
     }
 
-    /// Editor mutating registered tools and tool namespaces.
-    // parity: plugin/src/effect/tool.ts#ToolEditor [status=implemented hash=56fd5de24edc]
+    /// Editor mutating registered tools and tool namespaces. Upstream's `add` gained Code Mode input/output type
+    /// parameters (`CMInput`, `CMOutput`); Swift tool entries carry type-erased value schemas, so the signature is
+    /// unchanged.
+    // parity: plugin/src/effect/tool.ts#ToolEditor [status=implemented hash=efe97482f163]
     public struct ToolEditor: Sendable {
         public let list: @Sendable () -> [DynamicToolInfo]
         public let get: @Sendable (String) -> DynamicToolInfo?
@@ -1638,11 +1645,15 @@ public enum PluginEffect {
         }
     }
 
-    /// Tool execution before/after hook payloads.
-    // parity: plugin/src/effect/tool.ts#ToolHooks [status=implemented hash=353efa554e3e]
+    /// Tool execution before/after hook payloads. `info` is the registered tool the call resolved to (absent for an
+    /// unknown tool), and `codemode` whether the call came from a Code Mode script. `info` takes no part in equality,
+    /// hashing or coding: a tool's execute closure has no value identity.
+    // parity: plugin/src/effect/tool.ts#ToolHooks [status=implemented hash=ca459dd46a73]
     public enum ToolHooks: Sendable {
         public struct ExecuteBefore: Equatable, Hashable, Sendable, Codable {
             public var tool: String
+            public let info: DynamicToolInfo?
+            public let codemode: Bool
             public let sessionID: SessionID
             public let agent: AgentSchema.ID
             public let messageID: SessionMessageSchema.ID
@@ -1651,6 +1662,8 @@ public enum PluginEffect {
 
             public init(
                 tool: String,
+                info: DynamicToolInfo? = nil,
+                codemode: Bool = false,
                 sessionID: SessionID,
                 agent: AgentSchema.ID,
                 messageID: SessionMessageSchema.ID,
@@ -1658,11 +1671,55 @@ public enum PluginEffect {
                 input: JSONValue
             ) {
                 self.tool = tool
+                self.info = info
+                self.codemode = codemode
                 self.sessionID = sessionID
                 self.agent = agent
                 self.messageID = messageID
                 self.id = id
                 self.input = input
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case tool, codemode, sessionID, agent, messageID, id, input
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.tool = try container.decode(String.self, forKey: .tool)
+                self.info = nil
+                self.codemode = try container.decodeIfPresent(Bool.self, forKey: .codemode) ?? false
+                self.sessionID = try container.decode(SessionID.self, forKey: .sessionID)
+                self.agent = try container.decode(AgentSchema.ID.self, forKey: .agent)
+                self.messageID = try container.decode(SessionMessageSchema.ID.self, forKey: .messageID)
+                self.id = try container.decode(ToolSchema.CallID.self, forKey: .id)
+                self.input = try container.decode(JSONValue.self, forKey: .input)
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(tool, forKey: .tool)
+                try container.encode(codemode, forKey: .codemode)
+                try container.encode(sessionID, forKey: .sessionID)
+                try container.encode(agent, forKey: .agent)
+                try container.encode(messageID, forKey: .messageID)
+                try container.encode(id, forKey: .id)
+                try container.encode(input, forKey: .input)
+            }
+
+            public static func == (lhs: Self, rhs: Self) -> Bool {
+                lhs.tool == rhs.tool && lhs.codemode == rhs.codemode && lhs.sessionID == rhs.sessionID
+                    && lhs.agent == rhs.agent && lhs.messageID == rhs.messageID && lhs.id == rhs.id && lhs.input == rhs.input
+            }
+
+            public func hash(into hasher: inout Hasher) {
+                hasher.combine(tool)
+                hasher.combine(codemode)
+                hasher.combine(sessionID)
+                hasher.combine(agent)
+                hasher.combine(messageID)
+                hasher.combine(id)
+                hasher.combine(input)
             }
         }
 
@@ -1673,6 +1730,8 @@ public enum PluginEffect {
 
         public struct ExecuteAfter: Equatable, Hashable, Sendable, Codable {
             public let tool: String
+            public let info: DynamicToolInfo?
+            public let codemode: Bool
             public let sessionID: SessionID
             public let agent: AgentSchema.ID
             public let messageID: SessionMessageSchema.ID
@@ -1682,6 +1741,8 @@ public enum PluginEffect {
 
             public init(
                 tool: String,
+                info: DynamicToolInfo? = nil,
+                codemode: Bool = false,
                 sessionID: SessionID,
                 agent: AgentSchema.ID,
                 messageID: SessionMessageSchema.ID,
@@ -1690,12 +1751,60 @@ public enum PluginEffect {
                 outcome: AfterOutcome
             ) {
                 self.tool = tool
+                self.info = info
+                self.codemode = codemode
                 self.sessionID = sessionID
                 self.agent = agent
                 self.messageID = messageID
                 self.id = id
                 self.input = input
                 self.outcome = outcome
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case tool, codemode, sessionID, agent, messageID, id, input, outcome
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.tool = try container.decode(String.self, forKey: .tool)
+                self.info = nil
+                self.codemode = try container.decodeIfPresent(Bool.self, forKey: .codemode) ?? false
+                self.sessionID = try container.decode(SessionID.self, forKey: .sessionID)
+                self.agent = try container.decode(AgentSchema.ID.self, forKey: .agent)
+                self.messageID = try container.decode(SessionMessageSchema.ID.self, forKey: .messageID)
+                self.id = try container.decode(ToolSchema.CallID.self, forKey: .id)
+                self.input = try container.decode(JSONValue.self, forKey: .input)
+                self.outcome = try container.decode(AfterOutcome.self, forKey: .outcome)
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(tool, forKey: .tool)
+                try container.encode(codemode, forKey: .codemode)
+                try container.encode(sessionID, forKey: .sessionID)
+                try container.encode(agent, forKey: .agent)
+                try container.encode(messageID, forKey: .messageID)
+                try container.encode(id, forKey: .id)
+                try container.encode(input, forKey: .input)
+                try container.encode(outcome, forKey: .outcome)
+            }
+
+            public static func == (lhs: Self, rhs: Self) -> Bool {
+                lhs.tool == rhs.tool && lhs.codemode == rhs.codemode && lhs.sessionID == rhs.sessionID
+                    && lhs.agent == rhs.agent && lhs.messageID == rhs.messageID && lhs.id == rhs.id
+                    && lhs.input == rhs.input && lhs.outcome == rhs.outcome
+            }
+
+            public func hash(into hasher: inout Hasher) {
+                hasher.combine(tool)
+                hasher.combine(codemode)
+                hasher.combine(sessionID)
+                hasher.combine(agent)
+                hasher.combine(messageID)
+                hasher.combine(id)
+                hasher.combine(input)
+                hasher.combine(outcome)
             }
         }
 
@@ -2350,7 +2459,8 @@ public enum PluginPromise {
     // parity: plugin/src/promise/integration.ts#IntegrationOAuthAuthorization [status=implemented hash=6130b4ece287]
     public typealias IntegrationOAuthAuthorization = PluginEffect.IntegrationOAuthAuthorization
 
-    // parity: plugin/src/promise/integration.ts#IntegrationOAuthMethodRegistration [status=implemented hash=0dc1f4e69869]
+    /// Shared with the Effect SDK: `revoke` rejections are logged and the credential is still removed.
+    // parity: plugin/src/promise/integration.ts#IntegrationOAuthMethodRegistration [status=implemented hash=470cabb82c73]
     public typealias IntegrationOAuthMethodRegistration = PluginEffect.IntegrationOAuthMethodRegistration
 
     // parity: plugin/src/promise/integration.ts#IntegrationMethodRegistration [status=implemented hash=f0e98f033104]
@@ -2615,8 +2725,9 @@ public enum PluginPromise {
         }
     }
 
-    /// Promise-style tool registry editor.
-    // parity: plugin/src/promise/tool.ts#ToolEditor [status=implemented hash=c76d24646d07]
+    /// Promise-style tool registry editor. Upstream's `add` gained Code Mode input/output type parameters; Swift tool
+    /// entries carry type-erased value schemas, so the signature is unchanged.
+    // parity: plugin/src/promise/tool.ts#ToolEditor [status=implemented hash=ef6028976806]
     public struct ToolEditor: Sendable {
         public let list: @Sendable () -> [Info]
         public let get: @Sendable (String) -> Info?
@@ -2642,19 +2753,98 @@ public enum PluginPromise {
         }
     }
 
+    /// Promise-style tool execution hook payloads: as the Effect SDK's, with `info` as a Promise-style tool.
+    // parity: plugin/src/promise/tool.ts#ToolHooks [status=implemented hash=2e36cfa2b9e8]
+    public enum ToolHooks: Sendable {
+        public struct ExecuteBefore: Sendable {
+            public var tool: String
+            public let info: Info?
+            public let codemode: Bool
+            public let sessionID: SessionID
+            public let agent: AgentSchema.ID
+            public let messageID: SessionMessageSchema.ID
+            public let id: ToolSchema.CallID
+            public var input: JSONValue
+
+            public init(
+                tool: String,
+                info: Info? = nil,
+                codemode: Bool = false,
+                sessionID: SessionID,
+                agent: AgentSchema.ID,
+                messageID: SessionMessageSchema.ID,
+                id: ToolSchema.CallID,
+                input: JSONValue
+            ) {
+                self.tool = tool
+                self.info = info
+                self.codemode = codemode
+                self.sessionID = sessionID
+                self.agent = agent
+                self.messageID = messageID
+                self.id = id
+                self.input = input
+            }
+        }
+
+        public struct ExecuteAfter: Sendable {
+            public let tool: String
+            public let info: Info?
+            public let codemode: Bool
+            public let sessionID: SessionID
+            public let agent: AgentSchema.ID
+            public let messageID: SessionMessageSchema.ID
+            public let id: ToolSchema.CallID
+            public let input: JSONValue
+            public var outcome: PluginEffect.ToolHooks.AfterOutcome
+
+            public init(
+                tool: String,
+                info: Info? = nil,
+                codemode: Bool = false,
+                sessionID: SessionID,
+                agent: AgentSchema.ID,
+                messageID: SessionMessageSchema.ID,
+                id: ToolSchema.CallID,
+                input: JSONValue,
+                outcome: PluginEffect.ToolHooks.AfterOutcome
+            ) {
+                self.tool = tool
+                self.info = info
+                self.codemode = codemode
+                self.sessionID = sessionID
+                self.agent = agent
+                self.messageID = messageID
+                self.id = id
+                self.input = input
+                self.outcome = outcome
+            }
+        }
+
+        case executeBefore(ExecuteBefore)
+        case executeAfter(ExecuteAfter)
+
+        public var hookName: String {
+            switch self {
+            case .executeBefore: return "execute.before"
+            case .executeAfter: return "execute.after"
+            }
+        }
+    }
+
     /// Promise-style tool domain exposed on plugin contexts.
     // parity: plugin/src/promise/tool.ts#ToolDomain [status=implemented hash=f8089d9ec451]
     public struct ToolDomain: Sendable {
         public let transform: Transform<ToolEditor>
         public let reload: @Sendable () async -> Void
         public let list: @Sendable () async -> [Info]
-        public let hook: Hooks<PluginEffect.ToolHooks>
+        public let hook: Hooks<ToolHooks>
 
         public init(
             transform: @escaping Transform<ToolEditor>,
             reload: @escaping @Sendable () async -> Void,
             list: @escaping @Sendable () async -> [Info],
-            hook: @escaping Hooks<PluginEffect.ToolHooks>
+            hook: @escaping Hooks<ToolHooks>
         ) {
             self.transform = transform
             self.reload = reload
@@ -3007,7 +3197,10 @@ public enum PluginPromise {
 
     /// Adapts a Promise-style plugin into an Effect-style plugin so the core plugin host runs both uniformly.
     /// Every hook/transform registration attaches to the plugin scope, and returned `Cleanup` runs on scope disposal.
-    // parity: plugin/src/promise/adapter.ts#fromPromise [status=adapted hash=21d1b641f38d]
+    /// Tool hooks see the resolved tool as a Promise-style `Info`; only `execute.before` may reject a call (a
+    /// rejection fails that call alone) and only its `tool` and `input` write back, while `execute.after` writes back
+    /// a result or error only when the callback keeps the outcome's kind.
+    // parity: plugin/src/promise/adapter.ts#fromPromise [status=adapted hash=fa0fc8232d31]
     public static func fromPromise(_ plugin: Plugin) -> PluginEffect.Plugin {
         let effectBody: @Sendable (PluginEffect.Context) async throws -> Void = { host in
             let promiseContext = makePromiseContext(from: host)
@@ -3197,7 +3390,58 @@ public enum PluginPromise {
             },
             reload: host.tool.reload,
             list: { await host.tool.list().map(toPromiseTool) },
-            hook: host.tool.hook
+            hook: { name, callback in
+                await host.tool.hook(name) { event in
+                    switch event {
+                    case .executeBefore(var before):
+                        let adapted = ToolHooks.ExecuteBefore(
+                            tool: before.tool,
+                            info: before.info.map(toPromiseTool),
+                            codemode: before.codemode,
+                            sessionID: before.sessionID,
+                            agent: before.agent,
+                            messageID: before.messageID,
+                            id: before.id,
+                            input: before.input
+                        )
+                        let result: ToolHooks
+                        do {
+                            result = try await callback(.executeBefore(adapted))
+                        } catch let toolError as ToolSchema.ToolError {
+                            throw toolError
+                        } catch {
+                            throw ToolSchema.ToolError(message: String(describing: error))
+                        }
+                        if case .executeBefore(let updated) = result {
+                            before.tool = updated.tool
+                            before.input = updated.input
+                        }
+                        return .executeBefore(before)
+                    case .executeAfter(var after):
+                        let adapted = ToolHooks.ExecuteAfter(
+                            tool: after.tool,
+                            info: after.info.map(toPromiseTool),
+                            codemode: after.codemode,
+                            sessionID: after.sessionID,
+                            agent: after.agent,
+                            messageID: after.messageID,
+                            id: after.id,
+                            input: after.input,
+                            outcome: after.outcome
+                        )
+                        guard case .executeAfter(let updated)? = try? await callback(.executeAfter(adapted)) else {
+                            return event
+                        }
+                        switch (after.outcome, updated.outcome) {
+                        case (.completed, .completed), (.error, .error):
+                            after.outcome = updated.outcome
+                        default:
+                            break
+                        }
+                        return .executeAfter(after)
+                    }
+                }
+            }
         )
 
         let vcsDomain = VcsDomain(
