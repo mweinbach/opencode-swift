@@ -54,7 +54,7 @@ struct MachineDriverTests {
         worker.reply(.output(id: id, offset: 1, data: Array("ello".utf8)))
         worker.reply(.output(id: id, offset: 9, data: Array("zz".utf8)))
         worker.reply(.exit(MachineWire.Exit(id: id, bytes: 7, code: 0)))
-        #expect(await worker.next { $0 == .attach(id: id, from: 5) } != nil)
+        _ = try #require(await worker.next { $0 == .attach(id: id, from: 5) })
         worker.reply(.output(id: id, offset: 5, data: Array("!\n".utf8)))
         worker.reply(.exit(MachineWire.Exit(id: id, bytes: 7, code: 3)))
         let output = try await run.value
@@ -91,6 +91,22 @@ struct MachineDriverTests {
         await serving.value
     }
 
+    private func flushWorkerMessages(_ worker: Worker, on machine: any MachineDriver.Interface) async throws {
+        let syncPath = "/__sync_\(worker.messages.count)"
+        let probe = Task { try? await machine.environment.files.stat(syncPath) }
+        let call = try #require(await worker.next { message in
+            if case .fs(let req) = message, req.call == .stat(path: syncPath) { return true }
+            return false
+        })
+        if case .fs(let req) = call {
+            worker.reply(.fs(MachineWire.FileReply(
+                req: req.req,
+                outcome: .failure(MachineWire.FileError(kind: .notFound, message: "sync"))
+            )))
+        }
+        _ = await probe.value
+    }
+
     @Test("a reconnect from the same worker resumes a process; a restarted worker loses it")
     func reconnect() async throws {
         let machine = MachineDriver.make("gpu")
@@ -101,13 +117,15 @@ struct MachineDriverTests {
         let id = try #require(await first.next { started($0) != nil }.flatMap(started))
         first.reply(.started(id: id, pid: 7))
         first.reply(.output(id: id, offset: 0, data: [65]))
+        // Ensure `first`'s stream reader has processed `.started` and `.output` before reconnecting.
+        try await flushWorkerMessages(first, on: machine)
         // The same instance lists the process: the home attaches from what it already has.
         let second = Worker(hello: MachineTestHelper.hello(
             instance: "one",
             processes: [MachineWire.HelloProcess(id: id, pid: 7, state: .running, bytes: 1)]
         ))
         let resumed = Task { await machine.connect(second.connection) }
-        #expect(await second.next { $0 == .attach(id: id, from: 1) } != nil)
+        _ = try #require(await second.next { $0 == .attach(id: id, from: 1) })
         await serving.value
         second.reply(.output(id: id, offset: 1, data: [66]))
         second.reply(.exit(MachineWire.Exit(id: id, bytes: 2, code: 0)))
@@ -116,6 +134,8 @@ struct MachineDriverTests {
         let lost = Task { try await machine.environment.spawner.run(ProcessSpec(executable: "train", workingDirectory: "/")) }
         let other = try #require(await second.next { started($0) != nil && started($0) != id }.flatMap(started))
         second.reply(.started(id: other, pid: 8))
+        // Ensure `second`'s stream reader has processed `.started` before the worker restarts.
+        try await flushWorkerMessages(second, on: machine)
         // An exited process the home no longer tracks is released again.
         let third = Worker(hello: MachineTestHelper.hello(
             instance: "two",
@@ -123,7 +143,7 @@ struct MachineDriverTests {
         ))
         let restarted = Task { await machine.connect(third.connection) }
         await #expect(throws: MachineDriver.ProcessLost(machine: "gpu", restarted: true)) { try await lost.value }
-        #expect(await third.next { $0 == .release(id: MachineWire.ProcessID("old")) } != nil)
+        _ = try #require(await third.next { $0 == .release(id: MachineWire.ProcessID("old")) })
         await resumed.value
         third.drop()
         await restarted.value

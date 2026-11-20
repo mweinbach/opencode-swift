@@ -2513,10 +2513,13 @@ public enum CoreConfig {
                 environment: environment,
                 log: log
             )
-            state.withLock { s in
+            let stillOpen: Bool = state.withLock { s in
+                guard !s.closed else { return false }
                 s.isInput = next.isInput
                 s.reloadCount += 1
+                return true
             }
+            guard stillOpen else { return }
             await reconcileWatchesLocked(discovered)
 
             let changed: Bool = state.withLock { s in
