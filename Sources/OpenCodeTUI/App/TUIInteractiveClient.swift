@@ -1530,7 +1530,10 @@ public struct TUIInteractiveState: Equatable, Sendable {
                 let lp = pinnedSet.contains(lhs.id)
                 let rp = pinnedSet.contains(rhs.id)
                 if lp != rp { return lp }
-                return false
+                let lt = lhs.updatedMs ?? 0
+                let rt = rhs.updatedMs ?? 0
+                if lt != rt { return lt > rt }
+                return lhs.id > rhs.id
             }
             return ordered.compactMap { session in
                 let sub = session.directory.map { TUIUtil.abbreviateHome($0, home: homeDirectory) } ?? session.id
@@ -2232,7 +2235,9 @@ public final class TUIInteractiveClient: Sendable {
     }
 
     public func refreshSessions() async {
-        guard let list = try? await client.session.list(SessionListInput(limit: 50)) else { return }
+        guard let list = try? await client.session.list(
+            SessionListInput(limit: 50, order: .desc, parentID: "null", archived: false)
+        ) else { return }
         let summaries = list.data.map { s in
             TUISessionItem(
                 id: s.id.rawValue,
@@ -2291,6 +2296,7 @@ public final class TUIInteractiveClient: Sendable {
         guard let resp else { return }
         // `GET /api/session/:id/message` returns newest-first (`order=desc`); reverse into chronological oldest→newest order.
         let chronological = Array(resp.data.reversed())
+        let knownModels = store.withLock { $0.models }
         var totalCost = 0.0
         var latestTokens = 0
         var mapped: [TUITranscriptItem] = []
@@ -2341,10 +2347,13 @@ public final class TUIInteractiveClient: Sendable {
                     }
                 }
                 if !parts.isEmpty || a.error != nil {
+                    let friendlyModel = knownModels.first(where: {
+                        $0.id == a.model.id && $0.providerID == a.model.providerID
+                    })?.name ?? a.model.id
                     mapped.append(.assistant(
                         id: a.id.rawValue,
                         agentName: TUIUtil.titlecase(a.agent),
-                        modelLabel: a.model.id,
+                        modelLabel: friendlyModel,
                         parts: parts,
                         completed: a.time.completed != nil,
                         error: a.error?.message
@@ -2396,8 +2405,8 @@ public final class TUIInteractiveClient: Sendable {
                     state.interruptArmed = false
                 }
             }
-            if totalCost > 0 { state.sessionCost = totalCost }
-            if latestTokens > 0 { state.contextTokens = latestTokens }
+            state.sessionCost = max(totalCost, info?.cost ?? 0)
+            state.contextTokens = latestTokens
         }
         markDirty()
     }
@@ -2427,12 +2436,23 @@ public final class TUIInteractiveClient: Sendable {
                 if case .text(let t) = part { return t }
                 return nil
             }.joined(separator: "\n")
+            let normalizedName = tool.name.lowercased()
+            let preview: String?
+            if normalizedName == "edit" || normalizedName == "write" || normalizedName == "patch" || normalizedName == "apply_patch" {
+                let diffText = stringField(c.metadata ?? [:], "diff") ?? textOut
+                preview = previewLines(diffText, maxLines: 14, maxCols: 120)
+            } else if normalizedName == "shell" || normalizedName == "bash" || normalizedName == "exec" {
+                let shellOut = stringField(c.metadata ?? [:], "output") ?? textOut
+                preview = previewLines(shellOut, maxLines: 14, maxCols: 120)
+            } else {
+                preview = previewLines(textOut)
+            }
             return .tool(
                 id: tool.id,
                 name: tool.name,
                 status: .completed,
                 summary: summarizeToolInput(c.input),
-                outputPreview: previewLines(textOut),
+                outputPreview: preview,
                 error: nil
             )
         case .error(let e):
@@ -2715,21 +2735,37 @@ public final class TUIInteractiveClient: Sendable {
             guard isForActiveSession else { break }
             let msgID = stringField(obj, "assistantMessageID") ?? stringField(obj, "messageID") ?? "stream"
             let toolID = stringField(obj, "id") ?? "tool"
-            var previewText: String? = nil
+            let meta = jsonObject(obj["metadata"])
+            var rawText: String? = nil
             if case .array(let items) = obj["content"] {
                 let texts = items.compactMap { item -> String? in
                     let dict = jsonObject(item)
                     return stringField(dict, "text")
                 }
                 if !texts.isEmpty {
-                    previewText = previewLines(texts.joined(separator: "\n"))
+                    rawText = texts.joined(separator: "\n")
                 }
             }
             upsertAssistantPart(in: &state, messageID: msgID, partID: toolID) { existing in
-                if case .tool(let id, let name, _, let summary, _, _) = existing {
-                    return .tool(id: id, name: name, status: .completed, summary: summary, outputPreview: previewText, error: nil)
+                let resolvedName: String
+                let summary: String
+                if case .tool(_, let name, _, let existingSummary, _, _) = existing {
+                    resolvedName = name
+                    summary = existingSummary
+                } else {
+                    resolvedName = stringField(obj, "name") ?? "tool"
+                    summary = ""
                 }
-                return .tool(id: toolID, name: stringField(obj, "name") ?? "tool", status: .completed, summary: "", outputPreview: previewText, error: nil)
+                let normalized = resolvedName.lowercased()
+                let previewText: String?
+                if normalized == "edit" || normalized == "write" || normalized == "patch" || normalized == "apply_patch" {
+                    previewText = previewLines(stringField(meta, "diff") ?? rawText, maxLines: 14, maxCols: 120)
+                } else if normalized == "shell" || normalized == "bash" || normalized == "exec" {
+                    previewText = previewLines(stringField(meta, "output") ?? rawText, maxLines: 14, maxCols: 120)
+                } else {
+                    previewText = previewLines(rawText)
+                }
+                return .tool(id: toolID, name: resolvedName, status: .completed, summary: summary, outputPreview: previewText, error: nil)
             }
 
         case "session.tool.failed":

@@ -1147,4 +1147,113 @@ struct OpenCodeAppOAuthAndDatabaseTests {
 
         await store.disconnect()
     }
+
+    @Test("refreshMessages reverses desc pages chronologically and reconciles active running status")
+    @MainActor
+    func refreshMessagesChronologicalOrderAndActiveStatusReconciliation() async throws {
+        let dir = try OpenCodeAppTestHelper.makeTempDirectory(prefix: "opencode-app-chron")
+        defer { OpenCodeAppTestHelper.removeDirectory(dir) }
+
+        let sdk = try await OpenCode.create(
+            OpenCode.CreateOptions(
+                app: .init(version: "app-chron-test"),
+                database: CoreDatabaseStore.Options(path: ":memory:"),
+                config: .init(directory: dir, project: false)
+            )
+        )
+        defer {
+            Task { await sdk.close() }
+        }
+
+        let capturedMsgURL = Mutex<String?>(nil)
+        let capturedListURL = Mutex<String?>(nil)
+        let modelRef = SessionSchema.ModelRef(id: "claude-sonnet-4-5", providerID: "anthropic")
+        let descMessages: [SessionMessageSchema.Info] = [
+            .assistant(SessionMessageSchema.Assistant(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_a2")),
+                agent: "build",
+                model: modelRef,
+                content: [.text(SessionMessageSchema.AssistantText(text: "Second reply"))],
+                cost: 0.02,
+                tokens: SessionSchema.TokenUsage(input: 5000, output: 500, reasoning: 0, cache: .init(read: 0, write: 0)),
+                time: .init(created: 4000, completed: 4500)
+            )),
+            .user(SessionMessageSchema.User(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_u2")),
+                time: .init(created: 3000),
+                text: "Second prompt"
+            )),
+            .assistant(SessionMessageSchema.Assistant(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_a1")),
+                agent: "build",
+                model: modelRef,
+                content: [.text(SessionMessageSchema.AssistantText(text: "First reply"))],
+                cost: 0.01,
+                tokens: SessionSchema.TokenUsage(input: 1000, output: 100, reasoning: 0, cache: .init(read: 0, write: 0)),
+                time: .init(created: 2000, completed: 2500)
+            )),
+            .user(SessionMessageSchema.User(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_u1")),
+                time: .init(created: 1000),
+                text: "First prompt"
+            )),
+        ]
+        struct SessionEnvelope: Encodable { let data: SessionSchema.Info }
+        let sessionInfo = SessionSchema.Info(
+            id: try #require(SessionID(rawValue: "ses_app_chron")),
+            projectID: ProjectID(rawValue: "global"),
+            cost: 0.03,
+            tokens: SessionSchema.TokenUsage(input: 6000, output: 600, reasoning: 0, cache: .init(read: 0, write: 0)),
+            time: .init(created: 1000, updated: 4500),
+            title: "App Chronological Test",
+            location: OpenCodeLocation(directory: dir)
+        )
+
+        let transport = MockHTTPTransport { request in
+            let path = request.url.split(separator: "?").first.map(String.init) ?? request.url
+            if request.method == "GET" && path.hasSuffix("/api/session/ses_app_chron/message") {
+                capturedMsgURL.withLock { $0 = request.url }
+                return try Self.jsonResponse(SessionMessagesResponse(data: descMessages))
+            }
+            if request.method == "GET" && path.hasSuffix("/api/session/active") {
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]),
+                    body: Array(#"{"data":{}}"#.utf8)
+                )
+            }
+            if request.method == "GET" && path.hasSuffix("/api/session/ses_app_chron") {
+                return try Self.jsonResponse(SessionEnvelope(data: sessionInfo))
+            }
+            if request.method == "GET" && path.hasSuffix("/api/session") {
+                capturedListURL.withLock { $0 = request.url }
+                return try Self.jsonResponse(SessionsResponse(data: [sessionInfo]))
+            }
+            return try await sdk.host.fetch.send(request)
+        }
+
+        let store = OpenCodeAppStore()
+        try await store.connectRemote(url: "http://opencode.local", transport: transport, subscribeEvents: false)
+        // Simulate a running event before refreshing messages
+        _ = store.applyServerEvent(OpenCodeEvent(
+            id: "evt_run",
+            type: "session.shell.started",
+            data: .object(["sessionID": .string("ses_app_chron")])
+        ))
+        #expect(store.isActiveSessionWorking == true)
+
+        await store.refreshMessages(for: "ses_app_chron")
+
+        #expect(capturedMsgURL.withLock { $0 }?.contains("order=desc") == true)
+        #expect(capturedListURL.withLock { $0 }?.contains("order=desc") == true)
+        #expect(capturedListURL.withLock { $0 }?.contains("parentID=null") == true)
+        #expect(capturedListURL.withLock { $0 }?.contains("archived=false") == true)
+        // Reconciled back to idle via /api/session/active
+        #expect(store.isActiveSessionWorking == false)
+        // Strict oldest -> newest chronological order
+        #expect(store.messages.map(\.id) == ["msg_u1", "msg_a1", "msg_u2", "msg_a2"])
+        // Latest tokens read from newest assistant message (5500), not oldest (1100)
+        #expect(store.activeSessionTokens == 5_500)
+
+        await store.disconnect()
+    }
 }

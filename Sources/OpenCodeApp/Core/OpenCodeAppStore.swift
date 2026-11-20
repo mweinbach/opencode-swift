@@ -1261,7 +1261,9 @@ public final class OpenCodeAppStore {
         if let activeMap = try? await client.session.active() {
             runningSessionIDs = Set(activeMap.keys)
         }
-        guard let list = try? await client.session.list(SessionListInput(limit: 100)) else { return }
+        guard let list = try? await client.session.list(
+            SessionListInput(limit: 100, order: .desc, parentID: "null", archived: false)
+        ) else { return }
         sessions = list.data.map { info in
             AppSessionSummary(from: info, badge: badgeForSession(info.id.rawValue))
         }

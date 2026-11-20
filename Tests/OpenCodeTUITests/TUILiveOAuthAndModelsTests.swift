@@ -582,4 +582,215 @@ struct TUILiveOAuthAndModelsTests {
             #expect(eff.refreshIntegrations == true)
         }
     }
+
+    @Test("loadMessages reverses desc pages into chronological order, reconciles stuck running status, extracts diff/shell previews, and sorts sessions newest-first")
+    func loadMessagesChronologicalOrderAndSessionStatusReconciliation() async throws {
+        let capturedMessageURL = Mutex<String?>(nil)
+        let capturedSessionListURL = Mutex<String?>(nil)
+
+        let modelRef = SessionSchema.ModelRef(id: "claude-sonnet-4-5", providerID: "anthropic")
+        let descMessages: [SessionMessageSchema.Info] = [
+            .assistant(SessionMessageSchema.Assistant(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_04")),
+                agent: "build",
+                model: modelRef,
+                content: [.text(SessionMessageSchema.AssistantText(text: "Second final answer."))],
+                cost: 0.03,
+                tokens: SessionSchema.TokenUsage(input: 8000, output: 400, reasoning: 0, cache: .init(read: 0, write: 0)),
+                time: .init(created: 4000, completed: 4500)
+            )),
+            .user(SessionMessageSchema.User(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_03")),
+                time: .init(created: 3000),
+                text: "Second user question"
+            )),
+            .assistant(SessionMessageSchema.Assistant(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_02")),
+                agent: "build",
+                model: modelRef,
+                content: [
+                    .tool(SessionMessageSchema.AssistantTool(
+                        id: "tool_edit_1",
+                        name: "edit",
+                        state: .completed(SessionMessageSchema.ToolStateCompleted(
+                            input: ["filePath": .string("Sources/App.swift")],
+                            content: [.text("Edit applied")],
+                            metadata: ["diff": .string("@@ -1,2 +1,2 @@\n-let a = 1\n+let a = 2\n+let b = 3")]
+                        )),
+                        time: .init(created: 2100)
+                    )),
+                    .tool(SessionMessageSchema.AssistantTool(
+                        id: "tool_shell_1",
+                        name: "shell",
+                        state: .completed(SessionMessageSchema.ToolStateCompleted(
+                            input: ["command": .string("swift test")],
+                            content: [.text("line1\nline2\nline3\nline4")]
+                        )),
+                        time: .init(created: 2200)
+                    )),
+                    .text(SessionMessageSchema.AssistantText(text: "First assistant reply.")),
+                ],
+                cost: 0.01,
+                tokens: SessionSchema.TokenUsage(input: 1000, output: 200, reasoning: 0, cache: .init(read: 0, write: 0)),
+                time: .init(created: 2000, completed: 2500)
+            )),
+            .user(SessionMessageSchema.User(
+                id: try #require(SessionMessageSchema.ID(rawValue: "msg_01")),
+                time: .init(created: 1000),
+                text: "First user question"
+            )),
+        ]
+        let messagesBytes = try ClientCodec.encode(SessionMessagesResponse(data: descMessages))
+
+        struct SessionEnvelope: Encodable { let data: SessionSchema.Info }
+        let location = OpenCodeLocation(directory: TUILiveOAuthFixtures.defaultDirectory)
+        let sessionInfo = SessionSchema.Info(
+            id: try #require(SessionID(rawValue: "ses_chron_1")),
+            projectID: ProjectID(rawValue: "global"),
+            cost: 0.04,
+            tokens: SessionSchema.TokenUsage(input: 9000, output: 600, reasoning: 0, cache: .init(read: 0, write: 0)),
+            time: .init(created: 1000, updated: 4500),
+            title: "Chronological Chat",
+            location: location
+        )
+        let sessionInfoBytes = try ClientCodec.encode(SessionEnvelope(data: sessionInfo))
+        let sessionListBytes = try ClientCodec.encode(SessionsResponse(data: [
+            SessionSchema.Info(
+                id: try #require(SessionID(rawValue: "ses_new")),
+                projectID: ProjectID(rawValue: "global"),
+                cost: 0,
+                tokens: .zero,
+                time: .init(created: 5000, updated: 9000),
+                title: "Newest Session",
+                location: location
+            ),
+            SessionSchema.Info(
+                id: try #require(SessionID(rawValue: "ses_old")),
+                projectID: ProjectID(rawValue: "global"),
+                cost: 0,
+                tokens: .zero,
+                time: .init(created: 1000, updated: 2000),
+                title: "Older Session",
+                location: location
+            ),
+        ]))
+
+        let transport = MockHTTPTransport { req in
+            if req.method == "GET" && req.url.contains("/api/session/ses_chron_1/message") {
+                capturedMessageURL.withLock { $0 = req.url }
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]),
+                    body: messagesBytes
+                )
+            }
+            if req.method == "GET" && req.url.contains("/api/session/active") {
+                return TUILiveOAuthFixtures.jsonResponse(200, json: #"{"data":{}}"#)
+            }
+            if req.method == "GET" && req.url.contains("/api/session/ses_chron_1") {
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]),
+                    body: sessionInfoBytes
+                )
+            }
+            if req.method == "GET" && req.url.contains("/api/session") {
+                capturedSessionListURL.withLock { $0 = req.url }
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]),
+                    body: sessionListBytes
+                )
+            }
+            return TUILiveOAuthFixtures.jsonResponse(200, json: "{}")
+        }
+
+        var state = TUILiveOAuthFixtures.makeBaseState()
+        state.route = .session(TUIContext.SessionRoute(sessionID: "ses_chron_1"))
+        state.activeSessionID = "ses_chron_1"
+        state.sessionStatus = .running // simulate stuck running spinner before loadMessages
+        state.models = [
+            TUIModelItem(
+                id: "claude-sonnet-4-5",
+                providerID: "anthropic",
+                name: "Claude Sonnet 4.5",
+                providerName: "Anthropic",
+                variants: [],
+                contextLimit: 200_000
+            )
+        ]
+        let harness = TUILiveOAuthHarness(state: state, transport: transport)
+        defer { harness.destroy() }
+
+        await harness.controller.loadMessages(sessionID: "ses_chron_1")
+        await harness.controller.refreshSessions()
+
+        let msgURL = try #require(capturedMessageURL.withLock { $0 })
+        #expect(msgURL.contains("order=desc"))
+
+        let listURL = try #require(capturedSessionListURL.withLock { $0 })
+        #expect(listURL.contains("order=desc"))
+        #expect(listURL.contains("parentID=null"))
+        #expect(listURL.contains("archived=false"))
+
+        let snap = harness.store.snapshot()
+        // Reconciled from stuck .running to .idle via /api/session/active
+        #expect(snap.sessionStatus == .idle)
+        // Strict chronological order: oldest user -> first assistant -> second user -> second assistant
+        #expect(snap.messages.map(\.itemID) == ["msg_01", "msg_02", "msg_03", "msg_04"])
+        // Latest tokens taken from newest assistant (8400), NOT oldest (1200)
+        #expect(snap.contextTokens == 8_400)
+        // Friendly model display name resolved from catalog + multi-line diff/shell previews preserved
+        if case .assistant(_, let agent, let modelLabel, let parts, let completed, _) = snap.messages[1] {
+            #expect(agent == "Build")
+            #expect(modelLabel == "Claude Sonnet 4.5")
+            #expect(completed == true)
+            if case .tool(_, "edit", .completed, "Sources/App.swift", let preview, nil) = parts[0] {
+                #expect(preview?.contains("-let a = 1") == true)
+                #expect(preview?.contains("+let b = 3") == true)
+            } else {
+                Issue.record("Expected completed edit tool with diff preview")
+            }
+            if case .tool(_, "shell", .completed, "swift test", let preview, nil) = parts[1] {
+                #expect(preview?.contains("line4") == true)
+            } else {
+                Issue.record("Expected completed shell tool with multi-line preview")
+            }
+        } else {
+            Issue.record("Expected assistant item at index 1")
+        }
+
+        // Session list dialog sorts pinned first, then newest updatedMs descending
+        var listState = snap
+        listState.activeDialog = .sessionList
+        listState.sessions = [
+            TUISessionItem(id: "ses_old", title: "Older Session", directory: nil, updatedMs: 2000),
+            TUISessionItem(id: "ses_new", title: "Newest Session", directory: nil, updatedMs: 9000),
+            TUISessionItem(id: "ses_pinned", title: "Pinned Older", directory: nil, updatedMs: 1000),
+        ]
+        listState.preferences.pinnedSessionIDs = ["ses_pinned"]
+        let dialogIDs = listState.dialogRows().map(\.id)
+        #expect(dialogIDs == ["ses_pinned", "ses_new", "ses_old"])
+
+        // SSE lifecycle events update sessionStatus cleanly
+        var sseState = snap
+        sseState.activeSessionID = "ses_chron_1"
+        _ = TUIInteractiveClient.applyServerEvent(
+            OpenCodeEvent(id: "e1", type: "session.shell.started", data: .object(["sessionID": .string("ses_chron_1")])),
+            to: &sseState
+        )
+        #expect(sseState.sessionStatus == .running)
+        _ = TUIInteractiveClient.applyServerEvent(
+            OpenCodeEvent(id: "e2", type: "session.shell.ended", data: .object(["sessionID": .string("ses_chron_1")])),
+            to: &sseState
+        )
+        #expect(sseState.sessionStatus == .idle)
+        _ = TUIInteractiveClient.applyServerEvent(
+            OpenCodeEvent(id: "e3", type: "session.retry.scheduled", data: .object(["sessionID": .string("ses_chron_1"), "message": .string("Rate limited")])),
+            to: &sseState
+        )
+        #expect(sseState.sessionStatus == .retry("Rate limited"))
+        _ = TUIInteractiveClient.applyServerEvent(
+            OpenCodeEvent(id: "e4", type: "session.step.failed", data: .object(["sessionID": .string("ses_chron_1"), "error": .object(["message": .string("Provider timeout")])])),
+            to: &sseState
+        )
+        #expect(sseState.sessionStatus == .idle)
+    }
 }
