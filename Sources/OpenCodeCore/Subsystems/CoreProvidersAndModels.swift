@@ -332,15 +332,60 @@ public enum CoreProvider {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Credential"
             private let db: any SQLiteDatabase
+            private let bus: (any CoreBus.Interface)?
             private let refreshLocks = CoreSubsystems.Effect.KeyedMutex<ID>()
 
-            public init(database: any SQLiteDatabase) throws {
+            private static let updatedDef = EventSchema.EphemeralDefinition<CredentialSchema.Event.UpdatedPayload>(
+                type: CredentialSchema.Event.updated.type
+            ).descriptor
+
+            private static let switchedDef = EventSchema.EphemeralDefinition<CredentialSchema.Event.SwitchedPayload>(
+                type: CredentialSchema.Event.switched.type
+            ).descriptor
+
+            public init(
+                database: any SQLiteDatabase,
+                bus: (any CoreBus.Interface)? = nil
+            ) throws {
                 self.db = database
+                self.bus = bus
                 try database.executeScript(CredentialSQL.CredentialTable.createTableSQL)
             }
 
-            public static func inMemory() throws -> Service {
-                try Service(database: SQLiteDatabaseFactory.open(path: ":memory:"))
+            public static func inMemory(bus: (any CoreBus.Interface)? = nil) throws -> Service {
+                try Service(database: SQLiteDatabaseFactory.open(path: ":memory:"), bus: bus)
+            }
+
+            private func publishUpdated(integrationID: IntegrationID, credentialID: ID) async {
+                guard let bus else { return }
+                let payload = CredentialSchema.Event.UpdatedPayload(
+                    integrationID: integrationID,
+                    credentialID: credentialID
+                )
+                guard let data = try? JSONEncoder().encode(payload),
+                      let json = try? JSONDecoder().decode(JSONValue.self, from: data)
+                else { return }
+                _ = try? await bus.publishRaw(
+                    definition: Self.updatedDef,
+                    data: json,
+                    options: CoreBus.PublishOptions(global: true)
+                )
+            }
+
+            private func publishSwitched(integrationID: IntegrationID, credentialID: ID?) async {
+                guard let bus else { return }
+                let payload = CredentialSchema.Event.SwitchedPayload(
+                    integrationID: integrationID,
+                    credentialID: credentialID
+                )
+                guard let data = try? JSONEncoder().encode(payload),
+                      let json = try? JSONDecoder().decode(JSONValue.self, from: data)
+                else { return }
+                _ = try? await bus.publishRaw(
+                    definition: Self.switchedDef,
+                    data: json,
+                    options: CoreBus.PublishOptions(global: true)
+                )
             }
 
             /// Decodes a stored SQLite credential `value` JSON blob cleanly, supporting both integer
@@ -504,7 +549,7 @@ public enum CoreProvider {
                 )
                 let now = Flock.currentEpochMs()
                 let encoded = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-                try db.transaction {
+                let activated: Bool = try db.transaction {
                     let existing = try db.queryOne(
                         "SELECT id, active FROM credential WHERE integration_id = ? ORDER BY active DESC, time_created DESC, id DESC",
                         parameters: [.text(integrationID.rawValue)]
@@ -514,6 +559,12 @@ public enum CoreProvider {
                         _ = try db.execute(
                             "UPDATE credential SET active = 0 WHERE integration_id = ?",
                             parameters: [.text(integrationID.rawValue)]
+                        )
+                    } else if let existing, existing.int64("active") == 0, let existingID = existing.string("id") {
+                        // Legacy rows have no active flag and the newest one is selected, so pin it before inserting a newer row.
+                        _ = try db.execute(
+                            "UPDATE credential SET active = 1 WHERE id = ?",
+                            parameters: [.text(existingID)]
                         )
                     }
                     _ = try db.execute(
@@ -531,57 +582,113 @@ public enum CoreProvider {
                             .integer(now),
                         ]
                     )
+                    return shouldActivate
+                }
+                await publishUpdated(integrationID: info.integrationID, credentialID: info.id)
+                if activated {
+                    await publishSwitched(integrationID: info.integrationID, credentialID: info.id)
                 }
                 return info
             }
 
             public func activate(_ id: ID) async throws {
-                try db.transaction {
+                let switchedIntegration: IntegrationID? = try db.transaction {
                     guard let row = try db.queryOne("SELECT integration_id FROM credential WHERE id = ?", parameters: [.text(id.rawValue)]),
-                          let integrationID = row.string("integration_id")
-                    else { return }
+                          let integrationID = row.string("integration_id"),
+                          !integrationID.isEmpty
+                    else { return nil }
+                    let current = try db.queryOne(
+                        "SELECT id FROM credential WHERE integration_id = ? ORDER BY active DESC, time_created DESC, id DESC",
+                        parameters: [.text(integrationID)]
+                    )
+                    if current?.string("id") == id.rawValue {
+                        return nil
+                    }
                     _ = try db.execute("UPDATE credential SET active = 0 WHERE integration_id = ?", parameters: [.text(integrationID)])
                     _ = try db.execute("UPDATE credential SET active = 1 WHERE id = ?", parameters: [.text(id.rawValue)])
+                    return IntegrationID(rawValue: integrationID)
+                }
+                if let switchedIntegration {
+                    await publishSwitched(integrationID: switchedIntegration, credentialID: id)
                 }
             }
 
             public func update(_ id: ID, label: String?, value: Value?) async throws {
                 guard label != nil || value != nil else { return }
+                guard let existing = try db.queryOne(
+                    "SELECT integration_id, label FROM credential WHERE id = ?",
+                    parameters: [.text(id.rawValue)]
+                ),
+                      let integrationRaw = existing.string("integration_id"),
+                      !integrationRaw.isEmpty
+                else { return }
+                let existingLabel = existing.string("label")
+                if label == existingLabel && value == nil { return }
                 let now = Flock.currentEpochMs()
+                let updatedRows: Int
                 if let label, let value {
                     let encoded = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-                    _ = try db.execute(
+                    updatedRows = try db.execute(
                         "UPDATE credential SET label = ?, value = ?, time_updated = ? WHERE id = ?",
                         parameters: [.text(label), .text(encoded), .integer(now), .text(id.rawValue)]
-                    )
+                    ).rowsAffected
                 } else if let label {
-                    _ = try db.execute(
+                    updatedRows = try db.execute(
                         "UPDATE credential SET label = ?, time_updated = ? WHERE id = ?",
                         parameters: [.text(label), .integer(now), .text(id.rawValue)]
-                    )
+                    ).rowsAffected
                 } else if let value {
                     let encoded = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-                    _ = try db.execute(
+                    updatedRows = try db.execute(
                         "UPDATE credential SET value = ?, time_updated = ? WHERE id = ?",
                         parameters: [.text(encoded), .integer(now), .text(id.rawValue)]
-                    )
+                    ).rowsAffected
+                } else {
+                    updatedRows = 0
+                }
+                if updatedRows > 0, let label, label != existingLabel {
+                    await publishUpdated(integrationID: IntegrationID(rawValue: integrationRaw), credentialID: id)
                 }
             }
 
             public func remove(_ id: ID) async throws {
-                try db.transaction {
-                    guard let row = try db.queryOne("SELECT integration_id, active FROM credential WHERE id = ?", parameters: [.text(id.rawValue)]) else {
-                        return
+                let outcome: (integrationID: IntegrationID, switched: Bool, replacementID: ID?)? = try db.transaction {
+                    guard let row = try db.queryOne("SELECT integration_id FROM credential WHERE id = ?", parameters: [.text(id.rawValue)]) else {
+                        return nil
+                    }
+                    let integrationRaw = row.string("integration_id")
+                    let currentActiveID: String?
+                    if let integrationRaw, !integrationRaw.isEmpty {
+                        currentActiveID = try db.queryOne(
+                            "SELECT id FROM credential WHERE integration_id = ? ORDER BY active DESC, time_created DESC, id DESC",
+                            parameters: [.text(integrationRaw)]
+                        )?.string("id")
+                    } else {
+                        currentActiveID = nil
                     }
                     _ = try db.execute("DELETE FROM credential WHERE id = ?", parameters: [.text(id.rawValue)])
-                    if let integrationID = row.string("integration_id"), row.int64("active") == 1 {
-                        if let replacement = try db.queryOne(
-                            "SELECT id FROM credential WHERE integration_id = ? ORDER BY time_created DESC, id DESC",
-                            parameters: [.text(integrationID)]
-                        ), let repID = replacement.string("id") {
-                            _ = try db.execute("UPDATE credential SET active = 1 WHERE id = ?", parameters: [.text(repID)])
-                        }
+                    guard let integrationRaw, !integrationRaw.isEmpty else { return nil }
+                    let integrationID = IntegrationID(rawValue: integrationRaw)
+                    guard currentActiveID == id.rawValue else {
+                        return (integrationID, false, nil)
                     }
+                    let replacementID: ID?
+                    if let replacement = try db.queryOne(
+                        "SELECT id FROM credential WHERE integration_id = ? ORDER BY time_created DESC, id DESC",
+                        parameters: [.text(integrationRaw)]
+                    ), let repID = replacement.string("id") {
+                        _ = try db.execute("UPDATE credential SET active = 0 WHERE integration_id = ?", parameters: [.text(integrationRaw)])
+                        _ = try db.execute("UPDATE credential SET active = 1 WHERE id = ?", parameters: [.text(repID)])
+                        replacementID = ID(rawValue: repID)
+                    } else {
+                        replacementID = nil
+                    }
+                    return (integrationID, true, replacementID)
+                }
+                guard let outcome else { return }
+                await publishUpdated(integrationID: outcome.integrationID, credentialID: id)
+                if outcome.switched {
+                    await publishSwitched(integrationID: outcome.integrationID, credentialID: outcome.replacementID)
                 }
             }
         }
@@ -589,10 +696,14 @@ public enum CoreProvider {
         // parity: core/src/credential.ts#node [status=implemented hash=6a5f699ae67a]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
-            LayerNode.ExecutableLayer { _, _ in
-                LayerNode.Output([Service.serviceKey: try Service.inMemory()])
+            LayerNode.ExecutableLayer { deps, _ in
+                let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+                if let dbService = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self) {
+                    return LayerNode.Output([Service.serviceKey: try Service(database: dbService.db, bus: bus)])
+                }
+                return LayerNode.Output([Service.serviceKey: try Service.inMemory(bus: bus)])
             },
-            []
+            [CoreDatabaseStore.node, CoreBus.node]
         )
     }
 

@@ -1308,6 +1308,77 @@ public enum CoreMCP {
             ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error>
         }
 
+        /// Bus-backed `CoreMCP.Client.Events` producer bridging `McpEventSchema.ExperimentalEvent`
+        /// (`experimental.mcp.event`) published on `CoreBus.Service` into MCP push event streams.
+        public final class BusEvents: Events, Sendable {
+            public let server: String
+            public let types: [EventType]
+            public let bus: CoreBus.Service
+            public let location: OpenCodeLocation?
+            public let initialCursor: String?
+
+            public init(
+                server: String,
+                types: [EventType],
+                bus: CoreBus.Service,
+                location: OpenCodeLocation? = nil,
+                initialCursor: String? = "0"
+            ) {
+                self.server = server
+                self.types = types
+                self.bus = bus
+                self.location = location
+                self.initialCursor = initialCursor
+            }
+
+            public func list() async throws -> [EventType] {
+                types
+            }
+
+            public func stream(
+                name: String,
+                arguments: [String: JSONValue]?,
+                cursor: String?
+            ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error> {
+                _ = arguments
+                // Subscribe synchronously BEFORE returning so no bus event published right after open is missed.
+                let busStream = bus.subscribe(
+                    types: Set([McpEventSchema.ExperimentalEvent.type]),
+                    location: location
+                )
+                let serverName = self.server
+                let initial = cursor ?? self.initialCursor
+                return AsyncThrowingStream { continuation in
+                    let task = Task {
+                        continuation.yield(.active(cursor: initial, truncated: false))
+                        for await payload in busStream {
+                            if Task.isCancelled { break }
+                            guard let decoded = try? CoreBusJSON.decodeFromJSONValue(
+                                payload.data,
+                                as: McpEventSchema.ExperimentalEventData.self
+                            ) else { continue }
+                            guard decoded.server == serverName, decoded.name == name else { continue }
+                            if decoded.truncated == true {
+                                continuation.yield(.active(cursor: decoded.cursor, truncated: true))
+                                continue
+                            }
+                            continuation.yield(.event(
+                                eventId: decoded.eventId,
+                                name: decoded.name,
+                                timestamp: decoded.timestamp,
+                                data: decoded.data,
+                                cursor: decoded.cursor
+                            ))
+                        }
+                        continuation.finish()
+                    }
+                    continuation.onTermination = { _ in
+                        task.cancel()
+                    }
+                }
+            }
+        }
+
         // parity: core/src/mcp/client.ts#Connection [status=implemented hash=c9459625f817]
         public protocol Connection: Sendable {
             var modern: Bool { get }
@@ -2284,13 +2355,16 @@ public enum CoreMCP {
             private struct RuntimeState: Sendable {
                 var entries: [ServerName: RuntimeEntry] = [:]
                 var attached: [ServerName: [Client.LiveConnection]] = [:]
+                var customEvents: [ServerName: any Client.Events] = [:]
                 var subs: [String: Subscription] = [:]
+                var subTasks: [String: Task<Void, Never>] = [:]
             }
 
             private let options: Options
             private let directory: String
             private let http: (any HTTPTransport)?
             private let spawner: (any ProcessSpawner)?
+            private let bus: CoreBus.Service?
             private let state: CoreState.Store<Data, Editor>
             private let runtime = Mutex(RuntimeState())
 
@@ -2298,18 +2372,32 @@ public enum CoreMCP {
                 options: Options = Options(),
                 directory: String = "/",
                 http: (any HTTPTransport)? = nil,
-                spawner: (any ProcessSpawner)? = nil
+                spawner: (any ProcessSpawner)? = nil,
+                bus: CoreBus.Service? = nil
             ) {
                 self.options = options
                 self.directory = directory
                 self.http = http
                 self.spawner = spawner
+                self.bus = bus
                 self.state = CoreState.create(CoreState.Options(
                     name: "mcp",
                     initial: { Data() },
                     makeEditor: { Editor(data: $0) },
                     commitEditor: { $0.data }
                 ))
+            }
+
+            /// Registers or clears a direct `Client.Events` producer for `server` (used by local adapters and tests).
+            public func registerEvents(server: String, events: (any Client.Events)?) {
+                let key = ServerName(rawValue: server)
+                runtime.withLock { r in
+                    if let events {
+                        r.customEvents[key] = events
+                    } else {
+                        r.customEvents.removeValue(forKey: key)
+                    }
+                }
             }
 
             @discardableResult
@@ -2527,10 +2615,18 @@ public enum CoreMCP {
 
             public func events(server: String) async throws -> (any Client.Events)? {
                 let key = ServerName(rawValue: server)
-                guard let entry = runtime.withLock({ $0.entries[key] }) else {
+                return try runtime.withLock { r in
+                    if let custom = r.customEvents[key] {
+                        return custom
+                    }
+                    if let entry = r.entries[key] {
+                        return entry.connection.client?.events
+                    }
+                    if let attachedConn = r.attached[key]?.last {
+                        return attachedConn.events
+                    }
                     throw NotFoundError(server: key)
                 }
-                return entry.connection.client?.events
             }
 
             public func subscribe(
@@ -2540,7 +2636,13 @@ public enum CoreMCP {
                 cursor: String? = nil
             ) async throws -> Subscription {
                 let key = ServerName(rawValue: server)
-                guard runtime.withLock({ $0.entries[key] != nil }) else {
+                let (exists, eventsProvider): (Bool, (any Client.Events)?) = runtime.withLock { r in
+                    if let custom = r.customEvents[key] { return (true, custom) }
+                    if let entry = r.entries[key] { return (true, entry.connection.client?.events) }
+                    if let attachedConn = r.attached[key]?.last { return (true, attachedConn.events) }
+                    return (false, nil)
+                }
+                guard exists else {
                     throw NotFoundError(server: key)
                 }
                 let subID = Hash.sha256(CoreSubsystems.Util.canonicalJson(.array([
@@ -2548,16 +2650,89 @@ public enum CoreMCP {
                     .string(name),
                     arguments.map(JSONValue.object) ?? .null,
                 ])))
-                return runtime.withLock { r in
-                    if let existing = r.subs[subID] { return existing }
-                    let sub = Subscription(id: subID, server: key, name: name, arguments: arguments, status: .pending, cursor: cursor)
-                    r.subs[subID] = sub
-                    return sub
+                let (sub, isNew): (Subscription, Bool) = runtime.withLock { r in
+                    if let existing = r.subs[subID] { return (existing, false) }
+                    let created = Subscription(id: subID, server: key, name: name, arguments: arguments, status: .pending, cursor: cursor)
+                    r.subs[subID] = created
+                    return (created, true)
                 }
+                if isNew, let eventsProvider, let bus {
+                    let loc = OpenCodeLocation(directory: directory)
+                    let task = Task { [weak self] in
+                        guard let stream = try? await eventsProvider.stream(name: name, arguments: arguments, cursor: cursor) else { return }
+                        var gap = false
+                        do {
+                            for try await msg in stream {
+                                if Task.isCancelled { break }
+                                switch msg {
+                                case .error:
+                                    continue
+                                case .heartbeat(let cur):
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
+                                        }
+                                    }
+                                case .active(let cur, let truncated):
+                                    if cur != nil && truncated { gap = true }
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .active, cursor: cur)
+                                        }
+                                    }
+                                    await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                                case .event(let eventId, let eventName, let ts, let data, let cur):
+                                    await bus.emit(
+                                        McpEventSchema.ExperimentalEvent,
+                                        data: McpEventSchema.ExperimentalEventData(
+                                            id: subID,
+                                            server: server,
+                                            name: eventName,
+                                            eventId: eventId,
+                                            timestamp: ts,
+                                            data: data,
+                                            cursor: cur,
+                                            truncated: gap ? true : nil
+                                        ),
+                                        options: CoreBus.PublishOptions(location: loc)
+                                    )
+                                    gap = false
+                                    self?.runtime.withLock { r in
+                                        if let s = r.subs[subID] {
+                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
+                                        }
+                                    }
+                                }
+                            }
+                        } catch let err as Client.EventStreamRejectedError {
+                            self?.runtime.withLock { r in
+                                if let s = r.subs[subID] {
+                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .rejected(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
+                                }
+                            }
+                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                        } catch let err as Client.EventStreamTerminatedError {
+                            self?.runtime.withLock { r in
+                                if let s = r.subs[subID] {
+                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .terminated(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
+                                }
+                            }
+                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                        } catch {
+                            // Stream disconnected/closed
+                        }
+                    }
+                    runtime.withLock { r in r.subTasks[subID] = task }
+                }
+                return sub
             }
 
             public func unsubscribe(id: String) async {
-                runtime.withLock { _ = $0.subs.removeValue(forKey: id) }
+                let task = runtime.withLock { r -> Task<Void, Never>? in
+                    _ = r.subs.removeValue(forKey: id)
+                    return r.subTasks.removeValue(forKey: id)
+                }
+                task?.cancel()
             }
 
             public func subscriptions() async -> [Subscription] {
@@ -3698,10 +3873,36 @@ public enum CoreIntegration {
             return result
         }
 
+        public static let requestTimeout: Duration = .seconds(15)
+
+        private static func sendWithTimeout(
+            _ request: HTTPRequest,
+            transport: any HTTPTransport,
+            timeout: Duration = requestTimeout
+        ) async throws -> HTTPResponse {
+            try await withThrowingTaskGroup(of: HTTPResponse.self) { group in
+                group.addTask {
+                    try await transport.send(request)
+                }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    throw PlatformError.ioFailure("Timed out loading \(request.url)")
+                }
+                guard let first = try await group.next() else {
+                    throw PlatformError.ioFailure("No response from \(request.url)")
+                }
+                group.cancelAll()
+                return first
+            }
+        }
+
         // parity: core/src/wellknown.ts#inspect [status=implemented hash=7cbf623af36e]
         public static func inspect(origin: String, transport: any HTTPTransport) async throws -> Manifest {
             let url = "\(trimTrailingSlashes(origin))/.well-known/opencode"
-            let resp = try await transport.send(HTTPRequest(method: "GET", url: url, headers: ["accept": "application/json"]))
+            let resp = try await sendWithTimeout(
+                HTTPRequest(method: "GET", url: url, headers: ["accept": "application/json"]),
+                transport: transport
+            )
             guard (200..<300).contains(resp.head.statusCode) else {
                 throw PlatformError.ioFailure("Failed to load wellknown manifest from \(url) (HTTP \(resp.head.statusCode))")
             }
@@ -3736,7 +3937,10 @@ public enum CoreIntegration {
             for (k, v) in remote.headers ?? [:] {
                 headers[k] = substituteEnv(v, variables: variables, env: environment)
             }
-            let resp = try await transport.send(HTTPRequest(method: "GET", url: url, headers: headers))
+            let resp = try await sendWithTimeout(
+                HTTPRequest(method: "GET", url: url, headers: headers),
+                transport: transport
+            )
             guard (200..<300).contains(resp.head.statusCode) else {
                 throw PlatformError.ioFailure("Failed to load wellknown remote config from \(url) (HTTP \(resp.head.statusCode))")
             }
@@ -3765,20 +3969,69 @@ public enum CoreIntegration {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/WellKnown"
             private static let sourcesKey = "wellknown:sources"
+            private static let updatedDef = EventSchema.EphemeralDefinition<JSONValue>(
+                type: WellKnown.Event.updated.type
+            ).descriptor
+
+            private struct CacheState: Equatable, Sendable {
+                var byOrigin: [String: Entry] = [:]
+                var order: [String] = []
+            }
+
+            private actor SerialGate {
+                private var locked = false
+                private var waiters: [CheckedContinuation<Void, Never>] = []
+
+                func acquire() async {
+                    if !locked {
+                        locked = true
+                        return
+                    }
+                    await withCheckedContinuation { continuation in
+                        waiters.append(continuation)
+                    }
+                }
+
+                func release() {
+                    if !waiters.isEmpty {
+                        waiters.removeFirst().resume()
+                    } else {
+                        locked = false
+                    }
+                }
+            }
 
             private let transport: any HTTPTransport
             private let kv: any CoreKV.Interface
+            private let bus: (any CoreBus.Interface)?
             private let environment: any EnvironmentProviding
-            private let cache = Mutex<[String: Entry]>([:])
+            private let cache = Mutex(CacheState())
+            private let lock = SerialGate()
+
+            internal var hasBus: Bool { bus != nil }
 
             public init(
                 transport: any HTTPTransport,
                 kv: any CoreKV.Interface,
+                bus: (any CoreBus.Interface)? = nil,
                 environment: any EnvironmentProviding = SystemEnvironment.shared
             ) {
                 self.transport = transport
                 self.kv = kv
+                self.bus = bus
                 self.environment = environment
+            }
+
+            private static func manifestKey(_ origin: String) -> String { "wellknown:manifest:\(origin)" }
+            private static func configKey(_ origin: String) -> String { "wellknown:config:\(origin)" }
+
+            private func publishUpdated() async {
+                guard let bus else { return }
+                _ = try? await bus.publishRaw(
+                    definition: Self.updatedDef,
+                    data: .object([:]),
+                    options: CoreBus.PublishOptions(global: true)
+                )
             }
 
             private func readOrigins() async throws -> [String] {
@@ -3786,79 +4039,163 @@ public enum CoreIntegration {
                 return arr.compactMap { if case .string(let s) = $0 { return s } else { return nil } }
             }
 
+            private func decodeCachedManifest(_ value: JSONValue?) -> Manifest? {
+                guard case .object = value,
+                      let data = try? JSONEncoder().encode(value),
+                      let manifest = try? JSONDecoder().decode(Manifest.self, from: data)
+                else { return nil }
+                return manifest
+            }
+
+            private func encodeManifest(_ manifest: Manifest) throws -> JSONValue {
+                let data = try JSONEncoder().encode(manifest)
+                return try JSONDecoder().decode(JSONValue.self, from: data)
+            }
+
+            private func loadEntry(origin: String) async throws -> Entry {
+                do {
+                    let manifest = try await WellKnown.inspect(origin: origin, transport: transport)
+                    if let encoded = try? encodeManifest(manifest) {
+                        try await kv.set(Self.manifestKey(origin), value: encoded)
+                    }
+                    return Entry(origin: origin, integrationID: IntegrationID(rawValue: origin), manifest: manifest)
+                } catch {
+                    // An unreachable source keeps its last manifest so its remote config still loads after a restart.
+                    if let cached = try? await kv.get(Self.manifestKey(origin)),
+                       let manifest = decodeCachedManifest(cached)
+                    {
+                        return Entry(origin: origin, integrationID: IntegrationID(rawValue: origin), manifest: manifest)
+                    }
+                    throw error
+                }
+            }
+
+            private func loadSource(origin: String) async -> Entry? {
+                try? await loadEntry(origin: origin)
+            }
+
             public func entries() async throws -> [Entry] {
                 let origins = try await readOrigins()
+                let current = cache.withLock { $0.byOrigin }
+                var next = CacheState()
                 var out: [Entry] = []
                 for origin in origins {
-                    if let cached = cache.withLock({ $0[origin] }) {
-                        out.append(cached)
-                        continue
+                    let entry: Entry?
+                    if let cached = current[origin] {
+                        entry = cached
+                    } else {
+                        entry = await loadSource(origin: origin)
                     }
-                    if let manifest = try? await WellKnown.inspect(origin: origin, transport: transport) {
-                        let entry = Entry(origin: origin, integrationID: IntegrationID(rawValue: origin), manifest: manifest)
-                        cache.withLock { $0[origin] = entry }
+                    if let entry {
+                        if next.byOrigin[origin] == nil {
+                            next.order.append(origin)
+                        }
+                        next.byOrigin[origin] = entry
                         out.append(entry)
                     }
                 }
+                cache.withLock { $0 = next }
                 return out
             }
 
             public func snapshot() -> [Entry] {
-                cache.withLock { Array($0.values) }
+                cache.withLock { s in
+                    s.order.compactMap { s.byOrigin[$0] }
+                }
             }
 
             public func refresh() async throws -> Bool {
-                let origins = try await readOrigins()
-                guard !origins.isEmpty else { return false }
-                var next: [String: Entry] = [:]
-                for origin in origins {
-                    if let manifest = try? await WellKnown.inspect(origin: origin, transport: transport) {
-                        next[origin] = Entry(origin: origin, integrationID: IntegrationID(rawValue: origin), manifest: manifest)
+                await lock.acquire()
+                do {
+                    let origins = try await readOrigins()
+                    guard !origins.isEmpty else {
+                        await lock.release()
+                        return false
                     }
-                }
-                return cache.withLock { cur in
-                    if cur == next { return false }
-                    cur = next
-                    return true
+                    var next = CacheState()
+                    for origin in origins {
+                        if let entry = await loadSource(origin: origin) {
+                            if next.byOrigin[origin] == nil {
+                                next.order.append(origin)
+                            }
+                            next.byOrigin[origin] = entry
+                        }
+                    }
+                    let changed: Bool = cache.withLock { cur in
+                        if cur == next { return false }
+                        cur = next
+                        return true
+                    }
+                    if changed {
+                        await publishUpdated()
+                    }
+                    await lock.release()
+                    return changed
+                } catch {
+                    await lock.release()
+                    throw error
                 }
             }
 
             public func add(origin: String) async throws -> Entry {
-                let norm = WellKnown.trimTrailingSlashes(origin)
-                let manifest = try await WellKnown.inspect(origin: norm, transport: transport)
-                guard manifest.auth != nil else {
-                    throw PlatformError.ioFailure("No authentication method found at \(norm)")
+                await lock.acquire()
+                do {
+                    let norm = WellKnown.trimTrailingSlashes(origin)
+                    let entry = try await loadEntry(origin: norm)
+                    guard entry.manifest.auth != nil else {
+                        throw PlatformError.ioFailure("No authentication method found at \(norm)")
+                    }
+                    var origins = try await readOrigins()
+                    if !origins.contains(norm) { origins.append(norm) }
+                    try await kv.set(Self.sourcesKey, value: .array(origins.map(JSONValue.string)))
+                    cache.withLock { s in
+                        if s.byOrigin[norm] == nil {
+                            s.order.append(norm)
+                        }
+                        s.byOrigin[norm] = entry
+                    }
+                    await publishUpdated()
+                    await lock.release()
+                    return entry
+                } catch {
+                    await lock.release()
+                    throw error
                 }
-                let entry = Entry(origin: norm, integrationID: IntegrationID(rawValue: norm), manifest: manifest)
-                var origins = try await readOrigins()
-                if !origins.contains(norm) { origins.append(norm) }
-                try await kv.set(Self.sourcesKey, value: .array(origins.map(JSONValue.string)))
-                cache.withLock { $0[norm] = entry }
-                return entry
             }
 
             public func remove(origin: String) async throws {
-                let norm = WellKnown.trimTrailingSlashes(origin)
-                let origins = try await readOrigins().filter { $0 != norm }
-                try await kv.set(Self.sourcesKey, value: .array(origins.map(JSONValue.string)))
-                try await kv.remove("wellknown:manifest:\(norm)")
-                try await kv.remove("wellknown:config:\(norm)")
-                cache.withLock { _ = $0.removeValue(forKey: norm) }
+                await lock.acquire()
+                do {
+                    let norm = WellKnown.trimTrailingSlashes(origin)
+                    let origins = try await readOrigins().filter { $0 != norm }
+                    try await kv.set(Self.sourcesKey, value: .array(origins.map(JSONValue.string)))
+                    try await kv.remove(Self.manifestKey(norm))
+                    try await kv.remove(Self.configKey(norm))
+                    cache.withLock { s in
+                        _ = s.byOrigin.removeValue(forKey: norm)
+                        s.order.removeAll { $0 == norm }
+                    }
+                    await publishUpdated()
+                    await lock.release()
+                } catch {
+                    await lock.release()
+                    throw error
+                }
             }
 
             public func resolve(entry: Entry, variables: [String: String]) async throws -> [Config] {
                 let configs = try await WellKnown.resolveEntry(entry, variables: variables, transport: transport, environment: environment)
-                try await kv.set("wellknown:config:\(entry.origin)", value: .array(configs.map(JSONValue.object)))
+                try await kv.set(Self.configKey(entry.origin), value: .array(configs.map(JSONValue.object)))
                 return configs
             }
 
             public func cached(origin: String) async throws -> [Config] {
-                guard case .array(let arr) = try await kv.get("wellknown:config:\(origin)") else { return [] }
+                guard case .array(let arr) = try await kv.get(Self.configKey(origin)) else { return [] }
                 return arr.compactMap { if case .object(let o) = $0 { return o } else { return nil } }
             }
 
             public func clearCached(origin: String) async throws {
-                try await kv.remove("wellknown:config:\(origin)")
+                try await kv.remove(Self.configKey(origin))
             }
         }
 
@@ -3871,9 +4208,10 @@ public enum CoreIntegration {
                         throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "WellKnown")
                     }
                 let kv = try deps.get(CoreKV.Service.serviceKey, as: CoreKV.Service.self) ?? CoreKV.Service.inMemory()
-                return LayerNode.Output([Service.serviceKey: Service(transport: http, kv: kv)])
+                let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+                return LayerNode.Output([Service.serviceKey: Service(transport: http, kv: kv, bus: bus)])
             },
-            [LayerNodePlatform.httpClient, CoreKV.node]
+            [LayerNodePlatform.httpClient, CoreKV.node, CoreBus.node]
         )
 
         public enum WellKnownPlugin {

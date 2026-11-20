@@ -1433,6 +1433,8 @@ public enum PluginEffect {
         public let remove: @Sendable (SessionID) async throws -> Void
         public let prompt: @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void
         public let synthetic: @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void
+        /// Full synthetic admission accepting explicit `id` and `delivery` (used by `OpencodeWatches` for deterministic replay dedup).
+        public let syntheticRequest: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)?
         public let compact: @Sendable (SessionID) async throws -> Void
         public let interrupt: @Sendable (SessionID, Bool?) async throws -> Bool
 
@@ -1450,6 +1452,7 @@ public enum PluginEffect {
             remove: @escaping @Sendable (SessionID) async throws -> Void = { _ in },
             prompt: @escaping @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void = { _, _, _ in },
             synthetic: @escaping @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void = { _, _, _, _, _ in },
+            syntheticRequest: (@Sendable (CoreSessionSynthetic.Request) async throws -> Void)? = nil,
             compact: @escaping @Sendable (SessionID) async throws -> Void = { _ in },
             interrupt: @escaping @Sendable (SessionID, Bool?) async throws -> Bool = { _, _ in false }
         ) {
@@ -1461,6 +1464,7 @@ public enum PluginEffect {
             self.remove = remove
             self.prompt = prompt
             self.synthetic = synthetic
+            self.syntheticRequest = syntheticRequest
             self.compact = compact
             self.interrupt = interrupt
         }

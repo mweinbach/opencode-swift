@@ -1264,14 +1264,129 @@ public enum CoreConfigPlugin {
     }
 
     public enum LocationWatcher {
-        // parity: core/src/config/plugin/location-watcher.ts#Plugin [status=adapted hash=85f37e173177]
+        // parity: core/src/config/plugin/location-watcher.ts#Plugin [status=implemented hash=85f37e173177]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.location-watcher")
+
+        /// Live observer keeping `LocationWatcherPolicy` synchronized with config `watcher.ignore` entries
+        /// on initial load and every `config.updated` bus event (matching `ConfigEntryObserver.observe`).
+        public final class Observer: Sendable {
+            private struct State: Sendable {
+                var entries: [CoreConfigEntry]
+                var task: Task<Void, Never>?
+                var registration: CoreFilesystem.LocationWatcherPolicy.Registration?
+                var closed: Bool = false
+            }
+
+            private let state: Mutex<State>
+            private let config: any CoreConfig.Interface
+            private let policy: any CoreFilesystem.LocationWatcherPolicy.Interface
+
+            private init(
+                initial: [CoreConfigEntry],
+                config: any CoreConfig.Interface,
+                policy: any CoreFilesystem.LocationWatcherPolicy.Interface
+            ) {
+                self.state = Mutex(State(entries: initial))
+                self.config = config
+                self.policy = policy
+            }
+
+            deinit {
+                let (task, reg) = state.withLock { s -> (Task<Void, Never>?, CoreFilesystem.LocationWatcherPolicy.Registration?) in
+                    s.closed = true
+                    let t = s.task
+                    let r = s.registration
+                    s.task = nil
+                    s.registration = nil
+                    return (t, r)
+                }
+                task?.cancel()
+                reg?.dispose()
+            }
+
+            fileprivate static func start(
+                config: any CoreConfig.Interface,
+                bus: (any CoreBus.Interface)?,
+                location: OpenCodeLocation?,
+                policy: any CoreFilesystem.LocationWatcherPolicy.Interface
+            ) async -> Observer {
+                // Subscribe before reading initial entries so an update in between still triggers a reload.
+                let updates = bus?.subscribe(types: [ConfigSchema.Event.updated.type], location: location)
+                let initial = await config.entries()
+                let observer = Observer(initial: initial, config: config, policy: policy)
+
+                let registration = await policy.transform { [weak observer] editor in
+                    guard let entries = observer?.state.withLock({ $0.entries }) else { return }
+                    for entry in entries {
+                        guard entry.isDocument, let ignore = entry.info?.watcher?.ignore else { continue }
+                        editor.add(ignore)
+                    }
+                }
+
+                let task: Task<Void, Never>?
+                if let updates {
+                    task = Task { [weak observer] in
+                        for await _ in updates {
+                            if Task.isCancelled { break }
+                            guard let observer else { break }
+                            let nextEntries = await observer.config.entries()
+                            let stillOpen = observer.state.withLock { s -> Bool in
+                                guard !s.closed else { return false }
+                                s.entries = nextEntries
+                                return true
+                            }
+                            if stillOpen {
+                                await observer.policy.reload()
+                            }
+                        }
+                    }
+                } else {
+                    task = nil
+                }
+
+                let cancelIfClosed: (Task<Void, Never>?, CoreFilesystem.LocationWatcherPolicy.Registration?)? = observer.state.withLock { s in
+                    if s.closed { return (task, registration) }
+                    s.task = task
+                    s.registration = registration
+                    return nil
+                }
+                if let (t, r) = cancelIfClosed {
+                    t?.cancel()
+                    r?.dispose()
+                }
+                return observer
+            }
+
+            /// Stops observing `config.updated` and removes the transform registration from `LocationWatcherPolicy`.
+            public func close() async {
+                let (task, reg) = state.withLock { s -> (Task<Void, Never>?, CoreFilesystem.LocationWatcherPolicy.Registration?) in
+                    s.closed = true
+                    let t = s.task
+                    let r = s.registration
+                    s.task = nil
+                    s.registration = nil
+                    return (t, r)
+                }
+                task?.cancel()
+                reg?.dispose()
+            }
+        }
+
+        /// Starts live synchronization of `watcher.ignore` config entries into `policy`.
+        public static func start(
+            config: any CoreConfig.Interface,
+            bus: (any CoreBus.Interface)? = nil,
+            location: OpenCodeLocation? = nil,
+            policy: any CoreFilesystem.LocationWatcherPolicy.Interface
+        ) async -> Observer {
+            await Observer.start(config: config, bus: bus, location: location, policy: policy)
+        }
 
         public static func apply(
             entries: [CoreConfigEntry],
             to policy: any CoreFilesystem.LocationWatcherPolicy.Interface
         ) async {
-            let ignores = entries.flatMap { $0.info?.watcher?.ignore ?? [] }
+            let ignores = entries.flatMap { $0.isDocument ? ($0.info?.watcher?.ignore ?? []) : [] }
             _ = await policy.transform { editor in
                 editor.add(ignores)
             }

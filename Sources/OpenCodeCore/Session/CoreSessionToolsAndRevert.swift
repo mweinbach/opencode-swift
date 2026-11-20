@@ -1312,12 +1312,15 @@ public enum CoreSession {
             let location: OpenCodeLocation
             let projectID: ProjectID
             let subpath: String?
+            let parent: SessionSchema.Info?
             if let parentID = input.parentID {
-                let parent = try get(parentID)
-                location = parent.location
-                projectID = parent.projectID
-                subpath = parent.subpath
+                let p = try get(parentID)
+                parent = p
+                location = p.location
+                projectID = p.projectID
+                subpath = p.subpath
             } else {
+                parent = nil
                 location = input.location ?? OpenCodeLocation(directory: "/")
                 projectID = input.projectID ?? ProjectID.global
                 subpath = input.subpath
@@ -1338,8 +1341,8 @@ public enum CoreSession {
                         title: input.title,
                         agent: input.agent,
                         model: input.model,
-                        metadata: input.metadata,
-                        permissions: input.permissions,
+                        metadata: input.metadata ?? parent?.metadata,
+                        permissions: input.permissions ?? parent?.permissions,
                         version: version
                     ),
                     options: CoreBus.PublishOptions(location: location)
@@ -1405,6 +1408,15 @@ public enum CoreSession {
         }
 
         public func prompt(_ request: PromptRequest) async throws -> SessionInboxSchema.Info {
+            try await prompt(request, onAccepted: nil)
+        }
+
+        /// Admits a prompt and optionally runs `onAccepted` right after admission + wake before observing
+        /// task cancellation, matching upstream `Session.prompt(input, onAccepted)` uninterruptible checkpointing.
+        public func prompt(
+            _ request: PromptRequest,
+            onAccepted: (@Sendable () async -> Void)?
+        ) async throws -> SessionInboxSchema.Info {
             let session = try get(request.sessionID)
             let messageID = request.id ?? SessionMessageSchema.ID.create()
             let delivery = request.input.delivery ?? .steer
@@ -1420,16 +1432,17 @@ public enum CoreSession {
                     if request.resume != false, session.revert == nil {
                         await execution.wake(session.id)
                     }
+                    if let onAccepted {
+                        await onAccepted()
+                    }
                     return existing
                 }
             } catch is CoreSessionInbox.LifecycleConflict {
                 throw CoreSessionErrors.PromptConflictError(sessionID: session.id, messageID: messageID)
             }
 
-            if session.revert != nil {
-                try await CoreSessionRevert.commit(bus: bus, session: session)
-            }
-
+            // Prompt preparation stays cancellable before admission commits.
+            try Task.checkCancellation()
             let item = try await CoreSessionPrompt.prepare(
                 session: session,
                 messageID: messageID,
@@ -1437,6 +1450,12 @@ public enum CoreSession {
                 db: db,
                 fileSystem: fileSystem
             )
+            try Task.checkCancellation()
+
+            // Commit staged revert only after preparation succeeds, before admitting new work.
+            if session.revert != nil {
+                try await CoreSessionRevert.commit(bus: bus, session: session)
+            }
 
             let admitted: SessionInboxSchema.Info
             do {
@@ -1448,7 +1467,18 @@ public enum CoreSession {
             if request.resume != false {
                 await execution.wake(session.id)
             }
+            if let onAccepted {
+                await onAccepted()
+            }
             return admitted
+        }
+
+        public func setPermissions(sessionID: SessionID, permissions: SessionSchema.PermissionRuleset) async throws {
+            _ = try get(sessionID)
+            _ = try await bus.publish(
+                SessionEventSchema.Permissions,
+                data: SessionEventSchema.PermissionsData(sessionID: sessionID, permissions: permissions)
+            )
         }
 
         public func synthetic(_ request: CoreSessionSynthetic.Request) async throws -> SessionInboxSchema.Info {
