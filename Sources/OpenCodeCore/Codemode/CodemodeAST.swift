@@ -143,7 +143,7 @@ public enum CodemodeLanguage {
     }
 
     // parity: codemode/src/language/runtime/model.ts#lostError [status=implemented hash=b339b422c6d2]
-    public static func lostError(_ description: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func lostError(_ description: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(
             type: .typeError,
             message: "\(description) came from the host and was lost when the run was suspended; get it again after resuming.",
@@ -152,32 +152,32 @@ public enum CodemodeLanguage {
     }
 
     // parity: codemode/src/language/runtime/model.ts#typeError [status=implemented hash=d2e201e3d02b]
-    public static func typeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func typeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .typeError, message: message, node: node)
     }
 
     // parity: codemode/src/language/runtime/model.ts#invalidData [status=implemented hash=f2a0ed07a30c]
-    public static func invalidData(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func invalidData(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .typeError, message: message, node: node, kind: "InvalidDataValue")
     }
 
     // parity: codemode/src/language/runtime/model.ts#rangeError [status=implemented hash=557f53331587]
-    public static func rangeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func rangeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .rangeError, message: message, node: node)
     }
 
     // parity: codemode/src/language/runtime/model.ts#referenceError [status=implemented hash=c336ed0b8e72]
-    public static func referenceError(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func referenceError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .referenceError, message: message, node: node)
     }
 
     // parity: codemode/src/language/runtime/model.ts#syntaxError [status=implemented hash=b78d25883bc2]
-    public static func syntaxError(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func syntaxError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .syntaxError, message: message, node: node)
     }
 
     // parity: codemode/src/language/runtime/model.ts#uriError [status=implemented hash=151671bdf6db]
-    public static func uriError(_ message: String, node: AstNode? = nil) -> PendingThrow {
+    @inline(never) public static func uriError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .uriError, message: message, node: node)
     }
 

@@ -936,6 +936,7 @@ extension CodemodeLanguage {
 
         public override var tag: String { "Date" }
 
+        @inline(never)
         public func toISOString() throws -> String {
             let ms = epochMs
             guard ms.isFinite else { throw CodemodeLanguage.rangeError("Invalid time value") }
@@ -944,7 +945,9 @@ extension CodemodeLanguage {
 
         // parity: codemode/src/language/runtime/objects.ts#DateObj.toString [status=implemented hash=61588c38428e]
         public override func jsToString() -> String {
-            (try? toISOString()) ?? "Invalid Date"
+            let ms = epochMs
+            guard ms.isFinite else { return "Invalid Date" }
+            return CodemodeLanguage.formatISODate(epochMs: ms)
         }
 
         // parity: codemode/src/language/runtime/objects.ts#DateObj.toPrimitive [status=implemented hash=8d3d8d376b87]
@@ -2755,7 +2758,7 @@ extension CodemodeLanguage {
                 throw invalidData("Functions cannot be returned as data.")
             }
             if let dateObj = obj as? DateObj {
-                return dateObj.epochMs.isFinite ? .string((try? dateObj.toISOString()) ?? "") : .null
+                return dateObj.epochMs.isFinite ? .string(CodemodeLanguage.formatISODate(epochMs: dateObj.epochMs)) : .null
             }
             if let urlObj = obj as? URLObj { return .string(urlObj.href) }
             if let spObj = obj as? URLSearchParamsObj { return .string(spObj.jsToString()) }
@@ -5536,7 +5539,7 @@ extension CodemodeLanguage {
         case .object(let obj):
             if obj is Callable { return nil }
             if let d = obj as? DateObj {
-                return d.epochMs.isFinite ? .string((try? d.toISOString()) ?? "") : .null
+                return d.epochMs.isFinite ? .string(CodemodeLanguage.formatISODate(epochMs: d.epochMs)) : .null
             }
             if let u = obj as? URLObj { return .string(u.href) }
             let oid = ObjectIdentifier(obj)
@@ -5674,11 +5677,11 @@ extension CodemodeLanguage {
             },
             Method("toString", 0) { thisVal, _, _, _ in
                 let d = try receiver(DateObj.self, thisVal, "Date.prototype.toString")
-                return .string((try? d.toISOString()) ?? "Invalid Date")
+                return .string(d.jsToString())
             },
             Method("toUTCString", 0) { thisVal, _, _, _ in
                 let d = try receiver(DateObj.self, thisVal, "Date.prototype.toUTCString")
-                return .string((try? d.toISOString()) ?? "Invalid Date")
+                return .string(d.jsToString())
             },
             Method("getUTCFullYear", 0) { thisVal, _, _, _ in
                 let d = try receiver(DateObj.self, thisVal, "Date.prototype.getUTCFullYear")
