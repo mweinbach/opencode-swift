@@ -687,6 +687,8 @@ public final class ServerLocationBundle: Sendable {
     public let command: any CoreSubsystems.Command.Interface
     public let skill: any CoreSkill.Interface
     public let reference: any CoreInstruction.Reference.Interface
+    public let instructionDiscovery: CoreInstruction.Discovery.Service
+    public let instructionLoader: CoreConfigPlugin.Instruction.Loader?
     public let fileSystem: any CoreFilesystem.Interface
     public let fileSystemSearch: any CoreFilesystem.Search.Interface
     public let shell: any CoreShell.Interface
@@ -727,6 +729,7 @@ public final class ServerLocationBundle: Sendable {
             CoreSubsystems.Command.Service.serviceKey: command,
             CoreSkill.Service.serviceKey: skill,
             CoreInstruction.Reference.Service.serviceKey: reference,
+            CoreInstruction.Discovery.Service.serviceKey: instructionDiscovery,
             CoreFilesystem.Service.serviceKey: fileSystem,
             CoreFilesystem.Search.Service.serviceKey: fileSystemSearch,
             CoreShell.Service.serviceKey: shell,
@@ -791,6 +794,8 @@ public final class ServerLocationBundle: Sendable {
         snapshot: any CoreSnapshot.Interface,
         worktreeStrategies: any CoreWorktree.Strategies.Interface,
         tool: any CoreTool.Interface = CoreTool.Service(),
+        instructionDiscovery: CoreInstruction.Discovery.Service = CoreInstruction.Discovery.Service(),
+        instructionLoader: CoreConfigPlugin.Instruction.Loader? = nil,
         sessionRunner: (any CoreSessionRunner.Interface)? = nil,
         sessionTitle: (any CoreSessionTitle.Interface)? = nil
     ) {
@@ -805,6 +810,8 @@ public final class ServerLocationBundle: Sendable {
         self.command = command
         self.skill = skill
         self.reference = reference
+        self.instructionDiscovery = instructionDiscovery
+        self.instructionLoader = instructionLoader
         self.fileSystem = fileSystem
         self.fileSystemSearch = fileSystemSearch
         self.shell = shell
@@ -1010,6 +1017,7 @@ public final class ServerAppRuntime: Sendable {
     public let job: CoreJob.Service
     public let ptyTicket: CorePty.Ticket.Service
     public let persistentPty: any CorePty.Persistent.Interface
+    public let watcher: any CoreFilesystem.Watcher.Interface
     public let fileWatch: CoreFilesystem.FileWatch.Service
     public let pluginUpdate: any CorePlugin.Update.Interface
     public let wellKnown: any CoreIntegration.WellKnown.Interface
@@ -1061,6 +1069,7 @@ public final class ServerAppRuntime: Sendable {
         job: CoreJob.Service,
         ptyTicket: CorePty.Ticket.Service,
         persistentPty: any CorePty.Persistent.Interface,
+        watcher: any CoreFilesystem.Watcher.Interface = CoreFilesystem.Watcher.Service(enabled: false),
         fileWatch: CoreFilesystem.FileWatch.Service,
         pluginUpdate: any CorePlugin.Update.Interface,
         wellKnown: any CoreIntegration.WellKnown.Interface,
@@ -1106,6 +1115,7 @@ public final class ServerAppRuntime: Sendable {
         self.job = job
         self.ptyTicket = ptyTicket
         self.persistentPty = persistentPty
+        self.watcher = watcher
         self.fileWatch = fileWatch
         self.pluginUpdate = pluginUpdate
         self.wellKnown = wellKnown
@@ -1271,6 +1281,10 @@ public final class ServerAppRuntime: Sendable {
             await sessionExecution.awaitIdle(sid)
         }
         await locations.closeAll()
+        await fileWatch.close()
+        if let watcherService = watcher as? CoreFilesystem.Watcher.Service {
+            await watcherService.close()
+        }
         await eventFeed.close()
         await scope.close()
     }
@@ -1293,6 +1307,9 @@ public final class ServerAppRuntime: Sendable {
         customVideoGeneration: (any CoreIntegration.VideoGeneration.Interface)? = nil,
         customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
         customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
+        customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
+        instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
         workerdProfile: Bool = false,
         onLocationBoot: LocationCustomizer? = nil
     ) async throws -> ServerAppRuntime {
@@ -1379,7 +1396,17 @@ public final class ServerAppRuntime: Sendable {
         let persistentPty: any CorePty.Persistent.Interface = customPersistentPty ?? CorePty.Persistent.Service(
             options: options.pty
         )
-        let fileWatch = CoreFilesystem.FileWatch.Service(enabled: options.fs?.filewatcher ?? true)
+        let watcherEnabled = (options.fs?.filewatcher ?? true) && !workerdProfile
+        let watcher: any CoreFilesystem.Watcher.Interface = customWatcher ?? CoreFilesystem.Watcher.Service(
+            enabled: watcherEnabled,
+            native: CoreFilesystem.Watcher.native(for: fileSystem)
+        )
+        let fileWatch = CoreFilesystem.FileWatch.Service(
+            enabled: watcherEnabled,
+            watcher: watcher,
+            bus: bus,
+            fileSystem: fileSystem
+        )
         let pluginUpdate: any CorePlugin.Update.Interface = customPluginUpdate ?? ServerNoopPluginUpdateService()
         let wellKnown: any CoreIntegration.WellKnown.Interface = customWellKnown ?? CoreIntegration.WellKnown.Service(
             transport: httpTransport,
@@ -1565,6 +1592,7 @@ public final class ServerAppRuntime: Sendable {
                 file: capturedConfigOpts?.file,
                 content: capturedConfigOpts?.content
             )
+            let locationBusRoute = OpenCodeLocation(directory: ref.directory.rawValue, workspaceID: ref.workspaceID)
             let configUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(type: ConfigSchema.Event.updated.type)
             let configService = await CoreConfig.Service(
                 directory: dirPath,
@@ -1573,7 +1601,11 @@ public final class ServerAppRuntime: Sendable {
                 fileSystem: capturedFs,
                 environment: capturedEnv,
                 onUpdated: {
-                    await bus.emit(configUpdatedDef, data: JSONValue.object([:]))
+                    await bus.emit(
+                        configUpdatedDef,
+                        data: JSONValue.object([:]),
+                        options: CoreBus.PublishOptions(location: locationBusRoute)
+                    )
                 }
             )
             let configEntries = await configService.entries()
@@ -1822,10 +1854,22 @@ public final class ServerAppRuntime: Sendable {
             _ = await CoreTool.registerAllBuiltins(into: toolService, environment: toolEnv)
 
             // core/src/session/context.ts: the Location's instruction services, combined per Session step.
-            let instructionDiscovery = CoreInstruction.Discovery.Service(options: CoreInstruction.Discovery.Options(
-                project: capturedConfigOpts?.project,
-                claude: capturedOptions.instructions?.claude
-            ))
+            let instructionDiscoveryUpdatedDef = EventSchema.EphemeralDefinition<JSONValue>(
+                type: CoreInstruction.Discovery.Event.updated.type
+            )
+            let instructionDiscovery = CoreInstruction.Discovery.Service(
+                options: CoreInstruction.Discovery.Options(
+                    project: capturedConfigOpts?.project,
+                    claude: capturedOptions.instructions?.claude
+                ),
+                onUpdated: {
+                    await bus.emit(
+                        instructionDiscoveryUpdatedDef,
+                        data: JSONValue.object([:]),
+                        options: CoreBus.PublishOptions(location: locationBusRoute)
+                    )
+                }
+            )
             let instructionLoader = CoreConfigPlugin.Instruction.Loader(
                 discovery: instructionDiscovery,
                 paths: CoreConfigPlugin.Instruction.Loader.Paths(
@@ -1835,10 +1879,34 @@ public final class ServerAppRuntime: Sendable {
                     globalConfig: capturedGlobal.config
                 ),
                 fileSystem: capturedFs,
+                watcher: watcher,
                 http: capturedHttp,
-                entries: { await configService.entries() }
+                entries: { await configService.entries() },
+                configUpdates: {
+                    let stream = bus.subscribe(
+                        types: [ConfigSchema.Event.updated.type],
+                        location: locationBusRoute
+                    )
+                    return AsyncStream { continuation in
+                        let task = Task {
+                            for await _ in stream {
+                                continuation.yield(())
+                            }
+                            continuation.finish()
+                        }
+                        continuation.onTermination = { _ in task.cancel() }
+                    }
+                },
+                debounce: instructionDebounce,
+                urlFetchTimeout: instructionURLTimeout
             )
-            await instructionLoader.refresh()
+            // Start instruction watching asynchronously so server handlers never block on slow URL fetches
+            // or filesystem scans, while `SessionRunner` / `awaitActivation()` wait for initial activation.
+            let releaseInstructionHold = pluginService.hold()
+            let instructionStartTask = Task {
+                defer { releaseInstructionHold() }
+                await instructionLoader.start()
+            }
             let instructionBuiltIns = CoreInstruction.BuiltIns.Service(
                 workingDirectory: dirPath,
                 workspaceRoot: resolvedProject.directory.rawValue,
@@ -1855,10 +1923,10 @@ public final class ServerAppRuntime: Sendable {
             }
             let instructionSources = CoreSessionContext.InstructionSources(
                 builtins: { await instructionBuiltIns.load() },
-                // No file watcher here: rescan the instruction files before each read, so an edit reaches the
-                // next step as an instruction update.
+                // Watcher-driven invalidation updates `instructionDiscovery` asynchronously; steps read the
+                // current state after one-time initial activation without rescanning per step.
                 discovery: {
-                    await instructionLoader.refresh()
+                    await instructionLoader.awaitReady()
                     return await instructionDiscovery.load()
                 },
                 skills: { permissions in await skillInstructions.load(permissions: permissions) },
@@ -1892,6 +1960,8 @@ public final class ServerAppRuntime: Sendable {
 
             locScope.addFinalizer {
                 closedFlag.withLock { $0 = true }
+                instructionStartTask.cancel()
+                await instructionLoader.close()
                 await sessionRunner.modelTransport.closeAll()
                 await permissionService.close()
                 await formService.close()
@@ -1932,6 +2002,8 @@ public final class ServerAppRuntime: Sendable {
                 snapshot: snapshotService,
                 worktreeStrategies: worktreeStrategies,
                 tool: toolService,
+                instructionDiscovery: instructionDiscovery,
+                instructionLoader: instructionLoader,
                 sessionRunner: sessionRunner,
                 sessionTitle: sessionRunner.sessionTitle
             )
@@ -1985,6 +2057,7 @@ public final class ServerAppRuntime: Sendable {
             job: job,
             ptyTicket: ptyTicket,
             persistentPty: persistentPty,
+            watcher: watcher,
             fileWatch: fileWatch,
             pluginUpdate: pluginUpdate,
             wellKnown: wellKnown,

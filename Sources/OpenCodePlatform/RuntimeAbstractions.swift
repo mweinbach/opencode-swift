@@ -132,6 +132,8 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
     private struct State: Sendable {
         var nodes: [String: Node] = ["/": Node(type: .directory, bytes: [], modifiedAtMs: 0, mode: 0o755)]
         var clockMs: Int64 = 1_700_000_000_000
+        var observers: [UInt64: @Sendable (NativeFileEvent) -> Void] = [:]
+        var nextObserverID: UInt64 = 1
     }
 
     private let state = Mutex(State())
@@ -142,8 +144,33 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
             let now = s.clockMs
             for (rawPath, data) in initialFiles {
                 let norm = Self.normalize(rawPath)
-                Self.ensureParentsLocked(norm, in: &s, now: now)
+                _ = Self.ensureParentsLocked(norm, in: &s, now: now)
                 s.nodes[norm] = Node(type: .file, bytes: data, modifiedAtMs: now, mode: 0o644)
+            }
+        }
+    }
+
+    /// Registers a mutation observer invoked whenever files or directories change in memory.
+    /// Returns an idempotent unsubscribe closure.
+    public func observe(_ onEvent: @escaping @Sendable (NativeFileEvent) -> Void) -> @Sendable () -> Void {
+        let id = state.withLock { s -> UInt64 in
+            let id = s.nextObserverID
+            s.nextObserverID &+= 1
+            s.observers[id] = onEvent
+            return id
+        }
+        return { [weak self] in
+            self?.state.withLock { s in
+                _ = s.observers.removeValue(forKey: id)
+            }
+        }
+    }
+
+    private func notify(_ events: [NativeFileEvent], observers: [@Sendable (NativeFileEvent) -> Void]) {
+        guard !events.isEmpty, !observers.isEmpty else { return }
+        for event in events {
+            for observer in observers {
+                observer(event)
             }
         }
     }
@@ -167,20 +194,28 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
 
     public func writeFile(_ bytes: [UInt8], to path: String, createDirectories: Bool) async throws {
         let norm = Self.normalize(path)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             let parent = Self.dirname(norm)
+            var emitted: [NativeFileEvent] = []
             if createDirectories {
-                Self.ensureParentsLocked(norm, in: &s, now: s.clockMs)
+                let createdDirs = Self.ensureParentsLocked(norm, in: &s, now: s.clockMs)
+                for dir in createdDirs {
+                    emitted.append(NativeFileEvent(path: dir, kind: .created, isDirectory: true))
+                }
             } else if s.nodes[parent]?.type != .directory {
                 throw PlatformError.notFound(parent)
             }
+            let existed = s.nodes[norm] != nil
             s.nodes[norm] = Node(type: .file, bytes: bytes, modifiedAtMs: s.clockMs, mode: 0o644)
+            emitted.append(NativeFileEvent(path: norm, kind: existed ? .modified : .created, isDirectory: false))
+            return (emitted, Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func writeFileExclusive(_ bytes: [UInt8], to path: String) async throws {
         let norm = Self.normalize(path)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             if s.nodes[norm] != nil {
                 throw PlatformError.alreadyExists(norm)
             }
@@ -189,7 +224,9 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
                 throw PlatformError.notFound(parent)
             }
             s.nodes[norm] = Node(type: .file, bytes: bytes, modifiedAtMs: s.clockMs, mode: 0o644)
+            return ([NativeFileEvent(path: norm, kind: .created, isDirectory: false)], Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func exists(at path: String) async -> Bool {
@@ -207,19 +244,26 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
 
     public func makeDirectory(at path: String, recursive: Bool) async throws {
         let norm = Self.normalize(path)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             if let existing = s.nodes[norm] {
-                if recursive && existing.type == .directory { return }
+                if recursive && existing.type == .directory { return ([], []) }
                 throw PlatformError.alreadyExists(norm)
             }
             let parent = Self.dirname(norm)
+            var emitted: [NativeFileEvent] = []
             if recursive {
-                Self.ensureParentsLocked(norm, in: &s, now: s.clockMs)
+                let createdDirs = Self.ensureParentsLocked(norm, in: &s, now: s.clockMs)
+                for dir in createdDirs {
+                    emitted.append(NativeFileEvent(path: dir, kind: .created, isDirectory: true))
+                }
             } else if s.nodes[parent]?.type != .directory {
                 throw PlatformError.notFound(parent)
             }
             s.nodes[norm] = Node(type: .directory, bytes: [], modifiedAtMs: s.clockMs, mode: 0o755)
+            emitted.append(NativeFileEvent(path: norm, kind: .created, isDirectory: true))
+            return (emitted, Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func readDirectory(at path: String) async throws -> [String] {
@@ -244,36 +288,53 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
 
     public func remove(at path: String) async throws {
         let norm = Self.normalize(path)
-        state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = state.withLock { s in
             let prefix = norm == "/" ? "/" : norm + "/"
+            var removed: [NativeFileEvent] = []
+            for (key, node) in s.nodes where key == norm || key.hasPrefix(prefix) {
+                removed.append(NativeFileEvent(path: key, kind: .deleted, isDirectory: node.type == .directory))
+            }
+            guard !removed.isEmpty else { return ([], []) }
             s.nodes = s.nodes.filter { key, _ in
                 key != norm && !key.hasPrefix(prefix)
             }
+            removed.sort { $0.path < $1.path }
+            return (removed, Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func rename(from source: String, to destination: String) async throws {
         let src = Self.normalize(source)
         let dst = Self.normalize(destination)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             guard s.nodes[src] != nil else { throw PlatformError.notFound(src) }
-            Self.ensureParentsLocked(dst, in: &s, now: s.clockMs)
+            var emitted: [NativeFileEvent] = []
+            let createdDirs = Self.ensureParentsLocked(dst, in: &s, now: s.clockMs)
+            for dir in createdDirs {
+                emitted.append(NativeFileEvent(path: dir, kind: .created, isDirectory: true))
+            }
             let prefix = src == "/" ? "/" : src + "/"
-            var moved: [(String, Node)] = []
+            var moved: [(oldKey: String, newKey: String, node: Node)] = []
             for (key, node) in s.nodes {
                 if key == src {
-                    moved.append((dst, node))
+                    moved.append((key, dst, node))
                 } else if key.hasPrefix(prefix) {
-                    moved.append((dst + "/" + key.dropFirst(prefix.count), node))
+                    moved.append((key, dst + "/" + key.dropFirst(prefix.count), node))
                 }
             }
-            for (key, _) in s.nodes where key == src || key.hasPrefix(prefix) {
-                s.nodes.removeValue(forKey: key)
+            moved.sort { $0.oldKey < $1.oldKey }
+            for item in moved {
+                s.nodes.removeValue(forKey: item.oldKey)
+                emitted.append(NativeFileEvent(path: item.oldKey, kind: .deleted, isDirectory: item.node.type == .directory))
             }
-            for (newKey, node) in moved {
-                s.nodes[newKey] = node
+            for item in moved {
+                s.nodes[item.newKey] = item.node
+                emitted.append(NativeFileEvent(path: item.newKey, kind: .renamed, isDirectory: item.node.type == .directory))
             }
+            return (emitted, Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func realPath(at path: String) async throws -> String {
@@ -286,20 +347,24 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
 
     public func setModificationTime(at path: String, epochMs: Int64) async throws {
         let norm = Self.normalize(path)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             guard var node = s.nodes[norm] else { throw PlatformError.notFound(norm) }
             node.modifiedAtMs = epochMs
             s.nodes[norm] = node
+            return ([NativeFileEvent(path: norm, kind: .modified, isDirectory: node.type == .directory)], Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     public func chmod(at path: String, mode: UInt16) async throws {
         let norm = Self.normalize(path)
-        try state.withLock { s in
+        let (events, observers): ([NativeFileEvent], [@Sendable (NativeFileEvent) -> Void]) = try state.withLock { s in
             guard var node = s.nodes[norm] else { throw PlatformError.notFound(norm) }
             node.mode = mode
             s.nodes[norm] = node
+            return ([NativeFileEvent(path: norm, kind: .modified, isDirectory: node.type == .directory)], Array(s.observers.values))
         }
+        notify(events, observers: observers)
     }
 
     internal static func normalize(_ raw: String) -> String {
@@ -323,15 +388,19 @@ public final class InMemoryFileSystem: OpenCodeFileSystem, Sendable {
         return String(norm[..<slash])
     }
 
-    private static func ensureParentsLocked(_ norm: String, in state: inout State, now: Int64) {
+    @discardableResult
+    private static func ensureParentsLocked(_ norm: String, in state: inout State, now: Int64) -> [String] {
         let parts = norm.split(separator: "/").dropLast()
         var current = ""
+        var created: [String] = []
         for part in parts {
             current += "/\(part)"
             if state.nodes[current] == nil {
                 state.nodes[current] = Node(type: .directory, bytes: [], modifiedAtMs: now, mode: 0o755)
+                created.append(current)
             }
         }
+        return created
     }
 }
 
