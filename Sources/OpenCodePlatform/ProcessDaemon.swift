@@ -7,6 +7,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodeUtil
@@ -126,7 +128,7 @@ extension ProcessDaemon {
         // parity: process-daemon/src/service.rs#shell [status=implemented hash=e92cf29c5333]
         public static func shell(environment: any EnvironmentProviding = SystemEnvironment()) throws -> CreatePty {
             let program = environment.variable("SHELL") ?? (Platform.current == .windows ? "cmd.exe" : "/bin/sh")
-            let title = program.split(separator: "/").last.map(String.init) ?? "shell"
+            let title = program.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? "shell"
             #if !os(WASI)
             let cwd = FileManager.default.currentDirectoryPath
             #else
@@ -430,9 +432,16 @@ extension ProcessDaemon {
 
     // MARK: - Platform Pipe & PTY Backends (`src/service/pipe/unix.rs`, `pipe/windows.rs`, `windows.rs`)
 
+    internal protocol PipeProcessHandle: Sendable {
+        func pid() -> UInt32
+        func kill()
+        func signal(_ signal: ProcessSignal) throws
+        func reap()
+    }
+
     public enum UnixPipe {
         // parity: process-daemon/src/service/pipe/unix.rs#Process [status=implemented hash=088fd0d3da20]
-        public final class Process: @unchecked Sendable {
+        public final class Process: PipeProcessHandle, @unchecked Sendable {
             private let processID: UInt32
             private let lock = Mutex<(reaped: Bool, signalFn: (@Sendable (ProcessSignal) throws -> Void)?, killFn: (@Sendable () -> Void)?, reapFn: (@Sendable () -> Void)?)>((false, nil, nil, nil))
 
@@ -520,14 +529,60 @@ extension ProcessDaemon {
     }
 
     public enum WindowsPipe {
-        // parity: process-daemon/src/service/pipe/windows.rs#Process [status=adapted hash=8fdb1185926c]
-        public final class Process: @unchecked Sendable {
+        // parity: process-daemon/src/service/pipe/windows.rs#Process [status=implemented hash=8fdb1185926c]
+        public final class Process: PipeProcessHandle, @unchecked Sendable {
+            #if os(Windows)
+            private struct NativeHandles: Sendable {
+                let process: OwnedWinHandle
+                let job: WindowsJobObject?
+            }
+            #endif
+
+            private struct State: Sendable {
+                #if os(Windows)
+                var handles: NativeHandles?
+                #endif
+                var machine: WindowsProcessHelpers.PipeProcessStateMachine
+                var killFn: (@Sendable () -> Void)?
+            }
+
             private let processID: UInt32
-            private let state = Mutex<(reaped: Bool, killedSignal: String?, killFn: (@Sendable () -> Void)?)>((false, nil, nil))
+            private let state: Mutex<State>
+
+            #if os(Windows)
+            internal init(pid: UInt32, processHandle: OwnedWinHandle, job: WindowsJobObject?) {
+                self.processID = pid
+                self.state = Mutex(State(
+                    handles: NativeHandles(process: processHandle, job: job),
+                    machine: WindowsProcessHelpers.PipeProcessStateMachine(
+                        hasHandles: true,
+                        hasJob: job != nil
+                    ),
+                    killFn: nil
+                ))
+            }
+            #endif
 
             public init(pid: UInt32, killFn: (@Sendable () -> Void)? = nil) {
                 self.processID = pid
-                self.state.withLock { $0.killFn = killFn }
+                #if os(Windows)
+                self.state = Mutex(State(
+                    handles: nil,
+                    machine: WindowsProcessHelpers.PipeProcessStateMachine(
+                        hasHandles: true,
+                        hasJob: false
+                    ),
+                    killFn: killFn
+                ))
+                #else
+                self.state = Mutex(State(
+                    machine: WindowsProcessHelpers.PipeProcessStateMachine(
+                        hasHandles: true,
+                        hasJob: false
+                    ),
+                    killFn: killFn
+                ))
+                #endif
             }
 
             // parity: process-daemon/src/service/pipe/windows.rs#pid [status=implemented hash=460d52d29d7d]
@@ -535,49 +590,189 @@ extension ProcessDaemon {
                 processID
             }
 
-            // parity: process-daemon/src/service/pipe/windows.rs#kill [status=adapted hash=d67485a38d5c]
+            // parity: process-daemon/src/service/pipe/windows.rs#kill [status=implemented hash=d67485a38d5c]
             public func kill() {
+                #if os(Windows)
+                let action: (handles: NativeHandles?, fallback: (@Sendable () -> Void)?) = state.withLock { s in
+                    if let handles = s.handles {
+                        guard s.machine.recordKill(
+                            signalName: "SIGKILL",
+                            processAlreadySignalled: handles.process.isSignalled()
+                        ) else {
+                            return (nil, nil)
+                        }
+                        return (handles, nil)
+                    }
+                    guard s.machine.recordKill(signalName: "SIGKILL", processAlreadySignalled: false) else {
+                        return (nil, nil)
+                    }
+                    return (nil, s.killFn)
+                }
+                if let handles = action.handles {
+                    try? WindowsProcessPrimitives.terminateTree(process: handles.process, job: handles.job)
+                } else {
+                    action.fallback?()
+                }
+                #else
                 let fn = state.withLock { s -> (@Sendable () -> Void)? in
-                    guard !s.reaped else { return nil }
-                    if s.killedSignal == nil { s.killedSignal = "SIGKILL" }
+                    guard s.machine.recordKill(signalName: "SIGKILL", processAlreadySignalled: false) else {
+                        return nil
+                    }
                     return s.killFn
                 }
                 fn?()
+                #endif
             }
 
-            // parity: process-daemon/src/service/pipe/windows.rs#signal [status=adapted hash=dd48fe757d60]
+            // parity: process-daemon/src/service/pipe/windows.rs#signal [status=implemented hash=dd48fe757d60]
             public func signal(_ signal: ProcessSignal) throws {
+                let name = WindowsProcessHelpers.pipeSignalName(signal)
+                #if os(Windows)
+                let action: (handles: NativeHandles?, fallback: (@Sendable () -> Void)?) = state.withLock { s in
+                    if let handles = s.handles {
+                        guard s.machine.recordKill(
+                            signalName: name,
+                            processAlreadySignalled: handles.process.isSignalled()
+                        ) else {
+                            return (nil, nil)
+                        }
+                        return (handles, nil)
+                    }
+                    guard s.machine.recordKill(signalName: name, processAlreadySignalled: false) else {
+                        return (nil, nil)
+                    }
+                    return (nil, s.killFn)
+                }
+                if let handles = action.handles {
+                    do {
+                        try WindowsProcessPrimitives.terminateTree(process: handles.process, job: handles.job)
+                    } catch {
+                        throw DaemonError("failed to signal process: \(error)")
+                    }
+                } else {
+                    action.fallback?()
+                }
+                #else
                 let fn = state.withLock { s -> (@Sendable () -> Void)? in
-                    guard !s.reaped else { return nil }
-                    if s.killedSignal == nil { s.killedSignal = signal.rawValue }
+                    guard s.machine.recordKill(signalName: name, processAlreadySignalled: false) else {
+                        return nil
+                    }
                     return s.killFn
                 }
                 fn?()
+                #endif
             }
 
             // parity: process-daemon/src/service/pipe/windows.rs#reap [status=implemented hash=bf2d59d394a3]
             public func reap() {
-                state.withLock { $0.reaped = true }
+                state.withLock { s in
+                    #if os(Windows)
+                    s.handles = nil
+                    #endif
+                    s.machine.reap()
+                }
             }
 
             public var recordedSignal: String? {
-                state.withLock { $0.killedSignal }
+                state.withLock { $0.machine.killedSignal }
             }
+
+            #if os(Windows)
+            /// Waits for the child process handle, finishes (terminates or disarms) the Job Object,
+            /// and returns either the process exit code or the daemon signal that killed it.
+            internal func waitExit() throws -> WindowsProcessHelpers.PipeExitOutcome {
+                guard let handle = state.withLock({ $0.handles?.process }) else {
+                    throw DaemonError("process has been reaped")
+                }
+                guard WaitForSingleObject(handle.raw, INFINITE) == WAIT_OBJECT_0 else {
+                    throw DaemonError("\(WindowsOSFailure("WaitForSingleObject"))")
+                }
+                var exitCode: DWORD = 0
+                guard GetExitCodeProcess(handle.raw, &exitCode) else {
+                    throw DaemonError("\(WindowsOSFailure("GetExitCodeProcess"))")
+                }
+                let (completion, job): (WindowsProcessHelpers.PipeWaitCompletion, WindowsJobObject?) = state.withLock { s in
+                    let takenJob = s.handles?.job
+                    s.handles = nil
+                    let done = s.machine.completeWait(exitCode: UInt32(exitCode))
+                    return (done, takenJob)
+                }
+                if let job {
+                    do {
+                        try job.finish(failed: completion.shouldTerminateJob)
+                    } catch {
+                        windowsLogStderr("pipe process \(processID): job cleanup failed: \(error)")
+                    }
+                }
+                return completion.outcome
+            }
+            #endif
         }
 
-        // parity: process-daemon/src/service/pipe/windows.rs#spawn_pipe [status=adapted hash=59e94da59ab7]
+        // parity: process-daemon/src/service/pipe/windows.rs#spawn_pipe [status=implemented hash=59e94da59ab7]
         public static func spawn_pipe(
             id: TerminalId,
             order: UInt64,
             request: CreatePipe,
             backend: BackendMode = .native
         ) throws -> SessionActor {
-            try SessionActor.spawnPipe(id: id, order: order, request: request, backend: backend)
+            #if os(Windows)
+            if case .native = backend {
+                return try SessionActor.spawnNativeWindowsPipe(id: id, order: order, request: request)
+            }
+            #endif
+            return try SessionActor.spawnPipe(id: id, order: order, request: request, backend: backend)
         }
     }
 
     public enum WindowsPty {
-        // parity: process-daemon/src/service/windows.rs#wait_and_close [status=adapted hash=76824f08f0d2]
+        public enum ClosePollResult: Equatable, Sendable {
+            case closeRequested
+            case disconnected
+            case timeout
+        }
+
+        /// Blocking ConPTY wait-and-close worker matching `upstream/src/service/windows.rs#wait_and_close`:
+        /// keeps blocking `ClosePseudoConsole` off the actor/reader threads, polls the process wait
+        /// handle (avoiding `STILL_ACTIVE` / exit code 259 confusion), kills the child on early teardown,
+        /// and closes the master handle to produce real output-pipe EOF.
+        // parity: process-daemon/src/service/windows.rs#wait_and_close [status=implemented hash=76824f08f0d2]
+        public static func wait_and_close(
+            pollExited: @Sendable () -> Bool,
+            waitUntilExit: @Sendable () -> Result<UInt32?, DaemonError>,
+            killChild: @Sendable () -> Void,
+            waitForClose: @Sendable (_ blockIndefinitely: Bool) -> ClosePollResult,
+            onExit: @Sendable (Result<UInt32?, DaemonError>) -> Void,
+            onCloseMaster: @Sendable () -> Void
+        ) {
+            var reported = false
+            while true {
+                if !reported, pollExited() {
+                    onExit(waitUntilExit())
+                    reported = true
+                }
+                switch waitForClose(reported) {
+                case .closeRequested:
+                    if !reported {
+                        killChild()
+                    }
+                    onCloseMaster()
+                    if !reported {
+                        onExit(waitUntilExit())
+                    }
+                    return
+                case .disconnected:
+                    if !reported {
+                        onExit(waitUntilExit())
+                    }
+                    return
+                case .timeout:
+                    continue
+                }
+            }
+        }
+
+        /// Convenience overload for direct exit-then-close callbacks.
         public static func wait_and_close(
             waitForExit: @Sendable () -> Result<UInt32?, DaemonError>,
             onExit: @Sendable (Result<UInt32?, DaemonError>) -> Void,
@@ -635,7 +830,8 @@ extension ProcessDaemon {
         private var writeHandler: (@Sendable ([UInt8]) throws -> Void)?
         private var resizeHandler: (@Sendable (UInt16, UInt16) throws -> Void)?
         private var killHandler: (@Sendable () -> Void)?
-        private var pipeProcess: UnixPipe.Process?
+        private var onChildExitHandler: (@Sendable () -> Void)?
+        private var pipeProcess: (any PipeProcessHandle)?
         #if !os(WASI)
         private var pipeOutputHandle: FileHandle?
         #endif
@@ -658,6 +854,27 @@ extension ProcessDaemon {
 
         internal func currentInfo() -> ProcessInfo {
             stateLock.withLock { info }
+        }
+
+        internal var isStoppedFlag: Bool {
+            stateLock.withLock { isStopped }
+        }
+
+        /// Injects pipe output bytes already written to the output file by a platform sink (e.g. Windows
+        /// overlapped reader) with the exact count of `\n` bytes written, matching `upstream/src/service/pipe.rs`.
+        internal func emitPipeOutput(_ bytes: [UInt8], newlines: UInt64) {
+            guard !bytes.isEmpty else { return }
+            stateLock.withLock {
+                if isStopped { return }
+                let (start, end) = replay.append(bytes)
+                outputLines &+= newlines
+                info.outputHead = replay.head
+                info.outputTail = replay.tail
+                if info.pipe != nil {
+                    info.pipe?.outputLines = outputLines
+                }
+                broadcastLocked(.output(start: start, end: end, bytes: bytes))
+            }
         }
 
         /// Injects output bytes (for real reader threads and deterministic simulated tests).
@@ -745,12 +962,14 @@ extension ProcessDaemon {
 
         /// Records child process termination (exit code or signal).
         public func emitChildExit(exitCode: UInt32?, signal: String? = nil, failureMessage: String? = nil) {
-            stateLock.withLock {
+            let hook: (@Sendable () -> Void)? = stateLock.withLock {
                 if childExit == nil {
                     childExit = (exitCode, signal, failureMessage)
                 }
                 tryFinalizeExitLocked()
+                return onChildExitHandler
             }
+            hook?()
         }
 
         /// Records an output file failure for pipe processes.
@@ -1216,6 +1435,14 @@ extension ProcessDaemon {
                     terminal: terminal,
                     replayCapacity: replayCapacity
                 )
+                #elseif os(Windows)
+                return try spawnNativeWindowsConPty(
+                    id: id,
+                    order: order,
+                    request: request,
+                    terminal: terminal,
+                    replayCapacity: replayCapacity
+                )
                 #else
                 return try spawnPty(
                     id: id,
@@ -1289,7 +1516,9 @@ extension ProcessDaemon {
                 return actor
 
             case .native:
-                #if os(macOS) || os(Linux) || os(Windows)
+                #if os(Windows)
+                return try spawnNativeWindowsPipe(id: id, order: order, request: request)
+                #elseif os(macOS) || os(Linux)
                 return try spawnNativePipe(id: id, order: order, request: request)
                 #else
                 return try spawnPipe(id: id, order: order, request: request, backend: .simulated(onWrite: nil))
@@ -1480,7 +1709,407 @@ extension ProcessDaemon {
         }
         #endif
 
-        #if os(macOS) || os(Linux) || os(Windows)
+        #if os(Windows)
+        /// Helper that creates the output pipe and spawns the suspended child, returning ONLY the
+        /// daemon's `serverPipe` and `WindowsSuspendedProcess` so `clientPipe`, `stdinNull`, and
+        /// `stderrDup` are deterministically closed before Job Object assignment and `ResumeThread`.
+        private static func createSuspendedPipeChild(
+            request: CreatePipe
+        ) throws -> (serverPipe: OwnedWinHandle, created: WindowsSuspendedProcess) {
+            let (serverPipe, clientPipe): (OwnedWinHandle, OwnedWinHandle)
+            do {
+                (serverPipe, clientPipe) = try WindowsProcessPrimitives.createPipeOutputChannel()
+            } catch {
+                throw DaemonError("failed to create output pipe: \(error)")
+            }
+            let created: WindowsSuspendedProcess
+            do {
+                let stdinNull = try WindowsProcessPrimitives.openNullReadHandle()
+                // Separate duplicated handle for stderr so closing stderr keeps stdout open.
+                let stderrDup = try WindowsProcessPrimitives.duplicateInheritable(clientPipe)
+                let flags = WindowsProcessHelpers.creationFlags(for: .pipe, hasExplicitEnvironment: true)
+                created = try WindowsProcessPrimitives.createSuspendedProcessWithHandleList(
+                    program: request.program,
+                    args: request.args,
+                    cwd: request.cwd,
+                    env: request.env,
+                    stdin: stdinNull,
+                    stdout: clientPipe,
+                    stderr: stderrDup,
+                    creationFlags: flags
+                )
+            } catch {
+                throw DaemonError("failed to spawn \(request.program): \(error)")
+            }
+            return (serverPipe: serverPipe, created: created)
+        }
+
+        /// Native Windows pipe spawn matching `upstream/src/service/pipe/windows.rs`:
+        /// private overlapped named pipe, reparse-safe shared output file, `CREATE_SUSPENDED`
+        /// + `CREATE_NO_WINDOW` + `CREATE_UNICODE_ENVIRONMENT` + `EXTENDED_STARTUPINFO_PRESENT`,
+        /// `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` (`NUL`, stdout, duplicated stderr), kill-on-close
+        /// Job Object assignment before `ResumeThread`, and overlapped reader with `DRAIN_AFTER_EXIT`.
+        internal static func spawnNativeWindowsPipe(
+            id: TerminalId,
+            order: UInt64,
+            request: CreatePipe
+        ) throws -> SessionActor {
+            // Open and truncate output file before spawning so a bad path or reparse point fails cleanly.
+            let outputFile = try WindowsProcessPrimitives.openPipeOutputFile(at: request.outputPath)
+            let job = WindowsJobObject.create(label: "pipe process \(id)")
+            let cancelEvent: OwnedWinHandle
+            let exitedEvent: OwnedWinHandle
+            do {
+                cancelEvent = try OwnedWinHandle.makeManualResetEvent()
+                exitedEvent = try OwnedWinHandle.makeManualResetEvent()
+            } catch {
+                throw DaemonError("failed to create pipe control events: \(error)")
+            }
+
+            // `clientPipe`, `stdinNull`, and `stderrDup` are closed deterministically when
+            // `createSuspendedPipeChild` returns, before assigning the job or resuming the child.
+            let (serverPipe, created) = try createSuspendedPipeChild(request: request)
+
+            let assignedJob: WindowsJobObject?
+            if let candidateJob = job {
+                do {
+                    try candidateJob.assign(process: created.process)
+                    assignedJob = candidateJob
+                } catch {
+                    // An outer job with UI restrictions refuses new members; run joblessly (upstream parity).
+                    windowsLogStderr("pipe process \(id): cannot join the job object, killing only the main process: \(error)")
+                    assignedJob = nil
+                }
+            } else {
+                assignedJob = nil
+            }
+
+            let resumed: (pid: UInt32, process: OwnedWinHandle)
+            do {
+                resumed = try created.resume()
+            } catch {
+                // `created.deinit` terminates the suspended child if resume failed.
+                throw DaemonError("failed to start \(request.program): \(error)")
+            }
+            let childPid = resumed.pid
+            let processHandle = resumed.process
+
+            let info = ProcessInfo(
+                id: id,
+                mode: .pipe,
+                pid: childPid,
+                command: [request.program] + request.args,
+                cwd: request.cwd,
+                groupId: request.groupId,
+                lifecycle: .running,
+                outputHead: 0,
+                outputTail: 0,
+                startedAt: currentUnixMs(),
+                exitedAt: nil,
+                pty: nil,
+                pipe: PipeInfo(
+                    outputPath: request.outputPath,
+                    outputLines: 0,
+                    outputError: nil,
+                    metadata: request.metadata
+                )
+            )
+            let actor = SessionActor(
+                id: id,
+                order: order,
+                info: info,
+                terminal: nil,
+                replayCapacity: 0
+            )
+            let winProc = WindowsPipe.Process(pid: childPid, processHandle: processHandle, job: assignedJob)
+            actor.pipeProcess = winProc
+            actor.killHandler = {
+                winProc.kill()
+                cancelEvent.setEvent()
+            }
+
+            // Build `WindowsOverlappedRead` here so it uniquely owns `serverPipe` and drops it before EOF.
+            let overlappedReader: WindowsOverlappedRead?
+            let readerInitError: String?
+            do {
+                overlappedReader = try WindowsOverlappedRead(pipe: serverPipe)
+                readerInitError = nil
+            } catch {
+                overlappedReader = nil
+                readerInitError = String(describing: error)
+            }
+
+            // Overlapped output reader writing directly to outputFile before publishing to actor.
+            Thread.detachNewThread {
+                runWindowsPipeOutputReader(
+                    reader: overlappedReader,
+                    initError: readerInitError,
+                    outputFile: outputFile,
+                    actor: actor,
+                    cancelEvent: cancelEvent,
+                    exitEvent: exitedEvent
+                )
+            }
+
+            // Exit waiter thread: signals exitedEvent after publishing exit to start DRAIN_AFTER_EXIT.
+            Thread.detachNewThread {
+                defer { exitedEvent.setEvent() }
+                do {
+                    switch try winProc.waitExit() {
+                    case .code(let code):
+                        actor.emitChildExit(exitCode: code, signal: nil)
+                    case .signal(let sigName):
+                        actor.emitChildExit(exitCode: nil, signal: sigName)
+                    }
+                } catch {
+                    actor.emitChildExit(exitCode: nil, signal: nil, failureMessage: String(describing: error))
+                }
+            }
+
+            return actor
+        }
+
+        /// Creates ConPTY pipes + `OwnedPseudoConsole` and drops the ConPTY-side pipe ends
+        /// (`inputRead`, `outputWrite`) immediately so `outputRead` reaches real EOF as soon as
+        /// `ClosePseudoConsole` runs.
+        private static func createConPtyHandles(
+            cols: UInt16,
+            rows: UInt16
+        ) throws -> (pseudoConsole: OwnedPseudoConsole, inputWrite: OwnedWinHandle, outputRead: OwnedWinHandle) {
+            let inputPipe: (read: OwnedWinHandle, write: OwnedWinHandle)
+            let outputPipe: (read: OwnedWinHandle, write: OwnedWinHandle)
+            do {
+                inputPipe = try WindowsProcessPrimitives.createAnonymousPipe(inheritRead: false, inheritWrite: false)
+                outputPipe = try WindowsProcessPrimitives.createAnonymousPipe(inheritRead: false, inheritWrite: false)
+            } catch {
+                throw DaemonError("failed to create ConPTY pipes: \(error)")
+            }
+
+            var rawHPCON: HPCON? = nil
+            let size = COORD(X: Int16(clamping: cols), Y: Int16(clamping: rows))
+            let hr = CreatePseudoConsole(size, inputPipe.read.raw, outputPipe.write.raw, 0, &rawHPCON)
+            guard hr >= 0, let rawConsole = rawHPCON else {
+                throw DaemonError("CreatePseudoConsole failed with HRESULT 0x\(String(UInt32(bitPattern: hr), radix: 16))")
+            }
+            return (
+                pseudoConsole: OwnedPseudoConsole(rawConsole),
+                inputWrite: inputPipe.write,
+                outputRead: outputPipe.read
+            )
+        }
+
+        /// Native Windows ConPTY spawn matching `upstream/src/service.rs#spawn_pty` + `src/service/windows.rs`:
+        /// spawns the ConPTY child suspended, joins a kill-on-close Job Object, resumes, drains output
+        /// even after actor stop so `ClosePseudoConsole` never deadlocks, and closes `HPCON` on the wait thread.
+        internal static func spawnNativeWindowsConPty(
+            id: TerminalId,
+            order: UInt64,
+            request: CreatePty,
+            terminal: Ghostty.Terminal,
+            replayCapacity: Int
+        ) throws -> SessionActor {
+            let (pseudoConsole, inputWrite, outputRead) = try createConPtyHandles(cols: request.cols, rows: request.rows)
+
+            var mergedEnv = Foundation.ProcessInfo.processInfo.environment
+            for (k, v) in request.env { mergedEnv[k] = v }
+            mergedEnv["TERM"] = "xterm-256color"
+            mergedEnv["COLORTERM"] = "truecolor"
+
+            let job = WindowsJobObject.create(label: "pty process \(id)")
+            let closeEvent: OwnedWinHandle
+            do {
+                closeEvent = try OwnedWinHandle.makeManualResetEvent()
+            } catch {
+                throw DaemonError("failed to create ConPTY close event: \(error)")
+            }
+
+            let created: WindowsSuspendedProcess
+            do {
+                created = try pseudoConsole.withRawHandle { rawConsole in
+                    try WindowsProcessPrimitives.createSuspendedProcessWithConPty(
+                        program: request.program,
+                        args: request.args,
+                        cwd: request.cwd,
+                        env: mergedEnv,
+                        pseudoConsole: rawConsole
+                    )
+                }
+            } catch {
+                throw DaemonError("failed to spawn \(request.program): \(error)")
+            }
+
+            let assignedJob: WindowsJobObject?
+            if let candidateJob = job {
+                do {
+                    try candidateJob.assign(process: created.process)
+                    assignedJob = candidateJob
+                } catch {
+                    windowsLogStderr("pty process \(id): cannot join the job object, killing only the main process: \(error)")
+                    assignedJob = nil
+                }
+            } else {
+                assignedJob = nil
+            }
+
+            let resumed: (pid: UInt32, process: OwnedWinHandle)
+            do {
+                resumed = try created.resume()
+            } catch {
+                throw DaemonError("failed to start \(request.program): \(error)")
+            }
+            let childPid = resumed.pid
+            let processHandle = resumed.process
+
+            let info = ProcessInfo(
+                id: id,
+                mode: .pty,
+                pid: childPid,
+                command: [request.program] + request.args,
+                cwd: request.cwd,
+                groupId: request.groupId,
+                lifecycle: .running,
+                outputHead: 0,
+                outputTail: 0,
+                startedAt: currentUnixMs(),
+                exitedAt: nil,
+                pty: PtyInfo(
+                    title: request.title,
+                    userTitle: nil,
+                    foregroundProcess: nil,
+                    cols: request.cols,
+                    rows: request.rows
+                ),
+                pipe: nil
+            )
+            let actor = SessionActor(
+                id: id,
+                order: order,
+                info: info,
+                terminal: terminal,
+                replayCapacity: replayCapacity
+            )
+
+            let inputWriteBox = Mutex<OwnedWinHandle?>(inputWrite)
+            let ptyClosed = Mutex<Bool>(false)
+
+            let closePseudoConsoleOnce: @Sendable () -> Void = {
+                pseudoConsole.close()
+            }
+
+            actor.writeHandler = { bytes in
+                guard !bytes.isEmpty else { return }
+                guard !ptyClosed.withLock({ $0 }),
+                      let writer = inputWriteBox.withLock({ $0 }) else {
+                    throw DaemonError("terminal child has exited")
+                }
+                do {
+                    try WindowsProcessPrimitives.writeAll(to: writer, bytes: bytes)
+                } catch {
+                    throw DaemonError("ConPTY write failed: \(error)")
+                }
+            }
+
+            actor.resizeHandler = { cols, rows in
+                try pseudoConsole.resize(cols: cols, rows: rows)
+            }
+
+            actor.onChildExitHandler = {
+                ptyClosed.withLock { $0 = true }
+                inputWriteBox.withLock { $0 = nil }
+                closeEvent.setEvent()
+            }
+
+            let killTree: @Sendable () -> Void = {
+                try? WindowsProcessPrimitives.terminateTree(process: processHandle, job: assignedJob)
+            }
+
+            actor.killHandler = {
+                ptyClosed.withLock { $0 = true }
+                inputWriteBox.withLock { $0 = nil }
+                killTree()
+                closeEvent.setEvent()
+            }
+
+            // Reader thread: drains outputRead continuously, even after actor stops, so
+            // ClosePseudoConsole on the wait thread can never deadlock waiting for pipe drainage.
+            Thread.detachNewThread {
+                var buf = [UInt8](repeating: 0, count: WindowsProcessHelpers.pipeReadBytes)
+                var forwarding = true
+                while true {
+                    var bytesRead: DWORD = 0
+                    let ok = buf.withUnsafeMutableBytes { rawBuf in
+                        ReadFile(outputRead.raw, rawBuf.baseAddress, DWORD(rawBuf.count), &bytesRead, nil)
+                    }
+                    if ok {
+                        if bytesRead == 0 {
+                            if forwarding { actor.emitReaderEof() }
+                            break
+                        }
+                        if forwarding {
+                            if actor.isStoppedFlag {
+                                forwarding = false
+                            } else {
+                                actor.emitOutput(Array(buf[0..<Int(bytesRead)]))
+                            }
+                        }
+                    } else {
+                        let err = UInt32(GetLastError())
+                        if forwarding {
+                            if WindowsProcessHelpers.isEndOfOutputError(err) {
+                                actor.emitReaderEof()
+                            } else {
+                                actor.emitReaderFailed("win32 error \(err)")
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+
+            // Wait-and-close worker matching `upstream/src/service/windows.rs#wait_and_close`.
+            Thread.detachNewThread {
+                WindowsPty.wait_and_close(
+                    pollExited: {
+                        WaitForSingleObject(processHandle.raw, 0) != DWORD(WAIT_TIMEOUT)
+                    },
+                    waitUntilExit: {
+                        guard WaitForSingleObject(processHandle.raw, INFINITE) == WAIT_OBJECT_0 else {
+                            return .failure(DaemonError("\(WindowsOSFailure("WaitForSingleObject"))"))
+                        }
+                        var code: DWORD = 0
+                        guard GetExitCodeProcess(processHandle.raw, &code) else {
+                            return .failure(DaemonError("\(WindowsOSFailure("GetExitCodeProcess"))"))
+                        }
+                        if let job = assignedJob {
+                            try? job.finish(failed: false)
+                        }
+                        return .success(UInt32(code))
+                    },
+                    killChild: killTree,
+                    waitForClose: { blockIndefinitely in
+                        let timeout: DWORD = blockIndefinitely ? INFINITE : DWORD(WindowsProcessHelpers.ptyExitPollIntervalMs)
+                        let rc = WaitForSingleObject(closeEvent.raw, timeout)
+                        if rc == WAIT_OBJECT_0 { return .closeRequested }
+                        if rc == DWORD(WAIT_TIMEOUT) { return .timeout }
+                        return .disconnected
+                    },
+                    onExit: { result in
+                        switch result {
+                        case .success(let code):
+                            actor.emitChildExit(exitCode: code, signal: nil)
+                        case .failure(let err):
+                            actor.emitChildExit(exitCode: nil, signal: nil, failureMessage: err.message)
+                        }
+                    },
+                    onCloseMaster: closePseudoConsoleOnce
+                )
+            }
+
+            return actor
+        }
+        #endif
+
+        #if os(macOS) || os(Linux)
         private static func spawnNativePipe(
             id: TerminalId,
             order: UInt64,
@@ -1612,7 +2241,7 @@ extension ProcessDaemon {
         }
         #endif
 
-        #if !os(WASI)
+        #if os(macOS) || os(Linux)
         private static func openPipeOutputFile(at path: String) throws -> FileHandle {
             #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
             let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o666)
@@ -1690,7 +2319,11 @@ extension ProcessDaemon {
             }
             try validateMetadata(request.metadata)
             return try insertSession { id, order in
+                #if os(Windows)
+                try WindowsPipe.spawn_pipe(id: id, order: order, request: request, backend: backend)
+                #else
                 try UnixPipe.spawn_pipe(id: id, order: order, request: request, backend: backend)
+                #endif
             }
         }
 

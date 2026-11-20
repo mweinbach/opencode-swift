@@ -11,11 +11,13 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodeUtil
 
-#if os(macOS) || os(Linux) || os(Windows)
+#if os(macOS) || os(Linux)
 private final class ActiveProcessController: @unchecked Sendable {
     private struct State: Sendable {
         var exited: Bool = false
@@ -85,7 +87,54 @@ private final class ActiveProcessController: @unchecked Sendable {
         }
     }
 }
+#endif
 
+#if os(Windows)
+private final class WindowsProcessController: @unchecked Sendable {
+    private struct State: Sendable {
+        var exited: Bool = false
+        var terminationRequested: Bool = false
+        var processHandle: OwnedWinHandle?
+        var job: WindowsJobObject?
+    }
+
+    private let state: Mutex<State>
+
+    init(processHandle: OwnedWinHandle, job: WindowsJobObject?) {
+        self.state = Mutex(State(processHandle: processHandle, job: job))
+    }
+
+    var isExited: Bool {
+        state.withLock { $0.exited }
+    }
+
+    func markExitedAndTakeJob() -> (job: WindowsJobObject?, wasKilled: Bool) {
+        state.withLock { s in
+            s.exited = true
+            let takenJob = s.job
+            s.job = nil
+            s.processHandle = nil
+            return (takenJob, s.terminationRequested)
+        }
+    }
+
+    /// Immediately terminates the entire process tree via `TerminateJobObject` (falling back to
+    /// `TerminateProcess` when jobless). Idempotent and safe to invoke from any thread.
+    func terminate() {
+        let target: (process: OwnedWinHandle, job: WindowsJobObject?)? = state.withLock { s in
+            if s.exited || s.terminationRequested { return nil }
+            s.terminationRequested = true
+            guard let handle = s.processHandle else { return nil }
+            if handle.isSignalled() { return nil }
+            return (handle, s.job)
+        }
+        guard let target else { return }
+        try? WindowsProcessPrimitives.terminateTree(process: target.process, job: target.job)
+    }
+}
+#endif
+
+#if os(macOS) || os(Linux) || os(Windows)
 private final class ConcurrentProcessCollector: @unchecked Sendable {
     private struct State {
         var stdout: [UInt8]? = nil
@@ -235,18 +284,17 @@ public enum CrossSpawnSpawner {
                 throw CancellationError()
             }
 
+            #if os(Windows)
+            _ = forceKillAfterMs
+            return try await runWindowsSubprocess(spec, timeoutMs: timeoutMs, signal: signal)
+            #else
             let process = Process()
             if spec.executable.contains("/") || spec.executable.contains("\\") {
                 process.executableURL = URL(fileURLWithPath: spec.executable)
                 process.arguments = spec.arguments
             } else {
-                #if os(Windows)
-                process.executableURL = URL(fileURLWithPath: "C:\\Windows\\System32\\cmd.exe")
-                process.arguments = ["/c", spec.executable] + spec.arguments
-                #else
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
                 process.arguments = [spec.executable] + spec.arguments
-                #endif
             }
             if let cwd = spec.workingDirectory {
                 process.currentDirectoryURL = URL(fileURLWithPath: cwd)
@@ -352,11 +400,183 @@ public enum CrossSpawnSpawner {
                 collector.recordTerminationError(CancellationError())
                 controller.terminate()
             }
+            #endif
             #else
             _ = (timeoutMs, signal, forceKillAfterMs)
             throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "ProcessSpawner.run")
             #endif
         }
+
+        #if os(Windows)
+        /// Creates stdio pipes, spawns the suspended child, and returns ONLY the parent pipe ends
+        /// plus `WindowsSuspendedProcess`, guaranteeing child pipe ends are closed before `resume()`
+        /// and before the async runner suspends on `await`.
+        private static func spawnWindowsSubprocessSuspended(
+            _ spec: ProcessSpec
+        ) throws -> (
+            created: WindowsSuspendedProcess,
+            stdoutRead: OwnedWinHandle,
+            stderrRead: OwnedWinHandle,
+            stdinWriter: OwnedWinHandle?
+        ) {
+            let stdoutPipe: (read: OwnedWinHandle, write: OwnedWinHandle)
+            let stderrPipe: (read: OwnedWinHandle, write: OwnedWinHandle)
+            let stdinChild: OwnedWinHandle
+            let stdinWrite: OwnedWinHandle?
+            do {
+                stdoutPipe = try WindowsProcessPrimitives.createAnonymousPipe(inheritRead: false, inheritWrite: true)
+                stderrPipe = try WindowsProcessPrimitives.createAnonymousPipe(inheritRead: false, inheritWrite: true)
+                if spec.stdin != nil {
+                    let pipe = try WindowsProcessPrimitives.createAnonymousPipe(inheritRead: true, inheritWrite: false)
+                    stdinChild = pipe.read
+                    stdinWrite = pipe.write
+                } else {
+                    stdinChild = try WindowsProcessPrimitives.openNullReadHandle()
+                    stdinWrite = nil
+                }
+            } catch {
+                throw PlatformError.ioFailure("Failed to create subprocess pipes for \(spec.executable): \(error)")
+            }
+
+            let created: WindowsSuspendedProcess
+            do {
+                let flags = WindowsProcessHelpers.creationFlags(
+                    for: .spawner,
+                    hasExplicitEnvironment: spec.environment != nil
+                )
+                created = try WindowsProcessPrimitives.createSuspendedProcessWithHandleList(
+                    program: spec.executable,
+                    args: spec.arguments,
+                    cwd: spec.workingDirectory,
+                    env: spec.environment,
+                    stdin: stdinChild,
+                    stdout: stdoutPipe.write,
+                    stderr: stderrPipe.write,
+                    creationFlags: flags
+                )
+            } catch {
+                throw PlatformError.ioFailure("Failed to spawn \(spec.executable): \(error)")
+            }
+            return (created: created, stdoutRead: stdoutPipe.read, stderrRead: stderrPipe.read, stdinWriter: stdinWrite)
+        }
+
+        /// Native Windows subprocess runner using `CreateProcessW(CREATE_SUSPENDED | CREATE_NO_WINDOW |
+        /// EXTENDED_STARTUPINFO_PRESENT [| CREATE_UNICODE_ENVIRONMENT])`, `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`,
+        /// kill-on-close Job Object assignment before `ResumeThread`, and tree kill on timeout/abort/cancel.
+        private func runWindowsSubprocess(
+            _ spec: ProcessSpec,
+            timeoutMs: Int?,
+            signal: AbortSignal?
+        ) async throws -> ProcessOutput {
+            let job = WindowsJobObject.create(label: "process \(spec.executable)")
+            let (created, stdoutRead, stderrRead, stdinWriter) = try Self.spawnWindowsSubprocessSuspended(spec)
+
+            let assignedJob: WindowsJobObject?
+            if let candidateJob = job {
+                do {
+                    try candidateJob.assign(process: created.process)
+                    assignedJob = candidateJob
+                } catch {
+                    windowsLogStderr("process \(spec.executable): cannot join the job object, killing only the main process: \(error)")
+                    assignedJob = nil
+                }
+            } else {
+                assignedJob = nil
+            }
+
+            let resumed: (pid: UInt32, process: OwnedWinHandle)
+            do {
+                resumed = try created.resume()
+            } catch {
+                // `created.deinit` terminates the suspended child if resume failed.
+                throw PlatformError.ioFailure("Failed to start \(spec.executable): \(error)")
+            }
+            let processHandle = resumed.process
+
+            let settle = Teardown.track("process \(spec.executable)")
+            defer { settle() }
+
+            let controller = WindowsProcessController(processHandle: processHandle, job: assignedJob)
+            let collector = ConcurrentProcessCollector()
+
+            if let inputBytes = spec.stdin, let writer = stdinWriter {
+                Thread.detachNewThread {
+                    if !inputBytes.isEmpty {
+                        try? WindowsProcessPrimitives.writeAll(to: writer, bytes: inputBytes)
+                    }
+                    // `writer` closes automatically when this closure exits.
+                }
+            }
+
+            Thread.detachNewThread {
+                let bytes = WindowsProcessPrimitives.readAllSync(from: stdoutRead)
+                collector.setStdout(bytes)
+            }
+
+            Thread.detachNewThread {
+                let bytes = WindowsProcessPrimitives.readAllSync(from: stderrRead)
+                collector.setStderr(bytes)
+            }
+
+            Thread.detachNewThread {
+                _ = WaitForSingleObject(processHandle.raw, INFINITE)
+                var exitCode: DWORD = 0
+                _ = GetExitCodeProcess(processHandle.raw, &exitCode)
+                let (finishedJob, wasKilled) = controller.markExitedAndTakeJob()
+                if let finishedJob {
+                    try? finishedJob.finish(
+                        failed: WindowsProcessHelpers.shouldTerminateJobOnExit(
+                            exitCode: UInt32(exitCode),
+                            wasKilled: wasKilled
+                        )
+                    )
+                }
+                collector.setExited(exitCode: Int32(bitPattern: exitCode))
+            }
+
+            let removeAbortListener: @Sendable () -> Void
+            if let signal {
+                removeAbortListener = signal.onAbort {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+                if signal.isAborted {
+                    collector.recordTerminationError(AppProcess.abortError(signal))
+                    controller.terminate()
+                }
+            } else {
+                removeAbortListener = {}
+            }
+            defer { removeAbortListener() }
+
+            let timeoutTask: Task<Void, Never>?
+            if let timeoutMs {
+                timeoutTask = Task {
+                    do {
+                        try await Task.sleep(for: .milliseconds(timeoutMs))
+                    } catch {
+                        return
+                    }
+                    if !controller.isExited {
+                        collector.recordTerminationError(PlatformError.ioFailure("Timed out"))
+                        controller.terminate()
+                    }
+                }
+            } else {
+                timeoutTask = nil
+            }
+            defer { timeoutTask?.cancel() }
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    collector.install(continuation: continuation)
+                }
+            } onCancel: {
+                collector.recordTerminationError(CancellationError())
+                controller.terminate()
+            }
+        }
+        #endif
     }
 
     public static let spawnerKey = "@opencode/ChildProcessSpawner"
@@ -924,6 +1144,40 @@ public enum ProcessSignal {
     }
     #endif
 
+    #if os(Windows)
+    private static let windowsCtrlHandlerInstalled = Mutex(false)
+
+    private static let windowsConsoleCtrlTrampoline: @convention(c) (DWORD) -> WindowsBool = { ctrlType in
+        guard let signalName = WindowsProcessHelpers.consoleCtrlEventToSignalName(UInt32(ctrlType)) else {
+            return false
+        }
+        guard ProcessSignal.isSignalInstalled(signalName) else {
+            return false
+        }
+        Thread.detachNewThread {
+            ProcessSignal.dispatch(signal: signalName)
+        }
+        return true
+    }
+
+    private static func installWindowsConsoleHandlerIfNeeded(for signalName: String) {
+        let upper = signalName.uppercased()
+        guard upper == "SIGINT" || upper == "SIGTERM" else { return }
+        let shouldInstall = windowsCtrlHandlerInstalled.withLock { installed -> Bool in
+            if installed { return false }
+            installed = true
+            return true
+        }
+        if shouldInstall {
+            _ = SetConsoleCtrlHandler(windowsConsoleCtrlTrampoline, true)
+        }
+    }
+    #endif
+
+    internal static func isSignalInstalled(_ signal: String) -> Bool {
+        registry.withLock { $0.listeners[signal] != nil }
+    }
+
     // parity: util/src/process-signal.ts#install [status=implemented hash=ec1d26a15ffe]
     public static func install(signal: String, unavailable: @escaping @Sendable () -> Void) {
         let inserted = registry.withLock { reg -> Bool in
@@ -935,6 +1189,10 @@ public enum ProcessSignal {
         #if os(macOS) || os(Linux)
         if inserted {
             installPosixHandlerIfSupported(for: signal)
+        }
+        #elseif os(Windows)
+        if inserted {
+            installWindowsConsoleHandlerIfNeeded(for: signal)
         }
         #else
         _ = inserted
@@ -1150,6 +1408,8 @@ public enum HeapSnapshot {
         let pid: Int32
         #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
         pid = getpid()
+        #elseif os(Windows)
+        pid = Int32(bitPattern: GetCurrentProcessId())
         #else
         pid = 0
         #endif
