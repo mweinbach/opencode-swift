@@ -1975,7 +1975,9 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=2e813dcc7f5a]
+        /// Pooled stdio servers run on the local host environment; this port spawns them through `Connection.make`,
+        /// so upstream's `Environment.make(localID, …)` construction has no separate host value here.
+        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=d8b73369d6f9]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service()
@@ -2604,9 +2606,35 @@ public enum CoreMCP {
             (["<mcp_instructions>"] + entries(servers) + ["</mcp_instructions>"]).joined(separator: "\n")
         }
 
-        // parity: core/src/mcp/instructions.ts#Interface [status=implemented hash=314e495289c8]
+        /// The parts of a Session's tool snapshot that decide which MCP servers it can reach
+        /// (upstream `Pick<Tool.Snapshot, "definitions" | "codeModeCatalog">`).
+        public struct ToolReach: Sendable {
+            /// Effective names of the tools offered directly to the model.
+            public let definitions: [String]
+            /// The Code Mode catalog, when Code Mode is offered.
+            public let codeModeCatalog: CoreCodemode.Catalog.Inventory?
+
+            public init(definitions: [String], codeModeCatalog: CoreCodemode.Catalog.Inventory? = nil) {
+                self.definitions = definitions
+                self.codeModeCatalog = codeModeCatalog
+            }
+        }
+
+        static func catalogPaths(_ items: [CoreCodemode.Catalog.Entry], prefix: String = "") -> [String] {
+            items.flatMap { item -> [String] in
+                switch item {
+                case .tool(let tool):
+                    return [prefix.isEmpty ? tool.name : "\(prefix).\(tool.name)"]
+                case .namespace(let namespace):
+                    return catalogPaths(namespace.tools, prefix: prefix.isEmpty ? namespace.name : "\(prefix).\(namespace.name)")
+                }
+            }
+        }
+
+        // parity: core/src/mcp/instructions.ts#Interface [status=implemented hash=7006fb239099]
         public protocol Interface: Sendable {
-            func load(permissions: PermissionSchema.Ruleset) async -> CoreInstruction.Instructions.List
+            /// Lists instructions for MCP servers that have at least one tool in the Session's tool snapshot.
+            func load(tools: ToolReach) async -> CoreInstruction.Instructions.List
         }
 
         // parity: core/src/mcp/instructions.ts#Service [status=implemented hash=2cf5c2242094]
@@ -2618,18 +2646,23 @@ public enum CoreMCP {
                 self.mcp = mcp
             }
 
-            public func load(permissions: PermissionSchema.Ruleset) async -> CoreInstruction.Instructions.List {
+            public func load(tools snapshot: ToolReach) async -> CoreInstruction.Instructions.List {
                 let serverInstructions = await mcp.instructions()
                 let tools = await mcp.tools()
-                let canExecute = CoreSkill.evaluatePermission(action: "execute", resource: "*", permissions: permissions) != .deny
+                let direct = Set(snapshot.definitions)
+                let codemode = Set(snapshot.codeModeCatalog.map { Instructions.catalogPaths($0.tools) } ?? [])
+                // Instructions are useful only when this Session can reach at least one server tool.
                 let visible: [Summary] = serverInstructions.compactMap { item in
+                    let namespace = CoreTool.Mcp.namespace(item.server.rawValue)
                     let owned = tools.filter { $0.server == item.server }
-                    let hasReachable = owned.contains { t in
-                        CoreSkill.evaluatePermission(action: "\(t.server.rawValue)_\(t.definition.name)", resource: "*", permissions: permissions) != .deny
+                    let inCodeMode = owned.contains { tool in
+                        codemode.contains("\(namespace).\(CoreTool.Runtime.normalizedName(tool.definition.name))")
                     }
-                    guard hasReachable else { return nil }
-                    let codemode = canExecute && owned.first?.codemode != false
-                    return Summary(server: item.server.rawValue, instructions: item.instructions, codemode: codemode ? nil : false)
+                    let inDirect = owned.contains { tool in
+                        direct.contains(CoreTool.Mcp.name(server: item.server.rawValue, tool: tool.definition.name))
+                    }
+                    guard inCodeMode || inDirect else { return nil }
+                    return Summary(server: item.server.rawValue, instructions: item.instructions, codemode: inCodeMode ? nil : false)
                 }.sorted { $0.server < $1.server }
 
                 let updater = CoreInstruction.Instructions.listUpdate(
@@ -2655,7 +2688,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/instructions.ts#layer [status=implemented hash=2fd10cbda811]
+        // parity: core/src/mcp/instructions.ts#layer [status=implemented hash=2191c2500f85]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let mcp = deps.get(Registry.Service.serviceKey, as: Registry.Service.self) ?? Registry.Service()
             return LayerNode.Output([Service.serviceKey: Service(mcp: mcp)])
@@ -3235,12 +3268,14 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/integration.ts#OAuthImplementation [status=implemented hash=5975db7ac0b9]
+        // parity: core/src/integration.ts#OAuthImplementation [status=implemented hash=7410581a837f]
         public struct OAuthImplementation: Sendable {
             public let integrationID: ID
             public let method: OAuthMethod
             public let authorize: @Sendable (Form.Answer) async throws -> OAuthAuthorization
             public let refresh: (@Sendable (CredentialSchema.OAuth) async throws -> CredentialSchema.OAuth)?
+            /// Signs the credential out remotely before it is removed; a failure is logged and removal continues.
+            public let revoke: (@Sendable (CredentialSchema.OAuth) async throws -> Void)?
             public let label: (@Sendable (CredentialSchema.OAuth) -> String?)?
 
             public init(
@@ -3248,12 +3283,14 @@ public enum CoreIntegration {
                 method: OAuthMethod,
                 authorize: @escaping @Sendable (Form.Answer) async throws -> OAuthAuthorization,
                 refresh: (@Sendable (CredentialSchema.OAuth) async throws -> CredentialSchema.OAuth)? = nil,
+                revoke: (@Sendable (CredentialSchema.OAuth) async throws -> Void)? = nil,
                 label: (@Sendable (CredentialSchema.OAuth) -> String?)? = nil
             ) {
                 self.integrationID = integrationID
                 self.method = method
                 self.authorize = authorize
                 self.refresh = refresh
+                self.revoke = revoke
                 self.label = label
             }
         }
@@ -3525,7 +3562,19 @@ public enum CoreIntegration {
                 try await credentials.activate(credentialID)
             }
 
+            /// `Integration.connection.remove`: an OAuth credential whose sign-in method can revoke it is signed out
+            /// remotely first. A failed revocation only means the remote sign-out was not confirmed; the local
+            /// credential is removed regardless.
             public func removeCredential(_ credentialID: CredentialSchema.ID) async throws {
+                if let credential = try await credentials.get(credentialID),
+                   case .oauth(let value) = credential.value,
+                   let revoke = state.get()[credential.integrationID]?.oauthImplementations[value.methodID]?.revoke {
+                    do {
+                        try await revoke(value)
+                    } catch {
+                        // remote sign-out was not confirmed; removing the local credential
+                    }
+                }
                 try await credentials.remove(credentialID)
             }
 

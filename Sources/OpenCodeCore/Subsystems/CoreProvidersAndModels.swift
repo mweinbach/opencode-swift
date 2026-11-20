@@ -1984,7 +1984,8 @@ public enum CoreModel {
         private static func resolveProtocol(
             package: String,
             model: ModelSchema.Info,
-            support: Support
+            support: Support,
+            supports: [Support]? = nil
         ) -> [ModelSchema.Variant] {
             let responsesPackages: Set<String> = [
                 "@opencode/ai/providers/openai", "@opencode/ai/providers/openai/responses",
@@ -2066,6 +2067,14 @@ public enum CoreModel {
                 }
             }
             if googleInteractionsPackages.contains(package) {
+                // Budget models such as Gemini 2.5 do not accept "minimal" as an off switch; toggle-only models
+                // (such as Gemma 4) switch between minimal and high thinking.
+                if case .toggle = support, let supports, supports.allSatisfy({ $0 == .toggle }) {
+                    return [
+                        makeVariant("none", settings: ["thinkingLevel": .string("minimal")]),
+                        makeVariant("thinking", settings: ["thinkingLevel": .string("high"), "thinkingSummaries": .string("auto")]),
+                    ]
+                }
                 guard case .effort(let vals) = support else { return [] }
                 return (vals ?? defaultEfforts).map { effort in
                     makeVariant(effort, settings: ["thinkingLevel": .string(effort), "thinkingSummaries": .string("auto")])
@@ -2167,15 +2176,15 @@ public enum CoreModel {
         ) -> [ModelSchema.Variant] {
             guard let pkg = model.package else { return [] }
             let toggleVariants: [ModelSchema.Variant] = supports.contains(.toggle)
-                ? resolveProtocol(package: pkg, model: model, support: .toggle)
+                ? resolveProtocol(package: pkg, model: model, support: .toggle, supports: supports)
                 : []
             let effortSupport = supports.first { if case .effort = $0 { return true } else { return false } }
             let budgetSupport = supports.first { if case .budgetTokens = $0 { return true } else { return false } }
             let main: [ModelSchema.Variant]
             if let effortSupport {
-                main = resolveProtocol(package: pkg, model: model, support: effortSupport)
+                main = resolveProtocol(package: pkg, model: model, support: effortSupport, supports: supports)
             } else if let budgetSupport {
-                main = resolveProtocol(package: pkg, model: model, support: budgetSupport)
+                main = resolveProtocol(package: pkg, model: model, support: budgetSupport, supports: supports)
             } else {
                 main = toggleVariants
             }

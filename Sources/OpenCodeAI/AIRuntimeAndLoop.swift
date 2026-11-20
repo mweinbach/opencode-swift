@@ -445,6 +445,8 @@ public enum AIErrorClassifier {
         "responsibleaipolicyviolation",
         "content_policy_violation",
         "image_content_policy_violation",
+        // OpenAI's cybersecurity safeguard, as an HTTP 400 or a mid-stream error frame.
+        "cyber_policy",
         "refusal",
         "datainspectionfailed",
         "moderation_blocked",
@@ -460,7 +462,7 @@ public enum AIErrorClassifier {
     private static let quotaText =
         "insufficient[-_\\s]?(?:quota|balance)|(?<!token_)quota[-_\\s]?exceeded|budget exceeded|usage limit|(?<!rate[-_\\s]?)limit exhausted|package has expired|plan does not yet include"
     private static let contentPolicyText =
-        "violating our usage policy|blocked by content filtering policy|content[-_\\s]?policy|rejected (?:as a result of our|by the) safety system|detected potentially unsafe or sensitive content"
+        "violating our usage policy|blocked by content filtering policy|content[-_\\s]?policy|rejected (?:as a result of our|by the) safety system|detected potentially unsafe or sensitive content|rejected in accordance with our terms of use"
     private static let serverErrorText =
         "\\b(?:try again|(?:please |you can )?retry (?:the |this |your )?request|try (?:the |this |your )?request again|(?:currently |temporarily )?at capacity|overloaded|temporarily unavailable|service[-_\\s]?unavailable|(?:server|internal)[-_\\s]?error|server (?:is )?busy|provider returned (?:an )?error|resource[-_\\s]?exhausted|upstream (?:connect|connection|request)|request buffer limit while retrying upstream)\\b"
 

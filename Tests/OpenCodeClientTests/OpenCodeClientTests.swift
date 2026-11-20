@@ -15,7 +15,7 @@ struct OpenCodeClientTests {
     func moduleMetadataAndContract() {
         #expect(OpenCodeClientModule.upstreamPackage == "client")
         #expect(OpenCodeClientModule.api.groups.count == 32)
-        #expect(OpenCodeClientModule.api.endpoints.count == 173)
+        #expect(OpenCodeClientModule.api.endpoints.count == 174)
         #expect(OpenCodeClientModule.groupNames["server.fs"] == "file")
         #expect(OpenCodeClientModule.clientNamespace(path: "/api/experimental/usage/limits") == "experimental")
         #expect(OpenCodeClientModule.clientNamespace(path: "/api/session") == nil)

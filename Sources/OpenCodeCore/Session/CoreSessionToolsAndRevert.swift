@@ -1205,7 +1205,7 @@ public enum CoreSession {
         }
     }
 
-    // parity: core/src/session/session.ts#make [status=implemented hash=1304cd7c7971]
+    // parity: core/src/session/session.ts#make [status=implemented hash=9ee40a846d72]
     public static func make(id: SessionID, service: Service) -> Handle {
         Handle(id: id, service: service)
     }
@@ -1473,7 +1473,9 @@ public enum CoreSession {
 
         public func selectAgent(sessionID: SessionID, agent: String) async throws {
             let session = try get(sessionID)
-            if session.agent == agent { return }
+            // Without a stored agent the Session runs as its Location's default, which its last step records.
+            let current = session.agent ?? (try? store.lastAssistantAfter(sessionID: sessionID, afterSeq: nil))?.agent
+            if current == agent { return }
             _ = try await bus.publish(
                 SessionEventSchema.AgentSelected,
                 data: SessionEventSchema.AgentSelectedData(sessionID: sessionID, agent: agent, previous: session.agent)

@@ -1092,6 +1092,20 @@ public final class ClientDataStore: Sendable {
         var projectPermissions: [String: [PermissionSavedSchema.Info]] = [:]
         // Location collections
         var locations: [String: ClientLocationData] = [:]
+        // Running background jobs keyed by job id, for the session trees that synced them. Settled jobs are removed.
+        var job: [String: JobSchema.Info] = [:]
+        // Job ids the server listed for each synced tree root (it filters descendants itself), plus ids that events
+        // added for owners known to be in the tree. Loaded session info only reaches direct children, so walking
+        // parents alone would drop a grandchild's jobs.
+        var jobTree: [String: Set<String>] = [:]
+        // Job events that arrive while a tree's list is in flight, applied over its response: the latest info, or
+        // nil once settled. Keyed by tree root, each map is identified by a token so a superseded sync drops out.
+        var jobUpdates: [String: (token: UInt64, updates: [String: JobSchema.Info?])] = [:]
+        var nextJobSyncToken: UInt64 = 1
+        // Per-session send chain: prompts and the requests a caller puts in it with `sequence` must reach the
+        // server in submission order. Each waits for the previous link to settle, so one failure does not block
+        // the next.
+        var sending: [String: Task<Void, Never>] = [:]
         // Observers
         var nextObserverID: UInt64 = 1
         var observers: [UInt64: @Sendable () -> Void] = [:]
@@ -1451,6 +1465,159 @@ public final class ClientDataStore: Sendable {
         }
     }
 
+    // MARK: - Background Jobs
+
+    /// Running jobs owned by the session or any session below it: a synced tree's listed members, plus jobs whose
+    /// owner loaded session info places below it.
+    public func jobs(_ sessionID: String) -> [JobSchema.Info] {
+        state.withLock { s in
+            let members = s.jobTree[sessionID]
+            return s.job.values
+                .filter { members?.contains($0.clientJobID) == true || jobWithinLocked(s, job: $0, ancestorID: sessionID) }
+                .sorted { $0.clientJobID < $1.clientJobID }
+        }
+    }
+
+    /// Lists the running jobs of `sessionID`'s tree from the server and reconciles them with job events that
+    /// arrived while the list was in flight.
+    public func syncJobs(_ sessionID: String) async throws {
+        let token = state.withLock { s -> UInt64 in
+            let token = s.nextJobSyncToken
+            s.nextJobSyncToken += 1
+            s.jobUpdates[sessionID] = (token: token, updates: [:])
+            return token
+        }
+        let list: [JobSchema.Info]
+        do {
+            list = try await config.api().experimental.job.list(ExperimentalJobListInput(
+                sessionID: sessionID,
+                status: .string(JobSchema.Status.running.rawValue),
+                descendants: true
+            ))
+        } catch {
+            state.withLock { s in
+                if s.jobUpdates[sessionID]?.token == token { s.jobUpdates.removeValue(forKey: sessionID) }
+            }
+            if let notFound = extractSessionNotFoundError(error) {
+                markDeleted(notFound.sessionID)
+            }
+            throw error
+        }
+        let applied = state.withLock { s -> Bool in
+            guard let pending = s.jobUpdates[sessionID], pending.token == token else { return false }
+            s.jobUpdates.removeValue(forKey: sessionID)
+            var listed: [String: JobSchema.Info] = [:]
+            for job in list { listed[job.clientJobID] = job }
+            var next = listed
+            for (id, info) in pending.updates {
+                guard let info else {
+                    next.removeValue(forKey: id)
+                    continue
+                }
+                if listed[id] != nil || jobWithinLocked(s, job: info, ancestorID: sessionID) { next[id] = info }
+            }
+            let previous = s.jobTree[sessionID] ?? []
+            for (id, job) in s.job where next[id] == nil {
+                if previous.contains(id) || jobWithinLocked(s, job: job, ancestorID: sessionID) {
+                    s.job.removeValue(forKey: id)
+                }
+            }
+            for (id, job) in next { s.job[id] = job }
+            s.jobTree[sessionID] = Set(next.keys)
+            s.syncedKeys.insert("job:\(sessionID)")
+            return true
+        }
+        if applied { notifyObservers() }
+    }
+
+    /// Marks a job tree stale so its next `syncJobs` lists it again.
+    public func invalidateJobs(_ sessionID: String) {
+        _ = state.withLock { $0.syncedKeys.remove("job:\(sessionID)") }
+    }
+
+    // MARK: - Send Chain
+
+    /// How long a sequenced request that stays open holds its session's send chain once it has left: time to reach
+    /// the server before the next send does.
+    public static let sequenceHandoffMs: Int64 = 250
+
+    /// Captures the session's previous link and installs this request as the next one. The chain's link is the
+    /// request itself, or `link` of it for a request that stays open after the server has it.
+    private func sendAdmission<Value: Sendable>(
+        _ sessionID: String,
+        send: @escaping @Sendable () async throws -> Value,
+        link: (@Sendable (Task<Value, any Error>) async -> Void)? = nil
+    ) async throws -> Value {
+        let request = state.withLock { s -> Task<Value, any Error> in
+            let previous = s.sending[sessionID]
+            let request = Task<Value, any Error> {
+                await previous?.value
+                return try await send()
+            }
+            let next = Task<Void, Never> {
+                if let link {
+                    await link(request)
+                } else {
+                    _ = try? await request.value
+                }
+            }
+            s.sending[sessionID] = next
+            Task { [weak self] in
+                await next.value
+                self?.state.withLock { s in
+                    if s.sending[sessionID] == next { s.sending.removeValue(forKey: sessionID) }
+                }
+            }
+            return request
+        }
+        return try await request.value
+    }
+
+    /// Runs a session request this layer does not model, such as a shell or a server command, in the session's
+    /// send chain: `prepare` and then `send` start once the prompts and sequenced requests made before it have
+    /// left, so the server receives them in the order they were made. The chain keeps the order in which requests
+    /// leave, not the work they start: such a request can stay open for as long as that work runs, as a shell
+    /// command's does until its process exits. Its link therefore ends when the request settles or has had
+    /// `sequenceHandoffMs` to reach the server, whichever is first.
+    public func sequence<Value: Sendable>(
+        _ sessionID: String,
+        send: @escaping @Sendable () async throws -> Value,
+        prepare: (@Sendable () async throws -> Void)? = nil
+    ) async throws -> Value {
+        let (left, leftContinuation) = AsyncStream<Void>.makeStream()
+        let handoff = Self.sequenceHandoffMs
+        return try await sendAdmission(
+            sessionID,
+            send: {
+                defer { leftContinuation.finish() }
+                try await prepare?()
+                let request = Task<Value, any Error> { try await send() }
+                leftContinuation.yield(())
+                return try await request.value
+            },
+            link: { request in
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { _ = try? await request.value }
+                    group.addTask {
+                        var didLeave = false
+                        for await _ in left {
+                            didLeave = true
+                            break
+                        }
+                        if didLeave {
+                            try? await Task.sleep(for: .milliseconds(handoff))
+                        } else {
+                            // The request never left (its prepare failed); its settlement ends the link.
+                            _ = try? await request.value
+                        }
+                    }
+                    await group.next()
+                    group.cancelAll()
+                }
+            }
+        )
+    }
+
     public func syncProjects() async throws {
         let projects = try await config.api().project.list()
         state.withLock { s in
@@ -1661,7 +1828,10 @@ public final class ClientDataStore: Sendable {
                 delivery: input.delivery,
                 resume: input.resume
             )
-            return try await config.api().session.prompt(payload)
+            let api = config.api
+            return try await sendAdmission(input.sessionID) {
+                try await api().session.prompt(payload)
+            }
         } catch {
             if fresh {
                 let rolledBack = state.withLock { s -> Bool in
@@ -2124,6 +2294,39 @@ public final class ClientDataStore: Sendable {
                     }
                 }
 
+            case "server.connected":
+                // Re-list every synced job tree: events missed while disconnected never arrive.
+                let roots = Array(s.jobTree.keys)
+                for root in roots { s.syncedKeys.remove("job:\(root)") }
+                if !roots.isEmpty {
+                    Task { [weak self] in
+                        for root in roots { try? await self?.syncJobs(root) }
+                    }
+                }
+                didMutate = false
+
+            case "experimental.job.updated":
+                guard let infoVal = jsonField(event.data, "info"),
+                      let info = try? ClientCodec.fromJSONValue(JobSchema.Info.self, value: infoVal) else {
+                    didMutate = false
+                    break
+                }
+                let id = info.clientJobID
+                let running = info.clientJobStatus == .running
+                for key in Array(s.jobUpdates.keys) {
+                    s.jobUpdates[key]?.updates[id] = .some(running ? info : nil)
+                }
+                if !running {
+                    guard s.job[id] != nil else { didMutate = false; break }
+                    s.job.removeValue(forKey: id)
+                    for key in Array(s.jobTree.keys) { s.jobTree[key]?.remove(id) }
+                    break
+                }
+                s.job[id] = info
+                for key in Array(s.jobTree.keys) where jobWithinLocked(s, job: info, ancestorID: key) {
+                    s.jobTree[key]?.insert(id)
+                }
+
             case "session.tool.success":
                 if let sid = jsonString(event.data, "sessionID"),
                    let msgID = jsonString(event.data, "assistantMessageID"),
@@ -2275,6 +2478,7 @@ public final class ClientDataStore: Sendable {
     }
 
     private func removeSessionLocked(_ s: inout StoreState, sessionID: String) {
+        removeJobTreeLocked(&s, rootID: sessionID)
         for item in s.sessionPending[sessionID] ?? [] {
             s.outbox.remove(item.id.rawValue)
         }
@@ -2295,6 +2499,34 @@ public final class ClientDataStore: Sendable {
                 s.sessionFamily[rootID] = next
             }
         }
+    }
+
+    /// Whether a session is the ancestor or one of its descendants, by the parents in loaded session info.
+    private func withinTreeLocked(_ s: StoreState, sessionID: String, ancestorID: String) -> Bool {
+        var seen: Set<String> = []
+        var current: String? = sessionID
+        while let id = current, !seen.contains(id) {
+            if id == ancestorID { return true }
+            seen.insert(id)
+            current = s.sessionInfo[id]?.parentID?.rawValue
+        }
+        return false
+    }
+
+    /// A subagent job's session is the parent of the child it runs, so either can place it in a tree.
+    private func jobWithinLocked(_ s: StoreState, job: JobSchema.Info, ancestorID: String) -> Bool {
+        if withinTreeLocked(s, sessionID: job.clientJobSessionID, ancestorID: ancestorID) { return true }
+        if case .subagent(let subagent) = job {
+            return withinTreeLocked(s, sessionID: subagent.childSessionID.rawValue, ancestorID: ancestorID)
+        }
+        return false
+    }
+
+    private func removeJobTreeLocked(_ s: inout StoreState, rootID: String) {
+        s.jobUpdates.removeValue(forKey: rootID)
+        s.syncedKeys.remove("job:\(rootID)")
+        guard let members = s.jobTree.removeValue(forKey: rootID) else { return }
+        for id in members { s.job.removeValue(forKey: id) }
     }
 
     private func admitLocalLocked(_ s: inout StoreState, item: SessionInboxSchema.Info) {
@@ -2541,9 +2773,43 @@ public final class ClientDataStore: Sendable {
 public typealias ClientData = ClientDataStore
 
 /// Creates an observable `ClientDataStore` wired to `config.event` and `config.api`.
-// parity: client/src/solid/data.ts#createData [status=implemented hash=0958a1c45278]
+// parity: client/src/solid/data.ts#createData [status=implemented hash=5d11b8feaefc]
 public func createData(_ config: CreateDataInput) -> ClientDataStore {
     ClientDataStore(config: config)
+}
+
+// MARK: - Job Info Accessors
+
+extension JobSchema.Info {
+    fileprivate var clientJobID: String {
+        switch self {
+        case .shell(let v): return v.id
+        case .subagent(let v): return v.id
+        case .image(let v): return v.id
+        case .video(let v): return v.id
+        case .codemode(let v): return v.id
+        }
+    }
+
+    fileprivate var clientJobSessionID: String {
+        switch self {
+        case .shell(let v): return v.sessionID.rawValue
+        case .subagent(let v): return v.sessionID.rawValue
+        case .image(let v): return v.sessionID.rawValue
+        case .video(let v): return v.sessionID.rawValue
+        case .codemode(let v): return v.sessionID.rawValue
+        }
+    }
+
+    fileprivate var clientJobStatus: JobSchema.Status {
+        switch self {
+        case .shell(let v): return v.status
+        case .subagent(let v): return v.status
+        case .image(let v): return v.status
+        case .video(let v): return v.status
+        case .codemode(let v): return v.status
+        }
+    }
 }
 
 // MARK: - JSON Extraction Helpers

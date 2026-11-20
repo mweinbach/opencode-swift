@@ -953,10 +953,10 @@ struct SessionEventSchemaTests {
 
     @Test("EventManifestSchema and DurableEventManifestSchema match exact upstream counts and lookups")
     func eventManifestAndDurableManifest() throws {
-        #expect(EventManifestSchema.ServerDefinitions.count == 98)
-        #expect(EventManifestSchema.Server.count == 98)
-        #expect(EventManifestSchema.Definitions.count == 110)
-        #expect(EventManifestSchema.Latest.count == 110)
+        #expect(EventManifestSchema.ServerDefinitions.count == 99)
+        #expect(EventManifestSchema.Server.count == 99)
+        #expect(EventManifestSchema.Definitions.count == 111)
+        #expect(EventManifestSchema.Latest.count == 111)
         #expect(DurableEventManifestSchema.Durable.count == 49)
         #expect(EventManifestSchema.Durable == DurableEventManifestSchema.Durable)
 

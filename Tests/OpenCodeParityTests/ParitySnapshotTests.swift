@@ -502,7 +502,7 @@ struct ParitySnapshotTests {
                         mediaBlob: e["media_blob"]?.bool,
                         automations: e["automations"]?.bool,
                         artifacts: e["artifacts"]?.bool,
-                        videoGenerate: e["video_generate"]?.bool,
+                        videoGenerate: e["video_generate"]?.bool.map { .enabled($0) },
                         consoleWatches: e["console_watches"]?.bool,
                         mcpEvents: e["mcp_events"]?.bool,
                         fullCodemode: e["full_codemode"]?.bool,

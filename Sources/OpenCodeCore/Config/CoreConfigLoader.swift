@@ -562,40 +562,144 @@ public enum CoreConfigMarkdown {
         try? parse(content)
     }
 
-    /// Converts unquoted YAML frontmatter values containing colons or leading `[Tag] text` into block scalars (`|-`).
-    // parity: core/src/config/markdown.ts#sanitize [status=implemented hash=df26223ccc0a]
+    /// Joins a legacy separate `variant` into a string `model` so it survives native decoding. Embedded and
+    /// structured native selections, and a variant without a model, stay unchanged.
+    // parity: core/src/config/markdown.ts#joinLegacyVariant [status=implemented hash=ea60bed331cc]
+    public static func joinLegacyVariant(_ data: [String: JSONValue]) -> [String: JSONValue] {
+        guard case .string(let model) = data["model"], !model.contains("#") else { return data }
+        guard case .string(let variant) = data["variant"], !variant.isEmpty, !variant.contains("#") else { return data }
+        var joined = data
+        joined["model"] = .string("\(model)#\(variant)")
+        return joined
+    }
+
+    /// Converts unquoted YAML frontmatter values containing colons or leading `[Tag] text` into block scalars (`|-`),
+    /// so config files written for other coding agents keep working, without rewriting valid YAML flow collections.
+    // parity: core/src/config/markdown.ts#sanitize [status=implemented hash=153f9350af00]
     public static func sanitize(_ content: String) -> String {
         guard let (frontmatter, range) = extractFrontmatterBody(content) else {
             return content
         }
         let lines = splitLinesPreservingEmpty(frontmatter)
         var out: [String] = []
+        var flow: FlowState?
         for line in lines {
+            if let open = flow {
+                flow = scanFlow(line, open).state
+                out.append(line)
+                continue
+            }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("#") || trimmed.isEmpty || line.first?.isWhitespace == true {
                 out.append(line)
                 continue
             }
-            if let (key, rawVal) = splitTopLevelKeyValue(line) {
-                let value = rawVal.trimmingCharacters(in: .whitespaces)
-                if value.isEmpty || value == ">" || value == "|" || value.hasPrefix("\"") || value.hasPrefix("'") {
-                    out.append(line)
-                    continue
-                }
-                let hasColon = value.contains(":")
-                let hasBracketTag = matchesLeadingBracketTag(value)
-                if !hasColon && !hasBracketTag {
+            guard let (key, rawVal) = splitTopLevelKeyValue(line) else {
+                out.append(line)
+                continue
+            }
+            let value = rawVal.trimmingCharacters(in: .whitespaces)
+            if value.isEmpty || value.hasPrefix("\"") || value.hasPrefix("'") {
+                out.append(line)
+                continue
+            }
+            if value.hasPrefix("[") || value.hasPrefix("{") {
+                let scan = scanFlow(value, FlowState())
+                if scan.status == .open { flow = scan.state }
+                if scan.status != .trailing {
                     out.append(line)
                     continue
                 }
                 out.append("\(key): |-")
                 out.append("  \(value)")
-            } else {
-                out.append(line)
+                continue
             }
+            if !value.contains(":") || isValidYaml(line) {
+                out.append(line)
+                continue
+            }
+            out.append("\(key): |-")
+            out.append("  \(value)")
         }
         let replacement = out.joined(separator: "\n")
         return content.replacingCharacters(in: range, with: replacement)
+    }
+
+    private static func isValidYaml(_ line: String) -> Bool {
+        (try? parseSimpleYAMLMapping(line)) != nil
+    }
+
+    struct FlowState: Equatable, Sendable {
+        var stack: [Character] = []
+        var quote: Character?
+    }
+
+    enum FlowStatus: Equatable, Sendable {
+        case open
+        case closed
+        case trailing
+        case invalid
+    }
+
+    /// Tracks an unfinished YAML flow collection (`[...]` / `{...}`) across lines, quote-aware, stopping at a
+    /// comment. `trailing` means text follows the closing bracket, as in `[Tag] text`.
+    static func scanFlow(_ text: String, _ state: FlowState) -> (status: FlowStatus, state: FlowState?) {
+        var stack = state.stack
+        var quote = state.quote
+        let chars = Array(text)
+        var i = 0
+        while i < chars.count {
+            let ch = chars[i]
+            if quote == "\"" {
+                if ch == "\\" {
+                    i += 2
+                    continue
+                }
+                if ch == "\"" { quote = nil }
+                i += 1
+                continue
+            }
+            if quote == "'" {
+                if ch == "'" {
+                    if i + 1 < chars.count, chars[i + 1] == "'" {
+                        i += 2
+                        continue
+                    }
+                    quote = nil
+                }
+                i += 1
+                continue
+            }
+            if ch == "\"" || ch == "'" {
+                if i == 0 || chars[i - 1].isWhitespace || "[{,:".contains(chars[i - 1]) {
+                    quote = ch
+                    i += 1
+                    continue
+                }
+            }
+            if ch == "#", i == 0 || chars[i - 1].isWhitespace { break }
+            if ch == "[" {
+                stack.append("]")
+                i += 1
+                continue
+            }
+            if ch == "{" {
+                stack.append("}")
+                i += 1
+                continue
+            }
+            if ch == "]" || ch == "}" {
+                guard stack.last == ch else { return (.invalid, nil) }
+                stack.removeLast()
+                if stack.isEmpty {
+                    let rest = String(chars[(i + 1)...]).trimmingCharacters(in: .whitespaces)
+                    if rest.isEmpty || rest.hasPrefix("#") { return (.closed, nil) }
+                    return (.trailing, nil)
+                }
+            }
+            i += 1
+        }
+        return (.open, FlowState(stack: stack, quote: quote))
     }
 
     private static func parseStrict(_ content: String) throws -> Parsed {

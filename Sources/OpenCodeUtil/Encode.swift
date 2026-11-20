@@ -47,7 +47,8 @@ public func checksum(_ content: String) -> String? {
 }
 
 /// Sampled FNV-1a checksum for large strings using 5 fixed 4096-unit windows.
-// parity: util/src/encode.ts#sampledChecksum [status=implemented hash=fd820c3012df]
+/// The final window is anchored to the end of the content so trailing edits change the checksum.
+// parity: util/src/encode.ts#sampledChecksum [status=implemented hash=9edc80aa3f03]
 public func sampledChecksum(_ content: String, limit: Int = 500_000) -> String? {
     let units = Array(content.utf16)
     if units.isEmpty { return nil }
@@ -62,7 +63,7 @@ public func sampledChecksum(_ content: String, limit: Int = 500_000) -> String? 
         Int((Double(count) * 0.25).rounded(.down)),
         Int((Double(count) * 0.5).rounded(.down)),
         Int((Double(count) * 0.75).rounded(.down)),
-        count - size,
+        count,
     ]
 
     let samples = points.map { point -> String in

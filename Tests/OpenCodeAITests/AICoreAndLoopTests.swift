@@ -567,6 +567,25 @@ struct AIErrorClassifierAndUtilsTests {
             Issue.record("Expected contentPolicy, got \(policy)")
         }
 
+        // OpenAI's cybersecurity safeguard code is a content policy refusal
+        let cyber = AIErrorClassifier.classifyProviderFailure(AIErrorClassifier.ProviderFailure(
+            message: "This request was flagged",
+            status: 400,
+            rawBody: #"{"error":{"code":"cyber_policy","message":"This request was flagged"}}"#
+        ))
+        if case .contentPolicy = cyber {} else {
+            Issue.record("Expected contentPolicy for cyber_policy, got \(cyber)")
+        }
+
+        // Gemini's terms-of-use rejection text is a content policy refusal
+        let terms = AIErrorClassifier.classifyProviderFailure(AIErrorClassifier.ProviderFailure(
+            message: "The request was rejected in accordance with our terms of use.",
+            status: 400
+        ))
+        if case .contentPolicy = terms {} else {
+            Issue.record("Expected contentPolicy for terms of use text, got \(terms)")
+        }
+
         // Google 400 API_KEY_INVALID becomes AuthenticationError
         let googleAuth = AIErrorClassifier.classifyProviderFailure(AIErrorClassifier.ProviderFailure(
             message: "API key not valid",

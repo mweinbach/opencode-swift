@@ -628,7 +628,7 @@ public struct OpenCodeEvent: Equatable, Hashable, Sendable, Codable {
         self.data = data
     }
 
-    /// Canonical ordered list of all 98 public server event types from `EventManifest.ServerDefinitions`.
+    /// Canonical ordered list of all 99 public server event types from `EventManifest.ServerDefinitions`.
     public static let serverEventTypeList: [String] = [
         "location.shutdown",
         "models-dev.refreshed",
@@ -711,6 +711,7 @@ public struct OpenCodeEvent: Equatable, Hashable, Sendable, Codable {
         "shell.created",
         "shell.exited",
         "shell.deleted",
+        "experimental.job.updated",
         "form.created",
         "form.replied",
         "form.cancelled",
@@ -1308,6 +1309,7 @@ public enum ProtocolJobKind: String, Equatable, Hashable, Sendable, Codable, Cas
     case shell
     case subagent
     case image
+    case video
     case codemode
 }
 
@@ -1388,7 +1390,23 @@ public let JobEndpoints: [EndpointDescriptor] = [
             ProtocolErrorRef(SessionNotFoundError.self),
         ],
         tags: ["experimental"]
-    )
+    ),
+    EndpointDescriptor(
+        group: "server.experimental",
+        name: "job.cancel",
+        method: .post,
+        path: "/api/experimental/job/:id/cancel",
+        experimental: true,
+        openAPIIdentifier: "experimental.job.cancel",
+        summary: "Cancel background job",
+        description: "Cancel a running background job, interrupting the work it started. Cancelling a job that already finished does nothing. Experimental: may change without compatibility guarantees.",
+        pathParameters: [
+            ParameterDescriptor(name: "id", location: .path, required: true, typeName: "String")
+        ],
+        successType: "NoContent",
+        successEncoding: .noContent,
+        tags: ["experimental"]
+    ),
 ]
 
 // MARK: - 16. location.ts

@@ -852,14 +852,16 @@ struct CoreConfigFlagPolicyTests {
         #expect(r1[.artifacts] == CoreFlag.State(enabled: true, source: .config))
         #expect(r1[.automations] == CoreFlag.State(enabled: false, source: .config))
         #expect(r1[.todo] == CoreFlag.State(enabled: false, source: .default))
-        #expect(r1[.fullCodemode] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r1[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r1[.fullCodemode] == CoreFlag.State(enabled: true, source: .config))
 
         // 2. OPENCODE_FLAGS=all,-media_blob,todo overrides everything; optInOnly requires explicit key
         let r2 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [doc1], channel: "release", overrides: "all,-media_blob,todo"))
         #expect(r2[.artifacts] == CoreFlag.State(enabled: true, source: .env))
         #expect(r2[.mediaBlob] == CoreFlag.State(enabled: false, source: .env))
         #expect(r2[.todo] == CoreFlag.State(enabled: true, source: .env))
-        #expect(r2[.fullCodemode] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r2[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r2[.fullCodemode] == CoreFlag.State(enabled: true, source: .env))
 
         // 3. Legacy alias 'schedules' maps to .automations
         let r3 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [], channel: "release", overrides: "schedules"))
@@ -868,7 +870,8 @@ struct CoreConfigFlagPolicyTests {
         // 4. Local channel enables regular flags by default, keeps optInOnly off
         let r4 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [], channel: "local", overrides: nil))
         #expect(r4[.artifacts] == CoreFlag.State(enabled: true, source: .default))
-        #expect(r4[.fullCodemode] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r4[.fullCodemode] == CoreFlag.State(enabled: true, source: .default))
+        #expect(r4[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
     }
 
     @Test("markdown frontmatter sanitization, skill file parsing, and managed policy org messages")

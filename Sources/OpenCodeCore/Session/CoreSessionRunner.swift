@@ -72,11 +72,42 @@ public enum CoreSessionErrorMapping {
         )
     }
 
-    // parity: core/src/session/to-session-error.ts#toSessionError [status=implemented hash=2e2bd2cb0cae]
+    /// A machine failure whose message says why (upstream `Machine.NotSent`, `Machine.Unknown`,
+    /// `Machine.ProcessLost`, `Machines.NotFound`, `MachinePath.NotAbsolute`).
+    public protocol MachineFailure: Swift.Error {
+        var machineMessage: String { get }
+    }
+
+    /// A wrapper that keeps the cause it wraps (upstream `Environment.Failed`, `AppProcessError`, `PlatformError`),
+    /// so a machine failure underneath still says why.
+    public protocol CauseWrapping: Swift.Error {
+        var wrappedCause: (any Swift.Error)? { get }
+    }
+
+    /// A tool failure that carries its underlying cause (upstream `ToolFailure` / `Tool.Error` with `error`).
+    public protocol ToolFailureCause: Swift.Error {
+        var toolMessage: String { get }
+        var toolCause: (any Swift.Error)? { get }
+    }
+
+    /// The message of a machine failure, through the wrappers a tool may have put around it. A local failure has no
+    /// machine error anywhere in its cause, so its text is untouched.
+    static func machineMessage(_ error: (any Swift.Error)?) -> String? {
+        guard let error else { return nil }
+        if let machine = error as? any MachineFailure { return machine.machineMessage }
+        if let wrapper = error as? any CauseWrapping { return machineMessage(wrapper.wrappedCause) }
+        return nil
+    }
+
+    // parity: core/src/session/to-session-error.ts#toSessionError [status=implemented hash=73235299307f]
     public static func toSessionError(_ cause: any Error) -> SessionErrorSchema.Error {
         if let aiError = cause as? AISchema.AIError {
+            // ChatGPT's usage limit arrives in HTTP and stream errors alike, whatever their reason, so its code decides the type.
             if aiError.reason.body?.contains("subscription_sharing_usage_limit_exceeded") == true {
                 return providerError("provider.chatgpt-limit", reason: aiError.reason)
+            }
+            if aiError.reason.body?.contains("subscription_sharing_workplace_individual_usage_limit_exceeded") == true {
+                return providerError("provider.chatgpt-workspace-limit", reason: aiError.reason)
             }
             switch aiError.reason {
             case .rateLimit:
@@ -126,6 +157,26 @@ public enum CoreSessionErrorMapping {
         }
         if let toolErr = cause as? ToolSchema.ToolError {
             return SessionErrorSchema.Error(type: "tool.execution", message: toolErr.message)
+        }
+        if let failure = cause as? any ToolFailureCause {
+            guard let inner = failure.toolCause else {
+                return SessionErrorSchema.Error(type: "tool.execution", message: failure.toolMessage)
+            }
+            // A machine failure says why, however the tool wrapped it; every other cause keeps the tool's curated message.
+            if let machine = machineMessage(inner) {
+                return SessionErrorSchema.Error(type: "tool.execution", message: machine)
+            }
+            // The canonical error is the sole model-visible representation, so a cause with no message must not
+            // erase the tool's curated failure message.
+            let unwrapped = toSessionError(inner)
+            guard unwrapped.message.isEmpty else { return unwrapped }
+            return SessionErrorSchema.Error(
+                type: "tool.execution",
+                message: failure.toolMessage,
+                status: unwrapped.status,
+                response: unwrapped.response,
+                retryAfterMs: unwrapped.retryAfterMs
+            )
         }
         if let agentNotFound = cause as? CoreSessionErrors.AgentNotFoundError {
             return SessionErrorSchema.Error(type: "unknown", message: agentNotFound.message)
@@ -887,8 +938,46 @@ public enum CoreSessionRunnerModel {
         )
     }
 
-    // parity: core/src/session/runner/model.ts#Interface [status=implemented hash=b0f793bca981]
+    /// The model a session would run on, before plugins or credentials resolve it.
+    public struct Selected: Sendable {
+        public let info: ModelSchema.Info
+        public let variant: String?
+
+        public init(info: ModelSchema.Info, variant: String? = nil) {
+            self.info = info
+            self.variant = variant
+        }
+    }
+
+    /// Picks the session's model from `available`: its explicit selection when that is available, otherwise the
+    /// agent's preferred model, otherwise `fallback`.
+    public static func defaultSelect(
+        session: SessionSchema.Info,
+        available: @Sendable () async throws -> [ModelSchema.Info],
+        agentModel: SessionSchema.ModelRef? = nil,
+        fallback: (@Sendable () async throws -> ModelSchema.Info?)? = nil
+    ) async throws -> Selected {
+        func find(_ ref: SessionSchema.ModelRef) async throws -> ModelSchema.Info? {
+            try await available().first { $0.providerID.rawValue == ref.providerID && $0.id.rawValue == ref.id }
+        }
+        if let model = session.model {
+            if let info = try await find(model) { return Selected(info: info, variant: model.variant) }
+            throw ModelUnavailableError(providerID: model.providerID, modelID: model.id)
+        }
+        if let agentModel, let preferred = try await find(agentModel) {
+            return Selected(info: preferred, variant: agentModel.variant)
+        }
+        if let info = try await fallback?() { return Selected(info: info, variant: nil) }
+        throw ModelNotSelectedError(sessionID: session.id)
+    }
+
+    // parity: core/src/session/runner/model.ts#Interface [status=implemented hash=f92f8c63a04f]
     public protocol Interface: Sendable {
+        /// The selected model and variant, without resolving a runnable model.
+        func select(
+            session: SessionSchema.Info,
+            available: @Sendable () async throws -> [ModelSchema.Info]
+        ) async throws -> Selected
         func resolve(
             session: SessionSchema.Info,
             available: @Sendable () async throws -> [ModelSchema.Info],
@@ -901,11 +990,23 @@ public enum CoreSessionRunnerModel {
     public final class Service: Interface, Sendable {
         public static let serviceKey = "@opencode/SessionRunnerModel"
         private let resolver: @Sendable (SessionSchema.Info, @Sendable () async throws -> [ModelSchema.Info], RequestKind, String) async throws -> Resolved
+        private let selector: @Sendable (SessionSchema.Info, @Sendable () async throws -> [ModelSchema.Info]) async throws -> Selected
 
         public init(
+            select: (@Sendable (SessionSchema.Info, @Sendable () async throws -> [ModelSchema.Info]) async throws -> Selected)? = nil,
             resolve: @escaping @Sendable (SessionSchema.Info, @Sendable () async throws -> [ModelSchema.Info], RequestKind, String) async throws -> Resolved
         ) {
             self.resolver = resolve
+            self.selector = select ?? { session, available in
+                try await CoreSessionRunnerModel.defaultSelect(session: session, available: available)
+            }
+        }
+
+        public func select(
+            session: SessionSchema.Info,
+            available: @Sendable () async throws -> [ModelSchema.Info]
+        ) async throws -> Selected {
+            try await selector(session, available)
         }
 
         public func resolve(
@@ -1446,7 +1547,9 @@ public enum CoreSessionContext {
         public let request: any CoreSessionModelRequest.Interface
         public let entries: any CoreSessionInstructionEntry.Interface
         public let selectAgent: @Sendable (SessionSchema.Info) async throws -> CoreSessionModelRequest.AgentProfile
-        public let selectTools: @Sendable (SessionSchema.Info, CoreSessionModelRequest.AgentProfile) async throws -> CoreSessionModelRequest.ToolSnapshot
+        /// Builds the tool snapshot for the session's agent. The selected model (nil when none can be selected yet)
+        /// decides which tools the model policy offers.
+        public let selectTools: @Sendable (SessionSchema.Info, CoreSessionModelRequest.AgentProfile, ModelSchema.Info?) async throws -> CoreSessionModelRequest.ToolSnapshot
         public let availableModels: @Sendable () async throws -> [ModelSchema.Info]
 
         public init(
@@ -1458,7 +1561,7 @@ public enum CoreSessionContext {
             selectAgent: @escaping @Sendable (SessionSchema.Info) async throws -> CoreSessionModelRequest.AgentProfile = { session in
                 CoreSessionModelRequest.AgentProfile(id: session.agent ?? "build")
             },
-            selectTools: @escaping @Sendable (SessionSchema.Info, CoreSessionModelRequest.AgentProfile) async throws -> CoreSessionModelRequest.ToolSnapshot = { _, _ in
+            selectTools: @escaping @Sendable (SessionSchema.Info, CoreSessionModelRequest.AgentProfile, ModelSchema.Info?) async throws -> CoreSessionModelRequest.ToolSnapshot = { _, _, _ in
                 CoreSessionModelRequest.ToolSnapshot()
             },
             availableModels: @escaping @Sendable () async throws -> [ModelSchema.Info] = { [] }
@@ -1478,7 +1581,16 @@ public enum CoreSessionContext {
                 throw CoreSessionErrors.NotFoundError(sessionID: sessionID)
             }
             let agent = try await selectAgent(session)
-            let tools = try await selectTools(session, agent)
+            // The tool policy depends on the model the session would run on; an unselectable model falls back to
+            // the session's (or agent's) explicit reference so the policy still sees its provider and id.
+            let selected = try? await models.select(session: session, available: availableModels)
+            let policyModel = selected?.info ?? (session.model ?? agent.model).map { ref in
+                ModelSchema.Info.default(
+                    providerID: ProviderSchema.ID(rawValue: ref.providerID),
+                    id: ModelSchema.ID(rawValue: ref.id)
+                )
+            }
+            let tools = try await selectTools(session, agent, policyModel)
             let instructionSources = try entries.load(sessionID)
             return Selection(session: session, agent: agent, instructions: instructionSources, tools: tools)
         }
@@ -1526,7 +1638,9 @@ public enum CoreSessionContext {
         }
     }
 
-    // parity: core/src/session/context.ts#node [status=adapted hash=7ad11f3b99cf]
+    /// Tool snapshots are chosen for the selected model (`SessionRunnerModel.select`); the model policy, web search
+    /// availability and the `full_codemode` flag live behind the injected `selectTools`.
+    // parity: core/src/session/context.ts#node [status=adapted hash=7e10baf6f065]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1980,6 +2094,7 @@ public enum CoreSessionLLMEventPublisher {
                         tools[e.id] = st
                     }
                 }
+                CoreSessionLiveToolMetadata.clear(input.assistantMessageID.rawValue, e.id)
                 if case .error(let errVal) = e.result {
                     _ = try await bus.publish(
                         SessionEventSchema.Tool.Failed,
@@ -2059,6 +2174,7 @@ public enum CoreSessionLLMEventPublisher {
                     tools[id] = st
                 }
             }
+            CoreSessionLiveToolMetadata.set(input.assistantMessageID.rawValue, id, metadata)
             await bus.emit(
                 SessionEventSchema.Tool.Progress,
                 data: SessionEventSchema.Tool.ProgressData(
@@ -2081,6 +2197,7 @@ public enum CoreSessionLLMEventPublisher {
                 return true
             }
             guard shouldPublish else { return }
+            CoreSessionLiveToolMetadata.clear(input.assistantMessageID.rawValue, id)
             let nonEmptyContent: [SessionMessageSchema.ToolContent] = result.content.isEmpty
                 ? [.text("")]
                 : result.content
@@ -2117,6 +2234,7 @@ public enum CoreSessionLLMEventPublisher {
                 return (true, meta)
             }
             guard shouldPublish else { return }
+            CoreSessionLiveToolMetadata.clear(input.assistantMessageID.rawValue, id)
             _ = try await bus.publish(
                 SessionEventSchema.Tool.Failed,
                 data: SessionEventSchema.Tool.FailedData(
@@ -2231,7 +2349,7 @@ public enum CoreSessionLLMEventPublisher {
         }
     }
 
-    // parity: core/src/session/runner/publish-llm-event.ts#createLLMEventPublisher [status=implemented hash=ecf0127a20cd]
+    // parity: core/src/session/runner/publish-llm-event.ts#createLLMEventPublisher [status=implemented hash=b211b83bda0f]
     public static func createLLMEventPublisher(
         bus: CoreBus.Service,
         input: Input

@@ -32,6 +32,13 @@ struct OpenCodeUtilTests {
         #expect(sampledChecksum(value, limit: value.utf16.count - 1) == "600:1isj1k5:1isj1k5:1isj1k5:1isj1k5:1isj1k5")
     }
 
+    @Test("sampledChecksum hashes the end of large values")
+    func sampledChecksumTail() {
+        let value = String(repeating: "a", count: 500_001)
+        let edited = String(repeating: "a", count: 500_000) + "b"
+        #expect(sampledChecksum(edited) != sampledChecksum(value))
+    }
+
     @Test("Pure-Swift SHA-1 and SHA-256 match FIPS test vectors")
     func hashes() {
         #expect(Hash.fast("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d")

@@ -25,6 +25,7 @@ public enum CoreSessionJobTypes {
         case codemode
         case shell
         case image
+        case video
         case subagent
     }
 
@@ -32,11 +33,13 @@ public enum CoreSessionJobTypes {
         case codemode(jobID: String, sessionID: SessionID)
         case shell(sessionID: SessionID, shellID: String, command: String)
         case image(sessionID: SessionID, path: String, model: String)
+        case video(sessionID: SessionID, path: String)
         case subagent(sessionID: SessionID, childSessionID: SessionID, agent: String, description: String)
 
         public var sessionID: SessionID {
             switch self {
-            case .codemode(_, let sid), .shell(let sid, _, _), .image(let sid, _, _), .subagent(let sid, _, _, _):
+            case .codemode(_, let sid), .shell(let sid, _, _), .image(let sid, _, _), .video(let sid, _),
+                 .subagent(let sid, _, _, _):
                 return sid
             }
         }
@@ -68,6 +71,7 @@ public enum CoreSessionJobTypes {
         case codemode(jobID: String, sessionID: SessionID)
         case shell(sessionID: SessionID, shellID: String, command: String)
         case image(sessionID: SessionID, path: String, model: String)
+        case video(sessionID: SessionID, path: String, videoID: String)
         case subagent(SubagentRecovery)
     }
 
@@ -258,7 +262,7 @@ public enum CoreSessionBackground {
 
         for recovery in running {
             let ownerID: SessionID = switch recovery {
-            case .codemode(_, let sid), .shell(let sid, _, _), .image(let sid, _, _): sid
+            case .codemode(_, let sid), .shell(let sid, _, _), .image(let sid, _, _), .video(let sid, _, _): sid
             case .subagent(let sub): sub.parentSessionID
             }
             if try descends(store: store, parents: &parents, from: ownerID, ancestor: sessionID) {
@@ -269,6 +273,8 @@ public enum CoreSessionBackground {
                     items.append(.shell(sessionID: sid, shellID: shellID, command: command))
                 case .image(let sid, let path, let model):
                     items.append(.image(sessionID: sid, path: path, model: model))
+                case .video(let sid, let path, _):
+                    items.append(.video(sessionID: sid, path: path))
                 case .subagent(let sub):
                     items.append(.subagent(
                         sessionID: sub.parentSessionID,
@@ -366,7 +372,7 @@ public enum CoreSessionSubagentCompletion {
         value.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
-    // parity: core/src/session/subagent-completion.ts#formatBody [status=implemented hash=9d1dffd0f61f]
+    // parity: core/src/session/subagent-completion.ts#formatBody [status=implemented hash=aae647425600]
     public static func formatBody(
         _ body: String,
         childSessionID: SessionID,
@@ -382,6 +388,8 @@ public enum CoreSessionSubagentCompletion {
                 return "- shell (\(shellID)\(location)): \(clean(command))"
             case .image(_, let path, let model):
                 return "- image (\(model)\(location)): \(path)"
+            case .video(_, let path):
+                return "- video (\(path)\(location))"
             case .subagent(_, let childID, let agent, let description):
                 return "- subagent (\(agent), sessionID: \(childID.rawValue)): \(clean(description))"
             }
@@ -414,7 +422,10 @@ public enum CoreSessionSubagentCompletion {
         try await sessions.synthetic(
             id: report.notificationID,
             sessionID: recovery.parentSessionID,
-            text: "<subagent sessionID=\"\(recovery.childSessionID.rawValue)\" state=\"\(state)\" description=\"\(recovery.description)\">\n\(formatted)\n</subagent>",
+            text: CoreSessionBackgroundResult.render(
+                "kind=\"subagent\" sessionID=\"\(recovery.childSessionID.rawValue)\" state=\"\(state)\" description=\"\(recovery.description)\"",
+                formatted
+            ),
             description: recovery.description,
             metadata: [
                 "source": .string("subagent"),
@@ -1372,9 +1383,69 @@ public enum CoreSessionRestart {
             }
         }
 
+        /// The restart notice of a background video job (upstream `restartMessage` for `kind: "video"`).
+        static func videoRestartNotice(
+            _ background: CoreSessionJobTypes.BackgroundJobInfo,
+            path: String
+        ) -> (description: String, text: String, metadata: [String: JSONValue]) {
+            let state = background.status == .running ? "cancelled" : background.status.rawValue
+            let body: String
+            if background.status == .running {
+                body = "Video request for \(path) couldn't be saved after the server restarted: its project folder no longer exists."
+            } else if state == "completed" {
+                body = background.output ?? "Video request finished. Saved video: \(path)."
+            } else if state == "error" {
+                body = background.error ?? "Video request failed for \(path)."
+            } else {
+                body = "Video request for \(path) was cancelled."
+            }
+            return (
+                "Video generation",
+                CoreSessionBackgroundResult.render("kind=\"video\" id=\"\(background.id)\" state=\"\(state)\"", body),
+                [
+                    "source": .string("experimental_video_generate"),
+                    "jobID": .string(background.id),
+                    "state": .string(state),
+                    "path": .string(path),
+                ]
+            )
+        }
+
+        /// No video service keeps polling a running video in this host, so a recovered video job is reported with
+        /// its restart notice and its outbox row acknowledged (upstream `recoverVideoJob` without the session's
+        /// video services falls back to `recoverToolJob`).
+        private func recoverVideoJob(_ background: CoreSessionJobTypes.BackgroundJobInfo, sessionID: SessionID, path: String) async {
+            let notice = Self.videoRestartNotice(background, path: path)
+            do {
+                if try store.get(sessionID) != nil {
+                    _ = try await bus.publish(
+                        SessionEventSchema.Synthetic,
+                        data: SessionEventSchema.SyntheticData(
+                            sessionID: sessionID,
+                            text: notice.text,
+                            description: notice.description,
+                            metadata: notice.metadata
+                        )
+                    )
+                }
+            } catch {
+                // Unexpected failure delivering the recovered notice: keep the row for the next sweep.
+                return
+            }
+            if let notificationID = background.notificationID {
+                try? await jobs.completeBackground(notificationID)
+            }
+        }
+
         public func resumeSuspendedSessions() async throws {
             // Release claims of orphaned child sessions whose parent was deleted.
             try store.releaseOrphanedChildClaims()
+
+            for bg in await jobs.backgroundJobs() {
+                if case .video(let sessionID, let path, _) = bg.recovery {
+                    await recoverVideoJob(bg, sessionID: sessionID, path: path)
+                }
+            }
 
             // Recover running background subagent jobs first so they own their children.
             var ownedBySubagentJob = Set<SessionID>()
@@ -1404,7 +1475,7 @@ public enum CoreSessionRestart {
         }
     }
 
-    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=98da2029011a]
+    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=88fdd8b54a50]
     public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             guard let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db,

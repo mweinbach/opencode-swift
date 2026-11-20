@@ -1344,7 +1344,7 @@ public final class ServerAppRuntime: Sendable {
                     }
                 )
         )
-        let job = try CoreJob.Service(database: db)
+        let job = try CoreJob.Service(database: db, bus: bus)
         let ptyTicket = CorePty.Ticket.make()
         let persistentPty: any CorePty.Persistent.Interface = customPersistentPty ?? CorePty.Persistent.Service(
             options: options.pty

@@ -370,6 +370,17 @@ struct RealPlatformFixesTests {
         #expect(!(await fs.exists(at: "/cache/npm/@acme/cli@latest/20000")))
         let stillActive = await service.resolve("@acme/cli@latest")
         #expect(stillActive.directory == "/cache/npm/@acme/cli@latest/15000")
+
+        // reject() only applies to the newest generation when its version matches and a previous one exists
+        #expect(try await service.reject("@acme/cli@latest", version: "1.0.0") == false)
+        #expect(try await service.reject("@acme/cli@latest", version: "1.1.0") == true)
+        #expect(await fs.exists(at: "/cache/npm/@acme/cli@latest/15000.rejected"))
+        #expect(await fs.exists(at: "/cache/npm/@acme/cli@latest/15000"))
+        let rolledBack = await service.resolve("@acme/cli@latest")
+        #expect(rolledBack.directory == "/cache/npm/@acme/cli@latest/10000")
+        #expect(rolledBack.version == "1.0.0")
+        // Only one completed generation remains, so nothing more can be rejected
+        #expect(try await service.reject("@acme/cli@latest", version: "1.0.0") == false)
     }
 
     @Test("NpmPlatform.defaultProcessInstaller tries bun add and falls back to npm install --prefix")

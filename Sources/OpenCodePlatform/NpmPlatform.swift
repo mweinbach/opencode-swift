@@ -172,12 +172,16 @@ public enum NpmPlatform {
         }
     }
 
-    // parity: util/src/npm.ts#Interface [status=implemented hash=492660a6754d]
+    // parity: util/src/npm.ts#Interface [status=implemented hash=9d3c71267af9]
     public protocol Interface: Sendable {
         func add(_ pkg: String) async throws -> NpmSpec.Package
         func resolve(_ pkg: String) async -> NpmSpec.Package
         func check(_ pkg: String) async throws -> Bool
         func update(_ pkg: String) async throws -> NpmSpec.Package
+        /// Stop using the newest installed version when it is `version`, so the previous one is current again. Its
+        /// files stay until they expire, for anything still running it. False when it isn't the newest or there is
+        /// no previous one.
+        func reject(_ pkg: String, version: String) async throws -> Bool
         func which(_ pkg: String, bin: String?) async -> String?
     }
 
@@ -225,8 +229,9 @@ public enum NpmPlatform {
 
         private func generations(in dir: String) async -> [String] {
             guard let entries = try? await fsUtil.fileSystem.readDirectory(at: dir) else { return [] }
+            let rejected = Set(entries.filter { $0.hasSuffix(".rejected") })
             return entries
-                .filter { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
+                .filter { !$0.isEmpty && $0.allSatisfy(\.isNumber) && !rejected.contains("\($0).rejected") }
                 .sorted { (Int64($0) ?? 0) < (Int64($1) ?? 0) }
         }
 
@@ -305,6 +310,23 @@ public enum NpmPlatform {
 
         public func update(_ pkg: String) async throws -> NpmSpec.Package {
             try await install(pkg, update: true)
+        }
+
+        public func reject(_ pkg: String, version: String) async throws -> Bool {
+            let dir = packageDir(for: pkg)
+            let pkgName = parsedPackageName(for: pkg)
+            return try await flock.withLock(key: "npm:\(pkg)", dir: nil) {
+                let completed = await self.generations(in: dir)
+                guard completed.count >= 2, let newest = completed.last else { return false }
+                let root = "\(dir)/\(newest)"
+                guard await self.readInstalledVersion(in: root, packageName: pkgName) == version else { return false }
+                do {
+                    try await self.fsUtil.writeWithDirs("\(dir)/\(newest).rejected", content: [])
+                } catch {
+                    throw NpmSpec.InstallFailedError(add: [pkg], dir: dir, causeMessage: String(describing: error))
+                }
+                return true
+            }
         }
 
         public func which(_ pkg: String, bin: String? = nil) async -> String? {

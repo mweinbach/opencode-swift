@@ -3292,6 +3292,7 @@ public enum CoreJob {
         public enum OutstandingItem: Equatable, Hashable, Sendable, Codable {
             case shell(sessionID: SessionID, shellID: String, command: String)
             case image(sessionID: SessionID, path: String, model: String)
+            case video(sessionID: SessionID, path: String)
             case codemode(sessionID: SessionID, jobID: String)
             case subagent(sessionID: SessionID, childSessionID: SessionID, agent: String, description: String)
         }
@@ -3301,6 +3302,7 @@ public enum CoreJob {
             case codemode(sessionID: SessionID, jobID: String)
             case shell(sessionID: SessionID, shellID: String, command: String)
             case image(sessionID: SessionID, path: String, model: String)
+            case video(sessionID: SessionID, path: String, videoID: String)
             case subagent(
                 parentSessionID: SessionID,
                 childSessionID: SessionID,
@@ -3314,13 +3316,14 @@ public enum CoreJob {
                 case .codemode: return .codemode
                 case .shell: return .shell
                 case .image: return .image
+                case .video: return .video
                 case .subagent: return .subagent
                 }
             }
 
             public var ownerSessionID: SessionID {
                 switch self {
-                case .codemode(let sid, _), .shell(let sid, _, _), .image(let sid, _, _): return sid
+                case .codemode(let sid, _), .shell(let sid, _, _), .image(let sid, _, _), .video(let sid, _, _): return sid
                 case .subagent(let parent, _, _, _, _): return parent
                 }
             }
@@ -3336,11 +3339,13 @@ public enum CoreJob {
                 case .subagent(_, _, _, let desc, _): return desc
                 case .codemode: return "Code Mode script"
                 case .image(_, let path, _): return path
+                case .video(_, let path, _): return path
                 }
             }
         }
 
-        // parity: core/src/job/recovery.ts#RecoverySchema [status=adapted hash=258cf6adf39b]
+        /// Accepts every recovery kind, including `video` (`{ kind: "video", sessionID, path, videoID }`).
+        // parity: core/src/job/recovery.ts#RecoverySchema [status=adapted hash=a692f9c3a52f]
         public static func decodeRecovery(_ raw: String) -> Recovery? {
             try? JSONDecoder().decode(Recovery.self, from: Data(raw.utf8))
         }
@@ -3616,7 +3621,29 @@ public enum CoreJob {
                     path: path,
                     model: model
                 ))
+            case .video(let sessionID, let path, _):
+                return .video(JobSchema.Video(
+                    id: id,
+                    sessionID: sessionID,
+                    status: status,
+                    title: title,
+                    time: time,
+                    path: path
+                ))
             }
+        }
+
+        /// The listed shape of one live job.
+        // parity: core/src/job/list.ts#item [status=implemented hash=2d1d5836f217]
+        public static func item(_ info: Info, recovery: RecoveryModels.Recovery) -> Item {
+            toItem(
+                id: info.id,
+                status: info.status,
+                title: info.title,
+                started: info.startedAt,
+                completed: info.completedAt,
+                recovery: recovery
+            )
         }
 
         // parity: core/src/job/list.ts#read [status=implemented hash=db4977ea778e]
@@ -3724,11 +3751,31 @@ public enum CoreJob {
         }
 
         private let db: any SQLiteDatabase
+        private let bus: CoreBus.Service?
         private let state = Mutex(StoreState())
 
-        public init(database: any SQLiteDatabase) throws {
+        /// `experimental.job.updated`: a background job started, moved to the background, or ended.
+        public struct UpdatedData: Equatable, Hashable, Sendable, Codable {
+            public let info: JobSchema.Info
+            public init(info: JobSchema.Info) { self.info = info }
+        }
+
+        public static let updatedEvent = EventSchema.EphemeralDefinition<UpdatedData>(type: JobSchema.Event.updated.type)
+
+        public init(database: any SQLiteDatabase, bus: CoreBus.Service? = nil) throws {
             self.db = database
+            self.bus = bus
             try database.executeScript(JobTable.createTableSQL)
+        }
+
+        /// Clients follow listed jobs through this instead of polling the list.
+        private func updated(_ listed: JobSchema.Info?) async {
+            guard let bus, let listed else { return }
+            await bus.emit(Self.updatedEvent, data: UpdatedData(info: listed))
+        }
+
+        private static func listed(_ info: Info, _ recovery: RecoveryModels.Recovery?) -> JobSchema.Info? {
+            recovery.map { List.item(info, recovery: $0) }
         }
 
         public static func inMemory() throws -> Service {
@@ -3778,6 +3825,7 @@ public enum CoreJob {
                     recovery: recovery
                 )
             }
+            if input.background { await updated(Self.listed(initialInfo, input.recovery)) }
 
             let runnerTask = Task { [self] in
                 do {
@@ -3841,6 +3889,7 @@ public enum CoreJob {
             for w in result.waiters {
                 w.resume(returning: result.info)
             }
+            await updated(Self.listed(result.info, result.recovery))
         }
 
         private func persistBackgroundRow(
@@ -3968,9 +4017,10 @@ public enum CoreJob {
         }
 
         public func background(_ id: String) async throws -> Info? {
-            let transitioned = state.withLock { s -> (info: Info, waiters: [CheckedContinuation<Info, Never>], recovery: RecoveryModels.Recovery?)? in
+            let transitioned = state.withLock { s -> (info: Info, waiters: [CheckedContinuation<Info, Never>], recovery: RecoveryModels.Recovery?, moved: Bool)? in
                 guard var entry = s.jobs[id] else { return nil }
-                if entry.info.status != .running { return (entry.info, [], nil) }
+                if entry.info.status != .running { return (entry.info, [], nil, false) }
+                let moved = !entry.isBackgrounded
                 entry.isBackgrounded = true
                 let notifID = entry.info.notificationID ?? "msg_\(Identifier.ascending())"
                 let updated = Info(
@@ -3989,13 +4039,14 @@ public enum CoreJob {
                 let waiters = entry.bgWaiters
                 entry.bgWaiters.removeAll()
                 s.jobs[id] = entry
-                return (updated, waiters, entry.recovery)
+                return (updated, waiters, entry.recovery, moved)
             }
             guard let transitioned else { return nil }
             if let recovery = transitioned.recovery, let notifID = transitioned.info.notificationID {
                 try persistBackgroundRow(notificationID: notifID, info: transitioned.info, recovery: recovery)
             }
             for w in transitioned.waiters { w.resume(returning: transitioned.info) }
+            if transitioned.moved { await updated(Self.listed(transitioned.info, transitioned.recovery)) }
             return transitioned.info
         }
 
@@ -4166,19 +4217,22 @@ public enum CoreJob {
         }
     }
 
-    // parity: core/src/job.ts#make [status=implemented hash=4e572fec1cd8]
-    public static func make(database: any SQLiteDatabase) throws -> Service {
-        try Service(database: database)
+    /// Builds the job service; with a bus, every start in the background, move to the background and end of a
+    /// listed job publishes `experimental.job.updated`.
+    // parity: core/src/job.ts#make [status=implemented hash=f8d117e80b37]
+    public static func make(database: any SQLiteDatabase, bus: CoreBus.Service? = nil) throws -> Service {
+        try Service(database: database, bus: bus)
     }
 
-    // parity: core/src/job.ts#node [status=implemented hash=98f3fa69d10f]
+    // parity: core/src/job.ts#node [status=implemented hash=a2badfb8bbf5]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
-        LayerNode.ExecutableLayer { _, _ in
-            let svc = try Service.inMemory()
+        LayerNode.ExecutableLayer { deps, _ in
+            let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self)
+            let svc = try Service(database: SQLiteDatabaseFactory.open(path: ":memory:"), bus: bus)
             return LayerNode.Output([Service.serviceKey: svc])
         },
-        []
+        [CoreBus.node]
     )
 }
 

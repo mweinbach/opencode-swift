@@ -1162,6 +1162,10 @@ public enum PromiseInputTypes {
 
     public struct SessionCreateInput: Equatable, Hashable, Sendable {
         public let id: String?
+        /// Set parentID to create a subagent session at the parent's location; set agent to choose its agent
+        /// (otherwise it uses the default) and start it with session.prompt. After each completed round, the child
+        /// sends a `<background-result kind="subagent">` report to the parent's inbox and wakes the parent unless it
+        /// has a staged revert.
         public let parentID: String?
         public let title: String?
         public let agent: String?
@@ -2750,6 +2754,13 @@ public enum PromiseInputTypes {
         }
     }
 
+    public struct ExperimentalJobCancelInput: Equatable, Hashable, Sendable {
+        public let id: String
+        public init(id: String) {
+            self.id = id
+        }
+    }
+
     public struct ExperimentalJobListInput: Equatable, Hashable, Sendable {
         public let sessionID: String?
         public let kind: JSONValue?
@@ -3307,7 +3318,8 @@ public typealias FileListInput = PromiseInputTypes.FileListInput
 // parity: client/src/promise/generated/types.ts#FileFindInput [status=implemented hash=d4053d112a0f]
 public typealias FileFindInput = PromiseInputTypes.FileFindInput
 
-// parity: client/src/promise/generated/types.ts#ExperimentalFileWriteInput [status=implemented hash=13f9ff69682d]
+/// `payload` is `Uint8Array | Blob` upstream; both are raw bytes, which `[UInt8]` carries.
+// parity: client/src/promise/generated/types.ts#ExperimentalFileWriteInput [status=implemented hash=0a57560c5854]
 public typealias ExperimentalFileWriteInput = PromiseInputTypes.ExperimentalFileWriteInput
 
 // parity: client/src/promise/generated/types.ts#ExperimentalFileWatchInput [status=implemented hash=13a4ff8867ff]
@@ -3325,7 +3337,8 @@ public typealias SkillListInput = PromiseInputTypes.SkillListInput
 // parity: client/src/promise/generated/types.ts#RpcCallInput [status=implemented hash=9294119ab14d]
 public typealias RpcCallInput = PromiseInputTypes.RpcCallInput
 
-// parity: client/src/promise/generated/types.ts#EventSubscribeInput [status=implemented hash=629667134685]
+/// `types` takes any server event type, including `experimental.job.updated`.
+// parity: client/src/promise/generated/types.ts#EventSubscribeInput [status=implemented hash=e916039a2006]
 public typealias EventSubscribeInput = PromiseInputTypes.EventSubscribeInput
 
 // parity: client/src/promise/generated/types.ts#PtyListInput [status=implemented hash=dfc8d63403b9]
@@ -3415,8 +3428,12 @@ public typealias ExperimentalArtifactsDeleteInput = PromiseInputTypes.Experiment
 // parity: client/src/promise/generated/types.ts#ExperimentalArtifactsViewInput [status=implemented hash=42209adaf8a4]
 public typealias ExperimentalArtifactsViewInput = PromiseInputTypes.ExperimentalArtifactsViewInput
 
-// parity: client/src/promise/generated/types.ts#ExperimentalJobListInput [status=implemented hash=d461e35f5368]
+/// `kind` is one of `shell`, `subagent`, `image`, `video`, `codemode`.
+// parity: client/src/promise/generated/types.ts#ExperimentalJobListInput [status=implemented hash=21c15285e0cb]
 public typealias ExperimentalJobListInput = PromiseInputTypes.ExperimentalJobListInput
+
+// parity: client/src/promise/generated/types.ts#ExperimentalJobCancelInput [status=implemented hash=0cfccab209ce]
+public typealias ExperimentalJobCancelInput = PromiseInputTypes.ExperimentalJobCancelInput
 
 // parity: client/src/promise/generated/types.ts#ShellListInput [status=implemented hash=0f4202e34c0b]
 public typealias ShellListInput = PromiseInputTypes.ShellListInput
@@ -3847,6 +3864,8 @@ public typealias ExperimentalArtifactsDeleteOutput = ClientEmptyResponse
 public typealias ExperimentalArtifactsViewOutput = [UInt8]
 // parity: client/src/promise/generated/types.ts#ExperimentalJobListOutput [status=implemented hash=37262703c7fe]
 public typealias ExperimentalJobListOutput = [JobSchema.Info]
+// parity: client/src/promise/generated/types.ts#ExperimentalJobCancelOutput [status=implemented hash=3ca7b13e8938]
+public typealias ExperimentalJobCancelOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ShellListOutput [status=implemented hash=9f02098b2780]
 public typealias ShellListOutput = LocationSchema.ResponseEnvelope<[ShellSchema.Info]>
 // parity: client/src/promise/generated/types.ts#ShellCreateOutput [status=implemented hash=4b12e27a5e68]
@@ -4422,6 +4441,8 @@ public enum PromiseWire {
     public typealias JobSubagent = JobSchema.Subagent
     // parity: client/src/promise/generated/types.ts#JobImage [status=implemented hash=c37482a65981]
     public typealias JobImage = JobSchema.Image
+    // parity: client/src/promise/generated/types.ts#JobVideo [status=implemented hash=746733cdff49]
+    public typealias JobVideo = JobSchema.Video
     // parity: client/src/promise/generated/types.ts#JobCodeMode [status=implemented hash=c1b50e6e09ee]
     public typealias JobCodeMode = JobSchema.CodeMode
     // parity: client/src/promise/generated/types.ts#VcsInfo [status=implemented hash=be1d066bdaf3]
@@ -4630,6 +4651,9 @@ public enum PromiseWire {
     public typealias ShellExited = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#ShellDeleted [status=implemented hash=dc04ebe54f6f]
     public typealias ShellDeleted = OpenCodeProtocol.OpenCodeEvent
+    /// `experimental.job.updated`: `data: { info: JobInfo }`.
+    // parity: client/src/promise/generated/types.ts#ExperimentalJobUpdated [status=implemented hash=ad9edb7eb021]
+    public typealias ExperimentalJobUpdated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#FormCancelled [status=implemented hash=48b3e5416625]
     public typealias FormCancelled = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#WebsearchUpdated [status=implemented hash=66536f92e979]
@@ -4700,7 +4724,7 @@ public enum PromiseWire {
     public typealias AutomationTrigger = AutomationSchema.Trigger
     // parity: client/src/promise/generated/types.ts#ArtifactContent [status=implemented hash=1b2da4e73e2a]
     public typealias ArtifactContent = ArtifactSchema.Content
-    // parity: client/src/promise/generated/types.ts#JobInfo [status=implemented hash=b3c1311aee6d]
+    // parity: client/src/promise/generated/types.ts#JobInfo [status=implemented hash=3d275ec23aea]
     public typealias JobInfo = JobSchema.Info
     // parity: client/src/promise/generated/types.ts#SessionInboxMove [status=implemented hash=92eb58d8b764]
     public typealias SessionInboxMove = SessionInboxSchema.Move
@@ -4722,7 +4746,7 @@ public enum PromiseWire {
     public typealias SessionCreated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#SessionPermissions [status=implemented hash=dbb835113dd0]
     public typealias SessionPermissions = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=8402a3f01239]
+    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=589635b55f5e]
     public typealias ConfigEntry = ConfigSchema.Entry
     // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=d3beed292bfa]
     public typealias AutomationAction = AutomationSchema.Action
@@ -5482,6 +5506,12 @@ public struct ExperimentalJobClientAPI: Sendable {
         let descriptor = ClientRequestDescriptor(method: "GET", path: "/api/experimental/job", query: [("sessionID", encodeOptionalJSON(input?.sessionID)), ("kind", encodeOptionalJSON(input?.kind)), ("status", encodeOptionalJSON(input?.status)), ("descendants", encodeOptionalJSON(input?.descendants))], successStatus: 200, declaredStatuses: [400, 401, 404])
         return try await executor.requestData(descriptor, requestOptions: options)
     }
+    /// Cancel a running background job, interrupting the work it started. Cancelling a job that already finished
+    /// does nothing.
+    public func cancel(_ input: ExperimentalJobCancelInput, options: RequestOptions? = nil) async throws {
+        let descriptor = ClientRequestDescriptor(method: "POST", path: "/api/experimental/job/\(ClientURLBuilder.encodeURIComponent(input.id))/cancel", successStatus: 204, declaredStatuses: [400, 401], empty: true)
+        try await executor.requestEmpty(descriptor, requestOptions: options)
+    }
 }
 
 public struct ExperimentalMigrationV1ClientAPI: Sendable {
@@ -6201,7 +6231,7 @@ public struct GeneratedOpenCodeClient: Sendable {
 
 public enum GeneratedOpenCode {
     /// Constructs a raw generated Promise client backed by `OpenCodePlatform.HTTPTransport`.
-    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=90a1061f7003]
+    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=9f5e4e395b3e]
     public static func make(_ options: ClientOptions) -> GeneratedOpenCodeClient {
         GeneratedOpenCodeClient(options: options)
     }

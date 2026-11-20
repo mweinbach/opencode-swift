@@ -924,6 +924,10 @@ struct OpenCodeServerEndToEndTests {
         // Jobs, Usage, Voice, WebSearch providers
         let jobs = try await harness.client.experimental.job.list()
         #expect(jobs.isEmpty)
+        // Cancelling a job that already finished (or never existed) does nothing and answers 204.
+        try await harness.client.experimental.job.cancel(ExperimentalJobCancelInput(id: "job_missing"))
+        let videoJobs = try await harness.client.experimental.job.list(ExperimentalJobListInput(kind: .string("video")))
+        #expect(videoJobs.isEmpty)
         let usage = try await harness.client.experimental.usage.limits()
         #expect(usage.data == nil)
         let voiceModels = try await harness.client.experimental.voice.models()
