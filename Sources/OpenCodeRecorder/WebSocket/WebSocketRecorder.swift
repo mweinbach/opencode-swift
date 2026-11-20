@@ -1258,7 +1258,7 @@ public final class RecordingWebSocketConstructor: Sendable {
 /// Factory namespace mirroring `packages/http-recorder/src/websocket/recorder.ts`.
 public enum WebSocketRecorder {
     /// Decorates a lower-level `RecorderSocket` with auto record/replay and canonical JSON client comparison.
-    // parity: http-recorder/src/websocket/recorder.ts#layerSocket [status=implemented hash=3d6d20fd3a1d]
+    // parity: http-recorder/src/websocket/recorder.ts#layerSocket [status=implemented hash=b0430395ddb8]
     public static func layerSocket(
         _ name: String,
         options: SocketRecorderOptions = SocketRecorderOptions(),
@@ -1284,7 +1284,7 @@ public enum WebSocketRecorder {
     }
 
     /// Decorates a lower-level `RecorderSocket` with an explicit `"record"` or `"replay"` mode.
-    // parity: http-recorder/src/websocket/recorder.ts#layerSocketWithMode [status=implemented hash=1fd8bb42841b]
+    // parity: http-recorder/src/websocket/recorder.ts#layerSocketWithMode [status=implemented hash=dbee57f0806a]
     public static func layerSocketWithMode(
         _ name: String,
         mode: RecordReplayMode,
@@ -1312,7 +1312,7 @@ public enum WebSocketRecorder {
     }
 
     /// Decorates a dynamic WebSocket constructor with auto record/replay of URL, protocols, frames, and close metadata.
-    // parity: http-recorder/src/websocket/recorder.ts#layerWebSocketConstructor [status=implemented hash=0765cd106c84]
+    // parity: http-recorder/src/websocket/recorder.ts#layerWebSocketConstructor [status=implemented hash=a37ee98477ed]
     public static func layerWebSocketConstructor(
         _ name: String,
         options: SocketRecorderOptions = SocketRecorderOptions(),

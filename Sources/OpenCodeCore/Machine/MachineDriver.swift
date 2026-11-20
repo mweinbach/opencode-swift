@@ -65,7 +65,7 @@ public enum MachineDriver {
     /// `CrossSpawnSpawner.RELEASE_FORCE_KILL_AFTER`.
     static let releaseForceKillAfter: Duration = .seconds(3)
 
-    // parity: core/src/machine/driver.ts#NotSent [status=implemented hash=bce0dd5f4ff7]
+    // parity: core/src/machine/driver.ts#NotSent [status=implemented hash=473edd59cbd7]
     public struct NotSent: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machine.NotSent"
         public let machine: String
@@ -77,7 +77,7 @@ public enum MachineDriver {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/driver.ts#Unknown [status=implemented hash=903b3462f38e]
+    // parity: core/src/machine/driver.ts#Unknown [status=implemented hash=5861ea4e7a3b]
     public struct Unknown: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machine.Unknown"
         public let machine: String
@@ -90,7 +90,7 @@ public enum MachineDriver {
     }
 
     /// The worker no longer has a process: it restarted, or it forgot the process.
-    // parity: core/src/machine/driver.ts#ProcessLost [status=implemented hash=06b88f9056b1]
+    // parity: core/src/machine/driver.ts#ProcessLost [status=implemented hash=803e3e1d67ae]
     public struct ProcessLost: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machine.ProcessLost"
         public let machine: String

@@ -235,7 +235,7 @@ public enum AIAuth {
         credentialFromSecret(.plain(secret), source: source)
     }
 
-    // parity: ai/src/route/auth.ts#optional [status=implemented hash=1be868fec23d]
+    // parity: ai/src/route/auth.ts#optional [status=implemented hash=2be157010489]
     public static func optional(_ secret: Secret?, source: String = "optional value") -> Credential {
         guard let secret else {
             return Credential {
@@ -249,7 +249,7 @@ public enum AIAuth {
         optional(secret.map { .plain($0) }, source: source)
     }
 
-    // parity: ai/src/route/auth.ts#config [status=implemented hash=05b2910ee6c3]
+    // parity: ai/src/route/auth.ts#config [status=implemented hash=b96f825d2123]
     public static func config(_ name: String, environment: (any EnvironmentProviding)? = nil) -> Credential {
         Credential {
             let env = environment ?? SystemEnvironment.shared
@@ -442,7 +442,7 @@ public enum AIAuthOptions {
         }
     }
 
-    // parity: ai/src/route/auth-options.ts#ProviderAuthOption [status=implemented hash=da48c6826f38]
+    // parity: ai/src/route/auth-options.ts#ProviderAuthOption [status=implemented hash=7fa662f1deb2]
     public enum ProviderAuthOption: Sendable {
         case auth(AIAuth.Definition)
         case apiKey(ApiKey?)
@@ -451,7 +451,7 @@ public enum AIAuthOptions {
     }
 
     /// Type witness for option groups requiring at least one member.
-    // parity: ai/src/route/auth-options.ts#AtLeastOne [status=adapted hash=ae10329b4fff]
+    // parity: ai/src/route/auth-options.ts#AtLeastOne [status=adapted hash=846c62094d6a]
     public enum AtLeastOne<First: Sendable, Second: Sendable>: Sendable {
         case first(First)
         case second(Second)
@@ -573,7 +573,7 @@ public enum AIEndpoint {
         }
     }
 
-    // parity: ai/src/route/endpoint.ts#path [status=implemented hash=ec8ee2a3008d]
+    // parity: ai/src/route/endpoint.ts#path [status=implemented hash=2bd00a2b04b4]
     public static func path<Body: Sendable, Request: Sendable>(
         _ value: EndpointPart<Body, Request>,
         baseURL: String? = nil,
@@ -590,7 +590,7 @@ public enum AIEndpoint {
         Definition(baseURL: baseURL, path: .literal(literal), query: query)
     }
 
-    // parity: ai/src/route/endpoint.ts#merge [status=implemented hash=913f29642e9a]
+    // parity: ai/src/route/endpoint.ts#merge [status=implemented hash=b30a42aebaf3]
     public static func merge<Body: Sendable, Request: Sendable>(
         _ base: Definition<Body, Request>,
         _ patch: EndpointPatch<Body, Request>
@@ -996,7 +996,7 @@ public enum AIFraming {
         return true
     }
 
-    // parity: ai/src/route/framing.ts#sseFraming [status=implemented hash=ecca4d7745e3]
+    // parity: ai/src/route/framing.ts#sseFraming [status=implemented hash=45da39c2e07a]
     public static func sseFraming(
         _ bytes: AsyncThrowingStream<[UInt8], Error>,
         events: Set<String>? = nil,
@@ -1045,7 +1045,7 @@ public enum AIFraming {
         sseFraming(bytes, events: nil, includeDone: true)
     }
 
-    // parity: ai/src/route/framing.ts#sseEvents [status=implemented hash=74e23bad5950]
+    // parity: ai/src/route/framing.ts#sseEvents [status=implemented hash=716b5a7900f8]
     public static func sseEvents(_ events: Set<String>) -> Definition<String> {
         Definition<String>(id: "sse") { bytes in
             sseFraming(bytes, events: events, includeDone: false)
@@ -1232,13 +1232,13 @@ public enum AIRequestExecutor {
     // parity: ai/src/route/executor-service.ts#Service [status=implemented hash=ae70e600ec12]
     public typealias Service = RequestExecutorService
 
-    // parity: ai/src/route/executor-service.ts#CurrentTls [status=adapted hash=5dde7308185e]
+    // parity: ai/src/route/executor-service.ts#CurrentTls [status=adapted hash=2ca72f0baabf]
     @TaskLocal public static var CurrentTls: AISchema.ClientTls? = nil
 
-    // parity: ai/src/route/executor-service.ts#CurrentTimeout [status=adapted hash=da8c356a5637]
+    // parity: ai/src/route/executor-service.ts#CurrentTimeout [status=adapted hash=a0b006650511]
     @TaskLocal public static var CurrentTimeout: AISchema.RequestTimeout? = nil
 
-    // parity: ai/src/route/executor-service.ts#CurrentMiddleware [status=adapted hash=b6c959e56494]
+    // parity: ai/src/route/executor-service.ts#CurrentMiddleware [status=adapted hash=0e1ebe5da380]
     @TaskLocal public static var CurrentMiddleware: HttpMiddleware? = nil
 
     /// `outer` wraps `inner`: it sees the request first and the response last.
@@ -1276,7 +1276,7 @@ public enum AIRequestExecutor {
         return normalized
     }
 
-    // parity: ai/src/route/executor-service.ts#responseHttp [status=implemented hash=101d87b641e8]
+    // parity: ai/src/route/executor-service.ts#responseHttp [status=implemented hash=9163256bfc06]
     public static func responseHttp(_ response: ExecutorResponse) -> AISchema.HttpContext {
         AISchema.HttpContext(
             url: response.request.url,
@@ -1298,7 +1298,7 @@ public enum AIRequestExecutor {
         }
     }
 
-    // parity: ai/src/route/executor-service.ts#rootCause [status=implemented hash=2214b4a10565]
+    // parity: ai/src/route/executor-service.ts#rootCause [status=implemented hash=1ef1b595e805]
     public static func rootCause(_ error: any Error) -> any Error {
         if let clientErr = error as? ClientTransportError, let inner = clientErr.underlying {
             return rootCause(inner)
@@ -1308,7 +1308,7 @@ public enum AIRequestExecutor {
 
     private static let connectionLost = "Connection lost while reading the response"
 
-    // parity: ai/src/route/executor-service.ts#httpError [status=implemented hash=a603642cb663]
+    // parity: ai/src/route/executor-service.ts#httpError [status=implemented hash=d1c3bd86ebbe]
     public static func httpError(
         error: any Error,
         request: HTTPRequest,
@@ -1359,7 +1359,7 @@ public enum AIRequestExecutor {
         )
     }
 
-    // parity: ai/src/route/executor-service.ts#responseStream [status=implemented hash=855663e6a2df]
+    // parity: ai/src/route/executor-service.ts#responseStream [status=implemented hash=6838678c59e5]
     public static func responseStream(_ response: ExecutorResponse) -> AsyncThrowingStream<[UInt8], Error> {
         let http = responseHttp(response)
         let req = response.request
@@ -1379,7 +1379,7 @@ public enum AIRequestExecutor {
         }
     }
 
-    // parity: ai/src/route/executor-service.ts#responseBytes [status=implemented hash=4cfbb1833201]
+    // parity: ai/src/route/executor-service.ts#responseBytes [status=implemented hash=ee4ddb8859e1]
     public static func responseBytes(_ response: ExecutorResponse) async throws -> [UInt8] {
         do {
             return try await response.bytes()
@@ -1388,7 +1388,7 @@ public enum AIRequestExecutor {
         }
     }
 
-    // parity: ai/src/route/executor-service.ts#responseText [status=implemented hash=c6a30d317953]
+    // parity: ai/src/route/executor-service.ts#responseText [status=implemented hash=ff75dfa6b080]
     public static func responseText(_ response: ExecutorResponse) async throws -> String {
         do {
             return try await response.text()
@@ -1523,7 +1523,7 @@ public enum AIRequestExecutor {
     }
 
     /// Preserve HTTP diagnostics for executor and externally captured failures alike.
-    // parity: ai/src/route/executor.ts#httpFailure [status=implemented hash=17761aee8dca]
+    // parity: ai/src/route/executor.ts#httpFailure [status=implemented hash=8f72ff57fa65]
     public static func httpFailure(
         message: String,
         url: String? = nil,
@@ -1556,7 +1556,7 @@ public enum AIRequestExecutor {
         ))
     }
 
-    // parity: ai/src/route/executor.ts#stream [status=implemented hash=b4e90fb5edf8]
+    // parity: ai/src/route/executor.ts#stream [status=implemented hash=5d4e4b85f16d]
     public static func stream(
         executor: any Interface,
         request: HTTPRequest,
@@ -1579,7 +1579,7 @@ public enum AIRequestExecutor {
     }
 
     /// Build a `RequestExecutorService` over any portable `OpenCodePlatform.HTTPTransport`.
-    // parity: ai/src/route/executor.ts#layer [status=adapted hash=637489defc0f]
+    // parity: ai/src/route/executor.ts#layer [status=adapted hash=bda12dc466e7]
     public static func layer(transport: any HTTPTransport) -> RequestExecutorService {
         RequestExecutorService { request, nextMiddleware in
             let composed = composeMiddleware(CurrentMiddleware, nextMiddleware)
@@ -1928,7 +1928,7 @@ public enum AIRequestExecutor {
         }
     }
 
-    // parity: ai/src/route/executor.ts#withTimeout [status=implemented hash=3cf329f82753]
+    // parity: ai/src/route/executor.ts#withTimeout [status=implemented hash=653a373ca095]
     public static func withTimeout(
         _ execute: @escaping @Sendable (HTTPRequest, HttpMiddleware?) async throws -> ExecutorResponse,
         timeout: AISchema.RequestTimeout?
@@ -1960,7 +1960,7 @@ public enum AIRequestExecutor {
     }
 
     /// Wraps an executor so `fn` runs around every request before status classification.
-    // parity: ai/src/route/executor.ts#middleware [status=implemented hash=bb39ce2ddd3f]
+    // parity: ai/src/route/executor.ts#middleware [status=implemented hash=274e23b7ef33]
     public static func middleware(
         _ fn: @escaping HttpMiddleware,
         executor: RequestExecutorService
@@ -2118,7 +2118,7 @@ public enum AITransport {
         }
     }
 
-    // parity: ai/src/route/transport/http.ts#jsonRequestParts [status=implemented hash=8d14916c514f]
+    // parity: ai/src/route/transport/http.ts#jsonRequestParts [status=implemented hash=8d5c45abca73]
     public static func jsonRequestParts<Body: Sendable>(
         _ input: JsonRequestInput<Body>
     ) async throws -> JsonRequestParts {
@@ -2262,14 +2262,14 @@ public enum AITransport {
         }
     }
 
-    // parity: ai/src/route/transport/http.ts#httpJson [status=implemented hash=e0317b4c8e23]
+    // parity: ai/src/route/transport/http.ts#httpJson [status=implemented hash=4f484d20d313]
     public static func httpJson<Body: Sendable, Frame: Sendable>(
         _ input: HttpJsonInput<Frame>
     ) -> HttpJsonTransport<Body, Frame> {
         HttpJsonTransport(framing: input.framing)
     }
 
-    // parity: ai/src/route/transport/http.ts#sseJson [status=implemented hash=dbb0633b3f30]
+    // parity: ai/src/route/transport/http.ts#sseJson [status=implemented hash=a69b447884c2]
     public enum sseJson {
         public static let id = "http-json/sse"
 
@@ -2312,7 +2312,7 @@ public enum AITransport {
         }
     }
 
-    // parity: ai/src/route/transport/websocket-channel.ts#ChannelObservation [status=implemented hash=573c56690dda]
+    // parity: ai/src/route/transport/websocket-channel.ts#ChannelObservation [status=implemented hash=b71f594d94f1]
     public enum ChannelObservation: Equatable, Sendable {
         public enum RejectionRecovery: String, Equatable, Hashable, Sendable {
             case retryFull = "retry-full"
@@ -2454,7 +2454,7 @@ public enum AITransport {
 
     public static let maxWebSocketFrameBytes = 16 * 1024 * 1024
 
-    // parity: ai/src/route/transport/websocket.ts#toWebSocketUrl [status=implemented hash=4eaaeb36f409]
+    // parity: ai/src/route/transport/websocket.ts#toWebSocketUrl [status=implemented hash=a161b460c4b6]
     public static func toWebSocketUrl(_ value: String) throws(AISchema.AIError) -> String {
         guard var components = URLComponents(string: value), let scheme = components.scheme?.lowercased() else {
             throw AISchema.AIError(reason: .transport(AISchema.TransportError(
@@ -2497,7 +2497,7 @@ public enum AITransport {
         return result
     }
 
-    // parity: ai/src/route/transport/websocket.ts#open [status=adapted hash=39c0bb2d7873]
+    // parity: ai/src/route/transport/websocket.ts#open [status=adapted hash=463bebddc594]
     public static func open(
         _ input: WebSocketRequest,
         connector: WebSocketConnector
@@ -2505,7 +2505,7 @@ public enum AITransport {
         try await connector.open(input)
     }
 
-    // parity: ai/src/route/transport/websocket.ts#fromWebSocket [status=adapted hash=1a1c16091eca]
+    // parity: ai/src/route/transport/websocket.ts#fromWebSocket [status=adapted hash=5804709d9408]
     public static func fromWebSocket(
         _ connection: WebSocketConnection,
         input: WebSocketRequest
@@ -2578,7 +2578,7 @@ public enum AITransport {
         )))
     }
 
-    // parity: ai/src/route/transport/websocket.ts#makeDirect [status=implemented hash=a122ea8397eb]
+    // parity: ai/src/route/transport/websocket.ts#makeDirect [status=implemented hash=c5b63cbf73b4]
     public static func makeDirect(_ connector: WebSocketConnector) -> WebSocketChannelExecutor {
         WebSocketChannelExecutor { exchange in
             let req = WebSocketRequest(url: exchange.connect.url, headers: exchange.connect.headers)
@@ -2686,12 +2686,12 @@ public enum AITransport {
         }
     }
 
-    // parity: ai/src/route/transport/websocket.ts#direct [status=adapted hash=4b027a02ab27]
+    // parity: ai/src/route/transport/websocket.ts#direct [status=adapted hash=9939ee06394c]
     public static func direct(connector: WebSocketConnector) -> WebSocketChannelExecutor {
         makeDirect(connector)
     }
 
-    // parity: ai/src/route/transport/websocket.ts#WebSocketTransport [status=implemented hash=aeef45450c23]
+    // parity: ai/src/route/transport/websocket.ts#WebSocketTransport [status=implemented hash=5a4ad287e1fd]
     public enum WebSocketTransport {
         public static func toWebSocketUrl(_ value: String) throws(AISchema.AIError) -> String {
             try AITransport.toWebSocketUrl(value)
@@ -3023,7 +3023,7 @@ public enum AIRoute {
     }
 
     /// Type-erased runnable route stored on `AISchema.LanguageModel`.
-    // parity: ai/src/route/client.ts#AnyRoute [status=implemented hash=2fecc40c8157]
+    // parity: ai/src/route/client.ts#AnyRoute [status=implemented hash=a4e1ec6007d9]
     public struct AnyRoute: Sendable {
         public let compact: CompactionOperations?
         public let id: String
@@ -3115,7 +3115,7 @@ public enum AIRoute {
         }
     }
 
-    // parity: ai/src/route/client.ts#Route [status=implemented hash=c10198427163]
+    // parity: ai/src/route/client.ts#Route [status=implemented hash=7a295a9f5af6]
     public struct Route<Body: Sendable, Prepared: Sendable, Frame: Sendable, Event: Sendable, State: Sendable>: Sendable {
         public let compact: CompactionOperations?
         public let id: String
@@ -3451,7 +3451,7 @@ public enum AIRoute {
         }
     }
 
-    // parity: ai/src/route/client.ts#make [status=implemented hash=bbb5f6712dc6]
+    // parity: ai/src/route/client.ts#make [status=implemented hash=c463dfbefe49]
     public static func make<Body: Sendable, Frame: Sendable, Event: Sendable, State: Sendable>(
         _ input: MakeInput<Body, Frame, Event, State>
     ) -> Route<Body, AITransport.HttpPrepared<Frame>, Frame, Event, State> {
@@ -3487,7 +3487,7 @@ public enum AIRoute {
         )
     }
 
-    // parity: ai/src/route/client.ts#canCompact [status=implemented hash=3f05cf89083b]
+    // parity: ai/src/route/client.ts#canCompact [status=implemented hash=dc7a3a42bf72]
     public static func canCompact(_ model: AISchema.LanguageModel, mechanism: String? = nil) -> Bool {
         if mechanism == "trigger" {
             return model.route.compact?.trigger != nil
@@ -3601,7 +3601,7 @@ public enum AIRoute {
         }
     }
 
-    // parity: ai/src/route/client.ts#compileRequest [status=implemented hash=dc273fb33d1d]
+    // parity: ai/src/route/client.ts#compileRequest [status=implemented hash=f80025804a4b]
     public static func compileRequest(_ request: AISchema.LLMRequest) async throws -> CompiledRequest {
         try validateNoFileReferences(request)
         let resolved = prepareRequest(request)
@@ -3665,7 +3665,7 @@ public enum AIRoute {
     // parity: ai/src/route/client.ts#Service [status=implemented hash=89ccdb1f586d]
     public typealias Service = LLMClientService
 
-    // parity: ai/src/route/client.ts#generateWith [status=implemented hash=48581fcd07e9]
+    // parity: ai/src/route/client.ts#generateWith [status=implemented hash=71f1a0bf933c]
     public static func generateWith(_ streamFn: @escaping StreamMethod) -> GenerateMethod {
         { request, options in
             var state = AISchema.ResponseFold.empty()
@@ -3734,7 +3734,7 @@ public enum AIRoute {
         }
     }
 
-    // parity: ai/src/route/client.ts#layer [status=implemented hash=2b0960860755]
+    // parity: ai/src/route/client.ts#layer [status=implemented hash=fb762f246055]
     public static func layer(executor: AIRequestExecutor.RequestExecutorService) -> LLMClientService {
         let runtime = AITransport.TransportRuntime(http: executor)
         let streamFn: StreamMethod = { request, options in
@@ -3775,7 +3775,7 @@ public enum AIRoute {
         return LLMClientService(stream: streamFn, compact: compactFn)
     }
 
-    // parity: ai/src/route/client.ts#LLMClient [status=implemented hash=13d0cd33c774]
+    // parity: ai/src/route/client.ts#LLMClient [status=implemented hash=71352683f7a3]
     public enum LLMClient {
         public typealias Service = AIRoute.LLMClientService
 
@@ -3859,7 +3859,7 @@ public enum AIRoute {
         // parity: ai/src/route/media-protocol.ts#Query [status=implemented hash=eddba18f968b]
         public typealias Query = [String: [String]]
 
-        // parity: ai/src/route/media-protocol.ts#Body [status=implemented hash=2712dc65fa16]
+        // parity: ai/src/route/media-protocol.ts#Body [status=implemented hash=06206188aa12]
         public enum Body: Sendable {
             case json([String: JSONValue], query: Query? = nil)
             case multipart(MultipartFormData)
@@ -3873,17 +3873,17 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#json [status=implemented hash=4fffc5f90bb5]
+        // parity: ai/src/route/media-protocol.ts#json [status=implemented hash=90264e5994e1]
         public static func json(_ value: [String: JSONValue], query: Query? = nil) -> Body {
             .json(value, query: query)
         }
 
-        // parity: ai/src/route/media-protocol.ts#multipart [status=implemented hash=1e77f6f0e919]
+        // parity: ai/src/route/media-protocol.ts#multipart [status=implemented hash=ebee0744ddce]
         public static func multipart(_ value: MultipartFormData) -> Body {
             .multipart(value)
         }
 
-        // parity: ai/src/route/media-protocol.ts#binary [status=implemented hash=cb8c3bf50a6f]
+        // parity: ai/src/route/media-protocol.ts#binary [status=implemented hash=d14dc48ddaa0]
         public static func binary(_ value: [UInt8], contentType: String, query: Query? = nil) -> Body {
             .binary(value, contentType: contentType, query: query)
         }
@@ -3928,7 +3928,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#inline [status=implemented hash=3c78d29e8937]
+        // parity: ai/src/route/media-protocol.ts#inline [status=implemented hash=19a9ba958338]
         public static func inline<Request: Sendable, Response: Sendable>(
             _ route: Identity,
             unsupportedCheck: (@Sendable (Request) -> [String])? = nil,
@@ -4033,7 +4033,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#queued [status=implemented hash=2bab30fe2cbc]
+        // parity: ai/src/route/media-protocol.ts#queued [status=implemented hash=776c629081bc]
         public static func queued<Request: Sendable, Response: Sendable, Token: Codable & Sendable>(
             _ route: Identity,
             unsupportedCheck: (@Sendable (Request) -> [String])? = nil,
@@ -4123,7 +4123,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#stream [status=implemented hash=2f7967541b49]
+        // parity: ai/src/route/media-protocol.ts#stream [status=implemented hash=8f2c4f658329]
         public static func stream<Request: Sendable, Event: Sendable, Frame: Sendable, State: Sendable>(
             _ route: Identity,
             unsupportedCheck: (@Sendable (Addressed<Request>) -> [String])? = nil,
@@ -4292,7 +4292,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media-protocol.ts#identity [status=implemented hash=4dd2f32a38d7]
+        // parity: ai/src/route/media-protocol.ts#identity [status=implemented hash=3ff60396c148]
         public static func identity(id: String, name: String, provider: String) -> Identity {
             Identity(id: id, name: name, provider: provider)
         }
@@ -4324,7 +4324,7 @@ public enum AIRoute {
             return table[code] ?? .providerInternal
         }
 
-        // parity: ai/src/route/media-protocol.ts#expiringUrl [status=implemented hash=62eafab1e137]
+        // parity: ai/src/route/media-protocol.ts#expiringUrl [status=implemented hash=dd96aa959765]
         public static func expiringUrl(
             _ url: String,
             retentionMs: Double,
@@ -4362,7 +4362,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#MediaRequest [status=adapted hash=ba88accbf93e]
+        // parity: ai/src/route/media.ts#MediaRequest [status=adapted hash=38c9629087af]
         public protocol MediaRequest: Sendable {
             var modelDescriptor: ModelDescriptor { get }
             var headers: [String: String]? { get }
@@ -4407,7 +4407,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#deployment [status=implemented hash=86ad7022a79a]
+        // parity: ai/src/route/media.ts#deployment [status=implemented hash=a296662b0b83]
         public static func deployment(
             baseURL: String? = nil,
             transport: AISchema.TransportOptions? = nil,
@@ -4485,7 +4485,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#AnyRoute [status=implemented hash=c85077ceb9f7]
+        // parity: ai/src/route/media.ts#AnyRoute [status=implemented hash=13a3799f33ac]
         public enum AnyRoute<Request: MediaRequest, Event: Sendable, Response: Sendable>: Sendable {
             case inline(InlineRoute<Request, Response>)
             case stream(StreamRoute<Request, Event, Response>)
@@ -4565,7 +4565,7 @@ public enum AIRoute {
             }
         }
 
-        // parity: ai/src/route/media.ts#StreamInput [status=implemented hash=e17b1c2fca80]
+        // parity: ai/src/route/media.ts#StreamInput [status=implemented hash=b7ff49ba05cc]
         public struct StreamInput<Request: MediaRequest, Event: Sendable, Response: Sendable, Frame: Sendable, State: Sendable>: Sendable {
             public let composition: Composition<MediaProtocol.Addressed<Request>>
             public let wireProtocol: MediaProtocol.Streamed<Request, Event, Frame, State>

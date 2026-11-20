@@ -52,7 +52,7 @@ public func lastAssistantWithUsage(
 // MARK: - Persistent PTY Client (packages/client/src/solid/pty.ts)
 
 /// Discriminated union of control messages pushed by a persistent PTY WebSocket endpoint.
-// parity: client/src/solid/pty.ts#PersistentPtyMessage [status=implemented hash=c7ee5db3667e]
+// parity: client/src/solid/pty.ts#PersistentPtyMessage [status=implemented hash=18c89fe46ca1]
 public enum PersistentPtyMessage: Equatable, Hashable, Sendable, Codable {
     public enum Role: String, Equatable, Hashable, Sendable, Codable {
         case controller
@@ -182,7 +182,7 @@ public func decodePersistentPtyMessage(_ text: String) -> PersistentPtyMessage? 
 
 /// Encodes a binary persistent PTY input/resize frame:
 /// `[kind (1 = data, 0 = resize), cols_hi, cols_lo, rows_hi, rows_lo, ...data]`.
-// parity: client/src/solid/pty.ts#persistentPtyFrame [status=implemented hash=9a5429bd627e]
+// parity: client/src/solid/pty.ts#persistentPtyFrame [status=implemented hash=f3cf37d75f7a]
 public func persistentPtyFrame(cols: Int, rows: Int, data: [UInt8]? = nil) -> [UInt8] {
     var frame: [UInt8] = []
     frame.reserveCapacity(5 + (data?.count ?? 0))
@@ -882,7 +882,7 @@ public final class SessionRetentionController: Sendable {
 }
 
 /// Creates a `SessionRetentionController` and performs the initial retention evaluation.
-// parity: client/src/solid/retention.ts#createSessionRetention [status=implemented hash=3572dad47962]
+// parity: client/src/solid/retention.ts#createSessionRetention [status=implemented hash=561597d4ce30]
 @discardableResult
 public func createSessionRetention(_ input: SessionRetentionInput) -> SessionRetentionController {
     let controller = SessionRetentionController(input: input)

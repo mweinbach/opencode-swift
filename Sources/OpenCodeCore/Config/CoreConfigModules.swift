@@ -52,7 +52,7 @@ public enum CoreConfigPlugin {
         }
 
         /// Loads current config entries and invokes `reload` whenever config updates arrive.
-        // parity: core/src/config/plugin/entry-observer.ts#observe [status=adapted hash=e95cbe718228]
+        // parity: core/src/config/plugin/entry-observer.ts#observe [status=adapted hash=34b2839e60f2]
         public static func observe(
             config: any CoreConfig.Interface,
             reload: @escaping @Sendable () async -> Void
@@ -64,7 +64,7 @@ public enum CoreConfigPlugin {
         }
 
         /// Loads domain documents from config entries and directory sources.
-        // parity: core/src/config/plugin/entry-observer.ts#observeSources [status=adapted hash=fd321c0e3942]
+        // parity: core/src/config/plugin/entry-observer.ts#observeSources [status=adapted hash=92f380dcd78d]
         public static func observeSources<A: Sendable>(
             config: any CoreConfig.Interface,
             directories: [String],
@@ -99,7 +99,7 @@ public enum CoreConfigPlugin {
     // MARK: - Skill File Parser (`core/src/config/plugin/skill-file.ts`)
 
     public enum SkillFile {
-        // parity: core/src/config/plugin/skill-file.ts#ParseResult [status=implemented hash=726962d9945b]
+        // parity: core/src/config/plugin/skill-file.ts#ParseResult [status=implemented hash=a90d13f61628]
         public enum ParseResult: Equatable, Hashable, Sendable {
             case parsed(SkillSchema.Info)
             case skippedMarkdown
@@ -185,7 +185,7 @@ public enum CoreConfigPlugin {
         public static let ignore: [String] = FSPathUtil.ignoreGlobs + ["**/.*", "**/.*/**"]
 
         /// Scans a skill root directory up to depth 6, preferring `SKILL.md` per directory and collecting root `.md` files.
-        // parity: core/src/config/plugin/skill-scan.ts#scan [status=implemented hash=4199fc209860]
+        // parity: core/src/config/plugin/skill-scan.ts#scan [status=implemented hash=f729a3ca4241]
         public static func scan(
             root: String,
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
@@ -225,7 +225,7 @@ public enum CoreConfigPlugin {
     // MARK: - Plugin Source Resolver (`core/src/config/plugin/source.ts`)
 
     public enum Source {
-        // parity: core/src/config/plugin/source.ts#Operation [status=implemented hash=b8f9d39ec505]
+        // parity: core/src/config/plugin/source.ts#Operation [status=implemented hash=f922bc32f741]
         public enum Operation: Equatable, Hashable, Sendable {
             case add(target: String, options: [String: JSONValue], mtime: Int64? = nil)
             case remove(target: String)
@@ -294,21 +294,21 @@ public enum CoreConfigPlugin {
             func changes() -> AsyncStream<Void> { AsyncStream { $0.finish() } }
         }
 
-        // parity: core/src/config/plugin/source.ts#layer [status=adapted hash=a8627ac69589]
+        // parity: core/src/config/plugin/source.ts#layer [status=adapted hash=b49d8b9b9101]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let cfg = deps.get(CoreConfig.Service.serviceKey, as: (any CoreConfig.Interface).self) ?? CoreConfig.Test()
             let dir = deps.get("@opencode/Location.directory", as: String.self) ?? "/"
             return LayerNode.Output([Service.serviceKey: Service(config: cfg, directory: dir) as any Interface])
         }
 
-        // parity: core/src/config/plugin/source.ts#node [status=adapted hash=19e63e697939]
+        // parity: core/src/config/plugin/source.ts#node [status=adapted hash=04da21632e3f]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             layer,
             [CoreConfig.node, FSUtil.node, CoreFilesystem.Watcher.node]
         )
 
-        // parity: core/src/config/plugin/source.ts#empty [status=adapted hash=34c5dd2b1e93]
+        // parity: core/src/config/plugin/source.ts#empty [status=adapted hash=84ea884965d4]
         public static let empty: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: EmptyService() as any Interface),
@@ -319,27 +319,27 @@ public enum CoreConfigPlugin {
     // MARK: - Domain Config Plugins (All Remaining 18 `src/config/plugin/*.ts` Files)
 
     public enum Agent {
-        // parity: core/src/config/plugin/agent.ts#Plugin [status=adapted hash=6f7739bd95c4]
+        // parity: core/src/config/plugin/agent.ts#Plugin [status=adapted hash=381318ebd823]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.agent")
     }
 
     public enum Command {
-        // parity: core/src/config/plugin/command.ts#Plugin [status=adapted hash=beafa962f559]
+        // parity: core/src/config/plugin/command.ts#Plugin [status=adapted hash=c90f8838f4fa]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.command")
     }
 
     public enum Compaction {
-        // parity: core/src/config/plugin/compaction.ts#Plugin [status=adapted hash=7919431185b3]
+        // parity: core/src/config/plugin/compaction.ts#Plugin [status=adapted hash=c99106074e82]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.compaction")
     }
 
     public enum Compatibility {
-        // parity: core/src/config/plugin/compatibility.ts#Plugin [status=adapted hash=fd955a4daad8]
+        // parity: core/src/config/plugin/compatibility.ts#Plugin [status=adapted hash=77546d21e439]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.compatibility")
     }
 
     public enum Formatter {
-        // parity: core/src/config/plugin/formatter.ts#Plugin [status=adapted hash=cfffc0c2eb45]
+        // parity: core/src/config/plugin/formatter.ts#Plugin [status=adapted hash=c3f4b95e6fa4]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.formatter")
 
         public static func apply(
@@ -402,17 +402,17 @@ public enum CoreConfigPlugin {
     }
 
     public enum Image {
-        // parity: core/src/config/plugin/image.ts#Plugin [status=adapted hash=05f0b3480cbd]
+        // parity: core/src/config/plugin/image.ts#Plugin [status=adapted hash=4b80502b90aa]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.image")
     }
 
     public enum Instruction {
-        // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=06aae93cb63f]
+        // parity: core/src/config/plugin/instruction.ts#Plugin [status=adapted hash=0a7d4cb2760b]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.instruction")
     }
 
     public enum LocationWatcher {
-        // parity: core/src/config/plugin/location-watcher.ts#Plugin [status=adapted hash=8b8a3e6e7948]
+        // parity: core/src/config/plugin/location-watcher.ts#Plugin [status=adapted hash=85f37e173177]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.location-watcher")
 
         public static func apply(
@@ -427,11 +427,11 @@ public enum CoreConfigPlugin {
     }
 
     public enum Mcp {
-        // parity: core/src/config/plugin/mcp.ts#Plugin [status=adapted hash=813d9c1f9ca6]
+        // parity: core/src/config/plugin/mcp.ts#Plugin [status=adapted hash=035484776ba1]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.mcp")
 
         /// Merges global MCP timeouts and per-server MCP configs across ordered config entries.
-        // parity: core/src/config/plugin/mcp.ts#register [status=adapted hash=360e0965003d]
+        // parity: core/src/config/plugin/mcp.ts#register [status=adapted hash=083699dda3ee]
         public static func register(entries: [CoreConfigEntry]) -> [String: McpSchema.ServerConfig] {
             var startup: SchemaPrimitive.PositiveInt? = nil
             var catalog: SchemaPrimitive.PositiveInt? = nil
@@ -493,7 +493,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Policy {
-        // parity: core/src/config/plugin/policy.ts#Plugin [status=adapted hash=4daf8714d740]
+        // parity: core/src/config/plugin/policy.ts#Plugin [status=adapted hash=33965854bd6d]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.policy")
 
         /// Evaluates `tool.use` managed policies on a permission hook event (`action:resource`).
@@ -524,7 +524,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum Provider {
-        // parity: core/src/config/plugin/provider.ts#Plugin [status=adapted hash=71fcbae8f784]
+        // parity: core/src/config/plugin/provider.ts#Plugin [status=adapted hash=0b464e7e38fb]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.provider")
 
         /// Extracts configured providers from an integration document, keyed by provider ID.
@@ -537,12 +537,12 @@ public enum CoreConfigPlugin {
     }
 
     public enum Reference {
-        // parity: core/src/config/plugin/reference.ts#Plugin [status=adapted hash=8b15f2d100f8]
+        // parity: core/src/config/plugin/reference.ts#Plugin [status=adapted hash=97d1aee11d4e]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.reference")
     }
 
     public enum Shell {
-        // parity: core/src/config/plugin/shell.ts#Plugin [status=adapted hash=02426e85aecf]
+        // parity: core/src/config/plugin/shell.ts#Plugin [status=adapted hash=7f1efab0dc8e]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.shell")
 
         public static func apply(
@@ -558,12 +558,12 @@ public enum CoreConfigPlugin {
     }
 
     public enum Skill {
-        // parity: core/src/config/plugin/skill.ts#Plugin [status=adapted hash=8d738b631551]
+        // parity: core/src/config/plugin/skill.ts#Plugin [status=adapted hash=5a1f7a0301fc]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.skill")
     }
 
     public enum Snapshot {
-        // parity: core/src/config/plugin/snapshot.ts#Plugin [status=adapted hash=cc2110016171]
+        // parity: core/src/config/plugin/snapshot.ts#Plugin [status=adapted hash=6a78b10cf21a]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.snapshot")
 
         public static func apply(
@@ -579,7 +579,7 @@ public enum CoreConfigPlugin {
     }
 
     public enum ToolOutput {
-        // parity: core/src/config/plugin/tool-output.ts#Plugin [status=adapted hash=51763bfd457a]
+        // parity: core/src/config/plugin/tool-output.ts#Plugin [status=adapted hash=17bdb56d4bbf]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.tool-output")
 
         public static func apply(
@@ -597,12 +597,12 @@ public enum CoreConfigPlugin {
     }
 
     public enum WebSearch {
-        // parity: core/src/config/plugin/websearch.ts#Plugin [status=adapted hash=eb9d889dd3c9]
+        // parity: core/src/config/plugin/websearch.ts#Plugin [status=adapted hash=c13f572e87cc]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.websearch")
     }
 
     public enum Worktree {
-        // parity: core/src/config/plugin/worktree.ts#Plugin [status=adapted hash=5173d247d72a]
+        // parity: core/src/config/plugin/worktree.ts#Plugin [status=adapted hash=86faf031b6f0]
         public static let Plugin = ModuleDescriptor(id: "opencode.config.worktree")
     }
 }

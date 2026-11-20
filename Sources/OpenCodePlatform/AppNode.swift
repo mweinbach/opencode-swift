@@ -2,7 +2,7 @@ import OpenCodeUtil
 
 /// Application-wide dependency graph scope tags (`global` and `location`) matching `util/src/effect/app-node.ts`.
 public enum AppNode {
-    // parity: util/src/effect/app-node.ts#tags [status=implemented hash=8ad7297c4b5d]
+    // parity: util/src/effect/app-node.ts#tags [status=implemented hash=6a871c2dae29]
     public static let tags: LayerNode.Tags = LayerNode.tags([
         "location": ["global"],
         "global": [],
@@ -32,21 +32,21 @@ public enum LayerNodePlatform {
     // parity: util/src/effect/app-node-platform.ts#Fetch [status=implemented hash=3a8c3b0953ee]
     public typealias Fetch = @Sendable (HTTPRequest) async throws -> HTTPResponse
 
-    // parity: util/src/effect/app-node-platform.ts#filesystem [status=implemented hash=ab5502181afa]
+    // parity: util/src/effect/app-node-platform.ts#filesystem [status=implemented hash=921a9aff3b5d]
     public static let filesystem: LayerNode.Provider = AppNode.makeGlobalNode(
         fileSystemKey,
         LayerNode.ExecutableLayer.succeed(key: fileSystemKey, value: LocalFileSystem.shared as any OpenCodeFileSystem),
         []
     )
 
-    // parity: util/src/effect/app-node-platform.ts#path [status=implemented hash=f0b2c7f86569]
+    // parity: util/src/effect/app-node-platform.ts#path [status=implemented hash=8ff101037155]
     public static let path: LayerNode.Provider = AppNode.makeGlobalNode(
         pathKey,
         LayerNode.ExecutableLayer.succeed(key: pathKey, value: String(Platform.current.pathSeparator)),
         []
     )
 
-    // parity: util/src/effect/app-node-platform.ts#fetchLayer [status=implemented hash=4ed814261f43]
+    // parity: util/src/effect/app-node-platform.ts#fetchLayer [status=implemented hash=2c74eeee95e0]
     public static func fetchLayer(_ fetch: Fetch? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             if let fetch {
@@ -75,7 +75,7 @@ public enum LayerNodePlatform {
         }
     }
 
-    // parity: util/src/effect/app-node-platform.ts#httpFetch [status=implemented hash=a50b005fd924]
+    // parity: util/src/effect/app-node-platform.ts#httpFetch [status=implemented hash=5d8a3678d43f]
     public static let httpFetch: LayerNode.Provider = AppNode.makeGlobalNode(
         fetchKey,
         fetchLayer(),
@@ -105,7 +105,7 @@ public enum LayerNodePlatform {
         }
     }
 
-    // parity: util/src/effect/app-node-platform.ts#httpClient [status=implemented hash=b8a472908dbb]
+    // parity: util/src/effect/app-node-platform.ts#httpClient [status=implemented hash=8ef0b2f985dd]
     public static let httpClient: LayerNode.Provider = AppNode.makeGlobalNode(
         httpClientKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -132,7 +132,7 @@ public enum LayerNodePlatform {
 
 /// Long-lived HTTP fetch helper opting out of default idle timeouts (`util/src/no-timeout-fetch.ts`).
 public enum NoTimeoutFetch {
-    // parity: util/src/no-timeout-fetch.ts#noTimeoutFetch [status=implemented hash=5ef020dcc4c1]
+    // parity: util/src/no-timeout-fetch.ts#noTimeoutFetch [status=implemented hash=3e28e1459f8e]
     public static func noTimeoutFetch(
         _ request: HTTPRequest,
         transport: any HTTPTransport

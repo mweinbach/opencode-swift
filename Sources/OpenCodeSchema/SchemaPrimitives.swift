@@ -233,7 +233,7 @@ public enum SchemaPrimitive {
     }
 
     /// Branded relative path string.
-    // parity: schema/src/schema.ts#RelativePath [status=implemented hash=5cb205ff4f89]
+    // parity: schema/src/schema.ts#RelativePath [status=implemented hash=a13cf9ceb9de]
     public struct RelativePath: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -255,7 +255,7 @@ public enum SchemaPrimitive {
     }
 
     /// Branded absolute path string.
-    // parity: schema/src/schema.ts#AbsolutePath [status=implemented hash=e72ca209a2be]
+    // parity: schema/src/schema.ts#AbsolutePath [status=implemented hash=a7d3f72b7cf9]
     public struct AbsolutePath: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -277,7 +277,7 @@ public enum SchemaPrimitive {
     }
 
     /// Optional-key combinator semantics: in Swift `Codable`, `Optional<T>` with `encodeIfPresent` omits absent/`nil` keys.
-    // parity: schema/src/schema.ts#optional [status=adapted hash=6eec88eb8df0]
+    // parity: schema/src/schema.ts#optional [status=adapted hash=4707cfecf66c]
     public static func optional<T: Sendable>(_ value: T?) -> T? {
         value
     }
@@ -313,7 +313,7 @@ public enum SchemaPrimitive {
     }
 
     /// UTC timestamp represented on the wire as finite milliseconds since the Unix epoch.
-    // parity: schema/src/schema.ts#DateTimeUtcFromMillis [status=implemented hash=f3134f227f11]
+    // parity: schema/src/schema.ts#DateTimeUtcFromMillis [status=implemented hash=0cd8d501c6e9]
     public struct DateTimeUtcFromMillis: Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let epochMillis: Double
 
@@ -664,7 +664,7 @@ public enum SchemaPrimitive {
 
 public enum MoneySchema {
     /// Branded US dollar amount (finite number).
-    // parity: schema/src/money.ts#USD [status=implemented hash=b054b1f978bf]
+    // parity: schema/src/money.ts#USD [status=implemented hash=70c071f60fee]
     public struct USD: RawRepresentable, Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: Double
 
@@ -706,7 +706,7 @@ public enum MoneySchema {
     }
 
     /// Branded US dollar rate per 1,000,000 tokens (finite number).
-    // parity: schema/src/money.ts#USDPerMillionTokens [status=implemented hash=fad312ecc1f3]
+    // parity: schema/src/money.ts#USDPerMillionTokens [status=implemented hash=a9ede6972333]
     public struct USDPerMillionTokens: RawRepresentable, Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: Double
 
@@ -820,7 +820,7 @@ public enum FileDiffSchema {
         case modified
     }
 
-    // parity: schema/src/file-diff.ts#Info [status=implemented hash=6443faa80624]
+    // parity: schema/src/file-diff.ts#Info [status=implemented hash=cb436e94243a]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let file: String
         public let patch: String
@@ -878,7 +878,7 @@ public enum FileDiffSchema {
     }
 
     /// V1 snapshot and persisted session diff shape.
-    // parity: schema/src/file-diff.ts#LegacyInfo [status=implemented hash=e3128332ab76]
+    // parity: schema/src/file-diff.ts#LegacyInfo [status=implemented hash=41dd04b9fa4f]
     public struct LegacyInfo: Equatable, Hashable, Sendable, Codable {
         public let file: String?
         public let patch: String?
@@ -923,7 +923,7 @@ public enum FileDiffSchema {
 
 public enum BlobStoreSchema {
     /// Strict stored blob identifier matching `^blob_[0-9a-f]{12}[0-9A-Za-z]{14}$`.
-    // parity: schema/src/blob-store.ts#ID [status=implemented hash=012b94ddb5e4]
+    // parity: schema/src/blob-store.ts#ID [status=implemented hash=782f9cda2a4d]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1085,7 +1085,7 @@ public enum ReferenceSchema {
         }
     }
 
-    // parity: schema/src/reference.ts#Source [status=implemented hash=a80781ef5735]
+    // parity: schema/src/reference.ts#Source [status=implemented hash=5bf97c6b1971]
     public enum Source: Equatable, Hashable, Sendable, Codable {
         case local(LocalSource)
         case git(GitSource)
@@ -1121,7 +1121,7 @@ public enum ReferenceSchema {
         }
     }
 
-    // parity: schema/src/reference.ts#Info [status=implemented hash=396c9012502e]
+    // parity: schema/src/reference.ts#Info [status=implemented hash=69947df8ac9a]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let path: SchemaPrimitive.AbsolutePath
@@ -1148,7 +1148,7 @@ public enum ReferenceSchema {
 // MARK: - src/snapshot.ts
 
 public enum SnapshotSchema {
-    // parity: schema/src/snapshot.ts#ID [status=implemented hash=89787d870cbb]
+    // parity: schema/src/snapshot.ts#ID [status=implemented hash=2c04e1469c3c]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1445,7 +1445,7 @@ public enum GoalSchema {
     }
 
     /// The `/goal` plugin's RPC definition (`opencode.goal`).
-    // parity: schema/src/goal.ts#Definition [status=implemented hash=45f91684f5bf]
+    // parity: schema/src/goal.ts#Definition [status=implemented hash=82bdd336711f]
     public static let definition: RpcSchema.PortableDefinition = RpcSchema.PortableDefinition(
         id: "opencode.goal",
         methods: [
@@ -1496,7 +1496,7 @@ public enum QuestionSchema {
         }
     }
 
-    // parity: schema/src/question.ts#Prompt [status=implemented hash=551e0ce6f648]
+    // parity: schema/src/question.ts#Prompt [status=implemented hash=6fbfaa73a184]
     public struct Prompt: Equatable, Hashable, Sendable, Codable {
         public let question: String
         public let header: String
@@ -1511,7 +1511,7 @@ public enum QuestionSchema {
         }
     }
 
-    // parity: schema/src/question.ts#Answer [status=implemented hash=b247c9f14539]
+    // parity: schema/src/question.ts#Answer [status=implemented hash=98850841bfe9]
     public typealias Answer = [String]
 }
 

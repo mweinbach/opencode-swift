@@ -565,7 +565,7 @@ public enum CorePlugin {
     }
 
     /// LayerNode provider descriptor for the core `Plugin` Location service.
-    // parity: core/src/plugin.ts#node [status=adapted hash=ecd306294a4e]
+    // parity: core/src/plugin.ts#node [status=adapted hash=467152868432]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service.serviceKey),
@@ -857,7 +857,7 @@ public enum CorePlugin {
         }
 
         /// LayerNode provider descriptor for `PluginHooks`.
-        // parity: core/src/plugin/hooks.ts#node [status=adapted hash=9e1ad9da14bc]
+        // parity: core/src/plugin/hooks.ts#node [status=adapted hash=0c79ea0a2c77]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service()),
@@ -2145,7 +2145,7 @@ public enum CorePlugin {
         }
 
         /// Creates a `PluginEffect.Context` scoped to `pluginID` on top of `environment`.
-        // parity: core/src/plugin/host.ts#make [status=adapted hash=ef02c47c7e15]
+        // parity: core/src/plugin/host.ts#make [status=adapted hash=c2e7fee6801b]
         public static func make(
             environment: Environment,
             pluginID: String,
@@ -2827,7 +2827,7 @@ public enum CorePlugin {
         }
 
         /// Default empty `InstancePlugins` Location node.
-        // parity: core/src/plugin/instance.ts#node [status=adapted hash=d7426ff24166]
+        // parity: core/src/plugin/instance.ts#node [status=adapted hash=2db03f1fa255]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service()),
@@ -2839,7 +2839,7 @@ public enum CorePlugin {
 
     public enum SdkPlugins {
         /// Ephemeral global event published whenever an SDK embedder registers a plugin.
-        // parity: core/src/plugin/sdk.ts#Updated [status=implemented hash=67e6e911b648]
+        // parity: core/src/plugin/sdk.ts#Updated [status=implemented hash=2fa559027795]
         public static let Updated = SchemaPrimitive.EventDescriptor.ephemeral(type: "sdk.plugin.updated")
 
         /// Host-global SDK plugin registration contract.
@@ -2890,14 +2890,14 @@ public enum CorePlugin {
         }
 
         /// Layer constructing an isolated `SdkPlugins.Service` instance.
-        // parity: core/src/plugin/sdk.ts#layer [status=adapted hash=39355c7f955c]
+        // parity: core/src/plugin/sdk.ts#layer [status=adapted hash=36051b53fe67]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service()
         )
 
         /// Global LayerNode provider for `SdkPlugins`.
-        // parity: core/src/plugin/sdk.ts#node [status=adapted hash=1569eddfecc8]
+        // parity: core/src/plugin/sdk.ts#node [status=adapted hash=b4d453bf980a]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             layer,
@@ -2913,7 +2913,7 @@ public enum CorePlugin {
         public static let names: [String] = ["plugin", "plugins"]
 
         /// Discovers local `.ts`/`.js` plugin files and plugin subdirectories under `<directory>/{plugin,plugins}`.
-        // parity: core/src/plugin/source-directory.ts#discover [status=implemented hash=fd191b71a3d4]
+        // parity: core/src/plugin/source-directory.ts#discover [status=implemented hash=8fc9bd09ef25]
         public static func discover(
             fs: any OpenCodeFileSystem,
             directory: String
@@ -2958,7 +2958,7 @@ public enum CorePlugin {
 
     public enum Module {
         /// Tagged load error raised when an external/local plugin fails module validation or entrypoint resolution.
-        // parity: core/src/plugin/module.ts#LoadError [status=implemented hash=4834405dcb55]
+        // parity: core/src/plugin/module.ts#LoadError [status=implemented hash=1c4aaa8cbe23]
         public struct LoadError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "PluginModule.LoadError"
             public let message: String
@@ -3094,7 +3094,7 @@ public enum CorePlugin {
         }
 
         /// Constructs a `PluginModule` loader.
-        // parity: core/src/plugin/module.ts#make [status=adapted hash=940bdf2874b8]
+        // parity: core/src/plugin/module.ts#make [status=adapted hash=48e387434bc9]
         public static func make(
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             policyCheck: @escaping @Sendable (String) -> Bool = { _ in true },
@@ -3228,7 +3228,7 @@ public enum CorePlugin {
         }
 
         /// Global LayerNode provider for `PluginUpdate`.
-        // parity: core/src/plugin/update.ts#node [status=adapted hash=47cfe2786cef]
+        // parity: core/src/plugin/update.ts#node [status=adapted hash=09e1fcef8de5]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service()),
@@ -3274,7 +3274,7 @@ public enum CorePlugin {
         }
 
         /// Returns the built-in `pre` and `post` internal plugin generations in upstream boot order.
-        // parity: core/src/plugin/internal.ts#list [status=adapted hash=ebfc1b46e42b]
+        // parity: core/src/plugin/internal.ts#list [status=adapted hash=7c0b5c6b5ef7]
         public static func list() -> Partition {
             let prePlugins: [InternalPlugin] = [
                 ToolInputRepairPlugin.Plugin,
@@ -3484,14 +3484,14 @@ public enum CorePlugin {
 
         /// Supervisor runtime layer descriptor. The reload loop that drives `Updates` and `rejectFailedVersions` runs
         /// in the host runtime; this node only names the supervisor in the location graph.
-        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=0d0cefb9ac27]
+        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=14fdb8bbf751]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: "plugin-supervisor",
             value: "plugin-supervisor"
         )
 
         /// Location LayerNode provider for `PluginSupervisor`.
-        // parity: core/src/plugin/supervisor.ts#node [status=adapted hash=657fc7fc72aa]
+        // parity: core/src/plugin/supervisor.ts#node [status=adapted hash=8d7071eec4c9]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             "plugin-supervisor",
             layer,
@@ -3538,7 +3538,7 @@ public enum CorePlugin {
         """
 
         /// Built-in agent catalog plugin (`opencode.agent`) defining Build, Plan, General, Explore, Compaction, Title, and Summary agents.
-        // parity: core/src/plugin/agent.ts#Plugin [status=adapted hash=1f30747747d3]
+        // parity: core/src/plugin/agent.ts#Plugin [status=adapted hash=f254f32629b9]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.agent") { ctx in
                 let planDir = PluginContract.joinPath(
@@ -3767,7 +3767,7 @@ public enum CorePlugin {
         }
 
         /// Built-in slash command plugin (`opencode.command`) registering `/init` and `/review` with real prompt templates.
-        // parity: core/src/plugin/command.ts#Plugin [status=adapted hash=3a478a54668e]
+        // parity: core/src/plugin/command.ts#Plugin [status=adapted hash=2df3035c12aa]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.command") { ctx in
                 let projectDirectory = ctx.location.project.directory.rawValue
@@ -3819,7 +3819,7 @@ public enum CorePlugin {
 
     public enum ForkNoticePlugin {
         /// Built-in fork notice plugin (`opencode.fork-notice`) injecting `<fork-notice>` on `session.fork`.
-        // parity: core/src/plugin/fork-notice.ts#Plugin [status=implemented hash=6ab934f5ceaa]
+        // parity: core/src/plugin/fork-notice.ts#Plugin [status=implemented hash=86df2804b6e9]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.fork-notice") { ctx in
                 _ = await ctx.session.hook("fork", { event in
@@ -3880,7 +3880,7 @@ public enum CorePlugin {
         }
 
         /// Built-in autonomous goal loop plugin (`opencode.goal`).
-        // parity: core/src/plugin/goal.ts#Plugin [status=adapted hash=0b0de9259c9c]
+        // parity: core/src/plugin/goal.ts#Plugin [status=adapted hash=6473a2c99585]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.goal") { ctx in
                 _ = await ctx.command.transform { editor in
@@ -3905,7 +3905,7 @@ public enum CorePlugin {
 
     public enum IdentityPlugin {
         /// Formats the `# Your Model` identity system prompt block injected into session requests.
-        // parity: core/src/plugin/identity.ts#identity [status=implemented hash=d1056ea5e09a]
+        // parity: core/src/plugin/identity.ts#identity [status=implemented hash=80936396dbc7]
         public static func identity(name: String, ref: ModelSchema.Ref) -> String {
             [
                 "# Your Model",
@@ -3916,7 +3916,7 @@ public enum CorePlugin {
         }
 
         /// Built-in model identity prompt plugin (`opencode.prompt.identity`).
-        // parity: core/src/plugin/identity.ts#Plugin [status=implemented hash=11e365486321]
+        // parity: core/src/plugin/identity.ts#Plugin [status=implemented hash=ceb54b7094a6]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.prompt.identity") { ctx in
                 let inject: @Sendable (PluginEffect.SessionHooks) async throws -> PluginEffect.SessionHooks = { event in
@@ -3939,7 +3939,7 @@ public enum CorePlugin {
 
     public enum McpCodeModeDefaultsPlugin {
         /// Built-in MCP Code Mode compatibility plugin (`opencode.mcp.codemode.defaults`).
-        // parity: core/src/plugin/mcp-codemode-defaults.ts#Plugin [status=implemented hash=0eacd3f36c64]
+        // parity: core/src/plugin/mcp-codemode-defaults.ts#Plugin [status=implemented hash=8acaf564366c]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.mcp.codemode.defaults") { ctx in
                 _ = await ctx.mcp.transform { editor in
@@ -4353,12 +4353,12 @@ public enum CorePlugin {
     }
 
     /// Built-in models.dev catalog synchronization plugin (`opencode.models.dev`).
-    // parity: core/src/plugin/models-dev.ts#ModelsDevPlugin [status=adapted hash=eec78283dc18]
+    // parity: core/src/plugin/models-dev.ts#ModelsDevPlugin [status=adapted hash=e9e410ccf400]
     public static let ModelsDevPlugin = makeModelsDevPlugin()
 
     public enum OptimizePlugin {
         /// Resolves full `ModelSchema.Info` metadata for a session hook's `ModelSchema.Ref`.
-        // parity: core/src/plugin/optimize.ts#resolveModel [status=implemented hash=2d7487e0e0be]
+        // parity: core/src/plugin/optimize.ts#resolveModel [status=implemented hash=a22810ec5233]
         public static func resolveModel(ctx: PluginEffect.Context, model: ModelSchema.Ref) async -> ModelSchema.Info? {
             guard let located = try? await ctx.model.list(nil) else { return nil }
             return located.data.first { $0.providerID == model.providerID && $0.id == model.id }
@@ -4384,7 +4384,7 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/optimize.ts#OpenAIPlugin [status=adapted hash=9c958fc08236]
+        // parity: core/src/plugin/optimize.ts#OpenAIPlugin [status=adapted hash=d82f305204bd]
         public static let OpenAIPlugin = registerOptimization(
             id: "opencode.prompt.openai",
             providerMatcher: { ref, info in
@@ -4394,7 +4394,7 @@ public enum CorePlugin {
             optionValue: .bool(true)
         )
 
-        // parity: core/src/plugin/optimize.ts#AnthropicPlugin [status=adapted hash=9b457cb8f764]
+        // parity: core/src/plugin/optimize.ts#AnthropicPlugin [status=adapted hash=b42df69b0ca7]
         public static let AnthropicPlugin = registerOptimization(
             id: "opencode.prompt.anthropic",
             providerMatcher: { ref, info in
@@ -4424,7 +4424,7 @@ public enum CorePlugin {
             optionValue: .string("arcee")
         )
 
-        // parity: core/src/plugin/optimize.ts#MetaPlugin [status=adapted hash=4c1cee47fa9c]
+        // parity: core/src/plugin/optimize.ts#MetaPlugin [status=adapted hash=8bee1b200e7e]
         public static let MetaPlugin = registerOptimization(
             id: "opencode.prompt.meta",
             providerMatcher: { ref, info in
@@ -4466,7 +4466,7 @@ public enum CorePlugin {
         """
 
         /// Built-in Plan mode agent & read-only guardrails plugin (`opencode.plan`).
-        // parity: core/src/plugin/plan.ts#Plugin [status=adapted hash=7ddb7627ecbc]
+        // parity: core/src/plugin/plan.ts#Plugin [status=adapted hash=3e04730addf9]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.plan") { ctx in
                 let planID = AgentSchema.ID(rawValue: "plan")
@@ -4540,7 +4540,7 @@ public enum CorePlugin {
             "Use this skill for any question about OpenCode itself, including how OpenCode works, using or configuring it, migrating from V1 to V2, troubleshooting it, developing plugins or integrations, using the OpenCode SDK, clients, server, or API, and contributing to the OpenCode codebase. Also use it for OpenCode agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI, TUI, desktop app, and web app."
 
         /// Built-in skill plugin (`opencode.skill`) registering `opencode` and `report` skills.
-        // parity: core/src/plugin/skill.ts#Plugin [status=implemented hash=efbbd4294e79]
+        // parity: core/src/plugin/skill.ts#Plugin [status=implemented hash=431c0613c873]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.skill") { ctx in
                 _ = await ctx.skill.transform { editor in
@@ -4573,7 +4573,7 @@ public enum CorePlugin {
         private static let maxDepth = 6
 
         /// Built-in tool alias (`bash` -> `shell`) & schema-driven input repair plugin (`opencode.tool.input.repair`).
-        // parity: core/src/plugin/tool-input-repair.ts#Plugin [status=adapted hash=f07a96f58e44]
+        // parity: core/src/plugin/tool-input-repair.ts#Plugin [status=adapted hash=5473d70a6396]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.tool.input.repair") { ctx in
                 let aliased = Mutex<[String: String]>([:])
@@ -4844,7 +4844,7 @@ public enum CorePlugin {
 
     public enum VerbosityPlugin {
         /// Built-in GPT-5/GPT-6 default `textVerbosity = "low"` plugin (`opencode.prompt.verbosity`).
-        // parity: core/src/plugin/verbosity.ts#Plugin [status=adapted hash=652288a21817]
+        // parity: core/src/plugin/verbosity.ts#Plugin [status=adapted hash=0f7cc313b383]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.prompt.verbosity") { ctx in
                 _ = await ctx.session.hook("context", { event in
@@ -4863,7 +4863,7 @@ public enum CorePlugin {
 
     public enum WarmingPlugin {
         /// Built-in prompt-cache keep-alive warming plugin (`opencode.warming`).
-        // parity: core/src/plugin/warming.ts#Plugin [status=adapted hash=9a79c366abf0]
+        // parity: core/src/plugin/warming.ts#Plugin [status=adapted hash=ab16dfccaef0]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.warming") { ctx in
                 _ = await ctx.session.hook("context", { event in
@@ -4971,13 +4971,13 @@ public enum CorePlugin {
         }
 
         /// Built-in Git VCS plugin (`opencode.vcs.git`) backed by `CoreVcs.Git.Service`.
-        // parity: core/src/plugin/vcs/git.ts#Plugin [status=adapted hash=df2b85e1b539]
+        // parity: core/src/plugin/vcs/git.ts#Plugin [status=adapted hash=984dd3e8f730]
         public static let Plugin = make()
     }
 
     public enum VcsHgPlugin {
         /// Built-in Mercurial VCS plugin (`opencode.vcs.hg`) invoking `hg` via `ProcessSpawner`.
-        // parity: core/src/plugin/vcs/hg.ts#Plugin [status=adapted hash=5f7b3ce3e912]
+        // parity: core/src/plugin/vcs/hg.ts#Plugin [status=adapted hash=cbdb346a3cd5]
         public static let Plugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.vcs.hg") { ctx in
                 let capturedSpawner = Host.currentProcessSpawnerOverride
@@ -5101,7 +5101,7 @@ public enum CorePlugin {
         }
 
         /// Executes an MCP JSON-RPC 2.0 `tools/call` HTTP POST request over `OpenCodePlatform.HTTPTransport`.
-        // parity: core/src/plugin/websearch/mcp.ts#call [status=implemented hash=7495d70449d6]
+        // parity: core/src/plugin/websearch/mcp.ts#call [status=implemented hash=7612452d2185]
         public static func call(
             transport: any HTTPTransport,
             url: String,
@@ -5169,7 +5169,7 @@ public enum CorePlugin {
 
     public enum WebSearchProvider {
         /// Registers a web search provider together with its API-key & env integration methods.
-        // parity: core/src/plugin/websearch/provider.ts#register [status=implemented hash=6d2b0c9f7ab2]
+        // parity: core/src/plugin/websearch/provider.ts#register [status=implemented hash=8dd46179116d]
         public static func register(
             ctx: PluginEffect.Context,
             id: String,
@@ -5270,7 +5270,7 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/websearch/exa.ts#Plugin [status=adapted hash=5496dfb55fb0]
+        // parity: core/src/plugin/websearch/exa.ts#Plugin [status=adapted hash=fd32f3a81dd0]
         public static let Plugin = make()
     }
 
@@ -5318,7 +5318,7 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/websearch/firecrawl.ts#Plugin [status=adapted hash=8ed5ac1527bc]
+        // parity: core/src/plugin/websearch/firecrawl.ts#Plugin [status=adapted hash=91f638664410]
         public static let Plugin = make()
     }
 
@@ -5374,7 +5374,7 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/websearch/parallel.ts#Plugin [status=adapted hash=77abe5eb2498]
+        // parity: core/src/plugin/websearch/parallel.ts#Plugin [status=adapted hash=7b775c2c3ef2]
         public static let Plugin = make()
     }
 
@@ -5433,7 +5433,7 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/websearch/tavily.ts#Plugin [status=adapted hash=2794e9f6797f]
+        // parity: core/src/plugin/websearch/tavily.ts#Plugin [status=adapted hash=96820abcdfcf]
         public static let Plugin = make()
     }
 
@@ -5529,12 +5529,12 @@ public enum CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/websearch/tinyfish.ts#Plugin [status=adapted hash=f46f152620f6]
+        // parity: core/src/plugin/websearch/tinyfish.ts#Plugin [status=adapted hash=d114a6f72265]
         public static let Plugin = make()
     }
 
     /// All built-in web search provider plugins.
-    // parity: core/src/plugin/websearch/index.ts#WebSearchPlugins [status=implemented hash=e2d34d50fceb]
+    // parity: core/src/plugin/websearch/index.ts#WebSearchPlugins [status=implemented hash=44623855d082]
     public static let WebSearchPlugins: [PluginEffect.Plugin] = [
         WebSearchExa.Plugin,
         WebSearchFirecrawl.Plugin,
@@ -5560,7 +5560,7 @@ public enum CorePlugin {
         }
 
         /// Reads effective configured settings for `providerID`.
-        // parity: core/src/plugin/provider/configured.ts#configuredSettings [status=adapted hash=fcdcd7add0de]
+        // parity: core/src/plugin/provider/configured.ts#configuredSettings [status=adapted hash=69eaae683fee]
         public static func configuredSettings(
             providerID: ProviderSchema.ID,
             overlays: [[String: JSONValue]] = [],
@@ -5583,7 +5583,7 @@ public enum CorePlugin {
         }
 
         /// Resolves an integration's active connection to its live credential.
-        // parity: core/src/plugin/provider/credential-settings.ts#activeCredential [status=implemented hash=765de4af9a2b]
+        // parity: core/src/plugin/provider/credential-settings.ts#activeCredential [status=implemented hash=92c0ea394a18]
         public static func activeCredential(ctx: PluginEffect.Context, integrationID: String) async -> ResolvedCredential {
             let conn = await ctx.integration.connection.active(integrationID)
             let cred = if let conn { try? await ctx.integration.connection.resolve(conn) } else { nil as CredentialSchema.Value? }
@@ -5591,13 +5591,13 @@ public enum CorePlugin {
         }
 
         /// Reads an integration's stored credential without forcing token refresh.
-        // parity: core/src/plugin/provider/credential-settings.ts#storedCredential [status=adapted hash=5b4313fb36f3]
+        // parity: core/src/plugin/provider/credential-settings.ts#storedCredential [status=adapted hash=314f59bc26df]
         public static func storedCredential(ctx: PluginEffect.Context, integrationID: String) async -> ResolvedCredential {
             await activeCredential(ctx: ctx, integrationID: integrationID)
         }
 
         /// Derives provider settings from the active integration's credential.
-        // parity: core/src/plugin/provider/credential-settings.ts#credentialSettings [status=adapted hash=939c6b5b7bd5]
+        // parity: core/src/plugin/provider/credential-settings.ts#credentialSettings [status=adapted hash=d9d908a0bf56]
         public static func credentialSettings(
             ctx: PluginEffect.Context,
             integrationID: String,
@@ -5636,7 +5636,7 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/refresh.ts#onSwitch [status=adapted hash=d0de4e766638]
+        // parity: core/src/plugin/provider/refresh.ts#onSwitch [status=adapted hash=e9de25e50b30]
         public static func onSwitch(
             integrationID: String,
             action: @escaping @Sendable () async -> Void
@@ -5655,7 +5655,7 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/refresh.ts#switched [status=implemented hash=af8b89058774]
+        // parity: core/src/plugin/provider/refresh.ts#switched [status=implemented hash=18002cb3d2a4]
         public static func switched<A: Sendable>(
             load: @escaping @Sendable (Options) async throws -> A,
             apply: @escaping @Sendable (A) async -> Void
@@ -5666,7 +5666,7 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/refresh.ts#start [status=adapted hash=dae52dd6a905]
+        // parity: core/src/plugin/provider/refresh.ts#start [status=adapted hash=bdf84d9bfc7d]
         public static func start<A: Sendable>(
             load: @escaping @Sendable (Options) async throws -> A,
             apply: @escaping @Sendable (A) async -> Void
@@ -5729,7 +5729,7 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/local.ts#createLocalProviderPlugin [status=adapted hash=f07f0a12c3ca]
+        // parity: core/src/plugin/provider/local.ts#createLocalProviderPlugin [status=adapted hash=88f2a1964660]
         public static func createLocalProviderPlugin(
             id: String,
             providerID: String,
@@ -5802,7 +5802,7 @@ public enum CorePlugin {
     }
 
     /// Dynamic npm SDK factory loader contract (`plugin/provider/sdk-factory.ts`).
-    // parity: core/src/plugin/provider/sdk-factory.ts#loadSDKFactory [status=adapted hash=de1facaebc5b]
+    // parity: core/src/plugin/provider/sdk-factory.ts#loadSDKFactory [status=adapted hash=4fae9c783d87]
     public static func loadSDKFactory(packageName: String) async throws -> AnySendableValue {
         try await RuntimeImport.importNodeModule(packageName)
     }
@@ -5811,7 +5811,7 @@ public enum CorePlugin {
         // parity: core/src/plugin/provider/opencode-artifacts.ts#header [status=implemented hash=dcf1b7c5cffb]
         public static let header = "x-opencode-artifacts"
 
-        // parity: core/src/plugin/provider/opencode-artifacts.ts#make [status=adapted hash=6b493bf790dd]
+        // parity: core/src/plugin/provider/opencode-artifacts.ts#make [status=adapted hash=5840cb84a14b]
         public static func make(ctx: PluginEffect.Context) async {
             _ = ctx
         }
@@ -5899,7 +5899,7 @@ public enum CorePlugin {
             return WakeDecision(resume: resume, paused: paused, next: next)
         }
 
-        // parity: core/src/plugin/provider/opencode-watches.ts#make [status=adapted hash=2d411223f776]
+        // parity: core/src/plugin/provider/opencode-watches.ts#make [status=adapted hash=9066caafb8fd]
         public static func make(ctx: PluginEffect.Context) async {
             // The Console connection and watch tools need the OpenCode Console transport, which this host does not
             // wire yet; `decideWake` and `unattendedKey` carry the wake policy for it.
@@ -6077,7 +6077,7 @@ public enum CorePlugin {
     }
 
     public enum ChatGPTProvider {
-        // parity: core/src/plugin/provider/chatgpt.ts#ChatGPTPlugin [status=adapted hash=e82603f31d14]
+        // parity: core/src/plugin/provider/chatgpt.ts#ChatGPTPlugin [status=adapted hash=acb697d44ba7]
         public static let ChatGPTPlugin = PluginEffect.define(
             PluginEffect.Plugin(id: "opencode.provider.chatgpt") { ctx in
                 await registerCloudProvider(
@@ -6195,7 +6195,7 @@ public enum CorePlugin {
     }
 
     public enum AzureProvider {
-        // parity: core/src/plugin/provider/azure.ts#make [status=adapted hash=cca1cfaad991]
+        // parity: core/src/plugin/provider/azure.ts#make [status=adapted hash=26970e7052af]
         public static func make() -> PluginEffect.Plugin {
             PluginEffect.define(
                 PluginEffect.Plugin(id: "opencode.provider.azure") { ctx in
@@ -6232,7 +6232,7 @@ public enum CorePlugin {
     }
 
     public enum LMStudioProvider {
-        // parity: core/src/plugin/provider/lmstudio.ts#make [status=implemented hash=7d4052b599b3]
+        // parity: core/src/plugin/provider/lmstudio.ts#make [status=implemented hash=87fc2cd45205]
         public static let make = ProviderLocal.createLocalProviderPlugin(
             id: "opencode.provider.lmstudio",
             providerID: "lmstudio",
@@ -6245,7 +6245,7 @@ public enum CorePlugin {
     }
 
     public enum OllamaProvider {
-        // parity: core/src/plugin/provider/ollama.ts#make [status=implemented hash=e096c5392889]
+        // parity: core/src/plugin/provider/ollama.ts#make [status=implemented hash=1e2da33776b2]
         public static let make = ProviderLocal.createLocalProviderPlugin(
             id: "opencode.provider.ollama",
             providerID: "ollama",
@@ -6258,7 +6258,7 @@ public enum CorePlugin {
     }
 
     public enum VLLMProvider {
-        // parity: core/src/plugin/provider/vllm.ts#make [status=implemented hash=1aa6e1766d69]
+        // parity: core/src/plugin/provider/vllm.ts#make [status=implemented hash=8512ba4ef4c4]
         public static let make = ProviderLocal.createLocalProviderPlugin(
             id: "opencode.provider.vllm",
             providerID: "vllm",
@@ -6270,7 +6270,7 @@ public enum CorePlugin {
         public static let VLLMPlugin = make()
     }
 
-    // parity: core/src/plugin/provider/amazon-bedrock.ts#AmazonBedrockPlugin [status=adapted hash=a455915afee1]
+    // parity: core/src/plugin/provider/amazon-bedrock.ts#AmazonBedrockPlugin [status=adapted hash=0f305c8aeff4]
     public static let AmazonBedrockPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.amazon.bedrock") { ctx in
             let env = Host.currentEnvironment
@@ -6316,7 +6316,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/cerebras.ts#CerebrasPlugin [status=adapted hash=a81c45d122f2]
+    // parity: core/src/plugin/provider/cerebras.ts#CerebrasPlugin [status=adapted hash=63a49eecfede]
     public static let CerebrasPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.cerebras") { ctx in
             await registerCloudProvider(
@@ -6331,7 +6331,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/cloudflare-ai-gateway.ts#CloudflareAIGatewayPlugin [status=adapted hash=3d3202c2b2f3]
+    // parity: core/src/plugin/provider/cloudflare-ai-gateway.ts#CloudflareAIGatewayPlugin [status=adapted hash=af69e6f552db]
     public static let CloudflareAIGatewayPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.cloudflare.ai.gateway") { ctx in
             let env = Host.currentEnvironment
@@ -6350,7 +6350,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/cloudflare-workers-ai.ts#CloudflareWorkersAIPlugin [status=adapted hash=63d2375f1a34]
+    // parity: core/src/plugin/provider/cloudflare-workers-ai.ts#CloudflareWorkersAIPlugin [status=adapted hash=021a18d36e91]
     public static let CloudflareWorkersAIPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.cloudflare.workers.ai") { ctx in
             let env = Host.currentEnvironment
@@ -6368,7 +6368,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/databricks.ts#DatabricksPlugin [status=adapted hash=954ff5cce271]
+    // parity: core/src/plugin/provider/databricks.ts#DatabricksPlugin [status=adapted hash=34d62495ae1b]
     public static let DatabricksPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.databricks") { ctx in
             await registerCloudProvider(
@@ -6383,7 +6383,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/digitalocean.ts#DigitalOceanPlugin [status=adapted hash=0f83be9bb563]
+    // parity: core/src/plugin/provider/digitalocean.ts#DigitalOceanPlugin [status=adapted hash=ca31b56f187d]
     public static let DigitalOceanPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.digitalocean") { ctx in
             await registerCloudProvider(
@@ -6397,7 +6397,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/dynamic.ts#DynamicProviderPlugin [status=adapted hash=752b96cedc7b]
+    // parity: core/src/plugin/provider/dynamic.ts#DynamicProviderPlugin [status=adapted hash=978b53e8544e]
     public static let DynamicProviderPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.dynamic") { ctx in
             let env = Host.currentEnvironment
@@ -6524,7 +6524,7 @@ public enum CorePlugin {
         }
 
         /// Returns a user-facing entitlement error when `/copilot_internal/user` reports `chat_enabled === false`.
-        // parity: core/src/plugin/provider/github-copilot.ts#copilotEntitlementError [status=implemented hash=7342f68756a3]
+        // parity: core/src/plugin/provider/github-copilot.ts#copilotEntitlementError [status=implemented hash=fcaa0a741653]
         public static func copilotEntitlementError(_ user: EntitlementUser) -> String? {
             guard user.chatEnabled == false else { return nil }
             if user.canSignupForLimited == true {
@@ -6550,7 +6550,7 @@ public enum CorePlugin {
         public static let utilityTitleModels: [String] = ["gpt-4o-mini"]
 
         /// Issues a stateless, non-streaming `/chat/completions` title generation request against GitHub Copilot.
-        // parity: core/src/plugin/provider/github-copilot.ts#utilityTitle [status=implemented hash=75ffb9fc153a]
+        // parity: core/src/plugin/provider/github-copilot.ts#utilityTitle [status=implemented hash=1b5660a481b9]
         public static func utilityTitle(
             _ input: UtilityTitleInput,
             request: UtilityTitleRequest
@@ -6634,7 +6634,7 @@ public enum CorePlugin {
         }
     }
 
-    // parity: core/src/plugin/provider/github-copilot.ts#GithubCopilotPlugin [status=adapted hash=a6cdfb8f7e9f]
+    // parity: core/src/plugin/provider/github-copilot.ts#GithubCopilotPlugin [status=adapted hash=05ef0d39c369]
     public static let GithubCopilotPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.github.copilot") { ctx in
             await registerCloudProvider(
@@ -6648,7 +6648,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/gitlab.ts#GitLabPlugin [status=adapted hash=9021a382fffa]
+    // parity: core/src/plugin/provider/gitlab.ts#GitLabPlugin [status=adapted hash=4ad579752809]
     public static let GitLabPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.gitlab") { ctx in
             await registerCloudProvider(
@@ -6663,7 +6663,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/google-vertex.ts#GoogleVertexPlugin [status=adapted hash=e1ee3cf7df5c]
+    // parity: core/src/plugin/provider/google-vertex.ts#GoogleVertexPlugin [status=adapted hash=25deaa7dfeb7]
     public static let GoogleVertexPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.google.vertex") { ctx in
             let env = Host.currentEnvironment
@@ -6710,7 +6710,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/kilo.ts#KiloPlugin [status=adapted hash=9808ae1302af]
+    // parity: core/src/plugin/provider/kilo.ts#KiloPlugin [status=adapted hash=a8435c08fc2b]
     public static let KiloPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.kilo") { ctx in
             await registerCloudProvider(
@@ -6724,7 +6724,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/llmgateway.ts#LLMGatewayPlugin [status=adapted hash=c3545406cbeb]
+    // parity: core/src/plugin/provider/llmgateway.ts#LLMGatewayPlugin [status=adapted hash=a83fc8f90cb7]
     public static let LLMGatewayPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.llmgateway") { ctx in
             await registerCloudProvider(
@@ -6738,7 +6738,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/modal.ts#ModalPlugin [status=adapted hash=cbcb94c86517]
+    // parity: core/src/plugin/provider/modal.ts#ModalPlugin [status=adapted hash=08268239e1f9]
     public static let ModalPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.modal") { ctx in
             await registerCloudProvider(
@@ -6752,7 +6752,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/neon.ts#NeonPlugin [status=adapted hash=c51c76466671]
+    // parity: core/src/plugin/provider/neon.ts#NeonPlugin [status=adapted hash=335e4840982c]
     public static let NeonPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.neon") { ctx in
             await registerCloudProvider(
@@ -6766,7 +6766,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/nvidia.ts#NvidiaPlugin [status=adapted hash=f86fa56cf7f4]
+    // parity: core/src/plugin/provider/nvidia.ts#NvidiaPlugin [status=adapted hash=f97a2c9c6fd0]
     public static let NvidiaPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.nvidia") { ctx in
             await registerCloudProvider(
@@ -6780,7 +6780,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/openai-context-caps.ts#OpenAIContextCapsPlugin [status=adapted hash=0ad9b1a9deac]
+    // parity: core/src/plugin/provider/openai-context-caps.ts#OpenAIContextCapsPlugin [status=adapted hash=64eede75d232]
     public static let OpenAIContextCapsPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.openai-context-caps") { ctx in
             let methodIDs: Set<String> = ["chatgpt-browser", "chatgpt-headless", "chatgpt-token-sharing"]
@@ -6838,7 +6838,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/openai.ts#OpenAIPlugin [status=adapted hash=4a6e5dd63a10]
+    // parity: core/src/plugin/provider/openai.ts#OpenAIPlugin [status=adapted hash=9418d4fa4857]
     public static let OpenAIPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.openai") { ctx in
             await registerCloudProvider(
@@ -6853,7 +6853,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=e708e0cab564]
+    // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=3076ea9e0683]
     public static let OpencodePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.opencode") { ctx in
             await registerCloudProvider(
@@ -6868,7 +6868,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/openrouter.ts#OpenRouterPlugin [status=adapted hash=9238e39d68eb]
+    // parity: core/src/plugin/provider/openrouter.ts#OpenRouterPlugin [status=adapted hash=61b1fe2adf91]
     public static let OpenRouterPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.openrouter") { ctx in
             await registerCloudProvider(
@@ -6916,7 +6916,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/poe.ts#PoePlugin [status=adapted hash=213d50e06d2a]
+    // parity: core/src/plugin/provider/poe.ts#PoePlugin [status=adapted hash=ae2076e3b995]
     public static let PoePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.poe") { ctx in
             await registerCloudProvider(
@@ -6930,7 +6930,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/prompt-cache-key.ts#PromptCacheKeyPlugin [status=adapted hash=44cd4d776f1f]
+    // parity: core/src/plugin/provider/prompt-cache-key.ts#PromptCacheKeyPlugin [status=adapted hash=ffe821e02541]
     public static let PromptCacheKeyPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.prompt-cache-key") { ctx in
             let providerIDs = [
@@ -6969,7 +6969,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/sap-ai-core.ts#SapAICorePlugin [status=adapted hash=f9a61e852190]
+    // parity: core/src/plugin/provider/sap-ai-core.ts#SapAICorePlugin [status=adapted hash=eac888baa88e]
     public static let SapAICorePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.sap.ai.core") { ctx in
             await registerCloudProvider(
@@ -6983,7 +6983,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/snowflake-cortex.ts#SnowflakeCortexPlugin [status=adapted hash=efd6863b9c96]
+    // parity: core/src/plugin/provider/snowflake-cortex.ts#SnowflakeCortexPlugin [status=adapted hash=f86815d26718]
     public static let SnowflakeCortexPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.snowflake.cortex") { ctx in
             await registerCloudProvider(
@@ -6997,7 +6997,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/xai.ts#XAIPlugin [status=adapted hash=f133a37f143b]
+    // parity: core/src/plugin/provider/xai.ts#XAIPlugin [status=adapted hash=ef707ad94a7c]
     public static let XAIPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.xai") { ctx in
             await registerCloudProvider(
@@ -7011,7 +7011,7 @@ public enum CorePlugin {
         }
     )
 
-    // parity: core/src/plugin/provider/zenmux.ts#ZenmuxPlugin [status=adapted hash=08f51442389d]
+    // parity: core/src/plugin/provider/zenmux.ts#ZenmuxPlugin [status=adapted hash=d9f99417f595]
     public static let ZenmuxPlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.zenmux") { ctx in
             await registerCloudProvider(
@@ -7097,7 +7097,7 @@ public enum CorePlugin {
     )
 
     /// Complete built-in provider plugins array matching `packages/core/src/plugin/provider.ts`.
-    // parity: core/src/plugin/provider.ts#ProviderPlugins [status=implemented hash=7eb0beb5b91a]
+    // parity: core/src/plugin/provider.ts#ProviderPlugins [status=implemented hash=899deedb43bd]
     public static let ProviderPlugins: [PluginEffect.Plugin] = [
         AmazonBedrockPlugin,
         AzureProvider.AzurePlugin,
@@ -7285,7 +7285,7 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#ProbeError [status=implemented hash=cc4e302022ef]
+            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#ProbeError [status=implemented hash=31f554321ea3]
             public struct ProbeError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
                 public static let tag = "ClaudeProbe.ProbeError"
                 public let message: String
@@ -7344,7 +7344,7 @@ public enum CorePlugin {
                 #endif
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#run [status=adapted hash=e1f57a4615bb]
+            // parity: core/src/plugin/provider/claude-agent/claude/probe.ts#run [status=adapted hash=52fe369cff18]
             public static func run(probe: @Sendable () async throws -> Result) async throws -> Result {
                 do {
                     return try await probe()
@@ -7501,7 +7501,7 @@ public enum CorePlugin {
                 return rest
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#base [status=adapted hash=beecd3e161f5]
+            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#base [status=adapted hash=b744f88b89df]
             public static func base(cwd: String, env: [String: String] = [:]) -> [String: JSONValue] {
                 [
                     "cwd": .string(cwd),
@@ -7509,7 +7509,7 @@ public enum CorePlugin {
                 ]
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#session [status=adapted hash=6b7dd2fa6d29]
+            // parity: core/src/plugin/provider/claude-agent/claude/query-options.ts#session [status=adapted hash=4f93dc3ca948]
             public static func session(cwd: String, model: String, resume: String? = nil) async -> [String: JSONValue] {
                 var opts = base(cwd: cwd)
                 opts["model"] = .string(model)
@@ -7707,7 +7707,7 @@ public enum CorePlugin {
                 }
             }
 
-            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#make [status=adapted hash=e68f236b4250]
+            // parity: core/src/plugin/provider/claude-agent/claude/status.ts#make [status=adapted hash=a677e716743c]
             public static func make(
                 io: IO.Interface = IO.real,
                 connection: @escaping @Sendable () async -> [String: String] = { [:] },
@@ -8155,7 +8155,7 @@ public enum CorePlugin {
             }
 
             /// Groups consecutive user messages and hashes visible prompt turns with SHA-256.
-            // parity: core/src/plugin/provider/claude-agent/sync/fingerprint.ts#groups [status=implemented hash=94e19faea6a8]
+            // parity: core/src/plugin/provider/claude-agent/sync/fingerprint.ts#groups [status=implemented hash=da323b060bf1]
             public static func groups(
                 _ prompt: [(role: String, text: String)],
                 prefix: [Checkpoint] = []
@@ -8327,7 +8327,7 @@ public enum CorePlugin {
                 return found
             }
 
-            // parity: core/src/plugin/provider/claude-agent/sync/checkpoints.ts#build [status=implemented hash=c1e2828a7542]
+            // parity: core/src/plugin/provider/claude-agent/sync/checkpoints.ts#build [status=implemented hash=60d9c52123a5]
             public static func buildCheckpoints(
                 prompt: [(role: String, text: String)],
                 previous: Record? = nil,
@@ -8455,18 +8455,18 @@ public enum CorePlugin {
             return { request in try await accounts.run(request, configDirs: configDirs) }
         }
 
-        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=6a7b58c91241]
+        // parity: core/src/plugin/provider/claude-agent/aisdk.ts#register [status=adapted hash=df78cd4a00ae]
         public static func registerAISDK(ctx: PluginEffect.Context, sessions: any Sessions.Interface) async {
             // The Claude Agent SDK language model is not hosted here; `accountRun` is what its `sdk` hook builds.
             _ = (ctx, sessions)
         }
 
-        // parity: core/src/plugin/provider/claude-agent/instructions.ts#register [status=adapted hash=d743c0330f6e]
+        // parity: core/src/plugin/provider/claude-agent/instructions.ts#register [status=adapted hash=3c3459a229b7]
         public static func registerInstructions(ctx: PluginEffect.Context) async {
             _ = ctx
         }
 
-        // parity: core/src/plugin/provider/claude-agent/integration.ts#register [status=adapted hash=71ac8bb45268]
+        // parity: core/src/plugin/provider/claude-agent/integration.ts#register [status=adapted hash=7d3438106630]
         public static func registerIntegration(ctx: PluginEffect.Context) async {
             _ = await ctx.integration.transform { editor in
                 editor.update(ProviderID.rawValue) { item in item.name = "Claude Code" }
@@ -8558,7 +8558,7 @@ public enum CorePlugin {
         }
 
         /// The Claude config folders the provider's settings name.
-        // parity: core/src/plugin/provider/claude-agent/provider.ts#configDirs [status=adapted hash=f1be45724f25]
+        // parity: core/src/plugin/provider/claude-agent/provider.ts#configDirs [status=adapted hash=ba282d875a3a]
         public static func configDirs(ctx: PluginEffect.Context) async -> [String] {
             guard let providers = try? await ctx.provider.list(),
                   let provider = providers.data.first(where: { $0.id == ProviderID })
@@ -8566,7 +8566,7 @@ public enum CorePlugin {
             return QueryOptions.configDirs(provider.settings?.extra["configDir"])
         }
 
-        // parity: core/src/plugin/provider/claude-agent/provider.ts#register [status=adapted hash=a08588732db3]
+        // parity: core/src/plugin/provider/claude-agent/provider.ts#register [status=adapted hash=2bc79854e90c]
         public static func registerProvider(ctx: PluginEffect.Context) async {
             _ = await ctx.provider.transform { editor in
                 let info = ProviderSchema.Info(
@@ -8582,17 +8582,17 @@ public enum CorePlugin {
             }
         }
 
-        // parity: core/src/plugin/provider/claude-agent/provider.ts#connection [status=adapted hash=382c4e9de3f3]
+        // parity: core/src/plugin/provider/claude-agent/provider.ts#connection [status=adapted hash=bf69c8e1a6a2]
         public static func connection(ctx: PluginEffect.Context) async -> ConnectionSchema.Info? {
             await ctx.integration.connection.active(ProviderID.rawValue)
         }
 
-        // parity: core/src/plugin/provider/claude-agent/session.ts#register [status=adapted hash=039fcfb7e37b]
+        // parity: core/src/plugin/provider/claude-agent/session.ts#register [status=adapted hash=1dfa6cb19892]
         public static func registerSession(ctx: PluginEffect.Context) async {
             _ = ctx
         }
 
-        // parity: core/src/plugin/provider/claude-agent/index.ts#make [status=adapted hash=26a1167fd514]
+        // parity: core/src/plugin/provider/claude-agent/index.ts#make [status=adapted hash=71da10380554]
         public static func make(
             io: IO.Interface = IO.real,
             registry: any Sessions.Interface = Sessions.registry()

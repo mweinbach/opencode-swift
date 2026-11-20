@@ -626,7 +626,7 @@ public enum HTTPRecorder {
     public static let defaultMatcher: RequestMatcher = OpenCodeRecorder.defaultMatcher
 
     /// Wraps an explicit `HTTPTransport` and `CassetteStoreInterface` into a `RecordingHTTPTransport`.
-    // parity: http-recorder/src/http/recorder.ts#recordingLayer [status=implemented hash=ffccf670a71a]
+    // parity: http-recorder/src/http/recorder.ts#recordingLayer [status=implemented hash=e95fbdc0abd0]
     public static func recordingLayer(
         _ name: String,
         options: RecordReplayOptions = RecordReplayOptions(),
@@ -644,7 +644,7 @@ public enum HTTPRecorder {
     }
 
     /// Creates a filesystem-backed `RecordingHTTPTransport` with explicit mode/options and default fetch transport.
-    // parity: http-recorder/src/http/recorder.ts#cassetteLayer [status=implemented hash=a79ea416110f]
+    // parity: http-recorder/src/http/recorder.ts#cassetteLayer [status=implemented hash=5d14516d1644]
     public static func cassetteLayer(
         _ name: String,
         options: RecordReplayOptions = RecordReplayOptions(),
@@ -667,7 +667,7 @@ public enum HTTPRecorder {
     }
 
     /// Decorates a caller-provided `HTTPTransport` with auto record/replay backed by a filesystem cassette store.
-    // parity: http-recorder/src/http/recorder.ts#layer [status=implemented hash=11e7f9437a03]
+    // parity: http-recorder/src/http/recorder.ts#layer [status=implemented hash=a48bf3a138b9]
     public static func layer(
         _ name: String,
         options: RecorderOptions = RecorderOptions(),
@@ -697,7 +697,7 @@ public enum HTTPRecorder {
     }
 
     /// Convenience layer wiring `URLSessionHTTPTransport.shared` with auto record/replay cassette persistence.
-    // parity: http-recorder/src/http/recorder.ts#layerFetch [status=implemented hash=b40298ded7f9]
+    // parity: http-recorder/src/http/recorder.ts#layerFetch [status=implemented hash=f4d197fac8ac]
     public static func layerFetch(
         _ name: String,
         options: RecorderOptions = RecorderOptions(),

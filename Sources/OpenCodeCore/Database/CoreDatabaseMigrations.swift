@@ -82,7 +82,7 @@ public enum CoreDatabaseMigration {
 
     /// Bootstraps a fresh database with the full 23-table schema (plus migration journal) or applies pending
     /// incremental migrations to an existing OpenCode database.
-    // parity: core/src/database/migration.ts#apply [status=implemented hash=759e2e405bfd]
+    // parity: core/src/database/migration.ts#apply [status=implemented hash=52186addbec4]
     public static func apply(
         _ db: any SQLiteDatabase,
         options: ApplyOptions = ApplyOptions(),
@@ -581,7 +581,7 @@ public enum CoreDatabaseV1Migration {
         }
     }
 
-    // parity: core/src/database/v1-migration.bun.ts#Status [status=implemented hash=ebd7505a9b75]
+    // parity: core/src/database/v1-migration.bun.ts#Status [status=implemented hash=f1d987226b03]
     public enum Status: Equatable, Hashable, Sendable {
         case required
         case completed
@@ -1067,7 +1067,7 @@ public enum CoreDatabaseV1Migration {
     }
 
     /// Layer provider executing V1 migration on startup (`database/v1-migration.bun.ts#layer`).
-    // parity: core/src/database/v1-migration.bun.ts#layer [status=adapted hash=defc51098b68]
+    // parity: core/src/database/v1-migration.bun.ts#layer [status=adapted hash=95173caf2d00]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         if let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db {
             _ = try await run(db: db)
@@ -1076,7 +1076,7 @@ public enum CoreDatabaseV1Migration {
     }
 
     /// Runs the durable V1-to-V2 session migration on `db`.
-    // parity: core/src/database/v1-migration.bun.ts#run [status=implemented hash=3751fadd84d9]
+    // parity: core/src/database/v1-migration.bun.ts#run [status=implemented hash=e504fe69eea8]
     @discardableResult
     public static func run(db: any SQLiteDatabase, globalRoot: String = "/") async throws -> RunResult {
         if let phase = try readMigrationPhase(db), phase == "completed" {

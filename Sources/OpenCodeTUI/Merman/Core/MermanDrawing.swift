@@ -78,7 +78,7 @@ extension Merman {
         return [h.topLeft, h.topRight, h.bottomLeft, h.bottomRight, h.horizontal, h.vertical, h.topT, h.bottomT, h.leftT, h.rightT, h.cross]
     }()
 
-    // parity: merman/src/core/drawing.ts#DIAGRAM_DIAMOND_CHARS [status=implemented hash=ec6673b0f022]
+    // parity: merman/src/core/drawing.ts#DIAGRAM_DIAMOND_CHARS [status=implemented hash=f712359b8af2]
     public static let DIAGRAM_DIAMOND_CHARS = DiagramDiamondCharacters(
         topLeft: "╭",
         topRight: "╮",
@@ -323,7 +323,7 @@ extension Merman {
         setCell(capRight, bottom, chars.bottomRight)
     }
 
-    // parity: merman/src/core/drawing.ts#drawOrthogonalPath [status=implemented hash=8ff30270ca31]
+    // parity: merman/src/core/drawing.ts#drawOrthogonalPath [status=implemented hash=9991f845b3eb]
     public static func drawOrthogonalPath(
         _ points: [DiagramPoint],
         setCell: (Int, Int, String) -> Void,

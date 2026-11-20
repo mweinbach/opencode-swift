@@ -94,7 +94,7 @@ public enum TUIConfig {
         }
 
         /// Schema value accepted for each keybind entry (`false`, `"none"`, single item, or array of items).
-        // parity: tui/src/config/keybind.ts#BindingValueSchema [status=implemented hash=9777884e3954]
+        // parity: tui/src/config/keybind.ts#BindingValueSchema [status=implemented hash=62192661d78a]
         public enum BindingValueSchema: Equatable, Hashable, Sendable, Codable, ExpressibleByStringLiteral, ExpressibleByBooleanLiteral {
             case disabled
             case item(BindingItem)
@@ -148,7 +148,7 @@ public enum TUIConfig {
         // parity: tui/src/config/keybind.ts#LeaderDefault [status=implemented hash=83ca3f4e2efe]
         public static let LeaderDefault = "ctrl+x"
 
-        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=62f715d86dfd]
+        // parity: tui/src/config/keybind.ts#Definitions [status=implemented hash=889162884343]
         public static let Definitions: [String: Definition] = [
             "leader": Definition(.item(.sequence(LeaderDefault)), "Leader key for keybind combinations"),
             "app.exit": Definition("ctrl+c,ctrl+d,<leader>q", "Exit the application"),
@@ -400,7 +400,7 @@ public enum TUIConfig {
             "which-key.end": Definition("ctrl+alt+end", "Jump to last which-key binding"),
         ]
 
-        // parity: tui/src/config/keybind.ts#KeybindOverrides [status=implemented hash=49274a531c5e]
+        // parity: tui/src/config/keybind.ts#KeybindOverrides [status=implemented hash=1475d09db8a4]
         public typealias KeybindOverrides = [String: BindingValueSchema]
 
         // parity: tui/src/config/keybind.ts#Descriptions [status=implemented hash=a2bf3990b34a]
@@ -532,7 +532,7 @@ public enum TUIConfig {
         case seed = "seed"
     }
 
-    // parity: tui/src/config/index.tsx#Plugin [status=implemented hash=1b9ecf418b4c]
+    // parity: tui/src/config/index.tsx#Plugin [status=implemented hash=7eb73974b282]
     public enum Plugin: Equatable, Hashable, Sendable, Codable {
         case specifier(String)
         case configured(package: String, options: [String: JSONValue]?)
@@ -546,7 +546,7 @@ public enum TUIConfig {
         case turn
     }
 
-    // parity: tui/src/config/index.tsx#Cursor [status=implemented hash=5047b7cdc5d6]
+    // parity: tui/src/config/index.tsx#Cursor [status=implemented hash=a4bb6c53ae94]
     public struct Cursor: Equatable, Hashable, Sendable, Codable {
         public var style: CursorStyle?
         public var blinking: Bool?
@@ -819,7 +819,7 @@ public enum TUIConfig {
         }
     }
 
-    // parity: tui/src/config/index.tsx#Info [status=implemented hash=6130e55b9996]
+    // parity: tui/src/config/index.tsx#Info [status=implemented hash=986443cb7e52]
     public struct Info: Equatable, Sendable, Codable {
         public var theme: ThemeConfig?
         public var keybinds: Keybind.KeybindOverrides?
@@ -1047,7 +1047,7 @@ public enum TUIConfig {
         }
     }
 
-    // parity: tui/src/config/index.tsx#resolve [status=implemented hash=6cd21a70a2f3]
+    // parity: tui/src/config/index.tsx#resolve [status=implemented hash=e39d7dd24a8e]
     public static func resolve(_ input: Info, options: ResolveOptions = ResolveOptions()) -> Resolved {
         let tabsMode: TabsConfig.Mode
         if let m = input.tabs?.mode {
@@ -1162,7 +1162,7 @@ public enum TUIConfig {
 
     @TaskLocal private static var currentConfig: ConfigState?
 
-    // parity: tui/src/config/index.tsx#ConfigProvider [status=adapted hash=6d158b6fe4fb]
+    // parity: tui/src/config/index.tsx#ConfigProvider [status=adapted hash=abdb10dbed6f]
     public static func ConfigProvider<R>(
         config: Resolved,
         service: (any Interface)? = nil,
@@ -1225,7 +1225,7 @@ public enum TUIConfig {
 
             public typealias Definition = TUIConfig.Keybind.Definition
 
-            // parity: tui/src/config/v1/keybind.ts#Definitions [status=implemented hash=170ee89fc3d3]
+            // parity: tui/src/config/v1/keybind.ts#Definitions [status=implemented hash=36aaf4026f80]
             public static let Definitions: [String: Definition] = [
                 "leader": Definition(.item(.sequence(LeaderDefault)), "Leader key for keybind combinations"),
                 "app_exit": Definition("ctrl+c,ctrl+d,<leader>q", "Exit the application"),
@@ -1412,10 +1412,10 @@ public enum TUIConfig {
                 "terminal_title_toggle": Definition("none", "Toggle terminal title"),
             ]
 
-            // parity: tui/src/config/v1/keybind.ts#KeybindOverrides [status=implemented hash=49274a531c5e]
+            // parity: tui/src/config/v1/keybind.ts#KeybindOverrides [status=implemented hash=1475d09db8a4]
             public typealias KeybindOverrides = [String: BindingValueSchema]
 
-            // parity: tui/src/config/v1/keybind.ts#CommandMap [status=implemented hash=5020af297b68]
+            // parity: tui/src/config/v1/keybind.ts#CommandMap [status=implemented hash=432a132a50b8]
             public static let CommandMap: BindingCommandMap = [
                 "app_exit": "app.exit",
                 "app_debug": "app.debug",
@@ -1649,7 +1649,7 @@ public enum TUIConfig {
         // parity: tui/src/config/v1/index.tsx#LeaderTimeoutDefault [status=implemented hash=3ff7674555cc]
         public static let LeaderTimeoutDefault = 2000
 
-        // parity: tui/src/config/v1/index.tsx#LeaderTimeout [status=implemented hash=67a93352d0d5]
+        // parity: tui/src/config/v1/index.tsx#LeaderTimeout [status=implemented hash=8ab0603f0fa9]
         public struct LeaderTimeout: Equatable, Hashable, Sendable, Codable {
             public let rawValue: Int
 
@@ -1669,7 +1669,7 @@ public enum TUIConfig {
             }
         }
 
-        // parity: tui/src/config/v1/index.tsx#ScrollAcceleration [status=implemented hash=de5c22c5b3e4]
+        // parity: tui/src/config/v1/index.tsx#ScrollAcceleration [status=implemented hash=2bdb47c3b783]
         public struct ScrollAcceleration: Equatable, Hashable, Sendable, Codable {
             public var enabled: Bool
 
@@ -1678,7 +1678,7 @@ public enum TUIConfig {
             }
         }
 
-        // parity: tui/src/config/v1/index.tsx#DiffStyle [status=implemented hash=59bb92797c03]
+        // parity: tui/src/config/v1/index.tsx#DiffStyle [status=implemented hash=94dc9fc04300]
         public enum DiffStyle: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
             case auto
             case stacked
@@ -1690,7 +1690,7 @@ public enum TUIConfig {
         // parity: tui/src/config/v1/index.tsx#AttentionSoundPaths [status=implemented hash=d4c34a90e310]
         public typealias AttentionSoundPaths = AttentionSounds
 
-        // parity: tui/src/config/v1/index.tsx#Attention [status=implemented hash=b0b25cb3db2f]
+        // parity: tui/src/config/v1/index.tsx#Attention [status=implemented hash=184754f89ff5]
         public struct Attention: Equatable, Hashable, Sendable, Codable {
             public var enabled: Bool?
             public var notifications: Bool?
@@ -1721,10 +1721,10 @@ public enum TUIConfig {
             }
         }
 
-        // parity: tui/src/config/v1/index.tsx#Cursor [status=implemented hash=5047b7cdc5d6]
+        // parity: tui/src/config/v1/index.tsx#Cursor [status=implemented hash=a4bb6c53ae94]
         public typealias Cursor = TUIConfig.Cursor
 
-        // parity: tui/src/config/v1/index.tsx#Prompt [status=implemented hash=9a460f76977d]
+        // parity: tui/src/config/v1/index.tsx#Prompt [status=implemented hash=563e5804aa64]
         public struct Prompt: Equatable, Hashable, Sendable, Codable {
             public enum MaxWidth: Equatable, Hashable, Sendable, Codable {
                 case fixed(Int)
@@ -1745,7 +1745,7 @@ public enum TUIConfig {
             }
         }
 
-        // parity: tui/src/config/v1/index.tsx#Info [status=implemented hash=93dd24f2eadd]
+        // parity: tui/src/config/v1/index.tsx#Info [status=implemented hash=5c3a557d673d]
         public struct Info: Equatable, Sendable, Codable {
             public var schema: String?
             public var theme: String?
@@ -1881,7 +1881,7 @@ public enum TUIConfig {
             }
         }
 
-        // parity: tui/src/config/v1/index.tsx#ResolveOptions [status=implemented hash=a3ff98924f76]
+        // parity: tui/src/config/v1/index.tsx#ResolveOptions [status=implemented hash=78dc4a81e6de]
         public struct ResolveOptions: Equatable, Hashable, Sendable, Codable {
             public var terminalSuspend: Bool
 
@@ -1942,7 +1942,7 @@ public enum TUIConfig {
 
         @TaskLocal private static var currentV1Config: Resolved?
 
-        // parity: tui/src/config/v1/index.tsx#TuiConfigProvider [status=adapted hash=18bac1e7d22d]
+        // parity: tui/src/config/v1/index.tsx#TuiConfigProvider [status=adapted hash=cb1566bcb8e1]
         public static func TuiConfigProvider<R>(config: Resolved, body: () throws -> R) rethrows -> R {
             try $currentV1Config.withValue(config, operation: body)
         }
@@ -1988,7 +1988,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/helper.tsx#createSimpleContext [status=adapted hash=a896d502630a]
+    // parity: tui/src/context/helper.tsx#createSimpleContext [status=adapted hash=dda8dd5933a8]
     public static func createSimpleContext<T: Sendable>(name: String) -> SimpleContext<T> {
         SimpleContext<T>(name: name)
     }
@@ -2061,12 +2061,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentArgs: ArgsController?
 
-    // parity: tui/src/context/args.tsx#ArgsProvider [status=adapted hash=bccaf9a6585b]
+    // parity: tui/src/context/args.tsx#ArgsProvider [status=adapted hash=b7615a4e6956]
     public static func ArgsProvider<R>(_ args: Args = Args(), body: () throws -> R) rethrows -> R {
         try $currentArgs.withValue(ArgsController(args), operation: body)
     }
 
-    // parity: tui/src/context/args.tsx#useArgs [status=adapted hash=bccaf9a6585b]
+    // parity: tui/src/context/args.tsx#useArgs [status=adapted hash=b7615a4e6956]
     public static func useArgs() throws(TUIConfig.ConfigError) -> ArgsController {
         guard let value = currentArgs else { throw .missingContext("ArgsProvider") }
         return value
@@ -2102,19 +2102,19 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/client.tsx#ClientContext [status=adapted hash=ab68875726be]
+    // parity: tui/src/context/client.tsx#ClientContext [status=adapted hash=0791d9c697e6]
     public static let ClientContext: SimpleContext<ClientService> = createSimpleContext(name: "Client")
 
     @TaskLocal private static var currentClient: ClientService?
 
-    // parity: tui/src/context/client.tsx#ClientProvider [status=adapted hash=ab68875726be]
+    // parity: tui/src/context/client.tsx#ClientProvider [status=adapted hash=0791d9c697e6]
     public static func ClientProvider<R>(_ service: ClientService, body: () throws -> R) rethrows -> R {
         try ClientContext.provide(service) {
             try $currentClient.withValue(service, operation: body)
         }
     }
 
-    // parity: tui/src/context/client.tsx#useClient [status=adapted hash=ab68875726be]
+    // parity: tui/src/context/client.tsx#useClient [status=adapted hash=0791d9c697e6]
     public static func useClient() throws(TUIConfig.ConfigError) -> ClientService {
         if let value = currentClient { return value }
         return try ClientContext.use()
@@ -2147,7 +2147,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentData: DataContextController?
 
-    // parity: tui/src/context/data.tsx#DataProvider [status=adapted hash=5f5ce71d4772]
+    // parity: tui/src/context/data.tsx#DataProvider [status=adapted hash=1db89bbd0b9a]
     public static func DataProvider<R>(_ controller: DataContextController, body: () throws -> R) rethrows -> R {
         try $currentData.withValue(controller, operation: body)
     }
@@ -2158,7 +2158,7 @@ public enum TUIContext {
         return try $currentData.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/data.tsx#useData [status=adapted hash=5f5ce71d4772]
+    // parity: tui/src/context/data.tsx#useData [status=adapted hash=1db89bbd0b9a]
     public static func useData() throws(TUIConfig.ConfigError) -> DataContextController {
         guard let value = currentData else { throw .missingContext("DataProvider") }
         return value
@@ -2237,7 +2237,7 @@ public enum TUIContext {
 
     // MARK: - Clipboard Context (`packages/tui/src/context/clipboard.tsx`)
 
-    // parity: tui/src/context/clipboard.tsx#ClipboardContent [status=implemented hash=8af965e21d2b]
+    // parity: tui/src/context/clipboard.tsx#ClipboardContent [status=implemented hash=efbfd998cae3]
     public struct ClipboardContent: Equatable, Hashable, Sendable, Codable {
         public let data: String
         public let mime: String
@@ -2248,7 +2248,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/clipboard.tsx#ClipboardService [status=implemented hash=762005fe5fac]
+    // parity: tui/src/context/clipboard.tsx#ClipboardService [status=implemented hash=2ee33f84d704]
     public struct ClipboardService: Sendable {
         public let read: @Sendable () async throws -> ClipboardContent?
         public let write: @Sendable (String) async throws -> Void
@@ -2264,7 +2264,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentClipboard: ClipboardService?
 
-    // parity: tui/src/context/clipboard.tsx#ClipboardProvider [status=adapted hash=13675aa0cfd3]
+    // parity: tui/src/context/clipboard.tsx#ClipboardProvider [status=adapted hash=1753c29deabb]
     public static func ClipboardProvider<R>(value: ClipboardService, body: () throws -> R) rethrows -> R {
         try $currentClipboard.withValue(value, operation: body)
     }
@@ -2357,7 +2357,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/editor.ts#EditorIntegration [status=implemented hash=1dea392fe1fe]
+    // parity: tui/src/context/editor.ts#EditorIntegration [status=implemented hash=19ed5eddfab1]
     public struct EditorIntegration: Sendable {
         public let connection: (@Sendable (String) -> EditorConnection?)?
         public let selection: (@Sendable (String) async -> TUIEditor.ZedSelectionResult)?
@@ -2454,7 +2454,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentEditorContext: EditorContextController?
 
-    // parity: tui/src/context/editor.ts#EditorContextProvider [status=adapted hash=ab4d3b64138a]
+    // parity: tui/src/context/editor.ts#EditorContextProvider [status=adapted hash=3f02badb4ede]
     public static func EditorContextProvider<R>(
         controller: EditorContextController = EditorContextController(),
         body: () throws -> R
@@ -2462,7 +2462,7 @@ public enum TUIContext {
         try $currentEditorContext.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/editor.ts#useEditorContext [status=adapted hash=ab4d3b64138a]
+    // parity: tui/src/context/editor.ts#useEditorContext [status=adapted hash=3f02badb4ede]
     public static func useEditorContext() throws(TUIConfig.ConfigError) -> EditorContextController {
         guard let value = currentEditorContext else { throw .missingContext("EditorContextProvider") }
         return value
@@ -2496,12 +2496,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentEpilogue: Epilogue?
 
-    // parity: tui/src/context/epilogue.tsx#EpilogueProvider [status=adapted hash=a78312331dbf]
+    // parity: tui/src/context/epilogue.tsx#EpilogueProvider [status=adapted hash=7297edf78eb3]
     public static func EpilogueProvider<R>(value: Epilogue, body: () throws -> R) rethrows -> R {
         try $currentEpilogue.withValue(value, operation: body)
     }
 
-    // parity: tui/src/context/epilogue.tsx#useEpilogue [status=adapted hash=a78312331dbf]
+    // parity: tui/src/context/epilogue.tsx#useEpilogue [status=adapted hash=7297edf78eb3]
     public static func useEpilogue() throws(TUIConfig.ConfigError) -> Epilogue {
         guard let value = currentEpilogue else { throw .missingContext("EpilogueProvider") }
         return value
@@ -2566,12 +2566,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentExit: Exit?
 
-    // parity: tui/src/context/exit.tsx#ExitProvider [status=adapted hash=45a4eeb456ff]
+    // parity: tui/src/context/exit.tsx#ExitProvider [status=adapted hash=c88091f70682]
     public static func ExitProvider<R>(exit: @escaping Exit, body: () throws -> R) rethrows -> R {
         try $currentExit.withValue(exit, operation: body)
     }
 
-    // parity: tui/src/context/exit.tsx#useExit [status=adapted hash=45a4eeb456ff]
+    // parity: tui/src/context/exit.tsx#useExit [status=adapted hash=c88091f70682]
     public static func useExit() throws(TUIConfig.ConfigError) -> Exit {
         guard let value = currentExit else { throw .missingContext("ExitProvider") }
         return value
@@ -2581,7 +2581,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentInteractivity: (@Sendable () -> Bool)?
 
-    // parity: tui/src/context/interactivity.tsx#InteractivityProvider [status=adapted hash=5d3ae111ca03]
+    // parity: tui/src/context/interactivity.tsx#InteractivityProvider [status=adapted hash=2a582fd223da]
     public static func InteractivityProvider<R>(enabled: Bool, body: () throws -> R) rethrows -> R {
         let parent = useInteractivity()
         let combined: @Sendable () -> Bool = { parent() && enabled }
@@ -2860,7 +2860,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentLocal: LocalStateController?
 
-    // parity: tui/src/context/local.tsx#LocalProvider [status=adapted hash=40abbddcd144]
+    // parity: tui/src/context/local.tsx#LocalProvider [status=adapted hash=5dfdbeabb063]
     public static func LocalProvider<R>(
         controller: LocalStateController = LocalStateController(),
         body: () throws -> R
@@ -2868,7 +2868,7 @@ public enum TUIContext {
         try $currentLocal.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/local.tsx#useLocal [status=adapted hash=40abbddcd144]
+    // parity: tui/src/context/local.tsx#useLocal [status=adapted hash=5dfdbeabb063]
     public static func useLocal() throws(TUIConfig.ConfigError) -> LocalStateController {
         guard let value = currentLocal else { throw .missingContext("LocalProvider") }
         return value
@@ -2913,12 +2913,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentLogSink: LogSink?
 
-    // parity: tui/src/context/log.tsx#LogProvider [status=adapted hash=98b2b9174663]
+    // parity: tui/src/context/log.tsx#LogProvider [status=adapted hash=c5dcf0e24fd1]
     public static func LogProvider<R>(log: @escaping LogSink, body: () throws -> R) rethrows -> R {
         try $currentLogSink.withValue(log, operation: body)
     }
 
-    // parity: tui/src/context/log.tsx#useLog [status=adapted hash=82ac02a0249c]
+    // parity: tui/src/context/log.tsx#useLog [status=adapted hash=9777fe03699a]
     public static func useLog(tags: LogTags = [:]) throws(TUIConfig.ConfigError) -> Logger {
         guard let sink = currentLogSink else { throw .missingContext("LogProvider") }
         return Logger(sink: sink, tags: tags)
@@ -3079,7 +3079,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentPermission: PermissionContextValue?
 
-    // parity: tui/src/context/permission.tsx#PermissionProvider [status=adapted hash=c4f54d69b3ec]
+    // parity: tui/src/context/permission.tsx#PermissionProvider [status=adapted hash=f9dc09a40e9e]
     public static func PermissionProvider<R>(
         mode: PermissionMode? = nil,
         body: () throws -> R
@@ -3097,7 +3097,7 @@ public enum TUIContext {
         return try $currentPermission.withValue(PermissionContextValue(mode: resolved), operation: body)
     }
 
-    // parity: tui/src/context/permission.tsx#usePermission [status=adapted hash=c4f54d69b3ec]
+    // parity: tui/src/context/permission.tsx#usePermission [status=adapted hash=f9dc09a40e9e]
     public static func usePermission() throws(TUIConfig.ConfigError) -> PermissionContextValue {
         guard let value = currentPermission else { throw .missingContext("PermissionProvider") }
         return value
@@ -3123,7 +3123,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentPromptRef: PromptRefBox?
 
-    // parity: tui/src/context/prompt.tsx#PromptRefProvider [status=adapted hash=6e2ec413ebe5]
+    // parity: tui/src/context/prompt.tsx#PromptRefProvider [status=adapted hash=181eaa23e70d]
     public static func PromptRefProvider<R>(
         box: PromptRefBox = PromptRefBox(),
         body: () throws -> R
@@ -3131,7 +3131,7 @@ public enum TUIContext {
         try $currentPromptRef.withValue(box, operation: body)
     }
 
-    // parity: tui/src/context/prompt.tsx#usePromptRef [status=adapted hash=6e2ec413ebe5]
+    // parity: tui/src/context/prompt.tsx#usePromptRef [status=adapted hash=181eaa23e70d]
     public static func usePromptRef() throws(TUIConfig.ConfigError) -> PromptRefBox {
         guard let value = currentPromptRef else { throw .missingContext("PromptRefProvider") }
         return value
@@ -3139,7 +3139,7 @@ public enum TUIContext {
 
     // MARK: - Program Status OSC 7501 (`packages/tui/src/context/program-status.ts`)
 
-    // parity: tui/src/context/program-status.ts#PendingSession [status=implemented hash=99255fcb8232]
+    // parity: tui/src/context/program-status.ts#PendingSession [status=implemented hash=9a35ecda575b]
     public struct PendingSession: Equatable, Hashable, Sendable, Codable {
         public enum State: Equatable, Hashable, Sendable, Codable {
             case working
@@ -3292,7 +3292,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/program-status.ts#createProgramStatus [status=implemented hash=34b382ebcc76]
+    // parity: tui/src/context/program-status.ts#createProgramStatus [status=implemented hash=5e14455c36ea]
     public static func createProgramStatus(
         renderer: CliRenderer
     ) -> ProgramStatusController {
@@ -3373,12 +3373,12 @@ public enum TUIContext {
 
     @TaskLocal private static var currentRoute: RouteController?
 
-    // parity: tui/src/context/route.tsx#RouteProvider [status=adapted hash=38fe2e5c6655]
+    // parity: tui/src/context/route.tsx#RouteProvider [status=adapted hash=f44b9bf285c8]
     public static func RouteProvider<R>(controller: RouteController, body: () throws -> R) rethrows -> R {
         try $currentRoute.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/route.tsx#useRoute [status=adapted hash=38fe2e5c6655]
+    // parity: tui/src/context/route.tsx#useRoute [status=adapted hash=f44b9bf285c8]
     public static func useRoute() throws(TUIConfig.ConfigError) -> RouteController {
         guard let value = currentRoute else { throw .missingContext("RouteProvider") }
         return value
@@ -3391,7 +3391,7 @@ public enum TUIContext {
 
     // MARK: - Runtime Contexts (`packages/tui/src/context/runtime.tsx`)
 
-    // parity: tui/src/context/runtime.tsx#TuiHighlight [status=implemented hash=215770429336]
+    // parity: tui/src/context/runtime.tsx#TuiHighlight [status=implemented hash=00175613a35d]
     public struct TuiHighlight: Equatable, Hashable, Sendable, Codable {
         public let title: String
         public let body: String
@@ -3402,7 +3402,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiApp [status=implemented hash=e81ab16e8b7e]
+    // parity: tui/src/context/runtime.tsx#TuiApp [status=implemented hash=f115e1d6dfe4]
     public struct TuiApp: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let version: String
@@ -3417,7 +3417,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiPaths [status=implemented hash=ea1ce2fb1406]
+    // parity: tui/src/context/runtime.tsx#TuiPaths [status=implemented hash=30d3685d16f5]
     public struct TuiPaths: Equatable, Hashable, Sendable, Codable {
         public let cwd: String
         public let home: String
@@ -3432,7 +3432,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiTerminalEnvironment [status=implemented hash=63a0a1b485a8]
+    // parity: tui/src/context/runtime.tsx#TuiTerminalEnvironment [status=implemented hash=5c321e34897a]
     public struct TuiTerminalEnvironment: Equatable, Hashable, Sendable, Codable {
         public let platform: String
         public let variables: [String: String]?
@@ -3445,7 +3445,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiStartup [status=implemented hash=7537b1018b7c]
+    // parity: tui/src/context/runtime.tsx#TuiStartup [status=implemented hash=424e9314f919]
     public struct TuiStartup: Equatable, Sendable {
         public let initialRoute: Route?
         public let skipInitialLoading: Bool
@@ -3456,7 +3456,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiLifecycle [status=implemented hash=07f1684dd624]
+    // parity: tui/src/context/runtime.tsx#TuiLifecycle [status=implemented hash=8572c6e23701]
     public struct TuiLifecycle: Sendable {
         public let add: @Sendable (@escaping @Sendable () async -> Void) -> @Sendable () -> Void
 
@@ -3471,17 +3471,17 @@ public enum TUIContext {
     @TaskLocal private static var currentStartup: TuiStartup?
     @TaskLocal private static var currentLifecycle: TuiLifecycle?
 
-    // parity: tui/src/context/runtime.tsx#TuiPathsProvider [status=adapted hash=4ccd86178d0f]
+    // parity: tui/src/context/runtime.tsx#TuiPathsProvider [status=adapted hash=beb1c80dbb12]
     public static func TuiPathsProvider<R>(value: TuiPaths, body: () throws -> R) rethrows -> R {
         try $currentPaths.withValue(value, operation: body)
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiAppProvider [status=adapted hash=71582eb778dd]
+    // parity: tui/src/context/runtime.tsx#TuiAppProvider [status=adapted hash=d849f207a6e7]
     public static func TuiAppProvider<R>(value: TuiApp, body: () throws -> R) rethrows -> R {
         try $currentApp.withValue(value, operation: body)
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiTerminalEnvironmentProvider [status=adapted hash=1fcfc3a45a68]
+    // parity: tui/src/context/runtime.tsx#TuiTerminalEnvironmentProvider [status=adapted hash=c101f47bf933]
     public static func TuiTerminalEnvironmentProvider<R>(
         value: TuiTerminalEnvironment,
         body: () throws -> R
@@ -3489,12 +3489,12 @@ public enum TUIContext {
         try $currentTerminalEnv.withValue(value, operation: body)
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiStartupProvider [status=adapted hash=746fd976faa4]
+    // parity: tui/src/context/runtime.tsx#TuiStartupProvider [status=adapted hash=271978f26316]
     public static func TuiStartupProvider<R>(value: TuiStartup, body: () throws -> R) rethrows -> R {
         try $currentStartup.withValue(value, operation: body)
     }
 
-    // parity: tui/src/context/runtime.tsx#TuiLifecycleProvider [status=adapted hash=dfdcba0bb053]
+    // parity: tui/src/context/runtime.tsx#TuiLifecycleProvider [status=adapted hash=10b2c7843c7a]
     public static func TuiLifecycleProvider<R>(value: TuiLifecycle, body: () throws -> R) rethrows -> R {
         try $currentLifecycle.withValue(value, operation: body)
     }
@@ -4013,7 +4013,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentSessionTabs: SessionTabsContextController?
 
-    // parity: tui/src/context/session-tabs.tsx#SessionTabsProvider [status=adapted hash=a4b729b20488]
+    // parity: tui/src/context/session-tabs.tsx#SessionTabsProvider [status=adapted hash=643e450307a7]
     public static func SessionTabsProvider<R>(
         controller: SessionTabsContextController = SessionTabsContextController(),
         body: () throws -> R
@@ -4021,7 +4021,7 @@ public enum TUIContext {
         try $currentSessionTabs.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/session-tabs.tsx#useSessionTabs [status=adapted hash=a4b729b20488]
+    // parity: tui/src/context/session-tabs.tsx#useSessionTabs [status=adapted hash=643e450307a7]
     public static func useSessionTabs() throws(TUIConfig.ConfigError) -> SessionTabsContextController {
         guard let value = currentSessionTabs else { throw .missingContext("SessionTabsProvider") }
         return value
@@ -4089,7 +4089,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentSessionTerminals: SessionTerminalsController?
 
-    // parity: tui/src/context/session-terminals.tsx#SessionTerminalsProvider [status=adapted hash=8f5ce5a9a905]
+    // parity: tui/src/context/session-terminals.tsx#SessionTerminalsProvider [status=adapted hash=f8e3e5407319]
     public static func SessionTerminalsProvider<R>(
         controller: SessionTerminalsController = SessionTerminalsController(),
         body: () throws -> R
@@ -4097,7 +4097,7 @@ public enum TUIContext {
         try $currentSessionTerminals.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/session-terminals.tsx#useSessionTerminals [status=adapted hash=8f5ce5a9a905]
+    // parity: tui/src/context/session-terminals.tsx#useSessionTerminals [status=adapted hash=f8e3e5407319]
     public static func useSessionTerminals() throws(TUIConfig.ConfigError) -> SessionTerminalsController {
         guard let value = currentSessionTerminals else { throw .missingContext("SessionTerminalsProvider") }
         return value
@@ -4225,7 +4225,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/theme.tsx#ThemeSource [status=adapted hash=bae0bb55e9bd]
+    // parity: tui/src/context/theme.tsx#ThemeSource [status=adapted hash=798fd1454c45]
     public struct ThemeSource: Sendable {
         public let discover: @Sendable () async -> [String: ThemeDocument]
         public let subscribeRefresh: (@Sendable (@escaping @Sendable () -> Void) -> @Sendable () -> Void)?
@@ -4239,7 +4239,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/theme.tsx#createThemeSource [status=adapted hash=0fb94136f29f]
+    // parity: tui/src/context/theme.tsx#createThemeSource [status=adapted hash=72bbde6f9c2c]
     public static func createThemeSource(config: String) -> ThemeSource {
         ThemeSource(discover: {
             let themesDir = "\(config)/themes"
@@ -4377,7 +4377,7 @@ public enum TUIContext {
         try useThemes().currentTokens()
     }
 
-    // parity: tui/src/context/theme.tsx#ThemeContextProvider [status=adapted hash=1eaee3601227]
+    // parity: tui/src/context/theme.tsx#ThemeContextProvider [status=adapted hash=f4f5cbccdabb]
     public static func ThemeContextProvider<R>(context surface: SurfaceName?, body: () throws -> R) throws -> R {
         let service = try useThemes()
         return try $currentThemeService.withValue(service.withSurface(surface), operation: body)
@@ -4470,7 +4470,7 @@ public enum TUIContext {
         }
     }
 
-    // parity: tui/src/context/update-notification.tsx#UpdateState [status=implemented hash=e6df65aef380]
+    // parity: tui/src/context/update-notification.tsx#UpdateState [status=implemented hash=0abedda2baaa]
     public enum UpdateState: Equatable, Hashable, Sendable, Codable {
         case available(version: String)
         case installed(version: String)
@@ -4581,7 +4581,7 @@ public enum TUIContext {
 
     @TaskLocal private static var currentUpdateNotification: UpdateNotificationController?
 
-    // parity: tui/src/context/update-notification.tsx#UpdateNotificationProvider [status=adapted hash=5556ab9d9d26]
+    // parity: tui/src/context/update-notification.tsx#UpdateNotificationProvider [status=adapted hash=cc5dbd57c0e7]
     public static func UpdateNotificationProvider<R>(
         controller: UpdateNotificationController = UpdateNotificationController(),
         body: () throws -> R
@@ -4589,7 +4589,7 @@ public enum TUIContext {
         try $currentUpdateNotification.withValue(controller, operation: body)
     }
 
-    // parity: tui/src/context/update-notification.tsx#useUpdateNotification [status=adapted hash=5556ab9d9d26]
+    // parity: tui/src/context/update-notification.tsx#useUpdateNotification [status=adapted hash=cc5dbd57c0e7]
     public static func useUpdateNotification() throws(TUIConfig.ConfigError) -> UpdateNotificationController {
         guard let value = currentUpdateNotification else { throw .missingContext("UpdateNotificationProvider") }
         return value

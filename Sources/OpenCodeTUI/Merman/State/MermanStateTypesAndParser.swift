@@ -145,7 +145,7 @@ extension Merman {
         case stateDepartureRamp3
     }
 
-    // parity: merman/src/state/types.ts#BaseStateCellStyle [status=implemented hash=4016c55d7755]
+    // parity: merman/src/state/types.ts#BaseStateCellStyle [status=implemented hash=bcd654608f8f]
     public enum BaseStateCellStyle: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case state
         case stateBorder
@@ -281,7 +281,7 @@ extension Merman {
     // parity: merman/src/state/style.ts#StateStyleColors [status=implemented hash=606549733218]
     public typealias StateStyleColors = [StateCellStyle: RGBA]
 
-    // parity: merman/src/state/style.ts#resolveStateStyleColors [status=implemented hash=a93a23d0fe0f]
+    // parity: merman/src/state/style.ts#resolveStateStyleColors [status=implemented hash=1c9870fac878]
     public static func resolveStateStyleColors(
         _ colors: [BaseStateCellStyle: RGBA?] = [:]
     ) -> StateStyleColors {

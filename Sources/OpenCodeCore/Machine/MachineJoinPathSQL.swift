@@ -14,7 +14,7 @@ public enum MachineJoin {
     static let maxSafeInteger: Int64 = 9_007_199_254_740_991
 
     /// A way to reach the home, as the worker's transport understands it.
-    // parity: core/src/machine/join.ts#Reach [status=implemented hash=1be00d93659d]
+    // parity: core/src/machine/join.ts#Reach [status=implemented hash=b553c0804a0e]
     public enum Reach: Equatable, Hashable, Sendable {
         case url(String)
 
@@ -141,7 +141,7 @@ public enum MachinePath {
         }
     }
 
-    // parity: core/src/machine/path.ts#NotAbsolute [status=implemented hash=d94d79d63c26]
+    // parity: core/src/machine/path.ts#NotAbsolute [status=implemented hash=75d3204117ca]
     public struct NotAbsolute: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machine.NotAbsolute"
         public let machine: String
@@ -176,7 +176,7 @@ public enum MachinePath {
 /// Port of `core/src/machine/sql.ts`.
 public enum MachineSQL {
     /// The `machine` table: one row per known machine, with its public key (base64url) once it has joined.
-    // parity: core/src/machine/sql.ts#MachineTable [status=adapted hash=4966656af12a]
+    // parity: core/src/machine/sql.ts#MachineTable [status=adapted hash=5ed8011a0a2d]
     public enum MachineTable {
         public static let tableName = "machine"
         public static let id = "id"

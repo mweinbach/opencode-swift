@@ -10,7 +10,7 @@ public enum Machines {
     /// A machine's name, as a path will use it: `gpu:/work`. Two characters or more, so a Windows drive such as `C:`
     /// is never a machine, and never `local`, which is the server's own machine. At most 63, like a DNS label, so the
     /// link's welcome, which carries the name, always fits in one Noise message.
-    // parity: core/src/machine/machines.ts#Name [status=implemented hash=45d39d0a0a81]
+    // parity: core/src/machine/machines.ts#Name [status=implemented hash=391746d46cd6]
     public enum Name {
         /// `^[a-z][a-z0-9-]{1,62}$`, and not `local`.
         public static func isValid(_ name: String) -> Bool {
@@ -25,7 +25,7 @@ public enum Machines {
         }
     }
 
-    // parity: core/src/machine/machines.ts#Info [status=implemented hash=85a60593c15e]
+    // parity: core/src/machine/machines.ts#Info [status=implemented hash=7a3e376ab6b6]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let online: Bool
@@ -44,7 +44,7 @@ public enum Machines {
         }
     }
 
-    // parity: core/src/machine/machines.ts#NotFound [status=implemented hash=43a579bfc1f7]
+    // parity: core/src/machine/machines.ts#NotFound [status=implemented hash=e4e69fa73197]
     public struct NotFound: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.NotFound"
         public let machine: String
@@ -55,7 +55,7 @@ public enum Machines {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/machines.ts#InvalidName [status=implemented hash=a248f7c490ad]
+    // parity: core/src/machine/machines.ts#InvalidName [status=implemented hash=f09976493ea9]
     public struct InvalidName: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.InvalidName"
         public let name: String
@@ -69,7 +69,7 @@ public enum Machines {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/machines.ts#AlreadyExists [status=implemented hash=d084aa60e078]
+    // parity: core/src/machine/machines.ts#AlreadyExists [status=implemented hash=47adee34908f]
     public struct AlreadyExists: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.AlreadyExists"
         public let machine: String
@@ -80,7 +80,7 @@ public enum Machines {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/machines.ts#AlreadyPaired [status=implemented hash=2a4c9e4b61ae]
+    // parity: core/src/machine/machines.ts#AlreadyPaired [status=implemented hash=a287970e8798]
     public struct AlreadyPaired: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.AlreadyPaired"
         public let machine: String
@@ -95,7 +95,7 @@ public enum Machines {
     }
 
     /// One failure for every rejected join, saying nothing about which step rejected it.
-    // parity: core/src/machine/machines.ts#InvalidJoin [status=implemented hash=399e4f76d143]
+    // parity: core/src/machine/machines.ts#InvalidJoin [status=implemented hash=c9b48a34ece1]
     public struct InvalidJoin: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.InvalidJoin"
         public init() {}
@@ -105,7 +105,7 @@ public enum Machines {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/machines.ts#UnknownKey [status=implemented hash=7297d1e58d19]
+    // parity: core/src/machine/machines.ts#UnknownKey [status=implemented hash=71730a2c8d56]
     public struct UnknownKey: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machines.UnknownKey"
         public init() {}
@@ -315,7 +315,7 @@ public enum Machines {
         }
     }
 
-    // parity: core/src/machine/machines.ts#node [status=implemented hash=80e9dc9472c8]
+    // parity: core/src/machine/machines.ts#node [status=implemented hash=19f4400d4f0d]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

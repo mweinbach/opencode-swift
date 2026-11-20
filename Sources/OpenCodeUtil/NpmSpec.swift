@@ -1,6 +1,6 @@
 /// Pure-Swift npm package specification helpers matching `packages/util/src/npm.ts`.
 public enum NpmSpec {
-    // parity: util/src/npm.ts#InstallFailedError [status=implemented hash=3f7b6785d4b4]
+    // parity: util/src/npm.ts#InstallFailedError [status=implemented hash=2bb92803b6c4]
     public struct InstallFailedError: Error, Equatable, Sendable, CustomStringConvertible {
         public let add: [String]?
         public let dir: String

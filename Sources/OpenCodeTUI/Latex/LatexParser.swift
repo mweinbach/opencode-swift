@@ -69,7 +69,7 @@ private let negatedSymbols: [String: String] = [
 ]
 
 /// Expands user macros, enforces source-length and nesting-depth bounds, and parses LaTeX math into a `MathNode` AST.
-// parity: latex/src/parser.ts#parseLatex [status=implemented hash=728fd4d86289]
+// parity: latex/src/parser.ts#parseLatex [status=implemented hash=4229b2b1ebf9]
 public func parseLatex(_ source: String, options: ParseOptions = ParseOptions()) throws -> MathNode {
     let expanded = try expandLatexMacros(source, options: options)
     let maxDepth = try resolvePositiveInteger(options.maxDepth, fallback: DEFAULT_MAX_NESTING_DEPTH, optionName: "maxDepth")
@@ -78,7 +78,7 @@ public func parseLatex(_ source: String, options: ParseOptions = ParseOptions())
 }
 
 /// Validates source length and brace nesting, then expands configured user macros up to `maxExpand` passes.
-// parity: latex/src/parser.ts#expandLatexMacros [status=implemented hash=3b437b6fb75d]
+// parity: latex/src/parser.ts#expandLatexMacros [status=implemented hash=bd480af42008]
 public func expandLatexMacros(_ source: String, options: ParseOptions = ParseOptions()) throws -> String {
     let maxSourceLength = try resolvePositiveInteger(
         options.maxSourceLength,

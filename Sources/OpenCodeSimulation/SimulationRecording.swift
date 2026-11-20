@@ -10,7 +10,7 @@ import OpenCodeUtil
 /// Versioned JSONL terminal timeline and pointer sidecar recording (`packages/simulation/src/recording.ts`).
 public enum SimulationRecording {
     /// Initial JSONL record describing recorded terminal geometry and payload encoding.
-    // parity: simulation/src/recording.ts#Header [status=implemented hash=ff4474957bca]
+    // parity: simulation/src/recording.ts#Header [status=implemented hash=ff9b34b9ff31]
     public struct Header: Equatable, Hashable, Sendable, Codable {
         public let type: String
         public let version: Int
@@ -53,7 +53,7 @@ public enum SimulationRecording {
     }
 
     /// Timestamped base64-encoded ANSI output chunk in a JSONL timeline.
-    // parity: simulation/src/recording.ts#Output [status=implemented hash=8e46cb65b677]
+    // parity: simulation/src/recording.ts#Output [status=implemented hash=3631977f3a98]
     public struct Output: Equatable, Hashable, Sendable, Codable {
         public let type: String
         public let at_ms: Int
@@ -82,7 +82,7 @@ public enum SimulationRecording {
     }
 
     /// Timestamped viewport resize record in a JSONL timeline.
-    // parity: simulation/src/recording.ts#Resize [status=implemented hash=bcd9e4e3088f]
+    // parity: simulation/src/recording.ts#Resize [status=implemented hash=b7bbd342b601]
     public struct Resize: Equatable, Hashable, Sendable, Codable {
         public let type: String
         public let at_ms: Int
@@ -149,7 +149,7 @@ public enum SimulationRecording {
     }
 
     /// Pointer sidecar event written to `<timeline>.pointers.jsonl` on the same monotonic clock.
-    // parity: simulation/src/recording.ts#Pointer [status=implemented hash=bd487864212d]
+    // parity: simulation/src/recording.ts#Pointer [status=implemented hash=da434008e26d]
     public struct Pointer: Equatable, Hashable, Sendable, Codable {
         public enum Action: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
             case move

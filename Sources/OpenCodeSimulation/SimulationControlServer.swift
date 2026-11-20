@@ -328,7 +328,7 @@ public enum SimulationControlServer {
     }
 
     /// Starts a scoped WebSocket JSON-RPC 2.0 control server bound to `options.endpoint`.
-    // parity: simulation/src/control-server.ts#start [status=implemented hash=3658be8d2a7f]
+    // parity: simulation/src/control-server.ts#start [status=implemented hash=a959a4ef88a6]
     public static func start<RequestType: Sendable>(
         options: StartOptions<RequestType>,
         scope: LayerNode.ResourceScope? = nil

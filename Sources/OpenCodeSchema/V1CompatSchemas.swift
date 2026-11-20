@@ -38,7 +38,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/legacy-event.ts#CommandExecuted [status=implemented hash=e11239b8c50d]
+        // parity: schema/src/v1/legacy-event.ts#CommandExecuted [status=implemented hash=9e01c82b64cd]
         public static let commandExecuted = SchemaPrimitive.EventDescriptor.ephemeral(type: "command.executed")
 
         // parity: schema/src/v1/legacy-event.ts#Definitions [status=implemented hash=762e070744c7]
@@ -48,7 +48,7 @@ public enum V1Schema {
     // MARK: - src/v1/permission.ts
 
     public enum Permission {
-        // parity: schema/src/v1/permission.ts#ID [status=implemented hash=216b15e2123b]
+        // parity: schema/src/v1/permission.ts#ID [status=implemented hash=1216900a24e9]
         public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public let rawValue: String
 
@@ -87,14 +87,14 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#Action [status=implemented hash=7cb43bbe194b]
+        // parity: schema/src/v1/permission.ts#Action [status=implemented hash=21e5583186f8]
         public enum Action: String, Equatable, Hashable, Sendable, Codable {
             case allow
             case deny
             case ask
         }
 
-        // parity: schema/src/v1/permission.ts#Rule [status=implemented hash=d1ebf48e1633]
+        // parity: schema/src/v1/permission.ts#Rule [status=implemented hash=835f1cf2afe5]
         public struct Rule: Equatable, Hashable, Sendable, Codable {
             public let permission: String
             public let pattern: String
@@ -107,7 +107,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#Ruleset [status=implemented hash=f460e49a210c]
+        // parity: schema/src/v1/permission.ts#Ruleset [status=implemented hash=1d739c5fbbf1]
         public typealias Ruleset = [Rule]
 
         public struct ToolRef: Equatable, Hashable, Sendable, Codable {
@@ -120,7 +120,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#Request [status=implemented hash=b18d398016f5]
+        // parity: schema/src/v1/permission.ts#Request [status=implemented hash=5c4702d96a5d]
         public struct Request: Equatable, Hashable, Sendable, Codable {
             public let id: ID
             public let sessionID: SessionID
@@ -156,7 +156,7 @@ public enum V1Schema {
             case reject
         }
 
-        // parity: schema/src/v1/permission.ts#ReplyBody [status=implemented hash=2304149f1704]
+        // parity: schema/src/v1/permission.ts#ReplyBody [status=implemented hash=f7458d5419ac]
         public struct ReplyBody: Equatable, Hashable, Sendable, Codable {
             public let reply: Reply
             public let message: String?
@@ -167,7 +167,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#Approval [status=implemented hash=274d9e8d4559]
+        // parity: schema/src/v1/permission.ts#Approval [status=implemented hash=ae336dcecf04]
         public struct Approval: Equatable, Hashable, Sendable, Codable {
             public let projectID: ProjectID
             public let patterns: [String]
@@ -178,7 +178,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#AskInput [status=implemented hash=77e1eced8021]
+        // parity: schema/src/v1/permission.ts#AskInput [status=implemented hash=2dca631c20d9]
         public struct AskInput: Equatable, Hashable, Sendable, Codable {
             public let id: ID?
             public let sessionID: SessionID
@@ -210,7 +210,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/permission.ts#ReplyInput [status=implemented hash=3e4b675535c6]
+        // parity: schema/src/v1/permission.ts#ReplyInput [status=implemented hash=1ccedf7bcbe7]
         public struct ReplyInput: Equatable, Hashable, Sendable, Codable {
             public let requestID: ID
             public let reply: Reply
@@ -246,7 +246,7 @@ public enum V1Schema {
     // MARK: - src/v1/session.ts
 
     public enum Session {
-        // parity: schema/src/v1/session.ts#MessageID [status=implemented hash=8e3aaced4c18]
+        // parity: schema/src/v1/session.ts#MessageID [status=implemented hash=76271f0ed95b]
         public struct MessageID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public let rawValue: String
 
@@ -285,7 +285,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#PartID [status=implemented hash=a8f35e8168ba]
+        // parity: schema/src/v1/session.ts#PartID [status=implemented hash=f57e78fade78]
         public struct PartID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public let rawValue: String
 
@@ -330,7 +330,7 @@ public enum V1Schema {
             public init() {}
         }
 
-        // parity: schema/src/v1/session.ts#OutputLengthError [status=implemented hash=9bde727e1a94]
+        // parity: schema/src/v1/session.ts#OutputLengthError [status=implemented hash=4a7394a09a19]
         public struct OutputLengthError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "MessageOutputLengthError"
             public let data: EmptyData
@@ -357,7 +357,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#AuthError [status=implemented hash=3d56fd1df3c9]
+        // parity: schema/src/v1/session.ts#AuthError [status=implemented hash=afeca41354a0]
         public struct AuthError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "ProviderAuthError"
 
@@ -395,7 +395,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#AbortedError [status=implemented hash=ea7f7b68a79c]
+        // parity: schema/src/v1/session.ts#AbortedError [status=implemented hash=a06b3016f8ea]
         public struct AbortedError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "MessageAbortedError"
 
@@ -431,7 +431,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#StructuredOutputError [status=implemented hash=44eaee29d4bc]
+        // parity: schema/src/v1/session.ts#StructuredOutputError [status=implemented hash=397c2c579c31]
         public struct StructuredOutputError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "StructuredOutputError"
 
@@ -469,7 +469,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#APIError [status=implemented hash=437298d3b2dc]
+        // parity: schema/src/v1/session.ts#APIError [status=implemented hash=d2e314f17ac7]
         public struct APIError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "APIError"
 
@@ -522,7 +522,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ContextOverflowError [status=implemented hash=062208c96f9b]
+        // parity: schema/src/v1/session.ts#ContextOverflowError [status=implemented hash=8790d4bf62e0]
         public struct ContextOverflowError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "ContextOverflowError"
 
@@ -560,7 +560,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ContentFilterError [status=implemented hash=5a3274b34b9f]
+        // parity: schema/src/v1/session.ts#ContentFilterError [status=implemented hash=73920e8373a4]
         public struct ContentFilterError: Equatable, Hashable, Sendable, Codable {
             public static let errorName = "ContentFilterError"
 
@@ -684,7 +684,7 @@ public enum V1Schema {
 
         // MARK: Output Formats
 
-        // parity: schema/src/v1/session.ts#OutputFormatText [status=implemented hash=275b31dcf1f2]
+        // parity: schema/src/v1/session.ts#OutputFormatText [status=implemented hash=52fba1dd7c21]
         public struct OutputFormatText: Equatable, Hashable, Sendable, Codable {
             public init() {}
 
@@ -703,7 +703,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#OutputFormatJsonSchema [status=implemented hash=70e0fd933675]
+        // parity: schema/src/v1/session.ts#OutputFormatJsonSchema [status=implemented hash=67cff0ba96eb]
         public struct OutputFormatJsonSchema: Equatable, Hashable, Sendable, Codable {
             public let schema: [String: JSONValue]
             public let retryCount: SchemaPrimitive.NonNegativeInt
@@ -740,7 +740,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#Format [status=implemented hash=299ad264c3c2]
+        // parity: schema/src/v1/session.ts#Format [status=implemented hash=417812b027db]
         public enum Format: Equatable, Hashable, Sendable, Codable {
             case text(OutputFormatText)
             case jsonSchema(OutputFormatJsonSchema)
@@ -824,7 +824,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#Range [status=implemented hash=d7952502df05]
+        // parity: schema/src/v1/session.ts#Range [status=implemented hash=3bcad5336e13]
         public struct Range: Equatable, Hashable, Sendable, Codable {
             public let start: Position
             public let end: Position
@@ -835,7 +835,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#FileSource [status=implemented hash=c6083abf857f]
+        // parity: schema/src/v1/session.ts#FileSource [status=implemented hash=5db0adfdee15]
         public struct FileSource: Equatable, Hashable, Sendable, Codable {
             public let text: FilePartSourceText
             public let path: String
@@ -866,7 +866,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#SymbolSource [status=implemented hash=df48c562854b]
+        // parity: schema/src/v1/session.ts#SymbolSource [status=implemented hash=f5517226ff3c]
         public struct SymbolSource: Equatable, Hashable, Sendable, Codable {
             public let text: FilePartSourceText
             public let path: String
@@ -918,7 +918,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ResourceSource [status=implemented hash=f05faec891ea]
+        // parity: schema/src/v1/session.ts#ResourceSource [status=implemented hash=8f810669aa75]
         public struct ResourceSource: Equatable, Hashable, Sendable, Codable {
             public let text: FilePartSourceText
             public let clientName: String
@@ -954,7 +954,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#FilePartSource [status=implemented hash=0e0d72af07d0]
+        // parity: schema/src/v1/session.ts#FilePartSource [status=implemented hash=05312b45ec2f]
         public enum FilePartSource: Equatable, Hashable, Sendable, Codable {
             case file(FileSource)
             case symbol(SymbolSource)
@@ -989,7 +989,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#SnapshotPart [status=implemented hash=5b7e058f1419]
+        // parity: schema/src/v1/session.ts#SnapshotPart [status=implemented hash=2e32fe065458]
         public struct SnapshotPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1030,7 +1030,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#PatchPart [status=implemented hash=d13d9c02b992]
+        // parity: schema/src/v1/session.ts#PatchPart [status=implemented hash=c4a0eaf20745]
         public struct PatchPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1076,7 +1076,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#TextPart [status=implemented hash=d2ec707b7fd4]
+        // parity: schema/src/v1/session.ts#TextPart [status=implemented hash=068a7245d976]
         public struct TextPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1146,7 +1146,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ReasoningPart [status=implemented hash=11baf696b3be]
+        // parity: schema/src/v1/session.ts#ReasoningPart [status=implemented hash=ade23ddae96f]
         public struct ReasoningPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1204,7 +1204,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#FilePart [status=implemented hash=66b5359270bb]
+        // parity: schema/src/v1/session.ts#FilePart [status=implemented hash=7e1079402b7e]
         public struct FilePart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1284,7 +1284,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#AgentPart [status=implemented hash=2533f8e238db]
+        // parity: schema/src/v1/session.ts#AgentPart [status=implemented hash=5daf33d40b29]
         public struct AgentPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1336,7 +1336,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#CompactionPart [status=implemented hash=7aa4efada0cf]
+        // parity: schema/src/v1/session.ts#CompactionPart [status=implemented hash=0f401c023a94]
         public struct CompactionPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1404,7 +1404,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#SubtaskPart [status=implemented hash=3815ad90100a]
+        // parity: schema/src/v1/session.ts#SubtaskPart [status=implemented hash=4158b99d7d65]
         public struct SubtaskPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1482,7 +1482,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#RetryPart [status=implemented hash=6711715b519e]
+        // parity: schema/src/v1/session.ts#RetryPart [status=implemented hash=4efe44fba330]
         public struct RetryPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1540,7 +1540,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#StepStartPart [status=implemented hash=3bea9478c870]
+        // parity: schema/src/v1/session.ts#StepStartPart [status=implemented hash=ef76fc1cafc0]
         public struct StepStartPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1620,7 +1620,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#StepFinishPart [status=implemented hash=ae4e314409b1]
+        // parity: schema/src/v1/session.ts#StepFinishPart [status=implemented hash=3a08a3773941]
         public struct StepFinishPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -1686,7 +1686,7 @@ public enum V1Schema {
 
         // MARK: Tool States & Tool Part
 
-        // parity: schema/src/v1/session.ts#ToolStatePending [status=implemented hash=017edfce4e29]
+        // parity: schema/src/v1/session.ts#ToolStatePending [status=implemented hash=0821dddde336]
         public struct ToolStatePending: Equatable, Hashable, Sendable, Codable {
             public let input: [String: JSONValue]
             public let raw: String
@@ -1717,7 +1717,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ToolStateRunning [status=implemented hash=4e273350f3ac]
+        // parity: schema/src/v1/session.ts#ToolStateRunning [status=implemented hash=e9d779c695c4]
         public struct ToolStateRunning: Equatable, Hashable, Sendable, Codable {
             public struct Time: Equatable, Hashable, Sendable, Codable {
                 public let start: SchemaPrimitive.NonNegativeInt
@@ -1771,7 +1771,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ToolStateCompleted [status=implemented hash=67ec503c17be]
+        // parity: schema/src/v1/session.ts#ToolStateCompleted [status=implemented hash=23216be88829]
         public struct ToolStateCompleted: Equatable, Hashable, Sendable, Codable {
             public struct Time: Equatable, Hashable, Sendable, Codable {
                 public let start: SchemaPrimitive.NonNegativeInt
@@ -1845,7 +1845,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ToolStateError [status=implemented hash=2311e2e35359]
+        // parity: schema/src/v1/session.ts#ToolStateError [status=implemented hash=687fde688150]
         public struct ToolStateError: Equatable, Hashable, Sendable, Codable {
             public struct Time: Equatable, Hashable, Sendable, Codable {
                 public let start: SchemaPrimitive.NonNegativeInt
@@ -1901,7 +1901,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ToolState [status=implemented hash=7f52fc43d767]
+        // parity: schema/src/v1/session.ts#ToolState [status=implemented hash=f50c53184ad9]
         public enum ToolState: Equatable, Hashable, Sendable, Codable {
             case pending(ToolStatePending)
             case running(ToolStateRunning)
@@ -1939,7 +1939,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#ToolPart [status=implemented hash=144ad871940b]
+        // parity: schema/src/v1/session.ts#ToolPart [status=implemented hash=c51892c5b762]
         public struct ToolPart: Equatable, Hashable, Sendable, Codable {
             public let id: PartID
             public let sessionID: SessionID
@@ -2003,7 +2003,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#Part [status=implemented hash=0f23742dae75]
+        // parity: schema/src/v1/session.ts#Part [status=implemented hash=8a845926b1eb]
         public enum Part: Equatable, Hashable, Sendable, Codable {
             case text(TextPart)
             case subtask(SubtaskPart)
@@ -2067,7 +2067,7 @@ public enum V1Schema {
 
         // MARK: Part Inputs
 
-        // parity: schema/src/v1/session.ts#TextPartInput [status=implemented hash=2ae303b4b6e6]
+        // parity: schema/src/v1/session.ts#TextPartInput [status=implemented hash=044f6ab3b6a2]
         public struct TextPartInput: Equatable, Hashable, Sendable, Codable {
             public let id: PartID?
             public let text: String
@@ -2125,7 +2125,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#FilePartInput [status=implemented hash=f30cb7eacda1]
+        // parity: schema/src/v1/session.ts#FilePartInput [status=implemented hash=0c3e26ea3b0e]
         public struct FilePartInput: Equatable, Hashable, Sendable, Codable {
             public let id: PartID?
             public let mime: String
@@ -2177,7 +2177,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#AgentPartInput [status=implemented hash=a53a1609b9b6]
+        // parity: schema/src/v1/session.ts#AgentPartInput [status=implemented hash=c00ba41b5eee]
         public struct AgentPartInput: Equatable, Hashable, Sendable, Codable {
             public let id: PartID?
             public let name: String
@@ -2213,7 +2213,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#SubtaskPartInput [status=implemented hash=3992905d8950]
+        // parity: schema/src/v1/session.ts#SubtaskPartInput [status=implemented hash=cce0f1ea15b9]
         public struct SubtaskPartInput: Equatable, Hashable, Sendable, Codable {
             public let id: PartID?
             public let prompt: String
@@ -2273,7 +2273,7 @@ public enum V1Schema {
 
         // MARK: Messages
 
-        // parity: schema/src/v1/session.ts#User [status=implemented hash=c7754d87728b]
+        // parity: schema/src/v1/session.ts#User [status=implemented hash=58a25252ad1d]
         public struct User: Equatable, Hashable, Sendable, Codable {
             public struct Time: Equatable, Hashable, Sendable, Codable {
                 public let created: Double
@@ -2398,7 +2398,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#Assistant [status=implemented hash=aa97c1ce88b2]
+        // parity: schema/src/v1/session.ts#Assistant [status=implemented hash=40b553b76810]
         public struct Assistant: Equatable, Hashable, Sendable, Codable {
             public struct Time: Equatable, Hashable, Sendable, Codable {
                 public let created: SchemaPrimitive.NonNegativeInt
@@ -2539,7 +2539,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#Info [status=implemented hash=22296603ae45]
+        // parity: schema/src/v1/session.ts#Info [status=implemented hash=edd914a128c2]
         public enum Info: Equatable, Hashable, Sendable, Codable {
             case user(User)
             case assistant(Assistant)
@@ -2683,7 +2683,7 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#SessionInfo [status=implemented hash=10353b3d35dc]
+        // parity: schema/src/v1/session.ts#SessionInfo [status=implemented hash=24559797caab]
         public struct SessionInfo: Equatable, Hashable, Sendable, Codable {
             public let id: SessionID
             public let slug: String
@@ -2831,13 +2831,13 @@ public enum V1Schema {
             }
         }
 
-        // parity: schema/src/v1/session.ts#PartDelta [status=implemented hash=669ac80cd63c]
+        // parity: schema/src/v1/session.ts#PartDelta [status=implemented hash=ac719986e832]
         public static let partDelta = SchemaPrimitive.EventDescriptor.ephemeral(type: "message.part.delta")
 
-        // parity: schema/src/v1/session.ts#Diff [status=implemented hash=300370d67d8a]
+        // parity: schema/src/v1/session.ts#Diff [status=implemented hash=998162ce69a4]
         public static let diff = SchemaPrimitive.EventDescriptor.ephemeral(type: "session.diff")
 
-        // parity: schema/src/v1/session.ts#Error [status=implemented hash=48b0ffa8d707]
+        // parity: schema/src/v1/session.ts#Error [status=implemented hash=7d8bf038a888]
         public static let sessionError = SchemaPrimitive.EventDescriptor.ephemeral(type: "session.error")
 
         // parity: schema/src/v1/session.ts#Event [status=implemented hash=5a0a4867f73e]

@@ -148,7 +148,7 @@ public enum MachineWire {
     }
 
     /// The first message of every connection, reconnects included.
-    // parity: core/src/machine/wire.ts#Hello [status=implemented hash=50d89f499e13]
+    // parity: core/src/machine/wire.ts#Hello [status=implemented hash=9c49bccc31ba]
     public struct Hello: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let os: String
@@ -267,7 +267,7 @@ public enum MachineWire {
         }
     }
 
-    // parity: core/src/machine/wire.ts#FromWorker [status=implemented hash=3c59175cb333]
+    // parity: core/src/machine/wire.ts#FromWorker [status=implemented hash=b769d2ba17eb]
     public enum FromWorker: Equatable, Hashable, Sendable, Codable {
         case hello(Hello)
         case started(id: ProcessID, pid: Int)
@@ -407,7 +407,7 @@ public enum MachineWire {
     }
 
     /// File calls, with the semantics of the environment's `Files`.
-    // parity: core/src/machine/wire.ts#FileCall [status=implemented hash=08fa728738d7]
+    // parity: core/src/machine/wire.ts#FileCall [status=implemented hash=fa8f2d531e1d]
     public struct FileCall: Equatable, Hashable, Sendable, Codable {
         /// A file call and its reply carry the same `req`.
         public let req: Int
@@ -478,7 +478,7 @@ public enum MachineWire {
 
     // MARK: - ToWorker
 
-    // parity: core/src/machine/wire.ts#ToWorker [status=implemented hash=c080c8433591]
+    // parity: core/src/machine/wire.ts#ToWorker [status=implemented hash=ccc51aea8c7e]
     public enum ToWorker: Equatable, Hashable, Sendable, Codable {
         /// Starts the process and attaches to its output from byte 0. `env` is set over the worker's own environment.
         case start(id: ProcessID, argv: [String], cwd: String, env: [String: String])

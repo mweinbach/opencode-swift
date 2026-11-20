@@ -48,7 +48,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/gantt/types.ts#GanttEntry [status=implemented hash=4b6bd62a2355]
+    // parity: merman/src/gantt/types.ts#GanttEntry [status=implemented hash=a412eefddb6d]
     public enum GanttEntry: Equatable, Hashable, Sendable, Codable {
         case section(GanttSection)
         case task(GanttTask)
@@ -227,7 +227,7 @@ extension Merman {
     // parity: merman/src/gantt/style.ts#GanttStyleColors [status=implemented hash=7400e90ebda1]
     public typealias GanttStyleColors = [GanttCellStyle: RGBA]
 
-    // parity: merman/src/gantt/style.ts#resolveGanttStyleColors [status=implemented hash=611de78c2378]
+    // parity: merman/src/gantt/style.ts#resolveGanttStyleColors [status=implemented hash=e77317d7c560]
     public static func resolveGanttStyleColors(
         _ colors: [GanttStyleInputKey: RGBA?] = [:]
     ) -> GanttStyleColors {
@@ -512,7 +512,7 @@ extension Merman {
 
     // MARK: - Gantt Drawing (`gantt/drawing.ts`)
 
-    // parity: merman/src/gantt/drawing.ts#drawGanttDiagramGrid [status=implemented hash=717b2e5cbdf1]
+    // parity: merman/src/gantt/drawing.ts#drawGanttDiagramGrid [status=implemented hash=bdaa236aab8a]
     public static func drawGanttDiagramGrid(
         _ diagram: GanttDiagram,
         options: GanttDiagramRenderOptions = GanttDiagramRenderOptions()
@@ -735,7 +735,7 @@ extension Merman {
 
     // MARK: - Gantt Diagram (`gantt/diagram.ts`)
 
-    // parity: merman/src/gantt/diagram.ts#renderGanttDiagram [status=implemented hash=f646f17a0c32]
+    // parity: merman/src/gantt/diagram.ts#renderGanttDiagram [status=implemented hash=4780dd118c60]
     public static func renderGanttDiagram(
         _ content: String,
         options: GanttDiagramRenderOptions = GanttDiagramRenderOptions()

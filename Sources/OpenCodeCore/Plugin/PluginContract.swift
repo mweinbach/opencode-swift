@@ -37,7 +37,7 @@ public enum PluginContract {
     // MARK: - src/permission.ts
 
     /// Validated input for `context.permission.assert(...)`.
-    // parity: plugin/src/permission.ts#AssertInput [status=implemented hash=015362cb304d]
+    // parity: plugin/src/permission.ts#AssertInput [status=implemented hash=0b22f3864603]
     public struct AssertInput: Equatable, Hashable, Sendable, Codable {
         public let sessionID: SessionID
         public let agent: AgentSchema.ID?

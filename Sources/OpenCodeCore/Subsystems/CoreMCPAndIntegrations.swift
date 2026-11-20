@@ -162,7 +162,7 @@ public enum CoreMCP {
     // MARK: - core/src/mcp/event-errors.ts
 
     public enum EventErrors {
-        // parity: core/src/mcp/event-errors.ts#EventStreamRejectedError [status=implemented hash=2f7188e82873]
+        // parity: core/src/mcp/event-errors.ts#EventStreamRejectedError [status=implemented hash=5d223bd04772]
         public struct EventStreamRejectedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.EventStreamRejectedError"
             public let server: String
@@ -178,7 +178,7 @@ public enum CoreMCP {
             public var description: String { "MCP event stream rejected by \(server) (\(code)): \(message)" }
         }
 
-        // parity: core/src/mcp/event-errors.ts#EventStreamTerminatedError [status=implemented hash=71e2affbf99a]
+        // parity: core/src/mcp/event-errors.ts#EventStreamTerminatedError [status=implemented hash=896b523ee1f4]
         public struct EventStreamTerminatedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.EventStreamTerminatedError"
             public let server: String
@@ -741,7 +741,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/stdio.ts#make [status=implemented hash=149d2d93a24a]
+        // parity: core/src/mcp/stdio.ts#make [status=implemented hash=508795b36f84]
         public static func make(
             _ options: Options,
             spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
@@ -1011,7 +1011,7 @@ public enum CoreMCP {
     public enum Client {
         public static let latestProtocolVersion = "2026-07-28"
 
-        // parity: core/src/mcp/client.ts#EventType [status=implemented hash=9cc7b833eca6]
+        // parity: core/src/mcp/client.ts#EventType [status=implemented hash=cdd68afbdad3]
         public struct EventType: Equatable, Hashable, Sendable, Codable {
             public let name: String
             public let description: String?
@@ -1047,7 +1047,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#EventMessage [status=implemented hash=7a7a23eb5729]
+        // parity: core/src/mcp/client.ts#EventMessage [status=implemented hash=1053da804866]
         public enum EventMessage: Equatable, Hashable, Sendable {
             case active(cursor: String?, truncated: Bool)
             case event(eventId: String, name: String, timestamp: String, data: JSONValue, cursor: String?)
@@ -1173,7 +1173,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#NeedsAuthError [status=implemented hash=c211a065310e]
+        // parity: core/src/mcp/client.ts#NeedsAuthError [status=implemented hash=a9c713b9eeb3]
         public struct NeedsAuthError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.NeedsAuthError"
             public let server: String
@@ -1187,7 +1187,7 @@ public enum CoreMCP {
             public var description: String { message }
         }
 
-        // parity: core/src/mcp/client.ts#ConnectError [status=implemented hash=2dac8622951c]
+        // parity: core/src/mcp/client.ts#ConnectError [status=implemented hash=cc8060a7f377]
         public struct ConnectError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.ConnectError"
             public let server: String
@@ -1203,7 +1203,7 @@ public enum CoreMCP {
             public var description: String { message }
         }
 
-        // parity: core/src/mcp/client.ts#SessionExpiredError [status=implemented hash=b74c53d13810]
+        // parity: core/src/mcp/client.ts#SessionExpiredError [status=implemented hash=4f823938fcc5]
         public struct SessionExpiredError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.SessionExpiredError"
             public let server: String
@@ -1217,7 +1217,7 @@ public enum CoreMCP {
             public var description: String { message }
         }
 
-        // parity: core/src/mcp/client.ts#CallToolContent [status=implemented hash=0399521769cf]
+        // parity: core/src/mcp/client.ts#CallToolContent [status=implemented hash=4cd0f39c271e]
         public enum CallToolContent: Equatable, Hashable, Sendable, Codable {
             case text(String)
             case media(data: String, mimeType: String, uri: String?)
@@ -1617,7 +1617,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#connect [status=implemented hash=ad8470ee6057]
+        // parity: core/src/mcp/client.ts#connect [status=implemented hash=726c9b4addf5]
         public static func connect(_ options: ConnectOptions) async throws -> LiveConnection {
             let transport: any Transport
             if let override = options.transportOverride {
@@ -1669,7 +1669,7 @@ public enum CoreMCP {
     // MARK: - core/src/mcp/connection.ts
 
     public enum Connection {
-        // parity: core/src/mcp/connection.ts#Failure [status=implemented hash=cf257314af6c]
+        // parity: core/src/mcp/connection.ts#Failure [status=implemented hash=0c69a02fddd8]
         public enum Failure: Equatable, Hashable, Sendable {
             case failed(error: String)
             case needsAuth(error: String)
@@ -1905,7 +1905,7 @@ public enum CoreMCP {
         }
 
         /// Deterministic pool key encoding every connection-affecting option while fingerprinting secrets.
-        // parity: core/src/mcp/pool.ts#key [status=implemented hash=246b7fe62f09]
+        // parity: core/src/mcp/pool.ts#key [status=implemented hash=62f4c7715b0c]
         public static func key(
             config: McpSchema.ServerConfig,
             cwd: String? = nil,
@@ -1977,13 +1977,13 @@ public enum CoreMCP {
 
         /// Pooled stdio servers run on the local host environment; this port spawns them through `Connection.make`,
         /// so upstream's `Environment.make(localID, …)` construction has no separate host value here.
-        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=d8b73369d6f9]
+        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=d979691bcc4f]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service()
         )
 
-        // parity: core/src/mcp/pool.ts#node [status=implemented hash=317f2f7a71bf]
+        // parity: core/src/mcp/pool.ts#node [status=implemented hash=d547b4e7fc6e]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(Service.serviceKey, layer, [])
     }
 
@@ -1993,7 +1993,7 @@ public enum CoreMCP {
         // parity: core/src/mcp/oauth.ts#CLIENT_METADATA_URL [status=implemented hash=12343b25ed54]
         public static let CLIENT_METADATA_URL = "https://opencode.ai/oauth/opencode/client.json"
 
-        // parity: core/src/mcp/oauth.ts#loggedFetch [status=adapted hash=471e9aaa2fa6]
+        // parity: core/src/mcp/oauth.ts#loggedFetch [status=adapted hash=f7ff41a2aa6b]
         public static func loggedFetch(
             server: String,
             transport: any HTTPTransport
@@ -2010,7 +2010,7 @@ public enum CoreMCP {
             return client
         }
 
-        // parity: core/src/mcp/oauth.ts#connectProvider [status=adapted hash=aa79e49bccb8]
+        // parity: core/src/mcp/oauth.ts#connectProvider [status=adapted hash=5df651f401c8]
         public static func connectProvider(
             server: String,
             config: McpSchema.RemoteConfig,
@@ -2023,7 +2023,7 @@ public enum CoreMCP {
             return { oauth.access }
         }
 
-        // parity: core/src/mcp/oauth.ts#authorize [status=adapted hash=a11cd8b3b451]
+        // parity: core/src/mcp/oauth.ts#authorize [status=adapted hash=13c76e52b7cb]
         public static func authorize(
             name: String,
             config: McpSchema.RemoteConfig,
@@ -2065,7 +2065,7 @@ public enum CoreMCP {
             public var description: String { rawValue }
         }
 
-        // parity: core/src/mcp/index.ts#PromptsChanged [status=implemented hash=05254ee648fe]
+        // parity: core/src/mcp/index.ts#PromptsChanged [status=implemented hash=24bf0fd804df]
         public static let PromptsChanged = SchemaPrimitive.EventDescriptor.ephemeral(type: "mcp.prompts.changed")
 
         // parity: core/src/mcp/index.ts#Status [status=implemented hash=6c3cdc8689db]
@@ -2130,7 +2130,7 @@ public enum CoreMCP {
         // parity: core/src/mcp/index.ts#ResourceContent [status=implemented hash=92c7109a999d]
         public typealias ResourceContent = McpSchema.ResourceContent
 
-        // parity: core/src/mcp/index.ts#NotFoundError [status=implemented hash=767c7aec1d77]
+        // parity: core/src/mcp/index.ts#NotFoundError [status=implemented hash=13ae0bfbda1e]
         public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.NotFoundError"
             public let server: ServerName
@@ -2140,7 +2140,7 @@ public enum CoreMCP {
             public var description: String { message }
         }
 
-        // parity: core/src/mcp/index.ts#ToolCallError [status=implemented hash=08c24f3efa3a]
+        // parity: core/src/mcp/index.ts#ToolCallError [status=implemented hash=086ab859c7f7]
         public struct ToolCallError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.ToolCallError"
             public let server: ServerName
@@ -2156,7 +2156,7 @@ public enum CoreMCP {
             public var description: String { message }
         }
 
-        // parity: core/src/mcp/index.ts#EventsUnavailableError [status=implemented hash=6e08c0b38c45]
+        // parity: core/src/mcp/index.ts#EventsUnavailableError [status=implemented hash=9123ed3da582]
         public struct EventsUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.EventsUnavailableError"
             public let server: ServerName
@@ -2196,7 +2196,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/index.ts#Options [status=implemented hash=2c7eb6bdab8d]
+        // parity: core/src/mcp/index.ts#Options [status=implemented hash=70797ffe8861]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let clientName: String?
             public let clientVersion: String?
@@ -2560,7 +2560,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/index.ts#layer [status=implemented hash=a3465a204792]
+        // parity: core/src/mcp/index.ts#layer [status=implemented hash=bf4afebf074b]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let loc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
@@ -2688,13 +2688,13 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/instructions.ts#layer [status=implemented hash=2191c2500f85]
+        // parity: core/src/mcp/instructions.ts#layer [status=implemented hash=0839722cc768]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let mcp = deps.get(Registry.Service.serviceKey, as: Registry.Service.self) ?? Registry.Service()
             return LayerNode.Output([Service.serviceKey: Service(mcp: mcp)])
         }
 
-        // parity: core/src/mcp/instructions.ts#node [status=implemented hash=44ca9f0ae7f7]
+        // parity: core/src/mcp/instructions.ts#node [status=implemented hash=732a93d22de9]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [Registry.node])
     }
 }
@@ -2717,7 +2717,7 @@ public enum CoreIntegration {
         // parity: core/src/integration/connection.ts#Status [status=implemented hash=00831ab2ed72]
         public typealias Status = ConnectionSchema.Status
 
-        // parity: core/src/integration/connection.ts#key [status=implemented hash=5b4e89293be8]
+        // parity: core/src/integration/connection.ts#key [status=implemented hash=be398ea141f6]
         public static func key(_ connection: Info?) -> String? {
             guard let connection else { return nil }
             switch connection {
@@ -2748,7 +2748,7 @@ public enum CoreIntegration {
         // parity: core/src/form.ts#State [status=implemented hash=c40f0303736b]
         public typealias State = FormSchema.State
 
-        // parity: core/src/form.ts#TerminalState [status=implemented hash=a9a07e514793]
+        // parity: core/src/form.ts#TerminalState [status=implemented hash=07d6854e07ad]
         public enum TerminalState: Equatable, Hashable, Sendable {
             case answered(answer: Answer)
             case cancelled(message: String?)
@@ -2767,7 +2767,7 @@ public enum CoreIntegration {
         // parity: core/src/form.ts#Reply [status=implemented hash=c0332860318b]
         public typealias Reply = FormSchema.Reply
 
-        // parity: core/src/form.ts#NotFoundError [status=implemented hash=3e1364ea19ed]
+        // parity: core/src/form.ts#NotFoundError [status=implemented hash=d0519eb83856]
         public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Form.NotFoundError"
             public let id: ID
@@ -2777,7 +2777,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/form.ts#AlreadySettledError [status=implemented hash=e464fced668b]
+        // parity: core/src/form.ts#AlreadySettledError [status=implemented hash=4dbd3995a3ca]
         public struct AlreadySettledError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Form.AlreadySettledError"
             public let id: ID
@@ -2787,7 +2787,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/form.ts#AlreadyExistsError [status=implemented hash=c0c28062bf26]
+        // parity: core/src/form.ts#AlreadyExistsError [status=implemented hash=15390b7fc7ae]
         public struct AlreadyExistsError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Form.AlreadyExistsError"
             public let id: ID
@@ -2797,7 +2797,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/form.ts#InvalidAnswerError [status=implemented hash=6f7a40e175a8]
+        // parity: core/src/form.ts#InvalidAnswerError [status=implemented hash=d99aca91ca85]
         public struct InvalidAnswerError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Form.InvalidAnswerError"
             public let id: ID
@@ -2806,7 +2806,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/form.ts#InvalidFormError [status=implemented hash=d74024654eb7]
+        // parity: core/src/form.ts#InvalidFormError [status=implemented hash=106c8e0e5ece]
         public struct InvalidFormError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Form.InvalidFormError"
             public let message: String
@@ -3188,12 +3188,12 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/form.ts#layer [status=implemented hash=ba4d197d4f54]
+        // parity: core/src/form.ts#layer [status=implemented hash=b06416cbb97b]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             LayerNode.Output([Service.serviceKey: Service()])
         }
 
-        // parity: core/src/form.ts#node [status=implemented hash=557341d81bc8]
+        // parity: core/src/form.ts#node [status=implemented hash=eff0c6407f41]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [])
     }
 
@@ -3245,7 +3245,7 @@ public enum CoreIntegration {
         // parity: core/src/integration.ts#Ref [status=implemented hash=4d158ea03536]
         public typealias Ref = IntegrationSchema.Ref
 
-        // parity: core/src/integration.ts#OAuthAuthorization [status=implemented hash=5d4495b32643]
+        // parity: core/src/integration.ts#OAuthAuthorization [status=implemented hash=178e5c0f8009]
         public struct OAuthAuthorization: Sendable {
             public enum Mode: Sendable {
                 case auto(
@@ -3323,7 +3323,7 @@ public enum CoreIntegration {
             public init(integrationID: ID, method: EnvMethod) { self.integrationID = integrationID; self.method = method }
         }
 
-        // parity: core/src/integration.ts#Implementation [status=implemented hash=45e52a5066e6]
+        // parity: core/src/integration.ts#Implementation [status=implemented hash=6635028e5c93]
         public enum Implementation: Sendable {
             case oauth(OAuthImplementation)
             case command(CommandImplementation)
@@ -3332,7 +3332,7 @@ public enum CoreIntegration {
             case env(EnvImplementation)
         }
 
-        // parity: core/src/integration.ts#CodeRequiredError [status=implemented hash=ae2e77da2dfb]
+        // parity: core/src/integration.ts#CodeRequiredError [status=implemented hash=135e48d11788]
         public struct CodeRequiredError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Integration.CodeRequired"
             public let attemptID: AttemptID
@@ -3340,7 +3340,7 @@ public enum CoreIntegration {
             public var description: String { "Authorization code required for attempt \(attemptID.rawValue)" }
         }
 
-        // parity: core/src/integration.ts#AuthorizationError [status=implemented hash=b1a44a3bc642]
+        // parity: core/src/integration.ts#AuthorizationError [status=implemented hash=5f4da4402cec]
         public struct AuthorizationError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Integration.Authorization"
             public let causeMessage: String?
@@ -3356,7 +3356,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/integration.ts#AttemptNotFoundError [status=implemented hash=d384e8a2dc2f]
+        // parity: core/src/integration.ts#AttemptNotFoundError [status=implemented hash=337bacf84d57]
         public struct AttemptNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Integration.AttemptNotFound"
             public let integrationID: ID
@@ -3587,7 +3587,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/integration.ts#node [status=implemented hash=9ccb871b44b8]
+        // parity: core/src/integration.ts#node [status=implemented hash=41bdbe6e0f98]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -3693,7 +3693,7 @@ public enum CoreIntegration {
             return result
         }
 
-        // parity: core/src/wellknown.ts#inspect [status=implemented hash=84ee82df0cd0]
+        // parity: core/src/wellknown.ts#inspect [status=implemented hash=7cbf623af36e]
         public static func inspect(origin: String, transport: any HTTPTransport) async throws -> Manifest {
             let url = "\(trimTrailingSlashes(origin))/.well-known/opencode"
             let resp = try await transport.send(HTTPRequest(method: "GET", url: url, headers: ["accept": "application/json"]))
@@ -3703,7 +3703,7 @@ public enum CoreIntegration {
             return try JSONDecoder().decode(Manifest.self, from: Data(resp.body))
         }
 
-        // parity: core/src/wellknown.ts#resolve [status=implemented hash=15906531dda7]
+        // parity: core/src/wellknown.ts#resolve [status=implemented hash=c008b061539f]
         public static func resolve(
             _ input: ResolveInput,
             transport: any HTTPTransport,
@@ -3857,7 +3857,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/wellknown.ts#node [status=implemented hash=8fa940f356db]
+        // parity: core/src/wellknown.ts#node [status=implemented hash=8ac89e8c3787]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -3872,7 +3872,7 @@ public enum CoreIntegration {
         )
 
         public enum WellKnownPlugin {
-            // parity: core/src/wellknown/plugin.ts#Plugin [status=adapted hash=cb458972921f]
+            // parity: core/src/wellknown/plugin.ts#Plugin [status=adapted hash=fa763ba3312c]
             public static let pluginID = "opencode.wellknown"
 
             public static func apply(wellknown: any Interface, editor: Integration.Editor) {
@@ -3939,26 +3939,26 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/websearch.ts#ProviderRequiredError [status=implemented hash=a8177567c8e1]
+        // parity: core/src/websearch.ts#ProviderRequiredError [status=implemented hash=d0d1e6006475]
         public struct ProviderRequiredError: Swift.Error, Equatable, Hashable, Sendable {
             public static let tag = "WebSearch.ProviderRequired"
             public init() {}
         }
 
-        // parity: core/src/websearch.ts#ProviderNotFoundError [status=implemented hash=faca2d40c3e1]
+        // parity: core/src/websearch.ts#ProviderNotFoundError [status=implemented hash=64da8a720c4b]
         public struct ProviderNotFoundError: Swift.Error, Equatable, Hashable, Sendable {
             public static let tag = "WebSearch.ProviderNotFound"
             public let providerID: ID
             public init(providerID: ID) { self.providerID = providerID }
         }
 
-        // parity: core/src/websearch.ts#DisabledError [status=implemented hash=ba5bfa44ae95]
+        // parity: core/src/websearch.ts#DisabledError [status=implemented hash=4303a682b0ef]
         public struct DisabledError: Swift.Error, Equatable, Hashable, Sendable {
             public static let tag = "WebSearch.Disabled"
             public init() {}
         }
 
-        // parity: core/src/websearch.ts#RequestError [status=implemented hash=901b8ab81416]
+        // parity: core/src/websearch.ts#RequestError [status=implemented hash=f565e21140ab]
         public struct RequestError: Swift.Error, Sendable, CustomStringConvertible {
             public static let tag = "WebSearch.Request"
             public let providerID: ID
@@ -4113,7 +4113,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/websearch.ts#node [status=implemented hash=9c8ba495c563]
+        // parity: core/src/websearch.ts#node [status=implemented hash=ebaea95af4f8]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -4199,7 +4199,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/rpc.ts#node [status=implemented hash=7001c2aab0af]
+        // parity: core/src/rpc.ts#node [status=implemented hash=508f0a921b36]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { _, _ in LayerNode.Output([Service.serviceKey: Service()]) },
@@ -4258,7 +4258,7 @@ public enum CoreIntegration {
         // parity: core/src/modal/models.ts#Snapshot [status=implemented hash=1d9801f326d2]
         public typealias Snapshot = [RemoteModel]
 
-        // parity: core/src/modal/models.ts#load [status=implemented hash=9a61076ffc83]
+        // parity: core/src/modal/models.ts#load [status=implemented hash=041b1df56bfb]
         public static func load(
             http: any HTTPTransport,
             baseURL: String,
@@ -4439,7 +4439,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/generate.ts#UnavailableError [status=implemented hash=3292b442a526]
+        // parity: core/src/generate.ts#UnavailableError [status=implemented hash=d74f0b94f063]
         public struct UnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Generate.UnavailableError"
             public let message: String
@@ -4448,7 +4448,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/generate.ts#ModelNotFoundError [status=implemented hash=8a2d3ed0aca9]
+        // parity: core/src/generate.ts#ModelNotFoundError [status=implemented hash=99318b384038]
         public struct ModelNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Generate.ModelNotFoundError"
             public let providerID: String
@@ -4462,7 +4462,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/generate.ts#UnsupportedModelError [status=implemented hash=4c080e6b4498]
+        // parity: core/src/generate.ts#UnsupportedModelError [status=implemented hash=75c399289af9]
         public struct UnsupportedModelError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Generate.UnsupportedModelError"
             public let providerID: String
@@ -4475,7 +4475,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/generate.ts#InvalidRequestError [status=implemented hash=5a21ad71d08c]
+        // parity: core/src/generate.ts#InvalidRequestError [status=implemented hash=378ee0a5b419]
         public struct InvalidRequestError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Generate.InvalidRequestError"
             public let message: String
@@ -4494,7 +4494,7 @@ public enum CoreIntegration {
             case provider
         }
 
-        // parity: core/src/generate.ts#ProviderRequestError [status=implemented hash=a777f0008974]
+        // parity: core/src/generate.ts#ProviderRequestError [status=implemented hash=954f3c6f0b6c]
         public struct ProviderRequestError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Generate.ProviderRequestError"
             public let providerID: String
@@ -4520,7 +4520,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/generate.ts#Error [status=implemented hash=b19874bdc02a]
+        // parity: core/src/generate.ts#Error [status=implemented hash=695571737a1c]
         public enum GenerateError: Swift.Error, Equatable, Hashable, Sendable {
             case modelNotFound(ModelNotFoundError)
             case unsupportedModel(UnsupportedModelError)
@@ -5309,7 +5309,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/generate.ts#layer [status=implemented hash=e1207242b7bb]
+        // parity: core/src/generate.ts#layer [status=implemented hash=1e9b19f49456]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let models = deps.get(CoreModel.Model.Service.serviceKey, as: CoreModel.Model.Service.self)
             let resolver = deps.get(CoreModel.Resolver.Service.serviceKey, as: CoreModel.Resolver.Service.self)
@@ -5318,20 +5318,20 @@ public enum CoreIntegration {
             return LayerNode.Output([Service.serviceKey: Service(resolver: resolver, models: models, http: http)])
         }
 
-        // parity: core/src/generate.ts#node [status=implemented hash=f2d6d71c42fa]
+        // parity: core/src/generate.ts#node [status=implemented hash=c3c87d23cba0]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [CoreModel.Resolver.node])
     }
 
     // MARK: - core/src/image.ts & core/src/image/*
 
     public enum Image {
-        // parity: core/src/image.ts#ResizerUnavailableError [status=implemented hash=80b3db38a9cc]
+        // parity: core/src/image.ts#ResizerUnavailableError [status=implemented hash=064ee45d2fe7]
         public struct ResizerUnavailableError: Swift.Error, Equatable, Hashable, Sendable {
             public static let tag = "Image.ResizerUnavailableError"
             public init() {}
         }
 
-        // parity: core/src/image.ts#DecodeError [status=implemented hash=5690e22835be]
+        // parity: core/src/image.ts#DecodeError [status=implemented hash=6be66dc771e4]
         public struct DecodeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Image.DecodeError"
             public let resource: String
@@ -5341,7 +5341,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/image.ts#SizeError [status=implemented hash=a202ac8b1682]
+        // parity: core/src/image.ts#SizeError [status=implemented hash=0372594bec6b]
         public struct SizeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Image.SizeError"
             public let resource: String
@@ -5454,7 +5454,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/image.ts#node [status=implemented hash=9e1ad9da14bc]
+        // parity: core/src/image.ts#node [status=implemented hash=0c79ea0a2c77]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { _, _ in LayerNode.Output([Service.serviceKey: Service()]) },
@@ -5602,7 +5602,7 @@ public enum CoreIntegration {
                 }
             }
 
-            // parity: core/src/image/photon-normalize.ts#Result [status=implemented hash=66eeb7abdce2]
+            // parity: core/src/image/photon-normalize.ts#Result [status=implemented hash=ed239d6a3cce]
             public enum Result: Equatable, Hashable, Sendable {
                 case unchanged
                 case content(Content)
@@ -5646,7 +5646,7 @@ public enum CoreIntegration {
                 public init(content: PhotonNormalize.Content, limits: Limits) { self.content = content; self.limits = limits }
             }
 
-            // parity: core/src/image/photon-worker.ts#Reply [status=implemented hash=5ca9a88cc927]
+            // parity: core/src/image/photon-worker.ts#Reply [status=implemented hash=b22052721778]
             public enum Reply: Equatable, Hashable, Sendable {
                 case ready
                 case done(result: PhotonNormalize.Result)
@@ -5654,14 +5654,14 @@ public enum CoreIntegration {
         }
 
         public enum Photon {
-            // parity: core/src/image/photon.ts#WorkerUnavailableError [status=implemented hash=db37301166cd]
+            // parity: core/src/image/photon.ts#WorkerUnavailableError [status=implemented hash=ef26b29a42cb]
             public struct WorkerUnavailableError: Swift.Error, Sendable {
                 public static let tag = "Image.Photon.WorkerUnavailableError"
                 public let message: String
                 public init(message: String) { self.message = message }
             }
 
-            // parity: core/src/image/photon.ts#spawnWorker [status=adapted hash=eb832d9269c3]
+            // parity: core/src/image/photon.ts#spawnWorker [status=adapted hash=b53bdd6a0155]
             public static func spawnWorker() async throws -> any PhotonNormalize.Photon {
                 try await PhotonNormalize.load()
             }
@@ -5669,7 +5669,7 @@ public enum CoreIntegration {
             // parity: core/src/image/photon-wasm.bun.ts#default [status=adapted hash=37810e088658]
             public static let bunPhotonWasmPath: String = "@silvia-odwyer/photon-node/photon_rs_bg.wasm"
 
-            // parity: core/src/image/photon-wasm.node.ts#default [status=adapted hash=4d93604dd2dd]
+            // parity: core/src/image/photon-wasm.node.ts#default [status=adapted hash=dcc4c4af5f88]
             public static let nodePhotonWasmPath: String =
                 SystemEnvironment.shared.variable("OPENCODE_PHOTON_WASM_PATH")
                 ?? "@silvia-odwyer/photon-node/photon_rs_bg.wasm"
@@ -5709,7 +5709,7 @@ public enum CoreIntegration {
     // MARK: - core/src/video-generation.ts
 
     public enum VideoGeneration {
-        // parity: core/src/video-generation.ts#NotFoundError [status=implemented hash=84627ebb1e63]
+        // parity: core/src/video-generation.ts#NotFoundError [status=implemented hash=85b331af2ee3]
         public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "VideoGeneration.NotFoundError"
             public let id: String
@@ -5789,7 +5789,7 @@ public enum CoreIntegration {
         }
 
         /// Videos are stored as blobs, which need a local disk that Durable Objects don't have.
-        // parity: core/src/video-generation.ts#unsupportedLayer [status=implemented hash=0bbab7e9d892]
+        // parity: core/src/video-generation.ts#unsupportedLayer [status=implemented hash=ad735e215b62]
         public static let unsupportedLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service(
@@ -5805,7 +5805,7 @@ public enum CoreIntegration {
             )
         )
 
-        // parity: core/src/video-generation.ts#node [status=implemented hash=61b35f494ee2]
+        // parity: core/src/video-generation.ts#node [status=implemented hash=7b440690dd17]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(Service.serviceKey, unsupportedLayer, [])
     }
 
@@ -5861,7 +5861,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/voice.ts#InvalidRequestError [status=implemented hash=b99548b66aad]
+        // parity: core/src/voice.ts#InvalidRequestError [status=implemented hash=e6e6c49401fc]
         public struct InvalidRequestError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Voice.InvalidRequestError"
             public let message: String
@@ -5869,7 +5869,7 @@ public enum CoreIntegration {
             public var description: String { message }
         }
 
-        // parity: core/src/voice.ts#UnavailableError [status=implemented hash=0891c1478b32]
+        // parity: core/src/voice.ts#UnavailableError [status=implemented hash=6cfde12713d3]
         public struct UnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Voice.UnavailableError"
             public let message: String
@@ -6068,7 +6068,7 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/voice.ts#layer [status=implemented hash=89cfc6f6cc65]
+        // parity: core/src/voice.ts#layer [status=implemented hash=cd2ec6388e2b]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let integrations = try deps.get(Integration.Service.serviceKey, as: Integration.Service.self)
                 ?? Integration.Service(credentials: CoreProvider.Credential.Service.inMemory())
@@ -6077,7 +6077,7 @@ public enum CoreIntegration {
             return LayerNode.Output([Service.serviceKey: Service(integrations: integrations, executor: executor, http: http)])
         }
 
-        // parity: core/src/voice.ts#node [status=implemented hash=3d1e48cf38ae]
+        // parity: core/src/voice.ts#node [status=implemented hash=3942889b1907]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [Integration.node])
     }
 }

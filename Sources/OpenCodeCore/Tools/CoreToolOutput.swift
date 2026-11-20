@@ -286,7 +286,7 @@ public enum CoreToolOutput {
         }
     }
 
-    // parity: core/src/tool-output.ts#node [status=adapted hash=0075e8c51dfe]
+    // parity: core/src/tool-output.ts#node [status=adapted hash=a04a88253d29]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -613,7 +613,7 @@ public enum CoreToolOutput {
 
     public enum HTTPBody {
         /// Collects an HTTP response body while enforcing a hard `maximumBytes` ceiling.
-        // parity: core/src/tool/http-body.ts#collectBoundedResponseBody [status=implemented hash=16e4bcb3fdea]
+        // parity: core/src/tool/http-body.ts#collectBoundedResponseBody [status=implemented hash=c3449fe9964f]
         public static func collectBoundedResponseBody(
             headers: [String: String],
             chunks: AsyncThrowingStream<[UInt8], Swift.Error>,
@@ -676,7 +676,7 @@ public enum CoreToolOutput {
         private static let maxLineLength = 2_000
         private static let maxLineSuffix = "... (line truncated to \(maxLineLength) chars)"
 
-        // parity: core/src/tool/read-filesystem.ts#BinaryFileError [status=implemented hash=99c59d9be13e]
+        // parity: core/src/tool/read-filesystem.ts#BinaryFileError [status=implemented hash=a294ada08e7d]
         public struct BinaryFileError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "ReadTool.BinaryFileError"
             public let resource: String
@@ -686,7 +686,7 @@ public enum CoreToolOutput {
             public var description: String { message }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#MediaIngestLimitError [status=implemented hash=205bbd9915d7]
+        // parity: core/src/tool/read-filesystem.ts#MediaIngestLimitError [status=implemented hash=35b0d5930b8e]
         public struct MediaIngestLimitError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "ReadTool.MediaIngestLimitError"
             public let resource: String
@@ -700,7 +700,7 @@ public enum CoreToolOutput {
             public var description: String { message }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#PathKindError [status=implemented hash=86b84bd26894]
+        // parity: core/src/tool/read-filesystem.ts#PathKindError [status=implemented hash=acc50a77cc25]
         public struct PathKindError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public enum Expected: String, Equatable, Hashable, Sendable, Codable {
                 case file = "a file"
@@ -719,7 +719,7 @@ public enum CoreToolOutput {
             public var description: String { message }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#DirectoryOffsetError [status=implemented hash=e5272e6b261e]
+        // parity: core/src/tool/read-filesystem.ts#DirectoryOffsetError [status=implemented hash=b9a7799347bb]
         public struct DirectoryOffsetError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "ReadTool.DirectoryOffsetError"
             public let resource: String
@@ -729,7 +729,7 @@ public enum CoreToolOutput {
             public var description: String { message }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#ReadError [status=implemented hash=6819c24e3250]
+        // parity: core/src/tool/read-filesystem.ts#ReadError [status=implemented hash=abf05cb5fca4]
         public enum ReadError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             case notFound(String)
             case failed(String)
@@ -750,7 +750,7 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#PageInput [status=implemented hash=1ba10181b3fd]
+        // parity: core/src/tool/read-filesystem.ts#PageInput [status=implemented hash=cdf2b549dac2]
         public struct PageInput: Equatable, Hashable, Sendable, Codable {
             public let offset: Int?
             public let limit: Int?
@@ -761,7 +761,7 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#TextContent [status=implemented hash=9b0803d1ffcf]
+        // parity: core/src/tool/read-filesystem.ts#TextContent [status=implemented hash=e70dc71ee752]
         public struct TextContent: Equatable, Hashable, Sendable, Codable {
             public let content: String
             public let offset: Int
@@ -776,7 +776,7 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#DirectoryContent [status=implemented hash=943d847c7b0d]
+        // parity: core/src/tool/read-filesystem.ts#DirectoryContent [status=implemented hash=e98c255d7517]
         public struct DirectoryContent: Equatable, Hashable, Sendable, Codable {
             public let entries: [String]
             public let next: Int?
@@ -787,7 +787,7 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#MediaContent [status=implemented hash=246c93cac229]
+        // parity: core/src/tool/read-filesystem.ts#MediaContent [status=implemented hash=9559a652f9a1]
         public struct MediaContent: Equatable, Hashable, Sendable, Codable {
             public let uri: String
             public let mime: String
@@ -837,7 +837,7 @@ public enum CoreToolOutput {
         }
 
         /// Reads a file (text with pagination/clamping, or inline media) or directory listing.
-        // parity: core/src/tool/read-filesystem.ts#read [status=implemented hash=eae022a720d4]
+        // parity: core/src/tool/read-filesystem.ts#read [status=implemented hash=885f6d3de44d]
         public static func read(
             fileSystem: any OpenCodeFileSystem,
             path: SchemaPrimitive.AbsolutePath,
@@ -1004,7 +1004,7 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/search.ts#pathType [status=implemented hash=3ae86a02146e]
+        // parity: core/src/tool/search.ts#pathType [status=implemented hash=71c6ccc3ac5e]
         public static func pathType(
             fileSystem: any OpenCodeFileSystem,
             absolute: String,
@@ -1020,7 +1020,7 @@ public enum CoreToolOutput {
         }
 
         /// Fetches `limit + 1` results to determine truncation without a second search pass.
-        // parity: core/src/tool/search.ts#bounded [status=implemented hash=69f544b15436]
+        // parity: core/src/tool/search.ts#bounded [status=implemented hash=0cfeb30965d8]
         public static func bounded<T: Sendable>(
             limit: Int,
             search: @Sendable (Int) async throws -> [T]

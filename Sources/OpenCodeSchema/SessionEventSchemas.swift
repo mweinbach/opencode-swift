@@ -408,7 +408,7 @@ public enum SessionEventSchema {
 
     // MARK: Top-Level Event Definitions
 
-    // parity: schema/src/session-event.ts#Created [status=implemented hash=5459599200d8]
+    // parity: schema/src/session-event.ts#Created [status=implemented hash=2a754b388660]
     public static let Created = EventSchema.durable(
         type: "session.created",
         aggregate: "sessionID",
@@ -416,7 +416,7 @@ public enum SessionEventSchema {
         data: CreatedData.self
     )
 
-    // parity: schema/src/session-event.ts#AgentSelected [status=implemented hash=443a0f7f7a3d]
+    // parity: schema/src/session-event.ts#AgentSelected [status=implemented hash=3f646f26deaf]
     public static let AgentSelected = EventSchema.durable(
         type: "session.agent.selected",
         aggregate: "sessionID",
@@ -424,7 +424,7 @@ public enum SessionEventSchema {
         data: AgentSelectedData.self
     )
 
-    // parity: schema/src/session-event.ts#ModelSelected [status=implemented hash=db35a0c911ed]
+    // parity: schema/src/session-event.ts#ModelSelected [status=implemented hash=ec9ffbcb783b]
     public static let ModelSelected = EventSchema.durable(
         type: "session.model.selected",
         aggregate: "sessionID",
@@ -432,7 +432,7 @@ public enum SessionEventSchema {
         data: ModelSelectedData.self
     )
 
-    // parity: schema/src/session-event.ts#Moved [status=implemented hash=c1dbed02bed9]
+    // parity: schema/src/session-event.ts#Moved [status=implemented hash=20f91b9cb545]
     public static let Moved = EventSchema.durable(
         type: "session.moved",
         aggregate: "sessionID",
@@ -440,7 +440,7 @@ public enum SessionEventSchema {
         data: MovedData.self
     )
 
-    // parity: schema/src/session-event.ts#Renamed [status=implemented hash=13e8164ba9c7]
+    // parity: schema/src/session-event.ts#Renamed [status=implemented hash=bdcf796f2aea]
     public static let Renamed = EventSchema.durable(
         type: "session.renamed",
         aggregate: "sessionID",
@@ -448,7 +448,7 @@ public enum SessionEventSchema {
         data: RenamedData.self
     )
 
-    // parity: schema/src/session-event.ts#MetadataUpdated [status=implemented hash=4527ceda4a29]
+    // parity: schema/src/session-event.ts#MetadataUpdated [status=implemented hash=bcce9ed57e67]
     public static let MetadataUpdated = EventSchema.durable(
         type: "session.metadata.updated",
         aggregate: "sessionID",
@@ -456,7 +456,7 @@ public enum SessionEventSchema {
         data: MetadataUpdatedData.self
     )
 
-    // parity: schema/src/session-event.ts#Permissions [status=implemented hash=5311d6ce440b]
+    // parity: schema/src/session-event.ts#Permissions [status=implemented hash=4ff5ae05d135]
     public static let Permissions = EventSchema.durable(
         type: "session.permissions",
         aggregate: "sessionID",
@@ -464,7 +464,7 @@ public enum SessionEventSchema {
         data: PermissionsData.self
     )
 
-    // parity: schema/src/session-event.ts#Viewed [status=implemented hash=d25c33062869]
+    // parity: schema/src/session-event.ts#Viewed [status=implemented hash=25df6fb7e882]
     public static let Viewed = EventSchema.durable(
         type: "session.viewed",
         aggregate: "sessionID",
@@ -472,7 +472,7 @@ public enum SessionEventSchema {
         data: ViewedData.self
     )
 
-    // parity: schema/src/session-event.ts#Archived [status=implemented hash=d5c36945da36]
+    // parity: schema/src/session-event.ts#Archived [status=implemented hash=f45a38d4f279]
     public static let Archived = EventSchema.durable(
         type: "session.archived",
         aggregate: "sessionID",
@@ -480,7 +480,7 @@ public enum SessionEventSchema {
         data: SessionBaseData.self
     )
 
-    // parity: schema/src/session-event.ts#Unarchived [status=implemented hash=dba4c4f6111b]
+    // parity: schema/src/session-event.ts#Unarchived [status=implemented hash=fefa75ea74b4]
     public static let Unarchived = EventSchema.durable(
         type: "session.unarchived",
         aggregate: "sessionID",
@@ -489,7 +489,7 @@ public enum SessionEventSchema {
     )
 
     // Replay-only: older releases allowed replacing completed assistant content.
-    // parity: schema/src/session-event.ts#MessageContentUpdated [status=implemented hash=536a0ab7c9eb]
+    // parity: schema/src/session-event.ts#MessageContentUpdated [status=implemented hash=115d55c4219f]
     public static let MessageContentUpdated = EventSchema.durable(
         type: "session.message.content.updated",
         aggregate: "sessionID",
@@ -498,7 +498,7 @@ public enum SessionEventSchema {
     )
 
     // Internal accounting event (excluded from public `Definitions`, included in `DurableDefinitions`).
-    // parity: schema/src/session-event.ts#UsageRecorded [status=implemented hash=d9685fa5303e]
+    // parity: schema/src/session-event.ts#UsageRecorded [status=implemented hash=f05086addb07]
     public static let UsageRecorded = EventSchema.durable(
         type: "session.usage.recorded",
         aggregate: "sessionID",
@@ -506,13 +506,13 @@ public enum SessionEventSchema {
         data: UsageRecordedData.self
     )
 
-    // parity: schema/src/session-event.ts#UsageUpdated [status=implemented hash=395be539173e]
+    // parity: schema/src/session-event.ts#UsageUpdated [status=implemented hash=140311733211]
     public static let UsageUpdated = EventSchema.ephemeral(
         type: "session.usage.updated",
         data: UsageUpdatedData.self
     )
 
-    // parity: schema/src/session-event.ts#Deleted [status=implemented hash=eb96c00bd804]
+    // parity: schema/src/session-event.ts#Deleted [status=implemented hash=c15e41a39ad5]
     public static let Deleted = EventSchema.durable(
         type: "session.deleted",
         aggregate: "sessionID",
@@ -520,7 +520,7 @@ public enum SessionEventSchema {
         data: SessionBaseData.self
     )
 
-    // parity: schema/src/session-event.ts#Forked [status=implemented hash=152f0895e832]
+    // parity: schema/src/session-event.ts#Forked [status=implemented hash=c4ce99c2433e]
     public static let Forked = EventSchema.durable(
         type: "session.forked",
         aggregate: "sessionID",
@@ -528,7 +528,7 @@ public enum SessionEventSchema {
         data: ForkedData.self
     )
 
-    // parity: schema/src/session-event.ts#InboxDelivered [status=implemented hash=7515ddc160fa]
+    // parity: schema/src/session-event.ts#InboxDelivered [status=implemented hash=340a43235f13]
     public static let InboxDelivered = EventSchema.durable(
         type: "session.inbox.delivered",
         aggregate: "sessionID",
@@ -536,7 +536,7 @@ public enum SessionEventSchema {
         data: InboxRefData.self
     )
 
-    // parity: schema/src/session-event.ts#InboxEnqueued [status=implemented hash=8cd28ca3ffd4]
+    // parity: schema/src/session-event.ts#InboxEnqueued [status=implemented hash=e9b9532e10c6]
     public static let InboxEnqueued = EventSchema.durable(
         type: "session.inbox.enqueued",
         aggregate: "sessionID",
@@ -544,7 +544,7 @@ public enum SessionEventSchema {
         data: InboxEnqueuedData.self
     )
 
-    // parity: schema/src/session-event.ts#InboxCancelled [status=implemented hash=bb1052486bea]
+    // parity: schema/src/session-event.ts#InboxCancelled [status=implemented hash=832889a19e4b]
     public static let InboxCancelled = EventSchema.durable(
         type: "session.inbox.cancelled",
         aggregate: "sessionID",
@@ -552,7 +552,7 @@ public enum SessionEventSchema {
         data: InboxRefData.self
     )
 
-    // parity: schema/src/session-event.ts#InboxDeliveryChanged [status=implemented hash=289b58663b90]
+    // parity: schema/src/session-event.ts#InboxDeliveryChanged [status=implemented hash=eb562172705d]
     public static let InboxDeliveryChanged = EventSchema.durable(
         type: "session.inbox.delivery.changed",
         aggregate: "sessionID",
@@ -591,7 +591,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Execution.Started [status=implemented hash=e9ab33770df0]
+        // parity: schema/src/session-event.ts#Execution.Started [status=implemented hash=66ca8cb22062]
         public static let Started = EventSchema.durable(
             type: "session.execution.started",
             aggregate: "sessionID",
@@ -599,7 +599,7 @@ public enum SessionEventSchema {
             data: SessionBaseData.self
         )
 
-        // parity: schema/src/session-event.ts#Execution.Succeeded [status=implemented hash=fe7dad4ac782]
+        // parity: schema/src/session-event.ts#Execution.Succeeded [status=implemented hash=0ede6026ef80]
         public static let Succeeded = EventSchema.durable(
             type: "session.execution.succeeded",
             aggregate: "sessionID",
@@ -607,7 +607,7 @@ public enum SessionEventSchema {
             data: SessionBaseData.self
         )
 
-        // parity: schema/src/session-event.ts#Execution.Failed [status=implemented hash=55b176298eef]
+        // parity: schema/src/session-event.ts#Execution.Failed [status=implemented hash=b2e23026ddb6]
         public static let Failed = EventSchema.durable(
             type: "session.execution.failed",
             aggregate: "sessionID",
@@ -615,7 +615,7 @@ public enum SessionEventSchema {
             data: FailedData.self
         )
 
-        // parity: schema/src/session-event.ts#Execution.Interrupted [status=implemented hash=db3a055d03ed]
+        // parity: schema/src/session-event.ts#Execution.Interrupted [status=implemented hash=7a128e0cc416]
         public static let Interrupted = EventSchema.durable(
             type: "session.execution.interrupted",
             aggregate: "sessionID",
@@ -624,7 +624,7 @@ public enum SessionEventSchema {
         )
     }
 
-    // parity: schema/src/session-event.ts#InstructionsUpdated [status=implemented hash=8751bc32d838]
+    // parity: schema/src/session-event.ts#InstructionsUpdated [status=implemented hash=5c1a372e4ea2]
     public static let InstructionsUpdated = EventSchema.durable(
         type: "session.instructions.updated",
         aggregate: "sessionID",
@@ -632,7 +632,7 @@ public enum SessionEventSchema {
         data: InstructionsUpdatedData.self
     )
 
-    // parity: schema/src/session-event.ts#Synthetic [status=implemented hash=27ff43a25284]
+    // parity: schema/src/session-event.ts#Synthetic [status=implemented hash=ff5181724936]
     public static let Synthetic = EventSchema.durable(
         type: "session.synthetic",
         aggregate: "sessionID",
@@ -658,7 +658,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Skill.Activated [status=implemented hash=f3e46b309fd9]
+        // parity: schema/src/session-event.ts#Skill.Activated [status=implemented hash=00d28519560d]
         public static let Activated = EventSchema.durable(
             type: "session.skill.activated",
             aggregate: "sessionID",
@@ -697,7 +697,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Shell.Started [status=implemented hash=38509e7df2f3]
+        // parity: schema/src/session-event.ts#Shell.Started [status=implemented hash=bf9bc716af80]
         public static let Started = EventSchema.durable(
             type: "session.shell.started",
             aggregate: "sessionID",
@@ -705,7 +705,7 @@ public enum SessionEventSchema {
             data: StartedData.self
         )
 
-        // parity: schema/src/session-event.ts#Shell.Ended [status=implemented hash=90fec1e069f6]
+        // parity: schema/src/session-event.ts#Shell.Ended [status=implemented hash=ae6ea792935e]
         public static let Ended = EventSchema.durable(
             type: "session.shell.ended",
             aggregate: "sessionID",
@@ -842,7 +842,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Step.Started [status=implemented hash=df6edf6ca6a8]
+        // parity: schema/src/session-event.ts#Step.Started [status=implemented hash=4f43d74f9fb1]
         public static let Started = EventSchema.durable(
             type: "session.step.started",
             aggregate: "sessionID",
@@ -850,7 +850,7 @@ public enum SessionEventSchema {
             data: StartedData.self
         )
 
-        // parity: schema/src/session-event.ts#Step.FirstToken [status=implemented hash=8a3acefa80a2]
+        // parity: schema/src/session-event.ts#Step.FirstToken [status=implemented hash=ed96bfa897ff]
         public static let FirstToken = EventSchema.durable(
             type: "session.step.first-token",
             aggregate: "sessionID",
@@ -858,7 +858,7 @@ public enum SessionEventSchema {
             data: StepRefData.self
         )
 
-        // parity: schema/src/session-event.ts#Step.Streamed [status=implemented hash=fc8ba6d0b7b5]
+        // parity: schema/src/session-event.ts#Step.Streamed [status=implemented hash=92cd566b6477]
         public static let Streamed = EventSchema.durable(
             type: "session.step.streamed",
             aggregate: "sessionID",
@@ -866,7 +866,7 @@ public enum SessionEventSchema {
             data: StepRefData.self
         )
 
-        // parity: schema/src/session-event.ts#Step.Ended [status=implemented hash=589ded696cd1]
+        // parity: schema/src/session-event.ts#Step.Ended [status=implemented hash=9af055e8c8b1]
         public static let Ended = EventSchema.durable(
             type: "session.step.ended",
             aggregate: "sessionID",
@@ -874,7 +874,7 @@ public enum SessionEventSchema {
             data: EndedData.self
         )
 
-        // parity: schema/src/session-event.ts#Step.Failed [status=implemented hash=9482d7b17a8b]
+        // parity: schema/src/session-event.ts#Step.Failed [status=implemented hash=e96a57c8ebac]
         public static let Failed = EventSchema.durable(
             type: "session.step.failed",
             aggregate: "sessionID",
@@ -997,7 +997,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Text.Started [status=implemented hash=69c87532d25a]
+        // parity: schema/src/session-event.ts#Text.Started [status=implemented hash=5d8dbebecf28]
         public static let Started = EventSchema.durable(
             type: "session.text.started",
             aggregate: "sessionID",
@@ -1005,13 +1005,13 @@ public enum SessionEventSchema {
             data: StartedData.self
         )
 
-        // parity: schema/src/session-event.ts#Text.Delta [status=implemented hash=9842018daf41]
+        // parity: schema/src/session-event.ts#Text.Delta [status=implemented hash=58e5fb971f95]
         public static let Delta = EventSchema.ephemeral(
             type: "session.text.delta",
             data: DeltaData.self
         )
 
-        // parity: schema/src/session-event.ts#Text.Ended [status=implemented hash=692cb9a9ea58]
+        // parity: schema/src/session-event.ts#Text.Ended [status=implemented hash=4b766fb399a7]
         public static let Ended = EventSchema.durable(
             type: "session.text.ended",
             aggregate: "sessionID",
@@ -1143,7 +1143,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Reasoning.Started [status=implemented hash=8fc7da3c9e59]
+        // parity: schema/src/session-event.ts#Reasoning.Started [status=implemented hash=ad2403e2af9f]
         public static let Started = EventSchema.durable(
             type: "session.reasoning.started",
             aggregate: "sessionID",
@@ -1151,13 +1151,13 @@ public enum SessionEventSchema {
             data: StartedData.self
         )
 
-        // parity: schema/src/session-event.ts#Reasoning.Delta [status=implemented hash=3ee8958767ad]
+        // parity: schema/src/session-event.ts#Reasoning.Delta [status=implemented hash=d3724d2be828]
         public static let Delta = EventSchema.ephemeral(
             type: "session.reasoning.delta",
             data: DeltaData.self
         )
 
-        // parity: schema/src/session-event.ts#Reasoning.Ended [status=implemented hash=2639ace59b82]
+        // parity: schema/src/session-event.ts#Reasoning.Ended [status=implemented hash=146e782267ed]
         public static let Ended = EventSchema.durable(
             type: "session.reasoning.ended",
             aggregate: "sessionID",
@@ -1229,7 +1229,7 @@ public enum SessionEventSchema {
                 }
             }
 
-            // parity: schema/src/session-event.ts#Tool.Input.Started [status=implemented hash=aaccce5ac51e]
+            // parity: schema/src/session-event.ts#Tool.Input.Started [status=implemented hash=478c404f4769]
             public static let Started = EventSchema.durable(
                 type: "session.tool.input.started",
                 aggregate: "sessionID",
@@ -1237,13 +1237,13 @@ public enum SessionEventSchema {
                 data: StartedData.self
             )
 
-            // parity: schema/src/session-event.ts#Tool.Input.Delta [status=implemented hash=316510f04fb3]
+            // parity: schema/src/session-event.ts#Tool.Input.Delta [status=implemented hash=8b0c74303a32]
             public static let Delta = EventSchema.ephemeral(
                 type: "session.tool.input.delta",
                 data: DeltaData.self
             )
 
-            // parity: schema/src/session-event.ts#Tool.Input.Ended [status=implemented hash=be79c0e3d39b]
+            // parity: schema/src/session-event.ts#Tool.Input.Ended [status=implemented hash=4123e5690296]
             public static let Ended = EventSchema.durable(
                 type: "session.tool.input.ended",
                 aggregate: "sessionID",
@@ -1407,7 +1407,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Tool.Called [status=implemented hash=b530d3ab40e1]
+        // parity: schema/src/session-event.ts#Tool.Called [status=implemented hash=cb39f7ac6d60]
         public static let Called = EventSchema.durable(
             type: "session.tool.called",
             aggregate: "sessionID",
@@ -1415,13 +1415,13 @@ public enum SessionEventSchema {
             data: CalledData.self
         )
 
-        // parity: schema/src/session-event.ts#Tool.Progress [status=implemented hash=4061f2b162fb]
+        // parity: schema/src/session-event.ts#Tool.Progress [status=implemented hash=4d557ab618a6]
         public static let Progress = EventSchema.ephemeral(
             type: "session.tool.progress",
             data: ProgressData.self
         )
 
-        // parity: schema/src/session-event.ts#Tool.Success [status=implemented hash=b1fa81fbb910]
+        // parity: schema/src/session-event.ts#Tool.Success [status=implemented hash=da93476f64c3]
         public static let Success = EventSchema.durable(
             type: "session.tool.success",
             aggregate: "sessionID",
@@ -1429,7 +1429,7 @@ public enum SessionEventSchema {
             data: SuccessData.self
         )
 
-        // parity: schema/src/session-event.ts#Tool.Failed [status=implemented hash=33d1e0b2b0e7]
+        // parity: schema/src/session-event.ts#Tool.Failed [status=implemented hash=14c6fa24daf6]
         public static let Failed = EventSchema.durable(
             type: "session.tool.failed",
             aggregate: "sessionID",
@@ -1438,7 +1438,7 @@ public enum SessionEventSchema {
         )
     }
 
-    // parity: schema/src/session-event.ts#RetryScheduled [status=implemented hash=69d2c35dfb93]
+    // parity: schema/src/session-event.ts#RetryScheduled [status=implemented hash=65a8220fced5]
     public static let RetryScheduled = EventSchema.durable(
         type: "session.retry.scheduled",
         aggregate: "sessionID",
@@ -1529,7 +1529,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#Compaction.Started [status=implemented hash=4f21829cf565]
+        // parity: schema/src/session-event.ts#Compaction.Started [status=implemented hash=f7386d380a05]
         public static let Started = EventSchema.durable(
             type: "session.compaction.started",
             aggregate: "sessionID",
@@ -1537,13 +1537,13 @@ public enum SessionEventSchema {
             data: StartedData.self
         )
 
-        // parity: schema/src/session-event.ts#Compaction.Delta [status=implemented hash=03ad4bfe233e]
+        // parity: schema/src/session-event.ts#Compaction.Delta [status=implemented hash=caebc8bac954]
         public static let Delta = EventSchema.ephemeral(
             type: "session.compaction.delta",
             data: DeltaData.self
         )
 
-        // parity: schema/src/session-event.ts#Compaction.Ended [status=implemented hash=91b2282d02ab]
+        // parity: schema/src/session-event.ts#Compaction.Ended [status=implemented hash=1f1c9def1fab]
         public static let Ended = EventSchema.durable(
             type: "session.compaction.ended",
             aggregate: "sessionID",
@@ -1551,7 +1551,7 @@ public enum SessionEventSchema {
             data: EndedData.self
         )
 
-        // parity: schema/src/session-event.ts#Compaction.Failed [status=implemented hash=527a5c5a83da]
+        // parity: schema/src/session-event.ts#Compaction.Failed [status=implemented hash=a2446cd5094e]
         public static let Failed = EventSchema.durable(
             type: "session.compaction.failed",
             aggregate: "sessionID",
@@ -1584,7 +1584,7 @@ public enum SessionEventSchema {
             }
         }
 
-        // parity: schema/src/session-event.ts#RevertEvent.Staged [status=implemented hash=77e87a1576ad]
+        // parity: schema/src/session-event.ts#RevertEvent.Staged [status=implemented hash=95850169df2a]
         public static let Staged = EventSchema.durable(
             type: "session.revert.staged",
             aggregate: "sessionID",
@@ -1592,7 +1592,7 @@ public enum SessionEventSchema {
             data: StagedData.self
         )
 
-        // parity: schema/src/session-event.ts#RevertEvent.Cleared [status=implemented hash=a3c352c9adf9]
+        // parity: schema/src/session-event.ts#RevertEvent.Cleared [status=implemented hash=56faea2d2c9e]
         public static let Cleared = EventSchema.durable(
             type: "session.revert.cleared",
             aggregate: "sessionID",
@@ -1600,7 +1600,7 @@ public enum SessionEventSchema {
             data: SessionBaseData.self
         )
 
-        // parity: schema/src/session-event.ts#RevertEvent.Committed [status=implemented hash=9e231213a012]
+        // parity: schema/src/session-event.ts#RevertEvent.Committed [status=implemented hash=56c9aa7f53a6]
         public static let Committed = EventSchema.durable(
             type: "session.revert.committed",
             aggregate: "sessionID",
@@ -1682,7 +1682,7 @@ public enum SessionEventSchema {
     )
 
     /// Schema metadata descriptor for the `Session.Event.Durable` union (48 durable session events).
-    // parity: schema/src/session-event.ts#Durable [status=implemented hash=b75ba981b97b]
+    // parity: schema/src/session-event.ts#Durable [status=implemented hash=2c6a1e4d13fc]
     public static let Durable: [EventSchema.Definition] = DurableDefinitions
 
     /// Discriminated union of all 48 durable session events (`SessionEvent.DurableEvent`).
@@ -2016,7 +2016,7 @@ public enum SessionEventSchema {
     }
 
     /// Complete inventory of all 54 session event definitions (48 durable + 6 ephemeral).
-    // parity: schema/src/session-event.ts#All [status=implemented hash=0378bdb8676f]
+    // parity: schema/src/session-event.ts#All [status=implemented hash=3209e3665479]
     public static let All: [EventSchema.Definition] = DurableDefinitions + EphemeralDefinitions
 
     /// Discriminated union of all 54 session events (48 durable + 6 ephemeral, `SessionEvent.Event`).
@@ -2162,7 +2162,7 @@ public enum SessionEventSchema {
 /// Live session execution status events (`packages/schema/src/session-status-event.ts`).
 public enum SessionStatusEventSchema {
     /// Session runtime status union (`SessionStatus`: `idle`, `retry`, `busy`).
-    // parity: schema/src/session-status-event.ts#Info [status=implemented hash=5e97a283d792]
+    // parity: schema/src/session-status-event.ts#Info [status=implemented hash=492ac2efdfb9]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         public struct RetryAction: Equatable, Hashable, Sendable, Codable {
             public let reason: String
@@ -2270,7 +2270,7 @@ public enum SessionStatusEventSchema {
     }
 
     /// Ephemeral session status update event (`session.status`, identifier `SessionStatusUpdated`).
-    // parity: schema/src/session-status-event.ts#Status [status=implemented hash=2f625d1c373d]
+    // parity: schema/src/session-status-event.ts#Status [status=implemented hash=2af53d149cea]
     public static let Status = EventSchema.ephemeral(
         type: "session.status",
         identifier: "SessionStatusUpdated",
@@ -2278,7 +2278,7 @@ public enum SessionStatusEventSchema {
     )
 
     /// Deprecated ephemeral session idle event (`session.idle`).
-    // parity: schema/src/session-status-event.ts#Idle [status=implemented hash=1a1d368e5966]
+    // parity: schema/src/session-status-event.ts#Idle [status=implemented hash=eb1fa141b737]
     public static let Idle = EventSchema.ephemeral(
         type: "session.idle",
         data: IdleData.self

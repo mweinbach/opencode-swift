@@ -44,7 +44,7 @@ public enum EventSchema {
     }
 
     /// Branded event identifier (`evt_<26 ascending chars>`, `Event.ID`).
-    // parity: schema/src/event.ts#ID [status=implemented hash=fc1f5f650e9e]
+    // parity: schema/src/event.ts#ID [status=implemented hash=fc06de0429f1]
     public struct ID: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -83,7 +83,7 @@ public enum EventSchema {
     }
 
     /// Position in an aggregate's durable event log (`Event.Seq`, non-negative integer).
-    // parity: schema/src/event.ts#Seq [status=implemented hash=814c2f0f8e1b]
+    // parity: schema/src/event.ts#Seq [status=implemented hash=cb19dc4a8ed1]
     public struct Seq: RawRepresentable, Equatable, Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: Int64
 
@@ -124,7 +124,7 @@ public enum EventSchema {
     }
 
     /// Durable schema version of an event type (`Event.Version`, integer >= 1).
-    // parity: schema/src/event.ts#Version [status=implemented hash=bf7ce7cf96ce]
+    // parity: schema/src/event.ts#Version [status=implemented hash=8ec0e712245d]
     public struct Version: RawRepresentable, Equatable, Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: Int
 
@@ -234,7 +234,7 @@ public enum EventSchema {
     }
 
     /// Strongly typed durable event definition (`Event.DurableDefinition`).
-    // parity: schema/src/event.ts#DurableDefinition [status=implemented hash=6847adee6821]
+    // parity: schema/src/event.ts#DurableDefinition [status=implemented hash=b660f397a771]
     public struct DurableDefinition<DataType: Equatable & Hashable & Sendable & Codable>: EventDefinitionType, Equatable, Hashable, Sendable {
         public let type: String
         public let identifier: String
@@ -296,7 +296,7 @@ public enum EventSchema {
     }
 
     /// Strongly typed ephemeral event definition (`Event.EphemeralDefinition`).
-    // parity: schema/src/event.ts#EphemeralDefinition [status=implemented hash=3e5786b74ff4]
+    // parity: schema/src/event.ts#EphemeralDefinition [status=implemented hash=ca2855d561f0]
     public struct EphemeralDefinition<DataType: Equatable & Hashable & Sendable & Codable>: EventDefinitionType, Equatable, Hashable, Sendable {
         public let type: String
         public let identifier: String
@@ -344,7 +344,7 @@ public enum EventSchema {
     }
 
     /// Type-erased event definition descriptor stored in inventories and manifests (`Event.Definition`).
-    // parity: schema/src/event.ts#Definition [status=implemented hash=6d18d9300c6d]
+    // parity: schema/src/event.ts#Definition [status=implemented hash=f0b4085f80f6]
     public struct Definition: Equatable, Hashable, Sendable, Codable {
         public let type: String
         public let identifier: String
@@ -395,7 +395,7 @@ public enum EventSchema {
     public typealias Data<D: EventDefinitionType> = D.DataType
 
     /// Generic wire payload union matching either a durable or ephemeral event (`Event.Payload`).
-    // parity: schema/src/event.ts#Payload [status=implemented hash=324e1416bb0b]
+    // parity: schema/src/event.ts#Payload [status=implemented hash=c6ebe0106861]
     public enum Payload<EventData: Equatable & Hashable & Sendable & Codable>: Equatable, Hashable, Sendable, Codable {
         case durable(DurableEventEnvelope<EventData>)
         case ephemeral(EphemeralEventEnvelope<EventData>)
@@ -473,7 +473,7 @@ public enum EventSchema {
     }
 
     /// Constructs a strongly typed durable event definition (`Event.durable`).
-    // parity: schema/src/event.ts#durable [status=implemented hash=0224c012ae8c]
+    // parity: schema/src/event.ts#durable [status=implemented hash=e5a9a5cf4cba]
     public static func durable<EventData: Equatable & Hashable & Sendable & Codable>(
         type: String,
         identifier: String? = nil,
@@ -485,7 +485,7 @@ public enum EventSchema {
     }
 
     /// Constructs a strongly typed ephemeral event definition (`Event.ephemeral`).
-    // parity: schema/src/event.ts#ephemeral [status=implemented hash=cff6d7d31320]
+    // parity: schema/src/event.ts#ephemeral [status=implemented hash=0a2a57a4f2b2]
     public static func ephemeral<EventData: Equatable & Hashable & Sendable & Codable>(
         type: String,
         identifier: String? = nil,
@@ -559,7 +559,7 @@ public enum EventSchema {
 /// Durable event log replay boundary markers (`packages/schema/src/event-log.ts`).
 public enum EventLogSchema {
     /// Replay-to-live boundary marker for a durable log read (`EventLog.Synced`, `type: "log.synced"`).
-    // parity: schema/src/event-log.ts#Synced [status=implemented hash=501879774c36]
+    // parity: schema/src/event-log.ts#Synced [status=implemented hash=860706924d0a]
     public struct Synced: Equatable, Hashable, Sendable, Codable {
         public static let typeTag = "log.synced"
 
@@ -612,13 +612,13 @@ public enum InstallationEventSchema {
         }
     }
 
-    // parity: schema/src/installation-event.ts#Updated [status=implemented hash=3aaffef4f98d]
+    // parity: schema/src/installation-event.ts#Updated [status=implemented hash=a51daae4eb0c]
     public static let Updated = EventSchema.ephemeral(
         type: "installation.updated",
         data: VersionData.self
     )
 
-    // parity: schema/src/installation-event.ts#UpdateAvailable [status=implemented hash=91837522d0d6]
+    // parity: schema/src/installation-event.ts#UpdateAvailable [status=implemented hash=88ad6b540afe]
     public static let UpdateAvailable = EventSchema.ephemeral(
         type: "installation.update-available",
         data: VersionData.self
@@ -636,7 +636,7 @@ public enum InstallationEventSchema {
 /// Location lifecycle events (`packages/schema/src/location-event.ts`).
 public enum LocationEventSchema {
     /// The location's cached services were shut down; clients must revalidate its reads.
-    // parity: schema/src/location-event.ts#Shutdown [status=implemented hash=d447cf7d1abc]
+    // parity: schema/src/location-event.ts#Shutdown [status=implemented hash=240b3fdf32ee]
     public static let Shutdown = EventSchema.ephemeral(
         type: "location.shutdown",
         data: EventSchema.EmptyData.self
@@ -650,7 +650,7 @@ public enum LocationEventSchema {
 
 /// LSP events (`packages/schema/src/lsp-event.ts`).
 public enum LspEventSchema {
-    // parity: schema/src/lsp-event.ts#Updated [status=implemented hash=66d6e899016d]
+    // parity: schema/src/lsp-event.ts#Updated [status=implemented hash=a33df4c0e4aa]
     public static let Updated = EventSchema.ephemeral(
         type: "lsp.updated",
         data: EventSchema.EmptyData.self
@@ -748,31 +748,31 @@ public enum McpEventSchema {
         }
     }
 
-    // parity: schema/src/mcp-event.ts#ToolsChanged [status=implemented hash=43a16ce448d1]
+    // parity: schema/src/mcp-event.ts#ToolsChanged [status=implemented hash=6603ad1bd3f3]
     public static let ToolsChanged = EventSchema.ephemeral(
         type: "mcp.tools.changed",
         data: ServerData.self
     )
 
-    // parity: schema/src/mcp-event.ts#ResourcesChanged [status=implemented hash=3d85bfaf6dcc]
+    // parity: schema/src/mcp-event.ts#ResourcesChanged [status=implemented hash=779f1847be45]
     public static let ResourcesChanged = EventSchema.ephemeral(
         type: "mcp.resources.changed",
         data: ServerData.self
     )
 
-    // parity: schema/src/mcp-event.ts#StatusChanged [status=implemented hash=6f1e5e4f1e90]
+    // parity: schema/src/mcp-event.ts#StatusChanged [status=implemented hash=7a5627686571]
     public static let StatusChanged = EventSchema.ephemeral(
         type: "mcp.status.changed",
         data: ServerData.self
     )
 
-    // parity: schema/src/mcp-event.ts#ExperimentalEvent [status=implemented hash=bb7c74ce10fe]
+    // parity: schema/src/mcp-event.ts#ExperimentalEvent [status=implemented hash=2cce68d6e251]
     public static let ExperimentalEvent = EventSchema.ephemeral(
         type: "experimental.mcp.event",
         data: ExperimentalEventData.self
     )
 
-    // parity: schema/src/mcp-event.ts#ExperimentalSubscriptionChanged [status=implemented hash=9970dcd3e1b7]
+    // parity: schema/src/mcp-event.ts#ExperimentalSubscriptionChanged [status=implemented hash=947f5f80fabe]
     public static let ExperimentalSubscriptionChanged = EventSchema.ephemeral(
         type: "experimental.mcp.subscription.changed",
         data: ExperimentalSubscriptionChangedData.self
@@ -792,13 +792,13 @@ public enum McpEventSchema {
 
 /// Server transport lifecycle events (`packages/schema/src/server-event.ts`).
 public enum ServerEventSchema {
-    // parity: schema/src/server-event.ts#Connected [status=implemented hash=c45864272545]
+    // parity: schema/src/server-event.ts#Connected [status=implemented hash=0041e3affa10]
     public static let Connected = EventSchema.ephemeral(
         type: "server.connected",
         data: EventSchema.EmptyData.self
     )
 
-    // parity: schema/src/server-event.ts#Disposed [status=implemented hash=3430a3823728]
+    // parity: schema/src/server-event.ts#Disposed [status=implemented hash=2f1de94fd601]
     public static let Disposed = EventSchema.ephemeral(
         type: "global.disposed",
         data: EventSchema.EmptyData.self
@@ -966,25 +966,25 @@ public enum TuiEventSchema {
         }
     }
 
-    // parity: schema/src/tui-event.ts#PromptAppend [status=implemented hash=311ba4e983ec]
+    // parity: schema/src/tui-event.ts#PromptAppend [status=implemented hash=ad8e99a88a24]
     public static let PromptAppend = EventSchema.ephemeral(
         type: "tui.prompt.append",
         data: PromptAppendData.self
     )
 
-    // parity: schema/src/tui-event.ts#CommandExecute [status=implemented hash=f86f361d2a7b]
+    // parity: schema/src/tui-event.ts#CommandExecute [status=implemented hash=b660f6b5ff01]
     public static let CommandExecute = EventSchema.ephemeral(
         type: "tui.command.execute",
         data: CommandExecuteData.self
     )
 
-    // parity: schema/src/tui-event.ts#ToastShow [status=implemented hash=f954d1426a2e]
+    // parity: schema/src/tui-event.ts#ToastShow [status=implemented hash=5428faa5b0a6]
     public static let ToastShow = EventSchema.ephemeral(
         type: "tui.toast.show",
         data: ToastShowData.self
     )
 
-    // parity: schema/src/tui-event.ts#SessionSelect [status=implemented hash=4ee2f80533d8]
+    // parity: schema/src/tui-event.ts#SessionSelect [status=implemented hash=9dee01cabee3]
     public static let SessionSelect = EventSchema.ephemeral(
         type: "tui.session.select",
         data: SessionSelectData.self
@@ -1011,7 +1011,7 @@ public enum VcsEventSchema {
         }
     }
 
-    // parity: schema/src/vcs-event.ts#BranchUpdated [status=implemented hash=bb2722f03345]
+    // parity: schema/src/vcs-event.ts#BranchUpdated [status=implemented hash=7bdc93c7c81e]
     public static let BranchUpdated = EventSchema.ephemeral(
         type: "vcs.branch.updated",
         data: BranchUpdatedData.self
@@ -1026,7 +1026,7 @@ public enum VcsEventSchema {
 /// Remote workspace connection and lifecycle events (`packages/schema/src/workspace-event.ts`).
 public enum WorkspaceEventSchema {
     /// Workspace connection status payload (`WorkspaceEvent.ConnectionStatus`).
-    // parity: schema/src/workspace-event.ts#ConnectionStatus [status=implemented hash=9c2d2f07cef1]
+    // parity: schema/src/workspace-event.ts#ConnectionStatus [status=implemented hash=031d1ce7e107]
     public struct ConnectionStatus: Equatable, Hashable, Sendable, Codable {
         public enum State: String, Equatable, Hashable, Sendable, Codable {
             case connected
@@ -1060,19 +1060,19 @@ public enum WorkspaceEventSchema {
         }
     }
 
-    // parity: schema/src/workspace-event.ts#Ready [status=implemented hash=c32b5f891ee3]
+    // parity: schema/src/workspace-event.ts#Ready [status=implemented hash=2d9bb4032827]
     public static let Ready = EventSchema.ephemeral(
         type: "workspace.ready",
         data: ReadyData.self
     )
 
-    // parity: schema/src/workspace-event.ts#Failed [status=implemented hash=823ec819173e]
+    // parity: schema/src/workspace-event.ts#Failed [status=implemented hash=d31045835c5c]
     public static let Failed = EventSchema.ephemeral(
         type: "workspace.failed",
         data: FailedData.self
     )
 
-    // parity: schema/src/workspace-event.ts#Status [status=implemented hash=6a661d00905d]
+    // parity: schema/src/workspace-event.ts#Status [status=implemented hash=a90cbb906790]
     public static let Status = EventSchema.ephemeral(
         type: "workspace.status",
         data: ConnectionStatus.self
@@ -1108,13 +1108,13 @@ public enum WorktreeEventSchema {
         }
     }
 
-    // parity: schema/src/worktree-event.ts#Ready [status=implemented hash=7a2d7d5a96dc]
+    // parity: schema/src/worktree-event.ts#Ready [status=implemented hash=a7aea1d5e4f9]
     public static let Ready = EventSchema.ephemeral(
         type: "worktree.ready",
         data: ReadyData.self
     )
 
-    // parity: schema/src/worktree-event.ts#Failed [status=implemented hash=55b012b731b0]
+    // parity: schema/src/worktree-event.ts#Failed [status=implemented hash=cfad33b2b810]
     public static let Failed = EventSchema.ephemeral(
         type: "worktree.failed",
         data: FailedData.self
@@ -1277,7 +1277,7 @@ public enum EventManifestSchema {
     }
 
     /// Type predicate testing whether an event type belongs to the public `Server` manifest.
-    // parity: schema/src/event-manifest.ts#isServer [status=implemented hash=5bf8ffc9e86a]
+    // parity: schema/src/event-manifest.ts#isServer [status=implemented hash=64bc1029fbc3]
     public static func isServer(type: String) -> Bool {
         Server[type] != nil
     }

@@ -1324,7 +1324,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/directories.ts#parse [status=implemented hash=190a38cdc368]
+        // parity: cli/src/acp/directories.ts#parse [status=implemented hash=1fd587ea27e6]
         public static func parse(cwd: String, directories: [String] = []) throws(Errors.ACPError) -> [String] {
             _ = try parseCwd(cwd)
             if let invalid = directories.first(where: { dir in
@@ -1344,7 +1344,7 @@ extension CLIACP {
             return out
         }
 
-        // parity: cli/src/acp/directories.ts#parseCwd [status=implemented hash=1fd46229880c]
+        // parity: cli/src/acp/directories.ts#parseCwd [status=implemented hash=1121c62775ba]
         public static func parseCwd(_ cwd: String) throws(Errors.ACPError) -> SchemaPrimitive.AbsolutePath {
             guard ToolMapper.isAbsolutePath(cwd) else {
                 throw .invalidRequest(
@@ -1378,7 +1378,7 @@ extension CLIACP {
             list(metadata: session.metadata)
         }
 
-        // parity: cli/src/acp/directories.ts#activate [status=implemented hash=38d509920097]
+        // parity: cli/src/acp/directories.ts#activate [status=implemented hash=30ae7b6d7cf4]
         public static func activate(
             client: any BackendClient,
             session: SessionSchema.Info,
@@ -1437,7 +1437,7 @@ extension CLIACP {
     // MARK: - 14. Connection Bridge (`packages/cli/src/acp/connection.ts`)
 
     public enum Connection {
-        // parity: cli/src/acp/connection.ts#Responded [status=adapted hash=97c861bd09bf]
+        // parity: cli/src/acp/connection.ts#Responded [status=adapted hash=d5047aacae3b]
         public enum Responded {
             @TaskLocal
             public static var current: @Sendable () async -> Bool = { true }
@@ -1612,7 +1612,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/permission.ts#ask [status=implemented hash=d9f1be4896e1]
+        // parity: cli/src/acp/permission.ts#ask [status=implemented hash=5c12f70f08f9]
         public static func ask(_ input: Input) async throws -> PermissionSchema.Reply {
             let toolName = input.tool?.name ?? input.event.action
             let toolInput = input.tool?.input ?? input.event.metadata ?? [:]
@@ -1672,7 +1672,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/permission.ts#withCompletedDiffs [status=implemented hash=1655faee7d4a]
+        // parity: cli/src/acp/permission.ts#withCompletedDiffs [status=implemented hash=6b4dc4f57328]
         public static func withCompletedDiffs(
             _ update: SessionUpdate,
             source: ToolMapper.DiffSource?,
@@ -1886,7 +1886,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/prompt.ts#prepare [status=implemented hash=f78ea5acabea]
+        // parity: cli/src/acp/prompt.ts#prepare [status=implemented hash=260e45ab9afc]
         public static func prepare(
             catalog: CatalogStore.Catalog,
             content: [ContentBlock],
@@ -2171,7 +2171,7 @@ extension CLIACP {
     // MARK: - 18. Sessions Registry (`packages/cli/src/acp/sessions.ts`)
 
     public enum Sessions {
-        // parity: cli/src/acp/sessions.ts#SupportedMcpServer [status=implemented hash=f26bdbc43d40]
+        // parity: cli/src/acp/sessions.ts#SupportedMcpServer [status=implemented hash=82a9552dbb50]
         public enum SupportedMcpServer: Equatable, Hashable, Sendable, Codable {
             case stdio(McpServerStdio)
             case http(McpServerHttp)
@@ -2545,7 +2545,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/sessions.ts#make [status=adapted hash=9035a1f62c5a]
+        // parity: cli/src/acp/sessions.ts#make [status=adapted hash=02b8be9c225b]
         public static func make(
             client: any BackendClient,
             connection: any Connection.Interface,
@@ -2582,7 +2582,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/turn.ts#SteeringResponse [status=implemented hash=90561f0bea04]
+        // parity: cli/src/acp/turn.ts#SteeringResponse [status=implemented hash=daeeb3823df5]
         public enum SteeringResponse: Equatable, Hashable, Sendable, Codable {
             case injected
             case promptRequired(reason: String)
@@ -2630,7 +2630,7 @@ extension CLIACP {
         }
 
         /// Core acknowledges an interrupt before its cleanup settles, and its shell tool waits 3s before SIGKILL.
-        // parity: cli/src/acp/turn.ts#CancelDrainTimeout [status=adapted hash=1ef3760fa741]
+        // parity: cli/src/acp/turn.ts#CancelDrainTimeout [status=adapted hash=5a9305d01041]
         public enum CancelDrainTimeout {
             public static let defaultNanoseconds: UInt64 = 5_000_000_000
 
@@ -3419,7 +3419,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/turn.ts#make [status=adapted hash=89f26159020a]
+        // parity: cli/src/acp/turn.ts#make [status=adapted hash=7278e41a1768]
         public static func make(
             client: any BackendClient,
             connection: any Connection.Interface,
@@ -3798,7 +3798,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/service.ts#make [status=adapted hash=2f91943c5caf]
+        // parity: cli/src/acp/service.ts#make [status=adapted hash=47d6edc0b318]
         public static func make(
             client: any BackendClient,
             connection: any Connection.Interface,
@@ -3854,7 +3854,7 @@ extension CLIACP {
         }
 
         /// Connects an ACP JSON-RPC agent to an `NDJSONStream` using any `BackendClient`.
-        // parity: cli/src/acp/agent.ts#connect [status=adapted hash=df3d8ef5ff88]
+        // parity: cli/src/acp/agent.ts#connect [status=adapted hash=65a72c7713e6]
         public static func connect(
             client: any BackendClient,
             stream: NDJSONStream,
@@ -4401,7 +4401,7 @@ extension CLIACP.CatalogStore {
         }
     }
 
-    // parity: cli/src/acp/catalog.ts#make [status=adapted hash=464ed6d8341c]
+    // parity: cli/src/acp/catalog.ts#make [status=adapted hash=4311da8c4bc9]
     public static func make(
         client: any CLIACP.BackendClient,
         pollIntervalNanoseconds: UInt64 = 25_000_000,
@@ -4489,7 +4489,7 @@ extension CLIACP.Elicitation {
         await cancel(client: client, form: form, message: isQuestion ? unshownQuestionMessage : nil)
     }
 
-    // parity: cli/src/acp/elicitation.ts#ask [status=implemented hash=6e707d645375]
+    // parity: cli/src/acp/elicitation.ts#ask [status=implemented hash=ae989cb6a5ee]
     public static func ask(_ input: Input) async throws -> Outcome {
         let toolCallID: String? = {
             guard input.toolCallSent,

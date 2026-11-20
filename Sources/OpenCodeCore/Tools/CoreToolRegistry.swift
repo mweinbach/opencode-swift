@@ -116,7 +116,7 @@ public enum CoreTool {
             )
         }
 
-        // parity: core/src/tool/runtime.ts#execute [status=implemented hash=f367dac2914e]
+        // parity: core/src/tool/runtime.ts#execute [status=implemented hash=4b7e6d91a9f5]
         public static func execute(
             _ tool: RegisteredTool,
             input: JSONValue,
@@ -203,7 +203,7 @@ public enum CoreTool {
             })
         }
 
-        // parity: core/src/tool/runtime.ts#effectiveName [status=implemented hash=b7c205956951]
+        // parity: core/src/tool/runtime.ts#effectiveName [status=implemented hash=577df9f492d6]
         public static func effectiveName(name: String, options: ToolSchema.Options? = nil) -> String {
             let norm = normalizedName(name)
             guard let ns = options?.namespace else { return norm }
@@ -215,7 +215,7 @@ public enum CoreTool {
             options?.codemode != false
         }
 
-        // parity: core/src/tool/runtime.ts#toolFailure [status=implemented hash=52a93de96d56]
+        // parity: core/src/tool/runtime.ts#toolFailure [status=implemented hash=d9472a099151]
         public static func toolFailure(_ message: String) -> @Sendable (any Swift.Error) -> AISchema.ToolFailure {
             { error in
                 if let failure = error as? AISchema.ToolFailure { return failure }
@@ -226,7 +226,7 @@ public enum CoreTool {
 
     // MARK: - Tool Registry (`core/src/tool.ts`)
 
-    // parity: core/src/tool.ts#RegistrationError [status=implemented hash=4978aa6c2c35]
+    // parity: core/src/tool.ts#RegistrationError [status=implemented hash=c32428655506]
     public struct RegistrationError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Tool.RegistrationError"
         public let name: String
@@ -698,7 +698,7 @@ public enum CoreTool {
         }
     }
 
-    // parity: core/src/tool.ts#node [status=adapted hash=ea7fd70a84ed]
+    // parity: core/src/tool.ts#node [status=adapted hash=da8d6ef64124]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service() as any Interface),
@@ -755,12 +755,12 @@ public enum CoreTool {
             func callTool(server: String, name: String, args: JSONValue, sessionID: SessionID) async throws -> ToolCallResult
         }
 
-        // parity: core/src/tool/mcp.ts#namespace [status=implemented hash=9fe05130ab65]
+        // parity: core/src/tool/mcp.ts#namespace [status=implemented hash=7519a6ad9d7b]
         public static func namespace(_ server: String) -> String {
             Runtime.normalizedName(server)
         }
 
-        // parity: core/src/tool/mcp.ts#name [status=implemented hash=6debf12e0b78]
+        // parity: core/src/tool/mcp.ts#name [status=implemented hash=13fa3f6a42a4]
         public static func name(server: String, tool: String) -> String {
             Runtime.effectiveName(name: tool, options: ToolSchema.Options(namespace: namespace(server)))
         }
@@ -911,7 +911,7 @@ public enum CoreTool {
             }
         }
 
-        // parity: core/src/tool/mcp.ts#layer [status=adapted hash=724c7f3de16c]
+        // parity: core/src/tool/mcp.ts#layer [status=adapted hash=a72bd8892bfc]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let tools = deps.get(CoreTool.Service.serviceKey, as: (any CoreTool.Interface).self) ?? CoreTool.Service()
             let perm = deps.get(CorePermission.Service.serviceKey, as: (any CorePermission.Interface).self) ?? CorePermission.Service()
@@ -920,7 +920,7 @@ public enum CoreTool {
             return LayerNode.Output([Service.serviceKey: svc as any Interface])
         }
 
-        // parity: core/src/tool/mcp.ts#node [status=adapted hash=596c4d76753c]
+        // parity: core/src/tool/mcp.ts#node [status=adapted hash=d5b6bcdee20a]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             layer,

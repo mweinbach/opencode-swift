@@ -113,7 +113,7 @@ private func formatCalendarDate(_ daysSinceEpoch: Int64) -> String {
 ///
 /// Pass `timeZoneOffsetSeconds` to map epoch milliseconds into a caller's local civil calendar
 /// (matching JavaScript's `new Date(ms).getFullYear()/getMonth()/getDate()`). Defaults to UTC (`0`).
-// parity: util/src/activity-calendar.ts#activityCalendar [status=implemented hash=88792ed59993]
+// parity: util/src/activity-calendar.ts#activityCalendar [status=implemented hash=fa196c3016a8]
 public func activityCalendar(
     _ input: ActivityCalendarInput,
     timeZoneOffsetSeconds: (Int64) -> Int = { _ in 0 }

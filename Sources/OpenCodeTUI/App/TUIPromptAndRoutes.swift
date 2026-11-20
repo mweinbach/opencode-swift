@@ -237,7 +237,7 @@ public enum TUIPrompt {
         }
     }
 
-    // parity: tui/src/prompt/part.ts#expandPastedTextPlaceholders [status=implemented hash=0ab1dec08e5b]
+    // parity: tui/src/prompt/part.ts#expandPastedTextPlaceholders [status=implemented hash=e97c8aede61d]
     public static func expandPastedTextPlaceholders(
         _ text: String,
         pasted: [PastedText]
@@ -257,7 +257,7 @@ public enum TUIPrompt {
         return result
     }
 
-    // parity: tui/src/prompt/part.ts#expandTrackedPastedText [status=implemented hash=9b9af09e545f]
+    // parity: tui/src/prompt/part.ts#expandTrackedPastedText [status=implemented hash=a0fcba9197fe]
     public static func expandTrackedPastedText(
         _ text: String,
         ranges: [TrackedPastedRange],
@@ -387,7 +387,7 @@ public enum TUIPrompt {
         }
     }
 
-    // parity: tui/src/prompt/history.tsx#emptyPrompt [status=implemented hash=8b8932d42d3c]
+    // parity: tui/src/prompt/history.tsx#emptyPrompt [status=implemented hash=65f18d0eb04c]
     public static func emptyPrompt() -> PromptInfo {
         PromptInfo()
     }
@@ -520,7 +520,7 @@ public enum TUIPrompt {
 
     @TaskLocal private static var currentPromptHistory: PromptHistoryController?
 
-    // parity: tui/src/prompt/history.tsx#PromptHistoryProvider [status=adapted hash=b4b6735b1d67]
+    // parity: tui/src/prompt/history.tsx#PromptHistoryProvider [status=adapted hash=44e14c9dfc7f]
     public static func PromptHistoryProvider<R>(
         controller: PromptHistoryController = PromptHistoryController(),
         body: () throws -> R
@@ -1009,7 +1009,7 @@ public enum TUIPrompt {
         )
     }
 
-    // parity: tui/src/prompt/mention.ts#expandPromptInputPastedText [status=implemented hash=21dd6a2bbe60]
+    // parity: tui/src/prompt/mention.ts#expandPromptInputPastedText [status=implemented hash=25cd2b723e92]
     public static func expandPromptInputPastedText(
         _ input: PromptInputSchema.Prompt,
         pasted: [PastedText],
@@ -1155,7 +1155,7 @@ public enum TUIPrompt {
         return directory
     }
 
-    // parity: tui/src/prompt/directory-completion.ts#directoryAutocomplete [status=implemented hash=ea6cce20c495]
+    // parity: tui/src/prompt/directory-completion.ts#directoryAutocomplete [status=implemented hash=5848f0b4ead5]
     public static func directoryAutocomplete(
         listDirectories: @Sendable (String) async throws -> [String],
         locationDirectory: String,
@@ -1299,7 +1299,7 @@ public enum TUIPrompt {
 
     @TaskLocal private static var currentFrecency: FrecencyStore?
 
-    // parity: tui/src/prompt/frecency.tsx#FrecencyProvider [status=adapted hash=1c494f8cd849]
+    // parity: tui/src/prompt/frecency.tsx#FrecencyProvider [status=adapted hash=4c9fc24905c6]
     public static func FrecencyProvider<R>(
         store: FrecencyStore = FrecencyStore(),
         body: () throws -> R
@@ -1307,7 +1307,7 @@ public enum TUIPrompt {
         try $currentFrecency.withValue(store, operation: body)
     }
 
-    // parity: tui/src/prompt/frecency.tsx#useFrecency [status=adapted hash=1c494f8cd849]
+    // parity: tui/src/prompt/frecency.tsx#useFrecency [status=adapted hash=4c9fc24905c6]
     public static func useFrecency() throws(TUIConfig.ConfigError) -> FrecencyStore {
         guard let value = currentFrecency else { throw .missingContext("FrecencyProvider") }
         return value
@@ -1380,7 +1380,7 @@ public enum TUIPrompt {
 
     @TaskLocal private static var currentPromptStash: PromptStashStore?
 
-    // parity: tui/src/prompt/stash.tsx#PromptStashProvider [status=adapted hash=3d828848a289]
+    // parity: tui/src/prompt/stash.tsx#PromptStashProvider [status=adapted hash=9df2b667918a]
     public static func PromptStashProvider<R>(
         store: PromptStashStore = PromptStashStore(),
         body: () throws -> R
@@ -1388,7 +1388,7 @@ public enum TUIPrompt {
         try $currentPromptStash.withValue(store, operation: body)
     }
 
-    // parity: tui/src/prompt/stash.tsx#usePromptStash [status=adapted hash=3d828848a289]
+    // parity: tui/src/prompt/stash.tsx#usePromptStash [status=adapted hash=9df2b667918a]
     public static func usePromptStash() throws(TUIConfig.ConfigError) -> PromptStashStore {
         guard let value = currentPromptStash else { throw .missingContext("PromptStashProvider") }
         return value
@@ -1455,7 +1455,7 @@ public enum TUIRoutes {
 
     // MARK: - Generic Grouping Tree (`packages/tui/src/routes/session/grouping/tree.ts`)
 
-    // parity: tui/src/routes/session/grouping/tree.ts#GroupNode [status=implemented hash=3b67cf408b49]
+    // parity: tui/src/routes/session/grouping/tree.ts#GroupNode [status=implemented hash=5e1e61e1ec42]
     public indirect enum GroupNode<Entry: Equatable & Sendable, Kind: Hashable & Sendable>: Equatable, Sendable {
         case entry(Entry)
         case group(kind: Kind, children: [GroupNode<Entry, Kind>], size: Int)
@@ -1575,7 +1575,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/grouping/session.ts#SessionEntry [status=implemented hash=13395a4d760e]
+    // parity: tui/src/routes/session/grouping/session.ts#SessionEntry [status=implemented hash=47b90de59428]
     public enum SessionEntry: Equatable, Hashable, Sendable, Codable {
         case message(messageID: String)
         case compactionQueued(inboxID: String)
@@ -1595,7 +1595,7 @@ public enum TUIRoutes {
     // parity: tui/src/routes/session/grouping/session.ts#SessionNode [status=implemented hash=5f0a2593328d]
     public typealias SessionNode = GroupNode<SessionEntry, GroupKind>
 
-    // parity: tui/src/routes/session/grouping/session.ts#SessionGroup [status=implemented hash=845fcfb31d43]
+    // parity: tui/src/routes/session/grouping/session.ts#SessionGroup [status=implemented hash=483491f43f2f]
     public struct SessionGroup: Equatable, Sendable {
         public var kind: GroupKind
         public var children: [SessionNode]
@@ -1638,7 +1638,7 @@ public enum TUIRoutes {
         case group(SessionGroup)
     }
 
-    // parity: tui/src/routes/session/grouping/session.ts#AppendPart [status=implemented hash=89caff8ffc07]
+    // parity: tui/src/routes/session/grouping/session.ts#AppendPart [status=implemented hash=e78defb2f042]
     public enum AppendPart: Equatable, Hashable, Sendable {
         case text
         case reasoning(completedAt: Int64?)
@@ -1850,7 +1850,7 @@ public enum TUIRoutes {
 
     // MARK: - Anchors & Anchor Views (`anchors.ts`, `anchor-view.tsx`)
 
-    // parity: tui/src/routes/session/anchors.ts#AnchorTarget [status=implemented hash=665b03429d35]
+    // parity: tui/src/routes/session/anchors.ts#AnchorTarget [status=implemented hash=63cd0b87ab75]
     public enum AnchorTarget: Equatable, Hashable, Sendable, Codable {
         case part(ref: PartRef)
         case group(groupID: String)
@@ -1897,13 +1897,13 @@ public enum TUIRoutes {
         return nil
     }
 
-    // parity: tui/src/routes/session/anchors.ts#groupID [status=implemented hash=c0eaf4416f06]
+    // parity: tui/src/routes/session/anchors.ts#groupID [status=implemented hash=1fbcd98073d3]
     public static func groupID(kind: GroupKind, children: [SessionNode], level: Int) -> String? {
         guard let ref = firstAnchorRef(children) else { return nil }
         return "[\"\(ref.messageID)\",\"\(ref.partID)\",\"\(kind.rawValue)\",\(level)]"
     }
 
-    // parity: tui/src/routes/session/anchors.ts#containsAnchor [status=implemented hash=c0df1162b031]
+    // parity: tui/src/routes/session/anchors.ts#containsAnchor [status=implemented hash=72af501ad51b]
     public static func containsAnchor(_ node: SessionNode, target: AnchorTarget, level: Int = 0) -> Bool {
         switch node {
         case .group(let kind, let children, _):
@@ -1979,7 +1979,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/anchor-view.tsx#useEntryAnchor [status=adapted hash=8f6552f5dffc]
+    // parity: tui/src/routes/session/anchor-view.tsx#useEntryAnchor [status=adapted hash=9c67cfbb6f92]
     public static func useEntryAnchor(
         anchors: TimelineAnchors,
         entry: SessionEntry,
@@ -1989,7 +1989,7 @@ public enum TUIRoutes {
         return anchors.register(TimelineAnchor(target: .part(ref: ref), node: node))
     }
 
-    // parity: tui/src/routes/session/anchor-view.tsx#EntryAnchor [status=adapted hash=76878194fa6e]
+    // parity: tui/src/routes/session/anchor-view.tsx#EntryAnchor [status=adapted hash=989e3168c7b1]
     public static func EntryAnchor(
         ctx: any RenderContext,
         anchors: TimelineAnchors,
@@ -2006,7 +2006,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/anchor-view.tsx#GroupAnchor [status=adapted hash=3bdb299f515d]
+    // parity: tui/src/routes/session/anchor-view.tsx#GroupAnchor [status=adapted hash=ec8adab3460a]
     public static func GroupAnchor(
         ctx: any RenderContext,
         anchors: TimelineAnchors,
@@ -2150,7 +2150,7 @@ public enum TUIRoutes {
         return ActivitySummaryResult(label: label, active: active)
     }
 
-    // parity: tui/src/routes/session/activity-summary.ts#summarizeActivity [status=implemented hash=1a70e4e92f00]
+    // parity: tui/src/routes/session/activity-summary.ts#summarizeActivity [status=implemented hash=d1b5d959ed28]
     public static func summarizeActivity(
         children: [SessionNode],
         message: (String) -> SessionMessageSchema.Info?,
@@ -2189,7 +2189,7 @@ public enum TUIRoutes {
 
     // MARK: - Mount Budget & Message Navigation (`mount-budget.ts`, `message-navigation.ts`, `history.ts`)
 
-    // parity: tui/src/routes/session/mount-budget.ts#rowWeight [status=implemented hash=bc75a6ed301e]
+    // parity: tui/src/routes/session/mount-budget.ts#rowWeight [status=implemented hash=a29c99c39f8c]
     public static func rowWeight(
         _ row: SessionRow,
         expanded: (String, GroupKind) -> Bool,
@@ -2233,7 +2233,7 @@ public enum TUIRoutes {
         return index
     }
 
-    // parity: tui/src/routes/session/message-navigation.ts#messageNavigationSlack [status=implemented hash=d24f6c7e4ce8]
+    // parity: tui/src/routes/session/message-navigation.ts#messageNavigationSlack [status=implemented hash=cbed845ebc84]
     public static func messageNavigationSlack(
         top: Int,
         viewportHeight: Int,
@@ -2266,7 +2266,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/message-navigation.ts#findMessageBoundary [status=implemented hash=7932dd6e5ecc]
+    // parity: tui/src/routes/session/message-navigation.ts#findMessageBoundary [status=implemented hash=abf59c497264]
     public static func findMessageBoundary(
         direction: String,
         children: [MessageChildPosition],
@@ -2346,7 +2346,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/history.ts#createHistoryPrepend [status=adapted hash=e27f75365698]
+    // parity: tui/src/routes/session/history.ts#createHistoryPrepend [status=adapted hash=e36573b50538]
     public static func createHistoryPrepend(
         sessionID: @escaping @Sendable () -> String,
         more: @escaping @Sendable (String) -> Bool,
@@ -2365,7 +2365,7 @@ public enum TUIRoutes {
 
     // MARK: - Session Rows (`packages/tui/src/routes/session/rows.ts`)
 
-    // parity: tui/src/routes/session/rows.ts#completeGroupBoundary [status=implemented hash=c7eeecd2f62b]
+    // parity: tui/src/routes/session/rows.ts#completeGroupBoundary [status=implemented hash=d52b6fd07d46]
     public static func completeGroupBoundary(
         rows: @Sendable () -> [SessionRow],
         messagesCount: @Sendable () -> Int,
@@ -2827,7 +2827,7 @@ public enum TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/render-context.tsx#context [status=adapted hash=d533aa6e82ef]
+    // parity: tui/src/routes/session/render-context.tsx#context [status=adapted hash=ec9b906facfd]
     public static let context = TUIContext.createSimpleContext(name: "SessionRenderContext") as TUIContext.SimpleContext<SessionRenderContextValue>
 
     // parity: tui/src/routes/session/render-context.tsx#use [status=adapted hash=e3f41a80aea0]
@@ -2905,7 +2905,7 @@ public enum TUIRoutes {
         public var activeID: String { composerTabs.active }
     }
 
-    // parity: tui/src/routes/session/composer/context.ts#ComposerContext [status=adapted hash=6064d5547261]
+    // parity: tui/src/routes/session/composer/context.ts#ComposerContext [status=adapted hash=bf9c4c5ea5e4]
     public static let ComposerContext = TUIContext.createSimpleContext(name: "Composer") as TUIContext.SimpleContext<ComposerTabController>
 
     // parity: tui/src/routes/session/composer/context.ts#useComposerTab [status=adapted hash=0bd711d38775]
@@ -3110,7 +3110,7 @@ public enum TUIRoutes {
         return root
     }
 
-    // parity: tui/src/routes/session/sidebar.tsx#Sidebar [status=adapted hash=3bf082882f65]
+    // parity: tui/src/routes/session/sidebar.tsx#Sidebar [status=adapted hash=72933bdae92f]
     public static func Sidebar(
         ctx: any RenderContext,
         sessionID: String,
@@ -3178,7 +3178,7 @@ public enum TUIRoutes {
 
     /// Reasoning in the reasoning colors. Rendered mode draws it with OpenTUI's native Markdown, as answers are drawn,
     /// so none of it goes to the highlighter; source mode keeps the highlighted Markdown source.
-    // parity: tui/src/routes/session/message-parts.tsx#ReasoningBody [status=adapted hash=2c4c1ffd90ee]
+    // parity: tui/src/routes/session/message-parts.tsx#ReasoningBody [status=adapted hash=497fece6fc94]
     public static func ReasoningBody(
         ctx: any RenderContext,
         content: String,
@@ -3233,7 +3233,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/message-parts.tsx#InlineToolRow [status=adapted hash=69f54666b5d8]
+    // parity: tui/src/routes/session/message-parts.tsx#InlineToolRow [status=adapted hash=5cf49652653a]
     public static func InlineToolRow(
         ctx: any RenderContext,
         icon: String,
@@ -3266,7 +3266,7 @@ public enum TUIRoutes {
         return row
     }
 
-    // parity: tui/src/routes/session/group-view.tsx#SessionGroupView [status=adapted hash=bd63386bb333]
+    // parity: tui/src/routes/session/group-view.tsx#SessionGroupView [status=adapted hash=2d247d37d8a6]
     public static func SessionGroupView(
         ctx: any RenderContext,
         row: SessionGroup,
@@ -3286,7 +3286,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/permission.tsx#SessionQuestion [status=adapted hash=097989b1efaa]
+    // parity: tui/src/routes/session/permission.tsx#SessionQuestion [status=adapted hash=e0a24efd6e66]
     public static func SessionQuestion(
         ctx: any RenderContext,
         title: String,
@@ -3328,7 +3328,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/permission.tsx#PermissionPrompt [status=adapted hash=ddb58e7c39de]
+    // parity: tui/src/routes/session/permission.tsx#PermissionPrompt [status=adapted hash=afcbfdaa45a5]
     public static func PermissionPrompt(
         ctx: any RenderContext,
         request: PermissionSchema.Request,
@@ -3348,7 +3348,7 @@ public enum TUIRoutes {
         )
     }
 
-    // parity: tui/src/routes/session/form.tsx#FormPrompt [status=adapted hash=a79e55cf760b]
+    // parity: tui/src/routes/session/form.tsx#FormPrompt [status=adapted hash=ef0328bc0a00]
     public static func FormPrompt(
         ctx: any RenderContext,
         form: FormSchema.Info,
@@ -3373,7 +3373,7 @@ public enum TUIRoutes {
         )
     }
 
-    // parity: tui/src/routes/session/location-missing.tsx#SessionLocationUnavailable [status=adapted hash=6168e661b342]
+    // parity: tui/src/routes/session/location-missing.tsx#SessionLocationUnavailable [status=adapted hash=ca6cbb72cd2b]
     public static func SessionLocationUnavailable(
         ctx: any RenderContext,
         directory: String,
@@ -3388,7 +3388,7 @@ public enum TUIRoutes {
         )
     }
 
-    // parity: tui/src/routes/session/location-missing.tsx#SessionLocationMissing [status=adapted hash=3e9fc458d70a]
+    // parity: tui/src/routes/session/location-missing.tsx#SessionLocationMissing [status=adapted hash=fdbaa122b6b2]
     public static func SessionLocationMissing(
         ctx: any RenderContext,
         directory: String,
@@ -3435,7 +3435,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/composer/shell-tab.tsx#ShellTab [status=adapted hash=99d42c6d84be]
+    // parity: tui/src/routes/session/composer/shell-tab.tsx#ShellTab [status=adapted hash=bf914f6789a0]
     public static func ShellTab(
         ctx: any RenderContext,
         sessionID: String,
@@ -3465,7 +3465,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/composer/terminals-tab.tsx#TerminalsTab [status=adapted hash=ff3c5756ce86]
+    // parity: tui/src/routes/session/composer/terminals-tab.tsx#TerminalsTab [status=adapted hash=b4d710c40f5a]
     public static func TerminalsTab(
         ctx: any RenderContext,
         sessionID: String,
@@ -3482,7 +3482,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/dialog-execute.tsx#DialogExecute [status=adapted hash=7ae6ca270401]
+    // parity: tui/src/routes/session/dialog-execute.tsx#DialogExecute [status=adapted hash=4d4681f90548]
     public static func DialogExecute(
         ctx: any RenderContext,
         part: SessionMessageSchema.AssistantTool,
@@ -3503,7 +3503,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/dialog-fork.tsx#DialogFork [status=adapted hash=27265904341b]
+    // parity: tui/src/routes/session/dialog-fork.tsx#DialogFork [status=adapted hash=863dc6a9fa4d]
     public static func DialogFork(
         ctx: any RenderContext,
         sessionID: String,
@@ -3524,7 +3524,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/dialog-message.tsx#DialogMessage [status=adapted hash=60b14226dbd3]
+    // parity: tui/src/routes/session/dialog-message.tsx#DialogMessage [status=adapted hash=6216d9e9202c]
     public static func DialogMessage(
         ctx: any RenderContext,
         messageID: String,
@@ -3545,7 +3545,7 @@ public enum TUIRoutes {
         return box
     }
 
-    // parity: tui/src/routes/session/dialog-timeline.tsx#DialogTimeline [status=adapted hash=9bc91e36802f]
+    // parity: tui/src/routes/session/dialog-timeline.tsx#DialogTimeline [status=adapted hash=09f9dc0e9f6f]
     public static func DialogTimeline(
         ctx: any RenderContext,
         sessionID: String,

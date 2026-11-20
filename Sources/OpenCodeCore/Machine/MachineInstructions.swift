@@ -66,7 +66,7 @@ public enum MachineInstructions {
         }
     }
 
-    // parity: core/src/machine/instructions.ts#node [status=implemented hash=ade8e68e8192]
+    // parity: core/src/machine/instructions.ts#node [status=implemented hash=0ce2d8f0ede4]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

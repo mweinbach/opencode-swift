@@ -1435,7 +1435,7 @@ extension Merman {
         public var diagramPoint: DiagramPoint { DiagramPoint(x: x, y: y) }
     }
 
-    // parity: merman/src/flowchart/routing.ts#flowchartSourceConnector [status=implemented hash=179be10b1f99]
+    // parity: merman/src/flowchart/routing.ts#flowchartSourceConnector [status=implemented hash=c6b64bcabe91]
     public static func flowchartSourceConnector(
         _ from: FlowchartEndpointBounds,
         sourcePoint: FlowchartPoint

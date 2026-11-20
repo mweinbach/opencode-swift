@@ -321,7 +321,7 @@ extension Merman {
 
     // MARK: - Flowchart Style (`flowchart/style.ts`)
 
-    // parity: merman/src/flowchart/style.ts#FlowchartBaseCellStyle [status=implemented hash=305649fd5138]
+    // parity: merman/src/flowchart/style.ts#FlowchartBaseCellStyle [status=implemented hash=8dfa2232fec5]
     public enum FlowchartBaseCellStyle: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case node
         case nodeBorder
@@ -385,7 +385,7 @@ extension Merman {
     // parity: merman/src/flowchart/style.ts#FlowchartStyleBackgroundColors [status=implemented hash=79effbe672a4]
     public typealias FlowchartStyleBackgroundColors = [FlowchartCellStyle: RGBA]
 
-    // parity: merman/src/flowchart/style.ts#DEFAULT_THEME_RGB [status=implemented hash=ce4bb5a83ceb]
+    // parity: merman/src/flowchart/style.ts#DEFAULT_THEME_RGB [status=implemented hash=cff4bf9bd657]
     public static let DEFAULT_THEME_RGB: [FlowchartBaseCellStyle: DiagramRgb] = [
         .node: (228, 239, 232),
         .nodeBorder: (141, 163, 151),
@@ -407,7 +407,7 @@ extension Merman {
         .databaseEdgeFade1, .databaseEdgeFade2, .databaseEdgeFade3, .databaseEdgeFade4, .databaseEdgeFade5,
     ]
 
-    // parity: merman/src/flowchart/style.ts#resolveFlowchartStyleColors [status=implemented hash=dfba75c50f02]
+    // parity: merman/src/flowchart/style.ts#resolveFlowchartStyleColors [status=implemented hash=f0c28131f954]
     public static func resolveFlowchartStyleColors(
         _ colors: [FlowchartCellStyle: RGBA?] = [:]
     ) -> FlowchartStyleColors {

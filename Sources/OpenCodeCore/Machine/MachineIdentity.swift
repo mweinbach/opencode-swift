@@ -15,7 +15,7 @@ public enum MachineIdentity {
     static let keyBytes = 32
     static let signatureBytes = 64
 
-    // parity: core/src/machine/identity.ts#InvalidKey [status=implemented hash=62a857ee89eb]
+    // parity: core/src/machine/identity.ts#InvalidKey [status=implemented hash=337eedc39ee9]
     public struct InvalidKey: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Identity.InvalidKey"
         public let file: String
@@ -178,7 +178,7 @@ public enum MachineIdentity {
         }
     }
 
-    // parity: core/src/machine/identity.ts#node [status=implemented hash=da18fc47c76c]
+    // parity: core/src/machine/identity.ts#node [status=implemented hash=37dc448ff436]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

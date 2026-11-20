@@ -48,7 +48,7 @@ private func setupLatexPlugin(_ context: PluginTui.Context) async throws -> Plug
 }
 
 /// Built-in `opencode.latex` TUI plugin definition registering `latex` and `math` fenced code-block renderers.
-// parity: latex/src/plugin.ts#default [status=implemented hash=791942f2b637]
+// parity: latex/src/plugin.ts#default [status=implemented hash=98eb4c66532d]
 public let latexPlugin: PluginTui.Definition = PluginTui.define(
     PluginTui.Definition(
         id: "opencode.latex",

@@ -5,7 +5,7 @@ extension Merman {
         public init() {}
     }
 
-    // parity: merman/src/core/canvas.ts#DiagramCanvasCell [status=implemented hash=0c77ca1d85f3]
+    // parity: merman/src/core/canvas.ts#DiagramCanvasCell [status=implemented hash=f9ce1387d0e9]
     public struct DiagramCanvasCell<Style: Hashable & Sendable, Metadata: Sendable>: Sendable {
         public var char: String
         public var style: Style?
@@ -67,7 +67,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/core/canvas.ts#DiagramCanvasTextMetadata [status=implemented hash=141c7cc6a67d]
+    // parity: merman/src/core/canvas.ts#DiagramCanvasTextMetadata [status=implemented hash=213779bba2cf]
     public enum DiagramCanvasTextMetadata<Metadata: Sendable> {
         case fixed(Metadata)
         case perCell((Int, Int) -> Metadata?)
@@ -351,7 +351,7 @@ extension Merman {
 
     // MARK: - Grid StyledText Rendering (`core/render-grid.ts`)
 
-    // parity: merman/src/core/render-grid.ts#renderDiagramGridStyledText [status=implemented hash=d5207ddbbb69]
+    // parity: merman/src/core/render-grid.ts#renderDiagramGridStyledText [status=implemented hash=e7be73499325]
     public static func renderDiagramGridStyledText<Style: Hashable & Sendable, Metadata: Sendable>(
         _ grid: DiagramCanvas<Style, Metadata>,
         fg: (DiagramCanvasRun<Style, Metadata>) -> RGBA?,
@@ -377,7 +377,7 @@ extension Merman {
         return StyledText(chunks: chunks)
     }
 
-    // parity: merman/src/core/render-grid.ts#renderDiagramGridStyledTextByStyle [status=implemented hash=a21fbfefbc4e]
+    // parity: merman/src/core/render-grid.ts#renderDiagramGridStyledTextByStyle [status=implemented hash=62801cefaee9]
     public static func renderDiagramGridStyledTextByStyle<Style: Hashable & Sendable, Metadata: Sendable>(
         _ grid: DiagramCanvas<Style, Metadata>,
         foregrounds: [Style: RGBA],

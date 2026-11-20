@@ -490,7 +490,7 @@ public enum AIProviders {
         // parity: ai/src/providers/alibaba.ts#id [status=implemented hash=509ef6f188cf]
         public static let id = "alibaba"
 
-        // parity: ai/src/providers/alibaba.ts#Region [status=implemented hash=beeeb7237ad9]
+        // parity: ai/src/providers/alibaba.ts#Region [status=implemented hash=7f70952b9920]
         public typealias Region = String
 
         // parity: ai/src/providers/alibaba.ts#ChatOptionsInput [status=implemented hash=def16f0184a6]
@@ -744,7 +744,7 @@ public enum AIProviders {
         // parity: ai/src/providers/amazon-bedrock-mantle.ts#routes [status=implemented hash=507b1ad0c8b2]
         public static let routes: [AIProtocols.ChatRouteSpec] = [responsesRoute, chatRoute, messagesRoute]
 
-        // parity: ai/src/providers/amazon-bedrock-mantle.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/amazon-bedrock-mantle.ts#configure [status=implemented hash=f37384ae1f5f]
         public static func configure(
             _ input: Config = Config(),
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -823,7 +823,7 @@ public enum AIProviders {
         // parity: ai/src/providers/amazon-bedrock.ts#routes [status=implemented hash=d27b3f0c8e43]
         public static let routes: [AIProtocols.ChatRouteSpec] = [AIProtocols.BedrockConverse.route]
 
-        // parity: ai/src/providers/amazon-bedrock.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/amazon-bedrock.ts#configure [status=implemented hash=e9678b96adcb]
         public static func configure(
             _ input: Config = Config(),
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -862,7 +862,7 @@ public enum AIProviders {
         // parity: ai/src/providers/amazon-bedrock.ts#provider [status=implemented hash=370740ab87b4]
         public static let provider = configure()
 
-        // parity: ai/src/providers/amazon-bedrock.ts#model [status=implemented hash=919ce2139f56]
+        // parity: ai/src/providers/amazon-bedrock.ts#model [status=implemented hash=22059407eebb]
         public static func model(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel {
             configure(settings).model(modelID)
         }
@@ -884,7 +884,7 @@ public enum AIProviders {
         // parity: ai/src/providers/anthropic-compatible.ts#Config [status=implemented hash=5c6ad8a553e7]
         public typealias Config = ProviderConfig
 
-        // parity: ai/src/providers/anthropic-compatible.ts#Settings [status=implemented hash=bf062774b60e]
+        // parity: ai/src/providers/anthropic-compatible.ts#Settings [status=implemented hash=a5287b6a0cf2]
         public typealias Settings = ProviderConfig
 
         public static let compatibleRoute = AIProtocols.AnthropicMessages.route.with(id: "anthropic-compatible-messages", provider: id)
@@ -914,7 +914,7 @@ public enum AIProviders {
         // parity: ai/src/providers/anthropic-compatible.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
 
-        // parity: ai/src/providers/anthropic-compatible.ts#model [status=implemented hash=02417383ef9b]
+        // parity: ai/src/providers/anthropic-compatible.ts#model [status=implemented hash=77a520c3866d]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             if case .explicit = settings.apiKey, settings.authToken != nil {
                 throw ProviderConfigurationError(provider: settings.providerOverride ?? id, message: "Anthropic-compatible apiKey cannot be combined with authToken")
@@ -942,10 +942,10 @@ public enum AIProviders {
         // parity: ai/src/providers/anthropic.ts#Config [status=implemented hash=8b893ca53346]
         public typealias Config = ProviderConfig
 
-        // parity: ai/src/providers/anthropic.ts#Settings [status=implemented hash=bf062774b60e]
+        // parity: ai/src/providers/anthropic.ts#Settings [status=implemented hash=07a224942591]
         public typealias Settings = ProviderConfig
 
-        // parity: ai/src/providers/anthropic.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/anthropic.ts#configure [status=implemented hash=b8413ea083f0]
         public static func configure(
             _ input: Config = Config(),
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -965,7 +965,7 @@ public enum AIProviders {
         // parity: ai/src/providers/anthropic.ts#provider [status=implemented hash=370740ab87b4]
         public static let provider = configure()
 
-        // parity: ai/src/providers/anthropic.ts#model [status=implemented hash=c3e391a97a9c]
+        // parity: ai/src/providers/anthropic.ts#model [status=implemented hash=dc24b3dd4054]
         public static func model(_ modelID: String, settings: Settings = Settings()) throws(ProviderConfigurationError) -> ConfiguredModel {
             if case .explicit = settings.apiKey, settings.authToken != nil {
                 throw ProviderConfigurationError(provider: id, message: "Anthropic apiKey cannot be combined with authToken")
@@ -982,7 +982,7 @@ public enum AIProviders {
         // parity: ai/src/providers/assemblyai.ts#Config [status=implemented hash=d330416f1570]
         public typealias Config = ProviderConfig
 
-        // parity: ai/src/providers/assemblyai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/assemblyai.ts#configure [status=implemented hash=a6cb807f236b]
         public static func configure(
             _ input: Config = Config(),
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -1065,7 +1065,7 @@ public enum AIProviders {
         // parity: ai/src/providers/azure.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
 
-        // parity: ai/src/providers/azure.ts#responsesModel [status=implemented hash=cfab73c14f1e]
+        // parity: ai/src/providers/azure.ts#responsesModel [status=implemented hash=d95ea28cd9c4]
         public static func responsesModel(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             let ep = try resolveEndpoint(input: settings, modelID: modelID)
             var adjusted = settings
@@ -1138,11 +1138,11 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/baseten.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/baseten.ts#route [status=implemented hash=7e0261fe9836]
+        // parity: ai/src/providers/baseten.ts#route [status=implemented hash=422c7aa2ef58]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/baseten.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/baseten.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/baseten.ts#configure [status=implemented hash=b85fec1d6cfd]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["BASETEN_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1171,7 +1171,7 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/byteplus.ts#Settings [status=implemented hash=5dc534ea0f5c]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/byteplus.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/byteplus.ts#configure [status=implemented hash=8b286ebce2d6]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.SeedanceVideo.BYTEPLUS_BASE_URL, auth: resolveBearerAuth(config: input, envVars: ["BYTEPLUS_API_KEY"], environment: environment), headers: input.headers ?? [:])
         }
@@ -1194,7 +1194,7 @@ public enum AIProviders {
         public static let id = "cartesia"
         // parity: ai/src/providers/cartesia.ts#Config [status=implemented hash=e2282dcfffaf]
         public typealias Config = ProviderConfig
-        // parity: ai/src/providers/cartesia.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/cartesia.ts#configure [status=implemented hash=28e3f7668f77]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.CartesiaSpeech.DEFAULT_BASE_URL, auth: resolveBearerAuth(config: input, envVars: ["CARTESIA_API_KEY"], environment: environment), headers: ["Cartesia-Version": AIProtocols.CartesiaSpeech.API_VERSION])
         }
@@ -1216,11 +1216,11 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/cerebras.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/cerebras.ts#route [status=implemented hash=3fd188b1c9e5]
+        // parity: ai/src/providers/cerebras.ts#route [status=implemented hash=5c2cdea6472f]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/cerebras.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/cerebras.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/cerebras.ts#configure [status=implemented hash=66e401338792]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["CEREBRAS_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1280,11 +1280,11 @@ public enum AIProviders {
             try CloudflareShared.runBaseURL(input, provider: id, name: "CloudflareAIGateway")
         }
 
-        // parity: ai/src/providers/cloudflare-ai-gateway.ts#responsesRoute [status=implemented hash=4eb05b6066e6]
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#responsesRoute [status=implemented hash=07ec169ad8c6]
         public static let responsesRoute = AIProtocols.OpenAIResponses.route.with(id: "cloudflare-ai-gateway-responses", provider: id)
-        // parity: ai/src/providers/cloudflare-ai-gateway.ts#messagesRoute [status=implemented hash=9371bdb189ea]
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#messagesRoute [status=implemented hash=ae34ef3fb489]
         public static let messagesRoute = AIProtocols.AnthropicMessages.route.with(id: "cloudflare-ai-gateway-messages", provider: id)
-        // parity: ai/src/providers/cloudflare-ai-gateway.ts#route [status=implemented hash=68f71e5a3e1c]
+        // parity: ai/src/providers/cloudflare-ai-gateway.ts#route [status=implemented hash=cb0d32635b6c]
         public static let route = AIProtocols.OpenAIChat.route.with(id: "cloudflare-ai-gateway-chat", provider: id)
         // parity: ai/src/providers/cloudflare-ai-gateway.ts#routes [status=implemented hash=29169c79c1b7]
         public static let routes: [AIProtocols.ChatRouteSpec] = [responsesRoute, messagesRoute, route]
@@ -1464,7 +1464,7 @@ public enum AIProviders {
             try CloudflareShared.runBaseURL(input, provider: id, name: "CloudflareWorkersAI")
         }
 
-        // parity: ai/src/providers/cloudflare-workers-ai.ts#route [status=implemented hash=6e132f9da641]
+        // parity: ai/src/providers/cloudflare-workers-ai.ts#route [status=implemented hash=8a552ca9eb28]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id)
         // parity: ai/src/providers/cloudflare-workers-ai.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
@@ -1520,11 +1520,11 @@ public enum AIProviders {
         public typealias Settings = ProviderConfig
         // parity: ai/src/providers/cohere.ts#route [status=implemented hash=5a4fa66efd34]
         public static let route = AIProtocols.CohereChat.route
-        // parity: ai/src/providers/cohere.ts#chatRoute [status=implemented hash=ea9ff0f3c813]
+        // parity: ai/src/providers/cohere.ts#chatRoute [status=implemented hash=8f953def933b]
         public static let chatRoute = AIProtocols.OpenAIChat.route.with(id: "cohere-chat-completions", provider: id, providerMetadataKey: "cohere", baseURL: compatibilityBaseURL)
         // parity: ai/src/providers/cohere.ts#routes [status=implemented hash=da5c558abc5d]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route, chatRoute]
-        // parity: ai/src/providers/cohere.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/cohere.ts#configure [status=implemented hash=99073b5fbc31]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.CohereChat.DEFAULT_BASE_URL, auth: resolveBearerAuth(config: input, envVars: ["COHERE_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1566,7 +1566,7 @@ public enum AIProviders {
         public static let id = "deepgram"
         // parity: ai/src/providers/deepgram.ts#Config [status=implemented hash=e2282dcfffaf]
         public typealias Config = ProviderConfig
-        // parity: ai/src/providers/deepgram.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/deepgram.ts#configure [status=implemented hash=11d4a5c15c27]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             let explicitKey: String? = { if case .explicit(let k) = input.apiKey { return k }; return environment.variable("DEEPGRAM_API_KEY") }()
             let auth: AIProtocolUtils.AuthStrategy = input.auth ?? (explicitKey.map { .header(name: "authorization", value: "Token \($0)") } ?? .none)
@@ -1592,11 +1592,11 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/deepinfra.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/deepinfra.ts#route [status=implemented hash=5efa7f95947f]
+        // parity: ai/src/providers/deepinfra.ts#route [status=implemented hash=460c3c4e450b]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/deepinfra.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/deepinfra.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/deepinfra.ts#configure [status=implemented hash=6a329016a594]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["DEEPINFRA_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1618,11 +1618,11 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/deepseek.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/deepseek.ts#route [status=implemented hash=a68789a71e80]
+        // parity: ai/src/providers/deepseek.ts#route [status=implemented hash=35bbb9e20e1e]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/deepseek.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/deepseek.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/deepseek.ts#configure [status=implemented hash=53a1d5f15997]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["DEEPSEEK_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1640,19 +1640,19 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/digitalocean.ts#Settings [status=implemented hash=3922c3292ddf]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/digitalocean.ts#protocol [status=implemented hash=5f4b825458c9]
+        // parity: ai/src/providers/digitalocean.ts#protocol [status=implemented hash=b2813c211153]
         public static let `protocol` = AIProtocols.ChatProtocolSpec(
             id: "digitalocean-chat", framing: .sseWithDone,
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in try AIProtocols.OpenAIChat.fromRequest(req, useCacheControl: true) },
             parseStream: AIProtocols.OpenAIChat.parseSSEStream,
             makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
-        // parity: ai/src/providers/digitalocean.ts#route [status=implemented hash=e1d637b751cf]
+        // parity: ai/src/providers/digitalocean.ts#route [status=implemented hash=c9d0410ab539]
         public static let route = AIProtocols.ChatRouteSpec(id: id, provider: id, providerMetadataKey: id, protocol: `protocol`, defaultBaseURL: defaultBaseURL, path: "/chat/completions")
         public static let responsesRoute = AIProtocols.ChatRouteSpec(id: "digitalocean-responses", provider: id, providerMetadataKey: id, protocol: AIProtocols.OpenResponses.`protocol`, defaultBaseURL: defaultBaseURL, path: "/responses", defaultProviderOptions: ["store": .bool(false), "include": .array([.string("reasoning.encrypted_content")])])
         // parity: ai/src/providers/digitalocean.ts#routes [status=implemented hash=8fdb0460cbc8]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route, responsesRoute]
-        // parity: ai/src/providers/digitalocean.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/digitalocean.ts#configure [status=implemented hash=4ea0c44d2453]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["DIGITALOCEAN_ACCESS_TOKEN", "DIGITALOCEAN_API_KEY", "DO_INFERENCE_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:], defaultCapabilities: .init(promptCacheKey: true))
         }
@@ -1676,7 +1676,7 @@ public enum AIProviders {
         public static func responses(_ modelID: String) -> ConfiguredModel { provider.model(modelID, route: responsesRoute) }
         // parity: ai/src/providers/digitalocean.ts#model [status=implemented hash=61635358c550]
         public static func model(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: route) }
-        // parity: ai/src/providers/digitalocean.ts#responsesModel [status=implemented hash=cfab73c14f1e]
+        // parity: ai/src/providers/digitalocean.ts#responsesModel [status=implemented hash=d03185b7c327]
         public static func responsesModel(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: responsesRoute) }
         // parity: ai/src/providers/digitalocean.ts#imageModel [status=implemented hash=2f7c46a66434]
         public static func imageModel(_ modelID: String, settings: Settings = Settings()) -> AIProtocols.MediaModelHandle {
@@ -1704,7 +1704,7 @@ public enum AIProviders {
         public static let id = "elevenlabs"
         // parity: ai/src/providers/elevenlabs.ts#Config [status=implemented hash=e2282dcfffaf]
         public typealias Config = ProviderConfig
-        // parity: ai/src/providers/elevenlabs.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/elevenlabs.ts#configure [status=implemented hash=b4ca0b1516b5]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.ElevenLabsSpeech.DEFAULT_BASE_URL, auth: resolveHeaderAuth(config: input, envVars: ["ELEVENLABS_API_KEY"], headerName: "xi-api-key", environment: environment), headers: input.headers ?? [:])
         }
@@ -1728,11 +1728,11 @@ public enum AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/fireworks.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/fireworks.ts#route [status=implemented hash=d1cf434d86f0]
+        // parity: ai/src/providers/fireworks.ts#route [status=implemented hash=67ed9e335c33]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/fireworks.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/fireworks.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/fireworks.ts#configure [status=implemented hash=7c56fc1de0bc]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["FIREWORKS_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1765,13 +1765,13 @@ public enum AIProviders {
             ADCClientDescriptor(project: project, scope: cloudPlatformScope)
         }
 
-        // parity: ai/src/providers/google-vertex-shared.ts#OAuthOptions [status=implemented hash=02dbee15b47b]
+        // parity: ai/src/providers/google-vertex-shared.ts#OAuthOptions [status=implemented hash=1743cf8f9a36]
         public typealias OAuthOptions = ProviderConfig
 
-        // parity: ai/src/providers/google-vertex-shared.ts#ApiKeyOptions [status=implemented hash=c7bed71fa23e]
+        // parity: ai/src/providers/google-vertex-shared.ts#ApiKeyOptions [status=implemented hash=f66b537ebbcf]
         public typealias ApiKeyOptions = ProviderConfig
 
-        // parity: ai/src/providers/google-vertex-shared.ts#project [status=implemented hash=24f1020dc0a8]
+        // parity: ai/src/providers/google-vertex-shared.ts#project [status=implemented hash=522880972188]
         public static func project(_ value: String? = nil, environment: any EnvironmentProviding = SystemEnvironment.shared) -> String? {
             value
                 ?? environment.variable("GOOGLE_VERTEX_PROJECT")
@@ -1780,7 +1780,7 @@ public enum AIProviders {
                 ?? environment.variable("GCLOUD_PROJECT")
         }
 
-        // parity: ai/src/providers/google-vertex-shared.ts#location [status=implemented hash=a852f58db4bf]
+        // parity: ai/src/providers/google-vertex-shared.ts#location [status=implemented hash=ca2a130c3fca]
         public static func location(_ value: String? = nil, environment: any EnvironmentProviding = SystemEnvironment.shared) -> String {
             value
                 ?? environment.variable("GOOGLE_VERTEX_LOCATION")
@@ -1804,7 +1804,7 @@ public enum AIProviders {
             return value
         }
 
-        // parity: ai/src/providers/google-vertex-shared.ts#apiKey [status=implemented hash=98a20d5cbc71]
+        // parity: ai/src/providers/google-vertex-shared.ts#apiKey [status=implemented hash=1d5161560ad3]
         public static func apiKey(
             _ input: ApiKeyOptions,
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -1830,7 +1830,7 @@ public enum AIProviders {
             return .none
         }
 
-        // parity: ai/src/providers/google-vertex-shared.ts#oauthRoute [status=implemented hash=3a1a8031c3c3]
+        // parity: ai/src/providers/google-vertex-shared.ts#oauthRoute [status=implemented hash=ebb885d9361e]
         public static func oauthRoute(
             _ route: AIProtocols.ChatRouteSpec,
             label: String,
@@ -1853,7 +1853,7 @@ public enum AIProviders {
             return route.with(baseURL: resolvedBase, headers: input.headers, providerOptions: input.providerOptions, auth: auth)
         }
 
-        // parity: ai/src/providers/google-vertex-shared.ts#oauthSettings [status=implemented hash=6793bff7e15e]
+        // parity: ai/src/providers/google-vertex-shared.ts#oauthSettings [status=implemented hash=23f2bff4c286]
         public static func oauthSettings(label: String, input: ProviderConfig) throws(ProviderConfigurationError) -> ProviderConfig {
             if case .explicit = input.apiKey {
                 throw ProviderConfigurationError(provider: providerID, message: "Google Vertex \(label) does not support API keys")
@@ -1874,7 +1874,7 @@ public enum AIProviders {
         public static let baseRoute = AIProtocols.OpenAIChat.route.with(id: "google-vertex-chat", provider: id, providerMetadataKey: "vertex")
         // parity: ai/src/providers/google-vertex-chat.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [baseRoute]
-        // parity: ai/src/providers/google-vertex-chat.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex-chat.ts#configure [status=implemented hash=f5ff24666e12]
         public static func configure(_ input: Config, environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let r = try GoogleVertexShared.oauthRoute(baseRoute, label: "Chat", input: input, environment: environment) { proj, loc in
                 "https://\(GoogleVertexShared.host(loc))/v1/projects/\(proj)/locations/\(loc)/endpoints/openapi"
@@ -1883,7 +1883,7 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/google-vertex-chat.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/google-vertex-chat.ts#model [status=implemented hash=007b17b1024f]
+        // parity: ai/src/providers/google-vertex-chat.ts#model [status=implemented hash=026d5f224cd8]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             try configure(GoogleVertexShared.oauthSettings(label: "Chat", input: settings)).model(modelID)
         }
@@ -1896,12 +1896,12 @@ public enum AIProviders {
         public static let id = "google-vertex"
         // parity: ai/src/providers/google-vertex-interactions.ts#Config [status=implemented hash=33efcd262af0]
         public typealias Config = ProviderConfig
-        // parity: ai/src/providers/google-vertex-interactions.ts#Settings [status=implemented hash=2eec63a61d0e]
+        // parity: ai/src/providers/google-vertex-interactions.ts#Settings [status=implemented hash=893b4f4168d9]
         public typealias Settings = ProviderConfig
         public static let baseRoute = AIProtocols.GoogleInteractions.route.with(id: "google-vertex-interactions", provider: id, providerMetadataKey: "vertex")
         // parity: ai/src/providers/google-vertex-interactions.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [baseRoute]
-        // parity: ai/src/providers/google-vertex-interactions.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex-interactions.ts#configure [status=implemented hash=fb353e8f39c0]
         public static func configure(_ input: Config, environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let loc = GoogleVertexShared.location(input.location, environment: environment)
             let proj = GoogleVertexShared.project(input.project, environment: environment)
@@ -1923,7 +1923,7 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/google-vertex-interactions.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/google-vertex-interactions.ts#model [status=implemented hash=d592028f4245]
+        // parity: ai/src/providers/google-vertex-interactions.ts#model [status=implemented hash=bf505e12978c]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             try configure(settings).model(modelID)
         }
@@ -1950,7 +1950,7 @@ public enum AIProviders {
         )
         // parity: ai/src/providers/google-vertex-messages.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [baseRoute]
-        // parity: ai/src/providers/google-vertex-messages.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex-messages.ts#configure [status=implemented hash=218f5630d366]
         public static func configure(_ input: Config, environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let r = try GoogleVertexShared.oauthRoute(baseRoute, label: "Messages", input: input, environment: environment) { proj, loc in
                 "https://\(GoogleVertexShared.host(loc))/v1/projects/\(proj)/locations/\(loc)/publishers/anthropic"
@@ -1959,7 +1959,7 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/google-vertex-messages.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/google-vertex-messages.ts#model [status=implemented hash=65dadc988ed3]
+        // parity: ai/src/providers/google-vertex-messages.ts#model [status=implemented hash=eca341eeadcc]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             try configure(GoogleVertexShared.oauthSettings(label: "Messages", input: settings)).model(modelID)
         }
@@ -1979,7 +1979,7 @@ public enum AIProviders {
         )
         // parity: ai/src/providers/google-vertex-mistral.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [baseRoute]
-        // parity: ai/src/providers/google-vertex-mistral.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex-mistral.ts#configure [status=implemented hash=2c0cd5c464c0]
         public static func configure(_ input: Config, environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let r = try GoogleVertexShared.oauthRoute(baseRoute, label: "Mistral", input: input, environment: environment) { proj, loc in
                 "https://\(GoogleVertexShared.host(loc))/v1/projects/\(proj)/locations/\(loc)/publishers/mistralai"
@@ -1988,7 +1988,7 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/google-vertex-mistral.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/google-vertex-mistral.ts#model [status=implemented hash=9a843ebbbba7]
+        // parity: ai/src/providers/google-vertex-mistral.ts#model [status=implemented hash=ddc21b48b7a1]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             try configure(GoogleVertexShared.oauthSettings(label: "Mistral", input: settings)).model(modelID)
         }
@@ -2009,7 +2009,7 @@ public enum AIProviders {
         )
         // parity: ai/src/providers/google-vertex-responses.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute]
-        // parity: ai/src/providers/google-vertex-responses.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex-responses.ts#configure [status=implemented hash=64d5e8945c9e]
         public static func configure(_ input: Config, environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let r = try GoogleVertexShared.oauthRoute(chatRoute, label: "Responses", input: input, environment: environment) { proj, loc in
                 "https://\(GoogleVertexShared.host(loc))/v1/projects/\(proj)/locations/\(loc)/endpoints/openapi"
@@ -2018,7 +2018,7 @@ public enum AIProviders {
         }
         // parity: ai/src/providers/google-vertex-responses.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/google-vertex-responses.ts#model [status=implemented hash=3aedd1e5039e]
+        // parity: ai/src/providers/google-vertex-responses.ts#model [status=implemented hash=fb627ffdfd1a]
         public static func model(_ modelID: String, settings: Settings) throws(ProviderConfigurationError) -> ConfiguredModel {
             try configure(GoogleVertexShared.oauthSettings(label: "Responses", input: settings)).model(modelID)
         }
@@ -2039,7 +2039,7 @@ public enum AIProviders {
         public static let id = "google-vertex"
         // parity: ai/src/providers/google-vertex.ts#Config [status=implemented hash=db719439f004]
         public typealias Config = ProviderConfig
-        // parity: ai/src/providers/google-vertex.ts#Settings [status=implemented hash=5bb27d1801cc]
+        // parity: ai/src/providers/google-vertex.ts#Settings [status=implemented hash=8d6f6214c211]
         public typealias Settings = ProviderConfig
 
         public static let vertexGeminiRoute = AIProtocols.ChatRouteSpec(
@@ -2053,7 +2053,7 @@ public enum AIProviders {
         // parity: ai/src/providers/google-vertex.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [vertexGeminiRoute]
 
-        // parity: ai/src/providers/google-vertex.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google-vertex.ts#configure [status=implemented hash=2464eb0c2de8]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) throws(ProviderConfigurationError) -> ConfiguredProvider {
             let key = try GoogleVertexShared.apiKey(input, environment: environment)
             let base: String

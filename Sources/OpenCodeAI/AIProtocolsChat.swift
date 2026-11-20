@@ -1102,7 +1102,7 @@ public enum AIProtocols {
             return map
         }
 
-        // parity: ai/src/protocols/openai-freeform.ts#grammar [status=implemented hash=8fcd7aa1054f]
+        // parity: ai/src/protocols/openai-freeform.ts#grammar [status=implemented hash=424bd8401928]
         public static func grammar(_ format: AIProtocolUtils.FreeformFormat) -> GrammarSpec? {
             switch format {
             case .text: return nil
@@ -1123,7 +1123,7 @@ public enum AIProtocols {
             custom?.field ?? "input"
         }
 
-        // parity: ai/src/protocols/openai-freeform.ts#fromRaw [status=implemented hash=d02a2cc229d8]
+        // parity: ai/src/protocols/openai-freeform.ts#fromRaw [status=implemented hash=0bd3e25be21b]
         public static func fromRaw(_ custom: Custom?, raw: String) -> String {
             AIProtocolUtils.JSONCodec.encodeObject([fieldName(custom): .string(raw)])
         }
@@ -1140,7 +1140,7 @@ public enum AIProtocols {
             "{\(AIProtocolUtils.JSONCodec.encode(.string(fieldName(custom)))):\"\(streamDelta(raw))"
         }
 
-        // parity: ai/src/protocols/openai-freeform.ts#metadata [status=implemented hash=40dea1c5523e]
+        // parity: ai/src/protocols/openai-freeform.ts#metadata [status=implemented hash=48e691b6c0b4]
         public static func metadata(itemId: String, custom: Bool) -> [String: JSONValue] {
             custom ? ["itemId": .string(itemId), "custom": .bool(true)] : ["itemId": .string(itemId)]
         }
@@ -1155,7 +1155,7 @@ public enum AIProtocols {
             return wasCustom == custom
         }
 
-        // parity: ai/src/protocols/openai-freeform.ts#close [status=implemented hash=216386f0ae53]
+        // parity: ai/src/protocols/openai-freeform.ts#close [status=implemented hash=a5c1b7749c10]
         public static func close<K: Hashable & Sendable>(
             tools: AIProtocolUtils.ToolStream.State<K>,
             keys: [K],
@@ -1219,7 +1219,7 @@ public enum AIProtocols {
             case betweenTools
         }
 
-        // parity: ai/src/protocols/anthropic-messages.ts#ContextManagement [status=implemented hash=2b6282a3dbb8]
+        // parity: ai/src/protocols/anthropic-messages.ts#ContextManagement [status=implemented hash=06f75743f849]
         public struct ContextManagement: Equatable, Hashable, Sendable {
             public struct Edit: Equatable, Hashable, Sendable {
                 public let type: String
@@ -2072,7 +2072,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/anthropic-messages.ts#protocol [status=implemented hash=c7ff72010f93]
+        // parity: ai/src/protocols/anthropic-messages.ts#protocol [status=implemented hash=82faa7844dc3]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: framing,
@@ -2081,7 +2081,7 @@ public enum AIProtocols {
             makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/protocols/anthropic-messages.ts#transport [status=adapted hash=3c084e4c2ecd]
+        // parity: ai/src/protocols/anthropic-messages.ts#transport [status=adapted hash=eee9218bbf22]
         public static func transportHeaders(
             for body: AnthropicMessagesBody,
             existing: [String: String] = [:]
@@ -2108,7 +2108,7 @@ public enum AIProtocols {
             return headers
         }
 
-        // parity: ai/src/protocols/anthropic-messages.ts#route [status=implemented hash=6168c88c0729]
+        // parity: ai/src/protocols/anthropic-messages.ts#route [status=implemented hash=6989278dd117]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "anthropic",
@@ -2129,7 +2129,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/open-responses.ts#PATH [status=implemented hash=57ecae4492fe]
         public static let PATH = "/responses"
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputText [status=implemented hash=247aa7a7d00e]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputText [status=implemented hash=f403147b73d0]
         public struct OpenResponsesInputText: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let text: String
@@ -2137,7 +2137,7 @@ public enum AIProtocols {
             public var jsonValue: JSONValue { .object(["type": .string(type), "text": .string(text)]) }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputImage [status=implemented hash=784d754946ac]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputImage [status=implemented hash=994b0ec481e5]
         public struct OpenResponsesInputImage: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let image_url: String
@@ -2150,7 +2150,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputFile [status=implemented hash=6fda276dd31e]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesInputFile [status=implemented hash=8f31b6285430]
         public struct OpenResponsesInputFile: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let filename: String?
@@ -2185,7 +2185,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesOutputText [status=implemented hash=5c24f2797fa6]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesOutputText [status=implemented hash=eb5f7ba82162]
         public struct OpenResponsesOutputText: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let text: String
@@ -2199,7 +2199,7 @@ public enum AIProtocols {
             case final_answer
         }
 
-        // parity: ai/src/protocols/open-responses.ts#MessageMetadata [status=implemented hash=cc436a6dc440]
+        // parity: ai/src/protocols/open-responses.ts#MessageMetadata [status=implemented hash=6caf671a1310]
         public struct MessageMetadata: Equatable, Hashable, Sendable, Codable {
             public let itemId: String?
             public let status: String?
@@ -2209,7 +2209,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesReasoningItem [status=implemented hash=686da56380b0]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesReasoningItem [status=implemented hash=09f6e889871c]
         public struct OpenResponsesReasoningItem: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let id: String?
@@ -2232,7 +2232,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/open-responses.ts#HostedToolItem [status=implemented hash=61408561403f]
         public typealias HostedToolItem = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#CompactionItem [status=implemented hash=28a9c91ff1fc]
+        // parity: ai/src/protocols/open-responses.ts#CompactionItem [status=implemented hash=f2b23aea7388]
         public struct CompactionItem: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let id: String?
@@ -2247,7 +2247,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#ConfigurationUpdate [status=implemented hash=5c7079887378]
+        // parity: ai/src/protocols/open-responses.ts#ConfigurationUpdate [status=implemented hash=eafebb25789e]
         public struct ConfigurationUpdate: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let effort: String
@@ -2257,28 +2257,28 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#HostedToolReplay [status=implemented hash=0817b0c0ba3f]
+        // parity: ai/src/protocols/open-responses.ts#HostedToolReplay [status=implemented hash=7c9a70662bb7]
         public typealias HostedToolReplay = [String: JSONValue]
 
         // parity: ai/src/protocols/open-responses.ts#HostedToolReplayItem [status=implemented hash=16bb5161bf18]
         public typealias HostedToolReplayItem = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#Tool [status=implemented hash=62da9ed9b468]
+        // parity: ai/src/protocols/open-responses.ts#Tool [status=implemented hash=27b0eeadc631]
         public typealias Tool = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#CustomTool [status=implemented hash=15b4975903b2]
+        // parity: ai/src/protocols/open-responses.ts#CustomTool [status=implemented hash=a1c461c58a84]
         public typealias CustomTool = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#HostedTool [status=implemented hash=7ba4a411acb7]
+        // parity: ai/src/protocols/open-responses.ts#HostedTool [status=implemented hash=5976e28d845f]
         public typealias HostedTool = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#AdditionalTools [status=implemented hash=d8cdf6b39794]
+        // parity: ai/src/protocols/open-responses.ts#AdditionalTools [status=implemented hash=17d699eb2054]
         public typealias AdditionalTools = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#InputItem [status=implemented hash=56dd7fac7247]
+        // parity: ai/src/protocols/open-responses.ts#InputItem [status=implemented hash=708c1ff0fbbf]
         public typealias InputItem = JSONValue
 
-        // parity: ai/src/protocols/open-responses.ts#ToolChoice [status=implemented hash=5ccd4d03aa0f]
+        // parity: ai/src/protocols/open-responses.ts#ToolChoice [status=implemented hash=37c2635ca59c]
         public typealias ToolChoice = JSONValue
 
         // parity: ai/src/protocols/open-responses.ts#coreFields [status=implemented hash=b4cde5e49298]
@@ -2290,13 +2290,13 @@ public enum AIProtocols {
             "presence_penalty", "frequency_penalty",
         ]
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesBody [status=implemented hash=bcdc0c1fe010]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesBody [status=implemented hash=54020b508145]
         public typealias OpenResponsesBody = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#OpenResponsesUsage [status=implemented hash=31000231b365]
+        // parity: ai/src/protocols/open-responses.ts#OpenResponsesUsage [status=implemented hash=d8fdfab35a3a]
         public typealias OpenResponsesUsage = [String: JSONValue]
 
-        // parity: ai/src/protocols/open-responses.ts#StreamItem [status=implemented hash=3810eb427090]
+        // parity: ai/src/protocols/open-responses.ts#StreamItem [status=implemented hash=66c508a3a764]
         public typealias StreamItem = [String: JSONValue]
 
         // parity: ai/src/protocols/open-responses.ts#OutputItem [status=implemented hash=2db57e87796e]
@@ -2419,7 +2419,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerTool [status=implemented hash=67bf55c566c2]
+        // parity: ai/src/protocols/open-responses.ts#lowerTool [status=implemented hash=defeac592024]
         public static func lowerTool(
             protocolName: String,
             tool: AIProtocolUtils.ToolDefinition
@@ -2455,7 +2455,7 @@ public enum AIProtocols {
             ]
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerTools [status=implemented hash=bcc6f6c4ee86]
+        // parity: ai/src/protocols/open-responses.ts#lowerTools [status=implemented hash=c4342efc909d]
         public static func lowerTools(
             _ tools: [AIProtocolUtils.ToolDefinition],
             adapter: ProviderAdapter,
@@ -2474,12 +2474,12 @@ public enum AIProtocols {
             return out
         }
 
-        // parity: ai/src/protocols/open-responses.ts#namedTool [status=implemented hash=7ee6deac8621]
+        // parity: ai/src/protocols/open-responses.ts#namedTool [status=implemented hash=c39996cabe26]
         public static func namedTool(_ name: String, custom: [String: OpenAIFreeform.Custom]) -> JSONValue {
             .object(["type": .string(custom[name] != nil ? "custom" : "function"), "name": .string(name)])
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerToolChoice [status=implemented hash=1f2b46b6c0c0]
+        // parity: ai/src/protocols/open-responses.ts#lowerToolChoice [status=implemented hash=1ae87881743a]
         public static func lowerToolChoice(
             protocolName: String,
             toolChoice: AIProtocolUtils.ToolChoice,
@@ -2533,7 +2533,7 @@ public enum AIProtocols {
             return .file(OpenResponsesInputFile(filename: part.filename ?? defaultName, detail: detail, file_data: location))
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerMessages [status=implemented hash=33c2f9334b2e]
+        // parity: ai/src/protocols/open-responses.ts#lowerMessages [status=implemented hash=84982f1a98b5]
         public static func lowerMessages(
             _ request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter = .base
@@ -2700,7 +2700,7 @@ public enum AIProtocols {
             return input
         }
 
-        // parity: ai/src/protocols/open-responses.ts#lowerConversation [status=implemented hash=145ee393e3e9]
+        // parity: ai/src/protocols/open-responses.ts#lowerConversation [status=implemented hash=ed260ddee544]
         public static func lowerConversation(
             _ request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter = .base
@@ -2778,7 +2778,7 @@ public enum AIProtocols {
             ])
         }
 
-        // parity: ai/src/protocols/open-responses.ts#fromRequestWithAdapter [status=implemented hash=4f5be8e563d3]
+        // parity: ai/src/protocols/open-responses.ts#fromRequestWithAdapter [status=implemented hash=23cf032e495d]
         public static func fromRequestWithAdapter(
             _ request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter
@@ -2843,7 +2843,7 @@ public enum AIProtocols {
             model.providerMetadataKey ?? "openresponses"
         }
 
-        // parity: ai/src/protocols/open-responses.ts#providerMetadata [status=implemented hash=64fc5a642f86]
+        // parity: ai/src/protocols/open-responses.ts#providerMetadata [status=implemented hash=1069ac85b5b6]
         public static func providerMetadata(_ state: ParserState, metadata: [String: JSONValue]) -> AIProtocolUtils.ProviderMetadata {
             [state.providerMetadataKey: metadata]
         }
@@ -2875,7 +2875,7 @@ public enum AIProtocols {
             return OutputItem(id: id, type: type, raw: raw)
         }
 
-        // parity: ai/src/protocols/open-responses.ts#normalize [status=implemented hash=4ae0fe6244c9]
+        // parity: ai/src/protocols/open-responses.ts#normalize [status=implemented hash=6f8dbe6844ae]
         public static func normalize(_ state: ParserState, input: Event) -> NormalizedEvent {
             let framed = AIProtocolUtils.ProviderShared.withUntypedFrames(input)
             let type = AIProtocolUtils.JSONCodec.stringValue(framed["type"]) ?? ""
@@ -3292,7 +3292,7 @@ public enum AIProtocols {
             return (state, [])
         }
 
-        // parity: ai/src/protocols/open-responses.ts#initial [status=implemented hash=67918064ac71]
+        // parity: ai/src/protocols/open-responses.ts#initial [status=implemented hash=de588d8a14c0]
         public static func initial(
             _ request: AIProtocolUtils.LLMRequest,
             adapter: ProviderAdapter = .base
@@ -3372,7 +3372,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/open-responses.ts#protocol [status=implemented hash=6735316dd60d]
+        // parity: ai/src/protocols/open-responses.ts#protocol [status=implemented hash=3ef6cd7db881]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -3544,7 +3544,7 @@ public enum AIProtocols {
             ChannelTransport(options: options)
         }
 
-        // parity: ai/src/protocols/open-responses-channel.ts#OpenResponsesChannel [status=implemented hash=8a7bbf47a043]
+        // parity: ai/src/protocols/open-responses-channel.ts#OpenResponsesChannel [status=implemented hash=2af4757b2ad7]
         public static let OpenResponsesChannel = ChannelTransport.self
     }
 
@@ -3562,7 +3562,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-responses.ts#PATH [status=implemented hash=1ebc29874fd2]
         public static let PATH = OpenResponses.PATH
 
-        // parity: ai/src/protocols/openai-responses.ts#ContextManagement [status=implemented hash=1f179224d39f]
+        // parity: ai/src/protocols/openai-responses.ts#ContextManagement [status=implemented hash=dc67f96c9c45]
         public struct ContextManagementEntry: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let compactThreshold: Int?
@@ -3581,7 +3581,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-responses.ts#OpenAIResponsesBody [status=implemented hash=243a2ebcb941]
         public typealias OpenAIResponsesBody = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-responses.ts#CompactionTrigger [status=implemented hash=8c05872e3540]
+        // parity: ai/src/protocols/openai-responses.ts#CompactionTrigger [status=implemented hash=0802956921b8]
         public struct CompactionTrigger: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public init() { self.type = "compaction_trigger" }
@@ -3659,7 +3659,7 @@ public enum AIProtocols {
             return body
         }
 
-        // parity: ai/src/protocols/openai-responses.ts#protocol [status=implemented hash=71057f21f38a]
+        // parity: ai/src/protocols/openai-responses.ts#protocol [status=implemented hash=0550e136092a]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -3680,7 +3680,7 @@ public enum AIProtocols {
             OpenResponsesChannel.transport(options)
         }
 
-        // parity: ai/src/protocols/openai-responses.ts#transport [status=implemented hash=bb2f93b2ab8f]
+        // parity: ai/src/protocols/openai-responses.ts#transport [status=implemented hash=9775213b1f97]
         public static let transport = channelTransport(OpenResponsesChannel.Options(
             id: adapterID,
             name: name,
@@ -3692,7 +3692,7 @@ public enum AIProtocols {
             }
         ))
 
-        // parity: ai/src/protocols/openai-responses.ts#route [status=implemented hash=b47e0b985e8a]
+        // parity: ai/src/protocols/openai-responses.ts#route [status=implemented hash=8e5d31962209]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "openai",
@@ -3715,7 +3715,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-chat.ts#PATH [status=implemented hash=16806d4aa677]
         public static let PATH = "/chat/completions"
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatAssistantToolCall [status=implemented hash=e3a2ae131373]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatAssistantToolCall [status=implemented hash=5e0c4a6dfd9c]
         public struct OpenAIChatAssistantToolCall: Equatable, Hashable, Sendable {
             public let id: String
             public let name: String
@@ -3739,7 +3739,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatAssistantCustomToolCall [status=implemented hash=c1a8a17c65ff]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatAssistantCustomToolCall [status=implemented hash=a1cec6bfbacd]
         public struct OpenAIChatAssistantCustomToolCall: Equatable, Hashable, Sendable {
             public let id: String
             public let name: String
@@ -3758,7 +3758,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatMessage [status=implemented hash=4089e9aba311]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatMessage [status=implemented hash=7279d2c113bd]
         public typealias OpenAIChatMessage = [String: JSONValue]
 
         // parity: ai/src/protocols/openai-chat.ts#bodyFields [status=implemented hash=fc7ccbfa53ef]
@@ -3773,19 +3773,19 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-chat.ts#OpenAIChatBody [status=implemented hash=ce139493bf0f]
         public typealias OpenAIChatBody = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatUsage [status=implemented hash=ce3d3af5ec95]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatUsage [status=implemented hash=c1df8544db5b]
         public typealias OpenAIChatUsage = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatToolCallDelta [status=implemented hash=bccb983975d2]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatToolCallDelta [status=implemented hash=718fa6816d21]
         public typealias OpenAIChatToolCallDelta = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatDelta [status=implemented hash=93ce348fc67e]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatDelta [status=implemented hash=4715cbb4a2d6]
         public typealias OpenAIChatDelta = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatChoice [status=implemented hash=98ea4a62e2d8]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatChoice [status=implemented hash=30f92e438615]
         public typealias OpenAIChatChoice = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatEvent [status=implemented hash=828dab9f5f88]
+        // parity: ai/src/protocols/openai-chat.ts#OpenAIChatEvent [status=implemented hash=d2d3b91f0611]
         public typealias OpenAIChatEvent = [String: JSONValue]
 
         public struct PendingToolDelta: Equatable, Hashable, Sendable {
@@ -3931,7 +3931,7 @@ public enum AIProtocols {
             return .object(["type": .string("image_url"), "image_url": .object(["url": .string(url)])])
         }
 
-        // parity: ai/src/protocols/openai-chat.ts#fromRequest [status=implemented hash=0df5c71bf22f]
+        // parity: ai/src/protocols/openai-chat.ts#fromRequest [status=implemented hash=b1b6974666e4]
         public static func fromRequest(
             _ request: AIProtocolUtils.LLMRequest,
             useCacheControl: Bool = false
@@ -4374,7 +4374,7 @@ public enum AIProtocols {
             return events
         }
 
-        // parity: ai/src/protocols/openai-chat.ts#finishEvents [status=implemented hash=0d2d39a2cbf1]
+        // parity: ai/src/protocols/openai-chat.ts#finishEvents [status=implemented hash=67ed75f4ebe3]
         public static func finishEvents(state: ParserState) throws(AIProtocolUtils.ProtocolError) -> [AIProtocolUtils.LLMEvent] {
             if state.finishReason == nil && state.requireFinishReason {
                 throw AIProtocolUtils.ProtocolError(
@@ -4470,7 +4470,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/openai-chat.ts#protocol [status=implemented hash=757982d80386]
+        // parity: ai/src/protocols/openai-chat.ts#protocol [status=implemented hash=c3964d88f6d6]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sseWithDone,
@@ -4482,10 +4482,10 @@ public enum AIProtocols {
         // parity: ai/src/protocols/openai-chat.ts#framing [status=implemented hash=b470ea06f479]
         public static let framing: FramingKind = .sseWithDone
 
-        // parity: ai/src/protocols/openai-chat.ts#httpTransport [status=adapted hash=709f7bb91448]
+        // parity: ai/src/protocols/openai-chat.ts#httpTransport [status=adapted hash=77d65b0eabbd]
         public static let httpTransport: FramingKind = .sseWithDone
 
-        // parity: ai/src/protocols/openai-chat.ts#route [status=implemented hash=05bf1fd6d126]
+        // parity: ai/src/protocols/openai-chat.ts#route [status=implemented hash=ff1bf9d58b59]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "openai",
@@ -4499,7 +4499,7 @@ public enum AIProtocols {
     // MARK: - OpenAICompatibleChat & OpenAICompatibleResponses (2 symbols)
 
     public enum OpenAICompatibleChat {
-        // parity: ai/src/protocols/openai-compatible-chat.ts#route [status=implemented hash=46310d07b0ac]
+        // parity: ai/src/protocols/openai-compatible-chat.ts#route [status=implemented hash=eb499ff0e073]
         public static let route = ChatRouteSpec(
             id: "openai-compatible-chat",
             provider: "openai-compatible",
@@ -4511,7 +4511,7 @@ public enum AIProtocols {
     }
 
     public enum OpenAICompatibleResponses {
-        // parity: ai/src/protocols/openai-compatible-responses.ts#route [status=implemented hash=17a20658bc46]
+        // parity: ai/src/protocols/openai-compatible-responses.ts#route [status=implemented hash=a4bd854fd153]
         public static let route = ChatRouteSpec(
             id: "openai-compatible-responses",
             provider: "openai-compatible",
@@ -4983,7 +4983,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/gemini.ts#transport [status=adapted hash=045e6aedc22c]
         public static let transport: FramingKind = .sse
 
-        // parity: ai/src/protocols/gemini.ts#protocol [status=implemented hash=2ccad21c91af]
+        // parity: ai/src/protocols/gemini.ts#protocol [status=implemented hash=24c40fee3e9d]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -4993,7 +4993,7 @@ public enum AIProtocols {
             makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/protocols/gemini.ts#route [status=implemented hash=10a1b59b7a41]
+        // parity: ai/src/protocols/gemini.ts#route [status=implemented hash=7b1e9d41b25d]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "google",
@@ -5479,7 +5479,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/bedrock-converse.ts#protocol [status=implemented hash=121a6cea4af9]
+        // parity: ai/src/protocols/bedrock-converse.ts#protocol [status=implemented hash=632fe2c1359b]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .awsEventStream,
@@ -5488,7 +5488,7 @@ public enum AIProtocols {
             makeStreamDecoder: { StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/protocols/bedrock-converse.ts#route [status=implemented hash=f94a87960297]
+        // parity: ai/src/protocols/bedrock-converse.ts#route [status=implemented hash=196794f5cef0]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "bedrock",
@@ -5557,7 +5557,7 @@ public enum AIProtocols {
         // parity: ai/src/protocols/google-interactions.ts#ProviderOptionsInput [status=implemented hash=b8c6e72d7d57]
         public typealias ProviderOptionsInput = OptionsInput
 
-        // parity: ai/src/protocols/google-interactions.ts#mediaContent [status=implemented hash=3cb12bfe832f]
+        // parity: ai/src/protocols/google-interactions.ts#mediaContent [status=implemented hash=33aa1077dc6c]
         public static func mediaContent(_ asset: AIProtocolUtils.MediaAsset) throws(AIProtocolUtils.ProtocolError) -> [String: JSONValue] {
             let kind = asset.kind
             guard kind == .image || kind == .audio || kind == .video || asset.mediaType == "application/pdf"
@@ -6212,7 +6212,7 @@ public enum AIProtocols {
 
         /// The stream event union also carries request boundaries (`NextRequest`, via `beginNextRequest`), and
         /// `interaction.completed` is terminal only when it doesn't require continuation.
-        // parity: ai/src/protocols/google-interactions.ts#protocol [status=implemented hash=0c30702154f0]
+        // parity: ai/src/protocols/google-interactions.ts#protocol [status=implemented hash=8ee16a3d22a6]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -6222,7 +6222,7 @@ public enum AIProtocols {
             makeStreamDecoder: { request in StreamDecoder(request: request) }
         )
 
-        // parity: ai/src/protocols/google-interactions.ts#route [status=implemented hash=1372d6a960df]
+        // parity: ai/src/protocols/google-interactions.ts#route [status=implemented hash=86df32149b29]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "google",
@@ -6406,7 +6406,7 @@ public enum AIProtocols {
             return try decoder.feed(bytes) + decoder.finish()
         }
 
-        // parity: ai/src/protocols/cohere-chat.ts#protocol [status=implemented hash=0386e4efb34b]
+        // parity: ai/src/protocols/cohere-chat.ts#protocol [status=implemented hash=216f384ef08b]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -6415,7 +6415,7 @@ public enum AIProtocols {
             makeStreamDecoder: { _ in StreamDecoder() }
         )
 
-        // parity: ai/src/protocols/cohere-chat.ts#route [status=implemented hash=ae588b3c5556]
+        // parity: ai/src/protocols/cohere-chat.ts#route [status=implemented hash=5992d819d219]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "cohere",
@@ -6468,13 +6468,13 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/mistral-chat.ts#MistralBody [status=implemented hash=3fa23918d381]
+        // parity: ai/src/protocols/mistral-chat.ts#MistralBody [status=implemented hash=b0aee11677de]
         public typealias MistralBody = [String: JSONValue]
 
         // parity: ai/src/protocols/mistral-chat.ts#ParserState [status=implemented hash=1e31213c36b7]
         public typealias ParserState = OpenAIChat.ParserState
 
-        // parity: ai/src/protocols/mistral-chat.ts#fromRequest [status=implemented hash=952470fb0125]
+        // parity: ai/src/protocols/mistral-chat.ts#fromRequest [status=implemented hash=33222a8d1847]
         public static func fromRequest(_ request: AIProtocolUtils.LLMRequest) throws(AIProtocolUtils.ProtocolError) -> MistralBody {
             var norm = AIProtocolUtils.MistralToolID.normalizer(for: request)
             var adjusted = request
@@ -6510,7 +6510,7 @@ public enum AIProtocols {
             return body
         }
 
-        // parity: ai/src/protocols/mistral-chat.ts#protocol [status=implemented hash=daa27a2c7527]
+        // parity: ai/src/protocols/mistral-chat.ts#protocol [status=implemented hash=a8bd61f9aee8]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sseWithDone,
@@ -6522,10 +6522,10 @@ public enum AIProtocols {
         // parity: ai/src/protocols/mistral-chat.ts#framing [status=implemented hash=b470ea06f479]
         public static let framing: FramingKind = .sseWithDone
 
-        // parity: ai/src/protocols/mistral-chat.ts#httpTransport [status=adapted hash=c104cd0066db]
+        // parity: ai/src/protocols/mistral-chat.ts#httpTransport [status=adapted hash=3fb04d26f89a]
         public static let httpTransport: FramingKind = .sseWithDone
 
-        // parity: ai/src/protocols/mistral-chat.ts#route [status=implemented hash=2164a44678d7]
+        // parity: ai/src/protocols/mistral-chat.ts#route [status=implemented hash=21bf33d33f75]
         public static let route = ChatRouteSpec(
             id: adapterID,
             provider: "mistral",
@@ -6568,17 +6568,17 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/alibaba-chat.ts#compatibility [status=implemented hash=b978c1367d21]
+        // parity: ai/src/protocols/alibaba-chat.ts#compatibility [status=implemented hash=61ab4f67a277]
         public static let compatibility = AIProtocolUtils.ModelCompatibility(
             reasoningField: "reasoning_content",
             maxTokensField: "max_completion_tokens",
             zaiToolStream: false
         )
 
-        // parity: ai/src/protocols/alibaba-chat.ts#capabilities [status=implemented hash=86f981cdb740]
+        // parity: ai/src/protocols/alibaba-chat.ts#capabilities [status=implemented hash=88f845143713]
         public static let capabilities = AIProtocolUtils.ModelCapabilities(strictTools: false)
 
-        // parity: ai/src/protocols/alibaba-chat.ts#protocol [status=implemented hash=0a2a730be48c]
+        // parity: ai/src/protocols/alibaba-chat.ts#protocol [status=implemented hash=ed4c01ed9639]
         public static let `protocol` = ChatProtocolSpec(
             id: "alibaba-chat",
             framing: .sseWithDone,
@@ -6616,7 +6616,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/alibaba-messages.ts#protocol [status=implemented hash=5ae63050ec40]
+        // parity: ai/src/protocols/alibaba-messages.ts#protocol [status=implemented hash=18ded8492a43]
         public static let `protocol` = ChatProtocolSpec(
             id: "alibaba-messages",
             framing: AnthropicMessages.framing,
@@ -6668,7 +6668,7 @@ public enum AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/alibaba-responses.ts#protocol [status=implemented hash=0304d86c79d1]
+        // parity: ai/src/protocols/alibaba-responses.ts#protocol [status=implemented hash=d62413dd60ac]
         public static let `protocol` = ChatProtocolSpec(
             id: "alibaba-responses",
             framing: .sse,
@@ -6700,7 +6700,7 @@ public enum AIProtocols {
     // MARK: - MetaMessages & MetaResponses (5 symbols)
 
     public enum MetaMessages {
-        // parity: ai/src/protocols/meta-messages.ts#protocol [status=implemented hash=82bc7fd553f0]
+        // parity: ai/src/protocols/meta-messages.ts#protocol [status=implemented hash=799d5ec77d4d]
         public static let `protocol` = ChatProtocolSpec(
             id: "meta-messages",
             framing: AnthropicMessages.framing,
@@ -6713,7 +6713,7 @@ public enum AIProtocols {
     }
 
     public enum MetaResponses {
-        // parity: ai/src/protocols/meta-responses.ts#WebSearch [status=implemented hash=d3c2251794e9]
+        // parity: ai/src/protocols/meta-responses.ts#WebSearch [status=implemented hash=0311a51e3e06]
         public struct WebSearch: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let search_context_size: String?
@@ -6722,7 +6722,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/meta-responses.ts#ImageGeneration [status=implemented hash=b96c999cefb4]
+        // parity: ai/src/protocols/meta-responses.ts#ImageGeneration [status=implemented hash=8e3dd5eb5a3d]
         public struct ImageGeneration: Equatable, Hashable, Sendable, Codable {
             public let type: String
             public let size: String?
@@ -6752,7 +6752,7 @@ public enum AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/meta-responses.ts#protocol [status=implemented hash=3b7fee00146d]
+        // parity: ai/src/protocols/meta-responses.ts#protocol [status=implemented hash=7fab724286c1]
         public static let `protocol` = ChatProtocolSpec(
             id: "meta-responses",
             framing: .sse,
@@ -6795,10 +6795,10 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/venice-chat.ts#compatibility [status=implemented hash=5be427d1e6fb]
+        // parity: ai/src/protocols/venice-chat.ts#compatibility [status=implemented hash=43d6fffa43fe]
         public static let compatibility = AIProtocolUtils.ModelCompatibility(maxTokensField: "max_completion_tokens")
 
-        // parity: ai/src/protocols/venice-chat.ts#capabilities [status=implemented hash=4745ce638a7a]
+        // parity: ai/src/protocols/venice-chat.ts#capabilities [status=implemented hash=25a42f8fef17]
         public static let capabilities = AIProtocolUtils.ModelCapabilities(promptCacheKey: true)
 
         private static func camelToSnake(_ key: String) -> String {
@@ -6814,7 +6814,7 @@ public enum AIProtocols {
             return out
         }
 
-        // parity: ai/src/protocols/venice-chat.ts#protocol [status=implemented hash=282a57d17c97]
+        // parity: ai/src/protocols/venice-chat.ts#protocol [status=implemented hash=2b82709ec225]
         public static let `protocol` = ChatProtocolSpec(
             id: "venice-chat",
             framing: .sseWithDone,
@@ -6876,7 +6876,7 @@ public enum AIProtocols {
             return defs
         }()
 
-        // parity: ai/src/protocols/xai-responses.ts#protocol [status=implemented hash=de9434eeae0e]
+        // parity: ai/src/protocols/xai-responses.ts#protocol [status=implemented hash=4159e275d9c6]
         public static let `protocol` = ChatProtocolSpec(
             id: adapterID,
             framing: .sse,
@@ -6929,17 +6929,17 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/zai-chat.ts#compatibility [status=implemented hash=e955e53394a5]
+        // parity: ai/src/protocols/zai-chat.ts#compatibility [status=implemented hash=1ce61aa4e6d8]
         public static let compatibility = AIProtocolUtils.ModelCompatibility(
             reasoningField: "reasoning_content",
             maxTokensField: "max_tokens",
             zaiToolStream: false
         )
 
-        // parity: ai/src/protocols/zai-chat.ts#capabilities [status=implemented hash=86f981cdb740]
+        // parity: ai/src/protocols/zai-chat.ts#capabilities [status=implemented hash=88f845143713]
         public static let capabilities = AIProtocolUtils.ModelCapabilities(strictTools: false)
 
-        // parity: ai/src/protocols/zai-chat.ts#protocol [status=implemented hash=33e5f57e7464]
+        // parity: ai/src/protocols/zai-chat.ts#protocol [status=implemented hash=1df861ef9eaa]
         public static let `protocol` = ChatProtocolSpec(
             id: "zai-chat",
             framing: .sseWithDone,
@@ -6969,7 +6969,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/zai-messages.ts#protocol [status=implemented hash=6e40d3290f05]
+        // parity: ai/src/protocols/zai-messages.ts#protocol [status=implemented hash=57fad94f58c9]
         public static let `protocol` = ChatProtocolSpec(
             id: "zai-messages",
             framing: AnthropicMessages.framing,
@@ -7062,7 +7062,7 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/system-one.ts#Response [status=implemented hash=e0a6050fbbd0]
+        // parity: ai/src/protocols/system-one.ts#Response [status=implemented hash=b8254d7731fc]
         public struct Response: Equatable, Hashable, Sendable {
             public let model: String
             public let answers: [String: JSONValue]
@@ -7084,7 +7084,7 @@ public enum AIProtocols {
             public let providerMetadata: AIProtocolUtils.ProviderMetadata
         }
 
-        // parity: ai/src/protocols/system-one.ts#encodeBody [status=implemented hash=94e8caf5e892]
+        // parity: ai/src/protocols/system-one.ts#encodeBody [status=implemented hash=2731606d60e6]
         public static func encodeBody(
             _ request: DecisionRequest,
             fallbackMediaInput: String = "assets"
@@ -7174,13 +7174,13 @@ public enum AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/system-one.ts#protocol [status=implemented hash=de20e4641d28]
+        // parity: ai/src/protocols/system-one.ts#protocol [status=implemented hash=186fa255c445]
         public static let `protocol` = ProtocolDescriptor()
 
-        // parity: ai/src/protocols/system-one.ts#route [status=implemented hash=58bb1e6028df]
+        // parity: ai/src/protocols/system-one.ts#route [status=implemented hash=1ecbc5eb0faa]
         public static let route = RouteDescriptor()
 
-        // parity: ai/src/protocols/system-one.ts#SystemOne [status=implemented hash=a3e5d40b8da2]
+        // parity: ai/src/protocols/system-one.ts#SystemOne [status=implemented hash=21d915099675]
         public static let SystemOne = SystemOneProtocol.self
     }
 }

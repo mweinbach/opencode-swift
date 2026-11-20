@@ -6,7 +6,7 @@ private func isCIEnvironment(_ environment: any EnvironmentProviding) -> Bool {
 }
 
 /// Resolves `"auto"` mode to `.replay` under CI or when the cassette already exists, otherwise `.record`.
-// parity: http-recorder/src/replay/state.ts#resolveAutoMode [status=implemented hash=378b074a9cad]
+// parity: http-recorder/src/replay/state.ts#resolveAutoMode [status=implemented hash=c18dad0e6975]
 public func resolveAutoMode(
     cassette: any CassetteStoreInterface,
     name: String,
@@ -150,7 +150,7 @@ public struct ReplayState<T: Sendable>: Sendable {
 }
 
 /// Constructs a `ReplayPoolState` backed by `cassette` and projected by `project`.
-// parity: http-recorder/src/replay/state.ts#makeReplayPoolState [status=implemented hash=7c0b2afcd7e5]
+// parity: http-recorder/src/replay/state.ts#makeReplayPoolState [status=implemented hash=9a3fa9907ee3]
 public func makeReplayPoolState<T: Sendable>(
     cassette: any CassetteStoreInterface,
     name: String,
@@ -160,7 +160,7 @@ public func makeReplayPoolState<T: Sendable>(
 }
 
 /// Constructs a sequential `ReplayState` backed by `cassette` and projected by `project`.
-// parity: http-recorder/src/replay/state.ts#makeReplayState [status=implemented hash=66bc82228ba8]
+// parity: http-recorder/src/replay/state.ts#makeReplayState [status=implemented hash=d9baad7886ac]
 public func makeReplayState<T: Sendable>(
     cassette: any CassetteStoreInterface,
     name: String,

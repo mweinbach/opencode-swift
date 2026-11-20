@@ -113,7 +113,7 @@ public enum CoreSessionInbox {
         public static let queue = Scope.delivery(.queue)
     }
 
-    // parity: core/src/session/inbox.ts#LifecycleConflict [status=implemented hash=57a3160fe4d4]
+    // parity: core/src/session/inbox.ts#LifecycleConflict [status=implemented hash=4697596d0b74]
     public struct LifecycleConflict: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionInbox.LifecycleConflict"
         public let id: SessionMessageSchema.ID
@@ -126,7 +126,7 @@ public enum CoreSessionInbox {
     }
 
     /// Consumed inbox row returned by `projectDelivered` inside the same event transaction.
-    // parity: core/src/session/inbox.ts#Delivered [status=implemented hash=d92474da9402]
+    // parity: core/src/session/inbox.ts#Delivered [status=implemented hash=dfb585f3499f]
     public enum Delivered: Equatable, Sendable {
         case user(id: SessionMessageSchema.ID, payload: CoreSessionStored.UserPayload)
         case synthetic(id: SessionMessageSchema.ID, payload: SessionInboxSchema.SyntheticPayload)
@@ -135,7 +135,7 @@ public enum CoreSessionInbox {
     }
 
     /// Next promotable boundary item returned by `nextPromotable`.
-    // parity: core/src/session/inbox.ts#Promotion [status=implemented hash=0750797a93d2]
+    // parity: core/src/session/inbox.ts#Promotion [status=implemented hash=336a81957693]
     public enum Promotion: Equatable, Hashable, Sendable {
         case user(id: SessionMessageSchema.ID, delivery: SessionInboxSchema.Delivery)
         case synthetic(id: SessionMessageSchema.ID, delivery: SessionInboxSchema.Delivery)
@@ -337,7 +337,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#make [status=implemented hash=57ba7cba8505]
+    // parity: core/src/session/inbox.ts#make [status=implemented hash=c232b4a4af4a]
     public static func make(db: any SQLiteDatabase, bus: CoreBus.Service) -> Service {
         Service(db: db, bus: bus)
     }
@@ -352,7 +352,7 @@ public enum CoreSessionInbox {
         return LayerNode.Output([Service.serviceKey: make(db: db, bus: bus)])
     }
 
-    // parity: core/src/session/inbox.ts#node [status=adapted hash=a2badfb8bbf5]
+    // parity: core/src/session/inbox.ts#node [status=adapted hash=c6deac2d4727]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer,
@@ -415,7 +415,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#find [status=implemented hash=57f93783c6cf]
+    // parity: core/src/session/inbox.ts#find [status=implemented hash=1d4e28329ac8]
     public static func find(db: any SQLiteDatabase, id: SessionMessageSchema.ID) throws -> SessionInboxSchema.Info? {
         guard let raw = try db.queryOne(
             "SELECT * FROM `session_inbox` WHERE `id` = ?",
@@ -480,7 +480,7 @@ public enum CoreSessionInbox {
 
     // MARK: Projections (Transactional)
 
-    // parity: core/src/session/inbox.ts#projectAdmitted [status=implemented hash=1b0fe7de0484]
+    // parity: core/src/session/inbox.ts#projectAdmitted [status=implemented hash=445b5f59d12d]
     public static func projectAdmitted(
         db: any SQLiteDatabase,
         enqueuedSeq: Int64,
@@ -547,7 +547,7 @@ public enum CoreSessionInbox {
         )
     }
 
-    // parity: core/src/session/inbox.ts#projectDelivered [status=implemented hash=2ed0d98ed6e8]
+    // parity: core/src/session/inbox.ts#projectDelivered [status=implemented hash=2186f285ed90]
     public static func projectDelivered(
         db: any SQLiteDatabase,
         id: SessionMessageSchema.ID,
@@ -576,7 +576,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#projectCancelled [status=implemented hash=d1cf7a937805]
+    // parity: core/src/session/inbox.ts#projectCancelled [status=implemented hash=68cde135e750]
     public static func projectCancelled(
         db: any SQLiteDatabase,
         id: SessionMessageSchema.ID,
@@ -596,7 +596,7 @@ public enum CoreSessionInbox {
         try CoreSessionBlob.releaseMessage(db, sessionID: sessionID, messageID: id)
     }
 
-    // parity: core/src/session/inbox.ts#projectDeliveryChanged [status=implemented hash=63b86fec7c8f]
+    // parity: core/src/session/inbox.ts#projectDeliveryChanged [status=implemented hash=f9667cbede02]
     public static func projectDeliveryChanged(
         db: any SQLiteDatabase,
         id: SessionMessageSchema.ID,
@@ -632,13 +632,13 @@ public enum CoreSessionInbox {
         return try rows.map(parseInboxRow)
     }
 
-    // parity: core/src/session/inbox.ts#list [status=implemented hash=fb7fad7c54e7]
+    // parity: core/src/session/inbox.ts#list [status=implemented hash=c4d819288af0]
     public static func list(db: any SQLiteDatabase, sessionID: SessionID) throws -> [SessionInboxSchema.Info] {
         let hydrated = try CoreSessionBlob.hydrateInbox(db, rows: try listRows(db: db, sessionID: sessionID))
         return try hydrated.map(infoFromStoredRow)
     }
 
-    // parity: core/src/session/inbox.ts#listWithRefs [status=implemented hash=b7f9856bd130]
+    // parity: core/src/session/inbox.ts#listWithRefs [status=implemented hash=fe05905e0039]
     public static func listWithRefs(db: any SQLiteDatabase, sessionID: SessionID) throws -> [SessionInboxSchema.MediaInfo] {
         let kept = try CoreSessionBlob.keepInboxRefs(db, rows: try listRows(db: db, sessionID: sessionID))
         return try kept.rows.map { row in
@@ -680,7 +680,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#moveIDs [status=implemented hash=767bb8e8604f]
+    // parity: core/src/session/inbox.ts#moveIDs [status=implemented hash=139e5395e559]
     public static func moveIDs(db: any SQLiteDatabase, sessionID: SessionID) throws -> [SessionMessageSchema.ID] {
         let rows = try db.query(
             "SELECT `id` FROM `session_inbox` WHERE `session_id` = ? AND `type` = 'move' ORDER BY `enqueued_seq` ASC",
@@ -736,7 +736,7 @@ public enum CoreSessionInbox {
         }
     }
 
-    // parity: core/src/session/inbox.ts#nextPromotable [status=implemented hash=0db0abc53d48]
+    // parity: core/src/session/inbox.ts#nextPromotable [status=implemented hash=c8bb921773a8]
     public static func nextPromotable(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -751,7 +751,7 @@ public enum CoreSessionInbox {
         return try promotionFromRow(queued)
     }
 
-    // parity: core/src/session/inbox.ts#has [status=implemented hash=1a7d3bd411d8]
+    // parity: core/src/session/inbox.ts#has [status=implemented hash=ddefa2064b4e]
     public static func has(db: any SQLiteDatabase, sessionID: SessionID, scope: Scope) throws -> Bool {
         let sql: String
         let params: [SQLiteValue]
@@ -791,7 +791,7 @@ public enum CoreSessionInbox {
 
     /// Promotes pending input into visible messages, returning the promoted count,
     /// or `nil` when a control (`compaction` or `move`) owns the boundary.
-    // parity: core/src/session/inbox.ts#promote [status=implemented hash=e34e2153f0de]
+    // parity: core/src/session/inbox.ts#promote [status=implemented hash=12a5dbd99b64]
     public static func promote(
         db: any SQLiteDatabase,
         bus: CoreBus.Service,
@@ -859,7 +859,7 @@ public enum CoreSessionPrompt {
 
     /// Materializes prompt attachments (`data:`, `media:`, `file:`) and resolves attached skills
     /// into a durable `SessionInboxSchema.Item`.
-    // parity: core/src/session/prompt.ts#prepare [status=implemented hash=3c384b8abf9f]
+    // parity: core/src/session/prompt.ts#prepare [status=implemented hash=7d88f5df016c]
     public static func prepare(
         session: SessionSchema.Info,
         messageID: SessionMessageSchema.ID,
@@ -1069,7 +1069,7 @@ public enum CoreSessionSynthetic {
         }
     }
 
-    // parity: core/src/session/synthetic.ts#make [status=implemented hash=30023c766835]
+    // parity: core/src/session/synthetic.ts#make [status=implemented hash=d8072ded9246]
     public static func make(
         store: any CoreSessionStore.Interface,
         inbox: any CoreSessionInbox.Interface,
@@ -1139,7 +1139,7 @@ public enum CoreSessionEnvironment {
         }
     }
 
-    // parity: core/src/session/environment.ts#node [status=implemented hash=b5892664844f]
+    // parity: core/src/session/environment.ts#node [status=implemented hash=f295b9fcbf23]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { _, _ in LayerNode.Output([Service.serviceKey: Service()]) },
@@ -1196,7 +1196,7 @@ public enum CoreSessionInstructionEntry {
         public var description: String { message }
     }
 
-    // parity: core/src/session/instruction-entry.ts#snapshot [status=implemented hash=39fa964098c8]
+    // parity: core/src/session/instruction-entry.ts#snapshot [status=implemented hash=45682931b0be]
     public static func snapshot(db: any SQLiteDatabase, sessionID: SessionID) throws -> Snapshot {
         try fetchRows(db: db, sessionID: sessionID, includeRemoved: true)
     }
@@ -1218,7 +1218,7 @@ public enum CoreSessionInstructionEntry {
         }
     }
 
-    // parity: core/src/session/instruction-entry.ts#initialize [status=implemented hash=cbc6ec5a8cfb]
+    // parity: core/src/session/instruction-entry.ts#initialize [status=implemented hash=d199b9cdee11]
     public static func initialize(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1331,7 +1331,7 @@ public enum CoreSessionInstructionEntry {
         }
     }
 
-    // parity: core/src/session/instruction-entry.ts#node [status=adapted hash=98f3fa69d10f]
+    // parity: core/src/session/instruction-entry.ts#node [status=adapted hash=788769187e33]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1553,7 +1553,7 @@ public enum CoreSessionInstructionState {
         return chunks.joined(separator: "\n\n")
     }
 
-    // parity: core/src/session/instruction-state.ts#observe [status=implemented hash=c6dd031957cc]
+    // parity: core/src/session/instruction-state.ts#observe [status=implemented hash=9886361554b4]
     public static func observe(
         db: any SQLiteDatabase,
         sources: [Source],
@@ -1572,7 +1572,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#commit [status=implemented hash=963473e010ea]
+    // parity: core/src/session/instruction-state.ts#commit [status=implemented hash=34498b241ce2]
     public static func commit(
         db: any SQLiteDatabase,
         bus: CoreBus.Service,
@@ -1609,7 +1609,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#prepare [status=implemented hash=d761ff98d1d0]
+    // parity: core/src/session/instruction-state.ts#prepare [status=implemented hash=b4ef72814850]
     public static func prepare(
         db: any SQLiteDatabase,
         bus: CoreBus.Service,
@@ -1620,7 +1620,7 @@ public enum CoreSessionInstructionState {
         try await commit(db: db, bus: bus, sources: sources, observation: obs)
     }
 
-    // parity: core/src/session/instruction-state.ts#apply [status=implemented hash=82e6fe80d213]
+    // parity: core/src/session/instruction-state.ts#apply [status=implemented hash=00f335f35766]
     public static func apply(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1640,7 +1640,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#initialize [status=implemented hash=5a21bf2099e3]
+    // parity: core/src/session/instruction-state.ts#initialize [status=implemented hash=ead958b40557]
     public static func initialize(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1664,7 +1664,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#advanceEpoch [status=implemented hash=ace6b2a822d1]
+    // parity: core/src/session/instruction-state.ts#advanceEpoch [status=implemented hash=183f9c92f63c]
     public static func advanceEpoch(db: any SQLiteDatabase, sessionID: SessionID, epochStart: Int64) throws {
         _ = try db.execute(
             """
@@ -1676,7 +1676,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#rewind [status=implemented hash=0e1563b43eb2]
+    // parity: core/src/session/instruction-state.ts#rewind [status=implemented hash=dfb959c8b1e4]
     public static func rewind(db: any SQLiteDatabase, sessionID: SessionID, boundary: Int64) throws {
         _ = try db.execute(
             "DELETE FROM `instruction_state` WHERE `session_id` = ? AND `through_seq` >= ?",
@@ -1684,7 +1684,7 @@ public enum CoreSessionInstructionState {
         )
     }
 
-    // parity: core/src/session/instruction-state.ts#initial [status=implemented hash=7cffb4cdf4a4]
+    // parity: core/src/session/instruction-state.ts#initial [status=implemented hash=40903e9ccd94]
     public static func initial(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1697,17 +1697,17 @@ public enum CoreSessionInstructionState {
         return renderInitial(sources: sources, values: stored.initialValues, blobs: blobs)
     }
 
-    // parity: core/src/session/instruction-state.ts#current [status=implemented hash=2ca75ad02a94]
+    // parity: core/src/session/instruction-state.ts#current [status=implemented hash=9123e960937d]
     public static func current(db: any SQLiteDatabase, sessionID: SessionID) throws -> [String: String]? {
         try findState(db: db, sessionID: sessionID)?.currentValues
     }
 
-    // parity: core/src/session/instruction-state.ts#epochStart [status=implemented hash=21ae7f8d91c1]
+    // parity: core/src/session/instruction-state.ts#epochStart [status=implemented hash=eb9579c2e9d1]
     public static func epochStart(db: any SQLiteDatabase, sessionID: SessionID) throws -> Int64? {
         try findState(db: db, sessionID: sessionID)?.epochStart
     }
 
-    // parity: core/src/session/instruction-state.ts#preview [status=implemented hash=9f09edf66541]
+    // parity: core/src/session/instruction-state.ts#preview [status=implemented hash=9e85a9f4c0f8]
     public static func preview(
         db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1835,7 +1835,7 @@ public enum CoreSessionInstructions {
         }
     }
 
-    // parity: core/src/session/instructions.ts#node [status=adapted hash=5961e28aa687]
+    // parity: core/src/session/instructions.ts#node [status=adapted hash=11fa6213d177]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

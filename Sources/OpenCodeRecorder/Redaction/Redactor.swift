@@ -219,7 +219,7 @@ public struct Redactor: Sendable {
     }
 
     /// Builds a redactor with secure defaults extended by `options`.
-    // parity: http-recorder/src/redaction/redactor.ts#make [status=implemented hash=073f7e9107c0]
+    // parity: http-recorder/src/redaction/redactor.ts#make [status=implemented hash=3b4bc19ecf66]
     public static func make(_ options: RedactOptions = RedactOptions()) -> Redactor {
         let fields = Set((defaultRedactJsonFields + (options.jsonFields ?? [])).map(normalizeField))
         let reqAllow = defaultRequestHeaders + (options.allowRequestHeaders ?? []) + (options.headers ?? [])

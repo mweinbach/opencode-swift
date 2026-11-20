@@ -18,7 +18,7 @@ public enum SimulationOpenAI {
     private static let endpointURL = AIProtocols.OpenAIChat.DEFAULT_BASE_URL + AIProtocols.OpenAIChat.PATH
 
     /// Creates a `SimulationNetwork.Route` claiming `POST {DEFAULT_BASE_URL}{PATH}` and streaming OpenAI SSE events.
-    // parity: simulation/src/backend/openai.ts#route [status=implemented hash=faf6003bd3e6]
+    // parity: simulation/src/backend/openai.ts#route [status=implemented hash=fcd86781d4a4]
     public static func route(_ provider: any SimulatedProvider.Interface) -> SimulationNetwork.Route {
         SimulationNetwork.Route { request, url in
             guard request.method.uppercased() == "POST" else { return nil }

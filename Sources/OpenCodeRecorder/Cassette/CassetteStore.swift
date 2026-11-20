@@ -7,7 +7,7 @@ import OpenCodePlatform
 import OpenCodeUtil
 
 /// Raised when a requested cassette does not exist.
-// parity: http-recorder/src/cassette/store.ts#CassetteNotFoundError [status=implemented hash=e3a04c9eda93]
+// parity: http-recorder/src/cassette/store.ts#CassetteNotFoundError [status=implemented hash=12f0b724b12a]
 public struct CassetteNotFoundError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
     public static let tag = "CassetteNotFoundError"
     public let cassetteName: String
@@ -25,7 +25,7 @@ public struct CassetteNotFoundError: Error, Equatable, Hashable, Sendable, Custo
 }
 
 /// Raised when a cassette file cannot be parsed or fails schema validation.
-// parity: http-recorder/src/cassette/store.ts#InvalidCassetteError [status=implemented hash=e5e378480723]
+// parity: http-recorder/src/cassette/store.ts#InvalidCassetteError [status=implemented hash=2663f30979a9]
 public struct InvalidCassetteError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
     public static let tag = "InvalidCassetteError"
     public let cassetteName: String
@@ -45,7 +45,7 @@ public struct InvalidCassetteError: Error, Equatable, Hashable, Sendable, Custom
 }
 
 /// Raised when persisting a cassette would leak detected secrets.
-// parity: http-recorder/src/cassette/store.ts#UnsafeCassetteError [status=implemented hash=1faea8cf9c1d]
+// parity: http-recorder/src/cassette/store.ts#UnsafeCassetteError [status=implemented hash=93e8f184a4a3]
 public struct UnsafeCassetteError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
     public static let tag = "UnsafeCassetteError"
     public let cassetteName: String
@@ -123,7 +123,7 @@ public struct CassetteStoreService: CassetteStoreInterface, Sendable {
     }
 
     /// Creates a filesystem-backed cassette store using `OpenCodeFileSystem`.
-    // parity: http-recorder/src/cassette/store.ts#fileSystem [status=implemented hash=237e3d6eca7a]
+    // parity: http-recorder/src/cassette/store.ts#fileSystem [status=implemented hash=6da4d3347b0f]
     public static func fileSystem(
         directory: String? = nil,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -136,7 +136,7 @@ public struct CassetteStoreService: CassetteStoreInterface, Sendable {
     }
 
     /// Creates an in-memory cassette store for deterministic tests and WASI environments.
-    // parity: http-recorder/src/cassette/store.ts#memory [status=implemented hash=162cb34b4110]
+    // parity: http-recorder/src/cassette/store.ts#memory [status=implemented hash=6d1fb93ee1b7]
     public static func memory(
         _ initial: [String: [Interaction]] = [:],
         environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -223,7 +223,7 @@ internal func cassettePath(directory: String, name: String) throws -> String {
 }
 
 /// Synchronously checks whether a recorded cassette exists on disk.
-// parity: http-recorder/src/cassette/store.ts#hasCassetteSync [status=implemented hash=921bb20e3c69]
+// parity: http-recorder/src/cassette/store.ts#hasCassetteSync [status=implemented hash=fc02a0063785]
 public func hasCassetteSync(_ name: String, directory: String? = nil) throws -> Bool {
     let target = try cassettePath(directory: directory ?? defaultRecordingsDirectory(), name: name)
     #if os(WASI)
@@ -234,7 +234,7 @@ public func hasCassetteSync(_ name: String, directory: String? = nil) throws -> 
 }
 
 /// Synchronously removes a recorded cassette from disk; removing a missing cassette is a no-op.
-// parity: http-recorder/src/cassette/store.ts#removeCassetteSync [status=implemented hash=526968487706]
+// parity: http-recorder/src/cassette/store.ts#removeCassetteSync [status=implemented hash=b8cdeb919226]
 public func removeCassetteSync(_ name: String, directory: String? = nil) throws {
     let target = try cassettePath(directory: directory ?? defaultRecordingsDirectory(), name: name)
     #if !os(WASI)

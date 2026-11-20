@@ -62,7 +62,7 @@ public enum TUIPrimitive {
     }
 
     /// Creates a critically-damped spring transition matching `ui/animation.ts#spring`.
-    // parity: tui/src/ui/animation.ts#spring [status=implemented hash=6365412f2f63]
+    // parity: tui/src/ui/animation.ts#spring [status=implemented hash=32a439957965]
     public static func spring(
         visualDuration: Double,
         restDelta: Double = 0.002,
@@ -72,7 +72,7 @@ public enum TUIPrimitive {
     }
 
     /// Creates a timed easing transition matching `ui/animation.ts#tween`.
-    // parity: tui/src/ui/animation.ts#tween [status=implemented hash=ab67a429d910]
+    // parity: tui/src/ui/animation.ts#tween [status=implemented hash=5cf6a3bed3c1]
     public static func tween(
         duration: Double,
         ease: EaseFunction? = nil
@@ -403,7 +403,7 @@ public enum TUIPrimitive {
         max(0, min(count - 1, selected))
     }
 
-    // parity: tui/src/ui/select-controller.ts#moveSelection [status=implemented hash=fd4cb036647e]
+    // parity: tui/src/ui/select-controller.ts#moveSelection [status=implemented hash=301c8cb30caf]
     public static func moveSelection(
         _ selected: Int,
         count: Int,
@@ -418,7 +418,7 @@ public enum TUIPrimitive {
         return next
     }
 
-    // parity: tui/src/ui/select-controller.ts#revealSelectionOffset [status=implemented hash=740f0ec9bf11]
+    // parity: tui/src/ui/select-controller.ts#revealSelectionOffset [status=implemented hash=032a146d6d9f]
     public static func revealSelectionOffset(
         _ offset: Int,
         count: Int,
@@ -431,7 +431,7 @@ public enum TUIPrimitive {
         return max(0, min(maxOff, offset))
     }
 
-    // parity: tui/src/ui/select-controller.ts#reconcileSelectionWindow [status=implemented hash=444825ab7c52]
+    // parity: tui/src/ui/select-controller.ts#reconcileSelectionWindow [status=implemented hash=3ea2ae547f27]
     public static func reconcileSelectionWindow(
         _ selected: Int,
         count: Int,
@@ -444,7 +444,7 @@ public enum TUIPrimitive {
         return max(first, min(last, selected))
     }
 
-    // parity: tui/src/ui/select-controller.ts#moveSelectionOffset [status=implemented hash=17df5c55733b]
+    // parity: tui/src/ui/select-controller.ts#moveSelectionOffset [status=implemented hash=94af7505a5c9]
     public static func moveSelectionOffset(
         _ offset: Int,
         count: Int,
@@ -670,7 +670,7 @@ public enum TUIPrimitive {
         levels: [0.55, 0.85, 1.0, 0.85, 0.55, 0.55, 0.85, 1.0, 0.85, 0.55]
     )
 
-    // parity: tui/src/ui/one-cell-motion.ts#WORK_SPINNERS [status=implemented hash=c8a027d4d87e]
+    // parity: tui/src/ui/one-cell-motion.ts#WORK_SPINNERS [status=implemented hash=b26cc39c1cdb]
     public static let WORK_SPINNERS: [String: OneCellMotion] = {
         let lowDuetFrames: [String] = lowerOctantPath.prefix(3).enumerated().flatMap { index, point in
             let heads = (1 << point) | (1 << lowerOctantPath[(index + 3) % 6])
@@ -927,7 +927,7 @@ public enum TUIPrimitive {
     ]
 
     /// Creates frame strings for a Knight Rider style bidirectional scanner animation.
-    // parity: tui/src/ui/spinner.ts#createFrames [status=implemented hash=9d9aff9415e5]
+    // parity: tui/src/ui/spinner.ts#createFrames [status=implemented hash=fea085d102d6]
     public static func createFrames(_ options: KnightRiderOptions = KnightRiderOptions()) -> [String] {
         let width = options.width
         let holdStart = options.holdStart
@@ -961,7 +961,7 @@ public enum TUIPrimitive {
     }
 
     /// Creates a per-cell `ColorGenerator` closure for Knight Rider style scanner animation.
-    // parity: tui/src/ui/spinner.ts#createColors [status=implemented hash=a832812a13fb]
+    // parity: tui/src/ui/spinner.ts#createColors [status=implemented hash=1982dd9fcf70]
     public static func createColors(_ options: KnightRiderOptions = KnightRiderOptions()) -> SpinnerColorGenerator {
         let holdStart = options.holdStart
         let holdEnd = options.holdEnd
@@ -1637,7 +1637,7 @@ public enum TUIPrimitive {
         }
     }
 
-    // parity: tui/src/ui/pane-resize.ts#createPaneResize [status=adapted hash=005932aef46b]
+    // parity: tui/src/ui/pane-resize.ts#createPaneResize [status=adapted hash=e55973aa855a]
     public static func createPaneResize(
         initialValue: Int,
         defaultValue: @escaping @Sendable () -> Int,
@@ -1664,7 +1664,7 @@ public enum TUIPrimitive {
     }
 
     /// Renders a 2-column vertical pane resize handle into a `BoxRenderable`.
-    // parity: tui/src/ui/pane-resize-handle.tsx#PaneResizeHandle [status=adapted hash=5fac72024072]
+    // parity: tui/src/ui/pane-resize-handle.tsx#PaneResizeHandle [status=adapted hash=20b4bce644b3]
     public static func PaneResizeHandle(
         ctx: any RenderContext,
         resize: PaneResizeController,
@@ -2014,7 +2014,7 @@ public enum TUIPrimitive {
         }
     }
 
-    // parity: tui/src/ui/dialog.tsx#DialogFooterProps [status=implemented hash=f771102b0459]
+    // parity: tui/src/ui/dialog.tsx#DialogFooterProps [status=implemented hash=139cd0f2eec6]
     public struct DialogFooterProps: Sendable {
         public var actions: DialogFooterActions?
         public var inset: Int?
@@ -2155,7 +2155,7 @@ public enum TUIPrimitive {
     }
 
     /// Renders a centered modal backdrop and dialog panel surface into a `BoxRenderable`.
-    // parity: tui/src/ui/dialog.tsx#Dialog [status=adapted hash=dd4af292cef4]
+    // parity: tui/src/ui/dialog.tsx#Dialog [status=adapted hash=2d9be53cbc58]
     public static func Dialog(
         ctx: any RenderContext,
         size: DialogSize = .medium,
@@ -2201,7 +2201,7 @@ public enum TUIPrimitive {
     }
 
     /// Renders a dialog title header bar with `esc` close affordance and optional description.
-    // parity: tui/src/ui/dialog.tsx#DialogHeader [status=adapted hash=867d36c809c6]
+    // parity: tui/src/ui/dialog.tsx#DialogHeader [status=adapted hash=7075984f4d42]
     public static func DialogHeader(
         ctx: any RenderContext,
         title: String,
@@ -2246,7 +2246,7 @@ public enum TUIPrimitive {
 
     /// Standard dialog vertical layout container: header, body, and buttons or footer.
     /// With `grow`, the layout fills the parent's height and keeps the footer at the bottom.
-    // parity: tui/src/ui/dialog.tsx#DialogLayout [status=adapted hash=d99988669b2d]
+    // parity: tui/src/ui/dialog.tsx#DialogLayout [status=adapted hash=e30075c0f3a9]
     public static func DialogLayout(
         ctx: any RenderContext,
         id: String? = nil,
@@ -2288,7 +2288,7 @@ public enum TUIPrimitive {
 
     /// Right-aligned interactive dialog button strip matching `ui/dialog.tsx#DialogButtons`. `hints` are extra key
     /// actions shown on the left; a hint without a key takes its command's shortcut, and is dropped without one.
-    // parity: tui/src/ui/dialog.tsx#DialogButtons [status=adapted hash=f1034301abe9]
+    // parity: tui/src/ui/dialog.tsx#DialogButtons [status=adapted hash=5c3b51860d51]
     public static func DialogButtons(
         ctx: any RenderContext,
         buttons: [DialogButton],
@@ -3185,7 +3185,7 @@ public enum TUIPrimitive {
     }
 
     /// Formats a trailing choice indicator (`‹ value ›` or `  value ↵` when active, padded otherwise).
-    // parity: tui/src/ui/dialog-select.tsx#DialogSelectChoice [status=implemented hash=1fe974fa854f]
+    // parity: tui/src/ui/dialog-select.tsx#DialogSelectChoice [status=implemented hash=9580b13ed2cc]
     public static func DialogSelectChoice(
         value: String,
         active: Bool,
@@ -3230,7 +3230,7 @@ public enum TUIPrimitive {
     }
 
     /// Builds working-directory context menu options (`Copy path`, `Open folder`, optional `Workspaces`).
-    // parity: tui/src/ui/working-directory-actions.tsx#useWorkingDirectoryActions [status=adapted hash=8caefcf44bb7]
+    // parity: tui/src/ui/working-directory-actions.tsx#useWorkingDirectoryActions [status=adapted hash=bc476102cbff]
     public static func useWorkingDirectoryActions(
         directory: @escaping @Sendable () -> String?,
         hasMoveHandler: Bool = false

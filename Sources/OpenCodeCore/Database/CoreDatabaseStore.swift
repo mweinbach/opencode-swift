@@ -22,7 +22,7 @@ public enum CoreDatabaseStore {
         var driver: CoreDatabaseDrizzle.EffectSQLiteDatabase { get }
     }
 
-    // parity: core/src/database/database.ts#Options [status=implemented hash=0b4f7ca620e8]
+    // parity: core/src/database/database.ts#Options [status=implemented hash=746bb5c892ae]
     public struct Options: Equatable, Hashable, Sendable, Codable {
         public let path: String?
 
@@ -155,7 +155,7 @@ public enum CoreDatabaseStore {
         return Service(db: client)
     }
 
-    // parity: core/src/database/database.ts#layer [status=adapted hash=95cbbd0b2c65]
+    // parity: core/src/database/database.ts#layer [status=adapted hash=f94d0249b51b]
     public static func layer(options: Options = Options(path: ":memory:")) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, scope in
             let global = deps.get(Global.Service.serviceKey, as: Global.Service.self)?.paths
@@ -195,7 +195,7 @@ public enum CoreDatabaseStore {
         return AppNode.makeGlobalNode(Service.serviceKey, impl, [Global.node])
     }
 
-    // parity: core/src/database/database.ts#node [status=adapted hash=7084be28fe29]
+    // parity: core/src/database/database.ts#node [status=adapted hash=1d6d710d7317]
     public static let node: LayerNode.Provider = configured(options: Options(path: ":memory:"))
 }
 
@@ -299,7 +299,7 @@ public enum CoreDatabaseWorkerdSQLite {
         public func close() throws {}
     }
 
-    // parity: core/src/database/sqlite.workerd.ts#sqliteLayer [status=adapted hash=e523f8a0f321]
+    // parity: core/src/database/sqlite.workerd.ts#sqliteLayer [status=adapted hash=791352dffa0e]
     public static func sqliteLayer(storage: any DurableObjectStorage) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { _, _ in
             let adapter: any SQLiteDatabase = StorageClientAdapter(storage: storage)
@@ -475,7 +475,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/session.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery [status=adapted hash=fe8902d9272a]
+    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectPreparedQuery [status=adapted hash=f0a6ca2b551a]
     public final class SQLiteEffectPreparedQuery: Sendable {
         public let sql: String
         public let parameters: [SQLiteValue]
@@ -558,7 +558,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession [status=adapted hash=9afa05eba622]
+    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession [status=adapted hash=2c7d2b324fad]
     open class SQLiteEffectSession: @unchecked Sendable {
         public let client: any SQLiteDatabase
 
@@ -566,7 +566,7 @@ public enum CoreDatabaseDrizzle {
             self.client = client
         }
 
-        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareQuery [status=adapted hash=a178014d467e]
+        // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectSession.prepareQuery [status=adapted hash=077a5770a0b7]
         open func prepareQuery(_ sql: String, parameters: [SQLiteValue] = []) -> SQLiteEffectPreparedQuery {
             SQLiteEffectPreparedQuery(client: client, sql: sql, parameters: parameters)
         }
@@ -620,7 +620,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectTransaction [status=adapted hash=bf14b05ec1da]
+    // parity: core/src/database/drizzle/sqlite-core/effect/session.ts#SQLiteEffectTransaction [status=adapted hash=8d9907f5d15a]
     open class SQLiteEffectTransaction: SQLiteEffectDatabase, @unchecked Sendable {
         public override init(session: SQLiteEffectSession) {
             super.init(session: session)
@@ -632,7 +632,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession [status=adapted hash=6e0235039fba]
+    // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteSession [status=adapted hash=fdf0ad10cd28]
     public final class EffectSQLiteSession: SQLiteEffectSession, @unchecked Sendable {
         public let options: EffectSQLiteSessionOptions
 
@@ -665,7 +665,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteTransaction [status=adapted hash=9173c2649165]
+    // parity: core/src/database/drizzle/effect-sqlite/session.ts#EffectSQLiteTransaction [status=adapted hash=a92bda6c8fe9]
     public final class EffectSQLiteTransaction: SQLiteEffectTransaction, @unchecked Sendable {
         public init(session: EffectSQLiteSession) {
             super.init(session: session)
@@ -674,7 +674,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/raw.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/raw.ts#SQLiteEffectRaw [status=adapted hash=6e48b0af827d]
+    // parity: core/src/database/drizzle/sqlite-core/effect/raw.ts#SQLiteEffectRaw [status=adapted hash=b7b41eccee9d]
     public protocol SQLiteEffectRaw: Sendable {
         associatedtype ResultType: Sendable
         func execute() throws -> ResultType
@@ -713,7 +713,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/count.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/count.ts#SQLiteEffectCountBuilder [status=adapted hash=e34c8bc043a5]
+    // parity: core/src/database/drizzle/sqlite-core/effect/count.ts#SQLiteEffectCountBuilder [status=adapted hash=b55014db4aa5]
     public protocol SQLiteEffectCountBuilder: Sendable {
         func execute() throws -> Int
     }
@@ -745,24 +745,24 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/select.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectHKT [status=adapted hash=e2839970a9f4]
+    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectHKT [status=adapted hash=26abfe8fa3a4]
     public protocol SQLiteEffectSelectHKT: Sendable {
         associatedtype RowType: Sendable
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBase [status=adapted hash=317630770b3e]
+    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBase [status=adapted hash=04fd6ffa9bb2]
     public protocol SQLiteEffectSelectBase: Sendable {
         func all() throws -> [SQLiteRow]
         func get() throws -> SQLiteRow?
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectPrepare [status=adapted hash=265f69ad32be]
+    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectPrepare [status=adapted hash=6bd0a8c1814c]
     public typealias SQLiteEffectSelectPrepare = SQLiteEffectPreparedQuery
 
     // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#AnySQLiteEffectSelect [status=adapted hash=52bb6eb106db]
     public typealias AnySQLiteEffectSelect = any SQLiteEffectSelectBase
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBuilder [status=adapted hash=e98680df5745]
+    // parity: core/src/database/drizzle/sqlite-core/effect/select.ts#SQLiteEffectSelectBuilder [status=adapted hash=efca26963b18]
     public final class SQLiteEffectSelectBuilder: SQLiteEffectSelectBase, @unchecked Sendable {
         private let session: SQLiteEffectSession
         private let columns: [String]
@@ -840,7 +840,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/insert.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase [status=adapted hash=cae2b79243a2]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBase [status=adapted hash=4c793c5a7059]
     public protocol SQLiteEffectInsertBase: Sendable {
         @discardableResult
         func run() throws -> EffectSQLiteRunResult
@@ -858,24 +858,24 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertWithout [status=adapted hash=e43bbf5b2312]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertWithout [status=adapted hash=a156755b23c9]
     public typealias SQLiteEffectInsertWithout = SQLiteEffectInsertBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertReturning [status=adapted hash=7cf21d5ad970]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertReturning [status=adapted hash=33815eceedcc]
     public typealias SQLiteEffectInsertReturning = SQLiteEffectInsertBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertReturningAll [status=adapted hash=2eee90a65b08]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertReturningAll [status=adapted hash=a107f47fb86d]
     public typealias SQLiteEffectInsertReturningAll = SQLiteEffectInsertBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertDynamic [status=adapted hash=d00e949e1b2a]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertDynamic [status=adapted hash=d1bbe955031c]
     public typealias SQLiteEffectInsertDynamic = SQLiteEffectInsertBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertExecute [status=adapted hash=ad34a4cb6dc7]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertExecute [status=adapted hash=14e796b95b27]
     public typealias SQLiteEffectInsertExecute = EffectSQLiteRunResult
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertPrepare [status=adapted hash=5965d69279a9]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertPrepare [status=adapted hash=78d90f2ac060]
     public typealias SQLiteEffectInsertPrepare = SQLiteEffectPreparedQuery
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsert [status=adapted hash=7bb875d3fc0a]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsert [status=adapted hash=1c598e308581]
     public typealias SQLiteEffectInsert = SQLiteEffectInsertBuilder
     // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#AnySQLiteEffectInsert [status=adapted hash=c54768d3ce42]
     public typealias AnySQLiteEffectInsert = any SQLiteEffectInsertBase
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBuilder [status=adapted hash=4507878919ce]
+    // parity: core/src/database/drizzle/sqlite-core/effect/insert.ts#SQLiteEffectInsertBuilder [status=adapted hash=525bea7cefea]
     public final class SQLiteEffectInsertBuilder: SQLiteEffectInsertBase, @unchecked Sendable {
         private let session: SQLiteEffectSession
         private let table: CoreDatabaseSchema.TableDescriptor
@@ -978,35 +978,35 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/update.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase [status=adapted hash=500c7cc706d4]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBase [status=adapted hash=5f13120e69d1]
     public protocol SQLiteEffectUpdateBase: Sendable {
         @discardableResult
         func run() throws -> EffectSQLiteRunResult
         func returning() throws -> [SQLiteRow]
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateWithout [status=adapted hash=04e9731e331e]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateWithout [status=adapted hash=b9556344e5a2]
     public typealias SQLiteEffectUpdateWithout = SQLiteEffectUpdateBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateWithJoins [status=adapted hash=eceb1fcd2a84]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateWithJoins [status=adapted hash=15f3856551bc]
     public typealias SQLiteEffectUpdateWithJoins = SQLiteEffectUpdateBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateReturningAll [status=adapted hash=72df9787b86b]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateReturningAll [status=adapted hash=b6c480ce0e9f]
     public typealias SQLiteEffectUpdateReturningAll = SQLiteEffectUpdateBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateReturning [status=adapted hash=c79ec9ef30c5]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateReturning [status=adapted hash=515659c24b8a]
     public typealias SQLiteEffectUpdateReturning = SQLiteEffectUpdateBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateExecute [status=adapted hash=8747d38f2f98]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateExecute [status=adapted hash=7f4004188e31]
     public typealias SQLiteEffectUpdateExecute = EffectSQLiteRunResult
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdatePrepare [status=adapted hash=8c40abc59646]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdatePrepare [status=adapted hash=3c3ca2b069b5]
     public typealias SQLiteEffectUpdatePrepare = SQLiteEffectPreparedQuery
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateDynamic [status=adapted hash=ce84ac61d154]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateDynamic [status=adapted hash=043c022864c5]
     public typealias SQLiteEffectUpdateDynamic = SQLiteEffectUpdateBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdate [status=adapted hash=66ef3bd32b17]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdate [status=adapted hash=b15fe25ff0d4]
     public typealias SQLiteEffectUpdate = SQLiteEffectUpdateBuilder
     // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#AnySQLiteEffectUpdate [status=adapted hash=92f07c334d47]
     public typealias AnySQLiteEffectUpdate = any SQLiteEffectUpdateBase
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateJoinFn [status=adapted hash=46d5e013593b]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateJoinFn [status=adapted hash=b6ef99aa8f1d]
     public typealias SQLiteEffectUpdateJoinFn = @Sendable (String) -> SQLiteEffectUpdateBuilder
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBuilder [status=adapted hash=c06df5e6ae1a]
+    // parity: core/src/database/drizzle/sqlite-core/effect/update.ts#SQLiteEffectUpdateBuilder [status=adapted hash=5104192facc4]
     public final class SQLiteEffectUpdateBuilder: SQLiteEffectUpdateBase, @unchecked Sendable {
         private let session: SQLiteEffectSession
         private let table: CoreDatabaseSchema.TableDescriptor
@@ -1093,7 +1093,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/sqlite-core/effect/delete.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase [status=adapted hash=726e7d44e3f0]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteBase [status=adapted hash=772561432d1a]
     public protocol SQLiteEffectDeleteBase: Sendable {
         @discardableResult
         func run() throws -> EffectSQLiteRunResult
@@ -1176,26 +1176,26 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteWithout [status=adapted hash=cecc3bb3cf6a]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteWithout [status=adapted hash=32423adb7645]
     public typealias SQLiteEffectDeleteWithout = DeleteBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteReturningAll [status=adapted hash=11edeed78806]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteReturningAll [status=adapted hash=b8b4dec2e375]
     public typealias SQLiteEffectDeleteReturningAll = DeleteBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteReturning [status=adapted hash=0c3532e45992]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteReturning [status=adapted hash=257472af6878]
     public typealias SQLiteEffectDeleteReturning = DeleteBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteExecute [status=adapted hash=cb3eeb30153f]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteExecute [status=adapted hash=e9b79403e329]
     public typealias SQLiteEffectDeleteExecute = EffectSQLiteRunResult
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeletePrepare [status=adapted hash=4b5262f9350e]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeletePrepare [status=adapted hash=e79ee08fd31e]
     public typealias SQLiteEffectDeletePrepare = SQLiteEffectPreparedQuery
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteDynamic [status=adapted hash=dc7841313cac]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDeleteDynamic [status=adapted hash=fcf69bc3e982]
     public typealias SQLiteEffectDeleteDynamic = DeleteBuilder
-    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDelete [status=adapted hash=8cd5ea9bb255]
+    // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#SQLiteEffectDelete [status=adapted hash=c66834f7e600]
     public typealias SQLiteEffectDelete = DeleteBuilder
     // parity: core/src/database/drizzle/sqlite-core/effect/delete.ts#AnySQLiteEffectDelete [status=adapted hash=8a1c18ec634b]
     public typealias AnySQLiteEffectDelete = any SQLiteEffectDeleteBase
 
     // MARK: drizzle/sqlite-core/effect/query.ts
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery [status=adapted hash=c2b5de6f150c]
+    // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQuery [status=adapted hash=aa6e52180acc]
     public protocol SQLiteEffectRelationalQuery: Sendable {
         func execute() throws -> [SQLiteRow]
     }
@@ -1246,7 +1246,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQueryBuilder [status=adapted hash=40e26170a4ee]
+    // parity: core/src/database/drizzle/sqlite-core/effect/query.ts#SQLiteEffectRelationalQueryBuilder [status=adapted hash=0eb293f7b163]
     public final class SQLiteEffectRelationalQueryBuilder: SQLiteEffectRelationalQuery, Sendable {
         private let session: SQLiteEffectSession
         public let table: CoreDatabaseSchema.TableDescriptor
@@ -1297,7 +1297,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase [status=adapted hash=5b56c111346c]
+    // parity: core/src/database/drizzle/sqlite-core/effect/db.ts#SQLiteEffectDatabase [status=adapted hash=e2ece00063f3]
     open class SQLiteEffectDatabase: @unchecked Sendable {
         public let session: SQLiteEffectSession
         public var client: any SQLiteDatabase { session.client }
@@ -1378,7 +1378,7 @@ public enum CoreDatabaseDrizzle {
 
     // MARK: drizzle/effect-sqlite/driver.ts
 
-    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#EffectSQLiteDatabase [status=adapted hash=61d3f2f90074]
+    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#EffectSQLiteDatabase [status=adapted hash=27c65f7e0fcc]
     public final class EffectSQLiteDatabase: SQLiteEffectDatabase, @unchecked Sendable {
         public let effectSession: EffectSQLiteSession
 
@@ -1388,7 +1388,7 @@ public enum CoreDatabaseDrizzle {
         }
     }
 
-    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#EffectDrizzleSQLiteConfig [status=adapted hash=c4cf4d3de6eb]
+    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#EffectDrizzleSQLiteConfig [status=adapted hash=3fbd1b096d6e]
     public struct EffectDrizzleSQLiteConfig: Equatable, Sendable {
         public let jit: Bool?
 
@@ -1400,7 +1400,7 @@ public enum CoreDatabaseDrizzle {
     // parity: core/src/database/drizzle/effect-sqlite/driver.ts#DefaultServices [status=adapted hash=c30c9d0a3b27]
     public static let defaultServices: LayerNode.ExecutableLayer = .empty
 
-    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#make [status=adapted hash=4007601f9e0d]
+    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#make [status=adapted hash=6e03d03975f2]
     public static func make(
         client: any SQLiteDatabase,
         config: EffectDrizzleSQLiteConfig = EffectDrizzleSQLiteConfig()
@@ -1412,7 +1412,7 @@ public enum CoreDatabaseDrizzle {
         return EffectSQLiteDatabase(session: session)
     }
 
-    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#makeWithDefaults [status=adapted hash=80df579b7dcb]
+    // parity: core/src/database/drizzle/effect-sqlite/driver.ts#makeWithDefaults [status=adapted hash=0565c9e9b4dd]
     public static func makeWithDefaults(
         client: any SQLiteDatabase,
         config: EffectDrizzleSQLiteConfig = EffectDrizzleSQLiteConfig()

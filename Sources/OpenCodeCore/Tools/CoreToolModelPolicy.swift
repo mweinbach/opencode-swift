@@ -23,7 +23,7 @@ extension CoreTool {
             public var policy: Policy { Policy(hidden: hidden, direct: direct) }
         }
 
-        // parity: core/src/tool/model-policy.ts#modelTools [status=implemented hash=8b50461c2e93]
+        // parity: core/src/tool/model-policy.ts#modelTools [status=implemented hash=354b8379af49]
         public static func modelTools(
             model: ModelSchema.Info?,
             websearch: Bool,

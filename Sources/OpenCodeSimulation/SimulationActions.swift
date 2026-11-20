@@ -202,7 +202,7 @@ public enum SimulationActions {
     }
 
     /// Renders a frame and captures styled cell spans and visible `ImageRenderable` RGBA placements.
-    // parity: simulation/src/frontend/actions.ts#capture [status=implemented hash=4b90559fc8cc]
+    // parity: simulation/src/frontend/actions.ts#capture [status=implemented hash=7631435beec8]
     public static func capture(_ harness: Harness) async -> OpenCodeProtocol.Frontend.CapturedFrame {
         await harness.renderOnce()
         let buffer = harness.renderer.currentRenderBuffer
@@ -231,7 +231,7 @@ public enum SimulationActions {
     }
 
     /// Executes one UI simulation `Action`, triggers a frame render, and returns the updated UI `State`.
-    // parity: simulation/src/frontend/actions.ts#execute [status=implemented hash=5dc6661ad17d]
+    // parity: simulation/src/frontend/actions.ts#execute [status=implemented hash=fb0c7362449b]
     @discardableResult
     public static func execute(_ harness: Harness, action: Action) async throws -> OpenCodeProtocol.Frontend.State {
         switch action {

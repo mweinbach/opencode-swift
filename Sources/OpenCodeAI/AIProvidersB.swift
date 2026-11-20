@@ -35,7 +35,7 @@ extension AIProviders {
         // parity: ai/src/providers/google.ts#Settings [status=implemented hash=e14422450169]
         public typealias Settings = ProviderConfig
 
-        // parity: ai/src/providers/google.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/google.ts#configure [status=implemented hash=4368b4d9938b]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             let auth = resolveHeaderAuth(config: input, envVars: ["GOOGLE_GENERATIVE_AI_API_KEY"], headerName: "x-goog-api-key", environment: environment)
             return ConfiguredProvider(
@@ -118,7 +118,7 @@ extension AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/groq.ts#Settings [status=implemented hash=a9f0863d35ff]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/groq.ts#protocol [status=implemented hash=8c05f27a22c3]
+        // parity: ai/src/providers/groq.ts#protocol [status=implemented hash=25812ae97588]
         public static let `protocol` = AIProtocols.ChatProtocolSpec(
             id: "groq-chat", framing: .sseWithDone,
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in
@@ -132,9 +132,9 @@ extension AIProviders {
             parseStream: AIProtocols.OpenAIChat.parseSSEStream,
             makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
-        // parity: ai/src/providers/groq.ts#route [status=implemented hash=85482bd2cc0a]
+        // parity: ai/src/providers/groq.ts#route [status=implemented hash=bc3950a13dd6]
         public static let route = AIProtocols.ChatRouteSpec(id: "groq-chat", provider: id, providerMetadataKey: id, protocol: `protocol`, defaultBaseURL: defaultBaseURL, path: "/chat/completions")
-        // parity: ai/src/providers/groq.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/groq.ts#configure [status=implemented hash=443e01e05f05]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["GROQ_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: [route], defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:], defaultCompatibility: .init(reasoningField: "reasoning", requireReasoning: false, maxTokensField: "max_completion_tokens"), defaultCapabilities: .init(strictTools: false))
         }
@@ -152,7 +152,7 @@ extension AIProviders {
         public static let id = "meta"
         // parity: ai/src/providers/meta.ts#ProviderOptionsInput [status=implemented hash=eb925919a6f6]
         public typealias ProviderOptionsInput = [String: JSONValue]
-        // parity: ai/src/providers/meta.ts#MessagesOptionsInput [status=implemented hash=01cdd58737df]
+        // parity: ai/src/providers/meta.ts#MessagesOptionsInput [status=implemented hash=c1dd9700d4f5]
         public typealias MessagesOptionsInput = [String: JSONValue]
         // parity: ai/src/providers/meta.ts#ImageOptions [status=implemented hash=ca8a3afea9bb]
         public typealias ImageOptions = AIProtocols.MetaImages.ImageOptions
@@ -169,7 +169,7 @@ extension AIProviders {
             }
         }
 
-        // parity: ai/src/providers/meta.ts#webSearch [status=implemented hash=fae59c0ab74f]
+        // parity: ai/src/providers/meta.ts#webSearch [status=implemented hash=5976afeea5df]
         public static func webSearch(_ options: WebSearchOptions = WebSearchOptions()) -> AIProtocolUtils.ToolDefinition {
             var metaObj: [String: JSONValue] = ["type": .string("web_search")]
             if let s = options.searchContextSize { metaObj["search_context_size"] = .string(s) }
@@ -203,7 +203,7 @@ extension AIProviders {
             }
         }
 
-        // parity: ai/src/providers/meta.ts#imageGeneration [status=implemented hash=f4ef433de101]
+        // parity: ai/src/providers/meta.ts#imageGeneration [status=implemented hash=fc4953752f37]
         public static func imageGeneration(_ options: ImageGenerationOptions = ImageGenerationOptions()) -> AIProtocolUtils.ToolDefinition {
             var metaObj: [String: JSONValue] = ["type": .string("image_generation")]
             if let s = options.size { metaObj["size"] = .string(s) }
@@ -231,7 +231,7 @@ extension AIProviders {
 
         // parity: ai/src/providers/meta.ts#routes [status=implemented hash=507b1ad0c8b2]
         public static let routes: [AIProtocols.ChatRouteSpec] = [responsesRoute, chatRoute, messagesRoute]
-        // parity: ai/src/providers/meta.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/meta.ts#configure [status=implemented hash=025c83014287]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["META_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: responsesRoute, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -335,7 +335,7 @@ extension AIProviders {
         // parity: ai/src/providers/minimax.ts#routes [status=implemented hash=61a6b9b503aa]
         public static let routes: [AIProtocols.ChatRouteSpec] = [messagesRoute, chatRoute, responsesRoute]
 
-        // parity: ai/src/providers/minimax.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/minimax.ts#configure [status=implemented hash=c9057a7c9443]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(
                 id: id,
@@ -461,7 +461,7 @@ extension AIProviders {
         public static let route = AIProtocols.MistralChat.route
         // parity: ai/src/providers/mistral.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/mistral.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/mistral.ts#configure [status=implemented hash=d5136e8d95ae]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.MistralChat.DEFAULT_BASE_URL, auth: resolveBearerAuth(config: input, envVars: ["MISTRAL_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -476,7 +476,7 @@ extension AIProviders {
         public static let anthropicBaseURL = "https://api.moonshot.ai/anthropic/v1"
         // parity: ai/src/providers/moonshot.ts#id [status=implemented hash=763ab26d3fb6]
         public static let id = "moonshotai"
-        // parity: ai/src/providers/moonshot.ts#ReasoningEffort [status=implemented hash=4d3a67487f7e]
+        // parity: ai/src/providers/moonshot.ts#ReasoningEffort [status=implemented hash=967ec097bd0b]
         public typealias ReasoningEffort = String
         // parity: ai/src/providers/moonshot.ts#ChatOptionsInput [status=implemented hash=1e6ef06b5a74]
         public typealias ChatOptionsInput = [String: JSONValue]
@@ -544,7 +544,7 @@ extension AIProviders {
         // parity: ai/src/providers/moonshot.ts#routes [status=implemented hash=7ee10d607c52]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute, messagesRoute, responsesRoute]
 
-        // parity: ai/src/providers/moonshot.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/moonshot.ts#configure [status=implemented hash=4ce8c098422c]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(
                 id: id,
@@ -644,12 +644,12 @@ extension AIProviders {
             ]
         }
 
-        // parity: ai/src/providers/openai-options.ts#openAIDefaultOptions [status=implemented hash=d5be06c8ddd6]
+        // parity: ai/src/providers/openai-options.ts#openAIDefaultOptions [status=implemented hash=dcee0485b7db]
         public static func openAIDefaultOptions(_ modelID: String) -> [String: JSONValue] {
             AIProtocolUtils.JSONCodec.mergeObjects(["store": .bool(false)], gpt5DefaultOptions(modelID))
         }
 
-        // parity: ai/src/providers/openai-options.ts#withOpenAIOptions [status=implemented hash=82d3febff914]
+        // parity: ai/src/providers/openai-options.ts#withOpenAIOptions [status=implemented hash=5451a166478c]
         public static func withOpenAIOptions(_ modelID: String, providerOptions: [String: JSONValue]?) -> [String: JSONValue] {
             AIProtocolUtils.JSONCodec.mergeObjects(openAIDefaultOptions(modelID), providerOptions)
         }
@@ -671,7 +671,7 @@ extension AIProviders {
         }
         // parity: ai/src/providers/openai-compatible-responses.ts#provider [status=implemented hash=ce1b6df0aba2]
         public static let provider = (id: id, routes: routes)
-        // parity: ai/src/providers/openai-compatible-responses.ts#model [status=implemented hash=e4effa641a9a]
+        // parity: ai/src/providers/openai-compatible-responses.ts#model [status=implemented hash=8a292a164bf8]
         public static func model(_ modelID: String, settings: Settings) -> ConfiguredModel { configure(settings).model(modelID) }
     }
 
@@ -748,7 +748,7 @@ extension AIProviders {
             }
         }
 
-        // parity: ai/src/providers/openai.ts#imageGeneration [status=implemented hash=f4ef433de101]
+        // parity: ai/src/providers/openai.ts#imageGeneration [status=implemented hash=2ed7e30c6524]
         public static func imageGeneration(_ options: ImageGenerationOptions = ImageGenerationOptions()) -> AIProtocolUtils.ToolDefinition {
             var spec: [String: JSONValue] = ["type": .string("image_generation")]
             if let v = options.action { spec["action"] = .string(v) }
@@ -770,7 +770,7 @@ extension AIProviders {
         // parity: ai/src/providers/openai.ts#Settings [status=implemented hash=9421cacd9954]
         public typealias Settings = ProviderConfig
 
-        // parity: ai/src/providers/openai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/openai.ts#configure [status=implemented hash=2dbbfa0982b7]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             var hdrs: [String: String] = [:]
             if let org = input.organization { hdrs["OpenAI-Organization"] = org }
@@ -789,7 +789,7 @@ extension AIProviders {
 
         // parity: ai/src/providers/openai.ts#provider [status=implemented hash=370740ab87b4]
         public static let provider = configure()
-        // parity: ai/src/providers/openai.ts#model [status=implemented hash=c22c4a05ede2]
+        // parity: ai/src/providers/openai.ts#model [status=implemented hash=71e8c298e46f]
         public static func model(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel {
             configure(settings).model(modelID, route: AIProtocols.OpenAIResponses.route, providerOptions: OpenAIOptions.withOpenAIOptions(modelID, providerOptions: settings.providerOptions))
         }
@@ -834,7 +834,7 @@ extension AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/opencode.ts#Settings [status=implemented hash=2ea0351d9bdd]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/opencode.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/opencode.ts#configure [status=implemented hash=7d17533591f4]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["OPENCODE_API_KEY"], environment: environment), headers: input.headers ?? [:])
         }
@@ -909,7 +909,7 @@ extension AIProviders {
             }
         }
 
-        // parity: ai/src/providers/openrouter.ts#OpenRouterPlugin [status=implemented hash=8be1f61e5f42]
+        // parity: ai/src/providers/openrouter.ts#OpenRouterPlugin [status=implemented hash=be142f9de081]
         public struct OpenRouterPlugin: Equatable, Hashable, Sendable {
             public let id: String
             public let options: [String: JSONValue]
@@ -959,7 +959,7 @@ extension AIProviders {
         // parity: ai/src/providers/openrouter.ts#OpenRouterBody [status=implemented hash=31bfd990dfae]
         public typealias OpenRouterBody = [String: JSONValue]
 
-        // parity: ai/src/providers/openrouter.ts#protocol [status=implemented hash=d42911dfde3b]
+        // parity: ai/src/providers/openrouter.ts#protocol [status=implemented hash=18698df62533]
         public static let `protocol` = AIProtocols.ChatProtocolSpec(
             id: "openrouter-chat", framing: .sseWithDone,
             buildBody: { req throws(AIProtocolUtils.ProtocolError) in
@@ -988,13 +988,13 @@ extension AIProviders {
             makeStreamDecoder: { AIProtocols.OpenAIChat.StreamDecoder(request: $0) }
         )
 
-        // parity: ai/src/providers/openrouter.ts#route [status=implemented hash=cd9c33d5b1c2]
+        // parity: ai/src/providers/openrouter.ts#route [status=implemented hash=2b7815c6700f]
         public static let route = AIProtocols.ChatRouteSpec(id: id, provider: id, providerMetadataKey: id, protocol: `protocol`, defaultBaseURL: defaultBaseURL, path: "/chat/completions")
         public static let responsesRoute = AIProtocols.ChatRouteSpec(id: "openrouter-responses", provider: id, providerMetadataKey: id, protocol: AIProtocols.OpenResponses.`protocol`, defaultBaseURL: defaultBaseURL, path: "/responses", defaultProviderOptions: ["store": .bool(false), "include": .array([.string("reasoning.encrypted_content")])])
         // parity: ai/src/providers/openrouter.ts#routes [status=implemented hash=8fdb0460cbc8]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route, responsesRoute]
 
-        // parity: ai/src/providers/openrouter.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/openrouter.ts#configure [status=implemented hash=f63b344e9556]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             let defaults = ProviderSettings.bearerRouteDefaults(input, envVars: ["OPENROUTER_API_KEY"], baseURL: defaultBaseURL, environment: environment)
             return ConfiguredProvider(id: id, baseURL: defaults.baseURL, auth: defaults.auth, headers: defaults.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: defaults.providerOptions ?? [:], defaultCapabilities: .init(promptCacheKey: true))
@@ -1016,7 +1016,7 @@ extension AIProviders {
         public static func responses(_ modelID: String) -> ConfiguredModel { provider.model(modelID, route: responsesRoute) }
         // parity: ai/src/providers/openrouter.ts#model [status=implemented hash=540b31ba39cd]
         public static func model(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: route) }
-        // parity: ai/src/providers/openrouter.ts#responsesModel [status=implemented hash=cfab73c14f1e]
+        // parity: ai/src/providers/openrouter.ts#responsesModel [status=implemented hash=11f3dbea4dc7]
         public static func responsesModel(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: responsesRoute) }
         // parity: ai/src/providers/openrouter.ts#imageModel [status=implemented hash=6b232dacc4c7]
         public static func imageModel(_ modelID: String, settings: Settings = Settings()) -> AIProtocols.MediaModelHandle {
@@ -1051,11 +1051,11 @@ extension AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/togetherai.ts#Settings [status=implemented hash=8b7d78d33938]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/togetherai.ts#route [status=implemented hash=585619a1a727]
+        // parity: ai/src/providers/togetherai.ts#route [status=implemented hash=9f9489bbc2f6]
         public static let route = AIProtocols.OpenAIChat.route.with(id: id, provider: id, providerMetadataKey: id, baseURL: defaultBaseURL)
         // parity: ai/src/providers/togetherai.ts#routes [status=implemented hash=d8efbd745746]
         public static let routes: [AIProtocols.ChatRouteSpec] = [route]
-        // parity: ai/src/providers/togetherai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/togetherai.ts#configure [status=implemented hash=765900acc8b9]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["TOGETHER_API_KEY", "TOGETHER_AI_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: route, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1073,7 +1073,7 @@ extension AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/typesafe-ai.ts#Settings [status=implemented hash=2ea0351d9bdd]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/typesafe-ai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/typesafe-ai.ts#configure [status=implemented hash=29af8d6d55aa]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["TYPESAFE_API_KEY"], environment: environment), headers: input.headers ?? [:])
         }
@@ -1101,7 +1101,7 @@ extension AIProviders {
         public static let responsesRoute = AIProtocols.ChatRouteSpec(id: "venice-responses", provider: id, providerMetadataKey: id, protocol: AIProtocols.OpenResponses.`protocol`, defaultBaseURL: defaultBaseURL, path: "/responses", defaultProviderOptions: ["store": .bool(false), "include": .array([.string("reasoning.encrypted_content")])])
         // parity: ai/src/providers/venice.ts#routes [status=implemented hash=8fdb0460cbc8]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute, responsesRoute]
-        // parity: ai/src/providers/venice.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/venice.ts#configure [status=implemented hash=870818141856]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["VENICE_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: chatRoute, defaultProviderOptions: input.providerOptions ?? [:], defaultCompatibility: AIProtocols.VeniceChat.compatibility, defaultCapabilities: AIProtocols.VeniceChat.capabilities)
         }
@@ -1113,7 +1113,7 @@ extension AIProviders {
         public static func responses(_ modelID: String) -> ConfiguredModel { provider.model(modelID, route: responsesRoute) }
         // parity: ai/src/providers/venice.ts#model [status=implemented hash=f2cf10adf51b]
         public static func model(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: chatRoute) }
-        // parity: ai/src/providers/venice.ts#responsesModel [status=implemented hash=cfab73c14f1e]
+        // parity: ai/src/providers/venice.ts#responsesModel [status=implemented hash=d03185b7c327]
         public static func responsesModel(_ modelID: String, settings: Settings = Settings()) -> ConfiguredModel { configure(settings).model(modelID, route: responsesRoute) }
 
         public enum Responses {
@@ -1165,7 +1165,7 @@ extension AIProviders {
         // parity: ai/src/providers/vercel-ai-gateway.ts#routes [status=implemented hash=99eacc6db6bd]
         public static let routes: [AIProtocols.ChatRouteSpec] = [messagesRoute, responsesRoute, chatRoute]
 
-        // parity: ai/src/providers/vercel-ai-gateway.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/vercel-ai-gateway.ts#configure [status=implemented hash=ac2eec98c6fd]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             let defaults = ProviderSettings.bearerRouteDefaults(input, envVars: ["AI_GATEWAY_API_KEY", "VERCEL_OIDC_TOKEN"], baseURL: defaultBaseURL, environment: environment)
             return ConfiguredProvider(id: id, baseURL: defaults.baseURL, auth: defaults.auth, headers: defaults.headers ?? [:], routes: routes, defaultRoute: messagesRoute, defaultProviderOptions: defaults.providerOptions ?? [:])
@@ -1227,7 +1227,7 @@ extension AIProviders {
         public typealias Config = ProviderConfig
         // parity: ai/src/providers/volcengine.ts#Settings [status=implemented hash=5dc534ea0f5c]
         public typealias Settings = ProviderConfig
-        // parity: ai/src/providers/volcengine.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/volcengine.ts#configure [status=implemented hash=8c6054ef11bb]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? AIProtocols.SeedanceVideo.VOLCENGINE_BASE_URL, auth: resolveBearerAuth(config: input, envVars: ["ARK_API_KEY"], environment: environment), headers: input.headers ?? [:])
         }
@@ -1257,7 +1257,7 @@ extension AIProviders {
 
         // parity: ai/src/providers/xai.ts#routes [status=implemented hash=e73c5af69a31]
         public static let routes: [AIProtocols.ChatRouteSpec] = [responsesRoute, chatRoute]
-        // parity: ai/src/providers/xai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/xai.ts#configure [status=implemented hash=b5912b82af8a]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(id: id, baseURL: input.baseURL ?? defaultBaseURL, auth: resolveBearerAuth(config: input, envVars: ["XAI_API_KEY"], environment: environment), headers: input.headers ?? [:], routes: routes, defaultRoute: responsesRoute, defaultProviderOptions: input.providerOptions ?? [:])
         }
@@ -1332,7 +1332,7 @@ extension AIProviders {
         // parity: ai/src/providers/zai-coding-plan.ts#routes [status=implemented hash=7ee10d607c52]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute, messagesRoute, responsesRoute]
 
-        // parity: ai/src/providers/zai-coding-plan.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/zai-coding-plan.ts#configure [status=implemented hash=f5b9a5429a1e]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(
                 id: id,
@@ -1426,7 +1426,7 @@ extension AIProviders {
         // parity: ai/src/providers/zai.ts#routes [status=implemented hash=a63e1ef104fb]
         public static let routes: [AIProtocols.ChatRouteSpec] = [chatRoute]
 
-        // parity: ai/src/providers/zai.ts#configure [status=implemented hash=6ef9eff864c2]
+        // parity: ai/src/providers/zai.ts#configure [status=implemented hash=4bae47682f6d]
         public static func configure(_ input: Config = Config(), environment: any EnvironmentProviding = SystemEnvironment.shared) -> ConfiguredProvider {
             ConfiguredProvider(
                 id: id,

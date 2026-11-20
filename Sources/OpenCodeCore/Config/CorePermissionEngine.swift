@@ -96,7 +96,7 @@ public enum CorePermissionSQL {
     }
 
     /// SQLite table definition for persisted project permissions (`permission` table).
-    // parity: core/src/permission/sql.ts#PermissionTable [status=adapted hash=92cc7603c371]
+    // parity: core/src/permission/sql.ts#PermissionTable [status=adapted hash=2485a6cd0af0]
     public static let PermissionTable = TableDefinition(
         name: "permission",
         columns: ["id", "project_id", "action", "resource", "time_created", "time_updated"],
@@ -168,7 +168,7 @@ public enum CorePermissionSaved {
         }
     }
 
-    // parity: core/src/permission/saved.ts#NotFoundError [status=implemented hash=cb77b48300e2]
+    // parity: core/src/permission/saved.ts#NotFoundError [status=implemented hash=d1260c5aa814]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "PermissionSaved.NotFoundError"
         public let id: ID
@@ -180,7 +180,7 @@ public enum CorePermissionSaved {
         public var description: String { "Saved permission not found: \(id.rawValue)" }
     }
 
-    // parity: core/src/permission/saved.ts#ConflictError [status=implemented hash=b469ae374d19]
+    // parity: core/src/permission/saved.ts#ConflictError [status=implemented hash=7242468f5a8e]
     public struct ConflictError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "PermissionSaved.ConflictError"
         public let id: ID
@@ -345,7 +345,7 @@ public enum CorePermissionSaved {
         }
     }
 
-    // parity: core/src/permission/saved.ts#node [status=adapted hash=98f3fa69d10f]
+    // parity: core/src/permission/saved.ts#node [status=adapted hash=788769187e33]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -431,7 +431,7 @@ public enum CorePermission {
     }
 
     /// The requester fields of a permission request made by a tool call.
-    // parity: core/src/permission.ts#invocation [status=implemented hash=f5633dffa639]
+    // parity: core/src/permission.ts#invocation [status=implemented hash=cd0f9c0f1165]
     public static func invocation(_ context: ToolSchema.Context) -> InvocationContext {
         InvocationContext(
             sessionID: context.sessionID,
@@ -465,13 +465,13 @@ public enum CorePermission {
     }
 
     /// Context reference key for unattended execution rulesets (settled without user interaction).
-    // parity: core/src/permission.ts#Unattended [status=adapted hash=bd485b112613]
+    // parity: core/src/permission.ts#Unattended [status=adapted hash=c269d6b55e79]
     public enum Unattended {
         public static let key = "@opencode/Permission/Unattended"
         @TaskLocal public static var current: Ruleset? = nil
     }
 
-    // parity: core/src/permission.ts#DeclinedError [status=implemented hash=2e84a65a2eea]
+    // parity: core/src/permission.ts#DeclinedError [status=implemented hash=82977a9efb76]
     public struct DeclinedError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Permission.DeclinedError"
 
@@ -480,7 +480,7 @@ public enum CorePermission {
         public var description: String { "Permission declined by user" }
     }
 
-    // parity: core/src/permission.ts#CorrectedError [status=implemented hash=875846ed94fb]
+    // parity: core/src/permission.ts#CorrectedError [status=implemented hash=05bf83e8e723]
     public struct CorrectedError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Permission.CorrectedError"
         public let feedback: String
@@ -494,7 +494,7 @@ public enum CorePermission {
         public var description: String { feedback }
     }
 
-    // parity: core/src/permission.ts#BlockedError [status=implemented hash=f12ae71baefd]
+    // parity: core/src/permission.ts#BlockedError [status=implemented hash=182fcc2289f7]
     public struct BlockedError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Permission.BlockedError"
         public let rules: Ruleset
@@ -514,7 +514,7 @@ public enum CorePermission {
         public var description: String { message }
     }
 
-    // parity: core/src/permission.ts#NotFoundError [status=implemented hash=685b3d3b3994]
+    // parity: core/src/permission.ts#NotFoundError [status=implemented hash=7e7b1d3be76a]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Permission.NotFoundError"
         public let requestID: ID
@@ -1038,7 +1038,7 @@ public enum CorePermission {
         }
     }
 
-    // parity: core/src/permission.ts#node [status=adapted hash=0cbf8c0e88d3]
+    // parity: core/src/permission.ts#node [status=adapted hash=c6ce0e94f9a4]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

@@ -36,14 +36,14 @@ public enum PluginEffect {
     }
 
     /// Hook registration function type for non-model-scoped domains.
-    // parity: plugin/src/effect/registration.ts#Hooks [status=adapted hash=43d081f731c0]
+    // parity: plugin/src/effect/registration.ts#Hooks [status=adapted hash=0d123cc1c68c]
     public typealias Hooks<Event: Sendable> = @Sendable (
         _ name: String,
         _ callback: @escaping @Sendable (Event) async throws -> Event
     ) async -> Registration
 
     /// Hook registration function type supporting optional `ModelHookOptions`.
-    // parity: plugin/src/effect/registration.ts#ModelHooks [status=adapted hash=6f353087ed23]
+    // parity: plugin/src/effect/registration.ts#ModelHooks [status=adapted hash=31ff21d04761]
     public typealias ModelHooks<Event: Sendable> = @Sendable (
         _ name: String,
         _ callback: @escaping @Sendable (Event) async throws -> Event,
@@ -445,7 +445,7 @@ public enum PluginEffect {
     }
 
     /// Tagged union of all plugin-declarable integration methods.
-    // parity: plugin/src/effect/integration.ts#IntegrationMethod [status=implemented hash=e48303ea25b7]
+    // parity: plugin/src/effect/integration.ts#IntegrationMethod [status=implemented hash=026aeacd2bfd]
     public enum IntegrationMethod: Equatable, Hashable, Sendable, Codable {
         case oauth(IntegrationOAuthMethod)
         case command(IntegrationCommandMethod)
@@ -455,7 +455,7 @@ public enum PluginEffect {
     }
 
     /// OAuth authorization flow descriptor (automatic callback or manual code paste).
-    // parity: plugin/src/effect/integration.ts#IntegrationOAuthAuthorization [status=implemented hash=6130b4ece287]
+    // parity: plugin/src/effect/integration.ts#IntegrationOAuthAuthorization [status=implemented hash=7cfdd6571680]
     public enum IntegrationOAuthAuthorization: Sendable {
         case auto(
             url: String,
@@ -502,7 +502,7 @@ public enum PluginEffect {
     }
 
     /// Registration union for any integration authentication method.
-    // parity: plugin/src/effect/integration.ts#IntegrationMethodRegistration [status=implemented hash=f0e98f033104]
+    // parity: plugin/src/effect/integration.ts#IntegrationMethodRegistration [status=implemented hash=fdae739cd13c]
     public enum IntegrationMethodRegistration: Sendable {
         case oauth(IntegrationOAuthMethodRegistration)
         case command(integrationID: String, method: IntegrationCommandMethod)
@@ -1309,7 +1309,7 @@ public enum PluginEffect {
     }
 
     /// Retry decision mutated by `session.retry` hooks.
-    // parity: plugin/src/effect/session.ts#SessionRetryDecision [status=implemented hash=58e14d041446]
+    // parity: plugin/src/effect/session.ts#SessionRetryDecision [status=implemented hash=bc5bd788f6e0]
     public enum SessionRetryDecision: Equatable, Hashable, Sendable, Codable {
         case doNotRetry
         case retry(delayMs: Int)
@@ -1422,7 +1422,7 @@ public enum PluginEffect {
     }
 
     /// Session domain exposed on plugin contexts.
-    // parity: plugin/src/effect/session.ts#SessionDomain [status=adapted hash=8dd8efc7ed98]
+    // parity: plugin/src/effect/session.ts#SessionDomain [status=adapted hash=e00e6aec6c48]
     public struct SessionDomain: Sendable {
         public let hook: ModelHooks<SessionHooks>
         public let list: @Sendable () async throws -> [SessionSchema.Info]
@@ -2299,7 +2299,7 @@ public enum PluginPromise {
     public typealias Hooks<Event: Sendable> = PluginEffect.Hooks<Event>
 
     /// Promise-style model hook registration function type.
-    // parity: plugin/src/promise/registration.ts#ModelHooks [status=adapted hash=c029925e5d9a]
+    // parity: plugin/src/promise/registration.ts#ModelHooks [status=adapted hash=69f6a5347a11]
     public typealias ModelHooks<Event: Sendable> = PluginEffect.ModelHooks<Event>
 
     /// Promise-style synchronous state transform registration.
@@ -2453,17 +2453,17 @@ public enum PluginPromise {
     // parity: plugin/src/promise/integration.ts#IntegrationEnvMethod [status=implemented hash=745945249f5c]
     public typealias IntegrationEnvMethod = PluginEffect.IntegrationEnvMethod
 
-    // parity: plugin/src/promise/integration.ts#IntegrationMethod [status=implemented hash=e48303ea25b7]
+    // parity: plugin/src/promise/integration.ts#IntegrationMethod [status=implemented hash=026aeacd2bfd]
     public typealias IntegrationMethod = PluginEffect.IntegrationMethod
 
-    // parity: plugin/src/promise/integration.ts#IntegrationOAuthAuthorization [status=implemented hash=6130b4ece287]
+    // parity: plugin/src/promise/integration.ts#IntegrationOAuthAuthorization [status=implemented hash=cfc12bf835c1]
     public typealias IntegrationOAuthAuthorization = PluginEffect.IntegrationOAuthAuthorization
 
     /// Shared with the Effect SDK: `revoke` rejections are logged and the credential is still removed.
     // parity: plugin/src/promise/integration.ts#IntegrationOAuthMethodRegistration [status=implemented hash=470cabb82c73]
     public typealias IntegrationOAuthMethodRegistration = PluginEffect.IntegrationOAuthMethodRegistration
 
-    // parity: plugin/src/promise/integration.ts#IntegrationMethodRegistration [status=implemented hash=f0e98f033104]
+    // parity: plugin/src/promise/integration.ts#IntegrationMethodRegistration [status=implemented hash=5d8217176ec7]
     public typealias IntegrationMethodRegistration = PluginEffect.IntegrationMethodRegistration
 
     // parity: plugin/src/promise/integration.ts#IntegrationEditor [status=implemented hash=1d65f670d66b]
@@ -2545,7 +2545,7 @@ public enum PluginPromise {
     // parity: plugin/src/promise/rpc.ts#RpcRegistration [status=implemented hash=a6d4d2784502]
     public typealias RpcRegistration = PluginEffect.RpcRegistration
 
-    // parity: plugin/src/promise/rpc.ts#RpcDomain [status=adapted hash=ad81b803d04c]
+    // parity: plugin/src/promise/rpc.ts#RpcDomain [status=adapted hash=7d54879486b9]
     public struct RpcDomain: Sendable {
         public let call: @Sendable (_ namespace: String, _ method: String, _ input: JSONValue, _ signal: AbortSignal?) async throws -> JSONValue
         public let subscribe: @Sendable (_ namespace: String, _ event: String, _ signal: AbortSignal?) -> AsyncStream<RpcSchema.EventPayload>
@@ -2615,7 +2615,7 @@ public enum PluginPromise {
     // parity: plugin/src/promise/session.ts#SessionWebSocketReceive [status=implemented hash=d501d9035bee]
     public typealias SessionWebSocketReceive = PluginEffect.SessionWebSocketReceive
 
-    // parity: plugin/src/promise/session.ts#SessionRetryDecision [status=implemented hash=58e14d041446]
+    // parity: plugin/src/promise/session.ts#SessionRetryDecision [status=implemented hash=bc5bd788f6e0]
     public typealias SessionRetryDecision = PluginEffect.SessionRetryDecision
 
     // parity: plugin/src/promise/session.ts#SessionRetry [status=implemented hash=2220265f70c9]
@@ -2630,7 +2630,7 @@ public enum PluginPromise {
     // parity: plugin/src/promise/session.ts#SessionHooks [status=implemented hash=2d5eeb1b8743]
     public typealias SessionHooks = PluginEffect.SessionHooks
 
-    // parity: plugin/src/promise/session.ts#SessionDomain [status=adapted hash=8dd8efc7ed98]
+    // parity: plugin/src/promise/session.ts#SessionDomain [status=adapted hash=edce4276ccfd]
     public typealias SessionDomain = PluginEffect.SessionDomain
 
     // MARK: - promise/shell.ts

@@ -11,7 +11,7 @@ internal let locationQueryParameter = ParameterDescriptor(
 
 // MARK: - 1. agent.ts
 
-// parity: protocol/src/groups/agent.ts#AgentGroup [status=implemented hash=f0defdb4c3d1]
+// parity: protocol/src/groups/agent.ts#AgentGroup [status=implemented hash=d454e44ad27d]
 public let AgentGroup: EndpointGroupDescriptor = EndpointGroupDescriptor(
     identifier: "server.agent",
     title: "agent",
@@ -63,7 +63,7 @@ private let artifactItemErrors: [ProtocolErrorRef] = [
 ] + artifactCommonErrors
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/artifact.ts#ArtifactEndpoints [status=implemented hash=bd928c4c23e7]
+// parity: protocol/src/groups/artifact.ts#ArtifactEndpoints [status=implemented hash=282d9fb24602]
 public let ArtifactEndpoints: [EndpointDescriptor] = [
     locationQueryOpenApi(
         EndpointDescriptor(
@@ -219,7 +219,7 @@ private let automationItemErrors: [ProtocolErrorRef] = [
 ]
 
 /// Request payload for `POST /api/experimental/automation` (`Automation.CreatePayload`).
-// parity: protocol/src/groups/automation.ts#CreatePayload [status=implemented hash=3dafc53a545d]
+// parity: protocol/src/groups/automation.ts#CreatePayload [status=implemented hash=161b353c838a]
 public struct AutomationCreatePayload: Equatable, Hashable, Sendable, Codable {
     public let payload: [String: JSONValue]
 
@@ -239,7 +239,7 @@ public struct AutomationCreatePayload: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Query parameters for `GET /api/experimental/automation` (`Automation.ListQuery`).
-// parity: protocol/src/groups/automation.ts#ListQuery [status=implemented hash=1a5776e223f1]
+// parity: protocol/src/groups/automation.ts#ListQuery [status=implemented hash=6101403f4322]
 public struct AutomationListQuery: Equatable, Hashable, Sendable, Codable {
     public let sessionID: SessionID?
     public let directory: String?
@@ -251,7 +251,7 @@ public struct AutomationListQuery: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/automation.ts#AutomationEndpoints [status=implemented hash=4004f1d5dd80]
+// parity: protocol/src/groups/automation.ts#AutomationEndpoints [status=implemented hash=84dc5ea0bd86]
 public let AutomationEndpoints: [EndpointDescriptor] = [
     EndpointDescriptor(
         group: "server.experimental",
@@ -374,7 +374,7 @@ public let AutomationEndpoints: [EndpointDescriptor] = [
 // MARK: - 4. blob.ts
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/blob.ts#BlobGetEndpoint [status=implemented hash=36f0622da114]
+// parity: protocol/src/groups/blob.ts#BlobGetEndpoint [status=implemented hash=2f0cdfbdcedb]
 public let BlobGetEndpoint = EndpointDescriptor(
     group: "server.experimental",
     name: "blob.get",
@@ -395,7 +395,7 @@ public let BlobGetEndpoint = EndpointDescriptor(
 
 // MARK: - 5. command.ts
 
-// parity: protocol/src/groups/command.ts#CommandGroup [status=implemented hash=3c46c47a822e]
+// parity: protocol/src/groups/command.ts#CommandGroup [status=implemented hash=fefd6088aa9c]
 public let CommandGroup = EndpointGroupDescriptor(
     identifier: "server.command",
     title: "command",
@@ -419,7 +419,7 @@ public let CommandGroup = EndpointGroupDescriptor(
 
 // MARK: - 6. config.ts
 
-// parity: protocol/src/groups/config.ts#ConfigGroup [status=implemented hash=e3276eb289b2]
+// parity: protocol/src/groups/config.ts#ConfigGroup [status=implemented hash=5297d8600c60]
 public let ConfigGroup = EndpointGroupDescriptor(
     identifier: "server.config",
     title: "config",
@@ -466,7 +466,7 @@ public let ConfigGroup = EndpointGroupDescriptor(
 
 // MARK: - 7. credential.ts
 
-// parity: protocol/src/groups/credential.ts#CredentialGroup [status=implemented hash=c61c0391387f]
+// parity: protocol/src/groups/credential.ts#CredentialGroup [status=implemented hash=57c5e765a32b]
 public let CredentialGroup = EndpointGroupDescriptor(
     identifier: "server.credential",
     title: "credential",
@@ -544,7 +544,7 @@ public let CredentialGroup = EndpointGroupDescriptor(
 
 // MARK: - 8. debug.ts
 
-// parity: protocol/src/groups/debug.ts#DebugGroup [status=implemented hash=feec1587a13a]
+// parity: protocol/src/groups/debug.ts#DebugGroup [status=implemented hash=5efa98195ede]
 public let DebugGroup = EndpointGroupDescriptor(
     identifier: "server.debug",
     title: "debug",
@@ -740,7 +740,7 @@ public struct OpenCodeEvent: Equatable, Hashable, Sendable, Codable {
 public typealias OpenCodeEventEncoded = OpenCodeEvent
 
 /// Classifies whether an event type belongs to the public `OpenCodeEvent` SSE stream.
-// parity: protocol/src/groups/event.ts#isOpenCodeEvent [status=implemented hash=d1ff0768bd6c]
+// parity: protocol/src/groups/event.ts#isOpenCodeEvent [status=implemented hash=f51aa4210484]
 public func isOpenCodeEvent(type: String) -> Bool {
     type == "server.connected" || OpenCodeEvent.serverEventTypes.contains(type) || type.hasPrefix("rpc.")
 }
@@ -800,7 +800,7 @@ public let ExperimentalGroup: EndpointGroupDescriptor = PersistentPtyGroup
 
 // MARK: - 11. form.ts
 
-// parity: protocol/src/groups/form.ts#makeFormGroup [status=implemented hash=faf4032390b8]
+// parity: protocol/src/groups/form.ts#makeFormGroup [status=implemented hash=e650d6b452f4]
 public func makeFormGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGroupDescriptor {
     EndpointGroupDescriptor(
         identifier: "server.form",
@@ -826,7 +826,7 @@ public func makeFormGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointG
 
 // MARK: - 12. fs.ts
 
-// parity: protocol/src/groups/fs.ts#FileSystemGroup [status=implemented hash=0c908c2d3237]
+// parity: protocol/src/groups/fs.ts#FileSystemGroup [status=implemented hash=d181938a3f4e]
 public let FileSystemGroup = EndpointGroupDescriptor(
     identifier: "server.fs",
     title: "filesystem",
@@ -964,7 +964,7 @@ private let generateErrors: [ProtocolErrorRef] = [
     ProtocolErrorRef(LocationNotFoundError.self),
 ]
 
-// parity: protocol/src/groups/generate.ts#GenerateGroup [status=implemented hash=cde55c51c62c]
+// parity: protocol/src/groups/generate.ts#GenerateGroup [status=implemented hash=236a35cf31f2]
 public let GenerateGroup = EndpointGroupDescriptor(
     identifier: "server.generate",
     title: "generate",
@@ -1060,7 +1060,7 @@ public let GenerateGroup = EndpointGroupDescriptor(
 
 // MARK: - 14. integration.ts
 
-// parity: protocol/src/groups/integration.ts#IntegrationGroup [status=implemented hash=07512ac65bcf]
+// parity: protocol/src/groups/integration.ts#IntegrationGroup [status=implemented hash=06f590bb6c70]
 public let IntegrationGroup = EndpointGroupDescriptor(
     identifier: "server.integration",
     title: "integration",
@@ -1322,7 +1322,7 @@ public enum ProtocolJobStatus: String, Equatable, Hashable, Sendable, Codable, C
 }
 
 /// Query parameters for `GET /api/experimental/job` (`Job.ListQuery`).
-// parity: protocol/src/groups/job.ts#ListQuery [status=implemented hash=859b5803e061]
+// parity: protocol/src/groups/job.ts#ListQuery [status=implemented hash=41d18184eaff]
 public struct JobListQuery: Equatable, Hashable, Sendable, Codable {
     public let sessionID: SessionID?
     public let kind: ProtocolJobKind?
@@ -1343,7 +1343,7 @@ public struct JobListQuery: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/job.ts#JobEndpoints [status=implemented hash=a7b1aa77260a]
+// parity: protocol/src/groups/job.ts#JobEndpoints [status=implemented hash=ec42e3f6d0b6]
 public let JobEndpoints: [EndpointDescriptor] = [
     EndpointDescriptor(
         group: "server.experimental",
@@ -1412,7 +1412,7 @@ public let JobEndpoints: [EndpointDescriptor] = [
 // MARK: - 16. location.ts
 
 /// Deep-object query parameter selecting a target workspace location (`location[directory]=...`).
-// parity: protocol/src/groups/location.ts#LocationQuery [status=implemented hash=d433589d39bb]
+// parity: protocol/src/groups/location.ts#LocationQuery [status=implemented hash=ffe0eaf400b9]
 public struct LocationQuery: Equatable, Hashable, Sendable, Codable {
     public struct LocationField: Equatable, Hashable, Sendable, Codable {
         public let directory: String?
@@ -1434,7 +1434,7 @@ public struct LocationQuery: Equatable, Hashable, Sendable, Codable {
 }
 
 /// OpenAPI parameter transform setting `style: "deepObject"` and `explode: true` on the `location` query parameter.
-// parity: protocol/src/groups/location.ts#locationQueryOpenApi [status=implemented hash=c7d4f7f3b1f5]
+// parity: protocol/src/groups/location.ts#locationQueryOpenApi [status=implemented hash=84808764b99f]
 public let locationQueryOpenApi: @Sendable (EndpointDescriptor) -> EndpointDescriptor = { endpoint in
     endpoint.mappingQueryParameters { parameter in
         if parameter.name == "location" && parameter.location == .query {
@@ -1445,7 +1445,7 @@ public let locationQueryOpenApi: @Sendable (EndpointDescriptor) -> EndpointDescr
 }
 
 /// Middleware is applied per endpoint: reload acts on every loaded location and must not boot the caller's location first.
-// parity: protocol/src/groups/location.ts#makeLocationGroup [status=implemented hash=440dc7f7d30f]
+// parity: protocol/src/groups/location.ts#makeLocationGroup [status=implemented hash=172e274eea74]
 public func makeLocationGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGroupDescriptor {
     EndpointGroupDescriptor(
         identifier: "server.location",
@@ -1492,7 +1492,7 @@ public func hasMcpClientTicketURL(_ urlString: String) -> Bool {
     return parsed.pathname == MCP_CLIENT_PATH && parsed.hasNonEmptyQueryValue(for: PTY_CONNECT_TICKET_QUERY)
 }
 
-// parity: protocol/src/groups/mcp.ts#makeMcpGroup [status=implemented hash=6ffffa099577]
+// parity: protocol/src/groups/mcp.ts#makeMcpGroup [status=implemented hash=2def12c89d40]
 public func makeMcpGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGroupDescriptor {
     let mcpClientNameParam = ParameterDescriptor(
         name: "name",
@@ -1661,7 +1661,7 @@ public func makeMcpGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGr
 // MARK: - 18. media.ts
 
 /// Validated 64-character lowercase hexadecimal SHA-256 media blob hash (`^[0-9a-f]{64}$`).
-// parity: protocol/src/groups/media.ts#MediaHash [status=implemented hash=32ff324b56ac]
+// parity: protocol/src/groups/media.ts#MediaHash [status=implemented hash=8acd4632bdf8]
 public struct MediaHash: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
     public static let pattern = "^[0-9a-f]{64}$"
 
@@ -1703,7 +1703,7 @@ public struct MediaHash: RawRepresentable, Equatable, Hashable, Sendable, Codabl
 }
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/media.ts#MediaGetEndpoint [status=implemented hash=27ea9805ec3b]
+// parity: protocol/src/groups/media.ts#MediaGetEndpoint [status=implemented hash=e3dd9dcae074]
 public let MediaGetEndpoint = EndpointDescriptor(
     group: "server.experimental",
     name: "media.get",
@@ -1766,7 +1766,7 @@ public struct MessagesCursor: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Query parameters for `GET /api/session/:sessionID/message`.
-// parity: protocol/src/groups/message.ts#SessionMessagesQuery [status=implemented hash=4cf7efcd3fec]
+// parity: protocol/src/groups/message.ts#SessionMessagesQuery [status=implemented hash=ebdd08384162]
 public struct SessionMessagesQuery: Equatable, Hashable, Sendable, Codable {
     public static let minLimit = 1
     public static let maxLimit = 200
@@ -1795,7 +1795,7 @@ public struct SessionMessagesQuery: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Public wire representation of a projected session message (`Session.Message.Info`).
-// parity: protocol/src/groups/message.ts#PublicSessionMessage [status=implemented hash=7bc51a1bb5cc]
+// parity: protocol/src/groups/message.ts#PublicSessionMessage [status=implemented hash=a43fcf19943f]
 public struct PublicSessionMessage: Equatable, Hashable, Sendable, Codable {
     public let fields: [String: JSONValue]
 
@@ -1826,7 +1826,7 @@ public struct PublicSessionMessage: Equatable, Hashable, Sendable, Codable {
 
 /// Experimental: `PublicSessionMessage` for clients opting in with `X-OpenCode-Capabilities: experimental-media-uri`
 /// (`Session.Message.MediaInfo`).
-// parity: protocol/src/groups/message.ts#PublicMediaSessionMessage [status=implemented hash=eb3065f65b81]
+// parity: protocol/src/groups/message.ts#PublicMediaSessionMessage [status=implemented hash=4f4bad164626]
 public struct PublicMediaSessionMessage: Equatable, Hashable, Sendable, Codable {
     public let fields: [String: JSONValue]
 
@@ -1856,7 +1856,7 @@ public struct PublicMediaSessionMessage: Equatable, Hashable, Sendable, Codable 
 }
 
 /// Experimental: `session.messages` response for clients opting into `experimental-media-uri`.
-// parity: protocol/src/groups/message.ts#SessionMediaMessagesResponse [status=implemented hash=68eb43a27478]
+// parity: protocol/src/groups/message.ts#SessionMediaMessagesResponse [status=implemented hash=d888c6217999]
 public struct SessionMediaMessagesResponse: Equatable, Hashable, Sendable, Codable {
     public let data: [PublicMediaSessionMessage]
     public let cursor: MessagesCursor
@@ -1868,7 +1868,7 @@ public struct SessionMediaMessagesResponse: Equatable, Hashable, Sendable, Codab
 }
 
 /// Experimental: `session.message` response for clients opting into `experimental-media-uri`.
-// parity: protocol/src/groups/message.ts#SessionMediaMessageResponse [status=implemented hash=88b283d953ca]
+// parity: protocol/src/groups/message.ts#SessionMediaMessageResponse [status=implemented hash=c7ce3c8f959e]
 public struct SessionMediaMessageResponse: Equatable, Hashable, Sendable, Codable {
     public let data: PublicMediaSessionMessage
 
@@ -1877,7 +1877,7 @@ public struct SessionMediaMessageResponse: Equatable, Hashable, Sendable, Codabl
     }
 }
 
-// parity: protocol/src/groups/message.ts#MessageGroup [status=implemented hash=c45dfc4be726]
+// parity: protocol/src/groups/message.ts#MessageGroup [status=implemented hash=405be35b6846]
 public let MessageGroup = EndpointGroupDescriptor(
     identifier: "server.message",
     title: "session",

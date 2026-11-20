@@ -30,7 +30,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/timeline/types.ts#TimelineEntry [status=implemented hash=a9b4285777da]
+    // parity: merman/src/timeline/types.ts#TimelineEntry [status=implemented hash=2b53089909d1]
     public enum TimelineEntry: Equatable, Hashable, Sendable, Codable {
         case section(TimelineSection)
         case period(TimelinePeriod)
@@ -132,7 +132,7 @@ extension Merman {
     // parity: merman/src/timeline/style.ts#TIMELINE_PERIOD_FADE_STYLES [status=implemented hash=cbc1b593d70a]
     public static let TIMELINE_PERIOD_FADE_STYLES: [TimelineCellStyle] = [.periodFade1, .periodFade2, .periodFade3]
 
-    // parity: merman/src/timeline/style.ts#resolveTimelineStyleColors [status=implemented hash=11f46ce766f5]
+    // parity: merman/src/timeline/style.ts#resolveTimelineStyleColors [status=implemented hash=3885b874fb16]
     public static func resolveTimelineStyleColors(
         _ colors: [TimelineBaseCellStyle: RGBA?] = [:]
     ) -> TimelineStyleColors {
@@ -325,7 +325,7 @@ extension Merman {
         let height: Int
     }
 
-    // parity: merman/src/timeline/drawing.ts#drawTimelineDiagramGrid [status=implemented hash=01483666dc19]
+    // parity: merman/src/timeline/drawing.ts#drawTimelineDiagramGrid [status=implemented hash=f6a1f7e8da1b]
     public static func drawTimelineDiagramGrid(
         _ diagram: TimelineDiagram,
         options: TimelineDiagramRenderOptions = TimelineDiagramRenderOptions()
@@ -425,7 +425,7 @@ extension Merman {
 
     // MARK: - Timeline Diagram (`timeline/diagram.ts`)
 
-    // parity: merman/src/timeline/diagram.ts#renderTimelineDiagram [status=implemented hash=2b39b4e6a028]
+    // parity: merman/src/timeline/diagram.ts#renderTimelineDiagram [status=implemented hash=1af784863296]
     public static func renderTimelineDiagram(
         _ content: String,
         options: TimelineDiagramRenderOptions = TimelineDiagramRenderOptions()

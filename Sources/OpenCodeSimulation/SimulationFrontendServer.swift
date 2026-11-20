@@ -6,7 +6,7 @@ import OpenCodeUtil
 /// Frontend UI simulation WebSocket JSON-RPC server (`packages/simulation/src/frontend/server.ts`).
 public enum SimulationServer {
     /// Starts the UI Drive WebSocket control server dispatching all `ui.*` and `simulation.handshake` RPCs.
-    // parity: simulation/src/frontend/server.ts#start [status=implemented hash=fe7150e0bb1e]
+    // parity: simulation/src/frontend/server.ts#start [status=implemented hash=3f84d923e37d]
     public static func start(
         harness: SimulationActions.Harness,
         endpoint: String,

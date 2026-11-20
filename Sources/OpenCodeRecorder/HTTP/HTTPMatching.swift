@@ -3,7 +3,7 @@ import OpenCodeUtil
 
 /// Produces a deterministic canonical JSON string representation of a `RequestSnapshot`
 /// with recursively sorted header and JSON body keys.
-// parity: http-recorder/src/http/matching.ts#canonicalSnapshot [status=implemented hash=4be8f6f3e463]
+// parity: http-recorder/src/http/matching.ts#canonicalSnapshot [status=implemented hash=9c45124aef90]
 public func canonicalSnapshot(_ snapshot: RequestSnapshot) -> String {
     let bodyValue: PureJSONValue
     if let parsed = decodeJson(snapshot.body) {
@@ -186,7 +186,7 @@ public enum MatchSelection: Equatable, Hashable, Sendable {
 }
 
 /// Selects the first unused recorded interaction matching `incoming`, or produces a diff against the first unused interaction.
-// parity: http-recorder/src/http/matching.ts#selectFirstMatching [status=implemented hash=f90532c3841e]
+// parity: http-recorder/src/http/matching.ts#selectFirstMatching [status=implemented hash=50f1d12aa1ce]
 public func selectFirstMatching(
     interactions: [HttpInteraction],
     incoming: RequestSnapshot,

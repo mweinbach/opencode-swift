@@ -472,7 +472,7 @@ public enum JsonRpc {
         }
     }
 
-    // parity: protocol/src/simulation.ts#JsonRpc.Request [status=implemented hash=96360874b62f]
+    // parity: protocol/src/simulation.ts#JsonRpc.Request [status=implemented hash=aa2895c12bff]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let jsonrpc: String
         public let id: ID?
@@ -515,7 +515,7 @@ public enum JsonRpc {
         }
     }
 
-    // parity: protocol/src/simulation.ts#JsonRpc.ErrorObject [status=implemented hash=8b2a9e4496a3]
+    // parity: protocol/src/simulation.ts#JsonRpc.ErrorObject [status=implemented hash=4b93039b7d61]
     public struct ErrorObject: Equatable, Hashable, Sendable, Codable {
         public let code: Int
         public let message: String
@@ -528,7 +528,7 @@ public enum JsonRpc {
         }
     }
 
-    // parity: protocol/src/simulation.ts#JsonRpc.Response [status=implemented hash=7b5367e6a530]
+    // parity: protocol/src/simulation.ts#JsonRpc.Response [status=implemented hash=d0acad62afb1]
     public enum Response: Equatable, Hashable, Sendable, Codable {
         case success(id: ID, result: JSONValue)
         case failure(id: ID, error: ErrorObject)
@@ -631,7 +631,7 @@ public enum JsonRpc {
 
 // MARK: - SimulationRequestError
 
-// parity: protocol/src/simulation.ts#SimulationRequestError [status=implemented hash=08825d09b016]
+// parity: protocol/src/simulation.ts#SimulationRequestError [status=implemented hash=dcf8f20dad1d]
 public struct SimulationRequestError: Error, Equatable, Hashable, Sendable, Codable {
     public static let tag = "SimulationRequestError"
 
@@ -688,7 +688,7 @@ public enum Handshake {
         case backend
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.Identity [status=implemented hash=5dc5c13b8f31]
+    // parity: protocol/src/simulation.ts#Handshake.Identity [status=implemented hash=aac20e9f2bf2]
     public struct Identity: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let version: String
@@ -728,7 +728,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.Params [status=implemented hash=72254e7f3164]
+    // parity: protocol/src/simulation.ts#Handshake.Params [status=implemented hash=810a45a2f878]
     public struct Params: Equatable, Hashable, Sendable, Codable {
         public let client: Identity
         public let expectedRole: EndpointRole
@@ -816,7 +816,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.Response [status=implemented hash=064288e78477]
+    // parity: protocol/src/simulation.ts#Handshake.Response [status=implemented hash=5407e3ef12a4]
     public struct Response: Equatable, Hashable, Sendable, Codable {
         public let protocolVersion: ProtocolVersion
         public let role: EndpointRole
@@ -836,7 +836,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.Request [status=implemented hash=0d44b90829d0]
+    // parity: protocol/src/simulation.ts#Handshake.Request [status=implemented hash=d511c7c97f8f]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let jsonrpc: String
         public let id: JsonRpc.ID?
@@ -905,7 +905,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.RoleMismatchError [status=implemented hash=9fceb130a29a]
+    // parity: protocol/src/simulation.ts#Handshake.RoleMismatchError [status=implemented hash=b9df9b42d846]
     public struct RoleMismatchError: Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "SimulationHandshake.RoleMismatchError"
 
@@ -940,7 +940,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.UnsupportedProtocolError [status=implemented hash=42395246fad6]
+    // parity: protocol/src/simulation.ts#Handshake.UnsupportedProtocolError [status=implemented hash=d31a6fb25d82]
     public struct UnsupportedProtocolError: Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "SimulationHandshake.UnsupportedProtocolError"
 
@@ -975,7 +975,7 @@ public enum Handshake {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Handshake.MissingCapabilityError [status=implemented hash=2c972eed5c4f]
+    // parity: protocol/src/simulation.ts#Handshake.MissingCapabilityError [status=implemented hash=0cd311b2663c]
     public struct MissingCapabilityError: Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "SimulationHandshake.MissingCapabilityError"
 
@@ -1061,7 +1061,7 @@ public enum Handshake {
 
 // parity: protocol/src/simulation.ts#Frontend [status=implemented hash=6a86ca978b78]
 public enum Frontend {
-    // parity: protocol/src/simulation.ts#Frontend.Capabilities [status=implemented hash=da86c1bed891]
+    // parity: protocol/src/simulation.ts#Frontend.Capabilities [status=implemented hash=27ee4d40869a]
     public static let Capabilities: [Handshake.Capability] = [
         "ui.type",
         "ui.press",
@@ -1128,7 +1128,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.KeyModifiers [status=implemented hash=33a29c535974]
+    // parity: protocol/src/simulation.ts#Frontend.KeyModifiers [status=implemented hash=dd15fcd8f196]
     public struct KeyModifiers: Equatable, Hashable, Sendable, Codable {
         public let ctrl: Bool?
         public let shift: Bool?
@@ -1168,7 +1168,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.SemanticClickTarget [status=implemented hash=687417e8b923]
+    // parity: protocol/src/simulation.ts#Frontend.SemanticClickTarget [status=implemented hash=5bb937a898bd]
     public struct SemanticClickTarget: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let instance: String?
@@ -1218,7 +1218,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.MouseParams [status=implemented hash=ce840afd4bec]
+    // parity: protocol/src/simulation.ts#Frontend.MouseParams [status=implemented hash=156ed9b426d8]
     public enum MouseParams: Equatable, Hashable, Sendable, Codable {
         case move(x: Int, y: Int, modifiers: MouseModifiers? = nil)
         case down(x: Int, y: Int, button: MouseButton? = nil, modifiers: MouseModifiers? = nil)
@@ -1316,7 +1316,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.Action [status=implemented hash=7b86293e0224]
+    // parity: protocol/src/simulation.ts#Frontend.Action [status=implemented hash=4e748c8f7a81]
     public enum Action: Equatable, Hashable, Sendable, Codable {
         case type(text: String)
         case press(key: String, modifiers: KeyModifiers? = nil)
@@ -1402,7 +1402,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.Element [status=implemented hash=bee24a4cb5e1]
+    // parity: protocol/src/simulation.ts#Frontend.Element [status=implemented hash=f9b61c701920]
     public struct Element: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let num: Double
@@ -1440,7 +1440,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.State [status=implemented hash=2be8dcc2e69f]
+    // parity: protocol/src/simulation.ts#Frontend.State [status=implemented hash=7593beb44b75]
     public struct State: Equatable, Hashable, Sendable, Codable {
         public struct Focused: Equatable, Hashable, Sendable, Codable {
             public let renderable: Double?
@@ -1461,7 +1461,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.SemanticNode [status=implemented hash=9834c443cfef]
+    // parity: protocol/src/simulation.ts#Frontend.SemanticNode [status=implemented hash=df26567fffc9]
     public struct SemanticNode: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let instance: String?
@@ -1535,7 +1535,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.SemanticSnapshot [status=implemented hash=6b3531ac1e25]
+    // parity: protocol/src/simulation.ts#Frontend.SemanticSnapshot [status=implemented hash=55f8141d5ce4]
     public struct SemanticSnapshot: Equatable, Hashable, Sendable, Codable {
         public static let expectedFormat = "opencode-ui-snapshot-v1"
 
@@ -1632,7 +1632,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.CapturedImage [status=implemented hash=ffa70edb115f]
+    // parity: protocol/src/simulation.ts#Frontend.CapturedImage [status=implemented hash=853dd08c9fe4]
     public struct CapturedImage: Equatable, Hashable, Sendable, Codable {
         public let x: Double
         public let y: Double
@@ -1680,7 +1680,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.CapturedFrame [status=implemented hash=e21ec8d56a0c]
+    // parity: protocol/src/simulation.ts#Frontend.CapturedFrame [status=implemented hash=b251955deb61]
     public struct CapturedFrame: Equatable, Hashable, Sendable, Codable {
         public struct Cursor: Equatable, Hashable, Sendable, Codable {
             public let col: Double
@@ -1753,7 +1753,7 @@ public enum Frontend {
     // parity: protocol/src/simulation.ts#Frontend.Matches [status=implemented hash=23b045bab13f]
     public typealias Matches = Bool
 
-    // parity: protocol/src/simulation.ts#Frontend.TypeParams [status=implemented hash=5ba3ad94f197]
+    // parity: protocol/src/simulation.ts#Frontend.TypeParams [status=implemented hash=2d289873ca6a]
     public struct TypeParams: Equatable, Hashable, Sendable, Codable {
         public let text: String
 
@@ -1762,7 +1762,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.MatchesParams [status=implemented hash=2ed515ba8278]
+    // parity: protocol/src/simulation.ts#Frontend.MatchesParams [status=implemented hash=a538af623287]
     public struct MatchesParams: Equatable, Hashable, Sendable, Codable {
         public let text: String
 
@@ -1771,7 +1771,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.PressParams [status=implemented hash=30eaa35148fa]
+    // parity: protocol/src/simulation.ts#Frontend.PressParams [status=implemented hash=0f6f270c2cbd]
     public struct PressParams: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let modifiers: KeyModifiers?
@@ -1782,12 +1782,12 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.pressParams [status=implemented hash=ba6909bd6162]
+    // parity: protocol/src/simulation.ts#Frontend.pressParams [status=implemented hash=f3db8a0bbca1]
     public static func pressParams(_ key: String, modifiers: KeyModifiers? = nil) -> PressParams {
         PressParams(key: key, modifiers: modifiers)
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.ArrowParams [status=implemented hash=1b77c1249232]
+    // parity: protocol/src/simulation.ts#Frontend.ArrowParams [status=implemented hash=669185b357e2]
     public struct ArrowParams: Equatable, Hashable, Sendable, Codable {
         public let direction: Direction
 
@@ -1796,7 +1796,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.FocusParams [status=implemented hash=f0d071a62afe]
+    // parity: protocol/src/simulation.ts#Frontend.FocusParams [status=implemented hash=917682bf296f]
     public struct FocusParams: Equatable, Hashable, Sendable, Codable {
         public let target: Double
 
@@ -1805,7 +1805,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.ClickParams [status=implemented hash=65c42ec86eec]
+    // parity: protocol/src/simulation.ts#Frontend.ClickParams [status=implemented hash=b85e94eb12d8]
     public struct ClickParams: Equatable, Hashable, Sendable, Codable {
         public let target: Double
         public let x: Double
@@ -1820,7 +1820,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.ResizeParams [status=implemented hash=81c9587958ee]
+    // parity: protocol/src/simulation.ts#Frontend.ResizeParams [status=implemented hash=b1cee4cc326c]
     public struct ResizeParams: Equatable, Hashable, Sendable, Codable {
         public let cols: Double
         public let rows: Double
@@ -1831,7 +1831,7 @@ public enum Frontend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Frontend.Request [status=implemented hash=b4f8ccbb64d0]
+    // parity: protocol/src/simulation.ts#Frontend.Request [status=implemented hash=60f22332edd2]
     public enum Request: Equatable, Hashable, Sendable, Codable {
         case handshake(Handshake.Request)
         case uiType(id: JsonRpc.ID?, params: TypeParams)
@@ -2047,7 +2047,7 @@ public enum Frontend {
 
 // parity: protocol/src/simulation.ts#Backend [status=implemented hash=dddf89ebdb29]
 public enum Backend {
-    // parity: protocol/src/simulation.ts#Backend.Capabilities [status=implemented hash=da86c1bed891]
+    // parity: protocol/src/simulation.ts#Backend.Capabilities [status=implemented hash=4ec7c92278b0]
     public static let Capabilities: [Handshake.Capability] = [
         "llm.attach",
         "llm.chunk",
@@ -2064,7 +2064,7 @@ public enum Backend {
         "tool.cancel",
     ]
 
-    // parity: protocol/src/simulation.ts#Backend.Item [status=implemented hash=fec3c982170d]
+    // parity: protocol/src/simulation.ts#Backend.Item [status=implemented hash=10a55a3b0433]
     public enum Item: Equatable, Hashable, Sendable, Codable {
         case textDelta(text: String)
         case reasoningDelta(text: String)
@@ -2184,7 +2184,7 @@ public enum Backend {
         case contentFilter = "content-filter"
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolContent [status=implemented hash=dbd1ff45dcc2]
+    // parity: protocol/src/simulation.ts#Backend.ToolContent [status=implemented hash=bf87f86caf70]
     public enum ToolContent: Equatable, Hashable, Sendable, Codable {
         case text(text: String)
         case file(data: String, mime: String, name: String? = nil)
@@ -2245,7 +2245,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolRegistration [status=implemented hash=eec73fe714d6]
+    // parity: protocol/src/simulation.ts#Backend.ToolRegistration [status=implemented hash=e57d689a7897]
     public struct ToolRegistration: Equatable, Hashable, Sendable, Codable {
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let namespace: String?
@@ -2345,7 +2345,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolAttachParams [status=implemented hash=8626b1818760]
+    // parity: protocol/src/simulation.ts#Backend.ToolAttachParams [status=implemented hash=d6a0145c4125]
     public struct ToolAttachParams: Equatable, Hashable, Sendable, Codable {
         public let tools: [ToolRegistration]
 
@@ -2409,7 +2409,7 @@ public enum Backend {
     // parity: protocol/src/simulation.ts#Backend.ToolProgress [status=implemented hash=1d2b4a3508ac]
     public typealias ToolProgress = [String: JSONValue]
 
-    // parity: protocol/src/simulation.ts#Backend.ToolOutput [status=implemented hash=d25df442d95f]
+    // parity: protocol/src/simulation.ts#Backend.ToolOutput [status=implemented hash=353883ea7f79]
     public struct ToolOutput: Equatable, Hashable, Sendable, Codable {
         public let structured: JSONValue
         public let content: [ToolContent]
@@ -2431,7 +2431,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolUpdateParams [status=implemented hash=96b10cee61e5]
+    // parity: protocol/src/simulation.ts#Backend.ToolUpdateParams [status=implemented hash=487bcd69c4ef]
     public struct ToolUpdateParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let sequence: Int
@@ -2468,7 +2468,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolFinishParams [status=implemented hash=295b2e2a0e12]
+    // parity: protocol/src/simulation.ts#Backend.ToolFinishParams [status=implemented hash=f018009c8934]
     public struct ToolFinishParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let output: ToolOutput
@@ -2485,7 +2485,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolFailParams [status=implemented hash=b0656c76c43f]
+    // parity: protocol/src/simulation.ts#Backend.ToolFailParams [status=implemented hash=b03b5301ec54]
     public struct ToolFailParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let message: String
@@ -2501,7 +2501,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolInvocation [status=implemented hash=77ed2af6e973]
+    // parity: protocol/src/simulation.ts#Backend.ToolInvocation [status=implemented hash=0d6662e84dd3]
     public struct ToolInvocation: Equatable, Hashable, Sendable, Codable {
         public struct Context: Equatable, Hashable, Sendable, Codable {
             public let sessionID: String
@@ -2548,7 +2548,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ToolCancellation [status=implemented hash=bd962a6b5158]
+    // parity: protocol/src/simulation.ts#Backend.ToolCancellation [status=implemented hash=40fc99f28a79]
     public struct ToolCancellation: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let reason: String
@@ -2582,7 +2582,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.Attached [status=implemented hash=cc2722d08d20]
+    // parity: protocol/src/simulation.ts#Backend.Attached [status=implemented hash=e72c18fe9c93]
     public struct Attached: Equatable, Hashable, Sendable, Codable {
         public let attached: Bool
 
@@ -2604,7 +2604,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.Ok [status=implemented hash=18cabae893de]
+    // parity: protocol/src/simulation.ts#Backend.Ok [status=implemented hash=6c1bf38042ce]
     public struct Ok: Equatable, Hashable, Sendable, Codable {
         public let ok: Bool
 
@@ -2626,7 +2626,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ChunkParams [status=implemented hash=37443968e9a7]
+    // parity: protocol/src/simulation.ts#Backend.ChunkParams [status=implemented hash=3ad63403c9e8]
     public struct ChunkParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let items: [Item]
@@ -2647,7 +2647,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.FinishParams [status=implemented hash=f07731eca95f]
+    // parity: protocol/src/simulation.ts#Backend.FinishParams [status=implemented hash=08cfa6a785c9]
     public struct FinishParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let reason: FinishReason
@@ -2682,7 +2682,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.FinishPayload [status=implemented hash=e8421f873de1]
+    // parity: protocol/src/simulation.ts#Backend.FinishPayload [status=implemented hash=34521ad06a9d]
     public struct FinishPayload: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let reason: FinishReason?
@@ -2693,7 +2693,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.DisconnectParams [status=implemented hash=be3b46682ded]
+    // parity: protocol/src/simulation.ts#Backend.DisconnectParams [status=implemented hash=e03ce880d9b1]
     public struct DisconnectParams: Equatable, Hashable, Sendable, Codable {
         public let id: String
 
@@ -2707,7 +2707,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.Request [status=implemented hash=29828459dbe5]
+    // parity: protocol/src/simulation.ts#Backend.Request [status=implemented hash=19ced1578c57]
     public enum Request: Equatable, Hashable, Sendable, Codable {
         case handshake(Handshake.Request)
         case llmChunk(id: JsonRpc.ID?, params: ChunkParams)
@@ -2854,7 +2854,7 @@ public enum Backend {
         return try decodeRequest(value)
     }
 
-    // parity: protocol/src/simulation.ts#Backend.ProviderInvocation [status=implemented hash=b26912dbccfc]
+    // parity: protocol/src/simulation.ts#Backend.ProviderInvocation [status=implemented hash=b89c8e969037]
     public struct ProviderInvocation: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let url: String
@@ -2877,7 +2877,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.Pending [status=implemented hash=d4ea26fa8bda]
+    // parity: protocol/src/simulation.ts#Backend.Pending [status=implemented hash=a1f45aeb48f4]
     public struct Pending: Equatable, Hashable, Sendable, Codable {
         public let invocations: [ProviderInvocation]
 
@@ -2886,7 +2886,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.NetworkLogEntry [status=implemented hash=bf9ebfeecf2e]
+    // parity: protocol/src/simulation.ts#Backend.NetworkLogEntry [status=implemented hash=0ba674e2330f]
     public struct NetworkLogEntry: Equatable, Hashable, Sendable, Codable {
         public let time: Double
         public let method: String
@@ -2901,7 +2901,7 @@ public enum Backend {
         }
     }
 
-    // parity: protocol/src/simulation.ts#Backend.Notification [status=implemented hash=f5649aa78899]
+    // parity: protocol/src/simulation.ts#Backend.Notification [status=implemented hash=7423481034e0]
     public enum Notification: Equatable, Hashable, Sendable, Codable {
         case llmRequest(ProviderInvocation)
         case toolInvocation(ToolInvocation)
@@ -3014,7 +3014,7 @@ public struct SimulationRpcGroupDescriptor: Equatable, Hashable, Sendable, Codab
     }
 }
 
-// parity: protocol/src/simulation.ts#UiRpcs [status=implemented hash=bee9b3f8d910]
+// parity: protocol/src/simulation.ts#UiRpcs [status=implemented hash=7988ef6e567d]
 public let UiRpcs = SimulationRpcGroupDescriptor(
     name: "UiRpcs",
     methods: [
@@ -3035,7 +3035,7 @@ public let UiRpcs = SimulationRpcGroupDescriptor(
     ]
 )
 
-// parity: protocol/src/simulation.ts#BackendRpcs [status=implemented hash=2417ea6d21aa]
+// parity: protocol/src/simulation.ts#BackendRpcs [status=implemented hash=5d0bae5d6d54]
 public let BackendRpcs = SimulationRpcGroupDescriptor(
     name: "BackendRpcs",
     methods: [

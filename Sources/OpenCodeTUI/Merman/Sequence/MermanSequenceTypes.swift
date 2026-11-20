@@ -118,7 +118,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/sequence/types.ts#SequenceStep [status=implemented hash=0c12fbebca8e]
+    // parity: merman/src/sequence/types.ts#SequenceStep [status=implemented hash=5e4eb4118dbf]
     public enum SequenceStep: Equatable, Hashable, Sendable, Codable {
         case message(SequenceMessage)
         case note(SequenceNote)
@@ -182,7 +182,7 @@ extension Merman {
         case lifelineRamp3
     }
 
-    // parity: merman/src/sequence/types.ts#SequenceCellStyle [status=implemented hash=57c1cba422fe]
+    // parity: merman/src/sequence/types.ts#SequenceCellStyle [status=implemented hash=21316660fbd1]
     public enum SequenceCellStyle: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case participant
         case lifeline
@@ -310,7 +310,7 @@ extension Merman {
     // parity: merman/src/sequence/style.ts#SEQUENCE_FADE_STEPS [status=implemented hash=23a1c2c97cfa]
     public static let SEQUENCE_FADE_STEPS: [Int] = DIAGRAM_FADE_STEPS
 
-    // parity: merman/src/sequence/style.ts#resolveSequenceStyleColors [status=implemented hash=026644bee85f]
+    // parity: merman/src/sequence/style.ts#resolveSequenceStyleColors [status=implemented hash=4a8c52735d7c]
     public static func resolveSequenceStyleColors(
         _ colors: SequenceStyleColors = SequenceStyleColors()
     ) -> ResolvedSequenceStyleColors {

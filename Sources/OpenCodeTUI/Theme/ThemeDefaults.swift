@@ -169,7 +169,7 @@ public struct InferredHues: Equatable, Sendable {
 public let chromaticHues: [ChromaticHue] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple]
 
 /// Priority-ordered V1 tokens mapped into categorical hues.
-// parity: theme/src/tui/v1-migrate.ts#categoricalTokens [status=implemented hash=93a72f21bd69]
+// parity: theme/src/tui/v1-migrate.ts#categoricalTokens [status=implemented hash=fae1fe320008]
 public let categoricalTokens: [V1HueToken] = [.secondary, .accent, .success, .warning, .primary, .error, .info]
 
 private let minimumChroma = 0.03

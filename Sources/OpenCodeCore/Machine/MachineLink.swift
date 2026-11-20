@@ -32,7 +32,7 @@ public enum MachineLink {
     static let deadline: Duration = .seconds(10)
 
     /// The carrier ended: the connection under it closed.
-    // parity: core/src/machine/link.ts#Closed [status=implemented hash=722fc801c3e6]
+    // parity: core/src/machine/link.ts#Closed [status=implemented hash=b757658a7cb4]
     public struct Closed: Error, Equatable, Hashable, Sendable {
         public static let tag = "Link.Closed"
         public init() {}
@@ -40,7 +40,7 @@ public enum MachineLink {
 
     /// One failure for every refused handshake, on either side, saying nothing about which step refused it. The caller
     /// closes the carrier; nothing more is sent on it.
-    // parity: core/src/machine/link.ts#Refused [status=implemented hash=311254a24398]
+    // parity: core/src/machine/link.ts#Refused [status=implemented hash=4b11c3301107]
     public struct Refused: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Link.Refused"
         public init() {}
@@ -107,7 +107,7 @@ public enum MachineLink {
     ///
     /// Anything else, including ten seconds passing, is `Refused`, and nothing that says why reaches the peer: the
     /// caller closes the carrier. Cancelling `accept` cancels it; that is never turned into `Refused`.
-    // parity: core/src/machine/link.ts#accept [status=implemented hash=4e4f7b8c3b44]
+    // parity: core/src/machine/link.ts#accept [status=implemented hash=2c68c3e73917]
     public static func accept(
         _ carrier: any Carrier,
         identity: any MachineIdentity.Interface,
@@ -154,7 +154,7 @@ public enum MachineLink {
     ///
     /// Anything else is `Refused`, and the caller closes the carrier. `dial` has no deadline of its own: the caller
     /// bounds it. Cancelling it cancels it; that is never turned into `Refused`.
-    // parity: core/src/machine/link.ts#dial [status=implemented hash=3affeca20df6]
+    // parity: core/src/machine/link.ts#dial [status=implemented hash=46a509989636]
     public static func dial(_ carrier: any Carrier, options: DialOptions) async throws -> Established {
         try await refusing(deadline: nil) {
             let home = options.home

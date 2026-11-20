@@ -16,7 +16,7 @@ private let clientSessionLocationMiddleware = MiddlewareDescriptor(
 
 /// Client-side composed HTTP API surface matching `packages/protocol/src/client.ts#ClientApi`.
 /// Uses client-side middleware identities for API typing and OpenAPI generation.
-// parity: protocol/src/client.ts#ClientApi [status=implemented hash=487a94245e2f]
+// parity: protocol/src/client.ts#ClientApi [status=implemented hash=b6c287dc8f53]
 public let ClientApi: ProtocolApi = makeDefaultApi(
     locationMiddleware: clientLocationMiddleware,
     formLocationMiddleware: clientSessionLocationMiddleware,
@@ -24,7 +24,7 @@ public let ClientApi: ProtocolApi = makeDefaultApi(
 )
 
 /// Mapping from `HttpApiGroup` identifier (`server.<group>`) to generated SDK client property name.
-// parity: protocol/src/client.ts#groupNames [status=implemented hash=4876a71dae68]
+// parity: protocol/src/client.ts#groupNames [status=implemented hash=a95362fbaf8a]
 public let groupNames: [String: String] = [
     "server.server": "server",
     "server.debug": "debug",
@@ -62,7 +62,7 @@ public let groupNames: [String: String] = [
 
 /// Experimental routes carry no compatibility promise, so generated clients nest them under
 /// `client.experimental` instead of beside stable methods. The URL decides rather than the OpenAPI id.
-// parity: protocol/src/client.ts#clientNamespace [status=implemented hash=5614091b8c7f]
+// parity: protocol/src/client.ts#clientNamespace [status=implemented hash=0a210be22aad]
 public func clientNamespace(path: String) -> String? {
     (path == "/api/experimental" || path.hasPrefix("/api/experimental/")) ? "experimental" : nil
 }

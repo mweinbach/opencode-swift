@@ -19,7 +19,7 @@ public struct SecretFinding: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Runtime schema for `SecretFinding`.
-// parity: http-recorder/src/redaction/secrets.ts#SecretFindingSchema [status=implemented hash=9ddfd750a554]
+// parity: http-recorder/src/redaction/secrets.ts#SecretFindingSchema [status=implemented hash=0a440363b0fe]
 public let SecretFindingSchema = RecorderSchema<SecretFinding>(
     name: "SecretFinding",
     decode: { value in

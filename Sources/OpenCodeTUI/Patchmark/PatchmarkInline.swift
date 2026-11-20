@@ -1306,7 +1306,7 @@ public func parseReference(_ s: String, into refmap: inout RefMap) -> Int {
 }
 
 /// Parses inline markdown syntax into an array of `InlineNode`s.
-// parity: patchmark/src/inline.ts#parseInlines [status=implemented hash=cb1d2b87e719]
+// parity: patchmark/src/inline.ts#parseInlines [status=implemented hash=40749a4adf6a]
 public func parseInlines(_ raw: String, options: InlineParseOptions = InlineParseOptions()) -> [InlineNode] {
     var used = Set<String>()
     var unresolved = Set<String>()

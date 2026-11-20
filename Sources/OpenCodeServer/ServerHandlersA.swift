@@ -211,7 +211,7 @@ public func failedSnapshot(
 
 /// Handlers for `server.agent` (`GET /api/agent`, `GET /api/agent/:agentID`).
 /// Never waits for async plugin loading; returns currently registered agents immediately.
-// parity: server/src/handlers/agent.ts#AgentHandler [status=implemented hash=28fc7390c06a]
+// parity: server/src/handlers/agent.ts#AgentHandler [status=implemented hash=a3fc466255e5]
 public let AgentHandler = ServerHandlerGroup(
     groupIdentifier: "server.agent",
     routes: [
@@ -256,7 +256,7 @@ public struct ServerArtifactHandlers: Sendable {
 }
 
 /// Builds `artifacts.*` route handlers for the `server.experimental` group.
-// parity: server/src/handlers/artifact.ts#makeArtifact [status=implemented hash=fada42393a1e]
+// parity: server/src/handlers/artifact.ts#makeArtifact [status=implemented hash=e763aeecfdf6]
 public let makeArtifact: @Sendable () -> ServerArtifactHandlers = {
     @Sendable func explicitDirectory(request: ServerHTTPRequest) -> String? {
         if let q = request.query("location[directory]"), !q.isEmpty { return q }
@@ -497,7 +497,7 @@ private func findServerAutomation(runtime: ServerAppRuntime, rawID: String) asyn
 }
 
 /// Builds `automation.*` route handlers for the `server.experimental` group.
-// parity: server/src/handlers/automation.ts#makeAutomation [status=implemented hash=b98bb495269a]
+// parity: server/src/handlers/automation.ts#makeAutomation [status=implemented hash=83975bba8f2e]
 public let makeAutomation: @Sendable () -> ServerAutomationHandlers = {
     ServerAutomationHandlers(
         create: { ctx in
@@ -631,7 +631,7 @@ public let makeAutomation: @Sendable () -> ServerAutomationHandlers = {
 // MARK: - 5. Blob Get Handler (server/src/handlers/blob.ts)
 
 /// Builds `blob.get` raw streaming handler supporting immutable ETag, 304 Not Modified, If-Range, and HTTP Byte Ranges (206/416).
-// parity: server/src/handlers/blob.ts#makeBlobGet [status=implemented hash=04451e9b0536]
+// parity: server/src/handlers/blob.ts#makeBlobGet [status=implemented hash=240d81acf290]
 public let makeBlobGet: @Sendable () -> @Sendable (ServerRouteContext) async throws -> ServerHTTPResponse = {
     { ctx in
         let rawID = try ctx.requireParam("id")
@@ -732,7 +732,7 @@ public let CommandHandler = ServerHandlerGroup(
 // MARK: - 7. Config Handler (server/src/handlers/config.ts)
 
 /// Handlers for `server.config` (`GET /api/config`, `GET /api/config/shell`, `PATCH /api/experimental/config`).
-// parity: server/src/handlers/config.ts#ConfigHandler [status=implemented hash=af6ef459d786]
+// parity: server/src/handlers/config.ts#ConfigHandler [status=implemented hash=e3b092af5c22]
 public let ConfigHandler = ServerHandlerGroup(
     groupIdentifier: "server.config",
     routes: [
@@ -779,7 +779,7 @@ public let ConfigHandler = ServerHandlerGroup(
 // MARK: - 8. Credential Handler (server/src/handlers/credential.ts)
 
 /// Handlers for `server.credential` (CRUD + activation + managed policy check against global config location).
-// parity: server/src/handlers/credential.ts#CredentialHandler [status=implemented hash=2d18032a6706]
+// parity: server/src/handlers/credential.ts#CredentialHandler [status=implemented hash=0c61a5357548]
 public let CredentialHandler = ServerHandlerGroup(
     groupIdentifier: "server.credential",
     routes: [
@@ -912,7 +912,7 @@ private func formatCredentialEntries(_ credentials: [CoreProvider.Credential.Inf
 // MARK: - 9. Debug Handler (server/src/handlers/debug.ts)
 
 /// Handlers for `server.debug` (`POST /api/debug/heap-dump`, `GET /api/debug/location`, `DELETE /api/debug/location`).
-// parity: server/src/handlers/debug.ts#DebugHandler [status=implemented hash=7433c3f7acf0]
+// parity: server/src/handlers/debug.ts#DebugHandler [status=implemented hash=8012e7a1ab79]
 public let DebugHandler = ServerHandlerGroup(
     groupIdentifier: "server.debug",
     routes: [
@@ -968,7 +968,7 @@ public let DebugHandler = ServerHandlerGroup(
 // MARK: - 10. Event Handler (server/src/handlers/event.ts)
 
 /// Handlers for `server.event` (`GET /api/event` live SSE stream).
-// parity: server/src/handlers/event.ts#EventHandler [status=implemented hash=8214489d3b96]
+// parity: server/src/handlers/event.ts#EventHandler [status=implemented hash=980ea9d99781]
 public let EventHandler = ServerHandlerGroup(
     groupIdentifier: "server.event",
     routes: [
@@ -990,7 +990,7 @@ public let EventHandler = ServerHandlerGroup(
 // MARK: - 11. Form Handler (server/src/handlers/form.ts)
 
 /// Handlers for `server.form` (`GET /api/form`).
-// parity: server/src/handlers/form.ts#FormHandler [status=implemented hash=574cff14f559]
+// parity: server/src/handlers/form.ts#FormHandler [status=implemented hash=196c6fdc49d5]
 public let FormHandler = ServerHandlerGroup(
     groupIdentifier: "server.form",
     routes: [
@@ -1011,7 +1011,7 @@ public let FormHandler = ServerHandlerGroup(
 // MARK: - 12. FileSystem Handler (server/src/handlers/fs.ts)
 
 /// Handlers for `server.fs` (read with ETag/Last-Modified/Range/304/206/416, list, find, write, watch, unwatch).
-// parity: server/src/handlers/fs.ts#FileSystemHandler [status=implemented hash=9f20af3e4ef2]
+// parity: server/src/handlers/fs.ts#FileSystemHandler [status=implemented hash=7514943a55c8]
 public let FileSystemHandler = ServerHandlerGroup(
     groupIdentifier: "server.fs",
     routes: [
@@ -1261,7 +1261,7 @@ private func matchesFileIfRange(_ ifRange: String?, etag: String, lastModified: 
 // `video.create`: upstream converts the wire request with `Generate.videoInput` (base64 `start`/`end`/`references`
 // become media) because `VideoGeneration.start` takes a `Generate.VideoInput`. This port's
 // `VideoGeneration.Interface.start` still takes the wire `VideoRequest`, so that conversion belongs to its implementation.
-// parity: server/src/handlers/generate.ts#GenerateHandler [status=implemented hash=b05170353594]
+// parity: server/src/handlers/generate.ts#GenerateHandler [status=implemented hash=e11faf3a273d]
 public let GenerateHandler = ServerHandlerGroup(
     groupIdentifier: "server.generate",
     routes: [
@@ -1424,7 +1424,7 @@ private func isMcpIntegration(_ info: IntegrationSchema.Info?) -> Bool {
 }
 
 /// Checks `integration.connect` managed policy for `integrationID` (MCP OAuth integrations bypass integration policy).
-// parity: server/src/handlers/integration.ts#requireConnectable [status=implemented hash=baf4dc27649c]
+// parity: server/src/handlers/integration.ts#requireConnectable [status=implemented hash=243808e6c93c]
 public let requireConnectable: @Sendable (IntegrationID, LocationServices) async throws -> Void = { integrationID, location in
     if isMcpIntegration(try await location.integration.get(integrationID)) {
         return
@@ -1441,7 +1441,7 @@ public let requireConnectable: @Sendable (IntegrationID, LocationServices) async
 }
 
 /// Handlers for `server.integration` (list, get, wellknown.add, connect.key, connect.external, oauth.*, command.*).
-// parity: server/src/handlers/integration.ts#IntegrationHandler [status=implemented hash=f8b999017d78]
+// parity: server/src/handlers/integration.ts#IntegrationHandler [status=implemented hash=10587d1d5db8]
 public let IntegrationHandler = ServerHandlerGroup(
     groupIdentifier: "server.integration",
     routes: [
@@ -1811,7 +1811,7 @@ public struct ServerJobHandlers: Sendable {
 }
 
 /// Builds the `job.list` and `job.cancel` handlers for the `server.experimental` group.
-// parity: server/src/handlers/job.ts#makeJob [status=implemented hash=3a9895e2ca2f]
+// parity: server/src/handlers/job.ts#makeJob [status=implemented hash=7d5773c2262e]
 public let makeJob: @Sendable () -> ServerJobHandlers = {
     ServerJobHandlers(
         list: { ctx in try await jobList(ctx) },
@@ -1903,7 +1903,7 @@ private func jobList(_ ctx: ServerRouteContext) async throws -> ServerHTTPRespon
 // MARK: - 16. Location Handler (server/src/handlers/location.ts)
 
 /// Handlers for `server.location` (`GET /api/location`, `POST /api/location/reload`).
-// parity: server/src/handlers/location.ts#LocationHandler [status=implemented hash=2783fc98f2e4]
+// parity: server/src/handlers/location.ts#LocationHandler [status=implemented hash=1ffae7ab2923]
 public let LocationHandler = ServerHandlerGroup(
     groupIdentifier: "server.location",
     routes: [
@@ -1939,7 +1939,7 @@ public let LocationHandler = ServerHandlerGroup(
 // MARK: - 17. MCP Handler (server/src/handlers/mcp.ts)
 
 /// Handlers for `server.mcp` (list, add, remove, connect, disconnect, resource.catalog, clientToken, client WebSocket).
-// parity: server/src/handlers/mcp.ts#McpHandler [status=implemented hash=8fa1bf8c2773]
+// parity: server/src/handlers/mcp.ts#McpHandler [status=implemented hash=537c474b52a7]
 public let McpHandler = ServerHandlerGroup(
     groupIdentifier: "server.mcp",
     routes: [
@@ -2163,7 +2163,7 @@ private let inlineImageMimes: Set<String> = ["image/png", "image/jpeg", "image/g
 private let immutableMediaCacheControl = "private, max-age=31536000, immutable"
 
 /// Builds `media.get` raw handler serving content-addressed session media blobs still referenced by a message or inbox row.
-// parity: server/src/handlers/media.ts#makeMediaGet [status=implemented hash=4df203574840]
+// parity: server/src/handlers/media.ts#makeMediaGet [status=implemented hash=49f9effae752]
 public let makeMediaGet: @Sendable () -> @Sendable (ServerRouteContext) async throws -> ServerHTTPResponse = {
     { ctx in
         let hash = try ctx.requireParam("hash")
@@ -2223,7 +2223,7 @@ private func decodeMessageCursor(_ raw: String) -> (id: SessionMessageSchema.ID,
 }
 
 /// Handlers for `server.message` (`GET /api/session/:sessionID/message` with cursor pagination and `experimental-media-uri`).
-// parity: server/src/handlers/message.ts#MessageHandler [status=implemented hash=b2253fea3947]
+// parity: server/src/handlers/message.ts#MessageHandler [status=implemented hash=d2dd389abbf1]
 public let MessageHandler = ServerHandlerGroup(
     groupIdentifier: "server.message",
     routes: [

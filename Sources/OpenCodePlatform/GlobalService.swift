@@ -106,7 +106,7 @@ public enum Global {
         }
     }
 
-    // parity: util/src/global.ts#make [status=implemented hash=0bec3fcad96c]
+    // parity: util/src/global.ts#make [status=implemented hash=f76568ec4a59]
     public static func make(
         _ overrides: Overrides = Overrides(),
         environment: any EnvironmentProviding = SystemEnvironment.shared,
@@ -160,7 +160,7 @@ public enum Global {
         }
     }
 
-    // parity: util/src/global.ts#node [status=implemented hash=0690353164c9]
+    // parity: util/src/global.ts#node [status=implemented hash=7ea7d0749e66]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, scope in

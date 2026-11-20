@@ -92,7 +92,7 @@ public enum BrowserPlugin {
 
         /// Codes of the failures the server acts on, beside the general ones (`operation_failed`,
         /// `navigation_failed`, `unsupported`). An older desktop sends `operation_failed` for these.
-        // parity: plugin-browser/src/rpc.ts#FailureCode [status=implemented hash=bd10bd3007c9]
+        // parity: plugin-browser/src/rpc.ts#FailureCode [status=implemented hash=143f853ccb76]
         public enum FailureCode {
             /// A wait's condition did not hold before its timeout.
             public static let unmet = "condition_unmet"
@@ -226,7 +226,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#TabID [status=implemented hash=c66eecf81a19]
+        // parity: plugin-browser/src/rpc.ts#TabID [status=implemented hash=81e661721e2a]
         public struct TabID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let pattern = #"^tab_[a-f0-9-]{36}$"#
             public let rawValue: String
@@ -264,7 +264,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Ref [status=implemented hash=f4d48926301f]
+        // parity: plugin-browser/src/rpc.ts#Ref [status=implemented hash=8dc5e5e4d0bc]
         public struct Ref: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let pattern = #"^@?e[1-9][0-9]*$"#
             public let rawValue: String
@@ -304,7 +304,7 @@ public enum BrowserPlugin {
 
         /// Branded desktop file ID. Upstream now annotates the identifier on the exported schema only, so the
         /// `fileID` parameter of artifact tools carries its own description; the pattern and brand are unchanged.
-        // parity: plugin-browser/src/rpc.ts#FileID [status=implemented hash=a9d3586b2797]
+        // parity: plugin-browser/src/rpc.ts#FileID [status=implemented hash=8664a790df06]
         public struct FileID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let pattern = #"^file_[a-f0-9-]{36}$"#
             public let rawValue: String
@@ -456,7 +456,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#ResourceType [status=implemented hash=f4962c2053a5]
+        // parity: plugin-browser/src/rpc.ts#ResourceType [status=implemented hash=77a8a0edeeba]
         public enum ResourceType: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
             case document
             case stylesheet
@@ -472,7 +472,7 @@ public enum BrowserPlugin {
             case other
         }
 
-        // parity: plugin-browser/src/rpc.ts#Body [status=implemented hash=942e9fd348bb]
+        // parity: plugin-browser/src/rpc.ts#Body [status=implemented hash=0a37b3477101]
         public enum Body: Equatable, Hashable, Sendable, Codable {
             public enum UnavailableReason: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
                 case binary
@@ -529,7 +529,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#NetworkRequest [status=implemented hash=24bbd958ed0a]
+        // parity: plugin-browser/src/rpc.ts#NetworkRequest [status=implemented hash=b927af2ec0f9]
         public struct NetworkRequest: Equatable, Hashable, Sendable, Codable {
             public enum RequestState: String, Equatable, Hashable, Sendable, Codable {
                 case pending
@@ -570,7 +570,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#ConsoleEntry [status=implemented hash=bf92471bc156]
+        // parity: plugin-browser/src/rpc.ts#ConsoleEntry [status=implemented hash=e055b2a00dbb]
         public struct ConsoleEntry: Equatable, Hashable, Sendable, Codable {
             public enum Level: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
                 case debug
@@ -616,7 +616,7 @@ public enum BrowserPlugin {
         }
 
         /// What a `browser.wait` call returns: the tab, whether its condition held, what it waited for and how long.
-        // parity: plugin-browser/src/rpc.ts#Waited [status=implemented hash=7f8ccd633592]
+        // parity: plugin-browser/src/rpc.ts#Waited [status=implemented hash=6d0f7a3c455a]
         public struct Waited: Equatable, Hashable, Sendable, Codable {
             public enum Condition: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
                 case load
@@ -1496,7 +1496,7 @@ public enum BrowserPlugin {
 
         /// The desktop's answer to a file action (`preview` or `navigate.path`). Desktops from before the path forms
         /// leave out `tab`.
-        // parity: plugin-browser/src/rpc.ts#Shown [status=implemented hash=a1a6d822decc]
+        // parity: plugin-browser/src/rpc.ts#Shown [status=implemented hash=9a28e5346d8f]
         public struct Shown: Equatable, Hashable, Sendable, Codable {
             public let path: String
             public let tabID: TabID?
@@ -1533,7 +1533,7 @@ public enum BrowserPlugin {
 
         /// What a tool call passes: the operation's parameters, which may differ from its action's fields (aliases
         /// such as `query`, `value`, `id`, `requestID`, the path forms' `path`, and the wait plan's Playwright keys).
-        // parity: plugin-browser/src/rpc.ts#Input [status=adapted hash=fa3fecbab37a]
+        // parity: plugin-browser/src/rpc.ts#Input [status=adapted hash=5ed8847fe091]
         public struct Input: Equatable, Hashable, Sendable {
             public let type: Method
             public let fields: [String: JSONValue]
@@ -1569,7 +1569,7 @@ public enum BrowserPlugin {
         /// What the desktop receives: an operation's action fields, or a file action (`preview` with `path`, or
         /// `navigate.path` with `tabID` and `path`). A desktop from before `navigate.path` cannot decode it and answers
         /// `unsupported`, where an extra field on `preview` would open the file in another tab.
-        // parity: plugin-browser/src/rpc.ts#Action [status=implemented hash=b648548599b7]
+        // parity: plugin-browser/src/rpc.ts#Action [status=implemented hash=524cc410d4c2]
         public struct Action: Equatable, Hashable, Sendable, Codable {
             public let type: Method
             public var fields: [String: JSONValue]
@@ -1635,7 +1635,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Target [status=implemented hash=db2c9aca049f]
+        // parity: plugin-browser/src/rpc.ts#Target [status=implemented hash=76cde70e902f]
         public struct Target: Equatable, Hashable, Sendable, Codable {
             public let resources: [String]
             public let key: String
@@ -1646,7 +1646,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Command [status=implemented hash=d89c824c451a]
+        // parity: plugin-browser/src/rpc.ts#Command [status=implemented hash=885000605430]
         public struct Command: Equatable, Hashable, Sendable, Codable {
             public let action: Action
             public let generation: Int?
@@ -1669,7 +1669,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Result [status=implemented hash=ee34dd605251]
+        // parity: plugin-browser/src/rpc.ts#Result [status=implemented hash=6c8f99886602]
         public struct Result: Equatable, Hashable, Sendable, Codable {
             public let value: JSONValue
             public let files: [File]
@@ -1680,7 +1680,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Outcome [status=implemented hash=9a805ef9ecba]
+        // parity: plugin-browser/src/rpc.ts#Outcome [status=implemented hash=93ab2f94d61c]
         public enum Outcome: Equatable, Hashable, Sendable, Codable {
             case success(result: Result)
             case failure(code: String, message: String)
@@ -1719,7 +1719,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#TunnelTarget [status=implemented hash=e73c25585461]
+        // parity: plugin-browser/src/rpc.ts#TunnelTarget [status=implemented hash=0b34d0673ada]
         public struct TunnelTarget: Equatable, Hashable, Sendable, Codable {
             public static let hostPattern = #"^[a-zA-Z0-9._:%-]+$"#
             public let host: String
@@ -1748,7 +1748,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#TunnelRead [status=implemented hash=3577b0cd6ead]
+        // parity: plugin-browser/src/rpc.ts#TunnelRead [status=implemented hash=99a663c1efb2]
         public struct TunnelRead: Equatable, Hashable, Sendable, Codable {
             public let data: [UInt8]
             public let eof: Bool
@@ -1783,7 +1783,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/rpc.ts#Control [status=implemented hash=c154bbde3c20]
+        // parity: plugin-browser/src/rpc.ts#Control [status=implemented hash=06b195c208dd]
         public enum Control: Equatable, Hashable, Sendable, Codable {
             case attached(connectionID: String, version: Int = 4)
             case command(connectionID: String, requestID: String)
@@ -1836,7 +1836,7 @@ public enum BrowserPlugin {
             "unavailable": .jsonSchema(["type": .string("object")])
         ]
 
-        // parity: plugin-browser/src/rpc.ts#Definition [status=implemented hash=eaab6db05e7b]
+        // parity: plugin-browser/src/rpc.ts#Definition [status=implemented hash=b1de2cbdcca2]
         public static let Definition = RpcSchema.Definition(
             id: "experimental.browser",
             methods: [
@@ -1953,7 +1953,7 @@ public enum BrowserPlugin {
         public static let id = SkillSchema.ID(rawValue: "browser")
 
         /// How to use the browser tools well. Listed only while a desktop browser is attached, like the tools themselves.
-        // parity: plugin-browser/src/skill.ts#info [status=implemented hash=3152d6d2f4ea]
+        // parity: plugin-browser/src/skill.ts#info [status=implemented hash=de31d76fb519]
         public static let info: SkillSchema.Info = {
             let lines: [String] = [
                 "# In-app browser",
@@ -2097,7 +2097,7 @@ public enum BrowserPlugin {
         /// Asserts the permissions a browser file transfer needs, matching core FileAccess's lexical resources (the
         /// plugin SDK exposes `permission.assert`, not FileAccess): `external_directory` for paths outside the
         /// workspace and the project, then `action` (`read` or `edit`) on every path.
-        // parity: plugin-browser/src/files.ts#authorize [status=adapted hash=00466ba2c84a]
+        // parity: plugin-browser/src/files.ts#authorize [status=adapted hash=896b885a7994]
         public static func authorize(
             location: LocationSchema.Info,
             assert: @Sendable (PluginContract.AssertInput) async throws(ToolSchema.ToolError) -> Void,
@@ -2182,7 +2182,7 @@ public enum BrowserPlugin {
         }
 
         /// The physical (symlink-resolved) path of every upload.
-        // parity: plugin-browser/src/files.ts#physical [status=implemented hash=6469449b5e21]
+        // parity: plugin-browser/src/files.ts#physical [status=implemented hash=05052a55e156]
         public static func physical(
             _ paths: [String],
             fileSystem: (any OpenCodeFileSystem)? = nil
@@ -2200,7 +2200,7 @@ public enum BrowserPlugin {
         /// Reads server-local uploads as bytes (files cross machines as bytes; only this endpoint interprets its local
         /// paths). Every path must be a regular file and all of them together at most 5 MiB. `names` are the paths the
         /// call passed; each file is named after its own.
-        // parity: plugin-browser/src/files.ts#read [status=implemented hash=79f5662dfa77]
+        // parity: plugin-browser/src/files.ts#read [status=implemented hash=5fe0f39ddc32]
         public static func read(
             paths: [String],
             names: [String],
@@ -2324,7 +2324,7 @@ public enum BrowserPlugin {
         /// Resolves and authorizes the exact entry. A missing agent path must not trigger a search of unapproved
         /// directories; outside and invalid names are refused lexically, without querying the filesystem or prompting
         /// to read them. `nil` for an address that is no file.
-        // parity: plugin-browser/src/files.ts#locate [status=implemented hash=84ad581eaa42]
+        // parity: plugin-browser/src/files.ts#locate [status=implemented hash=6d6f528c3f0e]
         public static func locate(
             _ path: String,
             directory: String,
@@ -2417,7 +2417,7 @@ public enum BrowserPlugin {
 
         /// Saves captured/downloaded browser files at the planned paths: private directories (0700), exclusive file
         /// creation (0600), at most 5 MiB in total.
-        // parity: plugin-browser/src/files.ts#save [status=implemented hash=515409a55fdf]
+        // parity: plugin-browser/src/files.ts#save [status=implemented hash=4da2edc8ac41]
         public static func save(
             files: [Browser.File],
             plan: ExportPlan,
@@ -2490,7 +2490,7 @@ public enum BrowserPlugin {
     // MARK: - plugin-browser/src/proxy-machine.ts
 
     public enum BrowserProxyMachine {
-        // parity: plugin-browser/src/proxy-machine.ts#State [status=implemented hash=fbd79fbaf8ea]
+        // parity: plugin-browser/src/proxy-machine.ts#State [status=implemented hash=6ef5c88e7a11]
         public enum State: String, Equatable, Hashable, Sendable, Codable {
             case open
             case closed
@@ -3217,7 +3217,7 @@ public enum BrowserPlugin {
         // parity: plugin-browser/src/tunnel-machine.ts#MAX_TUNNELS [status=implemented hash=a3c5947a8ff0]
         public static let MAX_TUNNELS = 64
 
-        // parity: plugin-browser/src/tunnel-machine.ts#Entry [status=implemented hash=d92ea64c923b]
+        // parity: plugin-browser/src/tunnel-machine.ts#Entry [status=implemented hash=1929d060b893]
         public enum Entry: Equatable, Hashable, Sendable {
             case connecting
             case open(
@@ -3229,7 +3229,7 @@ public enum BrowserPlugin {
             )
         }
 
-        // parity: plugin-browser/src/tunnel-machine.ts#State [status=implemented hash=58696207af52]
+        // parity: plugin-browser/src/tunnel-machine.ts#State [status=implemented hash=039c1e667c8e]
         public enum State: Equatable, Sendable {
             case active(entries: [String: Entry])
             case disposed
@@ -3250,7 +3250,7 @@ public enum BrowserPlugin {
             case interrupted
         }
 
-        // parity: plugin-browser/src/tunnel-machine.ts#Event [status=implemented hash=f377eec91bc5]
+        // parity: plugin-browser/src/tunnel-machine.ts#Event [status=implemented hash=79bca58f9272]
         public enum Event: Equatable, Sendable {
             case openStarted(id: String)
             case openConnected(id: String)
@@ -3287,7 +3287,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/tunnel-machine.ts#initial [status=implemented hash=1c945a2922e0]
+        // parity: plugin-browser/src/tunnel-machine.ts#initial [status=implemented hash=b71c664dc5ef]
         public static func initial() -> State {
             .active(entries: [:])
         }
@@ -3751,7 +3751,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/machine.ts#ACCESS [status=implemented hash=f238b8956d0b]
+        // parity: plugin-browser/src/machine.ts#ACCESS [status=implemented hash=98918f15dbdd]
         public static let ACCESS: [AccessEntry] = [
             AccessEntry(action: "browser", resource: "*"),
             AccessEntry(action: "skill", resource: BrowserSkill.id.rawValue),
@@ -3768,7 +3768,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/machine.ts#RevokingSession [status=implemented hash=350a34c3363b]
+        // parity: plugin-browser/src/machine.ts#RevokingSession [status=implemented hash=0e6d159d0a37]
         public struct RevokingSession: Equatable, Sendable {
             public let sync: PermissionSync
             public let deleted: Bool
@@ -3810,14 +3810,14 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/machine.ts#SessionState [status=implemented hash=75c3db6f42d7]
+        // parity: plugin-browser/src/machine.ts#SessionState [status=implemented hash=c30480c62610]
         public enum SessionState: Equatable, Sendable {
             case attaching(AttachingSession)
             case attached(AttachedSession)
             case revoking(RevokingSession)
         }
 
-        // parity: plugin-browser/src/machine.ts#ConnectionState [status=implemented hash=2d29b13c41f5]
+        // parity: plugin-browser/src/machine.ts#ConnectionState [status=implemented hash=20f6b3c2ef2e]
         public enum ConnectionState: Equatable, Sendable {
             case active(nextAttempt: Int, sessions: [SessionID: SessionState])
             case disposed(nextAttempt: Int, sessions: [SessionID: RevokingSession])
@@ -3830,13 +3830,13 @@ public enum BrowserPlugin {
             case unavailable
         }
 
-        // parity: plugin-browser/src/machine.ts#RequestSettlement [status=implemented hash=ef082a258bb7]
+        // parity: plugin-browser/src/machine.ts#RequestSettlement [status=implemented hash=e7bd8609216f]
         public enum RequestSettlement: Equatable, Sendable {
             case ok(Browser.Result)
             case error(ToolSchema.ToolError)
         }
 
-        // parity: plugin-browser/src/machine.ts#ConnectionEvent [status=implemented hash=e9a341eb1b5a]
+        // parity: plugin-browser/src/machine.ts#ConnectionEvent [status=implemented hash=5c33242ee7e2]
         public enum ConnectionEvent: Equatable, Sendable {
             case attachStarted(sessionID: SessionID, attempt: Int, connectionID: String)
             case attachClosed(sessionID: SessionID, attempt: Int)
@@ -3875,7 +3875,7 @@ public enum BrowserPlugin {
             }
         }
 
-        // parity: plugin-browser/src/machine.ts#ConnectionEffect [status=implemented hash=16de4a6fc6b8]
+        // parity: plugin-browser/src/machine.ts#ConnectionEffect [status=implemented hash=949d4ccfc3ee]
         public enum ConnectionEffect: Equatable, Sendable {
             case syncPermissions(sessionID: SessionID, attempt: Int, allow: Bool)
             case closeAttachment(attempt: Int, outcome: AttachmentOutcome)
@@ -4416,7 +4416,7 @@ public enum BrowserPlugin {
 
         /// The session's attached connection, or the error a tool call returns while it has none. Reads nothing about
         /// its tabs, so it may answer before the call is authorized.
-        // parity: plugin-browser/src/machine.ts#selectConnection [status=implemented hash=9191b9d2611f]
+        // parity: plugin-browser/src/machine.ts#selectConnection [status=implemented hash=05f2ad43ce2e]
         public static func selectConnection(_ state: ConnectionState, sessionID: SessionID) -> ConnectionSelection {
             guard case .active(_, let sessions) = state, let entry = sessions[sessionID] else {
                 return .error(notAttached())
@@ -4614,7 +4614,7 @@ public enum BrowserPlugin {
         /// the grants this location's servers recorded, except those of a process that still runs: several servers can
         /// share one database, and another one's attachment may be live. Runs before the RPC registers, so no attach
         /// here can race it.
-        // parity: plugin-browser/src/connection.ts#reconcileStaleGrants [status=implemented hash=7a3d5b90831f]
+        // parity: plugin-browser/src/connection.ts#reconcileStaleGrants [status=implemented hash=74bfb060c930]
         public static func reconcileStaleGrants(
             session: PluginEffect.SessionDomain,
             storage: PluginEffect.StorageDomain,
@@ -4924,7 +4924,7 @@ public enum BrowserPlugin {
         /// refuses an agent whose own rules deny them even then), sweeps stale grants, mounts the
         /// `experimental.browser` RPC namespace, revokes grants a child session inherited, and subscribes to session
         /// deletion/move events.
-        // parity: plugin-browser/src/connection.ts#make [status=implemented hash=b7ac8b97c946]
+        // parity: plugin-browser/src/connection.ts#make [status=implemented hash=8b2c9368f1ce]
         public static func make(
             _ ctx: PluginEffect.Context,
             permissionSyncTimeoutMs: Int = BrowserMachine.PERMISSION_SYNC_TIMEOUT_MS,
@@ -5356,7 +5356,7 @@ public enum BrowserPlugin {
         /// Registers the `browser` skill, the `"browser"` tool namespace, and every browser operation. Authorization
         /// comes before anything that reads the session's tabs or the server's files: a caller that a policy blocks,
         /// or whose prompt is still open, learns nothing from them. Only the call's own input is checked first.
-        // parity: plugin-browser/src/tools.ts#register [status=implemented hash=9a4c69407fd1]
+        // parity: plugin-browser/src/tools.ts#register [status=implemented hash=54a013b0ca71]
         public static func register(
             ctx: PluginEffect.Context,
             connection: BrowserConnection.Connection
@@ -5968,7 +5968,7 @@ public enum BrowserPlugin {
         /// `requestID`, `expression`/`code`), the path forms of `tabs.open`/`navigate` (`preview`/`navigate.path`),
         /// and web addresses normalized to `http(s)://` or `about:blank`. Throws for conflicting or missing
         /// parameters, local files passed as URLs, extension pages, credentials and over-long addresses.
-        // parity: plugin-browser/src/tools.ts#normalizeAction [status=implemented hash=e10af3aa0975]
+        // parity: plugin-browser/src/tools.ts#normalizeAction [status=implemented hash=39471108f28b]
         public static func normalizeAction(_ input: Browser.Input) throws(ToolSchema.ToolError) -> Browser.Action {
             var rest = input.fields
             switch input.type {
@@ -6122,7 +6122,7 @@ public enum BrowserPlugin {
         // MARK: waitPlan
 
         /// What a wait call asks for, resolved from its parameters.
-        // parity: plugin-browser/src/tools.ts#WaitPlan [status=implemented hash=51da97197678]
+        // parity: plugin-browser/src/tools.ts#WaitPlan [status=implemented hash=5bec9ba33a9c]
         public struct WaitPlan: Equatable, Sendable {
             public enum Element: Equatable, Sendable {
                 case selector(String)
@@ -6584,7 +6584,7 @@ public enum BrowserPlugin {
     // MARK: - plugin-browser/src/index.ts
 
     /// Built-in Desktop Browser Automation plugin (`id: "opencode.browser"`).
-    // parity: plugin-browser/src/index.ts#default [status=implemented hash=7b0e617969d3]
+    // parity: plugin-browser/src/index.ts#default [status=implemented hash=b5e65d80f919]
     public static let Plugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.browser") { ctx in
             let connection = try await BrowserConnection.make(ctx)

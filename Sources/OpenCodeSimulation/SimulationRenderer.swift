@@ -46,7 +46,7 @@ public enum SimulationRenderer {
     ///
     /// Keeps the `TestRenderer` setup and optional `Timeline` in module-side weak tables so app code
     /// only carries `CliRenderer` while the simulation harness can access testing APIs and recording hooks.
-    // parity: simulation/src/frontend/renderer.ts#create [status=implemented hash=b720402c6619]
+    // parity: simulation/src/frontend/renderer.ts#create [status=implemented hash=e8715ffa5e0d]
     public static func create(
         options: CliRendererConfig = CliRendererConfig(),
         path: String? = nil,

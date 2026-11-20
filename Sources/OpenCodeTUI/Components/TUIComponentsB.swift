@@ -114,7 +114,7 @@ extension TUIComponent {
         return RGBA.fromValues(clamp(r), clamp(g), clamp(b), 1.0)
     }
 
-    // parity: tui/src/component/tab-pulse.tsx#TabPulse [status=adapted hash=f78249aea5a5]
+    // parity: tui/src/component/tab-pulse.tsx#TabPulse [status=adapted hash=80cab36aab21]
     public static func TabPulse(
         ctx: any RenderContext,
         width: Int,
@@ -354,7 +354,7 @@ extension TUIComponent {
 
     // MARK: - Error Component, Media Source, Model Options, Panel Host, PatchDiff, PluginRouteMissing, TodoItem
 
-    // parity: tui/src/component/error-component.tsx#ErrorComponent [status=adapted hash=f507ceb03149]
+    // parity: tui/src/component/error-component.tsx#ErrorComponent [status=adapted hash=0833b7f924f5]
     public static func ErrorComponent(
         ctx: any RenderContext,
         error: any Error,
@@ -461,7 +461,7 @@ extension TUIComponent {
         public var preferenceKey: String { "\(providerID)/\(modelID)" }
     }
 
-    // parity: tui/src/component/model-options.tsx#prioritizeFavorites [status=implemented hash=88e2ecd30474]
+    // parity: tui/src/component/model-options.tsx#prioritizeFavorites [status=implemented hash=2ec7808efd22]
     public static func prioritizeFavorites(_ options: [SortableModelOption], favorites: Set<String>) -> [SortableModelOption] {
         options.enumerated().sorted { lhs, rhs in
             let lf = favorites.contains(lhs.element.preferenceKey)
@@ -471,7 +471,7 @@ extension TUIComponent {
         }.map(\.element)
     }
 
-    // parity: tui/src/component/model-options.tsx#sortModelOptions [status=implemented hash=82fd912fbfdf]
+    // parity: tui/src/component/model-options.tsx#sortModelOptions [status=implemented hash=d28d1a6577e1]
     public static func sortModelOptions(_ options: [SortableModelOption], grouped: Bool = true) -> [SortableModelOption] {
         options.enumerated().sorted { lhs, rhs in
             let a = lhs.element
@@ -491,7 +491,7 @@ extension TUIComponent {
         }.map(\.element)
     }
 
-    // parity: tui/src/component/model-options.tsx#isFreeModel [status=implemented hash=e50014a6b6f5]
+    // parity: tui/src/component/model-options.tsx#isFreeModel [status=implemented hash=0da1e26cff21]
     public static func isFreeModel(inputCosts: [Double]) -> Bool {
         !inputCosts.isEmpty && inputCosts.allSatisfy { $0 == 0 }
     }
@@ -501,7 +501,7 @@ extension TUIComponent {
         TextChunk(text: "*", fg: theme.surface(.dialog).text.formfield.selected)
     }
 
-    // parity: tui/src/component/model-options.tsx#ModelDetail [status=adapted hash=d14f66acccf6]
+    // parity: tui/src/component/model-options.tsx#ModelDetail [status=adapted hash=efe4600dae1a]
     public static func ModelDetail(
         ctx: any RenderContext,
         inputCost: Double?,
@@ -539,7 +539,7 @@ extension TUIComponent {
 
     // MARK: Panel Host, PatchDiff, PluginRouteMissing, TodoItem
 
-    // parity: tui/src/component/panel-host.tsx#PanelHost [status=adapted hash=29ff97b2afe5]
+    // parity: tui/src/component/panel-host.tsx#PanelHost [status=adapted hash=d9c0532b5869]
     public static func PanelHost(
         ctx: any RenderContext,
         manager: TUIPluginHost.PluginManager,
@@ -653,7 +653,7 @@ extension TUIComponent {
         return maxLine
     }
 
-    // parity: tui/src/component/plugin-route-missing.tsx#PluginRouteMissing [status=adapted hash=00c0307056d5]
+    // parity: tui/src/component/plugin-route-missing.tsx#PluginRouteMissing [status=adapted hash=d1ef60887e67]
     public static func PluginRouteMissing(
         ctx: any RenderContext,
         id: String,
@@ -688,7 +688,7 @@ extension TUIComponent {
         return box
     }
 
-    // parity: tui/src/component/todo-item.tsx#TodoItem [status=adapted hash=4becf427497b]
+    // parity: tui/src/component/todo-item.tsx#TodoItem [status=adapted hash=648e48c68e60]
     public static func TodoItem(
         ctx: any RenderContext,
         todo: TUIUtil.Todo,
@@ -927,7 +927,7 @@ extension TUIComponent {
         return composer
     }
 
-    // parity: tui/src/component/prompt/index.tsx#PromptInterruptStatus [status=adapted hash=69a15a8cd59a]
+    // parity: tui/src/component/prompt/index.tsx#PromptInterruptStatus [status=adapted hash=ecb7c141fadb]
     public static func PromptInterruptStatus(
         ctx: any RenderContext,
         interrupting: Bool,
@@ -1037,14 +1037,14 @@ extension TUIComponent {
     // parity: tui/src/component/prompt/local-attachment.ts#MAX_LOCAL_ATTACHMENT_BYTES [status=implemented hash=0ec7acf7eba7]
     public static let MAX_LOCAL_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
-    // parity: tui/src/component/prompt/local-attachment.ts#LocalFiles [status=implemented hash=d5181d4c53a0]
+    // parity: tui/src/component/prompt/local-attachment.ts#LocalFiles [status=implemented hash=35e1c7c3675a]
     public protocol LocalFiles: Sendable {
         func readText(path: String, maxBytes: Int) async throws -> String
         func readBytes(path: String, maxBytes: Int) async throws -> [UInt8]
         func mime(path: String) async throws -> String
     }
 
-    // parity: tui/src/component/prompt/local-attachment.ts#LocalAttachment [status=implemented hash=5d0362b25bca]
+    // parity: tui/src/component/prompt/local-attachment.ts#LocalAttachment [status=implemented hash=bf0135c0509e]
     public enum LocalAttachment: Equatable, Sendable {
         case text(mime: String, content: String)
         case binary(mime: String, content: [UInt8])
@@ -1271,7 +1271,7 @@ extension TUIComponent {
         }
     }
 
-    // parity: tui/src/component/prompt/local-attachment.ts#promptFilesForServer [status=implemented hash=e57d4f0bdf34]
+    // parity: tui/src/component/prompt/local-attachment.ts#promptFilesForServer [status=implemented hash=da15578f6cdf]
     public static func promptFilesForServer(_ files: [PromptFileAttachment]?, localServer: Bool) -> [PromptFileAttachment]? {
         files?.map { item in
             if localServer, let file = item.path {
@@ -1283,7 +1283,7 @@ extension TUIComponent {
 
     // MARK: Prompt Metadata & Move (`src/component/prompt/metadata.tsx`, `move.tsx`)
 
-    // parity: tui/src/component/prompt/metadata.tsx#PromptMetadataRow [status=adapted hash=4a63bb32a38b]
+    // parity: tui/src/component/prompt/metadata.tsx#PromptMetadataRow [status=adapted hash=40fd503e2b5b]
     public static func PromptMetadataRow(
         ctx: any RenderContext,
         mode: String = "normal",
@@ -1336,7 +1336,7 @@ extension TUIComponent {
         }
     }
 
-    // parity: tui/src/component/prompt/move.tsx#usePromptMove [status=adapted hash=b475240f97c9]
+    // parity: tui/src/component/prompt/move.tsx#usePromptMove [status=adapted hash=868cad7f96a0]
     public static func usePromptMove() -> PromptMoveController {
         PromptMoveController()
     }
@@ -1497,7 +1497,7 @@ extension TUIComponent {
         }
     }
 
-    // parity: tui/src/component/retry-provider.tsx#RetryProvider [status=adapted hash=501326904632]
+    // parity: tui/src/component/retry-provider.tsx#RetryProvider [status=adapted hash=7d3c8085bd0a]
     public static func RetryProvider(
         ctx: any RenderContext,
         provider: String,
@@ -1508,7 +1508,7 @@ extension TUIComponent {
 
     // MARK: - Session Frame, Session Tabs & Rail (`session-frame.tsx`, `session-tabs.tsx`, `session-tabs-rail.tsx`)
 
-    // parity: tui/src/component/session-frame.tsx#SessionFrame [status=adapted hash=e217d6e5858b]
+    // parity: tui/src/component/session-frame.tsx#SessionFrame [status=adapted hash=c9c518693f80]
     public static func SessionFrame(
         ctx: any RenderContext,
         sessionID: String,
@@ -1749,7 +1749,7 @@ extension TUIComponent {
         MarqueeController()
     }
 
-    // parity: tui/src/component/session-tabs.tsx#SessionTabs [status=adapted hash=2c5e75df9b82]
+    // parity: tui/src/component/session-tabs.tsx#SessionTabs [status=adapted hash=58dd4d865931]
     public static func SessionTabs(
         ctx: any RenderContext,
         controller: SessionTabsController,
@@ -1799,7 +1799,7 @@ extension TUIComponent {
         return strip
     }
 
-    // parity: tui/src/component/session-tabs-rail.tsx#SessionTabHalfRow [status=adapted hash=fccbaeb64d1b]
+    // parity: tui/src/component/session-tabs-rail.tsx#SessionTabHalfRow [status=adapted hash=5de57a719088]
     public static func SessionTabHalfRow(
         ctx: any RenderContext,
         top: Int,
@@ -1826,7 +1826,7 @@ extension TUIComponent {
         )
     }
 
-    // parity: tui/src/component/session-tabs-rail.tsx#SessionTabsRailControls [status=adapted hash=9e45bfc174ea]
+    // parity: tui/src/component/session-tabs-rail.tsx#SessionTabsRailControls [status=adapted hash=cea8a1b1b434]
     public static func SessionTabsRailControls(
         ctx: any RenderContext,
         width: Int,
@@ -1909,7 +1909,7 @@ extension TUIComponent {
         return theme.hue.accent[.s400]
     }
 
-    // parity: tui/src/component/terminal-pane.tsx#TerminalPane [status=adapted hash=0105f2e7ca78]
+    // parity: tui/src/component/terminal-pane.tsx#TerminalPane [status=adapted hash=8ff7136822d1]
     public static func TerminalPane(
         ctx: any RenderContext,
         ptyID: String,

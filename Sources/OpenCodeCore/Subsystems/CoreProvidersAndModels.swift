@@ -186,7 +186,7 @@ public enum CoreAgent {
             }
         }
 
-        // parity: core/src/agent.ts#node [status=implemented hash=557341d81bc8]
+        // parity: core/src/agent.ts#node [status=implemented hash=eff0c6407f41]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { _, _ in LayerNode.Output([Service.serviceKey: Service()]) },
@@ -201,7 +201,7 @@ public enum CoreProvider {
     // MARK: - core/src/account/sql.ts
 
     public enum AccountSQL {
-        // parity: core/src/account/sql.ts#AccountTable [status=adapted hash=b0c2822752a9]
+        // parity: core/src/account/sql.ts#AccountTable [status=adapted hash=c0e77d105dd7]
         public enum AccountTable {
             public static let tableName = "account"
             public static let createTableSQL = """
@@ -218,7 +218,7 @@ public enum CoreProvider {
                 """
         }
 
-        // parity: core/src/account/sql.ts#AccountStateTable [status=adapted hash=8fe23d7616fd]
+        // parity: core/src/account/sql.ts#AccountStateTable [status=adapted hash=56b9a3de3f2b]
         public enum AccountStateTable {
             public static let tableName = "account_state"
             public static let createTableSQL = """
@@ -230,7 +230,7 @@ public enum CoreProvider {
                 """
         }
 
-        // parity: core/src/account/sql.ts#ControlAccountTable [status=adapted hash=8a5bd2a035b2]
+        // parity: core/src/account/sql.ts#ControlAccountTable [status=adapted hash=329fb3cb1007]
         public enum ControlAccountTable {
             public static let tableName = "control_account"
             public static let createTableSQL = """
@@ -252,7 +252,7 @@ public enum CoreProvider {
     // MARK: - core/src/credential/sql.ts & core/src/credential.ts
 
     public enum CredentialSQL {
-        // parity: core/src/credential/sql.ts#CredentialTable [status=adapted hash=981858cf3cb8]
+        // parity: core/src/credential/sql.ts#CredentialTable [status=adapted hash=04abb746175b]
         public enum CredentialTable {
             public static let tableName = "credential"
             public static let createTableSQL = """
@@ -297,7 +297,7 @@ public enum CoreProvider {
             return exp != 0 && exp <= now + marginMs
         }
 
-        // parity: core/src/credential.ts#Info [status=implemented hash=5ff5aac9c405]
+        // parity: core/src/credential.ts#Info [status=implemented hash=30fe67652ed4]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let id: ID
             public let integrationID: IntegrationID
@@ -586,7 +586,7 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/credential.ts#node [status=implemented hash=4c01331df1d9]
+        // parity: core/src/credential.ts#node [status=implemented hash=6a5f699ae67a]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { _, _ in
@@ -756,7 +756,7 @@ public enum CoreProvider {
             case error(message: String, params: [String: String])
         }
 
-        // parity: core/src/oauth/redirect.ts#pasted [status=implemented hash=670fd81febb4]
+        // parity: core/src/oauth/redirect.ts#pasted [status=implemented hash=3e370b6a59f7]
         public static func pasted(text: String, state: String) throws -> PastedResult {
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: value), url.scheme != nil,
@@ -780,7 +780,7 @@ public enum CoreProvider {
             return .code(code: code, params: params)
         }
 
-        // parity: core/src/oauth/redirect.ts#submit [status=implemented hash=ecd92e0cd1b1]
+        // parity: core/src/oauth/redirect.ts#submit [status=implemented hash=b586dbf6146d]
         public static func submit<A: Sendable>(
             state: String,
             received: @escaping @Sendable (String, [String: String]) -> A,
@@ -804,7 +804,7 @@ public enum CoreProvider {
         // parity: core/src/usage-limits.ts#Info [status=implemented hash=7c6362c48f5a]
         public typealias Info = UsageLimitsSchema.Info
 
-        // parity: core/src/usage-limits.ts#UnavailableError [status=implemented hash=8dd989a7017f]
+        // parity: core/src/usage-limits.ts#UnavailableError [status=implemented hash=4e6c633e1600]
         public struct UnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "UsageLimits.UnavailableError"
             public let message: String
@@ -869,7 +869,7 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/usage-limits.ts#layer [status=implemented hash=0d75385f1944]
+        // parity: core/src/usage-limits.ts#layer [status=implemented hash=e672562a4fa5]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let integrations = try deps.get(CoreIntegration.Integration.Service.serviceKey, as: CoreIntegration.Integration.Service.self)
                 ?? CoreIntegration.Integration.Service(credentials: Credential.Service.inMemory())
@@ -880,7 +880,7 @@ public enum CoreProvider {
             return LayerNode.Output([Service.serviceKey: Service(integrations: integrations, http: http)])
         }
 
-        // parity: core/src/usage-limits.ts#node [status=implemented hash=3156ecc2e047]
+        // parity: core/src/usage-limits.ts#node [status=implemented hash=16d9fd9a7164]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             layer,
@@ -1025,7 +1025,7 @@ public enum CoreProvider {
             "@opencode/ai/providers/google-vertex-mistral": "@opencode/ai/providers/google-vertex/mistral",
         ]
 
-        // parity: core/src/aisdk-native.ts#native [status=implemented hash=0d56986aba5b]
+        // parity: core/src/aisdk-native.ts#native [status=implemented hash=0c1cfcf94c10]
         public static func native(
             npm: String,
             providerID: String,
@@ -1052,7 +1052,7 @@ public enum CoreProvider {
             public let body: [String: JSONValue]?
         }
 
-        // parity: core/src/aisdk-native.ts#rewrite [status=implemented hash=62aee618c306]
+        // parity: core/src/aisdk-native.ts#rewrite [status=implemented hash=f41ad9828062]
         public static func rewrite(
             specifier: String?,
             providerID: String,
@@ -1117,7 +1117,7 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/aisdk.ts#InitError [status=implemented hash=150c667a2ec2]
+        // parity: core/src/aisdk.ts#InitError [status=implemented hash=838768fdd15d]
         public struct InitError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "AISDK.InitError"
             public let providerID: ProviderSchema.ID
@@ -1180,12 +1180,12 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/aisdk.ts#locationLayer [status=implemented hash=4d2e179515a2]
+        // parity: core/src/aisdk.ts#locationLayer [status=implemented hash=1fa6fcba7589]
         public static let locationLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             LayerNode.Output([Service.serviceKey: Service()])
         }
 
-        // parity: core/src/aisdk.ts#node [status=adapted hash=3231454d6c02]
+        // parity: core/src/aisdk.ts#node [status=adapted hash=eefa8e58c789]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             locationLayer,
@@ -1220,7 +1220,7 @@ public enum CoreProvider {
         // parity: core/src/provider.ts#MutableInfo [status=adapted hash=ea40965711c4]
         public typealias MutableInfo = ProviderSchema.Info
 
-        // parity: core/src/provider.ts#LoadError [status=implemented hash=697a5f957d85]
+        // parity: core/src/provider.ts#LoadError [status=implemented hash=ff96b60efbbf]
         public struct LoadError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Provider.LoadError"
             public let package: String
@@ -1353,7 +1353,7 @@ public enum CoreProvider {
             "@opencode/ai/providers/zai-coding-plan/responses",
         ]
 
-        // parity: core/src/provider.ts#loadPackage [status=adapted hash=49c1f8da07ea]
+        // parity: core/src/provider.ts#loadPackage [status=adapted hash=55a9d1bc0f54]
         public static func loadPackage(_ input: String) throws(LoadError) -> String {
             guard let specifier = AISDKNative.packageName(input) else {
                 throw LoadError(package: input, message: "Empty package specifier")
@@ -1563,7 +1563,7 @@ public enum CoreProvider {
             }
         }
 
-        // parity: core/src/provider.ts#node [status=implemented hash=4bdab79916d6]
+        // parity: core/src/provider.ts#node [status=implemented hash=e664f099c0a4]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -1666,7 +1666,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model.ts#parse [status=implemented hash=04551609f85a]
+        // parity: core/src/model.ts#parse [status=implemented hash=9dc411501ebc]
         public static func parse(_ input: String) -> (providerID: ProviderSchema.ID, modelID: ID) {
             guard let slash = input.firstIndex(of: "/") else {
                 return (ProviderSchema.ID(rawValue: input), ID(rawValue: ""))
@@ -1906,7 +1906,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model.ts#node [status=implemented hash=dd2ba709da98]
+        // parity: core/src/model.ts#node [status=implemented hash=aa84025a2c17]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -1921,7 +1921,7 @@ public enum CoreModel {
     // MARK: - core/src/variant.ts
 
     public enum Variant {
-        // parity: core/src/variant.ts#Support [status=implemented hash=219be3c06c96]
+        // parity: core/src/variant.ts#Support [status=implemented hash=1e4dafe9021a]
         public enum Support: Equatable, Hashable, Sendable {
             case effort(values: [String]?)
             case toggle
@@ -2169,7 +2169,7 @@ public enum CoreModel {
             return []
         }
 
-        // parity: core/src/variant.ts#resolve [status=implemented hash=fc31a0f341b3]
+        // parity: core/src/variant.ts#resolve [status=implemented hash=746955b9b05f]
         public static func resolve(
             _ model: ModelSchema.Info,
             supports: [Support] = [.effort(values: nil)]
@@ -2290,7 +2290,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-retry.ts#policy [status=implemented hash=82338bc34ebe]
+        // parity: core/src/model-retry.ts#policy [status=implemented hash=ede6f6c0c941]
         public static func policy(
             clock: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
             jitter: @escaping @Sendable () -> Double = { Double.random(in: 0.8...1.2) }
@@ -2298,7 +2298,7 @@ public enum CoreModel {
             Policy(clock: clock, jitter: jitter)
         }
 
-        // parity: core/src/model-retry.ts#retry [status=implemented hash=471f475196b2]
+        // parity: core/src/model-retry.ts#retry [status=implemented hash=7eb0413b55d5]
         public static func retry<A: Sendable>(
             policy: Policy = Retry.policy(),
             sleep: (@Sendable (Int) async throws -> Void)? = nil,
@@ -2338,7 +2338,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-retry.ts#retryOneShot [status=implemented hash=6fbe6b03d746]
+        // parity: core/src/model-retry.ts#retryOneShot [status=implemented hash=79dc7d4c6158]
         public static func retryOneShot<A: Sendable>(
             policy: Policy = Retry.policy(),
             sleep: (@Sendable (Int) async throws -> Void)? = nil,
@@ -2369,7 +2369,7 @@ public enum CoreModel {
     // MARK: - core/src/model-resolver.ts
 
     public enum Resolver {
-        // parity: core/src/model-resolver.ts#VariantUnavailableError [status=implemented hash=fc2d64e053ee]
+        // parity: core/src/model-resolver.ts#VariantUnavailableError [status=implemented hash=56af36ee417d]
         public struct VariantUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.VariantUnavailableError"
             public let providerID: ProviderSchema.ID
@@ -2385,7 +2385,7 @@ public enum CoreModel {
             public var description: String { message }
         }
 
-        // parity: core/src/model-resolver.ts#UnsupportedPackageError [status=implemented hash=24328a576b3f]
+        // parity: core/src/model-resolver.ts#UnsupportedPackageError [status=implemented hash=0c4d5e66afd4]
         public struct UnsupportedPackageError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.UnsupportedPackageError"
             public let providerID: ProviderSchema.ID
@@ -2406,7 +2406,7 @@ public enum CoreModel {
             case load, `init`, construct
         }
 
-        // parity: core/src/model-resolver.ts#ModelConfigurationError [status=implemented hash=a14999f712b6]
+        // parity: core/src/model-resolver.ts#ModelConfigurationError [status=implemented hash=f9b36ebb4e93]
         public struct ModelConfigurationError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.ModelConfigurationError"
             public let providerID: ProviderSchema.ID
@@ -2423,7 +2423,7 @@ public enum CoreModel {
             public var description: String { message }
         }
 
-        // parity: core/src/model-resolver.ts#ModelInitializationError [status=implemented hash=a028e7f5eefa]
+        // parity: core/src/model-resolver.ts#ModelInitializationError [status=implemented hash=cc078abb4eb4]
         public struct ModelInitializationError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.ModelInitializationError"
             public let providerID: ProviderSchema.ID
@@ -2441,7 +2441,7 @@ public enum CoreModel {
             public var description: String { message }
         }
 
-        // parity: core/src/model-resolver.ts#UnresolvedProviderVariablesError [status=implemented hash=76c9a275e686]
+        // parity: core/src/model-resolver.ts#UnresolvedProviderVariablesError [status=implemented hash=0f9fc350dfc9]
         public struct UnresolvedProviderVariablesError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.UnresolvedProviderVariablesError"
             public let providerID: ProviderSchema.ID
@@ -2461,7 +2461,7 @@ public enum CoreModel {
             public var description: String { message }
         }
 
-        // parity: core/src/model-resolver.ts#UnsupportedCompactionError [status=implemented hash=2a52f2180e37]
+        // parity: core/src/model-resolver.ts#UnsupportedCompactionError [status=implemented hash=50c260a3bb0a]
         public struct UnsupportedCompactionError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "SessionRunnerModel.UnsupportedCompactionError"
             public let providerID: ProviderSchema.ID
@@ -2477,7 +2477,7 @@ public enum CoreModel {
             public var description: String { message }
         }
 
-        // parity: core/src/model-resolver.ts#Error [status=implemented hash=066909e749b1]
+        // parity: core/src/model-resolver.ts#Error [status=implemented hash=dd457dd41eb5]
         public enum ResolverError: Swift.Error, Equatable, Hashable, Sendable {
             case variantUnavailable(VariantUnavailableError)
             case unsupportedPackage(UnsupportedPackageError)
@@ -2488,7 +2488,7 @@ public enum CoreModel {
             case authorization(CoreIntegration.Integration.AuthorizationError)
         }
 
-        // parity: core/src/model-resolver.ts#MediaError [status=implemented hash=5caad911504f]
+        // parity: core/src/model-resolver.ts#MediaError [status=implemented hash=3c050aa12be0]
         public enum MediaError: Swift.Error, Equatable, Hashable, Sendable {
             case variantUnavailable(VariantUnavailableError)
             case unsupportedPackage(UnsupportedPackageError)
@@ -2645,7 +2645,7 @@ public enum CoreModel {
             return !pkg.isEmpty
         }
 
-        // parity: core/src/model-resolver.ts#fromCatalogModel [status=implemented hash=fdbf31f4c355]
+        // parity: core/src/model-resolver.ts#fromCatalogModel [status=implemented hash=e80411c09114]
         public static func fromCatalogModel(
             _ runtime: Model.RuntimeInfo,
             credential: CredentialSchema.Value? = nil,
@@ -2875,7 +2875,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/model-resolver.ts#layer [status=implemented hash=9a12d882bc0e]
+        // parity: core/src/model-resolver.ts#layer [status=implemented hash=d5c5b28241b3]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let providers = deps.get(CoreProvider.Provider.Service.serviceKey, as: CoreProvider.Provider.Service.self)
                 ?? CoreProvider.Provider.Service()
@@ -2885,7 +2885,7 @@ public enum CoreModel {
             return LayerNode.Output([Service.serviceKey: Service(providers: providers, models: models, integrations: integrations)])
         }
 
-        // parity: core/src/model-resolver.ts#node [status=implemented hash=f361994733ce]
+        // parity: core/src/model-resolver.ts#node [status=implemented hash=618c48987604]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             layer,
@@ -3583,7 +3583,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#Options [status=implemented hash=4f4c4f6a24cb]
+        // parity: core/src/models-dev.ts#Options [status=implemented hash=9c951933af2d]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let url: String?
             public let file: String?
@@ -4878,7 +4878,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#layer [status=implemented hash=b6bce9765788]
+        // parity: core/src/models-dev.ts#layer [status=implemented hash=e716ba6ad344]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)
@@ -5077,7 +5077,7 @@ public enum CoreModel {
                 m.capabilities.supports.toolCalls != nil
         }
 
-        // parity: core/src/github-copilot/models.ts#load [status=implemented hash=d8e759a7dad2]
+        // parity: core/src/github-copilot/models.ts#load [status=implemented hash=8d6addb19f75]
         public static func load(
             http: any HTTPTransport,
             baseURL: String,

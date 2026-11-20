@@ -5,7 +5,7 @@
 // MARK: - src/integration-id.ts
 
 /// Branded Integration identifier.
-// parity: schema/src/integration-id.ts#IntegrationID [status=implemented hash=489c667f2318]
+// parity: schema/src/integration-id.ts#IntegrationID [status=implemented hash=33a71751cdab]
 public struct IntegrationID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     public let rawValue: String
 
@@ -27,7 +27,7 @@ public struct IntegrationID: RawRepresentable, Hashable, Sendable, Codable, Cust
 }
 
 /// Branded Integration method identifier.
-// parity: schema/src/integration-id.ts#IntegrationMethodID [status=implemented hash=185ccefb3b09]
+// parity: schema/src/integration-id.ts#IntegrationMethodID [status=implemented hash=adc1bf268738]
 public struct IntegrationMethodID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     public let rawValue: String
 
@@ -55,7 +55,7 @@ public enum ProjectSchema {
     public typealias ID = ProjectID
 
     /// VCS provider identifier matching `^[a-z][a-z0-9._-]*$`.
-    // parity: schema/src/project.ts#Vcs [status=implemented hash=f1c96a5fd43d]
+    // parity: schema/src/project.ts#Vcs [status=implemented hash=74bdc69a10e2]
     public struct Vcs: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -91,7 +91,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#Current [status=implemented hash=035c0a001145]
+    // parity: schema/src/project.ts#Current [status=implemented hash=810bab5cede5]
     public struct Current: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let directory: SchemaPrimitive.AbsolutePath
@@ -108,7 +108,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#Icon [status=implemented hash=cd764aaac70f]
+    // parity: schema/src/project.ts#Icon [status=implemented hash=60bb55df6630]
     public struct Icon: Equatable, Hashable, Sendable, Codable {
         public let url: String?
         public let override: String?
@@ -121,7 +121,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#Commands [status=implemented hash=9f2459c2138c]
+    // parity: schema/src/project.ts#Commands [status=implemented hash=6dbc46c8ae6d]
     public struct Commands: Equatable, Hashable, Sendable, Codable {
         public let start: String?
 
@@ -130,7 +130,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#Time [status=implemented hash=ee3151f10e4d]
+    // parity: schema/src/project.ts#Time [status=implemented hash=9f2d29cbaa25]
     public struct Time: Equatable, Hashable, Sendable, Codable {
         public let created: SchemaPrimitive.NonNegativeInt
         public let updated: SchemaPrimitive.NonNegativeInt
@@ -150,7 +150,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#Info [status=implemented hash=069381b15dac]
+    // parity: schema/src/project.ts#Info [status=implemented hash=a7cb3ae630d6]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let canonical: SchemaPrimitive.AbsolutePath
@@ -182,7 +182,7 @@ public enum ProjectSchema {
         }
     }
 
-    // parity: schema/src/project.ts#UpdateInput [status=implemented hash=463bde9fc8ee]
+    // parity: schema/src/project.ts#UpdateInput [status=implemented hash=428dc8a568b9]
     public struct UpdateInput: Equatable, Hashable, Sendable, Codable {
         public let projectID: ID
         public let canonical: SchemaPrimitive.AbsolutePath?
@@ -218,7 +218,7 @@ public enum WorkspaceSchema {
     // parity: schema/src/workspace.ts#ID [status=implemented hash=1708c8458e95]
     public typealias ID = WorkspaceID
 
-    // parity: schema/src/workspace.ts#DestroyResult [status=implemented hash=df4a0501a18f]
+    // parity: schema/src/workspace.ts#DestroyResult [status=implemented hash=66a4321d9347]
     public struct DestroyResult: Equatable, Hashable, Sendable, Codable {
         public let destroyed: Bool
 
@@ -276,7 +276,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#CreateInput [status=implemented hash=a88fcc6d3e2f]
+    // parity: schema/src/worktree.ts#CreateInput [status=implemented hash=5059b46bbfb7]
     public struct CreateInput: Equatable, Hashable, Sendable, Codable {
         public let projectID: ProjectID
         public let from: SchemaPrimitive.AbsolutePath?
@@ -328,7 +328,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#RemoveInput [status=implemented hash=a51652a0f31e]
+    // parity: schema/src/worktree.ts#RemoveInput [status=implemented hash=52505ad35ebb]
     public struct RemoveInput: Equatable, Hashable, Sendable, Codable {
         public let projectID: ProjectID
         public let directory: SchemaPrimitive.AbsolutePath
@@ -341,7 +341,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#Info [status=implemented hash=5b37f69dcf8e]
+    // parity: schema/src/worktree.ts#Info [status=implemented hash=5d0f3bc6e4dc]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let directory: SchemaPrimitive.AbsolutePath
 
@@ -350,7 +350,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#Directory [status=implemented hash=5d2def33ad1c]
+    // parity: schema/src/worktree.ts#Directory [status=implemented hash=9d68fe9aa4b2]
     public struct Directory: Equatable, Hashable, Sendable, Codable {
         public let directory: SchemaPrimitive.AbsolutePath
         public let strategy: String?
@@ -361,7 +361,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#ListEntry [status=implemented hash=7128d2f378c9]
+    // parity: schema/src/worktree.ts#ListEntry [status=implemented hash=653e88bd2213]
     public struct ListEntry: Equatable, Hashable, Sendable, Codable {
         public enum EntryType: String, Equatable, Hashable, Sendable, Codable {
             case root
@@ -377,7 +377,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#OperationError [status=implemented hash=48cbd6e3e2f1]
+    // parity: schema/src/worktree.ts#OperationError [status=implemented hash=8c0688dd5ea7]
     public struct OperationError: Swift.Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "Worktree.OperationError"
         public let message: String
@@ -411,7 +411,7 @@ public enum WorktreeSchema {
         }
     }
 
-    // parity: schema/src/worktree.ts#List [status=implemented hash=9e57af98e2e7]
+    // parity: schema/src/worktree.ts#List [status=implemented hash=3892002cae6e]
     public typealias List = [Directory]
 
     // parity: schema/src/worktree.ts#Event [status=implemented hash=35a10412729d]
@@ -489,7 +489,7 @@ public enum WorktreeSchema {
     }
 
     /// Computes whether a session under a resolved worktree should be adopted into the resolved project.
-    // parity: schema/src/worktree.ts#adopt [status=implemented hash=f1cadff215e5]
+    // parity: schema/src/worktree.ts#adopt [status=implemented hash=ba5db4a80658]
     public static func adopt(_ session: AdoptSession, _ event: AdoptEvent) -> AdoptionResult? {
         if let workspaceID = session.workspaceID, !workspaceID.isEmpty {
             return nil
@@ -560,7 +560,7 @@ public enum LocationSchema {
         }
     }
 
-    // parity: schema/src/location.ts#PublicRef [status=implemented hash=5a4550e21a7f]
+    // parity: schema/src/location.ts#PublicRef [status=implemented hash=00f6ac414181]
     public struct PublicRef: Equatable, Hashable, Sendable, Codable {
         public let directory: SchemaPrimitive.AbsolutePath
 
@@ -585,7 +585,7 @@ public enum LocationSchema {
         }
     }
 
-    // parity: schema/src/location.ts#Info [status=implemented hash=2236d9428bc9]
+    // parity: schema/src/location.ts#Info [status=implemented hash=eb1cd4f7156b]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let directory: SchemaPrimitive.AbsolutePath
         public let workspaceID: WorkspaceID?
@@ -602,7 +602,7 @@ public enum LocationSchema {
         }
     }
 
-    // parity: schema/src/location.ts#PublicInfo [status=implemented hash=507f4ec0b617]
+    // parity: schema/src/location.ts#PublicInfo [status=implemented hash=6b31b6b90c2b]
     public struct PublicInfo: Equatable, Hashable, Sendable, Codable {
         public let directory: SchemaPrimitive.AbsolutePath
         public let project: ProjectRef
@@ -635,7 +635,7 @@ public enum LocationSchema {
 // MARK: - src/vcs.ts
 
 public enum VcsSchema {
-    // parity: schema/src/vcs.ts#Branch [status=implemented hash=7982e3b6a91e]
+    // parity: schema/src/vcs.ts#Branch [status=implemented hash=15cd963a0b40]
     public struct Branch: Equatable, Hashable, Sendable, Codable {
         public let current: String?
         public let defaultBranch: String?
@@ -651,7 +651,7 @@ public enum VcsSchema {
         }
     }
 
-    // parity: schema/src/vcs.ts#Info [status=implemented hash=c327fd432ea2]
+    // parity: schema/src/vcs.ts#Info [status=implemented hash=062a1a8d096c]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let provider: String?
         public let branch: Branch
@@ -662,10 +662,10 @@ public enum VcsSchema {
         }
     }
 
-    // parity: schema/src/vcs.ts#BranchList [status=implemented hash=feb69fac03ee]
+    // parity: schema/src/vcs.ts#BranchList [status=implemented hash=f17daaa07852]
     public typealias BranchList = [String]
 
-    // parity: schema/src/vcs.ts#Base [status=implemented hash=dd19d0519c6b]
+    // parity: schema/src/vcs.ts#Base [status=implemented hash=300a321e1fc2]
     public struct Base: Equatable, Hashable, Sendable, Codable {
         public enum Source: String, Equatable, Hashable, Sendable, Codable {
             case reflog
@@ -683,20 +683,20 @@ public enum VcsSchema {
         }
     }
 
-    // parity: schema/src/vcs.ts#Mode [status=implemented hash=3559121df21f]
+    // parity: schema/src/vcs.ts#Mode [status=implemented hash=2883bda55d21]
     public enum Mode: String, Equatable, Hashable, Sendable, Codable {
         case working
         case branch
         case committed
     }
 
-    // parity: schema/src/vcs.ts#Untracked [status=implemented hash=4dda9bbff90c]
+    // parity: schema/src/vcs.ts#Untracked [status=implemented hash=c6174be233a6]
     public enum Untracked: String, Equatable, Hashable, Sendable, Codable {
         case files
         case folders
     }
 
-    // parity: schema/src/vcs.ts#FileStatus [status=implemented hash=b496cca716a1]
+    // parity: schema/src/vcs.ts#FileStatus [status=implemented hash=1846d3783585]
     public struct FileStatus: Equatable, Hashable, Sendable, Codable {
         public enum Status: String, Equatable, Hashable, Sendable, Codable {
             case added
@@ -804,7 +804,7 @@ public enum FileSystemSchema {
         }
     }
 
-    // parity: schema/src/filesystem.ts#FindInput [status=implemented hash=16e7c49dc6fc]
+    // parity: schema/src/filesystem.ts#FindInput [status=implemented hash=cdbc413e1795]
     public struct FindInput: Equatable, Hashable, Sendable, Codable {
         public let query: String
         public let type: EntryType?
@@ -830,7 +830,7 @@ public enum FileSystemSchema {
 // MARK: - src/pty.ts
 
 public enum PtySchema {
-    // parity: schema/src/pty.ts#ID [status=implemented hash=cb45fa9c05e5]
+    // parity: schema/src/pty.ts#ID [status=implemented hash=211acc50d27d]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -878,7 +878,7 @@ public enum PtySchema {
         case exited
     }
 
-    // parity: schema/src/pty.ts#Info [status=implemented hash=6571ecd8295f]
+    // parity: schema/src/pty.ts#Info [status=implemented hash=63534a17c78f]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let title: String
@@ -945,7 +945,7 @@ public enum PtySchema {
         public static let definitions: [SchemaPrimitive.EventDescriptor] = [created, updated, exited, deleted]
     }
 
-    // parity: schema/src/pty.ts#CreateInput [status=implemented hash=8b45e092a230]
+    // parity: schema/src/pty.ts#CreateInput [status=implemented hash=b1c13cca8799]
     public struct CreateInput: Equatable, Hashable, Sendable, Codable {
         public let command: String?
         public let args: [String]?
@@ -978,7 +978,7 @@ public enum PtySchema {
         }
     }
 
-    // parity: schema/src/pty.ts#UpdateInput [status=implemented hash=0fdfbf32f6a1]
+    // parity: schema/src/pty.ts#UpdateInput [status=implemented hash=722d2f5422e4]
     public struct UpdateInput: Equatable, Hashable, Sendable, Codable {
         public let title: String?
         public let size: Size?
@@ -993,7 +993,7 @@ public enum PtySchema {
 // MARK: - src/pty-ticket.ts
 
 public enum PtyTicketSchema {
-    // parity: schema/src/pty-ticket.ts#ConnectToken [status=implemented hash=050897348b33]
+    // parity: schema/src/pty-ticket.ts#ConnectToken [status=implemented hash=a4974124dc58]
     public struct ConnectToken: Equatable, Hashable, Sendable, Codable {
         public let ticket: String
         public let expiresIn: SchemaPrimitive.PositiveInt
@@ -1043,7 +1043,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#Info [status=implemented hash=61d3442cec89]
+    // parity: schema/src/persistent-pty.ts#Info [status=implemented hash=4b6258eb3237]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: PtySchema.ID
         public let title: String
@@ -1140,7 +1140,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#Handoff [status=implemented hash=b1f32678ed07]
+    // parity: schema/src/persistent-pty.ts#Handoff [status=implemented hash=1a3b238fe6c7]
     public struct Handoff: Equatable, Hashable, Sendable, Codable {
         public let directory: String
         public let instanceID: String
@@ -1155,7 +1155,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#CreateInput [status=implemented hash=79a70f6ec4bd]
+    // parity: schema/src/persistent-pty.ts#CreateInput [status=implemented hash=86d78f43ccee]
     public struct CreateInput: Equatable, Hashable, Sendable, Codable {
         public let command: String?
         public let args: [String]
@@ -1181,7 +1181,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#UpdateInput [status=implemented hash=a1bee64edec5]
+    // parity: schema/src/persistent-pty.ts#UpdateInput [status=implemented hash=174be94e313c]
     public struct UpdateInput: Equatable, Hashable, Sendable, Codable {
         public let attachmentID: String?
         public let size: Size?
@@ -1233,7 +1233,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#Snapshot [status=implemented hash=0fd1c593f6f4]
+    // parity: schema/src/persistent-pty.ts#Snapshot [status=implemented hash=b8acc5ebb3f0]
     public struct Snapshot: Equatable, Hashable, Sendable, Codable {
         public let info: Info
         public let text: String
@@ -1249,7 +1249,7 @@ public enum PersistentPtySchema {
     }
 
     /// Bounded read-lines count in `1...65535`.
-    // parity: schema/src/persistent-pty.ts#ReadLines [status=implemented hash=31e25cf6f8d5]
+    // parity: schema/src/persistent-pty.ts#ReadLines [status=implemented hash=1fee34a80a28]
     public struct ReadLines: RawRepresentable, Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: Int
 
@@ -1289,7 +1289,7 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#ReadResult [status=implemented hash=14735c5d5c93]
+    // parity: schema/src/persistent-pty.ts#ReadResult [status=implemented hash=8e0a220cb37c]
     public struct ReadResult: Equatable, Hashable, Sendable, Codable {
         public struct Screen: Equatable, Hashable, Sendable, Codable {
             public let text: String
@@ -1377,13 +1377,13 @@ public enum PersistentPtySchema {
         }
     }
 
-    // parity: schema/src/persistent-pty.ts#Added [status=implemented hash=92308b29ab97]
+    // parity: schema/src/persistent-pty.ts#Added [status=implemented hash=a7312d030667]
     public static let added = SchemaPrimitive.EventDescriptor.ephemeral(type: "persistent-pty.added")
 
-    // parity: schema/src/persistent-pty.ts#Removed [status=implemented hash=691a499a4e99]
+    // parity: schema/src/persistent-pty.ts#Removed [status=implemented hash=e6f9c6304449]
     public static let removed = SchemaPrimitive.EventDescriptor.ephemeral(type: "persistent-pty.removed")
 
-    // parity: schema/src/persistent-pty.ts#Updated [status=implemented hash=b3f906d059ea]
+    // parity: schema/src/persistent-pty.ts#Updated [status=implemented hash=d660ff41fc08]
     public static let updated = SchemaPrimitive.EventDescriptor.ephemeral(type: "persistent-pty.updated")
 
     // parity: schema/src/persistent-pty.ts#Event [status=implemented hash=ebc64d9ba020]
@@ -1398,7 +1398,7 @@ public enum PersistentPtySchema {
 // MARK: - src/shell.ts
 
 public enum ShellSchema {
-    // parity: schema/src/shell.ts#ID [status=implemented hash=fbaaa4c1ff0f]
+    // parity: schema/src/shell.ts#ID [status=implemented hash=7d339c71b924]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1449,7 +1449,7 @@ public enum ShellSchema {
         case killed
     }
 
-    // parity: schema/src/shell.ts#Time [status=implemented hash=315cdd540990]
+    // parity: schema/src/shell.ts#Time [status=implemented hash=d6ca9f1f864f]
     public struct Time: Equatable, Hashable, Sendable, Codable {
         public let started: Double
         public let completed: Double?
@@ -1474,7 +1474,7 @@ public enum ShellSchema {
     // parity: schema/src/shell.ts#Metadata [status=implemented hash=1a80e9f0220c]
     public typealias Metadata = [String: JSONValue]
 
-    // parity: schema/src/shell.ts#Info [status=implemented hash=a62efcb22819]
+    // parity: schema/src/shell.ts#Info [status=implemented hash=71c650215e61]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let status: Status
@@ -1580,7 +1580,7 @@ public enum ShellSchema {
         public static let definitions: [SchemaPrimitive.EventDescriptor] = [created, exited, deleted]
     }
 
-    // parity: schema/src/shell.ts#CreateInput [status=implemented hash=1184e293c86e]
+    // parity: schema/src/shell.ts#CreateInput [status=implemented hash=d2ca5fd3f796]
     public struct CreateInput: Equatable, Hashable, Sendable, Codable {
         public let command: String
         public let cwd: String?
@@ -1600,7 +1600,7 @@ public enum ShellSchema {
         }
     }
 
-    // parity: schema/src/shell.ts#OutputInput [status=implemented hash=2b97b77cf74e]
+    // parity: schema/src/shell.ts#OutputInput [status=implemented hash=384219111ffb]
     public struct OutputInput: Equatable, Hashable, Sendable, Codable {
         public let cursor: SchemaPrimitive.NonNegativeInt?
         public let limit: SchemaPrimitive.NonNegativeInt?
@@ -1611,7 +1611,7 @@ public enum ShellSchema {
         }
     }
 
-    // parity: schema/src/shell.ts#Output [status=implemented hash=43b76b438dc1]
+    // parity: schema/src/shell.ts#Output [status=implemented hash=fc2684bcf6f9]
     public struct Output: Equatable, Hashable, Sendable, Codable {
         public let output: String
         public let cursor: SchemaPrimitive.NonNegativeInt
@@ -1635,7 +1635,7 @@ public enum ShellSchema {
 // MARK: - src/job.ts
 
 public enum JobSchema {
-    // parity: schema/src/job.ts#Kind [status=implemented hash=9f8c2201ba9d]
+    // parity: schema/src/job.ts#Kind [status=implemented hash=0688dca18680]
     public enum Kind: String, Equatable, Hashable, Sendable, Codable {
         case shell
         case subagent
@@ -1644,7 +1644,7 @@ public enum JobSchema {
         case codemode
     }
 
-    // parity: schema/src/job.ts#Status [status=implemented hash=57c5e18a561a]
+    // parity: schema/src/job.ts#Status [status=implemented hash=8837c635e520]
     public enum Status: String, Equatable, Hashable, Sendable, Codable {
         case running
         case completed
@@ -1982,7 +1982,7 @@ public enum JobSchema {
         }
     }
 
-    // parity: schema/src/job.ts#Info [status=implemented hash=821c60d1c642]
+    // parity: schema/src/job.ts#Info [status=implemented hash=ed48f803da56]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         case shell(Shell)
         case subagent(Subagent)
@@ -2040,7 +2040,7 @@ public enum JobSchema {
 // MARK: - src/automation.ts
 
 public enum AutomationSchema {
-    // parity: schema/src/automation.ts#ID [status=implemented hash=d4c6d47225e3]
+    // parity: schema/src/automation.ts#ID [status=implemented hash=922dd4e1c23c]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2137,10 +2137,10 @@ public enum AutomationSchema {
         return result.isFinite ? result : nil
     }
 
-    // parity: schema/src/automation.ts#DurationString [status=implemented hash=36dc2cd16fb4]
+    // parity: schema/src/automation.ts#DurationString [status=implemented hash=f1c85110ac39]
     public typealias DurationString = String
 
-    // parity: schema/src/automation.ts#At [status=implemented hash=29f6eae85a24]
+    // parity: schema/src/automation.ts#At [status=implemented hash=b4b6521eff6c]
     public struct At: Equatable, Hashable, Sendable, Codable {
         public let at: String
         public let tz: String?
@@ -2171,7 +2171,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Every [status=implemented hash=4010f536bf21]
+    // parity: schema/src/automation.ts#Every [status=implemented hash=8a3d969cb71f]
     public struct Every: Equatable, Hashable, Sendable, Codable {
         public let every: DurationString
         public let tz: String?
@@ -2202,7 +2202,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Cron [status=implemented hash=50609b108e55]
+    // parity: schema/src/automation.ts#Cron [status=implemented hash=21b9a2c47285]
     public struct Cron: Equatable, Hashable, Sendable, Codable {
         public let cron: String
         public let tz: String?
@@ -2233,7 +2233,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Event [status=implemented hash=4d84efb3b2ab]
+    // parity: schema/src/automation.ts#Event [status=implemented hash=74ef9125cecd]
     public struct Event: Equatable, Hashable, Sendable, Codable {
         public let server: String
         public let event: String
@@ -2277,7 +2277,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Trigger [status=implemented hash=9b77341d224c]
+    // parity: schema/src/automation.ts#Trigger [status=implemented hash=8f4a7303a560]
     public enum Trigger: Equatable, Hashable, Sendable, Codable {
         case at(At)
         case every(Every)
@@ -2316,7 +2316,7 @@ public enum AutomationSchema {
     }
 
     /// Mutually exclusive target: either `{ session }` or `{ subagent }`; rejects objects containing both keys.
-    // parity: schema/src/automation.ts#Target [status=implemented hash=96320e49a8de]
+    // parity: schema/src/automation.ts#Target [status=implemented hash=c23476adf569]
     public enum Target: Equatable, Hashable, Sendable, Codable {
         case session(SessionID)
         case subagent(AgentSchema.ID)
@@ -2375,7 +2375,7 @@ public enum AutomationSchema {
         sessionID.rawValue.hasPrefix("ses_aut_")
     }
 
-    // parity: schema/src/automation.ts#PromptAction [status=implemented hash=a80bb4fb6f37]
+    // parity: schema/src/automation.ts#PromptAction [status=implemented hash=d740a6480faf]
     public struct PromptAction: Equatable, Hashable, Sendable, Codable {
         public let prompt: String
         public let to: Target
@@ -2406,7 +2406,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#CodeResult [status=implemented hash=f81fc327b967]
+    // parity: schema/src/automation.ts#CodeResult [status=implemented hash=3d601ef6cd65]
     public struct CodeResult: Equatable, Hashable, Sendable, Codable {
         public struct SendTarget: Equatable, Hashable, Sendable, Codable {
             public let subagent: AgentSchema.ID
@@ -2543,7 +2543,7 @@ public enum AutomationSchema {
     }
 
     /// Decodes an untrusted Code Mode `JSONValue` into `CodeResult?` (`null` -> `nil`), rejecting unknown keys.
-    // parity: schema/src/automation.ts#decodeCodeResult [status=implemented hash=705273da0fb3]
+    // parity: schema/src/automation.ts#decodeCodeResult [status=implemented hash=2e43a6a2869b]
     public static func decodeCodeResult(_ value: JSONValue) -> Swift.Result<CodeResult?, CodeResultDecodeError> {
         switch value {
         case .null:
@@ -2604,7 +2604,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#CodeAction [status=implemented hash=a85ad1fd88f3]
+    // parity: schema/src/automation.ts#CodeAction [status=implemented hash=caa8523006dd]
     public struct CodeAction: Equatable, Hashable, Sendable, Codable {
         public let code: String
         public let args: JSONValue?
@@ -2645,7 +2645,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Action [status=implemented hash=7b3aeb425c77]
+    // parity: schema/src/automation.ts#Action [status=implemented hash=f5dba061b39a]
     public enum Action: Equatable, Hashable, Sendable, Codable {
         case prompt(PromptAction)
         case code(CodeAction)
@@ -2677,14 +2677,14 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Status [status=implemented hash=2232fd4852fb]
+    // parity: schema/src/automation.ts#Status [status=implemented hash=1de7550926b0]
     public enum Status: String, Equatable, Hashable, Sendable, Codable {
         case active
         case paused
         case done
     }
 
-    // parity: schema/src/automation.ts#Outcome [status=implemented hash=d43459990553]
+    // parity: schema/src/automation.ts#Outcome [status=implemented hash=b091d9db676d]
     public enum Outcome: String, Equatable, Hashable, Sendable, Codable {
         case fired
         case late
@@ -2694,7 +2694,7 @@ public enum AutomationSchema {
         case expired
     }
 
-    // parity: schema/src/automation.ts#Info [status=implemented hash=f85a9b537f3c]
+    // parity: schema/src/automation.ts#Info [status=implemented hash=60145cb32b27]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public struct Time: Equatable, Hashable, Sendable, Codable {
             public let created: SchemaPrimitive.DateTimeUtcFromMillis
@@ -2766,7 +2766,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#PromptActionInput [status=implemented hash=92e230d40ced]
+    // parity: schema/src/automation.ts#PromptActionInput [status=implemented hash=c56f27d1a236]
     public struct PromptActionInput: Equatable, Hashable, Sendable, Codable {
         public let prompt: String
         public let to: Target?
@@ -2801,7 +2801,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#CodeActionInput [status=implemented hash=efb77679efc2]
+    // parity: schema/src/automation.ts#CodeActionInput [status=implemented hash=841317cb7d02]
     public struct CodeActionInput: Equatable, Hashable, Sendable, Codable {
         public let code: String
         public let args: JSONValue?
@@ -2846,7 +2846,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#ActionInput [status=implemented hash=ff9f299f4a2e]
+    // parity: schema/src/automation.ts#ActionInput [status=implemented hash=84521d07cd2c]
     public enum ActionInput: Equatable, Hashable, Sendable, Codable {
         case prompt(PromptActionInput)
         case code(CodeActionInput)
@@ -2878,7 +2878,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Request [status=implemented hash=01dc27f05978]
+    // parity: schema/src/automation.ts#Request [status=implemented hash=5a4ea53201e2]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let trigger: Trigger
@@ -2912,7 +2912,7 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#CreateInput [status=implemented hash=64d90ee8a460]
+    // parity: schema/src/automation.ts#CreateInput [status=implemented hash=26bbd713f6ab]
     public struct CreateInput: Equatable, Hashable, Sendable, Codable {
         public let sessionID: SessionID?
         public let directory: String?
@@ -3136,7 +3136,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#Method [status=implemented hash=7dcaec95407a]
+    // parity: schema/src/integration.ts#Method [status=implemented hash=443d1f6690e3]
     public enum Method: Equatable, Hashable, Sendable, Codable {
         case oauth(OAuthMethod)
         case command(CommandMethod)
@@ -3196,7 +3196,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#Info [status=implemented hash=ada1543f6448]
+    // parity: schema/src/integration.ts#Info [status=implemented hash=181894bdd3b8]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let name: String
@@ -3219,7 +3219,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#AttemptID [status=implemented hash=9f7beaf250dc]
+    // parity: schema/src/integration.ts#AttemptID [status=implemented hash=86c369212414]
     public struct AttemptID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -3254,7 +3254,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#Attempt [status=implemented hash=e67394da5ea3]
+    // parity: schema/src/integration.ts#Attempt [status=implemented hash=f59b149f035d]
     public struct Attempt: Equatable, Hashable, Sendable, Codable {
         public enum Mode: String, Equatable, Hashable, Sendable, Codable {
             case auto
@@ -3314,7 +3314,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#AttemptStatus [status=implemented hash=58936c95b912]
+    // parity: schema/src/integration.ts#AttemptStatus [status=implemented hash=734e648ed2cc]
     public enum AttemptStatus: Equatable, Hashable, Sendable, Codable {
         case pending(time: AttemptTime)
         case complete(time: AttemptTime)
@@ -3380,7 +3380,7 @@ public enum IntegrationSchema {
         }
     }
 
-    // parity: schema/src/integration.ts#CommandAttemptStatus [status=implemented hash=eef54f225b36]
+    // parity: schema/src/integration.ts#CommandAttemptStatus [status=implemented hash=9d9847dd75aa]
     public enum CommandAttemptStatus: Equatable, Hashable, Sendable, Codable {
         case pending(message: String? = nil, time: AttemptTime)
         case complete(time: AttemptTime)

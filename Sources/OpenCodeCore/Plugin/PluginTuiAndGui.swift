@@ -78,7 +78,7 @@ public enum PluginTui {
     }
 
     /// Active route in the TUI router (`home`, `session`, or `plugin`).
-    // parity: plugin/src/tui/context.ts#Route [status=implemented hash=5f3addd4d5ed]
+    // parity: plugin/src/tui/context.ts#Route [status=implemented hash=53827ba0e9fc]
     public enum Route: Equatable, Hashable, Sendable, Codable {
         case home
         case session(sessionID: String)
@@ -86,7 +86,7 @@ public enum PluginTui {
     }
 
     /// Navigation destination (either a full `Route` or a plugin-local named page).
-    // parity: plugin/src/tui/context.ts#Destination [status=implemented hash=4d81fbc1a405]
+    // parity: plugin/src/tui/context.ts#Destination [status=implemented hash=4ea0d83880cc]
     public enum Destination: Equatable, Hashable, Sendable, Codable {
         case route(Route)
         case pluginPage(name: String, data: [String: JSONValue]? = nil)
@@ -213,7 +213,7 @@ public enum PluginTui {
     }
 
     /// One mutually exclusive placement contribution to the TUI slot tree (`prepend`, `append`, `before`, `after`, `replace`).
-    // parity: plugin/src/tui/context.ts#SlotClaim [status=implemented hash=397123af400d]
+    // parity: plugin/src/tui/context.ts#SlotClaim [status=implemented hash=a3e4f7825a37]
     public struct SlotClaim: Sendable {
         public enum Placement: Equatable, Hashable, Sendable, Codable {
             case prepend(SlotPath)
@@ -314,14 +314,14 @@ public enum PluginTui {
     }
 
     /// Attention notification delivery preference.
-    // parity: plugin/src/tui/context.ts#AttentionNotification [status=implemented hash=0a8af15ef807]
+    // parity: plugin/src/tui/context.ts#AttentionNotification [status=implemented hash=fd797da6c6a8]
     public enum AttentionNotification: Equatable, Hashable, Sendable, Codable {
         case enabled(Bool)
         case configured(when: AttentionWhen?)
     }
 
     /// Attention sound delivery preference.
-    // parity: plugin/src/tui/context.ts#AttentionSound [status=implemented hash=4b32608bba53]
+    // parity: plugin/src/tui/context.ts#AttentionSound [status=implemented hash=a1f98b92d826]
     public enum AttentionSound: Equatable, Hashable, Sendable, Codable {
         case enabled(Bool)
         case configured(name: AttentionSoundName?, volume: Double?, when: AttentionWhen?)
@@ -349,7 +349,7 @@ public enum PluginTui {
     }
 
     /// Reason an attention notification was skipped.
-    // parity: plugin/src/tui/context.ts#AttentionNotifySkipReason [status=implemented hash=ee26e7f1736d]
+    // parity: plugin/src/tui/context.ts#AttentionNotifySkipReason [status=implemented hash=c6ca01d67798]
     public enum AttentionNotifySkipReason: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case attentionDisabled = "attention_disabled"
         case emptyMessage = "empty_message"
@@ -477,7 +477,7 @@ public enum PluginTui {
     }
 
     /// Footer action attached to a TUI select dialog.
-    // parity: plugin/src/tui/context.ts#DialogSelectAction [status=implemented hash=1220e61fd107]
+    // parity: plugin/src/tui/context.ts#DialogSelectAction [status=implemented hash=3534cd3342e5]
     public enum DialogSelectAction<Value: Sendable>: Sendable {
         case selectionRequired(bind: String, title: String, side: String?, onTrigger: @Sendable (Value) -> Void)
         case noSelection(bind: String, title: String, side: String?, onTrigger: @Sendable () -> Void)
@@ -802,7 +802,7 @@ public enum PluginTui {
     private static var currentTuiContext: Context?
 
     /// Runs `body` with `context` bound as the active TUI plugin context (Swift equivalent of Solid's `PluginContextProvider`).
-    // parity: plugin/src/tui/solid.ts#PluginContextProvider [status=adapted hash=8e9b8b1c8c07]
+    // parity: plugin/src/tui/solid.ts#PluginContextProvider [status=adapted hash=55d7d2fb27b0]
     public static func PluginContextProvider<T: Sendable>(
         value: Context,
         children: () throws -> T
@@ -1102,7 +1102,7 @@ public enum PluginGui {
     public typealias Messages = [String: String]
 
     /// Inline i18n catalog keyed by locale code (always carrying English fallback `"en"`).
-    // parity: plugin/src/gui/core.ts#Catalog [status=implemented hash=7a80cca9ace1]
+    // parity: plugin/src/gui/core.ts#Catalog [status=implemented hash=24469ca3b5a2]
     public struct Catalog: Equatable, Hashable, Sendable, Codable {
         public let en: Messages
         public let locales: [String: Messages]
@@ -1265,7 +1265,7 @@ public enum PluginGui {
     }
 
     /// Client handle used by window entries to invoke main-process IPC methods and read synced state.
-    // parity: plugin/src/gui/core.ts#IpcClient [status=adapted hash=018db7462cd3]
+    // parity: plugin/src/gui/core.ts#IpcClient [status=adapted hash=eaca1beffd24]
     public struct IpcClient: Sendable {
         public let id: String
         public let call: @Sendable (_ method: String, _ input: JSONValue?, _ options: IpcCallOptions?) async throws -> JSONValue
@@ -1290,7 +1290,7 @@ public enum PluginGui {
     public typealias TokenValue<V: Sendable> = V
 
     /// Live provider lifecycle state observed via `ctx.use(token)`.
-    // parity: plugin/src/gui/core.ts#Live [status=implemented hash=86ab478c9d02]
+    // parity: plugin/src/gui/core.ts#Live [status=implemented hash=8228b964910b]
     public enum Live<T: Sendable>: Sendable {
         public enum InactiveReason: String, Equatable, Hashable, Sendable, Codable {
             case disabled
@@ -1315,7 +1315,7 @@ public enum PluginGui {
     }
 
     /// Main-process implementation of an IPC contract.
-    // parity: plugin/src/gui/core.ts#IpcImpl [status=adapted hash=6bd8abb812f5]
+    // parity: plugin/src/gui/core.ts#IpcImpl [status=adapted hash=7b3c28c84e6b]
     public struct IpcImpl: Sendable {
         public let methods: [String: @Sendable (JSONValue?, Caller) async throws -> JSONValue]
         public let state: (@Sendable (Int) -> JSONValue)?
@@ -1362,7 +1362,7 @@ public enum PluginGui {
     public typealias StoreFrom = String
 
     /// Declaration of a persisted global or per-session plugin store.
-    // parity: plugin/src/gui/core.ts#StoreDeclaration [status=implemented hash=8dd3cfb28089]
+    // parity: plugin/src/gui/core.ts#StoreDeclaration [status=implemented hash=0368d850f730]
     public struct StoreDeclaration: Equatable, Hashable, Sendable, Codable {
         public enum ScopeKind: String, Equatable, Hashable, Sendable, Codable {
             case global
@@ -1429,11 +1429,11 @@ public enum PluginGui {
     }
 
     /// Writable draft alias for persisted store mutations.
-    // parity: plugin/src/gui/core.ts#Mutable [status=adapted hash=e5ae3a96c866]
+    // parity: plugin/src/gui/core.ts#Mutable [status=adapted hash=050b23d1a22f]
     public typealias Mutable<T> = T
 
     /// Map of declared stores by name.
-    // parity: plugin/src/gui/core.ts#DeclaredStores [status=implemented hash=81b09e209540]
+    // parity: plugin/src/gui/core.ts#DeclaredStores [status=implemented hash=763328ea65d1]
     public typealias DeclaredStores = [String: StoreDeclaration]
 
     /// Branded icon name `<plugin id>:<name>` declared in `Plugin.define({ icons })`.
@@ -1449,7 +1449,7 @@ public enum PluginGui {
     }
 
     /// Map of declared icon SVG documents by local icon name.
-    // parity: plugin/src/gui/core.ts#DeclaredIcons [status=implemented hash=a6c4fd73694b]
+    // parity: plugin/src/gui/core.ts#DeclaredIcons [status=implemented hash=a7e9f43d6602]
     public typealias DeclaredIcons = [String: String]
 
     // MARK: - gui/declarations.ts
@@ -1657,7 +1657,7 @@ public enum PluginGui {
     // MARK: - gui/modules.ts
 
     /// Modules provided by both main and window hosts to plugin GUI bundles.
-    // parity: plugin/src/gui/modules.ts#pluginSharedModules [status=implemented hash=95cd0a566645]
+    // parity: plugin/src/gui/modules.ts#pluginSharedModules [status=implemented hash=52a9b5197ca8]
     public static let pluginSharedModules: [String] = [
         "effect",
         "@opencode/plugin/gui",
@@ -1669,7 +1669,7 @@ public enum PluginGui {
     ]
 
     /// Modules provided exclusively by desktop/web window hosts.
-    // parity: plugin/src/gui/modules.ts#pluginWindowModules [status=implemented hash=6bc41a557453]
+    // parity: plugin/src/gui/modules.ts#pluginWindowModules [status=implemented hash=f20e6f6dbbff]
     public static let pluginWindowModules: [String] = [
         "solid-js",
         "solid-js/web",
@@ -2192,7 +2192,7 @@ public enum PluginGui {
     }
 
     /// Anchor computation positioning a quote comment editor in viewport pixels.
-    // parity: plugin/src/gui/host-apis.ts#ComposerQuoteAnchor [status=implemented hash=e5b74cf7785c]
+    // parity: plugin/src/gui/host-apis.ts#ComposerQuoteAnchor [status=implemented hash=0af0bfe90d6d]
     public typealias ComposerQuoteAnchor = @Sendable (_ width: Double, _ height: Double) -> (top: Double, left: Double)?
 
     /// Optional focus placement for an attached composer quote.
@@ -2419,7 +2419,7 @@ public enum PluginGui {
     }
 
     /// Storage isolation scope for `Storage.store`.
-    // parity: plugin/src/gui/host-apis.ts#StorageScope [status=implemented hash=1c2a6920eb40]
+    // parity: plugin/src/gui/host-apis.ts#StorageScope [status=implemented hash=e9c06505efb4]
     public enum StorageScope: Equatable, Hashable, Sendable, Codable {
         case global
         case server(id: String, directory: String? = nil)
@@ -4384,7 +4384,7 @@ public enum PluginGui {
     }
 
     /// One color-scheme variant of a `Theme` (mutually exclusive: either `seeds` or `palette`).
-    // parity: plugin/src/gui/registries.ts#ThemeVariant [status=implemented hash=afa6ae5a0cd5]
+    // parity: plugin/src/gui/registries.ts#ThemeVariant [status=implemented hash=6a5c4d3d7083]
     public enum ThemeVariant: Equatable, Hashable, Sendable, Codable {
         case seeds(ThemeSeedColors, overrides: [String: String]? = nil, v2Overrides: [String: String]? = nil)
         case palette(ThemePaletteColors, overrides: [String: String]? = nil, v2Overrides: [String: String]? = nil)
@@ -4435,7 +4435,7 @@ public enum PluginGui {
     }
 
     /// Slot contribution (`Slot` registry).
-    // parity: plugin/src/gui/registries.ts#Slot [status=implemented hash=47160f314fe0]
+    // parity: plugin/src/gui/registries.ts#Slot [status=implemented hash=6fee1a4cef8c]
     public struct Slot: Sendable {
         public static let registry = Registry<Slot>.define("slot")
 
@@ -5101,7 +5101,7 @@ public enum PluginGui {
     public typealias PluginDeclarations = Declarations
 
     /// Synchronous window setup function type.
-    // parity: plugin/src/gui/plugin.ts#Setup [status=implemented hash=cf5c9157e457]
+    // parity: plugin/src/gui/plugin.ts#Setup [status=implemented hash=71845a0a7594]
     public typealias Setup = @Sendable (SetupContext) -> Cleanup?
 
     /// Async main-process setup function type.
@@ -5127,7 +5127,7 @@ public enum PluginGui {
     }
 
     /// Identity helper defining a GUI plugin.
-    // parity: plugin/src/gui/plugin.ts#define [status=implemented hash=0d174f5acfdb]
+    // parity: plugin/src/gui/plugin.ts#define [status=implemented hash=334f7eb032fa]
     public static func define(_ plugin: Definition) -> Definition {
         plugin
     }
@@ -5242,7 +5242,7 @@ public enum PluginGui {
     public static var PluginContext: Context?
 
     /// Task-local context binding for scoped reactive lifetime markers.
-    // parity: plugin/src/gui/internal.ts#LifetimeContext [status=adapted hash=5f53a0ddd380]
+    // parity: plugin/src/gui/internal.ts#LifetimeContext [status=adapted hash=8f20e4844819]
     @TaskLocal
     public static var LifetimeContext: LifetimeMarker?
 
@@ -5252,7 +5252,7 @@ public enum PluginGui {
     public static var PanelContext: PanelFrame?
 
     /// Task-local context binding for the active narrow-screen drawer.
-    // parity: plugin/src/gui/internal.ts#DrawerContext [status=adapted hash=826698e80968]
+    // parity: plugin/src/gui/internal.ts#DrawerContext [status=adapted hash=3b141354e6c1]
     @TaskLocal
     public static var DrawerContext: DrawerHandle?
 
@@ -5335,7 +5335,7 @@ public enum PluginGui {
     public typealias KeyedValue<T: Sendable> = T
 
     /// Runs `fn` when `source()` yields a value (with a dedicated `LifetimeMarker`), or `otherwise` when `nil`.
-    // parity: plugin/src/gui/reactive.ts#createKeyed [status=adapted hash=867aa0e80e28]
+    // parity: plugin/src/gui/reactive.ts#createKeyed [status=adapted hash=a220788d3880]
     @discardableResult
     public static func createKeyed<T: Sendable>(
         _ source: KeyedSource<T>,
@@ -5367,7 +5367,7 @@ public enum PluginGui {
     }
 
     /// Fetches the latest result for `source()` with cooperative `AbortSignal` cancellation.
-    // parity: plugin/src/gui/reactive.ts#createLatest [status=adapted hash=ad5307b8106e]
+    // parity: plugin/src/gui/reactive.ts#createLatest [status=adapted hash=857dc6b2f64d]
     public static func createLatest<S: Sendable, T: Sendable>(
         _ source: KeyedSource<S>,
         fetch: @escaping @Sendable (S, AbortSignal) async throws -> T
@@ -5430,7 +5430,7 @@ public enum PluginGui {
 
     /// Receives a person's activation of an application link on the desktop session screen. Unlike `Links.open`, this
     /// registry is not a programmatic way to open a URL: `review` reviews the written target and never launches it.
-    // parity: plugin/src/gui/builtin.ts#BuiltinAppLink [status=implemented hash=0cc67113261d]
+    // parity: plugin/src/gui/builtin.ts#BuiltinAppLink [status=implemented hash=046187d8d890]
     public struct BuiltinAppLink: Sendable {
         public static let registry = Registry<BuiltinAppLink>.define("app-link")
 
@@ -5547,7 +5547,7 @@ public enum PluginGui {
     }
 
     /// Built-in slot contribution (`BuiltinSlot` registry).
-    // parity: plugin/src/gui/builtin.ts#BuiltinSlot [status=implemented hash=8d0195d70465]
+    // parity: plugin/src/gui/builtin.ts#BuiltinSlot [status=implemented hash=541d6ef4a1b6]
     public struct BuiltinSlot: Sendable {
         public static let registry = Registry<BuiltinSlot>.define("slot")
 
@@ -5563,14 +5563,14 @@ public enum PluginGui {
     }
 
     /// Legacy migration source for built-in window stores.
-    // parity: plugin/src/gui/builtin.ts#BuiltinStoreFrom [status=implemented hash=af590a140ffb]
+    // parity: plugin/src/gui/builtin.ts#BuiltinStoreFrom [status=implemented hash=424eceb18eff]
     public enum BuiltinStoreFrom: Sendable {
         case key(StoreFrom)
         case shared(key: String, sessions: String?, pick: @Sendable (JSONValue?) -> JSONValue?)
     }
 
     /// Built-in window store declaration supporting `builtinFrom` migrations.
-    // parity: plugin/src/gui/builtin.ts#BuiltinStoreDeclaration [status=implemented hash=d3bd07638ace]
+    // parity: plugin/src/gui/builtin.ts#BuiltinStoreDeclaration [status=implemented hash=17204d155574]
     public struct BuiltinStoreDeclaration: Sendable {
         public let base: StoreDeclaration
         public let builtinFrom: [BuiltinStoreFrom]
@@ -5608,7 +5608,7 @@ public enum PluginGui {
     }
 
     /// Options for opening a built-in window store.
-    // parity: plugin/src/gui/builtin.ts#BuiltinStoreOptions [status=implemented hash=96e05a92efc5]
+    // parity: plugin/src/gui/builtin.ts#BuiltinStoreOptions [status=implemented hash=4ae0bb3a6876]
     public struct BuiltinStoreOptions: Sendable {
         public let base: StoreOptions
         public let from: [BuiltinStoreFrom]
@@ -5747,7 +5747,7 @@ public enum PluginGui {
     }
 
     /// Legacy migration source for built-in main-process stores.
-    // parity: plugin/src/gui/builtin.ts#MainStoreFrom [status=implemented hash=743c0d6a9a60]
+    // parity: plugin/src/gui/builtin.ts#MainStoreFrom [status=implemented hash=f747614f0967]
     public enum MainStoreFrom: Equatable, Hashable, Sendable, Codable {
         case settings(key: String, file: String? = nil)
         case state(namespace: String, key: String)
@@ -5803,7 +5803,7 @@ public enum PluginGui {
     }
 
     /// Built-in i18n catalog supporting lazy async locale loaders.
-    // parity: plugin/src/gui/builtin.ts#BuiltinCatalog [status=implemented hash=76cd3fa6a4f1]
+    // parity: plugin/src/gui/builtin.ts#BuiltinCatalog [status=implemented hash=52b78dd055ae]
     public struct BuiltinCatalog: Sendable {
         public let en: Messages
         public let inlineLocales: [String: Messages]
@@ -5893,7 +5893,7 @@ public enum PluginGui {
     }
 
     /// Resolves GUI enable state: built-ins always run; other plugins follow saved rows (defaulting to enabled).
-    // parity: plugin/src/gui/host.ts#pluginEnabled [status=implemented hash=92aa82c83d78]
+    // parity: plugin/src/gui/host.ts#pluginEnabled [status=implemented hash=abd91fac8c43]
     public static func pluginEnabled(id: String, builtin: Bool, state: [EnableState]) -> Bool {
         if builtin { return true }
         return state.first(where: { $0.id == id })?.enabled ?? true
@@ -6121,7 +6121,7 @@ public enum PluginGui {
     }
 
     /// Returns whether a server `PluginSchema.Info` ships an active non-builtin `./gui-experimental` bundle.
-    // parity: plugin/src/gui/host.ts#shipsPluginGui [status=implemented hash=05a6934e29ee]
+    // parity: plugin/src/gui/host.ts#shipsPluginGui [status=implemented hash=fdddef886673]
     public static func shipsPluginGui(_ plugin: PluginSchema.Info) -> Bool {
         guard let id = plugin.id, !id.rawValue.isEmpty else { return false }
         if case .builtin = plugin.source { return false }
@@ -6176,7 +6176,7 @@ public enum PluginGui {
     }
 
     /// Push message sent from desktop main process to renderer windows.
-    // parity: plugin/src/gui/host.ts#BridgeMessage [status=implemented hash=d3f8620c16bb]
+    // parity: plugin/src/gui/host.ts#BridgeMessage [status=implemented hash=6533572eb736]
     public enum BridgeMessage: Equatable, Hashable, Sendable, Codable {
         case state(ipc: String, state: JSONValue)
         case event(ipc: String, name: String, data: JSONValue)
@@ -6235,7 +6235,7 @@ public enum PluginGui {
     // MARK: - gui/updater.ts
 
     /// App-wide updater state synchronized across all desktop windows.
-    // parity: plugin/src/gui/updater.ts#UpdaterState [status=implemented hash=7ecc227aa3cc]
+    // parity: plugin/src/gui/updater.ts#UpdaterState [status=implemented hash=6be0cc101508]
     public enum UpdaterState: Equatable, Hashable, Sendable, Codable {
         case disabled
         case idle
@@ -6249,7 +6249,7 @@ public enum PluginGui {
     }
 
     /// Built-in IPC contract for the desktop app updater (`updater`).
-    // parity: plugin/src/gui/updater.ts#Updater [status=implemented hash=2314dcad14e9]
+    // parity: plugin/src/gui/updater.ts#Updater [status=implemented hash=742287dd6ecf]
     public static let Updater = Ipc.define(
         IpcSpec(
             id: "updater",
@@ -6306,7 +6306,7 @@ public enum PluginGui {
     }
 
     /// Constructs the Vite GUI plugin bundle preset descriptor (`entry`, `outFile`, external module rules).
-    // parity: plugin/src/gui/vite.ts#gui [status=adapted hash=509105fa50a8]
+    // parity: plugin/src/gui/vite.ts#gui [status=adapted hash=8fb7c2139ac9]
     public static func gui(options: GuiOptions = GuiOptions()) -> ViteGuiPreset {
         ViteGuiPreset(
             name: "opencode-gui",

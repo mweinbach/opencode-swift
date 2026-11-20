@@ -102,7 +102,7 @@ private let frakturExceptions: [UnicodeScalar: String] = [
 ]
 
 /// Lays out a parsed `MathNode` AST onto a 2D terminal character grid with math-axis baseline tracking.
-// parity: latex/src/layout.ts#layoutMath [status=implemented hash=b88f3f6a8889]
+// parity: latex/src/layout.ts#layoutMath [status=implemented hash=3ea949c03d66]
 public func layoutMath(_ node: MathNode, options: RenderLatexOptions = RenderLatexOptions()) -> MathLayout {
     let context = LayoutContext(
         displayMode: options.displayMode ?? true,

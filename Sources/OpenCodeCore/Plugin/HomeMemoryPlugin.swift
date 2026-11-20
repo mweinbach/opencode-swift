@@ -196,7 +196,7 @@ extension CorePlugin {
             )
         }
 
-        // parity: core/src/plugin/home-memory.ts#Plugin [status=adapted hash=73f0cc010f2c]
+        // parity: core/src/plugin/home-memory.ts#Plugin [status=adapted hash=608913dd42a8]
         public static let Plugin = make()
     }
 }

@@ -623,7 +623,7 @@ public enum TUIUtil {
         }
     }
 
-    // parity: tui/src/util/error-details.ts#errorDetails [status=implemented hash=b5df2f89a98c]
+    // parity: tui/src/util/error-details.ts#errorDetails [status=implemented hash=ad2420a7204b]
     public static func errorDetails(
         title: String,
         error: String,
@@ -934,7 +934,7 @@ public enum TUIUtil {
         }
     }
 
-    // parity: tui/src/util/form.ts#FormAnswerField [status=implemented hash=f260f4245762]
+    // parity: tui/src/util/form.ts#FormAnswerField [status=implemented hash=d67349cdb8df]
     public typealias FormAnswerField = FormField
 
     public enum FormRowValue: Equatable, Hashable, Sendable {
@@ -1219,7 +1219,7 @@ public enum TUIUtil {
         case none
     }
 
-    // parity: tui/src/util/highlights.ts#decide [status=implemented hash=01b3440df7cf]
+    // parity: tui/src/util/highlights.ts#decide [status=implemented hash=c668959ab1bb]
     public static func decide(_ input: HighlightsInput, seen: String? = nil) -> HighlightsDecision {
         guard let current = parseStableSemver(input.version) else { return .none }
         let seenParts = seen.flatMap(parseStableSemver)
@@ -1378,7 +1378,7 @@ public enum TUIUtil {
         }
     }
 
-    // parity: tui/src/util/media.ts#createMediaCache [status=adapted hash=300749ac6e3d]
+    // parity: tui/src/util/media.ts#createMediaCache [status=adapted hash=dc600f038e2d]
     public static func createMediaCache(fetcher: @escaping MediaCache.FetchHandler) -> MediaCache {
         MediaCache(fetcher: fetcher)
     }
@@ -1432,14 +1432,14 @@ public enum TUIUtil {
         return (providerID, modelID)
     }
 
-    // parity: tui/src/util/model.ts#formatRef [status=implemented hash=d23a882aad22]
+    // parity: tui/src/util/model.ts#formatRef [status=implemented hash=79f8fe4e3ec3]
     public static func formatRef(_ model: ModelRef) -> String {
         var parts = [model.providerID, model.id]
         if let variant = model.variant { parts.append(variant) }
         return parts.joined(separator: "/")
     }
 
-    // parity: tui/src/util/model.ts#switchLabel [status=implemented hash=890004b41a0b]
+    // parity: tui/src/util/model.ts#switchLabel [status=implemented hash=533a0bf097ea]
     public static func switchLabel(
         _ model: ModelRef,
         models: [NamedModelRef]? = nil,
@@ -1530,7 +1530,7 @@ public enum TUIUtil {
         return "~/" + rel.split(separator: Character(sep), omittingEmptySubsequences: false).joined(separator: "/")
     }
 
-    // parity: tui/src/util/path-format.ts#formatPath [status=implemented hash=42e904dfbe6f]
+    // parity: tui/src/util/path-format.ts#formatPath [status=implemented hash=1e3dec18a5b6]
     public static func formatPath(
         _ input: String?,
         base: String,
@@ -1826,7 +1826,7 @@ public enum TUIUtil {
         return prefix
     }
 
-    // parity: tui/src/util/permission.ts#permissionAlwaysLines [status=implemented hash=ed7976199022]
+    // parity: tui/src/util/permission.ts#permissionAlwaysLines [status=implemented hash=699d6fca70ac]
     public static func permissionAlwaysLines(action: String, save: [String] = []) -> [String] {
         if save.count == 1 && save[0] == "*" {
             return ["This will always allow \(action) for this project."]
@@ -1966,7 +1966,7 @@ public enum TUIUtil {
         }
     }
 
-    // parity: tui/src/util/presentation.ts#epilogue [status=implemented hash=24c2376d2458]
+    // parity: tui/src/util/presentation.ts#epilogue [status=implemented hash=295f98f572be]
     public static func epilogue(session: SessionEpilogue? = nil, updatedVersion: String? = nil) -> String? {
         if session == nil && updatedVersion == nil { return nil }
         let reset = "\u{1B}[0m"
@@ -2007,7 +2007,7 @@ public enum TUIUtil {
 
     // MARK: Project Name (`src/util/project.ts`)
 
-    // parity: tui/src/util/project.ts#projectName [status=implemented hash=b92aab9ff6f3]
+    // parity: tui/src/util/project.ts#projectName [status=implemented hash=6c1fb5f736db]
     public static func projectName(canonical: String? = nil, name: String? = nil, fallback: String = "") -> String? {
         let resolved = canonical ?? fallback
         if resolved == "/" {
@@ -2080,7 +2080,7 @@ public enum TUIUtil {
 
     // MARK: Selection Copy & Key Handling (`src/util/selection.ts`)
 
-    // parity: tui/src/util/selection.ts#copyOnSelectRelease [status=adapted hash=f952a8ca55f0]
+    // parity: tui/src/util/selection.ts#copyOnSelectRelease [status=adapted hash=ff45ab319be2]
     public static func copyOnSelectRelease(
         isDragging: Bool,
         renderer: CliRenderer,
@@ -2703,7 +2703,7 @@ public enum TUIUtil {
         return (comps.hour == 0 && comps.minute == 0) ? dayStr : "\(dayStr), \(timeStr)"
     }
 
-    // parity: tui/src/util/usage-limits.ts#refusalReset [status=implemented hash=420f0e45baa2]
+    // parity: tui/src/util/usage-limits.ts#refusalReset [status=implemented hash=d64f9b1d8197]
     public static func refusalReset(responseBody: String?) -> Double? {
         guard let body = responseBody,
               let rx = try? NSRegularExpression(pattern: #""resetsAt"\s*:\s*"([^"]+)""#),
@@ -2719,7 +2719,7 @@ public enum TUIUtil {
         return nil
     }
 
-    // parity: tui/src/util/usage-limits.ts#retryReset [status=implemented hash=65f7e28f4c0b]
+    // parity: tui/src/util/usage-limits.ts#retryReset [status=implemented hash=6d9d385481be]
     public static func retryReset(retryAfterMs: Double?, baseMs: Double) -> Double? {
         guard let delay = retryAfterMs, delay.isFinite, delay >= 0, delay <= 45.0 * 86_400_000.0 else {
             return nil
@@ -2728,7 +2728,7 @@ public enum TUIUtil {
         return at.isFinite ? at : nil
     }
 
-    // parity: tui/src/util/usage-limits.ts#goLimitName [status=implemented hash=13724a1b1b0a]
+    // parity: tui/src/util/usage-limits.ts#goLimitName [status=implemented hash=5e2f34539f80]
     public static func goLimitName(responseBody: String?) -> String? {
         guard let body = responseBody,
               let rx = try? NSRegularExpression(pattern: #""limitName"\s*:\s*"([^"]+)""#),
@@ -2738,7 +2738,7 @@ public enum TUIUtil {
         return String(body[range])
     }
 
-    // parity: tui/src/util/usage-limits.ts#goLimitLink [status=implemented hash=dd835df09e1d]
+    // parity: tui/src/util/usage-limits.ts#goLimitLink [status=implemented hash=1fdbc7cb6063]
     public static func goLimitLink(responseBody: String?) -> String {
         if let body = responseBody,
            let rx = try? NSRegularExpression(pattern: #""workspace"\s*:\s*"((?:org|wrk)_[\w-]+)""#),
@@ -3154,7 +3154,7 @@ public enum TUIThemeBridge {
         return dict["theme"] != nil || dict["base"] != nil
     }
 
-    // parity: tui/src/theme/index.ts#parseTheme [status=implemented hash=2f1b358ba9a1]
+    // parity: tui/src/theme/index.ts#parseTheme [status=implemented hash=b8c46692a5a9]
     public static func parseTheme(
         _ source: ThemeDocumentSource,
         name: String = "theme",
@@ -3344,7 +3344,7 @@ public enum TUIPluginHost {
 
     /// Pure slot-tree placement resolver enforcing replacement takeover, hierarchy-beats-timeline,
     /// last-enabled-wins, and missing-target ancestor degradation.
-    // parity: tui/src/plugin/structure.ts#resolveSlots [status=implemented hash=84eb16a089f6]
+    // parity: tui/src/plugin/structure.ts#resolveSlots [status=implemented hash=a5a6cb3fa1c4]
     public static func resolveSlots<Render: Sendable>(
         paths: Set<String>,
         claims: [Claim<Render>]
@@ -3709,7 +3709,7 @@ public enum TUIPluginHost {
         }
     }
 
-    // parity: tui/src/plugin/api.tsx#createPluginContext [status=adapted hash=799804485fa4]
+    // parity: tui/src/plugin/api.tsx#createPluginContext [status=adapted hash=c215e62e12c9]
     public static func createPluginContext(
         host: HostServices,
         id: String,
@@ -3720,7 +3720,7 @@ public enum TUIPluginHost {
     }
 
     /// Isolates plugin render errors so one crashing plugin surfaces a single error toast instead of crashing the TUI.
-    // parity: tui/src/plugin/api.tsx#PluginBoundary [status=adapted hash=600b36865ff6]
+    // parity: tui/src/plugin/api.tsx#PluginBoundary [status=adapted hash=989abc850004]
     public static func PluginBoundary(
         id: String,
         where location: String,
@@ -3758,7 +3758,7 @@ public enum TUIPluginHost {
     }
 
     /// Built-in TUI feature plugins matching `src/plugin/builtins.ts#builtins`.
-    // parity: tui/src/plugin/builtins.ts#builtins [status=implemented hash=8284e604d07d]
+    // parity: tui/src/plugin/builtins.ts#builtins [status=implemented hash=48988eb0bbc2]
     public static let builtins: [BuiltinPluginDescriptor] = [
         BuiltinPluginDescriptor(id: "opencode.home.footer", defaultSlots: ["home.footer"]),
         BuiltinPluginDescriptor(id: "opencode.prompt.footer", defaultSlots: ["prompt.footer"]),
@@ -3841,7 +3841,7 @@ public enum TUIPluginHost {
         }
     }
 
-    // parity: tui/src/plugin/discovery.ts#mergePluginTargets [status=implemented hash=04203894ec68]
+    // parity: tui/src/plugin/discovery.ts#mergePluginTargets [status=implemented hash=46fc162fae8e]
     public static func mergePluginTargets(_ targets: [PluginTargetEntry], directory: String) -> [PluginTargetEntry] {
         var order: [String] = []
         var map: [String: PluginTargetEntry] = [:]
@@ -4000,7 +4000,7 @@ public enum TUIPluginHost {
 
     private static let activePluginManager = Mutex<PluginManager?>(nil)
 
-    // parity: tui/src/plugin/context.tsx#PluginProvider [status=adapted hash=85f9e3e262ce]
+    // parity: tui/src/plugin/context.tsx#PluginProvider [status=adapted hash=49931923899b]
     public static func PluginProvider(
         manager: PluginManager = PluginManager(),
         body: (PluginManager) -> Renderable
@@ -4017,7 +4017,7 @@ public enum TUIPluginHost {
         return created
     }
 
-    // parity: tui/src/plugin/render.tsx#PluginRoute [status=adapted hash=838d8e196833]
+    // parity: tui/src/plugin/render.tsx#PluginRoute [status=adapted hash=77f0e8f4a476]
     public static func PluginRoute(
         ctx: any RenderContext,
         manager: PluginManager,
@@ -4252,7 +4252,7 @@ public enum TUIFeaturePlugin {
         GoalController(initial: initial)
     }
 
-    // parity: tui/src/feature-plugins/prompt/goal.tsx#GoalStatus [status=adapted hash=9907868d2936]
+    // parity: tui/src/feature-plugins/prompt/goal.tsx#GoalStatus [status=adapted hash=1bf7b768cc4d]
     public static func GoalStatus(
         ctx: any RenderContext,
         goal: GoalState?,
@@ -4286,7 +4286,7 @@ public enum TUIFeaturePlugin {
 
     // MARK: Sidebar Widgets (`src/feature-plugins/sidebar/*`)
 
-    // parity: tui/src/feature-plugins/sidebar/context.tsx#SidebarContext [status=adapted hash=8ae8bf546f03]
+    // parity: tui/src/feature-plugins/sidebar/context.tsx#SidebarContext [status=adapted hash=3c28097e15bb]
     public static func SidebarContext(
         ctx: any RenderContext,
         usage: TUIUtil.ContextUsageSummary?,
@@ -4308,7 +4308,7 @@ public enum TUIFeaturePlugin {
         return box
     }
 
-    // parity: tui/src/feature-plugins/sidebar/footer.tsx#SidebarOnboarding [status=adapted hash=f128662ca232]
+    // parity: tui/src/feature-plugins/sidebar/footer.tsx#SidebarOnboarding [status=adapted hash=2dec9cc2cf39]
     public static func SidebarOnboarding(
         ctx: any RenderContext,
         terminalHeight: Int,
@@ -4336,7 +4336,7 @@ public enum TUIFeaturePlugin {
         return box
     }
 
-    // parity: tui/src/feature-plugins/sidebar/limit.tsx#SidebarLimit [status=adapted hash=d2bbfe69b2ec]
+    // parity: tui/src/feature-plugins/sidebar/limit.tsx#SidebarLimit [status=adapted hash=63163f9f56dc]
     public static func SidebarLimit(
         ctx: any RenderContext,
         usage: TUIUtil.ModelUsage?,
@@ -4370,7 +4370,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/mcp.tsx#SidebarMcp [status=adapted hash=0fd7a8cbc4f3]
+    // parity: tui/src/feature-plugins/sidebar/mcp.tsx#SidebarMcp [status=adapted hash=6a843b1247c7]
     public static func SidebarMcp(
         ctx: any RenderContext,
         servers: [SidebarMcpServer],
@@ -4402,7 +4402,7 @@ public enum TUIFeaturePlugin {
         return box
     }
 
-    // parity: tui/src/feature-plugins/sidebar/todo.tsx#SidebarTodo [status=adapted hash=37c656bd0dd3]
+    // parity: tui/src/feature-plugins/sidebar/todo.tsx#SidebarTodo [status=adapted hash=9d264c0b8235]
     public static func SidebarTodo(
         ctx: any RenderContext,
         todos: [TUIUtil.Todo],
@@ -4663,7 +4663,7 @@ public enum TUIFeaturePlugin {
         return next
     }
 
-    // parity: tui/src/feature-plugins/system/diff-viewer-file-menu.tsx#DiffFileMenu [status=adapted hash=5610c55c0234]
+    // parity: tui/src/feature-plugins/system/diff-viewer-file-menu.tsx#DiffFileMenu [status=adapted hash=7b58662ba782]
     public static func DiffFileMenu(
         ctx: any RenderContext,
         x: Int,
@@ -4783,7 +4783,7 @@ public enum TUIFeaturePlugin {
             || lower.hasSuffix(".webp") || lower.hasSuffix(".gif")
     }
 
-    // parity: tui/src/feature-plugins/system/diff-viewer-image.tsx#DiffViewerImage [status=adapted hash=dfc9561e9c92]
+    // parity: tui/src/feature-plugins/system/diff-viewer-image.tsx#DiffViewerImage [status=adapted hash=033bb783b6b4]
     public static func DiffViewerImage(
         ctx: any RenderContext,
         file: String,
@@ -4806,7 +4806,7 @@ public enum TUIFeaturePlugin {
 
     // MARK: Plugins Manager Dialog (`src/feature-plugins/system/plugins.tsx`)
 
-    // parity: tui/src/feature-plugins/system/plugins.tsx#PluginsDialog [status=adapted hash=107bf4125e62]
+    // parity: tui/src/feature-plugins/system/plugins.tsx#PluginsDialog [status=adapted hash=ba4c113bc03a]
     public static func PluginsDialog(
         ctx: any RenderContext,
         manager: TUIPluginHost.PluginManager,
@@ -4906,7 +4906,7 @@ public enum TUIFeaturePlugin {
         return "\(whole).\(frac)"
     }
 
-    // parity: tui/src/feature-plugins/system/stats.tsx#StatsPoster [status=adapted hash=4b4b5d4dc855]
+    // parity: tui/src/feature-plugins/system/stats.tsx#StatsPoster [status=adapted hash=173d166dc292]
     public static func StatsPoster(
         ctx: any RenderContext,
         stats: StatsPosterInput,
@@ -4945,7 +4945,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/storybook/footer.tsx#StoryFooter [status=adapted hash=ad4e8a5ba222]
+    // parity: tui/src/feature-plugins/system/storybook/footer.tsx#StoryFooter [status=adapted hash=5ba63d274935]
     public static func StoryFooter(
         ctx: any RenderContext,
         title: String,
@@ -4998,7 +4998,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/storybook/subcell-spinner.fixtures.ts#SUBCELL_SPINNERS [status=implemented hash=34896a149a51]
+    // parity: tui/src/feature-plugins/system/storybook/subcell-spinner.fixtures.ts#SUBCELL_SPINNERS [status=implemented hash=68a25297647a]
     public static let SUBCELL_SPINNERS: [SpinnerFixture] = {
         let perimeter = [0, 1, 3, 5, 7, 6, 4, 2]
         func braille(_ mask: Int) -> String {
@@ -5031,7 +5031,7 @@ public enum TUIFeaturePlugin {
         return out
     }()
 
-    // parity: tui/src/feature-plugins/system/storybook/one-cell-spinner.fixtures.ts#ONE_CELL_SPINNERS [status=implemented hash=f0b293805a99]
+    // parity: tui/src/feature-plugins/system/storybook/one-cell-spinner.fixtures.ts#ONE_CELL_SPINNERS [status=implemented hash=8d8dde8b4bff]
     public static let ONE_CELL_SPINNERS: [SpinnerFixture] = [
         SpinnerFixture(name: "Small toggle", description: "A small square opens and closes in an even rhythm.", motion: TUIPrimitive.WORK_SPINNERS["small-toggle"]!),
         SpinnerFixture(name: "Square toggle", description: "A larger square opens and closes at a slower pace.", motion: TUIPrimitive.WORK_SPINNERS["square-toggle"]!),
@@ -5188,7 +5188,7 @@ public enum TUIFeaturePlugin {
     }
 
     /// Renders the full diff viewer layout (header, optional file tree sidebar, patch cards or image previews, and footer).
-    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#DiffViewerContent [status=adapted hash=3c08eb458828]
+    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#DiffViewerContent [status=adapted hash=c27d5a4f4bf8]
     public static func DiffViewerContent(
         ctx: any RenderContext,
         props: DiffViewerContentProps,
@@ -5380,7 +5380,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/home/footer.tsx#default [status=adapted hash=df4dec35b8e1]
+    // parity: tui/src/feature-plugins/home/footer.tsx#default [status=adapted hash=57d2755d3e7e]
     public static let homeFooterPlugin = FeaturePluginModule(id: "opencode.home.footer") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "home.footer")) { ctx, input in
             let width: Int
@@ -5395,7 +5395,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/prompt/btw.tsx#default [status=adapted hash=dd53d390bf6d]
+    // parity: tui/src/feature-plugins/prompt/btw.tsx#default [status=adapted hash=546808382317]
     public static let promptBtwPlugin = FeaturePluginModule(id: "opencode.btw") { context in
         let offStatus = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "prompt.footer.status")) { ctx, input in
             let theme = context.host.theme()
@@ -5418,7 +5418,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/prompt/footer.tsx#default [status=adapted hash=1cb45d71988f]
+    // parity: tui/src/feature-plugins/prompt/footer.tsx#default [status=adapted hash=7c1b260fb8f3]
     public static let promptFooterPlugin = FeaturePluginModule(id: "opencode.prompt.footer") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "prompt.footer")) { ctx, input in
             let usage: String? = { if case .string(let s) = input["usage"] { return s }; return nil }()
@@ -5438,7 +5438,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/context.tsx#default [status=adapted hash=8a358eea56d2]
+    // parity: tui/src/feature-plugins/sidebar/context.tsx#default [status=adapted hash=7a8d2c866bb2]
     public static let sidebarContextPlugin = FeaturePluginModule(id: "opencode.sidebar.context") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
             let tokens: Int = { if case .int(let n) = input["tokens"] { return Int(n) }; return 0 }()
@@ -5456,7 +5456,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/footer.tsx#default [status=adapted hash=04c3121c4d47]
+    // parity: tui/src/feature-plugins/sidebar/footer.tsx#default [status=adapted hash=19aa1c6c6932]
     public static let sidebarFooterPlugin = FeaturePluginModule(id: "opencode.sidebar.footer") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.footer")) { ctx, input in
             let theme = context.host.theme()
@@ -5487,7 +5487,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/limit.tsx#default [status=adapted hash=9cd60581fc1d]
+    // parity: tui/src/feature-plugins/sidebar/limit.tsx#default [status=adapted hash=bea1e2800dcd]
     public static let sidebarLimitPlugin = FeaturePluginModule(id: "opencode.sidebar.limit") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
             let left: Double? = {
@@ -5512,7 +5512,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/mcp.tsx#default [status=adapted hash=54c424ffda54]
+    // parity: tui/src/feature-plugins/sidebar/mcp.tsx#default [status=adapted hash=77bb8dcd3be9]
     public static let sidebarMcpPlugin = FeaturePluginModule(id: "opencode.sidebar.mcp") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
             var servers: [SidebarMcpServer] = []
@@ -5532,7 +5532,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/sidebar/todo.tsx#default [status=adapted hash=b63838795b6b]
+    // parity: tui/src/feature-plugins/sidebar/todo.tsx#default [status=adapted hash=b6fa1eed33f3]
     public static let sidebarTodoPlugin = FeaturePluginModule(id: "opencode.sidebar.todo") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "sidebar.content")) { ctx, input in
             var todos: [TUIUtil.Todo] = []
@@ -5553,7 +5553,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#default [status=adapted hash=3e826ee10d46]
+    // parity: tui/src/feature-plugins/system/diff-viewer.tsx#default [status=adapted hash=f34d6eca6f64]
     public static let diffViewerPlugin = FeaturePluginModule(id: "opencode.diffs") { context in
         let offPanel = context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "session.panel")) { ctx, input in
             let width: Int = { if case .int(let w) = input["width"] { return Int(w) }; return 80 }()
@@ -5588,7 +5588,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/notifications.ts#default [status=adapted hash=219036bd0b67]
+    // parity: tui/src/feature-plugins/system/notifications.ts#default [status=adapted hash=a35ddc8a0fbc]
     public static let notificationsPlugin = FeaturePluginModule(id: "opencode.notifications") { context in
         let hub = TUIContext.useEvent()
         let toast = context.host.toast
@@ -5614,7 +5614,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/plugins.tsx#default [status=adapted hash=d52e6b0a996e]
+    // parity: tui/src/feature-plugins/system/plugins.tsx#default [status=adapted hash=f9770b64c917]
     public static let pluginsManagerPlugin = FeaturePluginModule(id: "opencode.plugins") { context in
         context.registerSlot(placement: TUIPluginHost.Placement(kind: .append, target: "app")) { ctx, input in
             if input["open"] == .bool(true) {
@@ -5630,7 +5630,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/stats.tsx#default [status=adapted hash=e9ec186fcb87]
+    // parity: tui/src/feature-plugins/system/stats.tsx#default [status=adapted hash=893b0bd4a10e]
     public static let statsPlugin = FeaturePluginModule(id: "opencode.stats") { context in
         let offRoute = try? context.registerRoute(TUIPluginHost.RegisteredRoute(name: "stats") { ctx, data in
             let width: Int = { if case .int(let w) = data["width"] { return Int(w) }; return 80 }()
@@ -5654,7 +5654,7 @@ public enum TUIFeaturePlugin {
         }
     }
 
-    // parity: tui/src/feature-plugins/system/storybook/index.tsx#default [status=adapted hash=a14f91e913ca]
+    // parity: tui/src/feature-plugins/system/storybook/index.tsx#default [status=adapted hash=cf2ac9de3d4e]
     public static let storybookPlugin = FeaturePluginModule(id: "opencode.storybook") { context in
         let offRoute = try? context.registerRoute(TUIPluginHost.RegisteredRoute(name: "storybook") { ctx, data in
             let theme = context.host.theme()

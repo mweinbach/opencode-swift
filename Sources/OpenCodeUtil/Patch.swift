@@ -4,7 +4,7 @@ public enum Patch {
         case last
     }
 
-    // parity: util/src/patch.ts#BoundaryError [status=implemented hash=4979cc508098]
+    // parity: util/src/patch.ts#BoundaryError [status=implemented hash=d8b10380018f]
     public struct BoundaryError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public let boundary: BoundaryKind
 
@@ -20,7 +20,7 @@ public enum Patch {
         public var description: String { message }
     }
 
-    // parity: util/src/patch.ts#InvalidHunkError [status=implemented hash=a82907c27988]
+    // parity: util/src/patch.ts#InvalidHunkError [status=implemented hash=d8180e6898fc]
     public struct InvalidHunkError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public let line: String
         public let lineNumber: Int
@@ -88,7 +88,7 @@ public enum Patch {
         }
     }
 
-    // parity: util/src/patch.ts#Hunk [status=implemented hash=90ab15ba6572]
+    // parity: util/src/patch.ts#Hunk [status=implemented hash=b6a99b2507b7]
     public enum Hunk: Equatable, Hashable, Sendable {
         case add(path: String, contents: String)
         case delete(path: String)

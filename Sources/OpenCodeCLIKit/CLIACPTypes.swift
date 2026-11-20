@@ -1730,7 +1730,7 @@ public enum CLIACP {
     // MARK: - 1. Errors (`packages/cli/src/acp/error.ts`)
 
     public enum Errors {
-        // parity: cli/src/acp/error.ts#SessionNotFoundError [status=implemented hash=1f69087e1aa7]
+        // parity: cli/src/acp/error.ts#SessionNotFoundError [status=implemented hash=3a0058cf44c3]
         public struct SessionNotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPSessionNotFoundError"
             public let sessionId: String
@@ -1740,7 +1740,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#SessionDirectoryMismatchError [status=implemented hash=fcaf7c5f24d1]
+        // parity: cli/src/acp/error.ts#SessionDirectoryMismatchError [status=implemented hash=7eb12a02e6a1]
         public struct SessionDirectoryMismatchError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPSessionDirectoryMismatchError"
             public let sessionId: String
@@ -1752,7 +1752,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidConfigOptionError [status=implemented hash=67219d62d053]
+        // parity: cli/src/acp/error.ts#InvalidConfigOptionError [status=implemented hash=ac8ca557fa0c]
         public struct InvalidConfigOptionError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidConfigOptionError"
             public let configId: String
@@ -1762,7 +1762,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidModelError [status=implemented hash=bcbd51464c3d]
+        // parity: cli/src/acp/error.ts#InvalidModelError [status=implemented hash=daf1cfab6a1f]
         public struct InvalidModelError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidModelError"
             public let modelId: String
@@ -1774,7 +1774,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidEffortError [status=implemented hash=2b98a9204083]
+        // parity: cli/src/acp/error.ts#InvalidEffortError [status=implemented hash=8168ca89898b]
         public struct InvalidEffortError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidEffortError"
             public let effort: String
@@ -1784,7 +1784,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidModeError [status=implemented hash=fe34d9e4f116]
+        // parity: cli/src/acp/error.ts#InvalidModeError [status=implemented hash=69591bb4e253]
         public struct InvalidModeError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidModeError"
             public let mode: String
@@ -1794,7 +1794,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidAdditionalDirectoryError [status=implemented hash=dd5b9896c72f]
+        // parity: cli/src/acp/error.ts#InvalidAdditionalDirectoryError [status=implemented hash=e567bed9d469]
         public struct InvalidAdditionalDirectoryError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidAdditionalDirectoryError"
             public let directory: String
@@ -1804,14 +1804,14 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#AuthRequiredError [status=implemented hash=c332ff99686e]
+        // parity: cli/src/acp/error.ts#AuthRequiredError [status=implemented hash=97414210dcf1]
         public struct AuthRequiredError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPAuthRequiredError"
 
             public init() {}
         }
 
-        // parity: cli/src/acp/error.ts#UnknownAuthMethodError [status=implemented hash=66b40eafb996]
+        // parity: cli/src/acp/error.ts#UnknownAuthMethodError [status=implemented hash=dbbf42d900b8]
         public struct UnknownAuthMethodError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPUnknownAuthMethodError"
             public let methodId: String
@@ -1821,7 +1821,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#InvalidRequestError [status=implemented hash=5c35701eaa35]
+        // parity: cli/src/acp/error.ts#InvalidRequestError [status=implemented hash=dffd7126d6ae]
         public struct InvalidRequestError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPInvalidRequestError"
             public let message: String
@@ -1833,7 +1833,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#ServiceFailureError [status=implemented hash=e444da2bf7e8]
+        // parity: cli/src/acp/error.ts#ServiceFailureError [status=implemented hash=424d1b97ede5]
         public struct ServiceFailureError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPServiceFailureError"
             public let safeMessage: String
@@ -1847,14 +1847,14 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#ServerUnavailableError [status=implemented hash=7577060ccf26]
+        // parity: cli/src/acp/error.ts#ServerUnavailableError [status=implemented hash=abb196a21a9b]
         public struct ServerUnavailableError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPServerUnavailableError"
 
             public init() {}
         }
 
-        // parity: cli/src/acp/error.ts#CatalogNotReadyError [status=implemented hash=37eec7e47c8f]
+        // parity: cli/src/acp/error.ts#CatalogNotReadyError [status=implemented hash=f5d0753c6e9b]
         public struct CatalogNotReadyError: Swift.Error, Equatable, Hashable, Sendable, Codable {
             public static let tag = "ACPCatalogNotReadyError"
 
@@ -1875,7 +1875,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/error.ts#CatalogLoadError [status=implemented hash=ed245d47e44c]
+        // parity: cli/src/acp/error.ts#CatalogLoadError [status=implemented hash=bc7f1b4503bc]
         public struct CatalogLoadError: Swift.Error, Sendable {
             public static let tag = "ACPCatalogLoadError"
             public let cause: any Swift.Error & Sendable
@@ -1891,7 +1891,7 @@ public enum CLIACP {
             case load(CatalogLoadError)
         }
 
-        // parity: cli/src/acp/error.ts#Error [status=implemented hash=54bf127ad9c1]
+        // parity: cli/src/acp/error.ts#Error [status=implemented hash=4f888b5c5cc1]
         public enum ACPError: Swift.Error, Equatable, Hashable, Sendable {
             case sessionNotFound(SessionNotFoundError)
             case sessionDirectoryMismatch(SessionDirectoryMismatchError)
@@ -2086,7 +2086,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/child.ts#Event [status=implemented hash=80becddcf37b]
+        // parity: cli/src/acp/child.ts#Event [status=implemented hash=f0f4046384f0]
         public enum Event: Equatable, Hashable, Sendable, Codable {
             case update(SessionUpdate)
             case status(Status, error: StatusError? = nil)
@@ -2131,7 +2131,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/child.ts#Update [status=implemented hash=30af5a2f78fc]
+        // parity: cli/src/acp/child.ts#Update [status=implemented hash=48163924a663]
         public struct Update: Equatable, Hashable, Sendable, Codable {
             public let rootSessionId: String
             public let childSessionId: String
@@ -2305,7 +2305,7 @@ public enum CLIACP {
         // parity: cli/src/acp/compaction.ts#Tracked [status=implemented hash=bf5a1f97b094]
         public typealias Tracked = [String: Started]
 
-        // parity: cli/src/acp/compaction.ts#usesStandardUpdates [status=implemented hash=5877395bfad9]
+        // parity: cli/src/acp/compaction.ts#usesStandardUpdates [status=implemented hash=9692a859c1e6]
         public static func usesStandardUpdates(compaction: Bool, childUpdates: Bool, child: Bool) -> Bool {
             compaction && (!child || childUpdates)
         }
@@ -2374,7 +2374,7 @@ public enum CLIACP {
             )
         }
 
-        // parity: cli/src/acp/compaction.ts#replay [status=implemented hash=f12144e4b5fd]
+        // parity: cli/src/acp/compaction.ts#replay [status=implemented hash=96558f3ecfcb]
         public static func replay(
             message: SessionMessageSchema.Compaction,
             standardUpdates: Bool
@@ -2514,7 +2514,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/catalog.ts#builtinCommands [status=implemented hash=fadf857768ac]
+        // parity: cli/src/acp/catalog.ts#builtinCommands [status=implemented hash=ddbd5d5e8825]
         public static let builtinCommands: [String: BuiltinCommand] = [
             "compact": BuiltinCommand(description: "Compact the session", start: .compaction),
         ]
@@ -2587,7 +2587,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/config-option.ts#Change [status=implemented hash=7a76c88ab675]
+        // parity: cli/src/acp/config-option.ts#Change [status=implemented hash=c47b35ffe912]
         public enum Change: Equatable, Hashable, Sendable, Codable {
             case model(ModelSchema.Ref)
             case modeID(AgentSchema.ID)
@@ -2689,7 +2689,7 @@ public enum CLIACP {
             return list
         }
 
-        // parity: cli/src/acp/config-option.ts#resolveChange [status=implemented hash=192fbda36bcb]
+        // parity: cli/src/acp/config-option.ts#resolveChange [status=implemented hash=5fad13346da8]
         public static func resolveChange(
             _ catalog: CatalogStore.Catalog,
             selection: Selection,
@@ -2799,7 +2799,7 @@ public enum CLIACP {
     // MARK: - 7. Content Translation (`packages/cli/src/acp/content.ts`)
 
     public enum Content {
-        // parity: cli/src/acp/content.ts#PromptPart [status=implemented hash=e67aab78704e]
+        // parity: cli/src/acp/content.ts#PromptPart [status=implemented hash=8aa56d60f5c1]
         public enum PromptPart: Equatable, Hashable, Sendable, Codable {
             case text(text: String, synthetic: Bool? = nil, ignored: Bool? = nil)
             case file(url: String, filename: String? = nil, mime: String)
@@ -3167,7 +3167,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/tool.ts#pendingToolCall [status=implemented hash=ba608ad33c26]
+        // parity: cli/src/acp/tool.ts#pendingToolCall [status=implemented hash=511007931f8b]
         public static func pendingToolCall(
             toolCallId: String,
             toolName: String,
@@ -3186,7 +3186,7 @@ public enum CLIACP {
             )
         }
 
-        // parity: cli/src/acp/tool.ts#runningToolUpdate [status=implemented hash=c21a44898b12]
+        // parity: cli/src/acp/tool.ts#runningToolUpdate [status=implemented hash=d1d233c4e5a0]
         public static func runningToolUpdate(
             toolCallId: String,
             toolName: String,
@@ -3203,7 +3203,7 @@ public enum CLIACP {
             )
         }
 
-        // parity: cli/src/acp/tool.ts#completedToolUpdate [status=implemented hash=eabf7d53a46b]
+        // parity: cli/src/acp/tool.ts#completedToolUpdate [status=implemented hash=591c11609995]
         public static func completedToolUpdate(
             toolCallId: String,
             toolName: String,
@@ -3246,7 +3246,7 @@ public enum CLIACP {
             )
         }
 
-        // parity: cli/src/acp/tool.ts#errorToolUpdate [status=implemented hash=fc858086f523]
+        // parity: cli/src/acp/tool.ts#errorToolUpdate [status=implemented hash=c38f6a62ec13]
         public static func errorToolUpdate(
             toolCallId: String,
             toolName: String,
@@ -3614,7 +3614,7 @@ public enum CLIACP {
             }
         }
 
-        // parity: cli/src/acp/translate.ts#Output [status=implemented hash=175ef473b0d3]
+        // parity: cli/src/acp/translate.ts#Output [status=implemented hash=9a6e459d7eb2]
         public enum Output: Equatable, Sendable {
             case sessionUpdate(update: SessionUpdate, diff: ToolMapper.DiffSource? = nil)
             case childUpdate(update: Child.Update, diff: ToolMapper.DiffSource? = nil)

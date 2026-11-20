@@ -354,7 +354,7 @@ async function $vmResult(value) {
         }
     }
 
-    // parity: psychoscript/src/prelude/internal.ts#tryFastBoundaryOrJson [status=implemented hash=767bebe0ab2d]
+    // parity: psychoscript/src/prelude/internal.ts#tryFastBoundaryOrJson [status=implemented hash=d2fa72dbac15]
     public static func tryFastBoundaryOrJson(_ value: Value) -> JSONValue? {
         switch value {
         case .null: return .null

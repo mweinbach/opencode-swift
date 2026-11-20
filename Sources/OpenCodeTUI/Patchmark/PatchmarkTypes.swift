@@ -13,7 +13,7 @@ public enum BlockMathDelimiter: String, Equatable, Hashable, Sendable, Codable {
 }
 
 /// Parsed inline AST node produced by Patchmark's CommonMark + GFM + Math inline parser.
-// parity: patchmark/src/types.ts#InlineNode [status=implemented hash=3b283b941ea3]
+// parity: patchmark/src/types.ts#InlineNode [status=implemented hash=efb4d488c8dd]
 public indirect enum InlineNode: Equatable, Hashable, Sendable, Codable {
     case text(String)
     case strong([InlineNode])
@@ -74,7 +74,7 @@ public struct ListItemNode: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Parsed top-level or nested block payload.
-// parity: patchmark/src/types.ts#BlockKind [status=implemented hash=eb82f9ad8511]
+// parity: patchmark/src/types.ts#BlockKind [status=implemented hash=ccda3d925cde]
 public indirect enum BlockKind: Equatable, Hashable, Sendable, Codable {
     case paragraph(inlines: [InlineNode])
     case heading(level: HeadingLevel, inlines: [InlineNode])
@@ -165,7 +165,7 @@ public struct MarkdownBlock: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Minimal patch operation transforming the previous frame's block list into the new frame's blocks.
-// parity: patchmark/src/types.ts#BlockPatch [status=implemented hash=a7ed09f43143]
+// parity: patchmark/src/types.ts#BlockPatch [status=implemented hash=e9f81ff7eb9e]
 public enum BlockPatch: Equatable, Hashable, Sendable, Codable {
     case append(block: MarkdownBlock)
     case replace(id: Int, index: Int, block: MarkdownBlock)

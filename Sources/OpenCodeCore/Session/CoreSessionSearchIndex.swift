@@ -28,7 +28,7 @@ public enum SessionSearchIndex {
 
     /// Whether each message type's text is indexed. Exhaustive over `SessionMessageSchema.MessageType`: a new type
     /// fails to compile here until it is decided.
-    // parity: core/src/session/search-index.ts#MessageTypes [status=adapted hash=7cb05839ae36]
+    // parity: core/src/session/search-index.ts#MessageTypes [status=adapted hash=91586adcf096]
     public static func indexes(_ type: SessionMessageSchema.MessageType) -> Bool {
         switch type {
         case .user: return true
@@ -56,7 +56,7 @@ public enum SessionSearchIndex {
     // parity: core/src/session/search-index.ts#ChunkLimit [status=implemented hash=1d319925e253]
     public static let chunkLimit = 50
 
-    // parity: core/src/session/search-index.ts#State [status=implemented hash=e3427da7efb5]
+    // parity: core/src/session/search-index.ts#State [status=implemented hash=3fcb4336fe43]
     public struct State: Equatable, Hashable, Sendable, Codable {
         public enum Status: String, Equatable, Hashable, Sendable, Codable {
             case building
@@ -104,7 +104,7 @@ public enum SessionSearchIndex {
         }
     }
 
-    // parity: core/src/session/search-index.ts#Ensured [status=implemented hash=ddac89b4f72e]
+    // parity: core/src/session/search-index.ts#Ensured [status=implemented hash=0efd37baf710]
     public enum Ensured: Equatable, Sendable {
         case newer
         case unsupported(reason: String)
@@ -127,7 +127,7 @@ public enum SessionSearchIndex {
 
     /// Creates the index and its triggers, or recreates them when the version is older or an object is gone, and starts a
     /// build. An index from a newer version is left alone so two versions sharing a database don't keep rebuilding it.
-    // parity: core/src/session/search-index.ts#ensure [status=implemented hash=5e2850146633]
+    // parity: core/src/session/search-index.ts#ensure [status=implemented hash=8dbf80484bc5]
     public static func ensure(_ db: any SQLiteDatabase) throws -> Ensured {
         let objects = try db.query(
             "SELECT name FROM sqlite_master WHERE name GLOB 'session_search*' AND type IN ('table', 'view', 'trigger')",
@@ -191,7 +191,7 @@ public enum SessionSearchIndex {
     /// Indexes the next chunk of the build and advances the cursor in the same IMMEDIATE transaction, so concurrent
     /// servers share one cursor. Titles are indexed 50 at a time; messages also stop at `maxChunkBytes` of stored rows,
     /// the first always fitting. `skip` passes the next row without indexing it, for a row that fails on its own.
-    // parity: core/src/session/search-index.ts#buildChunk [status=implemented hash=0eef64fa57ea]
+    // parity: core/src/session/search-index.ts#buildChunk [status=implemented hash=bdcea2647c72]
     public static func buildChunk(_ db: any SQLiteDatabase, limit: Int? = nil, skip: Bool = false) throws -> ChunkResult {
         let limit = limit ?? chunkLimit
         return try immediate(db) {
@@ -272,7 +272,7 @@ public enum SessionSearchIndex {
     }
 
     /// Marks the build failed for this version, so it is not retried until the version changes or `retry`.
-    // parity: core/src/session/search-index.ts#fail [status=implemented hash=b238e806e65c]
+    // parity: core/src/session/search-index.ts#fail [status=implemented hash=8fa56bc7987b]
     public static func fail(_ db: any SQLiteDatabase, error: String) throws {
         try update(db) { state in
             guard state.status == .building else { return nil }
@@ -285,7 +285,7 @@ public enum SessionSearchIndex {
 
     /// Restarts a failed build from the beginning: rows skipped just before it failed were probably victims of the same
     /// failure. Reindexing replaces existing entries, so the index stays usable meanwhile.
-    // parity: core/src/session/search-index.ts#retry [status=implemented hash=bee5619226d8]
+    // parity: core/src/session/search-index.ts#retry [status=implemented hash=3a5fc561c7b9]
     public static func retry(_ db: any SQLiteDatabase) throws {
         try update(db) { state in
             guard state.status == .failed else { return nil }
@@ -314,7 +314,7 @@ public enum SessionSearchIndex {
     }
 
     /// A state this version wrote and can read.
-    // parity: core/src/session/search-index.ts#current [status=implemented hash=5110492fec54]
+    // parity: core/src/session/search-index.ts#current [status=implemented hash=75f0059af12b]
     public static func current(_ state: StoredState?) -> State? {
         guard case .state(let value) = state, value.version == version else { return nil }
         return value
@@ -878,7 +878,7 @@ public enum SessionSearchBuild {
         }
     }
 
-    // parity: core/src/session/search-build.ts#layer [status=adapted hash=9278df9054d2]
+    // parity: core/src/session/search-build.ts#layer [status=adapted hash=02484e225e24]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let database = deps.get(CoreDatabaseStore.Service.serviceKey, as: (any CoreDatabaseStore.Interface).self)
         let db: any SQLiteDatabase
@@ -890,7 +890,7 @@ public enum SessionSearchBuild {
         return LayerNode.Output([Service.serviceKey: Service(db: db) as any Interface])
     }
 
-    // parity: core/src/session/search-build.ts#node [status=adapted hash=b827f9c24490]
+    // parity: core/src/session/search-build.ts#node [status=adapted hash=17762735ab32]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer,

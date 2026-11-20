@@ -55,7 +55,7 @@ public enum SessionTurn {
     }
 
     /// Milliseconds from the prompt that started the turn until `message` completed, or `0` while it runs.
-    // parity: util/src/session-turn.ts#duration [status=implemented hash=84e6c34c7bbc]
+    // parity: util/src/session-turn.ts#duration [status=implemented hash=02010bb60095]
     public static func duration(
         _ messages: [Message],
         message: Message,
@@ -73,7 +73,7 @@ public enum SessionTurn {
     }
 
     /// Output and reasoning tokens per second while the provider streamed them, or `nil` until every step has streamed.
-    // parity: util/src/session-turn.ts#tokensPerSecond [status=implemented hash=9750cd17b945]
+    // parity: util/src/session-turn.ts#tokensPerSecond [status=implemented hash=0b606a3b3cee]
     public static func tokensPerSecond(
         _ messages: [Message],
         message: Message,

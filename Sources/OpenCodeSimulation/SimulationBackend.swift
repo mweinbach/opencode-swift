@@ -24,7 +24,7 @@ public enum Simulation {
     public static let modelsCatalogURL = "https://models.opencode.ai/experimental/v2.0/api.json"
 
     /// Builds `LayerNode.Replacements` overriding `LayerNodePlatform.httpClient` with the simulated network.
-    // parity: simulation/src/backend/index.ts#simulationReplacements [status=implemented hash=bfbc8279b35b]
+    // parity: simulation/src/backend/index.ts#simulationReplacements [status=implemented hash=579b0a4bcacf]
     public static func simulationReplacements(
         app: AppDescriptor,
         environment: any EnvironmentProviding = SystemEnvironment.shared,

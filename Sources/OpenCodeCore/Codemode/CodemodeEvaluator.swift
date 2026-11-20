@@ -118,7 +118,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#AccessorSlot [status=implemented hash=f6815c0f515e]
+    // parity: psychoscript/src/runtime/objects.ts#AccessorSlot [status=implemented hash=66e5a141210c]
     public struct AccessorSlot: Sendable {
         public var get: GetterHalf?
         public var set: SetterHalf?
@@ -831,7 +831,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/objects.ts#RuntimeNative [status=implemented hash=904d0daf81a5]
     public typealias RuntimeNative = Native
 
-    // parity: psychoscript/src/runtime/objects.ts#nativeRule [status=implemented hash=0b81db9d48a3]
+    // parity: psychoscript/src/runtime/objects.ts#nativeRule [status=implemented hash=4401dc343cdb]
     public static func nativeRule(_ fn: Native) -> Bool {
         fn.supportsCallback
     }
@@ -1054,7 +1054,7 @@ extension CodemodeLanguage {
         case rejected(Value)
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#GeneratorState [status=implemented hash=d44eedc2dcb9]
+    // parity: psychoscript/src/runtime/objects.ts#GeneratorState [status=implemented hash=9cd19fe30442]
     public enum GeneratorState: String, Equatable, Hashable, Sendable, Codable {
         case suspendedStart
         case suspendedYield
@@ -1151,7 +1151,7 @@ extension CodemodeLanguage {
         case entries
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#PositionSource [status=implemented hash=ce5644246d9e]
+    // parity: psychoscript/src/runtime/objects.ts#PositionSource [status=implemented hash=e288d6bb89d5]
     public enum PositionSource: Sendable {
         case array(Arr)
         case string(String)
@@ -2137,14 +2137,14 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#accessorLabel [status=implemented hash=1f37b674961b]
+    // parity: psychoscript/src/runtime/objects.ts#accessorLabel [status=implemented hash=4967726e3935]
     /// How display shows a program accessor in place of its value, in Node's words.
     public static func accessorLabel(_ slot: AccessorSlot) -> String {
         if slot.get != nil && slot.set != nil { return "[Getter/Setter]" }
         return slot.get != nil ? "[Getter]" : "[Setter]"
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#reads [status=adapted hash=1df4269b2308]
+    // parity: psychoscript/src/runtime/objects.ts#reads [status=adapted hash=c672b420ad79]
     /// The program getters a built-in reads ahead (see `withReads`), scoped to the task running the built-in instead of
     /// a module global. While a `withReads` body runs again after its getters were read, `table` has their values by
     /// receiver and key; inside `withReads` (`depth` > 0) a getter not in the table reads as `undefined` and is recorded
@@ -3007,7 +3007,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/operations.ts#operatorConversion [status=implemented hash=cc95b0f4c60a]
+    // parity: psychoscript/src/runtime/operations.ts#operatorConversion [status=implemented hash=7af6b6bced3d]
     public static func operatorConversion(_ op: BinaryOperator) -> Hint? {
         switch op {
         case .add: return .default
@@ -3190,7 +3190,7 @@ extension CodemodeLanguage {
         try resolveProperty(base, .string(key), builtins: builtins, node: node)
     }
 
-    // parity: psychoscript/src/runtime/operations.ts#writableReference [status=implemented hash=72e5f3ee17e4]
+    // parity: psychoscript/src/runtime/operations.ts#writableReference [status=implemented hash=33534f54d5cd]
     public static func writableReference(_ base: Value, _ key: PropertyKey, node: AstNode? = nil) throws -> Obj {
         guard case .object(let obj) = base else {
             throw typeError("Cannot set properties of \(describeValue(base)).", node: node)
@@ -3250,7 +3250,7 @@ extension CodemodeLanguage {
         case aggregateError = "AggregateError"
     }
 
-    // parity: psychoscript/src/runtime/intrinsics.ts#errorTypes [status=implemented hash=f77043a5e66d]
+    // parity: psychoscript/src/runtime/intrinsics.ts#errorTypes [status=implemented hash=095d8a6f1575]
     public static let errorTypes: [ErrorType] = ErrorType.allCases
 
     // parity: psychoscript/src/runtime/intrinsics.ts#isErrorType [status=implemented hash=5e0499c396d5]
@@ -3409,7 +3409,7 @@ extension CodemodeLanguage {
         Native(proto: builtins.Function, options: options)
     }
 
-    // parity: psychoscript/src/runtime/native.ts#fn [status=implemented hash=1ce0822c2748]
+    // parity: psychoscript/src/runtime/native.ts#fn [status=implemented hash=5f3dd095b24e]
     public static func nativeFn(_ builtins: Builtins, name: String, length: Int = 0, call: @escaping NativeCall) -> Native {
         Native(proto: builtins.Function, options: NativeOptions(name: name, length: length, call: call))
     }
@@ -3491,7 +3491,7 @@ extension CodemodeLanguage {
         return try await evaluator.callCallable(fn, thisValue: target, args: args, site: site)
     }
 
-    // parity: psychoscript/src/runtime/callback.ts#conversions [status=implemented hash=51c0b62a83d6]
+    // parity: psychoscript/src/runtime/callback.ts#conversions [status=implemented hash=a1369e3ebfe2]
     public static func conversions(_ hint: Hint, _ values: [Value], coerce: Bool = false) -> [Value] {
         values.map { val in
             let prim: Value = if case .object(let obj) = val { obj.toPrimitive(hint: hint) } else { val }
@@ -3915,7 +3915,7 @@ extension CodemodeLanguage {
             case syncThenable = "sync-thenable"
         }
 
-        // parity: psychoscript/src/host-function.ts#Options [status=implemented hash=ab551aec8544]
+        // parity: psychoscript/src/host-function.ts#Options [status=implemented hash=e22db77005cd]
         public struct Options: Sendable {
             public let type: CallType
             public let idempotent: Bool
@@ -4001,7 +4001,7 @@ extension CodemodeLanguage {
             }
         }
 
-        // parity: psychoscript/src/host-function.ts#fn [status=implemented hash=d1162b57f9fd]
+        // parity: psychoscript/src/host-function.ts#fn [status=implemented hash=95180b8368c9]
         public static func fn(
             _ run: @escaping @Sendable ([Value], Call, Builtins) async throws -> Value,
             options: Options = Options()
@@ -4016,7 +4016,7 @@ extension CodemodeLanguage {
             )
         }
 
-        // parity: psychoscript/src/host-function.ts#durableFn [status=implemented hash=b677a50290a1]
+        // parity: psychoscript/src/host-function.ts#durableFn [status=implemented hash=e74967b76b2d]
         public static func durableFn(
             start: @escaping @Sendable ([Value], Call) async throws -> JSONValue,
             wait: @escaping @Sendable (JSONValue, DurableCall, Builtins) async throws -> Value,
@@ -4025,7 +4025,7 @@ extension CodemodeLanguage {
             DurableFn(start: start, wait: wait, cancel: cancel)
         }
 
-        // parity: psychoscript/src/host-function.ts#namespace [status=implemented hash=eb3f2cbbbcd3]
+        // parity: psychoscript/src/host-function.ts#namespace [status=implemented hash=64d87709c204]
         public static func namespace(
             keys: @escaping @Sendable ([String]) throws -> [String],
             resolve: @escaping @Sendable ([String]) -> ResolvedTarget
@@ -4482,7 +4482,7 @@ extension CodemodeLanguage {
         case any
     }
 
-    // parity: psychoscript/src/scheduler.ts#Reaction [status=implemented hash=70139d708a75]
+    // parity: psychoscript/src/scheduler.ts#Reaction [status=implemented hash=a13895d1e73b]
     public struct Reaction: Sendable {
         public let onFulfilled: Value
         public let onRejected: Value
@@ -4601,7 +4601,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/scheduler.ts#Stop [status=implemented hash=a27e60d86df3]
+    // parity: psychoscript/src/scheduler.ts#Stop [status=implemented hash=725ce712050e]
     public enum Stop: Sendable {
         case done(Completion)
         case waitHost
@@ -5059,7 +5059,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/promises.ts#JobCall [status=implemented hash=d59d9344113b]
+    // parity: psychoscript/src/runtime/promises.ts#JobCall [status=implemented hash=bb03ff51d726]
     public struct JobCall: Sendable {
         public let callable: Callable
         public let args: [Value]
@@ -5078,7 +5078,7 @@ extension CodemodeLanguage {
         return (p, res, rej)
     }
 
-    // parity: psychoscript/src/runtime/promises.ts#react [status=implemented hash=d2c7adf3e693]
+    // parity: psychoscript/src/runtime/promises.ts#react [status=implemented hash=27fc80564313]
     public static func react(
         _ promise: PromiseObj,
         onFulfilled: Value,
@@ -7969,7 +7969,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/stdlib/url.ts#uriGlobal [status=implemented hash=e5dbf9e8dcbe]
+    // parity: psychoscript/src/stdlib/url.ts#uriGlobal [status=implemented hash=804f855de773]
     public static func uriGlobal(_ builtins: Builtins, _ name: String) -> Native {
         nativeFn(builtins, name: name, length: 1) { _, args, _, _ in
             let str = coerceToString(args.first ?? .undefined)
@@ -8564,7 +8564,7 @@ extension CodemodeLanguage {
         ))
     }
 
-    // parity: psychoscript/src/stdlib/web.ts#base64Global [status=implemented hash=83475bf15ec6]
+    // parity: psychoscript/src/stdlib/web.ts#base64Global [status=implemented hash=facf121722e7]
     public static func base64Global(_ builtins: Builtins, _ name: String) -> Native {
         nativeFn(builtins, name: name, length: 1) { _, args, _, _ in
             let str = coerceToString(args.first ?? .undefined)
@@ -8586,7 +8586,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/stdlib/web.ts#structuredCloneGlobal [status=implemented hash=813a5692f7f9]
+    // parity: psychoscript/src/stdlib/web.ts#structuredCloneGlobal [status=implemented hash=1b11a0c92d91]
     /// The clone reads program getters' values (read ahead in program code); each round starts a fresh copy.
     public static func structuredCloneGlobal(_ builtins: Builtins) -> Native {
         nativeFn(builtins, name: "structuredClone", length: 1) { _, args, _, eval in
@@ -9030,13 +9030,13 @@ extension CodemodeLanguage {
         ["Obj", "Arr", "ErrorObj", "DateObj", "RegExpObj", "MapObj", "SetObj", "URLObj", "URLSearchParamsObj", "HeadersObj", "Bytes", "PromiseObj", "GeneratorObj", "Fn"]
     }
 
-    // parity: psychoscript/src/snapshot/codec.ts#encode [status=implemented hash=c9658861ddd5]
+    // parity: psychoscript/src/snapshot/codec.ts#encode [status=implemented hash=a8fd9070896c]
     public static func encodeSnapshotValues(_ roots: [Value], env: EncodeEnv = EncodeEnv()) throws -> (roots: [Encoded], records: [SnapshotRecord]) {
         let encoded = try roots.map { try toJsonValue($0, dropFunctions: !env.strict) ?? .null }
         return (encoded, [])
     }
 
-    // parity: psychoscript/src/snapshot/codec.ts#decode [status=implemented hash=a5985f50aabe]
+    // parity: psychoscript/src/snapshot/codec.ts#decode [status=implemented hash=02ae736b82a9]
     public static func decodeSnapshotValues(_ roots: [Encoded], records: [SnapshotRecord], env: DecodeEnv) throws -> [Value] {
         _ = records
         return try roots.map { try fromJson(env.builtins, $0) }
@@ -9216,7 +9216,7 @@ extension CodemodeLanguage {
         snapshotHash("swift-codemode:\(COMPILER_VERSION):\(OpNames.joined(separator: ",")):\(codecShape().joined(separator: ","))")
     }
 
-    // parity: psychoscript/src/snapshot.ts#captureVm [status=implemented hash=53d54c42e52a]
+    // parity: psychoscript/src/snapshot.ts#captureVm [status=implemented hash=0c61b3675cdc]
     public static func captureVm(_ vm: Vm, options: CaptureOptions = CaptureOptions()) throws -> (snapshot: Snapshot, lost: [Lost]) {
         let sources = vm.sources.map { src in
             let codes = compileSource(src)
@@ -10632,7 +10632,7 @@ extension CodemodeLanguage {
 
     // MARK: - VM, Interpreter, Driver, Execute & Runtime (vm.ts, interpreter.ts, driver.ts, execute.ts, runtime.ts)
 
-    // parity: psychoscript/src/vm.ts#Mode [status=adapted hash=da23ff16c148]
+    // parity: psychoscript/src/vm.ts#Mode [status=adapted hash=4fc8dc0bb686]
     public enum Mode: Int, Equatable, Hashable, Sendable, Codable {
         case normal = 0
         /// A class constructor run by `new`: hands the caller its result if that is an object, else its `this`.
@@ -11237,7 +11237,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/driver.ts#SUSPENDED [status=implemented hash=caf2ce43eeb3]
     public static let SUSPENDED = RuntimeSymbol("psychoscript.suspended")
 
-    // parity: psychoscript/src/runtime/driver.ts#parking [status=implemented hash=ca1c6ddd3128]
+    // parity: psychoscript/src/runtime/driver.ts#parking [status=implemented hash=bf9374c02386]
     /// For tests: `onPark` is called each time a run has nothing to do but wait on host calls in flight.
     public enum Parking {
         private static let hook = Mutex<(@Sendable () -> Void)?>(nil)
@@ -11346,7 +11346,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#SuspendError [status=implemented hash=52fb7d34a3c7]
+    // parity: psychoscript/src/runtime/execute.ts#SuspendError [status=implemented hash=ba85b002a90b]
     public final class SuspendError: Error, Sendable, CustomStringConvertible {
         public struct RunningCall: Equatable, Hashable, Sendable, Codable {
             public let key: String
@@ -11369,7 +11369,7 @@ extension CodemodeLanguage {
         public var description: String { message }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#Result [status=implemented hash=70988021f698]
+    // parity: psychoscript/src/runtime/execute.ts#Result [status=implemented hash=f234ed8b0673]
     public enum Result: Equatable, Sendable {
         case success(value: Json, warnings: [Diagnostic]?, logs: [String]?, truncated: Bool?, metadata: Json)
         case failure(error: Diagnostic, logs: [String]?, truncated: Bool?, metadata: Json)
@@ -11449,7 +11449,7 @@ extension CodemodeLanguage {
         case error(Diagnostic)
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#parseProgram [status=implemented hash=654a7cab3fa4]
+    // parity: psychoscript/src/runtime/execute.ts#parseProgram [status=implemented hash=e8c658ebab5f]
     public static func parseProgram(_ code: String) -> ParseProgramResult {
         do {
             var parser = try Parser(code)
@@ -11462,7 +11462,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#finishExecution [status=implemented hash=bfff75c793a4]
+    // parity: psychoscript/src/runtime/execute.ts#finishExecution [status=implemented hash=aa72945246ca]
     public static func finishExecution(_ outcome: Outcome) -> Result {
         switch outcome {
         case .result(let r): return r
@@ -11742,7 +11742,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#startProgram [status=implemented hash=dc548038ef8d]
+    // parity: psychoscript/src/runtime/execute.ts#startProgram [status=implemented hash=218b5f3090db]
     public static func startProgram(
         setup: Setup,
         code: String,
@@ -11752,7 +11752,7 @@ extension CodemodeLanguage {
         Running(setup: setup, code: code, bindings: bindings, runId: runId)
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#resumeProgram [status=implemented hash=e26769808338]
+    // parity: psychoscript/src/runtime/execute.ts#resumeProgram [status=implemented hash=d017a3de6242]
     public static func resumeProgram(setup: Setup, saved: Snapshot) throws -> Running {
         let checked = try validate(saved)
         guard checked.header.build == buildId() else {
@@ -11907,7 +11907,7 @@ extension CodemodeLanguage {
         return value
     }
 
-    // parity: psychoscript/src/runtime.ts#make [status=implemented hash=471f7ba64823]
+    // parity: psychoscript/src/runtime.ts#make [status=implemented hash=e0770818ccd3]
     public static func makeRuntime(_ options: RuntimeOptions = RuntimeOptions()) throws -> Runtime {
         let timeoutMs = try validateLimit("timeoutMs", options.limits.timeoutMs, minimum: 1)
         let maxOutputBytes = try validateLimit("maxOutputBytes", options.limits.maxOutputBytes, minimum: 0)

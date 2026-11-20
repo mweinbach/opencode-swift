@@ -16,7 +16,7 @@ public struct V1MigrationProgress: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Discriminated union representing V1 to V2 session history migration state.
-// parity: protocol/src/groups/migration.ts#V1MigrationStatus [status=implemented hash=8e28ece7e2ec]
+// parity: protocol/src/groups/migration.ts#V1MigrationStatus [status=implemented hash=620f4d90be3a]
 public enum V1MigrationStatus: Equatable, Hashable, Sendable, Codable {
     case required
     case completed
@@ -65,7 +65,7 @@ public enum V1MigrationStatus: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/migration.ts#MigrationGroup [status=implemented hash=f3dccad737f4]
+// parity: protocol/src/groups/migration.ts#MigrationGroup [status=implemented hash=707390d3bfb6]
 public let MigrationGroup = EndpointGroupDescriptor(
     identifier: "server.migration",
     title: "migration",
@@ -86,7 +86,7 @@ public let MigrationGroup = EndpointGroupDescriptor(
 
 // MARK: - 21. model.ts
 
-// parity: protocol/src/groups/model.ts#ModelGroup [status=implemented hash=988787f12f76]
+// parity: protocol/src/groups/model.ts#ModelGroup [status=implemented hash=8a3c33aa4988]
 public let ModelGroup = EndpointGroupDescriptor(
     identifier: "server.model",
     title: "model",
@@ -134,7 +134,7 @@ public let ModelGroup = EndpointGroupDescriptor(
 
 // MARK: - 22. permission.ts
 
-// parity: protocol/src/groups/permission.ts#makePermissionGroup [status=implemented hash=2555aacc2496]
+// parity: protocol/src/groups/permission.ts#makePermissionGroup [status=implemented hash=ae0759997fd4]
 public func makePermissionGroup(
     locationMiddleware: MiddlewareDescriptor,
     sessionLocationMiddleware: MiddlewareDescriptor
@@ -321,7 +321,7 @@ private let persistentPtyTerminalErrors: [ProtocolErrorRef] = [
     ProtocolErrorRef(ServiceUnavailableError.self),
 ]
 
-// parity: protocol/src/groups/persistent-pty.ts#PersistentPtyGroup [status=implemented hash=745d48925794]
+// parity: protocol/src/groups/persistent-pty.ts#PersistentPtyGroup [status=implemented hash=b69128a48107]
 public let PersistentPtyGroup = EndpointGroupDescriptor(
     identifier: "server.experimental",
     title: "persistentPty",
@@ -502,7 +502,7 @@ public let PersistentPtyGroup = EndpointGroupDescriptor(
 
 // MARK: - 24. plugin.ts
 
-// parity: protocol/src/groups/plugin.ts#PluginGroup [status=implemented hash=b0246fde58ac]
+// parity: protocol/src/groups/plugin.ts#PluginGroup [status=implemented hash=d0aa39db6b5d]
 public let PluginGroup = EndpointGroupDescriptor(
     identifier: "server.plugin",
     title: "plugin",
@@ -577,7 +577,7 @@ public let PluginGroup = EndpointGroupDescriptor(
 
 // MARK: - 25. project.ts
 
-// parity: protocol/src/groups/project.ts#ProjectGroup [status=implemented hash=88aa847e1907]
+// parity: protocol/src/groups/project.ts#ProjectGroup [status=implemented hash=963b9dbf99b4]
 public let ProjectGroup = EndpointGroupDescriptor(
     identifier: "server.project",
     title: "project",
@@ -616,7 +616,7 @@ public let ProjectGroup = EndpointGroupDescriptor(
 
 // MARK: - 26. provider.ts
 
-// parity: protocol/src/groups/provider.ts#ProviderGroup [status=implemented hash=d16b9d24d823]
+// parity: protocol/src/groups/provider.ts#ProviderGroup [status=implemented hash=3c5d25d92ee3]
 public let ProviderGroup = EndpointGroupDescriptor(
     identifier: "server.provider",
     title: "provider",
@@ -684,7 +684,7 @@ public func hasPtyConnectTicketURL(_ urlString: String) -> Bool {
     ) && parsed.hasNonEmptyQueryValue(for: PTY_CONNECT_TICKET_QUERY)
 }
 
-// parity: protocol/src/groups/pty.ts#makePtyGroup [status=implemented hash=c40a7b721fab]
+// parity: protocol/src/groups/pty.ts#makePtyGroup [status=implemented hash=f5e28c9b4e01]
 public func makePtyGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGroupDescriptor {
     EndpointGroupDescriptor(
         identifier: "server.pty",
@@ -828,7 +828,7 @@ public func makePtyGroup(locationMiddleware: MiddlewareDescriptor) -> EndpointGr
 
 // MARK: - 28. reference.ts
 
-// parity: protocol/src/groups/reference.ts#ReferenceGroup [status=implemented hash=99dce7662f29]
+// parity: protocol/src/groups/reference.ts#ReferenceGroup [status=implemented hash=49d2f2cfd85b]
 public let ReferenceGroup = EndpointGroupDescriptor(
     identifier: "server.reference",
     title: "reference",
@@ -852,7 +852,7 @@ public let ReferenceGroup = EndpointGroupDescriptor(
 
 // MARK: - 29. rpc.ts
 
-// parity: protocol/src/groups/rpc.ts#RpcInput [status=implemented hash=f25c74154948]
+// parity: protocol/src/groups/rpc.ts#RpcInput [status=implemented hash=9bd342a004c9]
 public struct RpcInput: Equatable, Hashable, Sendable, Codable {
     public let input: JSONValue?
 
@@ -861,7 +861,7 @@ public struct RpcInput: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/rpc.ts#RpcOutput [status=implemented hash=508b71164b6f]
+// parity: protocol/src/groups/rpc.ts#RpcOutput [status=implemented hash=5e1117b5e18f]
 public struct RpcOutput: Equatable, Hashable, Sendable, Codable {
     public let output: JSONValue?
 
@@ -870,7 +870,7 @@ public struct RpcOutput: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/rpc.ts#RpcGroup [status=implemented hash=a1695460d294]
+// parity: protocol/src/groups/rpc.ts#RpcGroup [status=implemented hash=115a5e27c7b9]
 public let RpcGroup = EndpointGroupDescriptor(
     identifier: "server.rpc",
     title: "rpc",
@@ -903,7 +903,7 @@ public let RpcGroup = EndpointGroupDescriptor(
 
 // MARK: - 30. server.ts
 
-// parity: protocol/src/groups/server.ts#ServerInfo [status=implemented hash=68f7d47f4be4]
+// parity: protocol/src/groups/server.ts#ServerInfo [status=implemented hash=c6ebfdcb47d6]
 public struct ServerInfo: Equatable, Hashable, Sendable, Codable {
     public struct Paths: Equatable, Hashable, Sendable, Codable {
         public let tmp: String
@@ -948,7 +948,7 @@ public struct ServerInfo: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/server.ts#PairingCode [status=implemented hash=14360c5caa93]
+// parity: protocol/src/groups/server.ts#PairingCode [status=implemented hash=17ad15e4427c]
 public struct PairingCode: Equatable, Hashable, Sendable, Codable {
     public let code: String
     public let expiresIn: Int
@@ -964,7 +964,7 @@ public struct PairingCode: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/server.ts#PairingSession [status=implemented hash=de19bed760dc]
+// parity: protocol/src/groups/server.ts#PairingSession [status=implemented hash=1994da0de094]
 public struct PairingSession: Equatable, Hashable, Sendable, Codable {
     public let token: String
 
@@ -983,7 +983,7 @@ public func isPairingConnectURL(_ urlString: String) -> Bool {
     return matchesSingleSegmentTemplate(pathname: parsed.pathname, prefix: "/auth/connect/", suffix: "")
 }
 
-// parity: protocol/src/groups/server.ts#ServerGroup [status=implemented hash=bebe0377553f]
+// parity: protocol/src/groups/server.ts#ServerGroup [status=implemented hash=9c218e195d0f]
 public let ServerGroup = EndpointGroupDescriptor(
     identifier: "server.server",
     title: "server",
@@ -1028,7 +1028,7 @@ public let ServerGroup = EndpointGroupDescriptor(
 // MARK: - 31. session.ts
 
 /// Experimental: `session.inbox.list` response for clients opting into `experimental-media-uri`.
-// parity: protocol/src/groups/session.ts#SessionMediaInboxResponse [status=implemented hash=b8d506d49c7e]
+// parity: protocol/src/groups/session.ts#SessionMediaInboxResponse [status=implemented hash=6254b169c91a]
 public struct SessionMediaInboxResponse: Equatable, Hashable, Sendable, Codable {
     public let data: [JSONValue]
 
@@ -1090,7 +1090,7 @@ public enum SessionParentFilter: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Query parameters for `GET /api/session` (`SessionsQuery`).
-// parity: protocol/src/groups/session.ts#SessionsQuery [status=implemented hash=a4dbb0b17e9c]
+// parity: protocol/src/groups/session.ts#SessionsQuery [status=implemented hash=285eb9af7cc7]
 public struct SessionsQuery: Equatable, Hashable, Sendable, Codable {
     public let limit: Int?
     public let order: ProtocolSortOrder?
@@ -1130,7 +1130,7 @@ private let instructionEntryValueTooLargeErrorRef = ProtocolErrorRef(
     httpStatusCode: 413
 )
 
-// parity: protocol/src/groups/session.ts#makeSessionGroup [status=implemented hash=222e78c497b7]
+// parity: protocol/src/groups/session.ts#makeSessionGroup [status=implemented hash=ee2b8f824128]
 public func makeSessionGroup(
     sessionLocationMiddleware: MiddlewareDescriptor,
     formLocationMiddleware: MiddlewareDescriptor
@@ -1838,7 +1838,7 @@ public func makeSessionGroup(
 
 // MARK: - 32. shell.ts
 
-// parity: protocol/src/groups/shell.ts#ShellGroup [status=implemented hash=55ac8f60a5bb]
+// parity: protocol/src/groups/shell.ts#ShellGroup [status=implemented hash=505052a0d20c]
 public let ShellGroup = EndpointGroupDescriptor(
     identifier: "server.shell",
     title: "shell",
@@ -1931,7 +1931,7 @@ public let ShellGroup = EndpointGroupDescriptor(
 
 // MARK: - 33. skill.ts
 
-// parity: protocol/src/groups/skill.ts#SkillGroup [status=implemented hash=02137f0c62e4]
+// parity: protocol/src/groups/skill.ts#SkillGroup [status=implemented hash=79897ac00cec]
 public let SkillGroup = EndpointGroupDescriptor(
     identifier: "server.skill",
     title: "skill",
@@ -1955,7 +1955,7 @@ public let SkillGroup = EndpointGroupDescriptor(
 
 // MARK: - 34. usage.ts
 
-// parity: protocol/src/groups/usage.ts#UsageGroup [status=implemented hash=20fbe3a3d17a]
+// parity: protocol/src/groups/usage.ts#UsageGroup [status=implemented hash=2e919d2404ce]
 public let UsageGroup = EndpointGroupDescriptor(
     identifier: "server.usage",
     title: "usage",
@@ -1981,7 +1981,7 @@ public let UsageGroup = EndpointGroupDescriptor(
 
 // MARK: - 35. vcs.ts
 
-// parity: protocol/src/groups/vcs.ts#VcsInitNotSupportedError [status=implemented hash=d6fc64421433]
+// parity: protocol/src/groups/vcs.ts#VcsInitNotSupportedError [status=implemented hash=a551b6fd2e6c]
 public struct VcsInitNotSupportedError: ProtocolError {
     public static let tag = "VcsInitNotSupportedError"
     public static let httpStatusCode = 501
@@ -2013,7 +2013,7 @@ public struct VcsInitNotSupportedError: ProtocolError {
     }
 }
 
-// parity: protocol/src/groups/vcs.ts#VcsGroup [status=implemented hash=28457bc4a3bb]
+// parity: protocol/src/groups/vcs.ts#VcsGroup [status=implemented hash=12473a3c1653]
 public let VcsGroup = EndpointGroupDescriptor(
     identifier: "server.vcs",
     title: "vcs",
@@ -2124,13 +2124,13 @@ public let VcsGroup = EndpointGroupDescriptor(
 
 // MARK: - 36. voice.ts
 
-// parity: protocol/src/groups/voice.ts#VoiceTransportType [status=implemented hash=66736ceb8281]
+// parity: protocol/src/groups/voice.ts#VoiceTransportType [status=implemented hash=bd78489826e5]
 public enum VoiceTransportType: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case webrtc
     case websocket
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceModel [status=implemented hash=7faec1da7329]
+// parity: protocol/src/groups/voice.ts#VoiceModel [status=implemented hash=abc9bf5a99e3]
 public struct VoiceModel: Equatable, Hashable, Sendable, Codable {
     public let model: String
     public let provider: String
@@ -2145,7 +2145,7 @@ public struct VoiceModel: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceWebRTCTransportInput [status=implemented hash=9d26ff9e5d4f]
+// parity: protocol/src/groups/voice.ts#VoiceWebRTCTransportInput [status=implemented hash=d04dfe2643a2]
 public struct VoiceWebRTCTransportInput: Equatable, Hashable, Sendable, Codable {
     public let type: String
     public let sdp: String
@@ -2184,7 +2184,7 @@ public struct VoiceWebRTCTransportInput: Equatable, Hashable, Sendable, Codable 
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceWebSocketTransportInput [status=implemented hash=83beef344d4c]
+// parity: protocol/src/groups/voice.ts#VoiceWebSocketTransportInput [status=implemented hash=6d3fac7efdfd]
 public struct VoiceWebSocketTransportInput: Equatable, Hashable, Sendable, Codable {
     public let type: String
 
@@ -2215,7 +2215,7 @@ public struct VoiceWebSocketTransportInput: Equatable, Hashable, Sendable, Codab
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceTransportInput [status=implemented hash=af447a72775e]
+// parity: protocol/src/groups/voice.ts#VoiceTransportInput [status=implemented hash=42405ff484b8]
 public enum VoiceTransportInput: Equatable, Hashable, Sendable, Codable {
     case webrtc(VoiceWebRTCTransportInput)
     case websocket(VoiceWebSocketTransportInput)
@@ -2243,7 +2243,7 @@ public enum VoiceTransportInput: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceWebRTCTransport [status=implemented hash=ec4155be63fe]
+// parity: protocol/src/groups/voice.ts#VoiceWebRTCTransport [status=implemented hash=9f9e0efddd95]
 public struct VoiceWebRTCTransport: Equatable, Hashable, Sendable, Codable {
     public let type: String
     public let sdp: String
@@ -2278,7 +2278,7 @@ public struct VoiceWebRTCTransport: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceWebSocketTransport [status=implemented hash=a53b34283b47]
+// parity: protocol/src/groups/voice.ts#VoiceWebSocketTransport [status=implemented hash=a6dd731c3cd1]
 public struct VoiceWebSocketTransport: Equatable, Hashable, Sendable, Codable {
     public let type: String
     public let url: String
@@ -2321,7 +2321,7 @@ public struct VoiceWebSocketTransport: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceTransport [status=implemented hash=625a072b22c5]
+// parity: protocol/src/groups/voice.ts#VoiceTransport [status=implemented hash=07f4c3eeee0e]
 public enum VoiceTransport: Equatable, Hashable, Sendable, Codable {
     case webrtc(VoiceWebRTCTransport)
     case websocket(VoiceWebSocketTransport)
@@ -2349,7 +2349,7 @@ public enum VoiceTransport: Equatable, Hashable, Sendable, Codable {
     }
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceGroup [status=implemented hash=ed6a58e0fedf]
+// parity: protocol/src/groups/voice.ts#VoiceGroup [status=implemented hash=fa67789856c3]
 public let VoiceGroup = EndpointGroupDescriptor(
     identifier: "server.voice",
     title: "voice",
@@ -2392,7 +2392,7 @@ public let VoiceGroup = EndpointGroupDescriptor(
 
 // MARK: - 37. websearch.ts
 
-// parity: protocol/src/groups/websearch.ts#WebSearchGroup [status=implemented hash=1a88069fc991]
+// parity: protocol/src/groups/websearch.ts#WebSearchGroup [status=implemented hash=6a7b5bb479dd]
 public let WebSearchGroup = EndpointGroupDescriptor(
     identifier: "server.websearch",
     title: "websearch",
@@ -2435,7 +2435,7 @@ public let WebSearchGroup = EndpointGroupDescriptor(
 
 // MARK: - 38. worktree.ts
 
-// parity: protocol/src/groups/worktree.ts#WorktreeError [status=implemented hash=f980a02f5d9b]
+// parity: protocol/src/groups/worktree.ts#WorktreeError [status=implemented hash=8c48bf2ab5d4]
 public struct WorktreeError: ProtocolError {
     public static let tag = "WorktreeError"
     public static let httpStatusCode = 400
@@ -2492,7 +2492,7 @@ public struct WorktreeError: ProtocolError {
     }
 }
 
-// parity: protocol/src/groups/worktree.ts#WorktreeGroup [status=implemented hash=b919fbc0fa18]
+// parity: protocol/src/groups/worktree.ts#WorktreeGroup [status=implemented hash=04d191de646c]
 public let WorktreeGroup = EndpointGroupDescriptor(
     identifier: "server.worktree",
     title: "worktree",

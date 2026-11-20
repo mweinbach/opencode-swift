@@ -40,7 +40,7 @@ extension TUIRoutes {
     ///   - status: `data.session.status(id)`.
     ///   - parentID: `data.session.get(id)?.parentID`.
     ///   - shellSessionIDs: `metadata.sessionID` of every shell in `data.shell.list(location)`.
-    // parity: tui/src/routes/session/composer/tabs.ts#busyCounts [status=adapted hash=1493376a2e8b]
+    // parity: tui/src/routes/session/composer/tabs.ts#busyCounts [status=adapted hash=5ceb65bdfbd7]
     public static func busyCounts(
         sessionID: String,
         jobs: [JobSchema.Info],
@@ -63,7 +63,7 @@ extension TUIRoutes {
     }
 
     /// The tab the picker opens on when nothing asks for one: the first that has something running, else Subagents.
-    // parity: tui/src/routes/session/composer/tabs.ts#busyTab [status=implemented hash=408d5197e2de]
+    // parity: tui/src/routes/session/composer/tabs.ts#busyTab [status=implemented hash=c62a4e5d3087]
     public static func busyTab(_ input: BusyCounts) -> String {
         if input.scripts > 0 { return "scripts" }
         if input.subagents > 0 { return "subagents" }
@@ -162,7 +162,7 @@ extension TUIRoutes {
         }
     }
 
-    // parity: tui/src/routes/session/composer/tabs.ts#createComposerTabs [status=adapted hash=22dd25133a0f]
+    // parity: tui/src/routes/session/composer/tabs.ts#createComposerTabs [status=adapted hash=19605edd18f7]
     public static func createComposerTabs(open: Bool = false, defaultTab: String? = nil) -> ComposerTabs {
         ComposerTabs(open: open, defaultTab: defaultTab)
     }
@@ -257,7 +257,7 @@ extension TUIRoutes {
 
     /// Builds the Scripts tab rows: each running script's first line of code and its elapsed time. Labels scan the
     /// transcript, so the caller passes `messages` only while the tab shows.
-    // parity: tui/src/routes/session/composer/scripts-tab.tsx#ScriptsTab [status=adapted hash=9666db567929]
+    // parity: tui/src/routes/session/composer/scripts-tab.tsx#ScriptsTab [status=adapted hash=202aa4d7b8a4]
     public static func ScriptsTab(
         ctx: any RenderContext,
         sessionID: String,

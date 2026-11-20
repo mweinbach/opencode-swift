@@ -3,7 +3,7 @@ import OpenCodeUtil
 /// Cross-platform `.npmrc` configuration loader matching `packages/util/src/npm-config.ts`.
 public enum NpmConfig {
     /// Loads flat `.npmrc` configuration keys for `dir` plus `NPM_CONFIG_*` environment variables.
-    // parity: util/src/npm-config.ts#load [status=implemented hash=6bb1a540cdc1]
+    // parity: util/src/npm-config.ts#load [status=implemented hash=aa081a54307a]
     public static func load(
         dir: String,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -38,7 +38,7 @@ public enum NpmConfig {
     }
 
     /// Resolves the effective npm registry URL (trailing slash stripped), defaulting to `https://registry.npmjs.org`.
-    // parity: util/src/npm-config.ts#registry [status=implemented hash=0e9f0c2b125f]
+    // parity: util/src/npm-config.ts#registry [status=implemented hash=5ecd2814387e]
     public static func registry(
         dir: String,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -337,7 +337,7 @@ public enum NpmPlatform {
         }
     }
 
-    // parity: util/src/npm.ts#node [status=implemented hash=677b73ca514c]
+    // parity: util/src/npm.ts#node [status=implemented hash=abb06ef83989]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

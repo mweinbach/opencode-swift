@@ -161,7 +161,7 @@ extension Merman {
         )
     }
 
-    // parity: merman/src/palette.ts#resolveOpenCodeDiagramPalette [status=implemented hash=2a8ed4f79259]
+    // parity: merman/src/palette.ts#resolveOpenCodeDiagramPalette [status=implemented hash=05e1c6201e7c]
     public static func resolveOpenCodeDiagramPalette(
         theme: ResolvedTheme,
         mode: Mode

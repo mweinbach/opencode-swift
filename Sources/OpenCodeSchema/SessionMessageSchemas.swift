@@ -22,7 +22,7 @@ public enum PromptSchema {
     }
 
     /// Origin of an attached file (`Prompt.FileSource`).
-    // parity: schema/src/prompt.ts#FileSource [status=implemented hash=1c90a4b010c8]
+    // parity: schema/src/prompt.ts#FileSource [status=implemented hash=7018d41c8634]
     public enum FileSource: Equatable, Hashable, Sendable, Codable {
         case inline
         case uri(String)
@@ -70,7 +70,7 @@ public enum PromptSchema {
     }
 
     /// Validated standard RFC 4648 base64 string (`Prompt.Base64`).
-    // parity: schema/src/prompt.ts#Base64 [status=implemented hash=8f5990fcdf8d]
+    // parity: schema/src/prompt.ts#Base64 [status=implemented hash=b505ec0e2e82]
     public struct Base64: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -169,7 +169,7 @@ public enum PromptSchema {
     }
 
     /// `media:` followed by a 64-character lowercase hex SHA-256 digest (`Prompt.MediaRef`).
-    // parity: schema/src/prompt.ts#MediaRef [status=implemented hash=c46defebcb02]
+    // parity: schema/src/prompt.ts#MediaRef [status=implemented hash=05a4c4addf2b]
     public struct MediaRef: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -253,7 +253,7 @@ public enum PromptSchema {
     }
 
     /// Union of inline `FileAttachment` and server-stored `MediaFileAttachment` (`Prompt.Attachment`).
-    // parity: schema/src/prompt.ts#Attachment [status=implemented hash=160b471f03c0]
+    // parity: schema/src/prompt.ts#Attachment [status=implemented hash=992c01539f95]
     public enum Attachment: Equatable, Hashable, Sendable, Codable {
         case file(FileAttachment)
         case media(MediaFileAttachment)
@@ -575,7 +575,7 @@ public enum SessionMessageSchema {
     }
 
     /// Branded message identifier (`msg_<26 ascending chars>`, `Session.Message.ID`).
-    // parity: schema/src/session-message.ts#ID [status=implemented hash=f1ffc166df74]
+    // parity: schema/src/session-message.ts#ID [status=implemented hash=82dde93f309d]
     public struct ID: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -624,7 +624,7 @@ public enum SessionMessageSchema {
     }
 
     /// Provider-owned replay data echoed back verbatim (`Session.Message.Native`).
-    // parity: schema/src/session-message.ts#Native [status=implemented hash=62dad7e6d52e]
+    // parity: schema/src/session-message.ts#Native [status=implemented hash=98a48f4889fe]
     public typealias Native = [String: JSONValue]
 
     /// Agent switch message (`type: "agent-switched"`).
@@ -1663,7 +1663,7 @@ public enum SessionMessageSchema {
     }
 
     /// Wire-encoded form of `AssistantContent` (timestamps encoded as epoch milliseconds).
-    // parity: schema/src/session-message.ts#AssistantContentEncoded [status=implemented hash=865802ca27d4]
+    // parity: schema/src/session-message.ts#AssistantContentEncoded [status=implemented hash=74ce41f814d8]
     public typealias AssistantContentEncoded = AssistantContent
 
     /// Scheduled retry information attached to an assistant step (`Session.Message.Assistant.Retry`).
@@ -2072,7 +2072,7 @@ public enum SessionMessageSchema {
     }
 
     /// Discriminated union of compaction messages (`status`: `running`, `completed`, `failed`).
-    // parity: schema/src/session-message.ts#Compaction [status=implemented hash=d35ff7c56ba4]
+    // parity: schema/src/session-message.ts#Compaction [status=implemented hash=c8d646c01e3c]
     public enum Compaction: Equatable, Hashable, Sendable, Codable {
         case running(CompactionRunning)
         case completed(CompactionCompleted)
@@ -2197,7 +2197,7 @@ public enum SessionMessageSchema {
     }
 
     /// Canonical projected session message union (`Session.Message.Info`).
-    // parity: schema/src/session-message.ts#Info [status=implemented hash=1adbf7df9313]
+    // parity: schema/src/session-message.ts#Info [status=implemented hash=b4d8cc5306e4]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         case agentSelected(AgentSelected)
         case modelSelected(ModelSelected)
@@ -2283,7 +2283,7 @@ public enum SessionMessageSchema {
     }
 
     /// Projected session message union supporting `experimental-media-uri` user attachments (`Session.Message.MediaInfo`).
-    // parity: schema/src/session-message.ts#MediaInfo [status=implemented hash=081d0bc13169]
+    // parity: schema/src/session-message.ts#MediaInfo [status=implemented hash=e043655f5b0a]
     public enum MediaInfo: Equatable, Hashable, Sendable, Codable {
         case agentSelected(AgentSelected)
         case modelSelected(ModelSelected)
@@ -2374,7 +2374,7 @@ public enum SessionMessageSchema {
 /// Durable session inbox items, payloads, and delivery modes (`packages/schema/src/session-inbox.ts`).
 public enum SessionInboxSchema {
     /// Inbox item delivery scheduling mode (`Session.Inbox.Delivery`).
-    // parity: schema/src/session-inbox.ts#Delivery [status=implemented hash=3fdc3e71dc1d]
+    // parity: schema/src/session-inbox.ts#Delivery [status=implemented hash=4583be2de0b9]
     public enum Delivery: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case steer
         case queue
@@ -2463,7 +2463,7 @@ public enum SessionInboxSchema {
     }
 
     /// Unenqueued inbox item union (`Session.Inbox.Item`).
-    // parity: schema/src/session-inbox.ts#Item [status=implemented hash=1b5e74f3a6c4]
+    // parity: schema/src/session-inbox.ts#Item [status=implemented hash=46637bf404e8]
     public enum Item: Equatable, Hashable, Sendable, Codable {
         case user(payload: UserPayload, delivery: Delivery)
         case synthetic(payload: SyntheticPayload, delivery: Delivery)
@@ -2827,7 +2827,7 @@ public enum SessionInboxSchema {
     }
 
     /// Discriminated union of enqueued inbox records (`Session.Inbox.Info`).
-    // parity: schema/src/session-inbox.ts#Info [status=implemented hash=d16a0c6c3ed8]
+    // parity: schema/src/session-inbox.ts#Info [status=implemented hash=e971c7c3ff62]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         case user(User)
         case synthetic(Synthetic)
@@ -2880,7 +2880,7 @@ public enum SessionInboxSchema {
     }
 
     /// Discriminated union of enqueued inbox records supporting `experimental-media-uri` (`Session.Inbox.MediaInfo`).
-    // parity: schema/src/session-inbox.ts#MediaInfo [status=implemented hash=6c4708a25136]
+    // parity: schema/src/session-inbox.ts#MediaInfo [status=implemented hash=71df6abbe038]
     public enum MediaInfo: Equatable, Hashable, Sendable, Codable {
         case user(MediaUser)
         case synthetic(Synthetic)

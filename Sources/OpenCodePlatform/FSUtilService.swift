@@ -231,13 +231,13 @@ public enum FSUtil {
         }
     }
 
-    // parity: util/src/fs-util.ts#FSUtil.layer [status=implemented hash=b6e589b996ad]
+    // parity: util/src/fs-util.ts#FSUtil.layer [status=implemented hash=8dda177497c9]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let fs = deps.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) ?? LocalFileSystem.shared
         return LayerNode.Output([Service.serviceKey: Service(fileSystem: fs)])
     }
 
-    // parity: util/src/fs-util.ts#FSUtil.node [status=implemented hash=a8936844d1ae]
+    // parity: util/src/fs-util.ts#FSUtil.node [status=implemented hash=e7d952e0cec6]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer,

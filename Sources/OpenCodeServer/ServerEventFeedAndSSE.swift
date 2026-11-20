@@ -17,7 +17,7 @@ public enum EventFeed {
     public static let SubscriberCapacity: Int = 4_096
 
     /// Raised on a subscriber stream when it falls behind by more than `capacity` frames.
-    // parity: server/src/event-feed.ts#SubscriberOverflowError [status=implemented hash=061d0ea145bf]
+    // parity: server/src/event-feed.ts#SubscriberOverflowError [status=implemented hash=1800cbeccb36]
     public struct SubscriberOverflowError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "EventFeed.SubscriberOverflow"
         public let capacity: Int
@@ -32,7 +32,7 @@ public enum EventFeed {
     }
 
     /// Raised when encoding a public event into an SSE frame throws.
-    // parity: server/src/event-feed.ts#EncodingError [status=implemented hash=a5afb6ef585f]
+    // parity: server/src/event-feed.ts#EncodingError [status=implemented hash=636b65a98743]
     public struct EncodingError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "EventFeed.EncodingError"
         public let eventID: EventSchema.ID
@@ -374,7 +374,7 @@ public enum EventFeed {
     }
 
     /// Constructs a live `EventFeed.Service` wired to an event observation source.
-    // parity: server/src/event-feed.ts#make [status=implemented hash=2a48dc5d1477]
+    // parity: server/src/event-feed.ts#make [status=implemented hash=9c2a67ba6793]
     public static func make(
         observe: @escaping @Sendable (@escaping CoreBus.Subscriber) -> CoreBus.Unsubscribe,
         options: Options? = nil
@@ -383,7 +383,7 @@ public enum EventFeed {
     }
 
     /// Layer node wiring `EventFeed.Service` to `CoreBus.Service`.
-    // parity: server/src/event-feed.ts#layer [status=adapted hash=de225996f350]
+    // parity: server/src/event-feed.ts#layer [status=adapted hash=3911bb7720b2]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, scope in
         guard let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self) else {
             let standalone = Service()

@@ -14,7 +14,7 @@ public enum CoreRipgrep {
     private static let maxSubmatches = 100
     private static let maxLineChars = 2_000
 
-    // parity: core/src/ripgrep.ts#Error [status=implemented hash=61445852947e]
+    // parity: core/src/ripgrep.ts#Error [status=implemented hash=354a201c0361]
     public struct RipgrepError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Ripgrep.Error"
         public let message: String
@@ -40,7 +40,7 @@ public enum CoreRipgrep {
         public var description: String { message }
     }
 
-    // parity: core/src/ripgrep.ts#InvalidPatternError [status=implemented hash=0a921f095fac]
+    // parity: core/src/ripgrep.ts#InvalidPatternError [status=implemented hash=6ad1d679af75]
     public struct InvalidPatternError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Ripgrep.InvalidPatternError"
         public let pattern: String
@@ -260,7 +260,7 @@ public enum CoreRipgrep {
             }
         }
 
-        // parity: core/src/ripgrep/binary.ts#RipgrepBinary.node [status=adapted hash=cdf387b3072e]
+        // parity: core/src/ripgrep/binary.ts#RipgrepBinary.node [status=adapted hash=3dc9704f2848]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -552,7 +552,7 @@ public enum CoreRipgrep {
         }
     }
 
-    // parity: core/src/ripgrep.ts#node [status=adapted hash=9976121974f7]
+    // parity: core/src/ripgrep.ts#node [status=adapted hash=51e5c738c1d0]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -635,7 +635,7 @@ public enum CoreFormatter {
     }
 
     /// Constructs the 26 built-in language formatters (`gofmt`, `prettier`, `biome`, `rustfmt`, `ruff`, etc.).
-    // parity: core/src/formatter/builtins.ts#make [status=implemented hash=3ed9473c2102]
+    // parity: core/src/formatter/builtins.ts#make [status=implemented hash=78f2399dd2cb]
     public static func make(_ input: MakeInput) -> [Info] {
         let fsUtil = FSUtil.Service(fileSystem: input.fileSystem)
 
@@ -940,7 +940,7 @@ public enum CoreFormatter {
         }
     }
 
-    // parity: core/src/formatter.ts#node [status=adapted hash=2300059c9143]
+    // parity: core/src/formatter.ts#node [status=adapted hash=3fcb8accf2a3]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

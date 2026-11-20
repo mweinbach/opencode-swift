@@ -95,7 +95,7 @@ public enum CoreCodemode {
     // MARK: - Execution Context (core/src/codemode/execution.ts)
 
     public enum Execution {
-        // parity: core/src/codemode/execution.ts#Service [status=adapted hash=bf5d489e91a7]
+        // parity: core/src/codemode/execution.ts#Service [status=adapted hash=4fd3c41fd608]
         public final class Service: Sendable {
             public let context: ToolSchema.Context
             public let permission: PermissionHook
@@ -192,7 +192,7 @@ public enum CoreCodemode {
             }
         }
 
-        // parity: core/src/codemode/catalog.ts#Summary [status=implemented hash=2696a01d5a14]
+        // parity: core/src/codemode/catalog.ts#Summary [status=implemented hash=bc0ca1687df8]
         public struct Summary: Equatable, Hashable, Sendable, Codable {
             public let total: Int
             public let namespaces: [NamespaceSummary]
@@ -262,7 +262,7 @@ public enum CoreCodemode {
             return "- \(namespace.name) (\(label))\(descSuffix)"
         }
 
-        // parity: core/src/codemode/catalog.ts#summarize [status=implemented hash=67e799b5c155]
+        // parity: core/src/codemode/catalog.ts#summarize [status=implemented hash=021c7c39482b]
         public static func summarize(_ inventory: Inventory, options: Options = Options()) -> Summary {
             let budget = options.budget ?? inlineBudget
             let flattened = flatten(inventory.tools)
@@ -682,7 +682,7 @@ public enum CoreCodemode {
             return CodemodeEngine.Extension.make(name: "fetch", globals: ["fetch": .function(fetchFn)])
         }
 
-        // parity: core/src/codemode/fetch.ts#extension [status=adapted hash=93111cd8909f]
+        // parity: core/src/codemode/fetch.ts#extension [status=adapted hash=0a07d604d32a]
         public static let `extension`: CodemodeEngine.Extension.Definition = CodemodeEngine.Extension.make(
             name: "fetch",
             globals: [
@@ -892,7 +892,7 @@ public enum CoreCodemode {
             )
         }
 
-        // parity: core/src/codemode/path.ts#extension [status=adapted hash=eeceba39cb12]
+        // parity: core/src/codemode/path.ts#extension [status=adapted hash=4920b46a70ab]
         public static let `extension`: CodemodeEngine.Extension.Definition = makeExtension(directory: "/")
     }
 
@@ -1076,7 +1076,7 @@ public enum CoreCodemode {
         }
 
         /// Default Bun file & glob extension definition backed by the current host filesystem.
-        // parity: core/src/codemode/bun.ts#extension [status=implemented hash=029d3fbd8e14]
+        // parity: core/src/codemode/bun.ts#extension [status=implemented hash=a9730b6420cb]
         public static let `extension`: CodemodeEngine.Extension.Definition = {
             let defaultContext = ToolSchema.Context(
                 sessionID: SessionID.create(),
@@ -1179,7 +1179,7 @@ public enum CoreCodemode {
 
         public typealias RunFn = @Sendable (ToolSchema.Context, @escaping @Sendable (ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>) async throws -> ToolSchema.Result<JSONValue>
 
-        // parity: core/src/codemode/job.ts#Current [status=adapted hash=f98d3ac7c70d]
+        // parity: core/src/codemode/job.ts#Current [status=adapted hash=6a45e9ab22b0]
         public enum Current {
             @TaskLocal public static var run: RunFn? = nil
         }
@@ -1235,7 +1235,7 @@ public enum CoreCodemode {
 
         /// With `full_codemode`, a script runs as a job: its tool call blocks for up to `blockTimeoutMs`, then moves to the
         /// background (the call returns at once) and its result arrives later as a session notice.
-        // parity: core/src/codemode/job.ts#make [status=adapted hash=edbddb970e12]
+        // parity: core/src/codemode/job.ts#make [status=adapted hash=e5bdf2c79179]
         public static func make(
             fullCodemode: Bool,
             blockTimeoutMs: Int = Job.blockTimeoutMs,
@@ -1733,7 +1733,7 @@ public enum CoreCodemode {
             return .object(dict)
         }
 
-        // parity: core/src/codemode/tool.ts#check [status=implemented hash=3f841d35e3e5]
+        // parity: core/src/codemode/tool.ts#check [status=implemented hash=332d31757798]
         public static func check(
             inventory: Inventory,
             code: String,

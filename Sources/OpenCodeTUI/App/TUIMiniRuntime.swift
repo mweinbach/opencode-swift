@@ -74,7 +74,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/types.ts#RunPromptPart [status=implemented hash=2db6945b58c4]
+    // parity: tui/src/mini/types.ts#RunPromptPart [status=implemented hash=35cc067afd31]
     public enum RunPromptPart: Equatable, Hashable, Sendable, Codable {
         case file(url: String, filename: String?, mime: String?, description: String?, source: FilePartSource?)
         case agent(name: String, source: SourceSpan?)
@@ -496,7 +496,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/types.ts#ToolSnapshot [status=implemented hash=561c4d08cc69]
+    // parity: tui/src/mini/types.ts#ToolSnapshot [status=implemented hash=48e7c3dcd938]
     public enum ToolSnapshot: Equatable, Hashable, Sendable, Codable {
         case code(title: String, content: String, file: String?)
         case diff(items: [ToolDiffItem])
@@ -577,7 +577,7 @@ public enum TUIMini {
         case block
     }
 
-    // parity: tui/src/mini/types.ts#RunEntryBody [status=implemented hash=ff6f6dbfed7e]
+    // parity: tui/src/mini/types.ts#RunEntryBody [status=implemented hash=b1e382a0e334]
     public enum RunEntryBody: Equatable, Hashable, Sendable, Codable {
         case none
         case text(content: String)
@@ -586,14 +586,14 @@ public enum TUIMini {
         case structured(snapshot: ToolSnapshot)
     }
 
-    // parity: tui/src/mini/types.ts#FooterView [status=implemented hash=5badcebbd7a0]
+    // parity: tui/src/mini/types.ts#FooterView [status=implemented hash=646ae757373e]
     public enum FooterView: Equatable, Hashable, Sendable, Codable {
         case prompt
         case permission(request: MiniPermissionRequest)
         case form(request: MiniFormRequest)
     }
 
-    // parity: tui/src/mini/types.ts#FooterPromptRoute [status=implemented hash=1b8157c1ea6b]
+    // parity: tui/src/mini/types.ts#FooterPromptRoute [status=implemented hash=59e9e0f84507]
     public enum FooterPromptRoute: Equatable, Hashable, Sendable, Codable {
         case composer
         case queuedMenu
@@ -662,7 +662,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/types.ts#FooterEvent [status=implemented hash=dae029589d3d]
+    // parity: tui/src/mini/types.ts#FooterEvent [status=implemented hash=0eaae708a4ac]
     public enum FooterEvent: Equatable, Sendable {
         case history([RunPrompt])
         case agent(String?)
@@ -728,7 +728,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/types.ts#RunTuiConfig [status=implemented hash=f500a993f570]
+    // parity: tui/src/mini/types.ts#RunTuiConfig [status=implemented hash=969dc08931f1]
     public typealias RunTuiConfig = TUIConfig.Resolved
 
     // parity: tui/src/mini/types.ts#MiniSettings [status=implemented hash=414a39b4314d]
@@ -770,7 +770,7 @@ public enum TUIMini {
         case everything
     }
 
-    // parity: tui/src/mini/types.ts#MiniSettingChange [status=implemented hash=5ebcb1b4bf8d]
+    // parity: tui/src/mini/types.ts#MiniSettingChange [status=implemented hash=16d9b61914ef]
     public enum MiniSettingChange: Equatable, Hashable, Sendable {
         case thinking(TUIContext.ThinkingMode)
         case tools(TUIContext.ThinkingMode)
@@ -1419,7 +1419,7 @@ public enum TUIMini {
         return nil
     }
 
-    // parity: tui/src/mini/tool.ts#toolOutputText [status=implemented hash=3abcec2140e7]
+    // parity: tui/src/mini/tool.ts#toolOutputText [status=implemented hash=b65dd10e80d1]
     public static func toolOutputText(_ name: String, content: [SessionMessageSchema.ToolContent]?) -> String {
         guard let content else { return "" }
         let canon = canonicalMiniToolName(name)
@@ -1450,7 +1450,7 @@ public enum TUIMini {
         )
     }
 
-    // parity: tui/src/mini/tool.ts#toolPath [status=implemented hash=a73212adb369]
+    // parity: tui/src/mini/tool.ts#toolPath [status=implemented hash=f406118199fe]
     public static func toolPath(_ input: String?, home: Bool = false, directory: String? = nil) -> String {
         let base = directory ?? TUIEditor.currentWorkingDirectory()
         let homeDir = home ? (SystemEnvironment.shared.homeDirectory ?? "") : ""
@@ -1581,7 +1581,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/tool.ts#toolEntryBody [status=implemented hash=366885a9b1ec]
+    // parity: tui/src/mini/tool.ts#toolEntryBody [status=implemented hash=89b1f2bf7ce3]
     public static func toolEntryBody(
         _ commit: StreamCommit,
         raw: String,
@@ -1830,7 +1830,7 @@ public enum TUIMini {
         commit.kind == .tool && (commit.toolState == .error || commit.part?.state.statusTag == "error")
     }
 
-    // parity: tui/src/mini/scrollback.shared.ts#entryLook [status=implemented hash=755777de97fa]
+    // parity: tui/src/mini/scrollback.shared.ts#entryLook [status=implemented hash=9b012bbd4087]
     public static func entryLook(_ commit: StreamCommit, theme: RunEntryTheme) -> (fg: RGBA, attrs: UInt32?) {
         if commit.kind == .user { return (theme.user.body, nil) }
         if entryFailed(commit) { return (theme.error.body, createTextAttributes(bold: true)) }
@@ -1891,7 +1891,7 @@ public enum TUIMini {
         return 1
     }
 
-    // parity: tui/src/mini/scrollback.writer.tsx#RunEntryContent [status=adapted hash=8af11244b796]
+    // parity: tui/src/mini/scrollback.writer.tsx#RunEntryContent [status=adapted hash=aba8d52d6c9e]
     public static func RunEntryContent(
         ctx: any RenderContext,
         commit: StreamCommit,
@@ -1931,7 +1931,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/scrollback.writer.tsx#entryWriter [status=adapted hash=216ed3e58ba6]
+    // parity: tui/src/mini/scrollback.writer.tsx#entryWriter [status=adapted hash=3cd12c6b8052]
     public static func entryWriter(
         commit: StreamCommit,
         body: RunEntryBody? = nil,
@@ -1959,7 +1959,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/scrollback.writer.tsx#turnSummaryWriter [status=adapted hash=a20e94a6da3b]
+    // parity: tui/src/mini/scrollback.writer.tsx#turnSummaryWriter [status=adapted hash=3152eda0fde6]
     public static func turnSummaryWriter(
         summary: TurnSummary,
         theme: RunTheme = RUN_THEME_FALLBACK,
@@ -2126,7 +2126,7 @@ public enum TUIMini {
         public let metadata: String
     }
 
-    // parity: tui/src/mini/splash.ts#entrySplashLayout [status=implemented hash=3ece6aa56ecf]
+    // parity: tui/src/mini/splash.ts#entrySplashLayout [status=implemented hash=4752d03fafe4]
     public static func entrySplashLayout(
         width: Int,
         version: String,
@@ -2175,7 +2175,7 @@ public enum TUIMini {
         return EntrySplashLayout(label: label, version: ver, path: pathVal, metadata: metadata)
     }
 
-    // parity: tui/src/mini/splash.ts#entrySplash [status=implemented hash=0b30d0c8928a]
+    // parity: tui/src/mini/splash.ts#entrySplash [status=implemented hash=3897ce274e92]
     public static func entrySplash(
         version: String,
         detail: String? = nil,
@@ -2247,7 +2247,7 @@ public enum TUIMini {
 
     // MARK: - Turn Summary & Session Data (`turn-summary.ts`, `session-data.ts`, `stream.ts`)
 
-    // parity: tui/src/mini/turn-summary.ts#turnSummaryCommit [status=implemented hash=a39c58462de3]
+    // parity: tui/src/mini/turn-summary.ts#turnSummaryCommit [status=implemented hash=705174951207]
     public static func turnSummaryCommit(
         agent: String,
         model: String,
@@ -2264,7 +2264,7 @@ public enum TUIMini {
         )
     }
 
-    // parity: tui/src/mini/session-data.ts#pickBlockerView [status=implemented hash=6267e1889694]
+    // parity: tui/src/mini/session-data.ts#pickBlockerView [status=implemented hash=b9ab0422fe77]
     public static func pickBlockerView(
         permission: MiniPermissionRequest? = nil,
         form: MiniFormRequest? = nil
@@ -3152,7 +3152,7 @@ public enum TUIMini {
         return order.compactMap { grouped[$0] }
     }
 
-    // parity: tui/src/mini/catalog.shared.ts#requestOptions [status=implemented hash=1d57ca5afed9]
+    // parity: tui/src/mini/catalog.shared.ts#requestOptions [status=implemented hash=fded3a7d1af8]
     public static func requestOptions(signal: AbortSignal? = nil) -> RequestOptions {
         RequestOptions(signal: signal)
     }
@@ -3408,7 +3408,7 @@ public enum TUIMini {
         config ?? TUIConfig.resolve(TUIConfig.Info(), options: TUIConfig.ResolveOptions(terminalSuspend: platform != "windows"))
     }
 
-    // parity: tui/src/mini/runtime.boot.ts#resolveMiniSettings [status=implemented hash=9679701f05e8]
+    // parity: tui/src/mini/runtime.boot.ts#resolveMiniSettings [status=implemented hash=6be56fac71de]
     public static func resolveMiniSettings(_ config: TUIConfig.MiniConfig? = nil) -> MiniSettings {
         MiniSettings(
             thinking: config?.thinking ?? .show,
@@ -3444,7 +3444,7 @@ public enum TUIMini {
         public let text: String
     }
 
-    // parity: tui/src/mini/stream-v2.fragment.ts#FragmentRestore [status=implemented hash=4457deb1a9c9]
+    // parity: tui/src/mini/stream-v2.fragment.ts#FragmentRestore [status=implemented hash=32f6d2bb49ff]
     public enum FragmentRestore: Equatable, Hashable, Sendable {
         case append(suffix: String)
         case covered
@@ -4924,7 +4924,7 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/footer.width.ts#footerStatuslinePolicy [status=implemented hash=d6128539688f]
+    // parity: tui/src/mini/footer.width.ts#footerStatuslinePolicy [status=implemented hash=c7ab2a50cca4]
     public static func footerStatuslinePolicy(
         width: Int,
         mono: Bool = false,
@@ -5090,12 +5090,12 @@ public enum TUIMini {
         }
     }
 
-    // parity: tui/src/mini/footer.menu.tsx#createFooterMenuState [status=implemented hash=87cadad870f1]
+    // parity: tui/src/mini/footer.menu.tsx#createFooterMenuState [status=implemented hash=a9bcf809709a]
     public static func createFooterMenuState(count: Int, limit: Int = FOOTER_MENU_ROWS) -> FooterMenuState {
         FooterMenuState(count: count, limit: limit)
     }
 
-    // parity: tui/src/mini/footer.menu.tsx#RunFooterMenu [status=adapted hash=01ced16f8abd]
+    // parity: tui/src/mini/footer.menu.tsx#RunFooterMenu [status=adapted hash=fbe00ee4610d]
     public static func RunFooterMenu(
         ctx: any RenderContext,
         items: [RunFooterMenuItem],
@@ -5201,7 +5201,7 @@ public enum TUIMini {
         PromptState(history: createPromptHistory(history))
     }
 
-    // parity: tui/src/mini/footer.prompt.tsx#RunPromptBody [status=adapted hash=0110516b9c75]
+    // parity: tui/src/mini/footer.prompt.tsx#RunPromptBody [status=adapted hash=2d7ee663ee85]
     public static func RunPromptBody(
         ctx: any RenderContext,
         text: String = "",
@@ -5258,7 +5258,7 @@ public enum TUIMini {
         return box
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunCommandMenuBody [status=adapted hash=58c88c235847]
+    // parity: tui/src/mini/footer.command.tsx#RunCommandMenuBody [status=adapted hash=bfd6011854e7]
     public static func RunCommandMenuBody(
         ctx: any RenderContext,
         items: [RunFooterMenuItem] = [],
@@ -5267,7 +5267,7 @@ public enum TUIMini {
         makePanelBox(ctx: ctx, id: "mini-command-menu", title: "Commands", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunAgentSelectBody [status=adapted hash=adec20fad097]
+    // parity: tui/src/mini/footer.command.tsx#RunAgentSelectBody [status=adapted hash=8e93f915d048]
     public static func RunAgentSelectBody(
         ctx: any RenderContext,
         agents: [RunAgent] = [],
@@ -5278,7 +5278,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-agent-select", title: "Select Agent", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunSettingsBody [status=adapted hash=5e029d336e64]
+    // parity: tui/src/mini/footer.command.tsx#RunSettingsBody [status=adapted hash=27d7b515dbd1]
     public static func RunSettingsBody(
         ctx: any RenderContext,
         settings: MiniSettings = MiniSettings(),
@@ -5293,7 +5293,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-settings", title: "Settings", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunSubagentSelectBody [status=adapted hash=74aa63b59b6d]
+    // parity: tui/src/mini/footer.command.tsx#RunSubagentSelectBody [status=adapted hash=8e8081a713f8]
     public static func RunSubagentSelectBody(
         ctx: any RenderContext,
         tabs: [FooterSubagentTab] = [],
@@ -5303,7 +5303,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-subagent-select", title: "Subagents", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunQueuedPromptSelectBody [status=adapted hash=5a2256a79d14]
+    // parity: tui/src/mini/footer.command.tsx#RunQueuedPromptSelectBody [status=adapted hash=51f85333d549]
     public static func RunQueuedPromptSelectBody(
         ctx: any RenderContext,
         prompts: [FooterQueuedPrompt] = [],
@@ -5313,7 +5313,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-queued-select", title: "Queued Prompts", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunVariantSelectBody [status=adapted hash=d9e4f34b4fa1]
+    // parity: tui/src/mini/footer.command.tsx#RunVariantSelectBody [status=adapted hash=f55616c33d85]
     public static func RunVariantSelectBody(
         ctx: any RenderContext,
         variants: [String] = [],
@@ -5325,7 +5325,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-variant-select", title: "Reasoning Variant", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.command.tsx#RunModelSelectBody [status=adapted hash=b2c5fff0c78c]
+    // parity: tui/src/mini/footer.command.tsx#RunModelSelectBody [status=adapted hash=5c5db15fcc26]
     public static func RunModelSelectBody(
         ctx: any RenderContext,
         providers: [RunProvider] = [],
@@ -5345,7 +5345,7 @@ public enum TUIMini {
         return makePanelBox(ctx: ctx, id: "mini-model-select", title: "Select Model", items: items, theme: theme)
     }
 
-    // parity: tui/src/mini/footer.form.tsx#RunFormBody [status=adapted hash=4aae3ba1864c]
+    // parity: tui/src/mini/footer.form.tsx#RunFormBody [status=adapted hash=ad0516769296]
     public static func RunFormBody(
         ctx: any RenderContext,
         request: MiniFormRequest,
@@ -5366,7 +5366,7 @@ public enum TUIMini {
         return box
     }
 
-    // parity: tui/src/mini/footer.permission.tsx#RejectField [status=adapted hash=4e63e2b3b3da]
+    // parity: tui/src/mini/footer.permission.tsx#RejectField [status=adapted hash=02fb06054e55]
     public static func RejectField(
         ctx: any RenderContext,
         message: String = "",
@@ -5380,7 +5380,7 @@ public enum TUIMini {
         return box
     }
 
-    // parity: tui/src/mini/footer.permission.tsx#RunPermissionBody [status=adapted hash=a9df5a3536d0]
+    // parity: tui/src/mini/footer.permission.tsx#RunPermissionBody [status=adapted hash=3ea77aa8a6c9]
     public static func RunPermissionBody(
         ctx: any RenderContext,
         request: MiniPermissionRequest,
@@ -5409,7 +5409,7 @@ public enum TUIMini {
     // parity: tui/src/mini/footer.subagent.tsx#SUBAGENT_INSPECTOR_ROWS [status=implemented hash=5cb85f3a78e3]
     public static let SUBAGENT_INSPECTOR_ROWS = 14
 
-    // parity: tui/src/mini/footer.subagent.tsx#RunFooterSubagentBody [status=adapted hash=4e9f08864fe5]
+    // parity: tui/src/mini/footer.subagent.tsx#RunFooterSubagentBody [status=adapted hash=9b0131f99ed5]
     public static func RunFooterSubagentBody(
         ctx: any RenderContext,
         tab: FooterSubagentTab,

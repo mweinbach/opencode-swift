@@ -36,7 +36,7 @@ public enum CoreSessionRecentText {
         return "\(String(value.unicodeScalars[..<scalarEnd]))\n[truncated]"
     }
 
-    // parity: core/src/session/recent-text.ts#serializeToolContent [status=implemented hash=9d38058db9b1]
+    // parity: core/src/session/recent-text.ts#serializeToolContent [status=implemented hash=d02ec778cb95]
     public static func serializeToolContent(_ content: [SessionMessageSchema.ToolContent]) -> String {
         content.map { item -> String in
             switch item {
@@ -256,10 +256,10 @@ public enum CoreSessionCompaction {
         }
     }
 
-    // parity: core/src/session/compaction.ts#Trigger [status=implemented hash=7dab85c52cfc]
+    // parity: core/src/session/compaction.ts#Trigger [status=implemented hash=cb9cec7bfb2a]
     public typealias Trigger = CompactInput
 
-    // parity: core/src/session/compaction.ts#Outcome [status=implemented hash=750e7b7aaaf4]
+    // parity: core/src/session/compaction.ts#Outcome [status=implemented hash=2f92242a7ead]
     public enum Outcome: Equatable, Sendable {
         case skipped
         case completed
@@ -645,7 +645,7 @@ public enum CoreSessionCompaction {
         }
     }
 
-    // parity: core/src/session/compaction.ts#layer [status=adapted hash=24853f49bbf7]
+    // parity: core/src/session/compaction.ts#layer [status=adapted hash=273358ca3d12]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         guard let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self),
               let llm = deps.get(AIRoute.LLMClientService.serviceID, as: (any AIRoute.Interface).self)
@@ -657,7 +657,7 @@ public enum CoreSessionCompaction {
         return LayerNode.Output([Service.serviceKey: Service(bus: bus, llm: llm, requests: req)])
     }
 
-    // parity: core/src/session/compaction.ts#node [status=adapted hash=b2d01160048e]
+    // parity: core/src/session/compaction.ts#node [status=adapted hash=643afe7e2b5e]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         layer,
@@ -680,7 +680,7 @@ public enum CoreSessionTitle {
         func ensure(_ sessionID: SessionID) async throws
     }
 
-    // parity: core/src/session/title.ts#isUntitled [status=implemented hash=aed16e0bae4e]
+    // parity: core/src/session/title.ts#isUntitled [status=implemented hash=26643fceac41]
     public static func isUntitled(_ session: SessionSchema.Info) -> Bool {
         SessionTitleFallback.isExactRootFallback(title: session.title, created: session.time.created)
     }
@@ -846,7 +846,7 @@ public enum CoreSessionTitle {
         }
     }
 
-    // parity: core/src/session/title.ts#layer [status=adapted hash=6da4cbba6234]
+    // parity: core/src/session/title.ts#layer [status=adapted hash=7eb10ec4edea]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         guard let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db,
               let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self),
@@ -859,7 +859,7 @@ public enum CoreSessionTitle {
         return LayerNode.Output([Service.serviceKey: Service(db: db, bus: bus, store: store, context: context, llm: llm)])
     }
 
-    // parity: core/src/session/title.ts#node [status=adapted hash=af1144b1d0fc]
+    // parity: core/src/session/title.ts#node [status=adapted hash=340bcfe9035c]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         layer,
@@ -871,7 +871,7 @@ public enum CoreSessionTitle {
 
 /// Non-mutating generation from current session context (`packages/core/src/session/generate.ts`).
 public enum CoreSessionGenerate {
-    // parity: core/src/session/generate.ts#Error [status=implemented hash=f10d72e8edf8]
+    // parity: core/src/session/generate.ts#Error [status=implemented hash=e74380fe785c]
     public typealias GenerateError = any Error
 
     // parity: core/src/session/generate.ts#Result [status=implemented hash=a7d97fcd5009]
@@ -887,7 +887,7 @@ public enum CoreSessionGenerate {
         }
     }
 
-    // parity: core/src/session/generate.ts#generate [status=implemented hash=76e9424f0d7d]
+    // parity: core/src/session/generate.ts#generate [status=implemented hash=90186dd628a1]
     public static func generate(
         session: SessionSchema.Info,
         prompt: String,

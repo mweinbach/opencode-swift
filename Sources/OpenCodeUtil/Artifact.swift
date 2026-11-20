@@ -1,5 +1,5 @@
 /// How the app shows a file, derived from its extension.
-// parity: util/src/artifact.ts#ArtifactKind [status=implemented hash=12192626739b]
+// parity: util/src/artifact.ts#ArtifactKind [status=implemented hash=ac9415b0756e]
 public enum ArtifactKind: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case image
     case svg

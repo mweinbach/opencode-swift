@@ -6,7 +6,7 @@ import Foundation
 import OpenCodeUtil
 
 /// JSON-compatible cassette metadata value matching `packages/http-recorder/src/api.ts#JsonValue`.
-// parity: http-recorder/src/api.ts#JsonValue [status=implemented hash=19bb7e359c5a]
+// parity: http-recorder/src/api.ts#JsonValue [status=implemented hash=f2c02f979e3f]
 public enum JsonValue: Equatable, Hashable, Sendable, Codable {
     case null
     case bool(Bool)

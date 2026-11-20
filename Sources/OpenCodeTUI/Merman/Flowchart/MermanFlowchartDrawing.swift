@@ -261,7 +261,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/flowchart/drawing.ts#drawFlowchartDiagramGrid [status=implemented hash=dab9286b75ac]
+    // parity: merman/src/flowchart/drawing.ts#drawFlowchartDiagramGrid [status=implemented hash=67292d9fcfaf]
     public static func drawFlowchartDiagramGrid(
         _ sourceDiagram: FlowchartDiagram,
         options: FlowchartDiagramRenderOptions = FlowchartDiagramRenderOptions()
@@ -302,7 +302,7 @@ extension Merman {
 
     // MARK: - Flowchart Render (`flowchart/render.ts`)
 
-    // parity: merman/src/flowchart/render.ts#renderFlowchartDiagram [status=implemented hash=bdc6f50ee476]
+    // parity: merman/src/flowchart/render.ts#renderFlowchartDiagram [status=implemented hash=f584d7691437]
     public static func renderFlowchartDiagram(
         _ content: String,
         options: FlowchartDiagramRenderOptions = FlowchartDiagramRenderOptions()

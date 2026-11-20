@@ -59,7 +59,7 @@ internal func validateErrorTag<K: CodingKey>(
 
 // MARK: - Tagged HTTP API Errors (packages/protocol/src/errors.ts — 40 symbols)
 
-// parity: protocol/src/errors.ts#LocationNotFoundError [status=implemented hash=4dd255c7b409]
+// parity: protocol/src/errors.ts#LocationNotFoundError [status=implemented hash=c066da9fc971]
 public struct LocationNotFoundError: ProtocolError {
     public static let tag = "LocationNotFoundError"
     public static let httpStatusCode = 404
@@ -91,7 +91,7 @@ public struct LocationNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#InvalidRequestError [status=implemented hash=063c8a2f51de]
+// parity: protocol/src/errors.ts#InvalidRequestError [status=implemented hash=9e1cc28f39a1]
 public struct InvalidRequestError: ProtocolError {
     public static let tag = "InvalidRequestError"
     public static let httpStatusCode = 400
@@ -127,7 +127,7 @@ public struct InvalidRequestError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#RpcError [status=implemented hash=e4552ab058bc]
+// parity: protocol/src/errors.ts#RpcError [status=implemented hash=68a574f0c86c]
 public struct RpcError: ProtocolError {
     public static let tag = "RpcError"
     public static let httpStatusCode = 400
@@ -163,7 +163,7 @@ public struct RpcError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#RpcInternalError [status=implemented hash=44c010e2a75d]
+// parity: protocol/src/errors.ts#RpcInternalError [status=implemented hash=1de980b22a52]
 public struct RpcInternalError: ProtocolError {
     public static let tag = "RpcInternalError"
     public static let httpStatusCode = 500
@@ -199,7 +199,7 @@ public struct RpcInternalError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#UnauthorizedError [status=implemented hash=c5ef510f495f]
+// parity: protocol/src/errors.ts#UnauthorizedError [status=implemented hash=80c0f4b281f5]
 public struct UnauthorizedError: ProtocolError {
     public static let tag = "UnauthorizedError"
     public static let httpStatusCode = 401
@@ -227,7 +227,7 @@ public struct UnauthorizedError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ConflictError [status=implemented hash=8697a6222a9c]
+// parity: protocol/src/errors.ts#ConflictError [status=implemented hash=e2020bfe2790]
 public struct ConflictError: ProtocolError {
     public static let tag = "ConflictError"
     public static let httpStatusCode = 409
@@ -259,7 +259,7 @@ public struct ConflictError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#SessionBusyError [status=implemented hash=5f809d4cbea4]
+// parity: protocol/src/errors.ts#SessionBusyError [status=implemented hash=1aa00e00b672]
 public struct SessionBusyError: ProtocolError {
     public static let tag = "SessionBusyError"
     public static let httpStatusCode = 409
@@ -291,7 +291,7 @@ public struct SessionBusyError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ServiceUnavailableError [status=implemented hash=c75ecc48aacc]
+// parity: protocol/src/errors.ts#ServiceUnavailableError [status=implemented hash=2140743074b0]
 public struct ServiceUnavailableError: ProtocolError {
     public static let tag = "ServiceUnavailableError"
     public static let httpStatusCode = 503
@@ -323,7 +323,7 @@ public struct ServiceUnavailableError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#UnknownError [status=implemented hash=709330961d84]
+// parity: protocol/src/errors.ts#UnknownError [status=implemented hash=0c4736016759]
 public struct UnknownError: ProtocolError {
     public static let tag = "UnknownError"
     public static let httpStatusCode = 500
@@ -355,7 +355,7 @@ public struct UnknownError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ProviderNotFoundError [status=implemented hash=344ff4a0c6ff]
+// parity: protocol/src/errors.ts#ProviderNotFoundError [status=implemented hash=91c064d9c45e]
 public struct ProviderNotFoundError: ProtocolError {
     public static let tag = "ProviderNotFoundError"
     public static let httpStatusCode = 404
@@ -387,7 +387,7 @@ public struct ProviderNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#IntegrationNotFoundError [status=implemented hash=da3db1b80bc0]
+// parity: protocol/src/errors.ts#IntegrationNotFoundError [status=implemented hash=dc36fa38eb49]
 public struct IntegrationNotFoundError: ProtocolError {
     public static let tag = "IntegrationNotFoundError"
     public static let httpStatusCode = 404
@@ -419,7 +419,7 @@ public struct IntegrationNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#IntegrationAttemptNotFoundError [status=implemented hash=53d132a89fd4]
+// parity: protocol/src/errors.ts#IntegrationAttemptNotFoundError [status=implemented hash=9eda2f8edb97]
 public struct IntegrationAttemptNotFoundError: ProtocolError {
     public static let tag = "IntegrationAttemptNotFoundError"
     public static let httpStatusCode = 404
@@ -455,7 +455,7 @@ public struct IntegrationAttemptNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#IntegrationMethodNotFoundError [status=implemented hash=4d33d0bbb73d]
+// parity: protocol/src/errors.ts#IntegrationMethodNotFoundError [status=implemented hash=9d96d926ced1]
 public struct IntegrationMethodNotFoundError: ProtocolError {
     public static let tag = "IntegrationMethodNotFoundError"
     public static let httpStatusCode = 404
@@ -491,7 +491,7 @@ public struct IntegrationMethodNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ProjectNotFoundError [status=implemented hash=70313c79fe46]
+// parity: protocol/src/errors.ts#ProjectNotFoundError [status=implemented hash=b2eb564267f6]
 public struct ProjectNotFoundError: ProtocolError {
     public static let tag = "ProjectNotFoundError"
     public static let httpStatusCode = 404
@@ -523,7 +523,7 @@ public struct ProjectNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#FileNotFoundError [status=implemented hash=ddab29e8c51f]
+// parity: protocol/src/errors.ts#FileNotFoundError [status=implemented hash=96768fabbee8]
 public struct FileNotFoundError: ProtocolError {
     public static let tag = "FileNotFoundError"
     public static let httpStatusCode = 404
@@ -555,7 +555,7 @@ public struct FileNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#PluginNotFoundError [status=implemented hash=30056b37ad9f]
+// parity: protocol/src/errors.ts#PluginNotFoundError [status=implemented hash=4e5d4002cad1]
 public struct PluginNotFoundError: ProtocolError {
     public static let tag = "PluginNotFoundError"
     public static let httpStatusCode = 404
@@ -587,7 +587,7 @@ public struct PluginNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#AgentNotFoundError [status=implemented hash=62bc76dbb41e]
+// parity: protocol/src/errors.ts#AgentNotFoundError [status=implemented hash=f428fcb94a57]
 public struct AgentNotFoundError: ProtocolError {
     public static let tag = "AgentNotFoundError"
     public static let httpStatusCode = 404
@@ -619,7 +619,7 @@ public struct AgentNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#SessionNotFoundError [status=implemented hash=2161b343cfd1]
+// parity: protocol/src/errors.ts#SessionNotFoundError [status=implemented hash=1247560e4bd3]
 public struct SessionNotFoundError: ProtocolError {
     public static let tag = "SessionNotFoundError"
     public static let httpStatusCode = 404
@@ -651,7 +651,7 @@ public struct SessionNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#MessageNotFoundError [status=implemented hash=001fe63e74da]
+// parity: protocol/src/errors.ts#MessageNotFoundError [status=implemented hash=dc9a77e55dd7]
 public struct MessageNotFoundError: ProtocolError {
     public static let tag = "MessageNotFoundError"
     public static let httpStatusCode = 404
@@ -687,7 +687,7 @@ public struct MessageNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#SkillNotFoundError [status=implemented hash=e39e2e4f66cf]
+// parity: protocol/src/errors.ts#SkillNotFoundError [status=implemented hash=ed449b37e962]
 public struct SkillNotFoundError: ProtocolError {
     public static let tag = "SkillNotFoundError"
     public static let httpStatusCode = 404
@@ -719,7 +719,7 @@ public struct SkillNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#McpServerNotFoundError [status=implemented hash=aea4a6e7099e]
+// parity: protocol/src/errors.ts#McpServerNotFoundError [status=implemented hash=6be6d1f8bbc0]
 public struct McpServerNotFoundError: ProtocolError {
     public static let tag = "McpServerNotFoundError"
     public static let httpStatusCode = 404
@@ -751,7 +751,7 @@ public struct McpServerNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#CommandNotFoundError [status=implemented hash=e89bfdb367b0]
+// parity: protocol/src/errors.ts#CommandNotFoundError [status=implemented hash=a19e2bc52f6e]
 public struct CommandNotFoundError: ProtocolError {
     public static let tag = "CommandNotFoundError"
     public static let httpStatusCode = 404
@@ -783,7 +783,7 @@ public struct CommandNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#CommandExecutionError [status=implemented hash=ffb178141a57]
+// parity: protocol/src/errors.ts#CommandExecutionError [status=implemented hash=846325f446fc]
 public struct CommandExecutionError: ProtocolError {
     public static let tag = "CommandExecutionError"
     public static let httpStatusCode = 500
@@ -815,7 +815,7 @@ public struct CommandExecutionError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#InvalidCursorError [status=implemented hash=b1a45c0183bd]
+// parity: protocol/src/errors.ts#InvalidCursorError [status=implemented hash=cfbca08a195d]
 public struct InvalidCursorError: ProtocolError {
     public static let tag = "InvalidCursorError"
     public static let httpStatusCode = 400
@@ -843,7 +843,7 @@ public struct InvalidCursorError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#PermissionNotFoundError [status=implemented hash=8e2f5d2d6385]
+// parity: protocol/src/errors.ts#PermissionNotFoundError [status=implemented hash=30b726ae53d4]
 public struct PermissionNotFoundError: ProtocolError {
     public static let tag = "PermissionNotFoundError"
     public static let httpStatusCode = 404
@@ -875,7 +875,7 @@ public struct PermissionNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#PermissionSavedNotFoundError [status=implemented hash=b89296efff38]
+// parity: protocol/src/errors.ts#PermissionSavedNotFoundError [status=implemented hash=e73f50c9c687]
 public struct PermissionSavedNotFoundError: ProtocolError {
     public static let tag = "PermissionSavedNotFoundError"
     public static let httpStatusCode = 404
@@ -907,7 +907,7 @@ public struct PermissionSavedNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#FormNotFoundError [status=implemented hash=706deb05c9af]
+// parity: protocol/src/errors.ts#FormNotFoundError [status=implemented hash=9b40047cf073]
 public struct FormNotFoundError: ProtocolError {
     public static let tag = "FormNotFoundError"
     public static let httpStatusCode = 404
@@ -939,7 +939,7 @@ public struct FormNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#FormAlreadySettledError [status=implemented hash=ddac4ff60c03]
+// parity: protocol/src/errors.ts#FormAlreadySettledError [status=implemented hash=c18ec82840b9]
 public struct FormAlreadySettledError: ProtocolError {
     public static let tag = "FormAlreadySettledError"
     public static let httpStatusCode = 409
@@ -971,7 +971,7 @@ public struct FormAlreadySettledError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#FormInvalidAnswerError [status=implemented hash=203ec1d7910f]
+// parity: protocol/src/errors.ts#FormInvalidAnswerError [status=implemented hash=834434537f1d]
 public struct FormInvalidAnswerError: ProtocolError {
     public static let tag = "FormInvalidAnswerError"
     public static let httpStatusCode = 400
@@ -1003,7 +1003,7 @@ public struct FormInvalidAnswerError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ForbiddenError [status=implemented hash=c1c372364d46]
+// parity: protocol/src/errors.ts#ForbiddenError [status=implemented hash=cf5b3130c398]
 public struct ForbiddenError: ProtocolError {
     public static let tag = "ForbiddenError"
     public static let httpStatusCode = 403
@@ -1031,7 +1031,7 @@ public struct ForbiddenError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#PtyNotFoundError [status=implemented hash=42975ac5b1b9]
+// parity: protocol/src/errors.ts#PtyNotFoundError [status=implemented hash=367c0cb482da]
 public struct PtyNotFoundError: ProtocolError {
     public static let tag = "PtyNotFoundError"
     public static let httpStatusCode = 404
@@ -1063,7 +1063,7 @@ public struct PtyNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#PtyFeatureUnsupportedError [status=implemented hash=c84d48ef91ec]
+// parity: protocol/src/errors.ts#PtyFeatureUnsupportedError [status=implemented hash=f036d2ae797d]
 public struct PtyFeatureUnsupportedError: ProtocolError {
     public static let tag = "PtyFeatureUnsupportedError"
     public static let httpStatusCode = 501
@@ -1095,7 +1095,7 @@ public struct PtyFeatureUnsupportedError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ShellNotFoundError [status=implemented hash=96c712f3c890]
+// parity: protocol/src/errors.ts#ShellNotFoundError [status=implemented hash=21f93e5be356]
 public struct ShellNotFoundError: ProtocolError {
     public static let tag = "ShellNotFoundError"
     public static let httpStatusCode = 404
@@ -1127,7 +1127,7 @@ public struct ShellNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ModelNotFoundError [status=implemented hash=035da280944a]
+// parity: protocol/src/errors.ts#ModelNotFoundError [status=implemented hash=5c68fde6d33e]
 public struct ModelNotFoundError: ProtocolError {
     public static let tag = "ModelNotFoundError"
     public static let httpStatusCode = 404
@@ -1164,7 +1164,7 @@ public struct ModelNotFoundError: ProtocolError {
 }
 
 /// The model exists but cannot serve this request, such as a chat model asked for images.
-// parity: protocol/src/errors.ts#UnsupportedModelError [status=implemented hash=9d6d33cc4b6d]
+// parity: protocol/src/errors.ts#UnsupportedModelError [status=implemented hash=94a88acac9bf]
 public struct UnsupportedModelError: ProtocolError {
     public static let tag = "UnsupportedModelError"
     public static let httpStatusCode = 422
@@ -1205,7 +1205,7 @@ public struct UnsupportedModelError: ProtocolError {
 }
 
 /// The provider rejected or failed the request after the server sent it.
-// parity: protocol/src/errors.ts#ProviderRequestError [status=implemented hash=ab38615ef8af]
+// parity: protocol/src/errors.ts#ProviderRequestError [status=implemented hash=2bdde19be966]
 public struct ProviderRequestError: ProtocolError {
     public static let tag = "ProviderRequestError"
     public static let httpStatusCode = 502
@@ -1255,7 +1255,7 @@ public struct ProviderRequestError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#AutomationNotFoundError [status=implemented hash=47b41799b5dc]
+// parity: protocol/src/errors.ts#AutomationNotFoundError [status=implemented hash=ffc9a2affb3d]
 public struct AutomationNotFoundError: ProtocolError {
     public static let tag = "AutomationNotFoundError"
     public static let httpStatusCode = 404
@@ -1287,7 +1287,7 @@ public struct AutomationNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#VideoNotFoundError [status=implemented hash=fa4d050cdb7f]
+// parity: protocol/src/errors.ts#VideoNotFoundError [status=implemented hash=7030c7adf23a]
 public struct VideoNotFoundError: ProtocolError {
     public static let tag = "VideoNotFoundError"
     public static let httpStatusCode = 404
@@ -1319,7 +1319,7 @@ public struct VideoNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#BlobNotFoundError [status=implemented hash=b4112bcc5b39]
+// parity: protocol/src/errors.ts#BlobNotFoundError [status=implemented hash=4c8b6e09ac5b]
 public struct BlobNotFoundError: ProtocolError {
     public static let tag = "BlobNotFoundError"
     public static let httpStatusCode = 404
@@ -1351,7 +1351,7 @@ public struct BlobNotFoundError: ProtocolError {
     }
 }
 
-// parity: protocol/src/errors.ts#ArtifactNotFoundError [status=implemented hash=841740db0a44]
+// parity: protocol/src/errors.ts#ArtifactNotFoundError [status=implemented hash=a8fe4c1d2096]
 public struct ArtifactNotFoundError: ProtocolError {
     public static let tag = "ArtifactNotFoundError"
     public static let httpStatusCode = 404

@@ -26,7 +26,7 @@ public enum CLIServices {
     // MARK: Plugin Startup Wait (`packages/cli/src/services/plugin-startup.ts`)
 
     /// Polls `client.plugin.list` until plugins activate (every 25ms, up to 5s), ignoring errors.
-    // parity: cli/src/services/plugin-startup.ts#waitForPlugins [status=implemented hash=81d4c217560f]
+    // parity: cli/src/services/plugin-startup.ts#waitForPlugins [status=implemented hash=dd67c49d3364]
     public static let waitForPlugins: @Sendable (OpenCodeClient, String) async -> Void = { client, directory in
         let deadline = Date().addingTimeInterval(5.0)
         while true {
@@ -48,7 +48,7 @@ public enum CLIServices {
 
     public enum PortOwner {
         /// Best-effort lookup naming the process listening on a TCP port (`PID <n> (<command>)`).
-        // parity: cli/src/services/port-owner.ts#describe [status=implemented hash=06d60bf8da3a]
+        // parity: cli/src/services/port-owner.ts#describe [status=implemented hash=16be225e3ebf]
         public static let describe: @Sendable (Int, String?, CLIContext) async -> String? = { port, hostname, context in
             if context.platformOS == .windows { return nil }
             let proc = context.appProcess
@@ -202,17 +202,17 @@ public enum CLIServices {
             context.remoteTunnelBackend ?? OpenTunnelClientBackend.make(context: context)
         }
 
-        // parity: cli/src/services/remote-tunnel.ts#run [status=adapted hash=4d91011149c3]
+        // parity: cli/src/services/remote-tunnel.ts#run [status=adapted hash=ca88a618f095]
         public static let run: @Sendable (RunInput, CLIContext) async -> Void = { input, context in
             await runWithPolicy(input: input, context: context, policy: .default)
         }
 
-        // parity: cli/src/services/remote-tunnel.ts#ensure [status=adapted hash=6cb9479829b9]
+        // parity: cli/src/services/remote-tunnel.ts#ensure [status=adapted hash=df2ab1e765f5]
         public static let ensure: @Sendable (CLIContext) async throws -> String = { context in
             try await ensureWithTimeout(context: context, timeout: Policy.defaultEnsureTimeout)
         }
 
-        // parity: cli/src/services/remote-tunnel.ts#hostname [status=adapted hash=f50b09bc4aea]
+        // parity: cli/src/services/remote-tunnel.ts#hostname [status=adapted hash=debe8f9b81d9]
         public static let hostname: @Sendable (String, CLIContext) async -> String? = { route, context in
             let backend = resolvedBackend(for: context)
             guard let host = await backend.loadStoredHostname() else { return nil }
@@ -243,7 +243,7 @@ public enum CLIServices {
         }
 
         /// Holds a secondary hard link to the running binary in `directory`, sweeping links of dead PIDs.
-        // parity: cli/src/services/retained-image.ts#retain [status=adapted hash=f0f97dfefac2]
+        // parity: cli/src/services/retained-image.ts#retain [status=adapted hash=87dce0604bfb]
         public static let retain: @Sendable (String, Role, CLIContext) async -> RetainedHandle = { directory, role, context in
             let fs = context.fileSystem
             try? await fs.makeDirectory(at: directory, recursive: true)
@@ -275,7 +275,7 @@ public enum CLIServices {
         }
 
         /// Moves retained executable links out of `directory` into `destination` so `directory` can be removed.
-        // parity: cli/src/services/retained-image.ts#relocate [status=implemented hash=fbc831740602]
+        // parity: cli/src/services/retained-image.ts#relocate [status=implemented hash=3da59389aa82]
         public static let relocate: @Sendable (String, String, CLIContext) async -> Void = { directory, destination, context in
             let fs = context.fileSystem
             let names = (try? await fs.readDirectory(at: directory)) ?? []
@@ -337,7 +337,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/services/service-config.ts#Info [status=implemented hash=adf40c49135e]
+        // parity: cli/src/services/service-config.ts#Info [status=implemented hash=3946b9b5d1b8]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public var disabled: Bool?
             public var remote: RemoteConfig?
@@ -449,7 +449,7 @@ public enum CLIServices {
             return parts.allSatisfy { !$0.isEmpty && $0.utf8.allSatisfy { $0 >= 0x30 && $0 <= 0x39 } }
         }
 
-        // parity: cli/src/services/service-config.ts#migrateRegistration [status=implemented hash=046fbf8478db]
+        // parity: cli/src/services/service-config.ts#migrateRegistration [status=implemented hash=7c7efc2206d4]
         public static let migrateRegistration: @Sendable (String, String, String, String, any OpenCodeFileSystem) async -> Void = {
             legacy, file, channel, installedVersion, fs in
             guard let bytes = try? await fs.readFile(at: legacy),
@@ -463,7 +463,7 @@ public enum CLIServices {
             try? await fs.chmod(at: file, mode: 0o600)
         }
 
-        // parity: cli/src/services/service-config.ts#migrateConfig [status=implemented hash=0adf97b8f41c]
+        // parity: cli/src/services/service-config.ts#migrateConfig [status=implemented hash=bf05734d9282]
         public static let migrateConfig: @Sendable (String, String, any OpenCodeFileSystem) async -> Void = {
             legacy, file, fs in
             guard let bytes = try? await fs.readFile(at: legacy),
@@ -516,7 +516,7 @@ public enum CLIServices {
             return decoded
         }
 
-        // parity: cli/src/services/service-config.ts#options [status=implemented hash=100f5e0e01eb]
+        // parity: cli/src/services/service-config.ts#options [status=implemented hash=a5a5511dde65]
         public static let options: @Sendable (OptionsInput, CLIContext) async throws -> ServiceEnsureOptions = { input, context in
             let paths = resolvePaths(context: context)
             for legacy in paths.legacyRegistrationFiles {
@@ -532,7 +532,7 @@ public enum CLIServices {
             )
         }
 
-        // parity: cli/src/services/service-config.ts#read [status=implemented hash=aa69177eb926]
+        // parity: cli/src/services/service-config.ts#read [status=implemented hash=a66e12d45142]
         public static func read(context: CLIContext = CLIContext.current) async throws -> Info {
             let paths = resolvePaths(context: context)
             if let legacy = paths.legacyConfigFile {
@@ -587,7 +587,7 @@ public enum CLIServices {
             if let lastError { throw lastError }
         }
 
-        // parity: cli/src/services/service-config.ts#password [status=implemented hash=74bd8d8a4c9e]
+        // parity: cli/src/services/service-config.ts#password [status=implemented hash=70093dd1099b]
         public static func password(
             _ value: String? = nil,
             context: CLIContext = CLIContext.current
@@ -602,7 +602,7 @@ public enum CLIServices {
             return next
         }
 
-        // parity: cli/src/services/service-config.ts#acceptRemote [status=implemented hash=0e20e9312b61]
+        // parity: cli/src/services/service-config.ts#acceptRemote [status=implemented hash=ae4af2e9a865]
         public static func acceptRemote(context: CLIContext = CLIContext.current) async throws {
             var existing = try await read(context: context)
             existing.remoteAccepted = true
@@ -619,7 +619,7 @@ public enum CLIServices {
             try await write(existing, context: context)
         }
 
-        // parity: cli/src/services/service-config.ts#remote [status=implemented hash=bc50c3de8a34]
+        // parity: cli/src/services/service-config.ts#remote [status=implemented hash=3e9d6d2113e4]
         public static func remote(context: CLIContext = CLIContext.current) async throws -> String {
             var existing = try await read(context: context)
             if let existingRoute = existing.remote?.route {
@@ -642,7 +642,7 @@ public enum CLIServices {
             )
         }
 
-        // parity: cli/src/services/service-config.ts#get [status=implemented hash=f25109939dcd]
+        // parity: cli/src/services/service-config.ts#get [status=implemented hash=925a69f5418f]
         public static func get(
             key: String? = nil,
             name: String? = nil,
@@ -689,7 +689,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/services/service-config.ts#set [status=implemented hash=4b1d0504d3f0]
+        // parity: cli/src/services/service-config.ts#set [status=implemented hash=521ab88a2be5]
         public static func set(
             key: String,
             value: String,
@@ -771,7 +771,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/services/service-config.ts#unset [status=implemented hash=b1039612f7f3]
+        // parity: cli/src/services/service-config.ts#unset [status=implemented hash=f06b7c641d38]
         public static func unset(
             key: String,
             name: String? = nil,
@@ -888,7 +888,7 @@ public enum CLIServices {
         }
 
         /// Atomically writes `service.json` and starts an ownership watchdog that triggers `shutdown` if replaced.
-        // parity: cli/src/services/service-registration.ts#register [status=implemented hash=8a73664bc3ae]
+        // parity: cli/src/services/service-registration.ts#register [status=implemented hash=d0ddc706c135]
         public static let register: @Sendable (Options, CLIContext) async throws -> Handle = { options, context in
             let fs = context.fileSystem
             let temp = "\(options.file).\(options.id).tmp"
@@ -989,7 +989,7 @@ public enum CLIServices {
         }
 
         /// Starts a private standalone server (`opencode serve --stdio --port 0`) with a lease password.
-        // parity: cli/src/services/standalone.ts#start [status=adapted hash=46dbdb7c1366]
+        // parity: cli/src/services/standalone.ts#start [status=adapted hash=d066324014cd]
         public static func start(
             _ options: Options = Options(),
             context: CLIContext = CLIContext.current
@@ -1175,7 +1175,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/services/server-connection.ts#resolve [status=implemented hash=b20fe4d93918]
+        // parity: cli/src/services/server-connection.ts#resolve [status=implemented hash=4dae793e435c]
         public static func resolve(
             _ args: Args = Args(),
             context: CLIContext = CLIContext.current
@@ -1427,7 +1427,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/services/server-connection.ts#shutdownPersistentPty [status=implemented hash=a66efe1fd1cc]
+        // parity: cli/src/services/server-connection.ts#shutdownPersistentPty [status=implemented hash=01fe0746989d]
         public static func shutdownPersistentPty(
             _ options: ServiceDiscoverOptions,
             context: CLIContext = CLIContext.current
@@ -2232,7 +2232,7 @@ public enum CLIServices {
         public typealias Middleware = @Sendable (WebRequest, @escaping @Sendable (WebRequest) async throws -> WebResponse?) async throws -> WebResponse
 
         /// Creates the Web UI routing/CSP/brotli handler middleware matching `WebUi.handler`.
-        // parity: cli/src/services/web-ui.ts#handler [status=implemented hash=9c5428ac37c1]
+        // parity: cli/src/services/web-ui.ts#handler [status=implemented hash=1e0d12c1440c]
         public static func handler(
             options: Options? = nil,
             context: CLIContext = CLIContext.current
@@ -2434,7 +2434,7 @@ public enum CLIServices {
         public typealias Starter = @Sendable (StartRequest) async throws -> StartedServer
 
         /// Runs the OpenCode HTTP/WebUI server process in `default`, `service`, or `stdio` mode.
-        // parity: cli/src/server-process.ts#run [status=adapted hash=a2135daa6b45]
+        // parity: cli/src/server-process.ts#run [status=adapted hash=24cd55cef644]
         public static let run: @Sendable (Options, CLIContext) async throws -> Void = { options, context in
             let global = context.globalPaths
             let foreground = options.mode == .default
@@ -2699,7 +2699,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/session-target.ts#SessionTargetPreparation [status=implemented hash=e247489fd23c]
+        // parity: cli/src/session-target.ts#SessionTargetPreparation [status=implemented hash=2b534125cfc1]
         public typealias SessionTargetPreparation = @Sendable (PreparationInput) async throws -> (model: ModelSchema.Ref?, agent: String?)
 
         // parity: cli/src/session-target.ts#SessionTargetMutationError [status=implemented hash=e83e5f87e320]
@@ -2773,7 +2773,7 @@ public enum CLIServices {
             }
         }
 
-        // parity: cli/src/session-target.ts#createWorktreeLocation [status=implemented hash=e80d4fa366bd]
+        // parity: cli/src/session-target.ts#createWorktreeLocation [status=implemented hash=c0325e65c936]
         public static func createWorktreeLocation(
             client: OpenCodeClient,
             directory: String? = nil,
@@ -2806,7 +2806,7 @@ public enum CLIServices {
             return (root: created.directory.rawValue, directory: created.directory.rawValue)
         }
 
-        // parity: cli/src/session-target.ts#resolveSessionTarget [status=implemented hash=42f36e93ae92]
+        // parity: cli/src/session-target.ts#resolveSessionTarget [status=implemented hash=107baf6e82d1]
         public static func resolveSessionTarget(_ input: ResolveInput) async throws -> SessionTarget {
             let reqOpts = input.signal.map { RequestOptions(signal: $0) }
             let selection = try await selectSession(input)
@@ -3834,7 +3834,7 @@ public enum CLIRun {
             }
         }
 
-        // parity: cli/src/mini-host.ts#createMiniHost [status=adapted hash=76e58330bbdf]
+        // parity: cli/src/mini-host.ts#createMiniHost [status=adapted hash=7d70cb114f46]
         public static func createMiniHost(
             terminal: InteractiveStdin,
             directory: String,
@@ -3977,7 +3977,7 @@ public enum CLIRun {
             )
         }
 
-        // parity: cli/src/mini.ts#resolveMiniTarget [status=implemented hash=adb03fecc256]
+        // parity: cli/src/mini.ts#resolveMiniTarget [status=implemented hash=447d1d652a7b]
         public static func resolveMiniTarget<A: Sendable>(
             sdk initial: OpenCodeClient,
             reconnect: (@Sendable (AbortSignal) async throws -> OpenCodeClient)? = nil,

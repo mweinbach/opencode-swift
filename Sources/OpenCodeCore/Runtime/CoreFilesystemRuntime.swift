@@ -158,7 +158,7 @@ public enum CoreFilesystem {
         }
 
         /// Where a typed path points.
-        // parity: core/src/file-access.ts#Place [status=implemented hash=482bb57ad046]
+        // parity: core/src/file-access.ts#Place [status=implemented hash=91c8666b31cc]
         public struct Place: Equatable, Hashable, Sendable, Codable {
             public struct EnvironmentRef: Equatable, Hashable, Sendable, Codable {
                 public let id: CoreLocation.Environment.ID
@@ -182,7 +182,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-access.ts#ResolveInput [status=implemented hash=01797c9de923]
+        // parity: core/src/file-access.ts#ResolveInput [status=implemented hash=66b4d8c33498]
         public struct ResolveInput: Equatable, Hashable, Sendable, Codable {
             public let path: String
             /// Selects the external approval boundary; it does not validate the target type.
@@ -291,7 +291,7 @@ public enum CoreFilesystem {
         /// Identifies a target's file: the same path in two environments is two files. The id's length (UTF-16 code
         /// units, as upstream's `string.length`) comes first so no id and path can read as another pair's key, and the
         /// keys of one environment sort as its paths do.
-        // parity: core/src/file-access.ts#key [status=implemented hash=97a2993aedea]
+        // parity: core/src/file-access.ts#key [status=implemented hash=ec27a3581df9]
         public static func key(absolute: String, environment id: CoreLocation.Environment.ID) -> String {
             "\(id.rawValue.utf16.count):\(id.rawValue):\(absolute)"
         }
@@ -684,7 +684,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-access.ts#node [status=adapted hash=f48b9834986a]
+        // parity: core/src/file-access.ts#node [status=adapted hash=0dbddf29cd80]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -822,7 +822,7 @@ public enum CoreFilesystem {
         }
 
         /// The file content was not valid UTF-8, so a text rewrite was refused.
-        // parity: core/src/file-mutation.ts#InvalidUtf8Error [status=implemented hash=855c8a800e14]
+        // parity: core/src/file-mutation.ts#InvalidUtf8Error [status=implemented hash=97101786cb8d]
         public struct InvalidUtf8Error: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "FileMutation.InvalidUtf8Error"
             public let path: String
@@ -844,7 +844,7 @@ public enum CoreFilesystem {
             String(validating: bytes, as: UTF8.self) != nil
         }
 
-        // parity: core/src/file-mutation.ts#readText [status=implemented hash=1d37b3269d31]
+        // parity: core/src/file-mutation.ts#readText [status=implemented hash=6c0c24320475]
         public static func readText(
             fileSystem: any OpenCodeFileSystem,
             target: String
@@ -854,7 +854,7 @@ public enum CoreFilesystem {
         }
 
         /// Read text that will be rewritten. Decoding replaces invalid bytes with U+FFFD, so such files are refused.
-        // parity: core/src/file-mutation.ts#readEditableText [status=implemented hash=5cb865f654e0]
+        // parity: core/src/file-mutation.ts#readEditableText [status=implemented hash=8a694253bb2b]
         public static func readEditableText(
             fileSystem: any OpenCodeFileSystem,
             target: String
@@ -874,7 +874,7 @@ public enum CoreFilesystem {
             return Bom.decodeBytes(bytes)
         }
 
-        // parity: core/src/file-mutation.ts#readOptionalText [status=implemented hash=f4ef69c33471]
+        // parity: core/src/file-mutation.ts#readOptionalText [status=implemented hash=6d79d58e9a8a]
         public static func readOptionalText(
             fileSystem: any OpenCodeFileSystem,
             target: String
@@ -887,7 +887,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-mutation.ts#syncTextBom [status=implemented hash=703d7d5dbf78]
+        // parity: core/src/file-mutation.ts#syncTextBom [status=implemented hash=f802955bd78b]
         public static func syncTextBom(
             fileSystem: any OpenCodeFileSystem,
             target: String,
@@ -1107,7 +1107,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-mutation.ts#node [status=adapted hash=a1142ff5b2b3]
+        // parity: core/src/file-mutation.ts#node [status=adapted hash=8885d308dbd5]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -1125,7 +1125,7 @@ public enum CoreFilesystem {
 
     public enum FileRetention {
         /// Deletes files whose modification timestamp is strictly older than `nowMs - retentionMs`.
-        // parity: core/src/file-retention.ts#cleanup [status=implemented hash=a8ffb267a028]
+        // parity: core/src/file-retention.ts#cleanup [status=implemented hash=a757962b1dbf]
         public static func cleanup(
             fileSystem: any OpenCodeFileSystem,
             files: [String],
@@ -1290,7 +1290,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-write.ts#node [status=adapted hash=171ea89f002a]
+        // parity: core/src/file-write.ts#node [status=adapted hash=0ecfc8c52b06]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -1355,7 +1355,7 @@ public enum CoreFilesystem {
     // MARK: - FFF Fuzzy File Finder Adapter (`core/src/filesystem/fff*.ts`)
 
     public enum Fff {
-        // parity: core/src/filesystem/fff.ts#Result [status=implemented hash=4ea80f1c8f51]
+        // parity: core/src/filesystem/fff.ts#Result [status=implemented hash=b590ffbff4ae]
         public enum Result<T: Sendable>: Sendable {
             case ok(T)
             case error(String)
@@ -1412,7 +1412,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/fff.ts#Mixed [status=implemented hash=174ca62b6336]
+        // parity: core/src/filesystem/fff.ts#Mixed [status=implemented hash=58694202330d]
         public enum Mixed: Equatable, Hashable, Sendable, Codable {
             case file(File)
             case directory(Directory)
@@ -1541,7 +1541,7 @@ public enum CoreFilesystem {
         // parity: core/src/filesystem/watcher.ts#Update [status=implemented hash=7227f75ead81]
         public typealias Update = CoreConfig.WatchUpdate
 
-        // parity: core/src/filesystem/watcher.ts#WatchInput [status=implemented hash=56fec6ce2e26]
+        // parity: core/src/filesystem/watcher.ts#WatchInput [status=implemented hash=4d5d05330035]
         public enum WatchInput: Equatable, Hashable, Sendable {
             case file(path: String)
             case entries(path: String, names: [String])
@@ -1826,13 +1826,13 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/watcher.ts#nativeLayer [status=adapted hash=80db1d636949]
+        // parity: core/src/filesystem/watcher.ts#nativeLayer [status=adapted hash=a45fa1add560]
         public static let nativeLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             let native = defaultNative()
             return LayerNode.Output([Native.serviceKey: native as any NativeInterface])
         }
 
-        // parity: core/src/filesystem/watcher.ts#layer [status=adapted hash=2663f8d9ecbc]
+        // parity: core/src/filesystem/watcher.ts#layer [status=adapted hash=4fa5f06d5d85]
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let native = deps.get(Native.serviceKey, as: (any NativeInterface).self)
@@ -1868,7 +1868,7 @@ public enum CoreFilesystem {
             return "@parcel/watcher-\(platformName)-\(archName)\(linuxSuffix)"
         }
 
-        // parity: core/src/filesystem/watcher.ts#testLayer [status=adapted hash=50dd48cc9d16]
+        // parity: core/src/filesystem/watcher.ts#testLayer [status=adapted hash=01abf8ee854b]
         public static let testLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
             let test = Test()
             return LayerNode.Output([
@@ -1993,7 +1993,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/location-watcher-policy.ts#node [status=adapted hash=9e1ad9da14bc]
+        // parity: core/src/filesystem/location-watcher-policy.ts#node [status=adapted hash=0c79ea0a2c77]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service() as any Interface),
@@ -2027,7 +2027,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/location-watcher.ts#node [status=adapted hash=de0fdfb7b6f9]
+        // parity: core/src/filesystem/location-watcher.ts#node [status=adapted hash=af216e7260b3]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -2055,7 +2055,7 @@ public enum CoreFilesystem {
         // parity: core/src/filesystem/file-watch.ts#MAX_PER_LOCATION [status=implemented hash=d0c39ff43968]
         public static let MAX_PER_LOCATION: Int = 256
 
-        // parity: core/src/filesystem/file-watch.ts#DisabledError [status=implemented hash=6346c92f15d7]
+        // parity: core/src/filesystem/file-watch.ts#DisabledError [status=implemented hash=237cf17835f5]
         public struct DisabledError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "FileWatch.DisabledError"
 
@@ -2083,7 +2083,7 @@ public enum CoreFilesystem {
             func unwatch(_ input: Input) async
         }
 
-        // parity: core/src/filesystem/file-watch.ts#Options [status=implemented hash=1fdb8e33c81b]
+        // parity: core/src/filesystem/file-watch.ts#Options [status=implemented hash=a1d7a62d1948]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let enabled: Bool?
 
@@ -2164,7 +2164,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/file-watch.ts#layer [status=adapted hash=1241a79b4ec7]
+        // parity: core/src/filesystem/file-watch.ts#layer [status=adapted hash=83179527e28f]
         public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { _, _ in
                 LayerNode.Output([Service.serviceKey: Service(enabled: options?.enabled ?? true) as any Interface])
@@ -2265,7 +2265,7 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/filesystem/search.ts#makeFffLayer [status=adapted hash=1c9d9a256787]
+        // parity: core/src/filesystem/search.ts#makeFffLayer [status=adapted hash=6cdbca187d27]
         public static func makeFffLayer(
             _ create: @escaping @Sendable (Fff.Init) -> Fff.Result<any Fff.Picker>
         ) -> LayerNode.ExecutableLayer {
@@ -2384,7 +2384,7 @@ public enum CoreFilesystem {
         }
     }
 
-    // parity: core/src/filesystem.ts#NotFoundError [status=implemented hash=9977d014dcb8]
+    // parity: core/src/filesystem.ts#NotFoundError [status=implemented hash=0053a747464a]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "FileSystem.NotFoundError"
         public let path: SchemaPrimitive.RelativePath
@@ -2396,7 +2396,7 @@ public enum CoreFilesystem {
         public var description: String { "File not found: \(path.rawValue)" }
     }
 
-    // parity: core/src/filesystem.ts#DirectoryNotFoundError [status=implemented hash=639d5a0b0466]
+    // parity: core/src/filesystem.ts#DirectoryNotFoundError [status=implemented hash=ba8e6efb3af5]
     public struct DirectoryNotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "FileSystem.DirectoryNotFoundError"
         public let directory: SchemaPrimitive.AbsolutePath
@@ -2412,7 +2412,7 @@ public enum CoreFilesystem {
         public var description: String { message }
     }
 
-    // parity: core/src/filesystem.ts#DirectoryAccessDeniedError [status=implemented hash=8b150e4af821]
+    // parity: core/src/filesystem.ts#DirectoryAccessDeniedError [status=implemented hash=7ef8417b2076]
     public struct DirectoryAccessDeniedError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "FileSystem.DirectoryAccessDeniedError"
         public let directory: SchemaPrimitive.AbsolutePath
@@ -2428,7 +2428,7 @@ public enum CoreFilesystem {
         public var description: String { message }
     }
 
-    // parity: core/src/filesystem.ts#Content [status=implemented hash=27d1393511e6]
+    // parity: core/src/filesystem.ts#Content [status=implemented hash=a7d7427f368a]
     public struct Content: Equatable, Hashable, Sendable, Codable {
         public enum Encoding: String, Equatable, Hashable, Sendable, Codable {
             case utf8
@@ -2465,7 +2465,7 @@ public enum CoreFilesystem {
     // parity: core/src/filesystem.ts#DEFAULT_SEARCH_TIMEOUT_MS [status=implemented hash=aa6d20d788b9]
     public static let DEFAULT_SEARCH_TIMEOUT_MS: Int = 30_000
 
-    // parity: core/src/filesystem.ts#GlobInput [status=implemented hash=2700a4e7f08e]
+    // parity: core/src/filesystem.ts#GlobInput [status=implemented hash=80f69c14bc0e]
     public struct GlobInput: Equatable, Hashable, Sendable, Codable {
         public let pattern: String
         public let path: SchemaPrimitive.RelativePath?
@@ -2485,7 +2485,7 @@ public enum CoreFilesystem {
         }
     }
 
-    // parity: core/src/filesystem.ts#GrepInput [status=implemented hash=d138620eeb58]
+    // parity: core/src/filesystem.ts#GrepInput [status=implemented hash=5f4099a0e40c]
     public struct GrepInput: Equatable, Hashable, Sendable, Codable {
         public let pattern: String
         public let path: SchemaPrimitive.RelativePath?
@@ -2640,7 +2640,7 @@ public enum CoreFilesystem {
         }
     }
 
-    // parity: core/src/filesystem.ts#node [status=adapted hash=2b973eedad20]
+    // parity: core/src/filesystem.ts#node [status=adapted hash=b6a3bdfea8a2]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

@@ -1044,7 +1044,7 @@ public struct ThemeDefinition: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Shared base token layer of a `ThemeDocument` (everything except `hue`).
-// parity: theme/src/tui/schema.ts#BaseThemeDefinition [status=implemented hash=742ffb250417]
+// parity: theme/src/tui/schema.ts#BaseThemeDefinition [status=implemented hash=2ecb4e17c723]
 public struct BaseThemeDefinition: Equatable, Hashable, Sendable, Codable {
     public var categorical: CategoricalDefinition
     public var text: TextDefinition
@@ -1092,7 +1092,7 @@ public struct BaseThemeDefinition: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Per-mode override layer in a `ThemeDocument` (provides required `hue` and optional token overrides).
-// parity: theme/src/tui/schema.ts#ModeDefinition [status=implemented hash=42cd124429f9]
+// parity: theme/src/tui/schema.ts#ModeDefinition [status=implemented hash=bb2a6674a3bc]
 public struct ModeDefinition: Equatable, Hashable, Sendable, Codable {
     public var hue: HueDefinition
     public var categorical: CategoricalDefinition?
@@ -1157,7 +1157,7 @@ public struct ModeDefinition: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Multi-mode TUI theme document (`base` plus at least one of `light` or `dark`).
-// parity: theme/src/tui/schema.ts#ThemeDocument [status=implemented hash=ad9b227ca255]
+// parity: theme/src/tui/schema.ts#ThemeDocument [status=implemented hash=0620a18626c4]
 public struct ThemeDocument: Equatable, Hashable, Sendable, Codable {
     public var schema: String?
     public var base: BaseThemeDefinition
@@ -1288,7 +1288,7 @@ public struct Hue: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Provenance of a resolved `RGBA` color within the theme's hue scales.
-// parity: theme/src/tui/types.ts#HueSource [status=implemented hash=04dbc0e5bb72]
+// parity: theme/src/tui/types.ts#HueSource [status=implemented hash=e24a285fa7d0]
 public struct HueSource: Equatable, Hashable, Sendable, Codable {
     public let hue: String
     public let step: HueStep

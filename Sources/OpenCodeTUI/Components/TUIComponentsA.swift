@@ -440,7 +440,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-config.tsx#settings [status=implemented hash=ce0b87956c2b]
+    // parity: tui/src/component/dialog-config.tsx#settings [status=implemented hash=6b26c4219f4b]
     public static let settings: [SettingDefinition] = [
         SettingDefinition(title: "Theme", category: "Appearance", path: ["theme", "name"], description: "Color theme used across the interface", defaultValue: "opencode", keywords: ["color scheme", "colors"], opensPicker: true),
         SettingDefinition(title: "Color mode", category: "Appearance", path: ["theme", "mode"], description: "Dark or light variant, or follow the system", defaultValue: "system", values: ["system", "dark", "light"], keywords: ["dark mode", "light mode", "system theme"]),
@@ -644,7 +644,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/devtools-bar.tsx#runtimeStatus [status=implemented hash=0fda116b324e]
+    // parity: tui/src/component/devtools-bar.tsx#runtimeStatus [status=implemented hash=76082ec62b59]
     public static func runtimeStatus(_ samples: [ProcessSample]) -> RuntimeStatus {
         guard let latest = samples.last?.time else { return .normal }
         let maxDelay = samples
@@ -824,7 +824,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-error-details.tsx#DialogErrorDetails [status=adapted hash=8fde7271cff0]
+    // parity: tui/src/component/dialog-error-details.tsx#DialogErrorDetails [status=adapted hash=1e7f79931a8a]
     public static func DialogErrorDetails(
         ctx: any RenderContext,
         title: String,
@@ -1049,7 +1049,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-highlights.tsx#DialogHighlights [status=adapted hash=9f315fc75ea4]
+    // parity: tui/src/component/dialog-highlights.tsx#DialogHighlights [status=adapted hash=701a886ff5de]
     public static func DialogHighlights(
         ctx: any RenderContext,
         version: String,
@@ -1087,7 +1087,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-image-preview.tsx#DialogImagePreview [status=adapted hash=9a2a6913c6c9]
+    // parity: tui/src/component/dialog-image-preview.tsx#DialogImagePreview [status=adapted hash=6052e30c9e9d]
     public static func DialogImagePreview(
         ctx: any RenderContext,
         images: [ImagePreviewItem],
@@ -1179,7 +1179,7 @@ public enum TUIComponent {
         return first.type == "credential" ? first.label : "$\(first.name ?? first.label)"
     }
 
-    // parity: tui/src/component/dialog-integration.tsx#DialogIntegration [status=adapted hash=5c06a56ff121]
+    // parity: tui/src/component/dialog-integration.tsx#DialogIntegration [status=adapted hash=0554fea01e62]
     public static func DialogIntegration(
         ctx: any RenderContext,
         integrations: [IntegrationItem],
@@ -1216,7 +1216,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-mcp.tsx#DialogMcp [status=adapted hash=ed5089e6d1b7]
+    // parity: tui/src/component/dialog-mcp.tsx#DialogMcp [status=adapted hash=65965f4f10fe]
     public static func DialogMcp(
         ctx: any RenderContext,
         servers: [McpServerEntry],
@@ -1274,7 +1274,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-model-free.tsx#DialogFreeModels [status=adapted hash=115fd77c1004]
+    // parity: tui/src/component/dialog-model-free.tsx#DialogFreeModels [status=adapted hash=161593edc857]
     public static func DialogFreeModels(
         ctx: any RenderContext,
         models: [ModelChoiceItem],
@@ -1299,7 +1299,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-model.tsx#DialogModel [status=adapted hash=08e2684bea02]
+    // parity: tui/src/component/dialog-model.tsx#DialogModel [status=adapted hash=6610f39766c4]
     public static func DialogModel(
         ctx: any RenderContext,
         models: [ModelChoiceItem],
@@ -1350,7 +1350,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-open.tsx#moveOpenSession [status=implemented hash=bbf43a05da57]
+    // parity: tui/src/component/dialog-open.tsx#moveOpenSession [status=implemented hash=9a0de4bfcb63]
     public static func moveOpenSession(
         _ session: OpenSessionItem,
         newDirectory: String,
@@ -1368,7 +1368,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-open.tsx#DialogOpen [status=adapted hash=d5e6516abb25]
+    // parity: tui/src/component/dialog-open.tsx#DialogOpen [status=adapted hash=87d3058096c2]
     public static func DialogOpen(
         ctx: any RenderContext,
         sessions: [OpenSessionItem],
@@ -1476,7 +1476,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-session-rename.tsx#DialogSessionRename [status=adapted hash=bfcfee39e443]
+    // parity: tui/src/component/dialog-session-rename.tsx#DialogSessionRename [status=adapted hash=f1aa91aa0b8a]
     public static func DialogSessionRename(
         ctx: any RenderContext,
         sessionID: String,
@@ -1504,7 +1504,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-shell-output.tsx#DialogShellOutput [status=adapted hash=31afd9ba2179]
+    // parity: tui/src/component/dialog-shell-output.tsx#DialogShellOutput [status=adapted hash=30c7325f39e8]
     public static func DialogShellOutput(
         ctx: any RenderContext,
         command: String,
@@ -1590,7 +1590,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-stash.tsx#DialogStash [status=adapted hash=8a92b4f4269f]
+    // parity: tui/src/component/dialog-stash.tsx#DialogStash [status=adapted hash=789a6a386093]
     public static func DialogStash(
         ctx: any RenderContext,
         entries: [StashItem],
@@ -1642,7 +1642,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-theme-list.tsx#DialogThemeList [status=adapted hash=209c5453307f]
+    // parity: tui/src/component/dialog-theme-list.tsx#DialogThemeList [status=adapted hash=21dd79f330aa]
     public static func DialogThemeList(
         ctx: any RenderContext,
         selectedTheme: String = "opencode",
@@ -1670,7 +1670,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-update.tsx#DialogUpdate [status=adapted hash=0fc4ecc8ae7c]
+    // parity: tui/src/component/dialog-update.tsx#DialogUpdate [status=adapted hash=f8523742c2db]
     public static func DialogUpdate(
         ctx: any RenderContext,
         state: String,
@@ -1749,7 +1749,7 @@ public enum TUIComponent {
         }
     }
 
-    // parity: tui/src/component/dialog-workspace-file-changes.tsx#DialogWorkspaceFileChanges [status=adapted hash=ffb002643527]
+    // parity: tui/src/component/dialog-workspace-file-changes.tsx#DialogWorkspaceFileChanges [status=adapted hash=9804eaec8135]
     public static func DialogWorkspaceFileChanges(
         ctx: any RenderContext,
         files: [WorkspaceFileChange],
@@ -1783,7 +1783,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-workspaces.tsx#WorkspaceSelection [status=implemented hash=0a730a7f7cf3]
+    // parity: tui/src/component/dialog-workspaces.tsx#WorkspaceSelection [status=implemented hash=c7e54e3e2ca7]
     public enum WorkspaceSelection: Equatable, Hashable, Sendable {
         case directory(path: String, subdirectory: Bool)
         case new(name: String)
@@ -1811,7 +1811,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/dialog-worktree-name.tsx#DialogWorktreeName [status=adapted hash=b289aac781a6]
+    // parity: tui/src/component/dialog-worktree-name.tsx#DialogWorktreeName [status=adapted hash=bdd4c70bb5fe]
     public static func DialogWorktreeName(
         ctx: any RenderContext,
         dialog: TUIPrimitive.DialogContext,
@@ -1933,7 +1933,7 @@ public enum TUIComponent {
         return overlay
     }
 
-    // parity: tui/src/component/reconnecting.tsx#Reconnecting [status=adapted hash=681f833ed285]
+    // parity: tui/src/component/reconnecting.tsx#Reconnecting [status=adapted hash=682ee21df691]
     public static func Reconnecting(
         ctx: any RenderContext,
         managed: Bool = false,
@@ -1973,7 +1973,7 @@ public enum TUIComponent {
         return overlay
     }
 
-    // parity: tui/src/component/startup-loading.tsx#StartupLoading [status=adapted hash=400a939ddf0e]
+    // parity: tui/src/component/startup-loading.tsx#StartupLoading [status=adapted hash=181297948c59]
     public static func StartupLoading(
         ctx: any RenderContext,
         ready: Bool,
@@ -2098,7 +2098,7 @@ public enum TUIComponent {
         )
     }
 
-    // parity: tui/src/component/usage.tsx#DialogUsageModel [status=adapted hash=b9593b1c8a23]
+    // parity: tui/src/component/usage.tsx#DialogUsageModel [status=adapted hash=2fff3f8cbf46]
     public static func DialogUsageModel(
         ctx: any RenderContext,
         modelName: String,
@@ -2210,7 +2210,7 @@ public enum TUIComponent {
         return nil
     }
 
-    // parity: tui/src/component/usage.tsx#UsageLimitNotice [status=adapted hash=0bd87d5cdc96]
+    // parity: tui/src/component/usage.tsx#UsageLimitNotice [status=adapted hash=292dd2e6455a]
     public static func UsageLimitNotice(
         ctx: any RenderContext,
         notice: LimitNoticeData,

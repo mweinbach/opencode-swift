@@ -1062,7 +1062,7 @@ public enum RpcRuntime {
     }
 
     /// Decodes a published `rpc.*` server event into a typed `RpcDecodedEvent`.
-    // parity: client/src/rpc-runtime.ts#event [status=implemented hash=42f9ea1fbe5f]
+    // parity: client/src/rpc-runtime.ts#event [status=implemented hash=f62bd9a19d57]
     public static func event(
         definition: RpcSchema.Definition,
         name: String,
@@ -1102,7 +1102,7 @@ public protocol TypedClientEvent: Sendable {
 extension OpenCodeEvent: TypedClientEvent {}
 
 /// Selected event member alias matching upstream `SelectedEvent<A, Type>`.
-// parity: client/src/shared-events.ts#SelectedEvent [status=adapted hash=f50324901637]
+// parity: client/src/shared-events.ts#SelectedEvent [status=adapted hash=0f341f24c204]
 public typealias SelectedEvent<Event: TypedClientEvent> = Event
 
 /// Options for subscribing to a `SharedEventsHub`.
@@ -1446,7 +1446,7 @@ public final class SharedEventsHub<Event: TypedClientEvent>: Sendable {
 
 public enum SharedEvents {
     /// Creates a shared, lazily connected, capacity-bounded event multiplexer.
-    // parity: client/src/shared-events.ts#make [status=implemented hash=feb90af179f8]
+    // parity: client/src/shared-events.ts#make [status=implemented hash=e1157cdafa50]
     public static func make<Event: TypedClientEvent>(
         connect: @escaping @Sendable (AbortSignal, @escaping @Sendable () -> Void) -> AsyncThrowingStream<Event, any Error>
     ) -> SharedEventsHub<Event> {

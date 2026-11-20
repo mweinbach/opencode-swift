@@ -79,7 +79,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/gitgraph/types.ts#GitGraphCellStyle [status=implemented hash=5a783b2239a5]
+    // parity: merman/src/gitgraph/types.ts#GitGraphCellStyle [status=implemented hash=ce11c2655ea8]
     public enum GitGraphCellStyle: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case branch0
         case branch1
@@ -120,7 +120,7 @@ extension Merman {
     // parity: merman/src/gitgraph/style.ts#GitGraphStyleColors [status=implemented hash=8ff623a2a621]
     public typealias GitGraphStyleColors = [GitGraphCellStyle: RGBA]
 
-    // parity: merman/src/gitgraph/style.ts#resolveGitGraphStyleColors [status=implemented hash=178507717dce]
+    // parity: merman/src/gitgraph/style.ts#resolveGitGraphStyleColors [status=implemented hash=1468f294ffa7]
     public static func resolveGitGraphStyleColors(
         _ colors: [GitGraphThemeKey: RGBA?] = [:]
     ) -> GitGraphStyleColors {
@@ -506,7 +506,7 @@ extension Merman {
         var style: GitGraphCellStyle
     }
 
-    // parity: merman/src/gitgraph/drawing.ts#drawGitGraphDiagramGrid [status=implemented hash=6ffb315ec1b8]
+    // parity: merman/src/gitgraph/drawing.ts#drawGitGraphDiagramGrid [status=implemented hash=19d7305a6f5a]
     public static func drawGitGraphDiagramGrid(
         _ diagram: GitGraphDiagram,
         options: GitGraphDiagramRenderOptions = GitGraphDiagramRenderOptions()
@@ -792,7 +792,7 @@ extension Merman {
 
     // MARK: - GitGraph Diagram (`gitgraph/diagram.ts`)
 
-    // parity: merman/src/gitgraph/diagram.ts#renderGitGraphDiagram [status=implemented hash=0ffba9bb39b1]
+    // parity: merman/src/gitgraph/diagram.ts#renderGitGraphDiagram [status=implemented hash=29f2f69eb79b]
     public static func renderGitGraphDiagram(
         _ content: String,
         options: GitGraphDiagramRenderOptions = GitGraphDiagramRenderOptions()

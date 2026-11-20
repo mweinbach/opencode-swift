@@ -1,5 +1,5 @@
 /// Branded Project identifier.
-// parity: schema/src/project-id.ts#ProjectID [status=implemented hash=90507be14ce0]
+// parity: schema/src/project-id.ts#ProjectID [status=implemented hash=b8c8b8a36fae]
 public struct ProjectID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     public let rawValue: String
 

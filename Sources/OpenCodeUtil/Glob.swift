@@ -47,7 +47,7 @@ public enum Glob {
     }
 
     /// Scans `entries` produced by a directory walker against `pattern` and `options`.
-    // parity: util/src/glob.ts#Glob.scan [status=implemented hash=6179518d7050]
+    // parity: util/src/glob.ts#Glob.scan [status=implemented hash=69602c673222]
     public static func scan(
         _ pattern: String,
         options: Options = Options(),
@@ -74,7 +74,7 @@ public enum Glob {
     }
 
     /// Matches `filepath` against a minimatch-style glob `pattern` (`dot` defaults to `true`).
-    // parity: util/src/glob.ts#Glob.match [status=implemented hash=7e1393c270e2]
+    // parity: util/src/glob.ts#Glob.match [status=implemented hash=4fd763a95934]
     public static func match(
         _ pattern: String,
         filepath: String,

@@ -7,7 +7,7 @@ public enum ResponseBodyEncoding: String, Equatable, Hashable, Sendable, Codable
 }
 
 /// Runtime schema for `RequestSnapshot`.
-// parity: http-recorder/src/http/model.ts#RequestSnapshotSchema [status=implemented hash=8cf42492653a]
+// parity: http-recorder/src/http/model.ts#RequestSnapshotSchema [status=implemented hash=953f74d4fd34]
 public let RequestSnapshotSchema = RecorderSchema<RequestSnapshot>(
     name: "RequestSnapshot",
     decode: { value in
@@ -51,7 +51,7 @@ public struct ResponseSnapshot: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Runtime schema for `ResponseSnapshot`.
-// parity: http-recorder/src/http/model.ts#ResponseSnapshotSchema [status=implemented hash=359e2aa02c1b]
+// parity: http-recorder/src/http/model.ts#ResponseSnapshotSchema [status=implemented hash=e3d096dfe11d]
 public let ResponseSnapshotSchema = RecorderSchema<ResponseSnapshot>(
     name: "ResponseSnapshot",
     decode: { value in
@@ -123,7 +123,7 @@ public struct HttpInteraction: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Runtime schema for `HttpInteraction`.
-// parity: http-recorder/src/http/model.ts#HttpInteractionSchema [status=implemented hash=ce4c36ffee1d]
+// parity: http-recorder/src/http/model.ts#HttpInteractionSchema [status=implemented hash=84c736c65708]
 public let HttpInteractionSchema = RecorderSchema<HttpInteraction>(
     name: "HttpInteraction",
     decode: { value in

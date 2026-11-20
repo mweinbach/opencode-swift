@@ -44,7 +44,7 @@ public enum PromiseSdk {
     }
 
     /// Options for creating a Promise-surface embedded OpenCode host (`packages/sdk/src/promise.ts#CreateOptions`).
-    // parity: sdk/src/promise.ts#CreateOptions [status=implemented hash=432d07f432f2]
+    // parity: sdk/src/promise.ts#CreateOptions [status=implemented hash=b8822a556802]
     public struct CreateOptions: Sendable {
         public var server: EmbeddedServerOptions
         public var log: SDKLogging.LogOptions?
@@ -226,7 +226,7 @@ public enum PromiseSdk {
     }
 
     /// Boots an in-process Promise-surface OpenCode host over `http://opencode.local` using `OwnedFetch`.
-    // parity: sdk/src/promise.ts#create [status=implemented hash=29c99c9dae0b]
+    // parity: sdk/src/promise.ts#create [status=implemented hash=8181720589ae]
     public static func create(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbeddedHost.EmbedOptions = EmbeddedHost.EmbedOptions()
@@ -282,7 +282,7 @@ public extension OpenCode {
     typealias Interface = PromiseSdk.Interface
 
     /// Boots an in-process OpenCode SDK host (`packages/sdk/src/opencode.ts#create`).
-    // parity: sdk/src/opencode.ts#create [status=implemented hash=12ad69602834]
+    // parity: sdk/src/opencode.ts#create [status=implemented hash=ae598f05a506]
     static func create(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbeddedHost.EmbedOptions = EmbeddedHost.EmbedOptions()
@@ -345,7 +345,7 @@ public enum OpenCodeWorkerd {
     public typealias Interface = PromiseSdk.Interface
 
     /// Boots the embedded OpenCode SDK on the workerd runtime profile over injected `DurableObjectStorage`.
-    // parity: sdk/src/workerd.ts#create [status=implemented hash=eef7fed6e49c]
+    // parity: sdk/src/workerd.ts#create [status=implemented hash=3e19a4887b74]
     public static func create(_ options: CreateOptions) async throws -> Interface {
         let profile = try WorkerdProfile.make(
             WorkerdProfile.Options(
@@ -649,7 +649,7 @@ public enum OpenCodeEffect {
     /// Acquires an Effect-native embedded OpenCode SDK bound to `scope`: closing `scope` automatically
     /// calls `host.close()` (`Effect.acquireRelease` semantics). The client permanently binds the host's
     /// in-process `OwnedFetch` transport, isolating it from any ambient transport in the caller's environment.
-    // parity: sdk/src/effect/opencode.ts#create [status=adapted hash=6147dc6a1feb]
+    // parity: sdk/src/effect/opencode.ts#create [status=adapted hash=7f2d7b1aa4e4]
     public static func create(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbedOptions = EmbedOptions(),
@@ -686,7 +686,7 @@ public enum OpenCodeEffect {
 
     /// Builds a `LayerNode.ExecutableLayer` providing `OpenCodeEffect.Interface` under `Service.serviceKey`,
     /// forwarding upstream `deps` into `options.services` for `SdkInstances.provide`.
-    // parity: sdk/src/effect/opencode.ts#layer [status=adapted hash=bb54dcf55ee4]
+    // parity: sdk/src/effect/opencode.ts#layer [status=adapted hash=b8b47c3d565d]
     public static func layer(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbedOptions = EmbedOptions()
@@ -755,7 +755,7 @@ public enum OpenCodeEffectWorkerd {
     public typealias Requirements = LayerNode.ResourceScope
 
     /// Acquires an Effect-native OpenCode SDK host on the workerd runtime profile bound to `scope`.
-    // parity: sdk/src/effect/workerd.ts#create [status=adapted hash=bd71bdd2b2ed]
+    // parity: sdk/src/effect/workerd.ts#create [status=adapted hash=98d42f6821bf]
     public static func create(
         _ options: CreateOptions,
         scope: Requirements

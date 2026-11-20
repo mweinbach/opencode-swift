@@ -91,7 +91,7 @@ public enum WebSocketEvent: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Runtime schema for `WebSocketEvent`.
-// parity: http-recorder/src/websocket/model.ts#WebSocketEventSchema [status=implemented hash=642d2ce048de]
+// parity: http-recorder/src/websocket/model.ts#WebSocketEventSchema [status=implemented hash=9c69606eba33]
 public let WebSocketEventSchema = RecorderSchema<WebSocketEvent>(
     name: "WebSocketEvent",
     decode: { value in
@@ -211,7 +211,7 @@ public struct WebSocketInteraction: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Runtime schema for `WebSocketInteraction`.
-// parity: http-recorder/src/websocket/model.ts#WebSocketInteractionSchema [status=implemented hash=389d9b94613f]
+// parity: http-recorder/src/websocket/model.ts#WebSocketInteractionSchema [status=implemented hash=5e75c70a7af3]
 public let WebSocketInteractionSchema = RecorderSchema<WebSocketInteraction>(
     name: "WebSocketInteraction",
     decode: { value in

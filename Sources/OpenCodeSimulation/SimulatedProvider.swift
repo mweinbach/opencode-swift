@@ -26,7 +26,7 @@ public enum SimulatedProvider {
     }
 
     /// Event emitted by a simulated model provider stream (`Backend.Item | finish`).
-    // parity: simulation/src/backend/simulated-provider.ts#ProviderResponseEvent [status=implemented hash=94465b276a80]
+    // parity: simulation/src/backend/simulated-provider.ts#ProviderResponseEvent [status=implemented hash=963ecc553325]
     public enum ProviderResponseEvent: Equatable, Hashable, Sendable, Codable {
         case item(OpenCodeProtocol.Backend.Item)
         case finish(reason: OpenCodeProtocol.Backend.FinishReason)
@@ -82,7 +82,7 @@ public enum SimulatedProvider {
     }
 
     /// Error raised when Drive disconnects an in-flight model provider invocation.
-    // parity: simulation/src/backend/simulated-provider.ts#ProviderDisconnectedError [status=implemented hash=9fb1b35069de]
+    // parity: simulation/src/backend/simulated-provider.ts#ProviderDisconnectedError [status=implemented hash=72d7825e1317]
     public struct ProviderDisconnectedError: Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "SimulatedProvider.ProviderDisconnectedError"
 
@@ -308,7 +308,7 @@ public enum SimulatedProvider {
     }
 
     /// Builds a `LayerNode.ExecutableLayer` acquiring the Drive WebSocket backend provider and tool driver.
-    // parity: simulation/src/backend/simulated-provider.ts#layerDrive [status=implemented hash=93d7caa1cea6]
+    // parity: simulation/src/backend/simulated-provider.ts#layerDrive [status=implemented hash=b5713d02cb4b]
     public static func layerDrive(_ options: DriveOptions) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, scope in
             let sdkPlugins = deps.get(CorePlugin.SdkPlugins.Service.serviceKey, as: CorePlugin.SdkPlugins.Service.self)

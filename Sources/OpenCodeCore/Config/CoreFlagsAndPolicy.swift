@@ -33,7 +33,7 @@ public enum CoreFlag {
     }
 
     /// Context reference for `OPENCODE_FLAGS` override strings (e.g. `"automations,-media_blob"` or `"all,-media_blob"`).
-    // parity: core/src/flag.ts#Overrides [status=adapted hash=a3f6213d88df]
+    // parity: core/src/flag.ts#Overrides [status=adapted hash=4a9e8375ed88]
     public enum Overrides {
         public static let key = "@opencode/Flag/Overrides"
         @TaskLocal public static var current: String? = nil
@@ -149,7 +149,7 @@ public enum CoreFlag {
         }
     }
 
-    // parity: core/src/flag.ts#layer [status=adapted hash=3062e87179b3]
+    // parity: core/src/flag.ts#layer [status=adapted hash=3a14f6c38d67]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let config = deps.get(CoreConfig.Service.serviceKey, as: (any CoreConfig.Interface).self)
             ?? CoreConfig.Test()
@@ -176,7 +176,7 @@ public enum CoreFlag {
         }
     }
 
-    // parity: core/src/flag.ts#node [status=adapted hash=61099913d40a]
+    // parity: core/src/flag.ts#node [status=adapted hash=d8081ff752cc]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         layer,

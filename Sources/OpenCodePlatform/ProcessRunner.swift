@@ -361,7 +361,7 @@ public enum CrossSpawnSpawner {
 
     public static let spawnerKey = "@opencode/ChildProcessSpawner"
 
-    // parity: util/src/cross-spawn-spawner.ts#node [status=implemented hash=dcfc1a1b751f]
+    // parity: util/src/cross-spawn-spawner.ts#node [status=implemented hash=b4e8095ce98e]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         spawnerKey,
         LayerNode.ExecutableLayer.succeed(key: spawnerKey, value: HostProcessSpawner.shared as any ProcessSpawner),
@@ -372,7 +372,7 @@ public enum CrossSpawnSpawner {
 // MARK: - AppProcess (`process.ts`)
 
 public enum AppProcess {
-    // parity: util/src/process.ts#AppProcessError [status=implemented hash=59c5d12b4a1c]
+    // parity: util/src/process.ts#AppProcessError [status=implemented hash=e70de0434e35]
     public struct AppProcessError: Error, Equatable, Sendable, CustomStringConvertible {
         public let command: String
         public let exitCode: Int32?
@@ -671,7 +671,7 @@ public enum AppProcess {
         }
     }
 
-    // parity: util/src/process.ts#requireSuccess [status=implemented hash=4b5f58493165]
+    // parity: util/src/process.ts#requireSuccess [status=implemented hash=26c6b4d0267d]
     public static func requireSuccess(_ result: RunResult) throws -> RunResult {
         if result.exitCode == 0 { return result }
         throw AppProcessError(
@@ -681,7 +681,7 @@ public enum AppProcess {
         )
     }
 
-    // parity: util/src/process.ts#requireExitIn [status=implemented hash=07ddd077561e]
+    // parity: util/src/process.ts#requireExitIn [status=implemented hash=d6e1a7b78208]
     public static func requireExitIn(_ codes: [Int32]) -> @Sendable (RunResult) throws -> RunResult {
         { result in
             if codes.contains(result.exitCode) { return result }
@@ -699,7 +699,7 @@ public enum AppProcess {
         return AbortError(message: "Aborted", name: "AbortError")
     }
 
-    // parity: util/src/process.ts#waitForAbort [status=implemented hash=1f3e77df358a]
+    // parity: util/src/process.ts#waitForAbort [status=implemented hash=e4a4b8146b7d]
     public static func waitForAbort(_ signal: AbortSignal) async throws -> Never {
         if signal.isAborted {
             throw abortError(signal)
@@ -720,7 +720,7 @@ public enum AppProcess {
         throw abortError(signal)
     }
 
-    // parity: util/src/process.ts#collectStream [status=implemented hash=50d0a7cff772]
+    // parity: util/src/process.ts#collectStream [status=implemented hash=03ae5dda1c63]
     public static func collectStream(
         _ chunks: [[UInt8]],
         maxOutputBytes: Int?
@@ -748,7 +748,7 @@ public enum AppProcess {
         return (buffer: collected, truncated: truncated)
     }
 
-    // parity: util/src/process.ts#node [status=implemented hash=c10cdaefc7ab]
+    // parity: util/src/process.ts#node [status=implemented hash=3cbb186d2a50]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1130,7 +1130,7 @@ public enum HeapSnapshot {
     }
 
     /// Writes a diagnostic memory snapshot file into `directory` (native Swift adaptation of V8 heap snapshot).
-    // parity: util/src/heap-snapshot.ts#write [status=adapted hash=721d3e0e7a6c]
+    // parity: util/src/heap-snapshot.ts#write [status=adapted hash=381d411801d0]
     public static func write(
         directory: String,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared

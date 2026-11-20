@@ -26,7 +26,7 @@ public enum BracePosition: String, CaseIterable, Equatable, Hashable, Sendable, 
 }
 
 /// Structural AST node produced by `parseLatex` and consumed by `layoutMath`.
-// parity: latex/src/types.ts#MathNode [status=implemented hash=2c80b1b55963]
+// parity: latex/src/types.ts#MathNode [status=implemented hash=34659f828d90]
 public indirect enum MathNode: Equatable, Hashable, Sendable, Codable {
     case row([MathNode])
     case symbol(value: String, role: SymbolRole? = nil)
@@ -63,7 +63,7 @@ public enum SymbolRole: String, CaseIterable, Equatable, Hashable, Sendable, Cod
 }
 
 /// Supported multi-row matrix, alignment, and piecewise math environments.
-// parity: latex/src/types.ts#MatrixEnvironment [status=implemented hash=ef257e25d600]
+// parity: latex/src/types.ts#MatrixEnvironment [status=implemented hash=c9289a03b16e]
 public enum MatrixEnvironment: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
     case matrix
     case pmatrix

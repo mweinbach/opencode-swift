@@ -47,7 +47,7 @@ public enum CoreLocation {
                 }
             }
 
-            // parity: core/src/environment/files.ts#NotFound [status=implemented hash=c56991347086]
+            // parity: core/src/environment/files.ts#NotFound [status=implemented hash=5a48bdb45a5d]
             public struct NotFound: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
                 public static let tag = "Environment.NotFound"
                 public let path: String
@@ -59,7 +59,7 @@ public enum CoreLocation {
                 public var description: String { "Environment path not found: \(path)" }
             }
 
-            // parity: core/src/environment/files.ts#WrongKind [status=implemented hash=9f39e6c9a93b]
+            // parity: core/src/environment/files.ts#WrongKind [status=implemented hash=014dd9c20746]
             public struct WrongKind: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
                 public static let tag = "Environment.WrongKind"
                 public let path: String
@@ -73,7 +73,7 @@ public enum CoreLocation {
                 public var description: String { "Wrong file kind at \(path): \(actual.rawValue)" }
             }
 
-            // parity: core/src/environment/files.ts#Failed [status=implemented hash=edbee34c0461]
+            // parity: core/src/environment/files.ts#Failed [status=implemented hash=3844cbc6030f]
             public struct Failed: Swift.Error, Sendable, CustomStringConvertible {
                 public static let tag = "Environment.Failed"
                 public let path: String
@@ -127,7 +127,7 @@ public enum CoreLocation {
             // parity: core/src/environment/files.ts#Files [status=implemented hash=d0b4d6070fb4]
             public protocol Interface: FilesImpl {}
 
-            // parity: core/src/environment/files.ts#typeFollowing [status=implemented hash=8b06041bf0cb]
+            // parity: core/src/environment/files.ts#typeFollowing [status=implemented hash=ff45f582ada8]
             public static func typeFollowing(_ files: any FilesImpl, path: String) async throws -> FileType {
                 let info = try await files.stat(path)
                 guard info.type == .symlink else { return info.type }
@@ -299,7 +299,7 @@ public enum CoreLocation {
             ExecFilesImpl(spawner: spawner)
         }
 
-        // parity: core/src/environment/exec-defaults.ts#makeFiles [status=implemented hash=6dffe983e05c]
+        // parity: core/src/environment/exec-defaults.ts#makeFiles [status=implemented hash=02de2968e8e4]
         public static func makeFiles(_ driver: Driver) -> any Files.Interface {
             if let overrides = driver.overrides as? any Files.Interface {
                 return overrides
@@ -444,7 +444,7 @@ public enum CoreLocation {
             Driver(spawner: spawner, overrides: LocalFilesImpl(fileSystem: fileSystem))
         }
 
-        // parity: core/src/environment/unavailable.ts#spawner [status=implemented hash=248c5af64f78]
+        // parity: core/src/environment/unavailable.ts#spawner [status=implemented hash=d27b55a791c0]
         public struct UnavailableSpawner: ProcessSpawner, Sendable {
             public init() {}
             public func run(_ spec: ProcessSpec) async throws -> ProcessOutput {
@@ -772,7 +772,7 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/environment/environment.ts#make [status=implemented hash=695cab8ec0ba]
+        // parity: core/src/environment/environment.ts#make [status=implemented hash=7e95b2809bf7]
         public static func make(_ id: ID, _ driver: Driver) -> any Interface {
             Service(id: id, driver: driver)
         }
@@ -789,7 +789,7 @@ public enum CoreLocation {
         /// Shared host environment used as the default `environment` of targets and inputs built without one.
         public static let host: any Interface = local()
 
-        // parity: core/src/environment/environment.ts#node [status=adapted hash=bbf1b8f85eec]
+        // parity: core/src/environment/environment.ts#node [status=adapted hash=978b3a2f1450]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -846,7 +846,7 @@ public enum CoreLocation {
             tag: AppNode.tags.values["location"]!
         )
 
-        // parity: core/src/location.ts#boundNode [status=implemented hash=4c0238411b15]
+        // parity: core/src/location.ts#boundNode [status=implemented hash=16230e6e805a]
         public static func boundNode(_ ref: LocationSchema.Ref) -> LayerNode.Provider {
             AppNode.makeLocationNode(
                 Service.serviceKey,
@@ -885,7 +885,7 @@ public enum CoreLocation {
     // MARK: - core/src/location-lifecycle.ts
 
     public enum Lifecycle {
-        // parity: core/src/location-lifecycle.ts#Service [status=implemented hash=87dbf66fd7c5]
+        // parity: core/src/location-lifecycle.ts#Service [status=implemented hash=f79b68bd7b6f]
         public final class Service: Sendable {
             public static let serviceKey = "@opencode/LocationLifecycle"
 
@@ -958,7 +958,7 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/location-lifecycle.ts#node [status=implemented hash=2d0ef6a5ca81]
+        // parity: core/src/location-lifecycle.ts#node [status=implemented hash=550b84d065d8]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { _, _ in
@@ -1004,7 +1004,7 @@ public enum CoreLocation {
 
         /// Process-global map of cached per-Location service containers with canonical lookup,
         /// invalidation, shutdown propagation, and full reload.
-        // parity: core/src/location-service-map.ts#Service [status=implemented hash=87dbf66fd7c5]
+        // parity: core/src/location-service-map.ts#Service [status=implemented hash=8f2246752b53]
         public final class Service: Sendable {
             public static let serviceKey = "@opencode/LocationServiceMap"
 
@@ -1089,7 +1089,7 @@ public enum CoreLocation {
             tag: AppNode.tags.values["global"]!
         )
 
-        // parity: core/src/location-service-map.ts#reload [status=implemented hash=2652d4780f15]
+        // parity: core/src/location-service-map.ts#reload [status=implemented hash=a76169df8c51]
         public static func reload(_ locations: Service) async throws {
             let refs = locations.keys()
             for ref in refs {
@@ -1140,7 +1140,7 @@ public enum CoreLocation {
     // MARK: - core/src/location-activity.ts
 
     public enum Activity {
-        // parity: core/src/location-activity.ts#Service [status=implemented hash=27196bfa6ed3]
+        // parity: core/src/location-activity.ts#Service [status=implemented hash=84a48615aff0]
         public final class Service: Sendable {
             public static let serviceKey = "@opencode/LocationActivity"
 
@@ -1201,12 +1201,12 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/location-activity.ts#layer [status=implemented hash=7a5d60e1575f]
+        // parity: core/src/location-activity.ts#layer [status=implemented hash=950e0a0bf464]
         public static func layer(timeToLiveMs: Int64 = 60 * 60 * 1_000) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service(timeToLiveMs: timeToLiveMs))
         }
 
-        // parity: core/src/location-activity.ts#node [status=implemented hash=9f163980fc82]
+        // parity: core/src/location-activity.ts#node [status=implemented hash=2d6090f54b16]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             layer(),
@@ -1312,7 +1312,7 @@ public enum CoreLocation {
             }
         }
 
-        // parity: core/src/instance.ts#layer [status=implemented hash=32e619f02ed7]
+        // parity: core/src/instance.ts#layer [status=implemented hash=b7d7eedc8e34]
         public static func layer(
             _ ref: LocationSchema.Ref,
             options: Options = Options()
@@ -1377,17 +1377,17 @@ public enum CoreVcs {
             return out.joined(separator: "\n") + "\n"
         }
 
-        // parity: core/src/vcs/patch.ts#emptyPatch [status=implemented hash=a52be9e49bc1]
+        // parity: core/src/vcs/patch.ts#emptyPatch [status=implemented hash=531fd6e54ecf]
         public static func emptyPatch(_ file: String) -> String {
             unifiedDiff(file: file, before: "", after: "")
         }
 
-        // parity: core/src/vcs/patch.ts#addPatch [status=implemented hash=0b285f268542]
+        // parity: core/src/vcs/patch.ts#addPatch [status=implemented hash=a4548a6c59a2]
         public static func addPatch(file: String, content: String) -> String {
             unifiedDiff(file: file, before: "", after: content)
         }
 
-        // parity: core/src/vcs/patch.ts#deletePatch [status=implemented hash=e81fc8b83ebf]
+        // parity: core/src/vcs/patch.ts#deletePatch [status=implemented hash=99509b5e1e3c]
         public static func deletePatch(file: String, content: String) -> String {
             unifiedDiff(file: file, before: content, after: "")
         }
@@ -1513,7 +1513,7 @@ public enum CoreVcs {
             return chunks
         }
 
-        // parity: core/src/vcs/patch.ts#chunksByFile [status=implemented hash=6600f0942ecb]
+        // parity: core/src/vcs/patch.ts#chunksByFile [status=implemented hash=9bf080406bfc]
         public static func chunksByFile(
             _ patch: Info,
             fallback: (Int) -> String? = { _ in nil }
@@ -1530,7 +1530,7 @@ public enum CoreVcs {
     // MARK: - core/src/git.ts
 
     public enum Git {
-        // parity: core/src/git.ts#Repository [status=implemented hash=ca3a37183db6]
+        // parity: core/src/git.ts#Repository [status=implemented hash=901f0d32ea9d]
         public struct Repository: Equatable, Hashable, Sendable, Codable {
             public let worktree: SchemaPrimitive.AbsolutePath
             public let gitDirectory: SchemaPrimitive.AbsolutePath
@@ -1578,7 +1578,7 @@ public enum CoreVcs {
             }
         }
 
-        // parity: core/src/git.ts#OperationError [status=implemented hash=a695a99efe45]
+        // parity: core/src/git.ts#OperationError [status=implemented hash=ad682a4ed387]
         public struct OperationError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Git.OperationError"
 
@@ -1602,7 +1602,7 @@ public enum CoreVcs {
             public var description: String { "Git \(operation.rawValue) failed: \(message)" }
         }
 
-        // parity: core/src/git.ts#CommandError [status=implemented hash=4b8fdd39b51f]
+        // parity: core/src/git.ts#CommandError [status=implemented hash=07359b7b1abd]
         public struct CommandError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Git.CommandError"
             public let args: [String]
@@ -1620,7 +1620,7 @@ public enum CoreVcs {
             }
         }
 
-        // parity: core/src/git.ts#Worktree [status=implemented hash=e97e2778218f]
+        // parity: core/src/git.ts#Worktree [status=implemented hash=cede745bb761]
         public struct Worktree: Equatable, Hashable, Sendable, Codable {
             public enum Kind: String, Equatable, Hashable, Sendable, Codable {
                 case main
@@ -1636,7 +1636,7 @@ public enum CoreVcs {
             }
         }
 
-        // parity: core/src/git.ts#WorktreeError [status=implemented hash=cd3e4435d1c0]
+        // parity: core/src/git.ts#WorktreeError [status=implemented hash=ba991410ac3e]
         public struct WorktreeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Git.WorktreeError"
 
@@ -2375,7 +2375,7 @@ public enum CoreVcs {
             )
         }
 
-        // parity: core/src/git.ts#node [status=implemented hash=4450d31b6ef9]
+        // parity: core/src/git.ts#node [status=implemented hash=536d31f43a8e]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -2404,7 +2404,7 @@ public enum CoreVcs {
         // parity: core/src/vcs.ts#Untracked [status=implemented hash=ed8666a3d18d]
         public typealias Untracked = VcsSchema.Untracked
 
-        // parity: core/src/vcs.ts#DiffError [status=implemented hash=a180a7e59f15]
+        // parity: core/src/vcs.ts#DiffError [status=implemented hash=431ebc53d6c8]
         public struct DiffError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Vcs.DiffError"
             public let message: String
@@ -2416,7 +2416,7 @@ public enum CoreVcs {
             public var description: String { message }
         }
 
-        // parity: core/src/vcs.ts#InitializeError [status=implemented hash=e2aaf16026d3]
+        // parity: core/src/vcs.ts#InitializeError [status=implemented hash=bfcf0565494f]
         public struct InitializeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Vcs.InitializeError"
 
@@ -2647,7 +2647,7 @@ public enum CoreVcs {
             }
         }
 
-        // parity: core/src/vcs.ts#node [status=implemented hash=8a4b3c4c8b55]
+        // parity: core/src/vcs.ts#node [status=implemented hash=abc8df045023]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -2686,7 +2686,7 @@ public enum CoreProject {
         // parity: core/src/project/schema.ts#Event [status=implemented hash=9c71f88f580c]
         public typealias Event = ProjectSchema.Event
 
-        // parity: core/src/project/schema.ts#Vcs [status=implemented hash=3c8d26a8aa9e]
+        // parity: core/src/project/schema.ts#Vcs [status=implemented hash=ca37f14e83af]
         public struct Vcs: Equatable, Hashable, Sendable, Codable {
             public let type: ProjectSchema.Vcs
             public let store: SchemaPrimitive.AbsolutePath
@@ -2701,7 +2701,7 @@ public enum CoreProject {
     // MARK: - core/src/project/sql.ts
 
     public enum SQL {
-        // parity: core/src/project/sql.ts#ProjectTable [status=adapted hash=16346ea5a3e9]
+        // parity: core/src/project/sql.ts#ProjectTable [status=adapted hash=f042ff64f5a3]
         public enum ProjectTable {
             public static let tableName = "project"
             public static let createTableSQL = """
@@ -2724,7 +2724,7 @@ public enum CoreProject {
                 """
         }
 
-        // parity: core/src/project/sql.ts#ProjectDirectoryTable [status=adapted hash=676444ab7b59]
+        // parity: core/src/project/sql.ts#ProjectDirectoryTable [status=adapted hash=e9c0c176d792]
         public enum ProjectDirectoryTable {
             public static let tableName = "project_directory"
             public static let createTableSQL = """
@@ -2739,7 +2739,7 @@ public enum CoreProject {
                 """
         }
 
-        // parity: core/src/project/sql.ts#upsertProject [status=implemented hash=23cd7f7337f0]
+        // parity: core/src/project/sql.ts#upsertProject [status=implemented hash=90177c108c0b]
         public static func upsertProject(
             database: any SQLiteDatabase,
             id: Schema.ID,
@@ -2809,7 +2809,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/project/icon.ts#discover [status=implemented hash=a847ad48cdab]
+        // parity: core/src/project/icon.ts#discover [status=implemented hash=a88646055ae6]
         public static func discover(
             fileSystem: any OpenCodeFileSystem,
             directory: String
@@ -2856,7 +2856,7 @@ public enum CoreProject {
             return nil
         }
 
-        // parity: core/src/project/icon.ts#refresh [status=implemented hash=191f0753f4ec]
+        // parity: core/src/project/icon.ts#refresh [status=implemented hash=9cf02fc4ee22]
         public static func refresh(
             fileSystem: any OpenCodeFileSystem,
             database: any SQLiteDatabase,
@@ -2915,7 +2915,7 @@ public enum CoreProject {
         // parity: core/src/project.ts#UpdateInput [status=implemented hash=e829e2e144bd]
         public typealias UpdateInput = Schema.UpdateInput
 
-        // parity: core/src/project.ts#NotFoundError [status=implemented hash=ce2d05ed674b]
+        // parity: core/src/project.ts#NotFoundError [status=implemented hash=06908269bb16]
         public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Project.NotFoundError"
             public let projectID: ID
@@ -2951,7 +2951,7 @@ public enum CoreProject {
         }
 
         /// Walks upward from `input` looking for any VCS marker (default `[".git", ".hg"]`).
-        // parity: core/src/project.ts#root [status=implemented hash=df62efa4ebd3]
+        // parity: core/src/project.ts#root [status=implemented hash=6b39bccef2e2]
         public static func root(
             fileSystem: any OpenCodeFileSystem,
             input: SchemaPrimitive.AbsolutePath,
@@ -3239,7 +3239,7 @@ public enum CoreProject {
         // parity: core/src/project.ts#node [status=implemented hash=aea3814ebc3b]
         public static let node: LayerNode.Provider = configured()
 
-        // parity: core/src/project.ts#sweepNode [status=adapted hash=8e68eb9df0d3]
+        // parity: core/src/project.ts#sweepNode [status=adapted hash=a0549cd0e8fe]
         public static let sweepNode: LayerNode.Provider = AppNode.makeGlobalNode(
             "@opencode/ProjectSweep",
             LayerNode.ExecutableLayer.empty,
@@ -3327,7 +3327,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/repository.ts#InvalidReferenceError [status=implemented hash=4e44ac8036e2]
+        // parity: core/src/repository.ts#InvalidReferenceError [status=implemented hash=5a217452f904]
         public struct InvalidReferenceError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryInvalidReferenceError"
             public let repository: String
@@ -3341,7 +3341,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository.ts#UnsupportedLocalRepositoryError [status=implemented hash=f884a1075dce]
+        // parity: core/src/repository.ts#UnsupportedLocalRepositoryError [status=implemented hash=bc5baffdb795]
         public struct UnsupportedLocalRepositoryError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryUnsupportedLocalRepositoryError"
             public let repository: String
@@ -3355,7 +3355,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository.ts#InvalidBranchError [status=implemented hash=8b3ec2a0ee31]
+        // parity: core/src/repository.ts#InvalidBranchError [status=implemented hash=eca2a5004d6c]
         public struct InvalidBranchError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryInvalidBranchError"
             public let branch: String
@@ -3602,7 +3602,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/repository-cache.ts#InvalidBranchError [status=implemented hash=640ea03928cf]
+        // parity: core/src/repository-cache.ts#InvalidBranchError [status=implemented hash=37a1ce862311]
         public struct InvalidBranchError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheInvalidBranchError"
             public let branch: String
@@ -3611,7 +3611,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#CloneFailedError [status=implemented hash=cbf3615fc832]
+        // parity: core/src/repository-cache.ts#CloneFailedError [status=implemented hash=98f46b6b4df6]
         public struct CloneFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheCloneFailedError"
             public let repository: String
@@ -3620,7 +3620,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#FetchFailedError [status=implemented hash=8fff33771c75]
+        // parity: core/src/repository-cache.ts#FetchFailedError [status=implemented hash=981191ca26f2]
         public struct FetchFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheFetchFailedError"
             public let repository: String
@@ -3629,7 +3629,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#CheckoutFailedError [status=implemented hash=a48a0f9a5648]
+        // parity: core/src/repository-cache.ts#CheckoutFailedError [status=implemented hash=182be87d57dc]
         public struct CheckoutFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheCheckoutFailedError"
             public let repository: String
@@ -3641,7 +3641,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#ResetFailedError [status=implemented hash=d58ca3613886]
+        // parity: core/src/repository-cache.ts#ResetFailedError [status=implemented hash=ad54511c6eed]
         public struct ResetFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheResetFailedError"
             public let repository: String
@@ -3650,7 +3650,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#LockFailedError [status=implemented hash=8608f8dec300]
+        // parity: core/src/repository-cache.ts#LockFailedError [status=implemented hash=9d6c44d419e4]
         public struct LockFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheLockFailedError"
             public let localPath: String
@@ -3659,7 +3659,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#CacheOperationError [status=implemented hash=f12707b2e46a]
+        // parity: core/src/repository-cache.ts#CacheOperationError [status=implemented hash=7ac898e4b0b9]
         public struct CacheOperationError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "RepositoryCacheOperationError"
             public let operation: String
@@ -3671,7 +3671,7 @@ public enum CoreProject {
             public var description: String { message }
         }
 
-        // parity: core/src/repository-cache.ts#Error [status=implemented hash=dc17e611b9d6]
+        // parity: core/src/repository-cache.ts#Error [status=implemented hash=d9e0e909632b]
         public enum CacheError: Swift.Error, Equatable, Hashable, Sendable {
             case invalidBranch(InvalidBranchError)
             case cloneFailed(CloneFailedError)
@@ -3694,7 +3694,7 @@ public enum CoreProject {
                 error is CacheError
         }
 
-        // parity: core/src/repository-cache.ts#validateBranch [status=implemented hash=b19563f13df6]
+        // parity: core/src/repository-cache.ts#validateBranch [status=implemented hash=e091b2866706]
         public static func validateBranch(_ branch: String) throws(InvalidBranchError) {
             do {
                 try Repository.validateBranch(branch)
@@ -3836,7 +3836,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/repository-cache.ts#node [status=implemented hash=3b113b55c1ae]
+        // parity: core/src/repository-cache.ts#node [status=implemented hash=01b42eb8b5ec]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -3852,7 +3852,7 @@ public enum CoreProject {
     // MARK: - core/src/workspace/*
 
     public enum Workspace {
-        // parity: core/src/workspace/sql.ts#WorkspaceTable [status=adapted hash=b0609a1a17c5]
+        // parity: core/src/workspace/sql.ts#WorkspaceTable [status=adapted hash=560aecfb2bde]
         public enum WorkspaceTable {
             public static let tableName = "workspace"
             public static let createTableSQL = """
@@ -3870,7 +3870,7 @@ public enum CoreProject {
             // parity: core/src/workspace/driver.ts#Binding [status=implemented hash=33a5330bd53b]
             public typealias Binding = [String: JSONValue]
 
-            // parity: core/src/workspace/driver.ts#Error [status=implemented hash=23892c7d93cd]
+            // parity: core/src/workspace/driver.ts#Error [status=implemented hash=4b67f19c55fb]
             public struct DriverError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
                 public static let tag = "WorkspaceDriver.Error"
                 public let message: String?
@@ -3882,7 +3882,7 @@ public enum CoreProject {
                 public var description: String { message ?? "Workspace driver error" }
             }
 
-            // parity: core/src/workspace/driver.ts#ProviderNotFound [status=implemented hash=58e1812c3b60]
+            // parity: core/src/workspace/driver.ts#ProviderNotFound [status=implemented hash=809fb82e7e21]
             public struct ProviderNotFound: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
                 public static let tag = "WorkspaceDriver.ProviderNotFound"
                 public let provider: String
@@ -3937,12 +3937,12 @@ public enum CoreProject {
                 }
             }
 
-            // parity: core/src/workspace/driver.ts#registry [status=implemented hash=7fdf4850405d]
+            // parity: core/src/workspace/driver.ts#registry [status=implemented hash=552d443f1e0c]
             public static func registry(_ drivers: [String: any Interface]) -> RegistryService {
                 RegistryService(drivers)
             }
 
-            // parity: core/src/workspace/driver.ts#registryNode [status=implemented hash=68d7bef18d1e]
+            // parity: core/src/workspace/driver.ts#registryNode [status=implemented hash=f291dfcd9363]
             public static func registryNode(_ drivers: [String: any Interface]) -> LayerNode.Provider {
                 AppNode.makeGlobalNode(
                     RegistryService.serviceKey,
@@ -3951,14 +3951,14 @@ public enum CoreProject {
                 )
             }
 
-            // parity: core/src/workspace/driver.ts#node [status=implemented hash=307863fcc0f6]
+            // parity: core/src/workspace/driver.ts#node [status=implemented hash=cea941e1133e]
             public static let node: LayerNode.Provider = registryNode([:])
         }
 
         // parity: core/src/workspace.ts#ID [status=implemented hash=53d8ed3214a8]
         public typealias ID = WorkspaceSchema.ID
 
-        // parity: core/src/workspace.ts#Info [status=implemented hash=3fcd7ba872fa]
+        // parity: core/src/workspace.ts#Info [status=implemented hash=44bfe5d01625]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let id: ID
             public let provider: String
@@ -3975,7 +3975,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/workspace.ts#NotFound [status=implemented hash=1a25669390ce]
+        // parity: core/src/workspace.ts#NotFound [status=implemented hash=8ec4032f9ea7]
         public struct NotFound: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Workspace.NotFound"
             public let workspaceID: ID
@@ -3983,7 +3983,7 @@ public enum CoreProject {
             public var description: String { "Workspace not found: \(workspaceID.rawValue)" }
         }
 
-        // parity: core/src/workspace.ts#CreateConflict [status=implemented hash=38a3f5eb5be1]
+        // parity: core/src/workspace.ts#CreateConflict [status=implemented hash=d0945f8ea122]
         public struct CreateConflict: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Workspace.CreateConflict"
             public let workspaceID: ID
@@ -4114,7 +4114,7 @@ public enum CoreProject {
             }
         }
 
-        // parity: core/src/workspace.ts#configured [status=implemented hash=ff586874fbc4]
+        // parity: core/src/workspace.ts#configured [status=implemented hash=165313b0a8b6]
         public static func configured(_ options: Options = Options()) -> LayerNode.Provider {
             _ = options
             return AppNode.makeGlobalNode(
@@ -4139,7 +4139,7 @@ public enum CoreWorktree {
     // MARK: - core/src/worktree/sql.ts
 
     public enum SQL {
-        // parity: core/src/worktree/sql.ts#WorktreeTable [status=adapted hash=92be8301ad42]
+        // parity: core/src/worktree/sql.ts#WorktreeTable [status=adapted hash=df061a3d41d3]
         public enum WorktreeTable {
             public static let tableName = "worktree"
             public static let createTableSQL = """
@@ -4157,7 +4157,7 @@ public enum CoreWorktree {
     // MARK: - core/src/worktree/directory.ts
 
     public enum Directory {
-        // parity: core/src/worktree/directory.ts#DirectoryUnavailableError [status=implemented hash=3d559ad59a5d]
+        // parity: core/src/worktree/directory.ts#DirectoryUnavailableError [status=implemented hash=f52cf757e43e]
         public struct DirectoryUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "Worktree.DirectoryUnavailableError"
             public let directory: SchemaPrimitive.AbsolutePath
@@ -4169,7 +4169,7 @@ public enum CoreWorktree {
             public var description: String { "Worktree directory unavailable: \(directory.rawValue)" }
         }
 
-        // parity: core/src/worktree/directory.ts#canonical [status=implemented hash=60d6c83fde99]
+        // parity: core/src/worktree/directory.ts#canonical [status=implemented hash=5b4a3815c22c]
         public static func canonical(
             fileSystem: any OpenCodeFileSystem,
             input: SchemaPrimitive.AbsolutePath
@@ -4289,7 +4289,7 @@ public enum CoreWorktree {
             }
         }
 
-        // parity: core/src/worktree/strategies.ts#node [status=implemented hash=ea6b755ef883]
+        // parity: core/src/worktree/strategies.ts#node [status=implemented hash=e71b60d8ba2d]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
@@ -4310,7 +4310,7 @@ public enum CoreWorktree {
     }
 
     public enum GitStrategy {
-        // parity: core/src/worktree/git.ts#make [status=implemented hash=f02e75134d87]
+        // parity: core/src/worktree/git.ts#make [status=implemented hash=df7f44e4b735]
         public static func make(
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             git: any CoreVcs.Git.Interface = CoreVcs.Git.Service()
@@ -4374,7 +4374,7 @@ public enum CoreWorktree {
     // parity: core/src/worktree.ts#Event [status=implemented hash=6469c9b747d3]
     public typealias Event = WorktreeSchema.Event
 
-    // parity: core/src/worktree.ts#SourceDirectoryNotFoundError [status=implemented hash=3bb8ad4e64da]
+    // parity: core/src/worktree.ts#SourceDirectoryNotFoundError [status=implemented hash=a1ddde23d17a]
     public struct SourceDirectoryNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Worktree.SourceDirectoryNotFoundError"
         public let projectID: ProjectID
@@ -4385,7 +4385,7 @@ public enum CoreWorktree {
         public var description: String { "Worktree source directory not found for project \(projectID.rawValue)" }
     }
 
-    // parity: core/src/worktree.ts#DestinationExistsError [status=implemented hash=fdd7c7ac9cb0]
+    // parity: core/src/worktree.ts#DestinationExistsError [status=implemented hash=3bfb30fe56a8]
     public struct DestinationExistsError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Worktree.DestinationExistsError"
         public let directory: SchemaPrimitive.AbsolutePath
@@ -4393,7 +4393,7 @@ public enum CoreWorktree {
         public var description: String { "Worktree destination already exists: \(directory.rawValue)" }
     }
 
-    // parity: core/src/worktree.ts#InvalidDirectoryError [status=implemented hash=9dc02a03b5cc]
+    // parity: core/src/worktree.ts#InvalidDirectoryError [status=implemented hash=7d6e302ac8cc]
     public struct InvalidDirectoryError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Worktree.InvalidDirectoryError"
         public let directory: SchemaPrimitive.AbsolutePath
@@ -4401,7 +4401,7 @@ public enum CoreWorktree {
         public var description: String { "Invalid worktree directory: \(directory.rawValue)" }
     }
 
-    // parity: core/src/worktree.ts#StrategyUnavailableError [status=implemented hash=32846acd6a8e]
+    // parity: core/src/worktree.ts#StrategyUnavailableError [status=implemented hash=2ac50a4b66c6]
     public struct StrategyUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Worktree.StrategyUnavailableError"
         public let strategy: StrategyID
@@ -4409,7 +4409,7 @@ public enum CoreWorktree {
         public var description: String { "Worktree strategy unavailable: \(strategy.rawValue)" }
     }
 
-    // parity: core/src/worktree.ts#Error [status=implemented hash=01bff236ae9a]
+    // parity: core/src/worktree.ts#Error [status=implemented hash=6eddfe8c5337]
     public enum WorktreeError: Swift.Error, Equatable, Hashable, Sendable {
         case projectNotFound(CoreProject.Project.NotFoundError)
         case sourceDirectoryNotFound(SourceDirectoryNotFoundError)
@@ -4553,7 +4553,7 @@ public enum CoreWorktree {
         }
     }
 
-    // parity: core/src/worktree.ts#node [status=implemented hash=e0b077421b53]
+    // parity: core/src/worktree.ts#node [status=implemented hash=fd8029feb3e0]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

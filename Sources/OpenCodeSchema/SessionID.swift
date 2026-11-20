@@ -3,7 +3,7 @@ public enum IdentifierValidationError: Error, Equatable, Sendable {
 }
 
 /// Branded Session identifier (`ses_<26 descending chars>`).
-// parity: schema/src/session-id.ts#SessionID [status=implemented hash=6736768baf7a]
+// parity: schema/src/session-id.ts#SessionID [status=implemented hash=9f46b877b5c6]
 public struct SessionID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     public let rawValue: String
 

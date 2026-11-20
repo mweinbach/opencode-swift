@@ -27,7 +27,7 @@ public enum ConfigFlagSchema {
     }
 
     /// Registry mapping each feature flag key to its human-readable description.
-    // parity: schema/src/config/flag.ts#registry [status=implemented hash=5f92f1319d3a]
+    // parity: schema/src/config/flag.ts#registry [status=implemented hash=8327827f3a53]
     public static let registry: [Key: String] = [
         .todo:
             "Enable the experimental todowrite tool. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=todo or experimental.todo: true.",
@@ -60,7 +60,7 @@ public enum ConfigFlagSchema {
     public static let optInOnly: Set<Key> = [.todo, .sqliteFts]
 
     /// Legacy flag names mapped to their canonical flag key.
-    // parity: schema/src/config/flag.ts#aliases [status=implemented hash=40e4d64669eb]
+    // parity: schema/src/config/flag.ts#aliases [status=implemented hash=a1e88a23b334]
     public static let aliases: [String: Key] = [
         "schedules": .automations,
     ]
@@ -186,7 +186,7 @@ public enum ConfigPolicySchema {
 
     /// Policy statement. Automatically normalizes legacy `integration.use` prefixed with
     /// `mcp:`, `skill:`, or `plugin:` into `mcp.use`, `skill.use`, and `plugin.use`.
-    // parity: schema/src/config/policy.ts#Info [status=implemented hash=c8dc5bd5761d]
+    // parity: schema/src/config/policy.ts#Info [status=implemented hash=e25216360034]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let action: Action
         public let resource: String
@@ -234,11 +234,11 @@ public enum ConfigPolicySchema {
 
 public enum ConfigProviderSchema {
     /// Open-ended provider settings (`Provider.Settings` + arbitrary JSON extra keys).
-    // parity: schema/src/config/provider.ts#Settings [status=implemented hash=d105e3493570]
+    // parity: schema/src/config/provider.ts#Settings [status=implemented hash=c7d15c6d7f21]
     public typealias Settings = ProviderSchema.Settings
 
     /// Open-ended model settings (`Model.Settings` + arbitrary JSON extra keys).
-    // parity: schema/src/config/provider.ts#ModelSettings [status=implemented hash=266b120f8332]
+    // parity: schema/src/config/provider.ts#ModelSettings [status=implemented hash=b36659fc6e75]
     public typealias ModelSettings = ModelSchema.Settings
 
     /// Shared provider overlay fields (`settings`, `headers`, `body`).
@@ -259,7 +259,7 @@ public enum ConfigProviderSchema {
         }
     }
 
-    // parity: schema/src/config/provider.ts#Request [status=implemented hash=bd0248542b3f]
+    // parity: schema/src/config/provider.ts#Request [status=implemented hash=9e273cad7519]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let headers: [String: String]?
         public let body: [String: JSONValue]?
@@ -371,7 +371,7 @@ public enum ConfigProviderSchema {
     }
 
     /// models.dev v2's `capabilities.reasoning`.
-    // parity: schema/src/config/provider.ts#Reasoning [status=implemented hash=c763fbd05f30]
+    // parity: schema/src/config/provider.ts#Reasoning [status=implemented hash=5dfb7e62907e]
     public enum Reasoning: Equatable, Hashable, Sendable, Codable {
         case unsupported
         case supported(toggle: Bool? = nil, effort: [String]? = nil, budget: ReasoningBudget? = nil)
@@ -557,7 +557,7 @@ public enum ConfigProviderSchema {
         }
     }
 
-    // parity: schema/src/config/provider.ts#Info [status=implemented hash=62bc3fe458d4]
+    // parity: schema/src/config/provider.ts#Info [status=implemented hash=97ba982448b2]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let canonical: ProviderSchema.ID?
         public let name: String?
@@ -633,7 +633,7 @@ public enum ConfigAgentSchema {
         }
     }
 
-    // parity: schema/src/config/agent.ts#Info [status=implemented hash=fa245cb8df47]
+    // parity: schema/src/config/agent.ts#Info [status=implemented hash=98f62e263d1a]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public enum Mode: String, Equatable, Hashable, Sendable, Codable {
             case subagent
@@ -713,7 +713,7 @@ public enum ConfigAgentSchema {
 // MARK: - src/config/command.ts
 
 public enum ConfigCommandSchema {
-    // parity: schema/src/config/command.ts#Info [status=implemented hash=37a0361f3f31]
+    // parity: schema/src/config/command.ts#Info [status=implemented hash=4b35f2c305ca]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let template: String
         public let description: String?
@@ -743,7 +743,7 @@ public enum ConfigCommandSchema {
 // MARK: - src/config/compaction.ts
 
 public enum ConfigCompactionSchema {
-    // parity: schema/src/config/compaction.ts#Keep [status=implemented hash=572805bf0b7f]
+    // parity: schema/src/config/compaction.ts#Keep [status=implemented hash=41208f95bd3f]
     public struct Keep: Equatable, Hashable, Sendable, Codable {
         public let tokens: SchemaPrimitive.NonNegativeInt?
 
@@ -753,7 +753,7 @@ public enum ConfigCompactionSchema {
     }
 
     /// Percentage string from "1%" up to "99.9...%" matching `^([1-9]\d?(\.\d+)?)%$`.
-    // parity: schema/src/config/compaction.ts#Percent [status=implemented hash=fa18ee74b8cd]
+    // parity: schema/src/config/compaction.ts#Percent [status=implemented hash=08f8ba8bfcc6]
     public struct Percent: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -818,7 +818,7 @@ public enum ConfigCompactionSchema {
         }
     }
 
-    // parity: schema/src/config/compaction.ts#Info [status=implemented hash=0851ad15973d]
+    // parity: schema/src/config/compaction.ts#Info [status=implemented hash=1470adf8b609]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let auto: Bool?
         public let background: Bool?
@@ -959,7 +959,7 @@ public enum ConfigExperimentalSchema {
         }
     }
 
-    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=fb471acd943c]
+    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=152d9fcbbdaf]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let portableShellScanner: Bool?
         public let codemodeVM: Bool?
@@ -1077,7 +1077,7 @@ public enum ConfigExperimentalSchema {
 // MARK: - src/config/formatter.ts
 
 public enum ConfigFormatterSchema {
-    // parity: schema/src/config/formatter.ts#Entry [status=implemented hash=3b73e50565cd]
+    // parity: schema/src/config/formatter.ts#Entry [status=implemented hash=ce83d8f07483]
     public struct Entry: Equatable, Hashable, Sendable, Codable {
         public let disabled: Bool?
         public let command: [String]?
@@ -1126,7 +1126,7 @@ public enum ConfigFormatterSchema {
 // MARK: - src/config/lsp.ts
 
 public enum ConfigLSPSchema {
-    // parity: schema/src/config/lsp.ts#Disabled [status=implemented hash=7419512d601f]
+    // parity: schema/src/config/lsp.ts#Disabled [status=implemented hash=b58344e67674]
     public struct Disabled: Equatable, Hashable, Sendable, Codable {
         public let disabled: Bool
 
@@ -1157,7 +1157,7 @@ public enum ConfigLSPSchema {
         }
     }
 
-    // parity: schema/src/config/lsp.ts#Server [status=implemented hash=03471fb91849]
+    // parity: schema/src/config/lsp.ts#Server [status=implemented hash=b9e4d320ed3f]
     public struct Server: Equatable, Hashable, Sendable, Codable {
         public let command: [String]
         public let extensions: [String]?
@@ -1255,7 +1255,7 @@ public enum ConfigMCPSchema {
     // parity: schema/src/config/mcp.ts#Protocol [status=implemented hash=1f6c14823bea]
     public typealias WireProtocol = McpSchema.WireProtocol
 
-    // parity: schema/src/config/mcp.ts#Info [status=implemented hash=241335f1b75e]
+    // parity: schema/src/config/mcp.ts#Info [status=implemented hash=9bd952f3a39b]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let timeout: Timeout?
         public let servers: [String: Server]?
@@ -1270,7 +1270,7 @@ public enum ConfigMCPSchema {
 // MARK: - src/config/media.ts
 
 public enum ConfigMediaSchema {
-    // parity: schema/src/config/media.ts#Image [status=implemented hash=10bb2a04f22c]
+    // parity: schema/src/config/media.ts#Image [status=implemented hash=b70bfa5ce30c]
     public struct Image: Equatable, Hashable, Sendable, Codable {
         public let autoResize: Bool?
         public let maxWidth: SchemaPrimitive.PositiveInt?
@@ -1297,7 +1297,7 @@ public enum ConfigMediaSchema {
         }
     }
 
-    // parity: schema/src/config/media.ts#Info [status=implemented hash=1cfd8f564e65]
+    // parity: schema/src/config/media.ts#Info [status=implemented hash=9cfbda16dc37]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let image: Image?
 
@@ -1310,7 +1310,7 @@ public enum ConfigMediaSchema {
 // MARK: - src/config/plugin.ts
 
 public enum ConfigPluginSchema {
-    // parity: schema/src/config/plugin.ts#Entry [status=implemented hash=1d991bb1959b]
+    // parity: schema/src/config/plugin.ts#Entry [status=implemented hash=4ff6e4bc6d96]
     public struct Entry: Equatable, Hashable, Sendable, Codable {
         public let package: String
         public let options: [String: JSONValue]?
@@ -1353,7 +1353,7 @@ public enum ConfigPluginSchema {
 // MARK: - src/config/reference.ts
 
 public enum ConfigReferenceSchema {
-    // parity: schema/src/config/reference.ts#Git [status=implemented hash=c9678fc30660]
+    // parity: schema/src/config/reference.ts#Git [status=implemented hash=1101c5cc3434]
     public struct Git: Equatable, Hashable, Sendable, Codable {
         public let repository: String
         public let branch: String?
@@ -1373,7 +1373,7 @@ public enum ConfigReferenceSchema {
         }
     }
 
-    // parity: schema/src/config/reference.ts#Local [status=implemented hash=8980b6d277e7]
+    // parity: schema/src/config/reference.ts#Local [status=implemented hash=79a0aef8d7c4]
     public struct Local: Equatable, Hashable, Sendable, Codable {
         public let path: String
         public let description: String?
@@ -1439,7 +1439,7 @@ public enum ConfigReferenceSchema {
 // MARK: - src/config/shell.ts
 
 public enum ConfigShellSchema {
-    // parity: schema/src/config/shell.ts#Option [status=implemented hash=139beeda63f3]
+    // parity: schema/src/config/shell.ts#Option [status=implemented hash=bf927e654a1e]
     public struct Option: Equatable, Hashable, Sendable, Codable {
         public let path: String
         public let name: String
@@ -1456,7 +1456,7 @@ public enum ConfigShellSchema {
 // MARK: - src/config/tool-output.ts
 
 public enum ConfigToolOutputSchema {
-    // parity: schema/src/config/tool-output.ts#Info [status=implemented hash=a8fef01f89f2]
+    // parity: schema/src/config/tool-output.ts#Info [status=implemented hash=e9f8ced096b8]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let maxLines: SchemaPrimitive.PositiveInt?
         public let maxBytes: SchemaPrimitive.PositiveInt?
@@ -1510,7 +1510,7 @@ public enum ConfigWarmingSchema {
         }
     }
 
-    // parity: schema/src/config/warming.ts#Info [status=implemented hash=ac9ff30d364b]
+    // parity: schema/src/config/warming.ts#Info [status=implemented hash=5e2a04287596]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let prompt: String?
         public let interval: Interval?
@@ -1576,7 +1576,7 @@ public enum ConfigWarmingSchema {
 // MARK: - src/config/watcher.ts
 
 public enum ConfigWatcherSchema {
-    // parity: schema/src/config/watcher.ts#Info [status=implemented hash=e5a332052074]
+    // parity: schema/src/config/watcher.ts#Info [status=implemented hash=f9073e02d7cc]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let ignore: [String]?
 
@@ -1614,7 +1614,7 @@ public enum ConfigWebSearchSchema {
         }
     }
 
-    // parity: schema/src/config/websearch.ts#Info [status=implemented hash=fe2b87c5fa9e]
+    // parity: schema/src/config/websearch.ts#Info [status=implemented hash=9a9c96680934]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let provider: ProviderChoice
 
@@ -1658,7 +1658,7 @@ public enum ConfigWebSearchSchema {
 // MARK: - src/config/worktree.ts
 
 public enum ConfigWorktreeSchema {
-    // parity: schema/src/config/worktree.ts#Info [status=implemented hash=4a4087e46737]
+    // parity: schema/src/config/worktree.ts#Info [status=implemented hash=42f8d73b0822]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let directory: String
 
@@ -1717,7 +1717,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Info [status=implemented hash=7066d2a4ea13]
+    // parity: schema/src/config.ts#Info [status=implemented hash=6b308ec1c563]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let schema: String?
         public let shell: String?
@@ -1848,7 +1848,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Patch [status=implemented hash=699b5cf95877]
+    // parity: schema/src/config.ts#Patch [status=implemented hash=ccc369b44316]
     public struct Patch: Equatable, Hashable, Sendable, Codable {
         public let shell: String?
 
@@ -1871,7 +1871,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Document [status=implemented hash=86c10fc0e0e8]
+    // parity: schema/src/config.ts#Document [status=implemented hash=6f8ffb832770]
     public struct Document: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath?
         public let info: Info
@@ -1902,7 +1902,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Directory [status=implemented hash=0de1b05525bb]
+    // parity: schema/src/config.ts#Directory [status=implemented hash=7efa1b3856de]
     public struct Directory: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath
 
@@ -1928,7 +1928,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Entry [status=implemented hash=c3fe837cf934]
+    // parity: schema/src/config.ts#Entry [status=implemented hash=a4bd12f1c6cd]
     public enum Entry: Equatable, Hashable, Sendable, Codable {
         case document(Document)
         case directory(Directory)

@@ -10,7 +10,7 @@ import OpenCodeUtil
 /// Host-supplied session annotations, durable and opaque to core (`packages/schema/src/session-metadata.ts`).
 public enum SessionMetadataSchema {
     /// Arbitrary key-value JSON annotations attached to a session.
-    // parity: schema/src/session-metadata.ts#SessionMetadata [status=implemented hash=153aada7ecbc]
+    // parity: schema/src/session-metadata.ts#SessionMetadata [status=implemented hash=18810aa8ec77]
     public typealias SessionMetadata = [String: JSONValue]
 }
 
@@ -93,7 +93,7 @@ public enum SessionErrorSchema {
 /// Session fork boundary contracts (`packages/schema/src/session-fork.ts`).
 public enum SessionForkSchema {
     /// Message boundary defining where a forked session branches from its parent.
-    // parity: schema/src/session-fork.ts#Boundary [status=implemented hash=0268c3b3be39]
+    // parity: schema/src/session-fork.ts#Boundary [status=implemented hash=b482570a13fe]
     public enum Boundary: Equatable, Hashable, Sendable, Codable {
         case before(messageID: SessionMessageSchema.ID)
         case through(messageID: SessionMessageSchema.ID)
@@ -222,7 +222,7 @@ public enum SessionRevertSchema {
 
     /// Storage decoder for revert state written before `FileDiff` became canonical.
     /// Decodes either canonical `Revert` or legacy `RevertV1`, normalizing into `Revert`, and always encodes canonical `Revert`.
-    // parity: schema/src/session-revert.ts#PersistedRevert [status=implemented hash=844d87a07112]
+    // parity: schema/src/session-revert.ts#PersistedRevert [status=implemented hash=9982ee0bb8f3]
     public struct PersistedRevert: Equatable, Hashable, Sendable, Codable {
         public let revert: Revert
 
@@ -578,7 +578,7 @@ public enum SessionSchema {
     }
 
     /// Keyset pagination anchor (`Session.ListAnchor`).
-    // parity: schema/src/session.ts#ListAnchor [status=implemented hash=8c1f28b6017a]
+    // parity: schema/src/session.ts#ListAnchor [status=implemented hash=daa969dce54d]
     public struct ListAnchor: Equatable, Hashable, Sendable, Codable {
         public enum Direction: String, Equatable, Hashable, Sendable, Codable {
             case previous
@@ -598,7 +598,7 @@ public enum SessionSchema {
 
     /// Query filter for listing sessions (`Session.ListFilter`).
     /// Encodes `archived` as `"true"` / `"false"` and `parentID: .root` as `"null"` to match upstream wire format.
-    // parity: schema/src/session.ts#ListFilter [status=implemented hash=f67cb9d7178f]
+    // parity: schema/src/session.ts#ListFilter [status=implemented hash=fd93d85494f7]
     public struct ListFilter: Equatable, Hashable, Sendable, Codable {
         public let order: SortOrder?
         public let search: String?
@@ -679,7 +679,7 @@ public enum SessionSchema {
     }
 
     /// Opaque URL-safe Base64 pagination cursor (`SessionsCursor`).
-    // parity: schema/src/session.ts#ListCursor [status=implemented hash=b3a3de08234f]
+    // parity: schema/src/session.ts#ListCursor [status=implemented hash=6e2ff9551fe5]
     public struct ListCursor: RawRepresentable, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public enum CursorError: Swift.Error, Equatable, Sendable {
             case invalidCursor
@@ -832,7 +832,7 @@ public enum SessionSchema {
 /// Session usage statistics schemas (`packages/schema/src/session-stats.ts`).
 public enum SessionStatsSchema {
     /// Daily step activity entry (`SessionStats.Activity`).
-    // parity: schema/src/session-stats.ts#Activity [status=implemented hash=840a5a747482]
+    // parity: schema/src/session-stats.ts#Activity [status=implemented hash=40af74b6f2be]
     public struct Activity: Equatable, Hashable, Sendable, Codable {
         public let date: String
         public let steps: Int
@@ -860,7 +860,7 @@ public enum SessionStatsSchema {
     }
 
     /// Aggregated model usage entry (`SessionStats.ModelUsage`).
-    // parity: schema/src/session-stats.ts#ModelUsage [status=implemented hash=5694003e6ee6]
+    // parity: schema/src/session-stats.ts#ModelUsage [status=implemented hash=b1f72156c0a9]
     public struct ModelUsage: Equatable, Hashable, Sendable, Codable {
         public let model: SessionSchema.ModelRef
         public let steps: Int
@@ -898,7 +898,7 @@ public enum SessionStatsSchema {
     }
 
     /// Per-tool call statistics (`SessionStats.ToolUsage`).
-    // parity: schema/src/session-stats.ts#ToolUsage [status=implemented hash=bd3f43e7dafd]
+    // parity: schema/src/session-stats.ts#ToolUsage [status=implemented hash=7a98e356b798]
     public struct ToolUsage: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let calls: Int
@@ -967,7 +967,7 @@ public enum SessionStatsSchema {
     }
 
     /// Aggregate tool invocation totals (`SessionStats.ToolTotals`).
-    // parity: schema/src/session-stats.ts#ToolTotals [status=implemented hash=34b551ecaf48]
+    // parity: schema/src/session-stats.ts#ToolTotals [status=implemented hash=2e5d920ac7ef]
     public struct ToolTotals: Equatable, Hashable, Sendable, Codable {
         public let calls: Int
         public let succeeded: Int
@@ -1010,7 +1010,7 @@ public enum SessionStatsSchema {
     }
 
     /// Discriminated union of tool statistics payload shapes (`SessionStats.Tools`).
-    // parity: schema/src/session-stats.ts#Tools [status=implemented hash=f0717c1b9c4f]
+    // parity: schema/src/session-stats.ts#Tools [status=implemented hash=f2f8ca88b4ef]
     public enum Tools: Equatable, Hashable, Sendable, Codable {
         case none
         case summary(totals: ToolTotals)
@@ -1063,7 +1063,7 @@ public enum SessionStatsSchema {
     }
 
     /// Full session statistics response (`SessionStats.Info`).
-    // parity: schema/src/session-stats.ts#Info [status=implemented hash=04103a4605c5]
+    // parity: schema/src/session-stats.ts#Info [status=implemented hash=7ce99d9197e6]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public struct TimeRange: Equatable, Hashable, Sendable, Codable {
             public let from: Int64

@@ -1523,7 +1523,7 @@ public enum WorkerdProfile {
 
     /// Produces normalized workerd `EmbeddedServerOptions` (filewatcher/fff disabled, durable events enabled,
     /// JSON-serialized inline config) and the workerd `LayerNode.Replacements` graph.
-    // parity: sdk/src/internal/workerd.ts#make [status=implemented hash=d30e3fc452fd]
+    // parity: sdk/src/internal/workerd.ts#make [status=implemented hash=6b9371c58fe0]
     public static func make(_ options: Options) throws -> BuiltProfile {
         let encodedConfig: String?
         if let config = options.config {
@@ -1835,7 +1835,7 @@ public enum EmbeddedHost {
     /// Boots an embedded in-process OpenCode host with scoped logging, SQLite store, event bus,
     /// Session Core, Workspace service, non-blocking SDK plugin activation, optional session-selected
     /// instances, background suspension recovery, and an owned in-process fetch transport.
-    // parity: sdk/src/internal/host.ts#create [status=adapted hash=4ff4bda715cd]
+    // parity: sdk/src/internal/host.ts#create [status=adapted hash=5ac2c3748555]
     public static func create(
         _ options: CreateOptions = CreateOptions(),
         embed: EmbedOptions = EmbedOptions()

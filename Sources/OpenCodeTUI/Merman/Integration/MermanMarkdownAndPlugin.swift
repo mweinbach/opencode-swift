@@ -339,7 +339,7 @@ extension Merman {
         ])
     }
 
-    // parity: merman/src/markdown.ts#createMermaidCodeBlockRenderer [status=implemented hash=ea3224773ede]
+    // parity: merman/src/markdown.ts#createMermaidCodeBlockRenderer [status=implemented hash=257acbf26dba]
     public static func createMermaidCodeBlockRenderer(
         ctx: any RenderContext,
         options: MermaidMarkdownRendererOptions = MermaidMarkdownRendererOptions()
@@ -416,7 +416,7 @@ extension Merman {
     // MARK: - TUI Plugin (`plugin.ts`)
 
     /// Built-in `opencode.merman` TUI plugin registering the fenced `mermaid` Markdown code-block renderer.
-    // parity: merman/src/plugin.ts#default [status=implemented hash=4046970746b6]
+    // parity: merman/src/plugin.ts#default [status=implemented hash=63a344f4164d]
     public static let plugin: PluginTui.Definition = PluginTui.define(
         PluginTui.Definition(
             id: "opencode.merman",

@@ -35,7 +35,7 @@ extension CorePlugin.ClaudeAgent {
         // parity: core/src/plugin/provider/claude-agent/claude/accounts.ts#key [status=implemented hash=ac650962fcb6]
         public static func key(_ sessionID: String) -> String { "accounts/\(sessionID)" }
 
-        // parity: core/src/plugin/provider/claude-agent/claude/accounts.ts#make [status=implemented hash=f91b986219f2]
+        // parity: core/src/plugin/provider/claude-agent/claude/accounts.ts#make [status=implemented hash=08a999487cf8]
         public static func make(
             sessions: @escaping @Sendable (Sessions.RunRequest) async throws -> Void,
             storage: Storage

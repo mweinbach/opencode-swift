@@ -20,7 +20,7 @@ public enum EffectClient {
     // MARK: - Effect ClientError (packages/client/src/effect/generated/client-error.ts)
 
     /// Tagged client error wrapping transport or streaming failures from the Effect client layer.
-    // parity: client/src/effect/generated/client-error.ts#ClientError [status=implemented hash=449676285212]
+    // parity: client/src/effect/generated/client-error.ts#ClientError [status=implemented hash=42a89d470fc4]
     public struct ClientError: Error, Sendable, CustomStringConvertible {
         public static let tag = "ClientError"
         public let cause: any Error & Sendable
@@ -85,7 +85,7 @@ public enum EffectClient {
     }
 
     /// Bound Effect-style RPC client for one `RpcSchema.Definition`.
-    // parity: client/src/effect/rpc.ts#RpcClient [status=implemented hash=58e25d241b82]
+    // parity: client/src/effect/rpc.ts#RpcClient [status=implemented hash=61b7188c2529]
     public struct RpcClient: Sendable {
         public let definition: RpcSchema.Definition
         public let events: RpcEvents
@@ -334,7 +334,7 @@ public enum EffectClient {
 
     public enum Generated {
         /// Builds the raw generated Effect-layer HTTP/SSE client matching `effect/generated/client.ts#make`.
-        // parity: client/src/effect/generated/client.ts#make [status=adapted hash=77f777457b3c]
+        // parity: client/src/effect/generated/client.ts#make [status=adapted hash=01b81f992819]
         public static func make(_ options: ClientOptions) -> GeneratedClient {
             GeneratedClient(options: options)
         }
@@ -432,7 +432,7 @@ public enum EffectClient {
 
     public enum OpenCode {
         /// Creates an `EffectClient.OpenCodeClient` matching `packages/client/src/effect/client.ts#make`.
-        // parity: client/src/effect/client.ts#make [status=adapted hash=ca04470d19e6]
+        // parity: client/src/effect/client.ts#make [status=adapted hash=ac3e9eadfd44]
         public static func make(_ options: ClientOptions) -> OpenCodeClient {
             OpenCodeClient(options: options)
         }
@@ -464,7 +464,7 @@ public enum EffectClient {
         }
 
         /// Discover a healthy, compatible local service without starting one.
-        // parity: client/src/effect/service.ts#discover [status=implemented hash=f895b29d90fa]
+        // parity: client/src/effect/service.ts#discover [status=implemented hash=c2ad22baf180]
         public static func discover(
             options: ServiceDiscoverOptions = ServiceDiscoverOptions(),
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -480,7 +480,7 @@ public enum EffectClient {
         }
 
         /// Recognize an authenticated compatible service bound to an expected URL, including while it starts or fails.
-        // parity: client/src/effect/service.ts#incumbent [status=implemented hash=e773f07a053b]
+        // parity: client/src/effect/service.ts#incumbent [status=implemented hash=0ea98485cfbf]
         public static func incumbent(
             url: String,
             options: ServiceDiscoverOptions = ServiceDiscoverOptions(),
@@ -506,7 +506,7 @@ public enum EffectClient {
         }
 
         /// Ensure a healthy, compatible local service is running.
-        // parity: client/src/effect/service.ts#ensure [status=implemented hash=420cf6a53579]
+        // parity: client/src/effect/service.ts#ensure [status=implemented hash=016a084243df]
         public static func ensure(
             options: ServiceEnsureOptions = ServiceEnsureOptions(),
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -528,7 +528,7 @@ public enum EffectClient {
         }
 
         /// Stop the registered local service.
-        // parity: client/src/effect/service.ts#stop [status=implemented hash=aa7d39dc91e7]
+        // parity: client/src/effect/service.ts#stop [status=implemented hash=bf66b36b3d1c]
         public static func stop(
             options: ServiceStopOptions = ServiceStopOptions(),
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -880,7 +880,7 @@ public enum EffectClient {
         public typealias ExperimentalSessionInstructionsEntryRemoveOperation = @Sendable (ExperimentalSessionInstructionsEntryRemoveInput) async throws -> ExperimentalSessionInstructionsEntryRemoveOutput
         // parity: client/src/effect/api/api.ts#ExperimentalSessionLogInput [status=implemented hash=d564dbfa1cfa]
         public typealias ExperimentalSessionLogInput = PromiseInputTypes.ExperimentalSessionLogInput
-        // parity: client/src/effect/api/api.ts#ExperimentalSessionLogOutput [status=implemented hash=020de82295e0]
+        // parity: client/src/effect/api/api.ts#ExperimentalSessionLogOutput [status=implemented hash=848ec8476a4f]
         public typealias ExperimentalSessionLogOutput = SessionLogItem
         // parity: client/src/effect/api/api.ts#ExperimentalSessionLogOperation [status=implemented hash=c6e366ba2cc8]
         public typealias ExperimentalSessionLogOperation = @Sendable (ExperimentalSessionLogInput) -> AsyncThrowingStream<ExperimentalSessionLogOutput, any Error>
@@ -1291,13 +1291,13 @@ public enum EffectClient {
         public typealias PtyApi = PtyClientAPI
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyReadInput [status=implemented hash=f965509c66c5]
         public typealias ExperimentalPersistentPtyReadInput = PromiseInputTypes.ExperimentalPersistentPtyReadInput
-        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyReadOutput [status=implemented hash=c62413155ff5]
+        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyReadOutput [status=implemented hash=0cee0c3750e3]
         public typealias ExperimentalPersistentPtyReadOutput = PersistentPtySchema.ReadResult?
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyReadOperation [status=implemented hash=e3389ce02cb9]
         public typealias ExperimentalPersistentPtyReadOperation = @Sendable (ExperimentalPersistentPtyReadInput) async throws -> ExperimentalPersistentPtyReadOutput
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyListInput [status=implemented hash=7ffb52455452]
         public typealias ExperimentalPersistentPtyListInput = PromiseInputTypes.ExperimentalPersistentPtyListInput
-        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyListOutput [status=implemented hash=0148adb163db]
+        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyListOutput [status=implemented hash=60bf459c6665]
         public typealias ExperimentalPersistentPtyListOutput = [PersistentPtySchema.Info]
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyListOperation [status=implemented hash=9bd6728a2a8b]
         public typealias ExperimentalPersistentPtyListOperation = @Sendable (ExperimentalPersistentPtyListInput) async throws -> ExperimentalPersistentPtyListOutput
@@ -1309,11 +1309,11 @@ public enum EffectClient {
         public typealias ExperimentalPersistentPtyCreateOperation = @Sendable (ExperimentalPersistentPtyCreateInput) async throws -> ExperimentalPersistentPtyCreateOutput
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyShutdownOutput [status=implemented hash=1ed23324ee74]
         public typealias ExperimentalPersistentPtyShutdownOutput = ClientEmptyResponse
-        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyShutdownOperation [status=implemented hash=2b1f8fc3867b]
+        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyShutdownOperation [status=implemented hash=1810234d2878]
         public typealias ExperimentalPersistentPtyShutdownOperation = @Sendable () async throws -> ExperimentalPersistentPtyShutdownOutput
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyHandoffOutput [status=implemented hash=d83820ac17f1]
         public typealias ExperimentalPersistentPtyHandoffOutput = PersistentPtyHandoffResponse
-        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyHandoffOperation [status=implemented hash=2189920d7e3c]
+        // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyHandoffOperation [status=implemented hash=08c4348b7cf7]
         public typealias ExperimentalPersistentPtyHandoffOperation = @Sendable () async throws -> ExperimentalPersistentPtyHandoffOutput
         // parity: client/src/effect/api/api.ts#ExperimentalPersistentPtyGetInput [status=implemented hash=1caa2ae1a80a]
         public typealias ExperimentalPersistentPtyGetInput = PromiseInputTypes.ExperimentalPersistentPtyGetInput
@@ -1554,9 +1554,9 @@ public enum EffectClient {
         public typealias DebugLocationEvictOperation = @Sendable (DebugLocationEvictInput?) async throws -> DebugLocationEvictOutput
         // parity: client/src/effect/api/api.ts#DebugApi [status=implemented hash=b13ded4a6bc3]
         public typealias DebugApi = DebugClientAPI
-        // parity: client/src/effect/api/api.ts#ExperimentalMigrationV1StatusOutput [status=implemented hash=6d4b08bf1671]
+        // parity: client/src/effect/api/api.ts#ExperimentalMigrationV1StatusOutput [status=implemented hash=f670dd75736c]
         public typealias ExperimentalMigrationV1StatusOutput = OpenCodeProtocol.V1MigrationStatus
-        // parity: client/src/effect/api/api.ts#ExperimentalMigrationV1StatusOperation [status=implemented hash=9836a9992e5f]
+        // parity: client/src/effect/api/api.ts#ExperimentalMigrationV1StatusOperation [status=implemented hash=bbb7ff8470e5]
         public typealias ExperimentalMigrationV1StatusOperation = @Sendable () async throws -> ExperimentalMigrationV1StatusOutput
         // parity: client/src/effect/api/api.ts#ExperimentalMigrationApi [status=implemented hash=cac5ea1965d6]
         public typealias ExperimentalMigrationApi = ExperimentalMigrationClientAPI
@@ -1588,7 +1588,7 @@ public enum EffectClient {
         public typealias ConfigGetOutput = [ConfigSchema.Entry]
         // parity: client/src/effect/api/api.ts#ConfigGetOperation [status=implemented hash=4fed076fbe89]
         public typealias ConfigGetOperation = @Sendable (ConfigGetInput?) async throws -> ConfigGetOutput
-        // parity: client/src/effect/api/api.ts#ConfigShellsOutput [status=implemented hash=c5341ff0f4b4]
+        // parity: client/src/effect/api/api.ts#ConfigShellsOutput [status=implemented hash=9ab65543b76d]
         public typealias ConfigShellsOutput = [ConfigShellSchema.Option]
         // parity: client/src/effect/api/api.ts#ConfigShellsOperation [status=implemented hash=ef392e02cbe5]
         public typealias ConfigShellsOperation = @Sendable () async throws -> ConfigShellsOutput

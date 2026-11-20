@@ -1318,7 +1318,7 @@ public enum AIProtocolUtils {
             value
         }
 
-        // parity: ai/src/protocols/shared.ts#optionalNullish [status=adapted hash=9e4345b8f70a]
+        // parity: ai/src/protocols/shared.ts#optionalNullish [status=adapted hash=eb73b9fbed0a]
         public static func optionalNullish(_ value: JSONValue?) -> JSONValue? {
             guard let value, value != .null else { return nil }
             return value
@@ -1329,7 +1329,7 @@ public enum AIProtocolUtils {
             (try? decode()) ?? nil
         }
 
-        // parity: ai/src/protocols/shared.ts#ReportedBilling [status=implemented hash=3b7abda3ef27]
+        // parity: ai/src/protocols/shared.ts#ReportedBilling [status=implemented hash=aebcc02d239c]
         public struct ReportedBilling: Equatable, Hashable, Sendable, Codable {
             public let cost: Double?
 
@@ -1360,7 +1360,7 @@ public enum AIProtocolUtils {
             return ReportedBilling(cost: nil)
         }
 
-        // parity: ai/src/protocols/shared.ts#contentFilterCategory [status=implemented hash=1f8b3a30fa12]
+        // parity: ai/src/protocols/shared.ts#contentFilterCategory [status=implemented hash=e32ebd667dca]
         public static func contentFilterCategory(_ sources: JSONValue?...) -> String? {
             for source in sources {
                 guard let obj = JSONCodec.objectValue(source) else { continue }
@@ -1387,7 +1387,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/shared.ts#withUntypedFrames [status=implemented hash=6680be0be19f]
+        // parity: ai/src/protocols/shared.ts#withUntypedFrames [status=implemented hash=0862c6ed43fb]
         public static func withUntypedFrames(_ frame: [String: JSONValue]) -> [String: JSONValue] {
             if frame["type"] != nil { return frame }
             var copy = frame
@@ -1396,7 +1396,7 @@ public enum AIProtocolUtils {
             return copy
         }
 
-        // parity: ai/src/protocols/shared.ts#knownString [status=adapted hash=9bf779f28392]
+        // parity: ai/src/protocols/shared.ts#knownString [status=adapted hash=e5dce48e5368]
         public static func knownString(_ value: JSONValue?) -> String? {
             JSONCodec.stringValue(value)
         }
@@ -1464,12 +1464,12 @@ public enum AIProtocolUtils {
             return max(minimum, half)
         }
 
-        // parity: ai/src/protocols/shared.ts#eventError [status=implemented hash=0457bb1076df]
+        // parity: ai/src/protocols/shared.ts#eventError [status=implemented hash=2d4f12b8aafb]
         public static func eventError(_ route: String, _ message: String, body: String? = nil) -> ProtocolError {
             ProtocolError(kind: .invalidProviderOutput, message: message, route: route, body: body)
         }
 
-        // parity: ai/src/protocols/shared.ts#parseJson [status=implemented hash=9c4bab29d763]
+        // parity: ai/src/protocols/shared.ts#parseJson [status=implemented hash=fb6abe1f2628]
         public static func parseJson(route: String, input: String, message: String) throws(ProtocolError) -> JSONValue {
             guard let parsed = PureJSON.parse(input) else {
                 throw eventError(route, message, body: input)
@@ -1477,7 +1477,7 @@ public enum AIProtocolUtils {
             return JSONCodec.fromPureJSON(parsed)
         }
 
-        // parity: ai/src/protocols/shared.ts#joinText [status=implemented hash=56cdf1ea1ec0]
+        // parity: ai/src/protocols/shared.ts#joinText [status=implemented hash=6203ca129d3f]
         public static func joinText(_ parts: [TextPart]) -> String {
             parts.map(\.text).joined(separator: "\n")
         }
@@ -1489,12 +1489,12 @@ public enum AIProtocolUtils {
                 .replacingOccurrences(of: ">", with: "&gt;")
         }
 
-        // parity: ai/src/protocols/shared.ts#wrapSystemUpdate [status=implemented hash=cf4c8f79ac49]
+        // parity: ai/src/protocols/shared.ts#wrapSystemUpdate [status=implemented hash=0996d01b78f7]
         public static func wrapSystemUpdate(_ parts: [TextPart]) -> String {
             "<system-update>\n\(escapeSystemUpdateText(joinText(parts)))\n</system-update>"
         }
 
-        // parity: ai/src/protocols/shared.ts#systemUpdateText [status=implemented hash=3c2b8a74a49e]
+        // parity: ai/src/protocols/shared.ts#systemUpdateText [status=implemented hash=08a8a7851fb9]
         public static func systemUpdateText(route: String, message: Message) throws(ProtocolError) -> [TextPart] {
             var out: [TextPart] = []
             for part in message.content {
@@ -1506,7 +1506,7 @@ public enum AIProtocolUtils {
             return out
         }
 
-        // parity: ai/src/protocols/shared.ts#wrappedSystemUpdate [status=implemented hash=08c43235bc78]
+        // parity: ai/src/protocols/shared.ts#wrappedSystemUpdate [status=implemented hash=8a6a663be3e5]
         public static func wrappedSystemUpdate(route: String, message: Message) throws(ProtocolError) -> TextPart {
             let content = try systemUpdateText(route: route, message: message)
             return TextPart(text: wrapSystemUpdate(content), cache: content.last?.cache)
@@ -1625,12 +1625,12 @@ public enum AIProtocolUtils {
             return "Unknown stream error"
         }
 
-        // parity: ai/src/protocols/shared.ts#invalidRequest [status=implemented hash=a4c017ddc4e5]
+        // parity: ai/src/protocols/shared.ts#invalidRequest [status=implemented hash=9c0cb2a1ba82]
         public static func invalidRequest(_ message: String) -> ProtocolError {
             ProtocolError(kind: .invalidRequest, message: message)
         }
 
-        // parity: ai/src/protocols/shared.ts#unsupportedOperation [status=implemented hash=bc3e569d035b]
+        // parity: ai/src/protocols/shared.ts#unsupportedOperation [status=implemented hash=09e65b90840b]
         public static func unsupportedOperation(
             operation: String,
             message: String,
@@ -1738,7 +1738,7 @@ public enum AIProtocolUtils {
             return (tools: flattenTools(request.tools), request: updated)
         }
 
-        // parity: ai/src/protocols/shared.ts#matchToolChoice [status=implemented hash=d85de3e942a7]
+        // parity: ai/src/protocols/shared.ts#matchToolChoice [status=implemented hash=f1f9d811f098]
         public static func matchToolChoice<R>(
             route: String,
             toolChoice: ToolChoice,
@@ -1759,7 +1759,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/shared.ts#supportsContent [status=implemented hash=24f11427046d]
+        // parity: ai/src/protocols/shared.ts#supportsContent [status=implemented hash=7a99df4023b2]
         public static func supportsContent(_ part: ContentPart, types: [String]) -> Bool {
             types.contains(part.typeName)
         }
@@ -1775,7 +1775,7 @@ public enum AIProtocolUtils {
             invalidRequest("\(route) \(role.rawValue) messages only support \(formatContentTypes(types)) content for now")
         }
 
-        // parity: ai/src/protocols/shared.ts#validateWith [status=adapted hash=bdc726bcc44f]
+        // parity: ai/src/protocols/shared.ts#validateWith [status=adapted hash=08f771b54fa0]
         public static func validateWith<Input, Output>(
             _ decode: @escaping @Sendable (Input) throws -> Output
         ) -> @Sendable (Input) throws(ProtocolError) -> Output {
@@ -1790,7 +1790,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/shared.ts#jsonPost [status=implemented hash=14563d9608a0]
+        // parity: ai/src/protocols/shared.ts#jsonPost [status=implemented hash=5c4a69915044]
         public static func jsonPost(
             url: String,
             body: String,
@@ -1848,7 +1848,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/bedrock-auth.ts#defaultChain [status=adapted hash=d19800c4c1a3]
+        // parity: ai/src/protocols/utils/bedrock-auth.ts#defaultChain [status=adapted hash=8655bac38002]
         public static func defaultChain(
             _ options: DefaultChainOptions,
             environment: any EnvironmentProviding = SystemEnvironment.shared
@@ -1871,7 +1871,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/bedrock-auth.ts#sigV4 [status=implemented hash=7b15fea51930]
+        // parity: ai/src/protocols/utils/bedrock-auth.ts#sigV4 [status=implemented hash=5d7c91edc130]
         public static func sigV4(
             _ source: CredentialSource?,
             service: String = "bedrock",
@@ -1908,7 +1908,7 @@ public enum AIProtocolUtils {
         // parity: ai/src/protocols/utils/bedrock-auth.ts#auth [status=implemented hash=a73757d95202]
         public static let auth: AuthStrategy = sigV4(nil)
 
-        // parity: ai/src/protocols/utils/bedrock-auth.ts#resolveRegion [status=implemented hash=c74a4f8dc6b9]
+        // parity: ai/src/protocols/utils/bedrock-auth.ts#resolveRegion [status=implemented hash=98893929f0ce]
         public static func resolveRegion(
             region: String? = nil,
             credentialsRegion: String? = nil,
@@ -1952,7 +1952,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/bedrock-auth.ts#resolveAuth [status=implemented hash=9ed8699d69ce]
+        // parity: ai/src/protocols/utils/bedrock-auth.ts#resolveAuth [status=implemented hash=c193ddc447fb]
         public static func resolveAuth(
             _ input: ResolveAuthInput,
             region: String,
@@ -2140,7 +2140,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/cache.ts#newBreakpoints [status=implemented hash=5fb737a7f538]
+        // parity: ai/src/protocols/utils/cache.ts#newBreakpoints [status=implemented hash=49587d867334]
         public static func newBreakpoints(_ cap: Int) -> Breakpoints {
             Breakpoints(remaining: cap, dropped: 0)
         }
@@ -2155,7 +2155,7 @@ public enum AIProtocolUtils {
             return true
         }
 
-        // parity: ai/src/protocols/utils/cache.ts#warnDropped [status=implemented hash=d7eb8f01b7ea]
+        // parity: ai/src/protocols/utils/cache.ts#warnDropped [status=implemented hash=c663875fa898]
         public static func warnDropped(_ breakpoints: Breakpoints, protocolName: String, cap: Int) -> String? {
             guard breakpoints.dropped > 0 else { return nil }
             return "\(protocolName): dropped \(breakpoints.dropped) cache breakpoint(s); the API allows at most \(cap) per request."
@@ -2184,7 +2184,7 @@ public enum AIProtocolUtils {
     // MARK: - BedrockCache (packages/ai/src/protocols/utils/bedrock-cache.ts — 5 symbols)
 
     public enum BedrockCache {
-        // parity: ai/src/protocols/utils/bedrock-cache.ts#CachePointBlock [status=implemented hash=ed0c8eb1bae9]
+        // parity: ai/src/protocols/utils/bedrock-cache.ts#CachePointBlock [status=implemented hash=e3b675a51424]
         public struct CachePointBlock: Equatable, Hashable, Sendable, Codable {
             public struct CachePoint: Equatable, Hashable, Sendable, Codable {
                 public let type: String
@@ -2275,7 +2275,7 @@ public enum AIProtocolUtils {
             case webp
         }
 
-        // parity: ai/src/protocols/utils/bedrock-media.ts#ImageBlock [status=implemented hash=e4ac4f42754a]
+        // parity: ai/src/protocols/utils/bedrock-media.ts#ImageBlock [status=implemented hash=611bf5330ac8]
         public struct ImageBlock: Equatable, Hashable, Sendable, Codable {
             public let format: ImageFormat
             public let bytes: String
@@ -2300,7 +2300,7 @@ public enum AIProtocolUtils {
             case pdf, csv, doc, docx, xls, xlsx, html, txt, md
         }
 
-        // parity: ai/src/protocols/utils/bedrock-media.ts#DocumentBlock [status=implemented hash=5e0351f64a75]
+        // parity: ai/src/protocols/utils/bedrock-media.ts#DocumentBlock [status=implemented hash=178ed44b4c1f]
         public struct DocumentBlock: Equatable, Hashable, Sendable, Codable {
             public let format: DocumentFormat
             public let name: String
@@ -2390,7 +2390,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/bedrock-media.ts#lower [status=implemented hash=226ecd916c91]
+        // parity: ai/src/protocols/utils/bedrock-media.ts#lower [status=implemented hash=e79c01f1a563]
         public static func lower(_ part: MediaPart, documentNames: inout Set<String>) throws(ProtocolError) -> [JSONValue] {
             let mime = part.media.mediaType.lowercased()
             if let imageFormat = imageFormats[mime] {
@@ -2546,7 +2546,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/gateway-protocol.ts#gatewayProtocol [status=adapted hash=6a971fca7535]
+        // parity: ai/src/protocols/utils/gateway-protocol.ts#gatewayProtocol [status=adapted hash=1d7d41365ffc]
         public static func gatewayProtocol(
             id: String,
             innerProtocolID: String,
@@ -2561,7 +2561,7 @@ public enum AIProtocolUtils {
     public enum GeminiGenerateContent {
         /// A Gemini safety setting; known categories are `HARM_CATEGORY_*` and known thresholds include
         /// `BLOCK_LOW_AND_ABOVE`, `BLOCK_MEDIUM_AND_ABOVE`, `BLOCK_ONLY_HIGH`, `BLOCK_NONE` and `OFF`, but any string is kept.
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#SafetySetting [status=implemented hash=3dbc2d17d49c]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#SafetySetting [status=implemented hash=fd632b329833]
         public struct SafetySetting: Equatable, Hashable, Sendable, Codable {
             public let category: String
             public let threshold: String
@@ -2633,7 +2633,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#chunk [status=implemented hash=073312d213cf]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#chunk [status=implemented hash=f9f58dd26779]
         public static func chunk(from json: [String: JSONValue]) -> Chunk {
             let candidates: [Candidate] = (JSONCodec.arrayValue(json["candidates"]) ?? []).map { entry in
                 let obj = JSONCodec.objectValue(entry) ?? [:]
@@ -2684,7 +2684,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#track [status=implemented hash=c90f61666699]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#track [status=implemented hash=584c618350d0]
         public static func track(_ state: Metadata, chunk: Chunk) -> Metadata {
             Metadata(
                 usage: chunk.usageMetadata ?? state.usage,
@@ -2726,7 +2726,7 @@ public enum AIProtocolUtils {
             return ProtocolError(kind: .contentPolicy, message: "\(name) withheld its output (\(reason))", body: frame)
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#usage [status=implemented hash=b9d6bd77749a]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#usage [status=implemented hash=c0470fe35909]
         public static func usage(_ usage: UsageMetadata?) -> MediaUsage? {
             guard let usage else { return nil }
             var details: [String: JSONValue] = [:]
@@ -2741,7 +2741,7 @@ public enum AIProtocolUtils {
             )
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#providerMetadata [status=implemented hash=b34c63f847c8]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#providerMetadata [status=implemented hash=46784c2e2032]
         public static func providerMetadata(_ state: Metadata) -> ProviderMetadata {
             var google: [String: JSONValue] = [:]
             if let f = state.finishReason { google["finishReason"] = .string(f) }
@@ -2766,7 +2766,7 @@ public enum AIProtocolUtils {
             return out
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#toolMedia [status=implemented hash=339567eb2f10]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#toolMedia [status=implemented hash=fe7a3c6bd1b4]
         public static func toolMedia(_ item: ToolFileContent) -> MediaAsset {
             if item.mime.hasPrefix("video/") && item.uri.hasPrefix("gs://") {
                 return MediaAsset.ref(provider: "google", id: item.uri, mediaType: item.mime)
@@ -2774,7 +2774,7 @@ public enum AIProtocolUtils {
             return ProviderShared.toolFileMedia(item).media
         }
 
-        // parity: ai/src/protocols/utils/gemini-generate-content.ts#mediaPart [status=implemented hash=5a23bf3e58c2]
+        // parity: ai/src/protocols/utils/gemini-generate-content.ts#mediaPart [status=implemented hash=72e894fea780]
         public static func mediaPart(route: String, asset: MediaAsset) throws(ProtocolError) -> [String: JSONValue] {
             let fileUri: String?
             if asset.kind == .video, case .url(let u) = asset.source,
@@ -3167,7 +3167,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/lifecycle.ts#initial [status=implemented hash=2d2426124295]
+        // parity: ai/src/protocols/utils/lifecycle.ts#initial [status=implemented hash=9387c82afd79]
         public static func initial() -> State {
             State()
         }
@@ -3297,7 +3297,7 @@ public enum AIProtocolUtils {
             )
         }
 
-        // parity: ai/src/protocols/utils/lifecycle.ts#finish [status=implemented hash=8bc9fd9876f7]
+        // parity: ai/src/protocols/utils/lifecycle.ts#finish [status=implemented hash=c5c38d730f95]
         public static func finish(
             _ state: State,
             events: inout [LLMEvent],
@@ -3417,7 +3417,7 @@ public enum AIProtocolUtils {
             return MediaAsset.bytes(bytes, mediaType: mediaType, providerMetadata: providerMetadata)
         }
 
-        // parity: ai/src/protocols/utils/media-input.ts#imageOutput [status=implemented hash=4819a7948112]
+        // parity: ai/src/protocols/utils/media-input.ts#imageOutput [status=implemented hash=f62cc029b707]
         public static func imageOutput(
             invalid: (String) -> ProtocolError,
             label: String,
@@ -3441,7 +3441,7 @@ public enum AIProtocolUtils {
             throw invalid("\(label) has neither image data nor a URL")
         }
 
-        // parity: ai/src/protocols/utils/media-input.ts#appendFields [status=implemented hash=56cd8440ebbf]
+        // parity: ai/src/protocols/utils/media-input.ts#appendFields [status=implemented hash=d1a343cecf6e]
         public static func appendFields(
             fields: [String: JSONValue],
             overlay: [String: JSONValue]? = nil,
@@ -3561,10 +3561,10 @@ public enum AIProtocolUtils {
         // parity: ai/src/protocols/utils/open-responses-options.ts#TextVerbosities [status=implemented hash=0eb20fbe2334]
         public static let TextVerbosities: [String] = ["low", "medium", "high"]
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#TextVerbosity [status=implemented hash=0f57a3d33fd6]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#TextVerbosity [status=implemented hash=578a68d15ada]
         public typealias TextVerbosity = String
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#ResponseIncludables [status=implemented hash=88f584d1a2c0]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#ResponseIncludables [status=implemented hash=837da1e23993]
         public static let ResponseIncludables: [String] = [
             "file_search_call.results",
             "web_search_call.results",
@@ -3576,13 +3576,13 @@ public enum AIProtocolUtils {
             "message.output_text.logprobs",
         ]
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#ResponseIncludable [status=implemented hash=572b4387000d]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#ResponseIncludable [status=implemented hash=e30ba4861d78]
         public typealias ResponseIncludable = String
 
         // parity: ai/src/protocols/utils/open-responses-options.ts#ServiceTiers [status=implemented hash=f0f2c9afacff]
         public static let ServiceTiers: [String] = ["auto", "default", "flex", "priority"]
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#ServiceTier [status=implemented hash=1d63cc48102f]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#ServiceTier [status=implemented hash=34d3ac08e7d5]
         public typealias ServiceTier = String
 
         // parity: ai/src/protocols/utils/open-responses-options.ts#Truncations [status=implemented hash=d3b58afc584b]
@@ -3606,7 +3606,7 @@ public enum AIProtocolUtils {
         // parity: ai/src/protocols/utils/open-responses-options.ts#TruncationSchema [status=implemented hash=ba09833ba7ec]
         public static let TruncationSchema = Truncations
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#AllowedTools [status=implemented hash=69372a877990]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#AllowedTools [status=implemented hash=81754f0cd761]
         public struct AllowedTools: Equatable, Hashable, Sendable, Codable {
             public let toolNames: [String]
             public let mode: String?
@@ -3617,7 +3617,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#StreamOptions [status=implemented hash=fd1cba63eb49]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#StreamOptions [status=implemented hash=c5c3e616ec07]
         public struct StreamOptions: Equatable, Hashable, Sendable, Codable {
             public let includeObfuscation: Bool?
 
@@ -3626,7 +3626,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/open-responses-options.ts#Options [status=implemented hash=5308b9e144a8]
+        // parity: ai/src/protocols/utils/open-responses-options.ts#Options [status=implemented hash=28eb29754431]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public var store: Bool?
             public var metadata: [String: String]?
@@ -4253,7 +4253,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/responses-checkpoint.ts#make [status=adapted hash=f5f80550dd87]
+        // parity: ai/src/protocols/utils/responses-checkpoint.ts#make [status=adapted hash=f6a2b80e7691]
         public static func make(
             body: @escaping @Sendable (LLMRequest) throws(ProtocolError) -> [String: JSONValue]
         ) -> Runner {
@@ -4355,7 +4355,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/responses-compaction.ts#make [status=adapted hash=06f072baca16]
+        // parity: ai/src/protocols/utils/responses-compaction.ts#make [status=adapted hash=0eca031bc87c]
         public static func make(
             providerName: String,
             buildBody: @escaping @Sendable (LLMRequest) throws(ProtocolError) -> [String: JSONValue]
@@ -4400,7 +4400,7 @@ public enum AIProtocolUtils {
         // parity: ai/src/protocols/utils/responses-hosted-tools.ts#Definitions [status=implemented hash=889a8cdbd672]
         public typealias Definitions = [String: Definition]
 
-        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#common [status=implemented hash=5b90102e087f]
+        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#common [status=implemented hash=8c9607e3121a]
         public static let common: Definitions = [
             "web_search_call": Definition(name: "web_search") { item in
                 item.raw["action"] ?? .object([:])
@@ -4428,7 +4428,7 @@ public enum AIProtocolUtils {
             tools[item.type] != nil
         }
 
-        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#stream [status=adapted hash=6372af6099dc]
+        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#stream [status=adapted hash=8ca55e278867]
         public static func stream(
             tools: Definitions
         ) -> @Sendable (Lifecycle.State, Item, String) throws(ProtocolError) -> (Lifecycle.State, [LLMEvent]) {
@@ -4437,7 +4437,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#onDone [status=implemented hash=6697b2ca2ec1]
+        // parity: ai/src/protocols/utils/responses-hosted-tools.ts#onDone [status=implemented hash=6a03989a7aff]
         public static func onDone(
             lifecycle: Lifecycle.State,
             item: Item,
@@ -4477,7 +4477,7 @@ public enum AIProtocolUtils {
     // MARK: - SpeakerTurns (packages/ai/src/protocols/utils/speaker-turns.ts — 1 symbol)
 
     public enum SpeakerTurns {
-        // parity: ai/src/protocols/utils/speaker-turns.ts#group [status=implemented hash=542e337b11b3]
+        // parity: ai/src/protocols/utils/speaker-turns.ts#group [status=implemented hash=a45a242a5e93]
         public static func group<Item, Speaker: Equatable>(
             _ items: [Item],
             speaker: (Item) -> Speaker
@@ -4535,7 +4535,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/speech-stream.ts#timestamps [status=implemented hash=48d8c8a70c71]
+        // parity: ai/src/protocols/utils/speech-stream.ts#timestamps [status=implemented hash=1a56b95fc6c2]
         public static func timestamps(texts: [String], starts: [Double], ends: [Double]) -> [SpeechEvent] {
             guard !texts.isEmpty else { return [] }
             let items = texts.enumerated().map { idx, text in
@@ -4573,7 +4573,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/speech-stream.ts#container [status=implemented hash=31461ff3c05e]
+        // parity: ai/src/protocols/utils/speech-stream.ts#container [status=implemented hash=0b15faf336c6]
         public static func container(format: String, sampleRate: Int? = nil) -> FormatMetadata {
             var info: [String: JSONValue] = ["format": .string(format)]
             if let sampleRate { info["sampleRate"] = .int(Int64(sampleRate)) }
@@ -4596,7 +4596,7 @@ public enum AIProtocolUtils {
             }
         }
 
-        // parity: ai/src/protocols/utils/speech-stream.ts#pcm [status=implemented hash=57f204835d00]
+        // parity: ai/src/protocols/utils/speech-stream.ts#pcm [status=implemented hash=8943b3721588]
         public static func pcm(encoding: PcmEncoding, sampleRate: Int?, mediaType: String? = nil) -> FormatMetadata {
             var info: [String: JSONValue] = [
                 "format": .string("pcm"),
@@ -4616,7 +4616,7 @@ public enum AIProtocolUtils {
             return Int(digits)
         }
 
-        // parity: ai/src/protocols/utils/speech-stream.ts#finish [status=implemented hash=4f2f80feaa38]
+        // parity: ai/src/protocols/utils/speech-stream.ts#finish [status=implemented hash=60019be43f63]
         public static func finish(
             route: MediaIdentity,
             state: Audio,
@@ -4651,7 +4651,7 @@ public enum AIProtocolUtils {
 
     // MARK: - ToolSchema (packages/ai/src/protocols/utils/tool-schema.ts — 1 symbol)
 
-    // parity: ai/src/protocols/utils/tool-schema.ts#ToolSchemaProjection [status=implemented hash=1dfa54def43f]
+    // parity: ai/src/protocols/utils/tool-schema.ts#ToolSchemaProjection [status=implemented hash=e5a50a9c1d88]
     public enum ToolSchemaProjection {
         public static func gemini(_ schema: [String: JSONValue]) -> [String: JSONValue] {
             GeminiJsonSchema.normalize(schema)
@@ -4853,7 +4853,7 @@ public enum AIProtocolUtils {
             case error(ProtocolError)
         }
 
-        // parity: ai/src/protocols/utils/tool-stream.ts#empty [status=implemented hash=db1e4b48606d]
+        // parity: ai/src/protocols/utils/tool-stream.ts#empty [status=implemented hash=321cf96cd987]
         public static func empty<K: Hashable & Sendable>() -> State<K> {
             [:]
         }
@@ -4933,7 +4933,7 @@ public enum AIProtocolUtils {
             return AppendOutcome(tools: next, tool: tool, events: events)
         }
 
-        // parity: ai/src/protocols/utils/tool-stream.ts#start [status=implemented hash=d6cc33086f7e]
+        // parity: ai/src/protocols/utils/tool-stream.ts#start [status=implemented hash=98ea52db29f7]
         public static func start<K: Hashable & Sendable>(
             _ tools: State<K>,
             key: K,
@@ -4944,7 +4944,7 @@ public enum AIProtocolUtils {
             return next
         }
 
-        // parity: ai/src/protocols/utils/tool-stream.ts#appendOrStart [status=implemented hash=adc5c0df8e02]
+        // parity: ai/src/protocols/utils/tool-stream.ts#appendOrStart [status=implemented hash=3f62ec09f80a]
         public static func appendOrStart<K: Hashable & Sendable>(
             route: String,
             tools: State<K>,
@@ -5007,7 +5007,7 @@ public enum AIProtocolUtils {
             return .error(ProviderShared.eventError(route, missingToolMessage))
         }
 
-        // parity: ai/src/protocols/utils/tool-stream.ts#finish [status=implemented hash=1bf189a7f098]
+        // parity: ai/src/protocols/utils/tool-stream.ts#finish [status=implemented hash=d45d9eff9252]
         public static func finish<K: Hashable & Sendable>(
             route: String,
             tools: State<K>,
@@ -5021,7 +5021,7 @@ public enum AIProtocolUtils {
             return (next, finishEvents(tool: tool, event: event))
         }
 
-        // parity: ai/src/protocols/utils/tool-stream.ts#finishAll [status=implemented hash=782f1ad44f5a]
+        // parity: ai/src/protocols/utils/tool-stream.ts#finishAll [status=implemented hash=015908e1557c]
         public static func finishAll<K: Hashable & Sendable & Comparable>(
             route: String,
             tools: State<K>
@@ -5340,7 +5340,7 @@ public enum BedrockEventStream {
         return BinaryMessage(headers: headers, body: body)
     }
 
-    // parity: ai/src/protocols/bedrock-event-stream.ts#Frame [status=implemented hash=6668d5647fee]
+    // parity: ai/src/protocols/bedrock-event-stream.ts#Frame [status=implemented hash=d0a333cd15f1]
     public struct Frame: Equatable, Hashable, Sendable {
         public let event: [String: JSONValue]
         public let rawBody: String
@@ -5476,7 +5476,7 @@ public enum BedrockEventStream {
         }
     }
 
-    // parity: ai/src/protocols/bedrock-event-stream.ts#framing [status=implemented hash=f961b50c4327]
+    // parity: ai/src/protocols/bedrock-event-stream.ts#framing [status=implemented hash=eec4ff5be796]
     public static func framing(route: String = "bedrock-converse") -> FramingDefinition {
         FramingDefinition(route: route)
     }

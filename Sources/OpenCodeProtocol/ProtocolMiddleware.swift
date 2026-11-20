@@ -13,7 +13,7 @@ public struct MiddlewareDescriptor: Equatable, Hashable, Sendable, Codable {
 }
 
 /// HTTP API authorization middleware (`@opencode/HttpApiAuthorization`) failing with `UnauthorizedError` (401).
-// parity: protocol/src/middleware/authorization.ts#Authorization [status=implemented hash=8d904f3f70e2]
+// parity: protocol/src/middleware/authorization.ts#Authorization [status=implemented hash=a899fb3e262a]
 public enum Authorization {
     public static let id = "@opencode/HttpApiAuthorization"
     public static let error = ProtocolErrorRef(UnauthorizedError.self)
@@ -21,7 +21,7 @@ public enum Authorization {
 }
 
 /// HTTP API schema validation error middleware (`@opencode/HttpApiSchemaError`) failing with `InvalidRequestError` (400).
-// parity: protocol/src/middleware/schema-error.ts#SchemaErrorMiddleware [status=implemented hash=28dcad0d8ec8]
+// parity: protocol/src/middleware/schema-error.ts#SchemaErrorMiddleware [status=implemented hash=9c71df644a41]
 public enum SchemaErrorMiddleware {
     public static let id = "@opencode/HttpApiSchemaError"
     public static let error = ProtocolErrorRef(InvalidRequestError.self)

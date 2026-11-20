@@ -1,7 +1,7 @@
 /// If the last line holds only a bare block opener (`-`, `*`, `+`, `##`, `12.`, `>`, ```` ``` ````, `$$`),
 /// holds that line back until its first content character or newline arrives.
 /// Prevents 1-frame paragraph-to-heading/list kind pops during token streaming.
-// parity: patchmark/src/stream.ts#splitPendingMarker [status=implemented hash=19aa17c7500e]
+// parity: patchmark/src/stream.ts#splitPendingMarker [status=implemented hash=e1dab229618e]
 public func splitPendingMarker(_ text: String) -> (visible: String, held: String) {
     let u = Array(text.utf16)
     var lastNl = -1

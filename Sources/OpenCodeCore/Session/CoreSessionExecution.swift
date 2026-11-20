@@ -309,7 +309,7 @@ public enum CoreSessionBackground {
         return items
     }
 
-    // parity: core/src/session/background.ts#list [status=implemented hash=836fd0aa186e]
+    // parity: core/src/session/background.ts#list [status=implemented hash=a9a43474f966]
     public static func list(
         jobs: any CoreSessionJobTypes.JobBridge,
         store: any Lookup,
@@ -397,7 +397,7 @@ public enum CoreSessionSubagentCompletion {
         return "\(body)\n\nBackground work still running:\n\(lines.joined(separator: "\n"))"
     }
 
-    // parity: core/src/session/subagent-completion.ts#deliver [status=implemented hash=55923190a42c]
+    // parity: core/src/session/subagent-completion.ts#deliver [status=implemented hash=4d11cba8a3c1]
     public static func deliver(
         sessions: any SyntheticSession,
         jobs: any CoreSessionJobTypes.JobBridge,
@@ -443,7 +443,7 @@ public enum CoreSessionSubagentCompletion {
 /// Checks whether spawning another generation of subagent children exceeds the configured depth limit
 /// (`packages/core/src/session/subagent-depth.ts`).
 public enum CoreSessionSubagentDepth {
-    // parity: core/src/session/subagent-depth.ts#reached [status=implemented hash=177934e1b346]
+    // parity: core/src/session/subagent-depth.ts#reached [status=implemented hash=19ed7cf2dc05]
     public static func reached(
         parent: SessionSchema.Info,
         store: any CoreSessionStore.Interface,
@@ -466,7 +466,7 @@ public enum CoreSessionSubagentDepth {
 /// Coordinates transactional subagent completion outbox emission and best-effort parent delivery
 /// (`packages/core/src/session/execution/subagent-report.ts`).
 public enum CoreSessionSubagentReport {
-    // parity: core/src/session/execution/subagent-report.ts#Outcome [status=implemented hash=e9301c18fb9a]
+    // parity: core/src/session/execution/subagent-report.ts#Outcome [status=implemented hash=23fac0b0c484]
     public enum Outcome: Equatable, Sendable {
         case succeeded
         case failed(error: SessionErrorSchema.Error)
@@ -916,7 +916,7 @@ public enum CoreSessionRunCoordinator {
         }
     }
 
-    // parity: core/src/session/run-coordinator.ts#make [status=implemented hash=e19af7fd6843]
+    // parity: core/src/session/run-coordinator.ts#make [status=implemented hash=eddaf5988bd9]
     public static func make<Key: Hashable & Sendable, Reason: Sendable>(
         drain: @escaping @Sendable (Key, Bool, CoreSessionInbox.Promotable) async throws -> Void,
         started: (@Sendable (Key) async -> Void)? = nil,
@@ -1162,7 +1162,7 @@ public enum CoreSessionExecution {
         public func awaitIdle(_ sessionID: SessionID) async {}
     }
 
-    // parity: core/src/session/execution.ts#layer [status=adapted hash=ec15004c70b5]
+    // parity: core/src/session/execution.ts#layer [status=adapted hash=f09dffe0d932]
     public static func layer(
         runnerForLocation: @escaping @Sendable (SessionSchema.Info) async throws -> any CoreSessionRunner.Interface
     ) -> LayerNode.ExecutableLayer {
@@ -1188,12 +1188,12 @@ public enum CoreSessionExecution {
         }
     }
 
-    // parity: core/src/session/execution.ts#noopLayer [status=adapted hash=53e27bd768f2]
+    // parity: core/src/session/execution.ts#noopLayer [status=adapted hash=8ebdbcf829b6]
     public static let noopLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
         LayerNode.Output([Service.serviceKey: NoopService()])
     }
 
-    // parity: core/src/session/execution.ts#node [status=adapted hash=1ac4965f824e]
+    // parity: core/src/session/execution.ts#node [status=adapted hash=6bec4735d0d4]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         noopLayer,
@@ -1258,7 +1258,7 @@ public enum CoreSessionSubagentJob {
         return LayerNode.Output([Service.serviceKey: Service(jobs: jobs, execution: execution)])
     }
 
-    // parity: core/src/session/subagent-job.ts#node [status=adapted hash=4ff1e335592e]
+    // parity: core/src/session/subagent-job.ts#node [status=adapted hash=8ec1fbe10975]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer,
@@ -1475,7 +1475,7 @@ public enum CoreSessionRestart {
         }
     }
 
-    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=88fdd8b54a50]
+    // parity: core/src/session/execution/restart.ts#layer [status=adapted hash=b993cac97ee2]
     public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             guard let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db,
@@ -1498,7 +1498,7 @@ public enum CoreSessionRestart {
         }
     }
 
-    // parity: core/src/session/execution/restart.ts#node [status=adapted hash=c83e773a0e9a]
+    // parity: core/src/session/execution/restart.ts#node [status=adapted hash=0b590b72a06b]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer(),

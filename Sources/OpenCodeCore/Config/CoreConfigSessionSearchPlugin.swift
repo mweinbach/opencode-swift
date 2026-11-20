@@ -26,7 +26,7 @@ extension CoreConfigPlugin {
             }
         }
 
-        // parity: core/src/config/plugin/session-search.ts#Plugin [status=adapted hash=ea694af0abff]
+        // parity: core/src/config/plugin/session-search.ts#Plugin [status=adapted hash=d8ff958f0e89]
         public static let Plugin = ModuleDescriptor(id: id)
     }
 }

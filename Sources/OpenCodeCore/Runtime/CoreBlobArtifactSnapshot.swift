@@ -17,7 +17,7 @@ public enum CoreBlobStore {
     // parity: core/src/blob-store.ts#Info [status=implemented hash=7697ecac33cb]
     public typealias Info = BlobStoreSchema.Info
 
-    // parity: core/src/blob-store.ts#NotFoundError [status=implemented hash=62227e30710d]
+    // parity: core/src/blob-store.ts#NotFoundError [status=implemented hash=af2c0f653015]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "BlobStore.NotFoundError"
         public let id: String
@@ -31,7 +31,7 @@ public enum CoreBlobStore {
         public var description: String { message }
     }
 
-    // parity: core/src/blob-store.ts#UnavailableError [status=implemented hash=80e00e2208d8]
+    // parity: core/src/blob-store.ts#UnavailableError [status=implemented hash=57fc8e785333]
     public struct UnavailableError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "BlobStore.UnavailableError"
         public let message: String
@@ -141,13 +141,13 @@ public enum CoreBlobStore {
         }
     }
 
-    // parity: core/src/blob-store.ts#unsupportedLayer [status=adapted hash=adbd9bf952bc]
+    // parity: core/src/blob-store.ts#unsupportedLayer [status=adapted hash=e20afacce90a]
     public static let unsupportedLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
         key: Service.serviceKey,
         value: UnsupportedService() as any Interface
     )
 
-    // parity: core/src/blob-store.ts#node [status=adapted hash=1ba2f21c2852]
+    // parity: core/src/blob-store.ts#node [status=adapted hash=e02afb8a880b]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -318,7 +318,7 @@ public enum CoreArtifact {
         }
     }
 
-    // parity: core/src/artifact.ts#DisabledError [status=implemented hash=c14648b590fc]
+    // parity: core/src/artifact.ts#DisabledError [status=implemented hash=ed0f36759660]
     public struct DisabledError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.DisabledError"
         public init() {}
@@ -327,7 +327,7 @@ public enum CoreArtifact {
         public var description: String { message }
     }
 
-    // parity: core/src/artifact.ts#NotFoundError [status=implemented hash=0c13ac8ccbf5]
+    // parity: core/src/artifact.ts#NotFoundError [status=implemented hash=0579336fdbec]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.NotFoundError"
         public let artifactID: ID
@@ -337,7 +337,7 @@ public enum CoreArtifact {
         public var description: String { message }
     }
 
-    // parity: core/src/artifact.ts#FileMissingError [status=implemented hash=8b0c6e4daa64]
+    // parity: core/src/artifact.ts#FileMissingError [status=implemented hash=d3e64f0e26c6]
     public struct FileMissingError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.FileMissingError"
         public let artifactID: ID
@@ -348,7 +348,7 @@ public enum CoreArtifact {
         public var description: String { message }
     }
 
-    // parity: core/src/artifact.ts#ProviderNotFoundError [status=implemented hash=659e3cf54dd0]
+    // parity: core/src/artifact.ts#ProviderNotFoundError [status=implemented hash=9e9b89682081]
     public struct ProviderNotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.ProviderNotFoundError"
         public let providerID: ProviderID
@@ -358,7 +358,7 @@ public enum CoreArtifact {
         public var description: String { message }
     }
 
-    // parity: core/src/artifact.ts#InvalidError [status=implemented hash=d6575577332c]
+    // parity: core/src/artifact.ts#InvalidError [status=implemented hash=c88b927233fd]
     public struct InvalidError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.InvalidError"
         public let reason: String
@@ -369,7 +369,7 @@ public enum CoreArtifact {
         public var description: String { reason }
     }
 
-    // parity: core/src/artifact.ts#ProviderError [status=implemented hash=3092cb3dd1c5]
+    // parity: core/src/artifact.ts#ProviderError [status=implemented hash=40a2fe1a2c61]
     public struct ProviderError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Artifact.ProviderError"
         public let providerID: ProviderID
@@ -383,7 +383,7 @@ public enum CoreArtifact {
         public var description: String { message }
     }
 
-    // parity: core/src/artifact.ts#Error [status=implemented hash=a78162c83b06]
+    // parity: core/src/artifact.ts#Error [status=implemented hash=c5ef6736044d]
     public enum ArtifactError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         case disabled(DisabledError)
         case notFound(NotFoundError)
@@ -500,7 +500,7 @@ public enum CoreArtifact {
     }
 
     /// Resolves the stored directory of an artifact from KV for HTTP routes without an explicit location query.
-    // parity: core/src/artifact.ts#locate [status=implemented hash=76be013b2bf9]
+    // parity: core/src/artifact.ts#locate [status=implemented hash=a09464c4e64f]
     public static func locate(kv: any KVStore, id: ID) async -> String? {
         guard let raw = await kv.get(itemPrefix + id.rawValue),
               let data = try? JSONEncoder().encode(raw),
@@ -932,7 +932,7 @@ public enum CoreArtifact {
         }
     }
 
-    // parity: core/src/artifact.ts#node [status=adapted hash=4048d84296fe]
+    // parity: core/src/artifact.ts#node [status=adapted hash=735f7b939589]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -959,7 +959,7 @@ public enum CoreSnapshot {
     // parity: core/src/snapshot.ts#ID [status=implemented hash=e49acddfac38]
     public typealias ID = SnapshotSchema.ID
 
-    // parity: core/src/snapshot.ts#Error [status=implemented hash=c4ee1c7eb04d]
+    // parity: core/src/snapshot.ts#Error [status=implemented hash=a4511d676b5a]
     public struct SnapshotError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public enum Operation: String, Equatable, Hashable, Sendable, Codable {
             case capture
@@ -1232,7 +1232,7 @@ public enum CoreSnapshot {
         func restore(_ input: RestoreInput) async throws { _ = input }
     }
 
-    // parity: core/src/snapshot.ts#node [status=adapted hash=30ce7fecd74a]
+    // parity: core/src/snapshot.ts#node [status=adapted hash=b3d53f679f39]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1244,7 +1244,7 @@ public enum CoreSnapshot {
         [FSUtil.node, Global.node]
     )
 
-    // parity: core/src/snapshot.ts#noopLayer [status=adapted hash=923f80ee8a54]
+    // parity: core/src/snapshot.ts#noopLayer [status=adapted hash=ae239f7a65a8]
     public static let noopLayer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
         key: Service.serviceKey,
         value: NoopService() as any Interface

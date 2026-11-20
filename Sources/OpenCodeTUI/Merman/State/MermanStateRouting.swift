@@ -20,7 +20,7 @@ extension Merman {
         case vertical
     }
 
-    // parity: merman/src/state/routing.ts#StateTransitionRoutePlan [status=implemented hash=861480124bf3]
+    // parity: merman/src/state/routing.ts#StateTransitionRoutePlan [status=implemented hash=88e34e128cb8]
     public struct StateTransitionRoutePlan: Equatable, Hashable, Sendable, Codable {
         public var transition: StateVisibleTransition
         public var from: StateDiagramBoxBounds
@@ -49,7 +49,7 @@ extension Merman {
     // parity: merman/src/state/routing.ts#StateTransitionPathPoint [status=implemented hash=ab09fdc76fff]
     public typealias StateTransitionPathPoint = DiagramPoint
 
-    // parity: merman/src/state/routing.ts#StateTransitionRenderCell [status=implemented hash=33ec036fa413]
+    // parity: merman/src/state/routing.ts#StateTransitionRenderCell [status=implemented hash=a4cc1cd505d2]
     public struct StateTransitionRenderCell: Equatable, Hashable, Sendable, Codable {
         public var x: Int
         public var y: Int
@@ -161,7 +161,7 @@ extension Merman {
         public let height: Int
     }
 
-    // parity: merman/src/state/routing.ts#measureStateTransitionLabel [status=implemented hash=e2ac080e37b6]
+    // parity: merman/src/state/routing.ts#measureStateTransitionLabel [status=implemented hash=df2dcdcaac20]
     public static func measureStateTransitionLabel(_ label: String) -> StateLabelMetrics {
         if label.isEmpty { return StateLabelMetrics(lines: [], width: 0, height: 0) }
         let lines = splitDiagramLines(label)
@@ -1448,7 +1448,7 @@ extension Merman {
         return try SpatialIndex.empty().add(claims: claims)
     }
 
-    // parity: merman/src/state/routing.ts#createStateTransitionRenderPlans [status=implemented hash=432f385d6156]
+    // parity: merman/src/state/routing.ts#createStateTransitionRenderPlans [status=implemented hash=9eb8f5ac21eb]
     public static func createStateTransitionRenderPlans(
         _ diagram: StateVisibleDiagram,
         bounds: [String: StateDiagramBoxBounds],

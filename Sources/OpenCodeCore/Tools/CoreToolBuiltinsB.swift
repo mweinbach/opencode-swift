@@ -48,7 +48,7 @@ extension CoreTool {
             case html
         }
 
-        // parity: core/src/tool/plugin/webfetch.ts#Input [status=implemented hash=07f77a938783]
+        // parity: core/src/tool/plugin/webfetch.ts#Input [status=implemented hash=87c87465fb64]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let url: String
             public let format: Format
@@ -286,7 +286,7 @@ extension CoreTool {
         The current year is 2026. Use this year when searching for recent information or current events.
         """
 
-        // parity: core/src/tool/plugin/websearch.ts#Input [status=implemented hash=f57b8d153750]
+        // parity: core/src/tool/plugin/websearch.ts#Input [status=implemented hash=5d2c31906901]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let query: String
 
@@ -453,7 +453,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/todo.ts#name [status=implemented hash=85c0d95a46d3]
         public static let name: String = "todowrite"
 
-        // parity: core/src/tool/plugin/todo.ts#Info [status=implemented hash=f6cbd49a9670]
+        // parity: core/src/tool/plugin/todo.ts#Info [status=implemented hash=c38cd86f2e01]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public enum Status: String, Equatable, Hashable, Sendable, Codable {
                 case pending
@@ -471,7 +471,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/todo.ts#Input [status=implemented hash=cc0f0e8e1e0b]
+        // parity: core/src/tool/plugin/todo.ts#Input [status=implemented hash=701cbc444c22]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let todos: [Info]
 
@@ -480,7 +480,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/todo.ts#Output [status=implemented hash=3d4b7b8c56cd]
+        // parity: core/src/tool/plugin/todo.ts#Output [status=implemented hash=4efeb6bdb587]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             public let todos: [Info]
 
@@ -564,7 +564,7 @@ extension CoreTool {
         - If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label
         """
 
-        // parity: core/src/tool/plugin/question.ts#Input [status=implemented hash=296b935a5145]
+        // parity: core/src/tool/plugin/question.ts#Input [status=implemented hash=1556f5615115]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let questions: [QuestionSchema.Prompt]
 
@@ -573,7 +573,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/question.ts#Output [status=implemented hash=f9b9064677b0]
+        // parity: core/src/tool/plugin/question.ts#Output [status=implemented hash=ba0a42c51d75]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             public let answers: [QuestionSchema.Answer]
 
@@ -582,7 +582,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/question.ts#CancelledError [status=implemented hash=1b1d54e491d8]
+        // parity: core/src/tool/plugin/question.ts#CancelledError [status=implemented hash=df815d778c94]
         public struct CancelledError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "QuestionTool.CancelledError"
             public init() {}
@@ -726,7 +726,7 @@ extension CoreTool {
             "Pass the returned sessionID to continue that specific child conversation. A follow-up to a running child joins its current run.",
         ].joined(separator: "\n")
 
-        // parity: core/src/tool/plugin/subagent.ts#Input [status=implemented hash=a070ad3f7210]
+        // parity: core/src/tool/plugin/subagent.ts#Input [status=implemented hash=1a257b27bb1b]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let agent: String
             public let description: String
@@ -749,7 +749,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/subagent.ts#Output [status=implemented hash=790875b93ef0]
+        // parity: core/src/tool/plugin/subagent.ts#Output [status=implemented hash=f0cb2f14c927]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             public let sessionID: SessionID
             public let status: String
@@ -949,14 +949,14 @@ extension CoreTool {
         // parity: core/src/tool/plugin/skill.ts#name [status=implemented hash=60c5a1ea6cbd]
         public static let name: String = "skill"
 
-        // parity: core/src/tool/plugin/skill.ts#description [status=implemented hash=cd7cebc2544d]
+        // parity: core/src/tool/plugin/skill.ts#description [status=implemented hash=2462f767ec89]
         public static let description: String = [
             "Load a specialized skill's instructions and resources into the current conversation when the task at hand matches its description.",
             "",
             "The skill ID must match an available skill or a skill explicitly referenced by the user.",
         ].joined(separator: "\n")
 
-        // parity: core/src/tool/plugin/skill.ts#Input [status=implemented hash=99a4583a5207]
+        // parity: core/src/tool/plugin/skill.ts#Input [status=implemented hash=697bb97d5a7c]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let id: SkillSchema.ID
 
@@ -965,7 +965,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/skill.ts#Output [status=implemented hash=44145ae05d9a]
+        // parity: core/src/tool/plugin/skill.ts#Output [status=implemented hash=4ce560995419]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             public let directory: String
             public let content: String
@@ -1054,7 +1054,7 @@ extension CoreTool {
     // MARK: - ArtifactTools (`core/src/tool/plugin/artifact.ts`)
 
     public enum ArtifactTools {
-        // parity: core/src/tool/plugin/artifact.ts#CreateToolInput [status=implemented hash=9695e488faf0]
+        // parity: core/src/tool/plugin/artifact.ts#CreateToolInput [status=implemented hash=9cf2f78f9288]
         public struct CreateToolInput: Equatable, Hashable, Sendable, Codable {
             public let title: String
             public let files: [String: String]
@@ -1069,7 +1069,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/artifact.ts#ReadToolInput [status=implemented hash=08253195690c]
+        // parity: core/src/tool/plugin/artifact.ts#ReadToolInput [status=implemented hash=2a459cfd8139]
         public struct ReadToolInput: Equatable, Hashable, Sendable, Codable {
             public let id: ArtifactSchema.ID
 
@@ -1078,7 +1078,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/artifact.ts#UpdateToolInput [status=implemented hash=1fe06adc32ba]
+        // parity: core/src/tool/plugin/artifact.ts#UpdateToolInput [status=implemented hash=332058ea469f]
         public struct UpdateToolInput: Equatable, Hashable, Sendable, Codable {
             public let id: ArtifactSchema.ID
             public let title: String?
@@ -1093,7 +1093,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/artifact.ts#DeleteToolInput [status=implemented hash=da9f0500f6fa]
+        // parity: core/src/tool/plugin/artifact.ts#DeleteToolInput [status=implemented hash=307072d13935]
         public struct DeleteToolInput: Equatable, Hashable, Sendable, Codable {
             public let id: ArtifactSchema.ID
 
@@ -1221,7 +1221,7 @@ extension CoreTool {
     // MARK: - AutomationTools (`core/src/tool/plugin/automation.ts`)
 
     public enum AutomationTools {
-        // parity: core/src/tool/plugin/automation.ts#View [status=implemented hash=ce7d8451b5b6]
+        // parity: core/src/tool/plugin/automation.ts#View [status=implemented hash=a0ba3b93a6b8]
         public struct View: Equatable, Hashable, Sendable, Codable {
             public let id: AutomationSchema.ID
             public let name: String
@@ -1268,7 +1268,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/automation.ts#IDInput [status=implemented hash=0d97b8ef489e]
+        // parity: core/src/tool/plugin/automation.ts#IDInput [status=implemented hash=99237fcbd627]
         public struct IDInput: Equatable, Hashable, Sendable, Codable {
             public let id: AutomationSchema.ID
 
@@ -1549,7 +1549,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/image-generate.ts#MAX_INPUT_BYTES [status=implemented hash=d826de23135e]
         public static let MAX_INPUT_BYTES: Int = 20 * 1024 * 1024
 
-        // parity: core/src/tool/plugin/image-generate.ts#description [status=implemented hash=cd7cebc2544d]
+        // parity: core/src/tool/plugin/image-generate.ts#description [status=implemented hash=45bf1d41dd48]
         public static let description: String = [
             "Generates a new image, or edits existing ones.",
             "Only call this when the user asks you to create or edit an image. If you think an image would help but the user didn't ask for one, ask them first instead of generating it.",
@@ -1559,7 +1559,7 @@ extension CoreTool {
             "Don't repeat a request unless the user asks.",
         ].joined(separator: "\n")
 
-        // parity: core/src/tool/plugin/image-generate.ts#Input [status=implemented hash=085b8134426e]
+        // parity: core/src/tool/plugin/image-generate.ts#Input [status=implemented hash=832a27a7d442]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let prompt: String
             public let images: [String]?
@@ -1574,7 +1574,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/image-generate.ts#Output [status=implemented hash=64bf3f949fa8]
+        // parity: core/src/tool/plugin/image-generate.ts#Output [status=implemented hash=3e396b59bbc0]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             public let id: String
             public let path: String
@@ -1588,7 +1588,7 @@ extension CoreTool {
         }
 
         /// Selects the newest image model from the session's provider, otherwise the newest available one.
-        // parity: core/src/tool/plugin/image-generate.ts#defaultModel [status=implemented hash=b80173b140bf]
+        // parity: core/src/tool/plugin/image-generate.ts#defaultModel [status=implemented hash=98958ab33082]
         public static func defaultModel(
             available: [ModelSchema.Info],
             providerID: ProviderSchema.ID? = nil,
@@ -2021,7 +2021,7 @@ extension CoreTool {
     // MARK: - OpenCodeTools (`core/src/tool/plugin/opencode.ts`)
 
     public enum OpenCodeTools {
-        // parity: core/src/tool/plugin/opencode.ts#RenameInput [status=implemented hash=af36069493df]
+        // parity: core/src/tool/plugin/opencode.ts#RenameInput [status=implemented hash=a7a31bcc5e8c]
         public struct RenameInput: Equatable, Hashable, Sendable, Codable {
             public let sessionID: SessionID?
             public let title: String
@@ -2032,7 +2032,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#MoveInput [status=implemented hash=c4ce1629393f]
+        // parity: core/src/tool/plugin/opencode.ts#MoveInput [status=implemented hash=98cec273b70c]
         public struct MoveInput: Equatable, Hashable, Sendable, Codable {
             public let sessionID: SessionID?
             public let directory: SchemaPrimitive.AbsolutePath
@@ -2043,7 +2043,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#WorktreeCreateInput [status=implemented hash=8f6e2a13343d]
+        // parity: core/src/tool/plugin/opencode.ts#WorktreeCreateInput [status=implemented hash=e5a7a096889f]
         public struct WorktreeCreateInput: Equatable, Hashable, Sendable, Codable {
             public let name: String
 
@@ -2052,7 +2052,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#WorktreeRemoveInput [status=implemented hash=3972a8fc3891]
+        // parity: core/src/tool/plugin/opencode.ts#WorktreeRemoveInput [status=implemented hash=8de35485013d]
         public struct WorktreeRemoveInput: Equatable, Hashable, Sendable, Codable {
             public let directory: SchemaPrimitive.AbsolutePath
             public let force: Bool?
@@ -2063,7 +2063,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#ModelsInput [status=implemented hash=9f3547076d38]
+        // parity: core/src/tool/plugin/opencode.ts#ModelsInput [status=implemented hash=936a5bc06ddf]
         public struct ModelsInput: Equatable, Hashable, Sendable, Codable {
             /// "chat": a language model (LLM). "image": generates or edits images. "video": generates videos.
             public enum ModelKind: String, Equatable, Hashable, Sendable, Codable {

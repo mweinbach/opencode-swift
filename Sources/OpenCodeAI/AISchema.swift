@@ -116,7 +116,7 @@ public enum AISchema {
         case payloadTooLarge = "payload-too-large"
     }
 
-    // parity: ai/src/schema/errors.ts#HttpContext [status=implemented hash=0f934bf4ff35]
+    // parity: ai/src/schema/errors.ts#HttpContext [status=implemented hash=7ed2b9adf249]
     public struct HttpContext: Equatable, Hashable, Sendable, Codable {
         public let url: String
         public let status: Int
@@ -150,7 +150,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/errors.ts#HttpRateLimitDetails [status=implemented hash=9781e23cbf76]
+    // parity: ai/src/schema/errors.ts#HttpRateLimitDetails [status=implemented hash=cf31ccdeffec]
     public struct HttpRateLimitDetails: Equatable, Hashable, Sendable, Codable {
         public let retryAfterMs: Int?
         public let limit: [String: String]?
@@ -170,7 +170,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/errors.ts#InvalidRequestError [status=implemented hash=d24406ded5d8]
+    // parity: ai/src/schema/errors.ts#InvalidRequestError [status=implemented hash=f8c535d268ab]
     public struct InvalidRequestError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "InvalidRequest"
         public let message: String
@@ -199,7 +199,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#UnsupportedOperationError [status=implemented hash=1120ec7236b1]
+    // parity: ai/src/schema/errors.ts#UnsupportedOperationError [status=implemented hash=21800ea68491]
     public struct UnsupportedOperationError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "UnsupportedOperation"
         public let message: String
@@ -231,7 +231,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#ProviderConfigurationError [status=implemented hash=6cfe817b527b]
+    // parity: ai/src/schema/errors.ts#ProviderConfigurationError [status=implemented hash=1af594dfd7e8]
     public struct ProviderConfigurationError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "ProviderConfiguration"
         public let provider: ProviderID
@@ -268,7 +268,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#RateLimitError [status=implemented hash=72eb0e42388a]
+    // parity: ai/src/schema/errors.ts#RateLimitError [status=implemented hash=9499ef1d4a70]
     public struct RateLimitError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "RateLimit"
         public let message: String
@@ -297,7 +297,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#QuotaExceededError [status=implemented hash=3202ba0c6e84]
+    // parity: ai/src/schema/errors.ts#QuotaExceededError [status=implemented hash=e73acaf967c4]
     public struct QuotaExceededError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "QuotaExceeded"
         public let message: String
@@ -346,7 +346,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#ProviderInternalError [status=implemented hash=bdc784c6b65a]
+    // parity: ai/src/schema/errors.ts#ProviderInternalError [status=implemented hash=87fd6647866f]
     public struct ProviderInternalError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "ProviderInternal"
         public let message: String
@@ -385,7 +385,7 @@ public enum AISchema {
         case write
     }
 
-    // parity: ai/src/schema/errors.ts#TransportError [status=implemented hash=d6b4cf369e5e]
+    // parity: ai/src/schema/errors.ts#TransportError [status=implemented hash=c0727dff9609]
     public struct TransportError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Transport"
 
@@ -457,7 +457,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#InvalidProviderOutputError [status=implemented hash=daf34b99f0bc]
+    // parity: ai/src/schema/errors.ts#InvalidProviderOutputError [status=implemented hash=0e71211caf77]
     public struct InvalidProviderOutputError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "InvalidProviderOutput"
 
@@ -514,7 +514,7 @@ public enum AISchema {
         public var description: String { message }
     }
 
-    // parity: ai/src/schema/errors.ts#TimeoutError [status=implemented hash=a0ff587f6c82]
+    // parity: ai/src/schema/errors.ts#TimeoutError [status=implemented hash=3035b6e740d9]
     public struct TimeoutError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Timeout"
         public let message: String
@@ -739,7 +739,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/errors.ts#AIError [status=implemented hash=1bd3fb3bf757]
+    // parity: ai/src/schema/errors.ts#AIError [status=implemented hash=fca5de491664]
     public struct AIError: Swift.Error, Equatable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "AI.Error"
         public let reason: AIErrorReason
@@ -830,7 +830,7 @@ public enum AISchema {
     }
 
     /// Return `error` with `partial` attached, or unchanged when there is no partial output.
-    // parity: ai/src/schema/errors.ts#withPartial [status=implemented hash=dfe9236600cf]
+    // parity: ai/src/schema/errors.ts#withPartial [status=implemented hash=132fc8a120ba]
     public static func withPartial(_ error: AIError, partial: LLMResponse?) -> AIError {
         guard let partial else { return error }
         return AIError(reason: error.reason, partial: partial)
@@ -874,7 +874,7 @@ public enum AISchema {
     // parity: ai/src/schema/options.ts#ProviderOptions [status=implemented hash=4dc14ed18d0c]
     public typealias ProviderOptions = [String: JSONValue]
 
-    // parity: ai/src/schema/options.ts#ProviderMetadata [status=implemented hash=477a8bad0b8d]
+    // parity: ai/src/schema/options.ts#ProviderMetadata [status=implemented hash=1f8afa1c1dff]
     public typealias ProviderMetadata = [String: [String: JSONValue]]
 
     // parity: ai/src/schema/options.ts#mergeProviderOptions [status=implemented hash=002e902c54c5]
@@ -1275,7 +1275,7 @@ public enum AISchema {
     }
 
     /// Provider-defined string enum: known values for autocomplete, any string accepted.
-    // parity: ai/src/schema/options.ts#OpenString [status=implemented hash=7ba6b7035da5]
+    // parity: ai/src/schema/options.ts#OpenString [status=implemented hash=43d23e83202a]
     public struct OpenString<Known: RawRepresentable & Hashable & Sendable>: RawRepresentable, Hashable, Sendable, Codable, ExpressibleByStringLiteral, CustomStringConvertible where Known.RawValue == String {
         public let rawValue: String
 
@@ -1360,7 +1360,7 @@ public enum AISchema {
         case alibaba
     }
 
-    // parity: ai/src/schema/options.ts#LanguageModelCompatibility [status=implemented hash=59d71cdeb2af]
+    // parity: ai/src/schema/options.ts#LanguageModelCompatibility [status=implemented hash=8930f87180c1]
     public struct LanguageModelCompatibility: Equatable, Hashable, Sendable, Codable {
         // parity: ai/src/schema/options.ts#LanguageModelCompatibility.Input [status=implemented hash=0b5db6ff2fe3]
         public typealias Input = LanguageModelCompatibility
@@ -1687,7 +1687,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/options.ts#LanguageModel [status=implemented hash=9fd690c10069]
+    // parity: ai/src/schema/options.ts#LanguageModel [status=implemented hash=3d1130ddd2b3]
     public struct LanguageModel: Sendable {
         // parity: ai/src/schema/options.ts#LanguageModel.ConstructorInput [status=implemented hash=83e578bc3dc1]
         public struct ConstructorInput: Sendable {
@@ -1715,7 +1715,7 @@ public enum AISchema {
             }
         }
 
-        // parity: ai/src/schema/options.ts#LanguageModel.Input [status=implemented hash=4359db80409c]
+        // parity: ai/src/schema/options.ts#LanguageModel.Input [status=implemented hash=3c2a74b4227a]
         public struct Input: Sendable {
             public let id: String
             public let provider: String
@@ -1827,7 +1827,7 @@ public enum AISchema {
     // parity: ai/src/schema/options.ts#LanguageModelProviderOptions [status=adapted hash=12766d0ef36b]
     public typealias LanguageModelProviderOptions = ProviderOptions
 
-    // parity: ai/src/schema/options.ts#LanguageModelSchema [status=adapted hash=9636df006f67]
+    // parity: ai/src/schema/options.ts#LanguageModelSchema [status=adapted hash=db647a905339]
     public static func LanguageModelSchema(_ value: Any) -> LanguageModel? {
         value as? LanguageModel
     }
@@ -1880,7 +1880,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/options.ts#CacheHint [status=implemented hash=5210e028c0f4]
+    // parity: ai/src/schema/options.ts#CacheHint [status=implemented hash=63d7c8ea261d]
     public struct CacheHint: Equatable, Hashable, Sendable, Codable {
         public enum Kind: String, Equatable, Hashable, Sendable, Codable {
             case ephemeral
@@ -1896,7 +1896,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/options.ts#CachePolicyObject [status=implemented hash=cb49b872354b]
+    // parity: ai/src/schema/options.ts#CachePolicyObject [status=implemented hash=693b5f84a0c5]
     public struct CachePolicyObject: Equatable, Hashable, Sendable, Codable {
         public enum MessagesStrategy: Equatable, Hashable, Sendable, Codable {
             case latestUserMessage
@@ -2062,7 +2062,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#TextPart [status=implemented hash=4e89a8a0e7a6]
+    // parity: ai/src/schema/messages.ts#TextPart [status=implemented hash=970eb32ce874]
     public struct TextPart: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public let cache: CacheHint?
@@ -2096,7 +2096,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#MediaPart [status=implemented hash=dbd82a783109]
+    // parity: ai/src/schema/messages.ts#MediaPart [status=implemented hash=a5efbad44794]
     public struct MediaPart: Equatable, Sendable, Codable {
         public let media: AIMedia.Asset
         public let filename: String?
@@ -2281,7 +2281,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ToolCallPart [status=implemented hash=dbeba99ff1b1]
+    // parity: ai/src/schema/messages.ts#ToolCallPart [status=implemented hash=65ad8cb9ccc6]
     public struct ToolCallPart: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -2361,7 +2361,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ToolResultPart [status=implemented hash=b2f8060a1ddd]
+    // parity: ai/src/schema/messages.ts#ToolResultPart [status=implemented hash=452386d6931d]
     public struct ToolResultPart: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -2462,7 +2462,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ReasoningPart [status=implemented hash=ed754096afab]
+    // parity: ai/src/schema/messages.ts#ReasoningPart [status=implemented hash=a991ddf8f084]
     public struct ReasoningPart: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public let encrypted: String?
@@ -2595,7 +2595,7 @@ public enum AISchema {
     }
 
     /// Reasoning effort changed here, from `previous` to `effort`; `nil` is the model default.
-    // parity: ai/src/schema/messages.ts#EffortPart [status=implemented hash=7121c4cc75e9]
+    // parity: ai/src/schema/messages.ts#EffortPart [status=implemented hash=5ddf7da1464a]
     public struct EffortPart: Equatable, Hashable, Sendable, Codable {
         public let effort: ReasoningEffort?
         public let previous: ReasoningEffort?
@@ -2725,7 +2725,7 @@ public enum AISchema {
     }
 
     /// Tools changed here: `add` appends or redefines tools by name, `remove` drops them by name.
-    // parity: ai/src/schema/messages.ts#ToolChanges [status=implemented hash=b2baa9356a39]
+    // parity: ai/src/schema/messages.ts#ToolChanges [status=implemented hash=2ec9681ac60d]
     public struct ToolChanges: Equatable, Hashable, Sendable, Codable {
         public let add: [ToolEntry]
         public let remove: [String]
@@ -2736,7 +2736,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#SystemMessage [status=implemented hash=d055dbdc9ead]
+    // parity: ai/src/schema/messages.ts#SystemMessage [status=implemented hash=1076fd909c3e]
     public struct SystemMessage: Equatable, Hashable, Sendable, Codable {
         public enum Part: Equatable, Hashable, Sendable, Codable {
             case text(TextPart)
@@ -2802,7 +2802,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#UserMessage [status=implemented hash=3a3d31c88f43]
+    // parity: ai/src/schema/messages.ts#UserMessage [status=implemented hash=28df469200af]
     public struct UserMessage: Equatable, Sendable, Codable {
         public enum Part: Equatable, Sendable, Codable {
             case text(TextPart)
@@ -2868,7 +2868,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#AssistantMessage [status=implemented hash=ff79ab6d22de]
+    // parity: ai/src/schema/messages.ts#AssistantMessage [status=implemented hash=ad61f5bf70e6]
     public struct AssistantMessage: Equatable, Sendable, Codable {
         public enum Part: Equatable, Sendable, Codable {
             case text(TextPart)
@@ -2950,7 +2950,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ToolMessage [status=implemented hash=3d61900b82b5]
+    // parity: ai/src/schema/messages.ts#ToolMessage [status=implemented hash=55878c7830a9]
     public struct ToolMessage: Equatable, Hashable, Sendable, Codable {
         public let id: String?
         public let content: [ToolResultPart]
@@ -2987,7 +2987,7 @@ public enum AISchema {
         case assistant(AssistantMessage)
         case tool(ToolMessage)
 
-        // parity: ai/src/schema/messages.ts#Message.ContentInput [status=implemented hash=9925edb0efdd]
+        // parity: ai/src/schema/messages.ts#Message.ContentInput [status=implemented hash=2a6d7594cb80]
         public enum ContentInput<Part: Sendable>: Sendable {
             case text(String)
             case part(Part)
@@ -3000,10 +3000,10 @@ public enum AISchema {
         // parity: ai/src/schema/messages.ts#Message.UserContentInput [status=implemented hash=97eadc7ab5a5]
         public typealias UserContentInput = ContentInput<UserMessage.Part>
 
-        // parity: ai/src/schema/messages.ts#Message.AssistantContentInput [status=implemented hash=1019379d8832]
+        // parity: ai/src/schema/messages.ts#Message.AssistantContentInput [status=implemented hash=7c07c52328ba]
         public typealias AssistantContentInput = ContentInput<AssistantMessage.Part>
 
-        // parity: ai/src/schema/messages.ts#Message.SystemInput [status=implemented hash=273a26d276ba]
+        // parity: ai/src/schema/messages.ts#Message.SystemInput [status=implemented hash=2940e6a5a4d3]
         public struct SystemInput: Sendable {
             public let id: String?
             public let content: ContentInput<SystemMessage.Part>
@@ -3042,7 +3042,7 @@ public enum AISchema {
             }
         }
 
-        // parity: ai/src/schema/messages.ts#Message.ToolInput [status=implemented hash=03ec3ea53852]
+        // parity: ai/src/schema/messages.ts#Message.ToolInput [status=implemented hash=3a4dbcdd4dd8]
         public struct ToolInput: Sendable {
             public let id: String?
             public let content: [ToolResultPart]
@@ -3254,7 +3254,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ToolDefinition [status=implemented hash=f841821affce]
+    // parity: ai/src/schema/messages.ts#ToolDefinition [status=implemented hash=79ba74eb8cdc]
     public struct ToolDefinition: Equatable, Hashable, Sendable, Codable {
         // parity: ai/src/schema/messages.ts#ToolDefinition.Input [status=implemented hash=3bbed93656fe]
         public typealias Input = ToolDefinitionInput
@@ -3493,7 +3493,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#ToolChoice [status=implemented hash=bcfd612640d7]
+    // parity: ai/src/schema/messages.ts#ToolChoice [status=implemented hash=4f4bcc5bbea3]
     public struct ToolChoice: Equatable, Hashable, Sendable, Codable {
         public enum Kind: String, Equatable, Hashable, Sendable, Codable {
             case auto
@@ -3527,7 +3527,7 @@ public enum AISchema {
         }
 
         /// Select a specific named tool.
-        // parity: ai/src/schema/messages.ts#ToolChoice.named [status=implemented hash=6b3953ae2910]
+        // parity: ai/src/schema/messages.ts#ToolChoice.named [status=implemented hash=5b5e565e3b9a]
         public static func named(_ value: String) -> ToolChoice {
             ToolChoice(type: .tool, name: value)
         }
@@ -3549,7 +3549,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/messages.ts#LLMRequest [status=implemented hash=e271b20dcc12]
+    // parity: ai/src/schema/messages.ts#LLMRequest [status=implemented hash=492fb0cd228f]
     public struct LLMRequest: BaseRequest, Sendable {
         public let id: String?
         public let model: LanguageModel
@@ -3683,7 +3683,7 @@ public enum AISchema {
     // parity: ai/src/schema/events.ts#FinishReason [status=implemented hash=6b20075db089]
     public typealias FinishReason = LLMSchema.FinishReason
 
-    // parity: ai/src/schema/events.ts#Usage [status=implemented hash=6f7de3c74af1]
+    // parity: ai/src/schema/events.ts#Usage [status=implemented hash=5d975a27cc11]
     public struct Usage: Equatable, Hashable, Sendable, Codable {
         public let contextTokens: Double?
         public let inputTokens: Double?
@@ -3734,7 +3734,7 @@ public enum AISchema {
     // parity: ai/src/schema/events.ts#UsageInput [status=implemented hash=5bbe4b34c20e]
     public typealias UsageInput = Usage
 
-    // parity: ai/src/schema/events.ts#MediaUsage [status=implemented hash=98fdc8e7ff7f]
+    // parity: ai/src/schema/events.ts#MediaUsage [status=implemented hash=bcd57b9c32af]
     public enum MediaUsage: Equatable, Hashable, Sendable, Codable {
         case tokens(input: Double?, output: Double?, total: Double?, details: [String: JSONValue]?)
         case seconds(Double)
@@ -3796,7 +3796,7 @@ public enum AISchema {
     }
 
     /// Token usage from a provider's counts; returns `nil` when no count is present.
-    // parity: ai/src/schema/events.ts#tokenUsage [status=implemented hash=6a62b3d87184]
+    // parity: ai/src/schema/events.ts#tokenUsage [status=implemented hash=c7322c4982c9]
     public static func tokenUsage(
         input: Double? = nil,
         output: Double? = nil,
@@ -3807,7 +3807,7 @@ public enum AISchema {
         return .tokens(input: input, output: output, total: total, details: details)
     }
 
-    // parity: ai/src/schema/events.ts#CompactionResponse [status=implemented hash=61b79fbaaa73]
+    // parity: ai/src/schema/events.ts#CompactionResponse [status=implemented hash=ea38501ee785]
     public struct CompactionResponse: Equatable, Sendable, Codable {
         public let replacement: [Message]
         public let usage: Usage?
@@ -3818,7 +3818,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#CompactionCheckpointResponse [status=implemented hash=4e1442d3c62e]
+    // parity: ai/src/schema/events.ts#CompactionCheckpointResponse [status=implemented hash=41a13316aca0]
     public struct CompactionCheckpointResponse: Equatable, Hashable, Sendable, Codable {
         public let checkpoint: CompactionPart
         public let responseID: String
@@ -3866,7 +3866,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#StepStart [status=implemented hash=53170c82e46b]
+    // parity: ai/src/schema/events.ts#StepStart [status=implemented hash=80434ce6bb4d]
     public struct StepStart: Equatable, Hashable, Sendable, Codable {
         public let index: Int
         public init(index: Int) { self.index = index }
@@ -3883,7 +3883,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#TextStart [status=implemented hash=0e882dc97489]
+    // parity: ai/src/schema/events.ts#TextStart [status=implemented hash=4bebfd2ec9c9]
     public struct TextStart: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let providerMetadata: ProviderMetadata?
@@ -3906,7 +3906,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#TextDelta [status=implemented hash=89949b689df8]
+    // parity: ai/src/schema/events.ts#TextDelta [status=implemented hash=9d5a2c471474]
     public struct TextDelta: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let text: String
@@ -3933,7 +3933,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#TextEnd [status=implemented hash=8272608bd5e6]
+    // parity: ai/src/schema/events.ts#TextEnd [status=implemented hash=aad135c2a0cc]
     public struct TextEnd: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let text: String?
@@ -3960,7 +3960,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ReasoningStart [status=implemented hash=9df2a833d154]
+    // parity: ai/src/schema/events.ts#ReasoningStart [status=implemented hash=1b720cded415]
     public struct ReasoningStart: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let providerMetadata: ProviderMetadata?
@@ -3983,7 +3983,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ReasoningDelta [status=implemented hash=9d4fc9d03936]
+    // parity: ai/src/schema/events.ts#ReasoningDelta [status=implemented hash=f56c39e56e8e]
     public struct ReasoningDelta: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let text: String
@@ -4010,7 +4010,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ReasoningEnd [status=implemented hash=8ee35fe2fbe3]
+    // parity: ai/src/schema/events.ts#ReasoningEnd [status=implemented hash=2a792b80fcd2]
     public struct ReasoningEnd: Equatable, Hashable, Sendable, Codable {
         public let id: ContentBlockID
         public let text: String?
@@ -4037,7 +4037,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolInputStart [status=implemented hash=510cb282277d]
+    // parity: ai/src/schema/events.ts#ToolInputStart [status=implemented hash=c44470f8e3cb]
     public struct ToolInputStart: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4078,7 +4078,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolInputDelta [status=implemented hash=51407f822e09]
+    // parity: ai/src/schema/events.ts#ToolInputDelta [status=implemented hash=11eb54d88ec3]
     public struct ToolInputDelta: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4119,7 +4119,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolInputEnd [status=implemented hash=4ada6ecefc8c]
+    // parity: ai/src/schema/events.ts#ToolInputEnd [status=implemented hash=3c5f23ee88ca]
     public struct ToolInputEnd: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4155,7 +4155,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolInputError [status=implemented hash=0811b530e073]
+    // parity: ai/src/schema/events.ts#ToolInputError [status=implemented hash=dd86faa52edc]
     public struct ToolInputError: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4186,7 +4186,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolCall [status=implemented hash=a17d5171b0d3]
+    // parity: ai/src/schema/events.ts#ToolCall [status=implemented hash=9bdf9cca610c]
     public struct ToolCall: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4248,7 +4248,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#ToolResult [status=implemented hash=8bb39992ca2a]
+    // parity: ai/src/schema/events.ts#ToolResult [status=implemented hash=d9cccd43e0bc]
     public struct ToolResult: Equatable, Hashable, Sendable, Codable {
         public let id: ToolCallID
         public let name: String
@@ -4304,7 +4304,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#FinishReasonDetails [status=implemented hash=17106870aba1]
+    // parity: ai/src/schema/events.ts#FinishReasonDetails [status=implemented hash=717176200e46]
     public struct FinishReasonDetails: Equatable, Hashable, Sendable, Codable {
         public let normalized: FinishReason
         public let raw: String?
@@ -4324,7 +4324,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#StepFinish [status=implemented hash=2b07aae7f725]
+    // parity: ai/src/schema/events.ts#StepFinish [status=implemented hash=435d92e3b109]
     public struct StepFinish: Equatable, Hashable, Sendable, Codable {
         public let index: Int
         public let reason: FinishReasonDetails
@@ -4361,7 +4361,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#Finish [status=implemented hash=630873d67aa8]
+    // parity: ai/src/schema/events.ts#Finish [status=implemented hash=b08bef87fcd2]
     public struct Finish: Equatable, Sendable, Codable {
         public let reason: FinishReasonDetails
         public let usage: Usage?
@@ -4403,7 +4403,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#MediaEvent [status=implemented hash=9fb54ca2aa86]
+    // parity: ai/src/schema/events.ts#MediaEvent [status=implemented hash=a96ad4a64be1]
     public struct MediaEvent: Equatable, Sendable, Codable {
         public let media: AIMedia.Asset
         public let providerMetadata: ProviderMetadata?
@@ -4427,7 +4427,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#RawEvent [status=implemented hash=4826af8e89d8]
+    // parity: ai/src/schema/events.ts#RawEvent [status=implemented hash=b56813cb2608]
     public struct RawEvent: Equatable, Hashable, Sendable, Codable {
         public let data: JSONValue
 
@@ -4447,7 +4447,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#LLMEvent [status=implemented hash=cce5ecdc4091]
+    // parity: ai/src/schema/events.ts#LLMEvent [status=implemented hash=61f51a4e1f9e]
     public enum LLMEvent: Equatable, Sendable, Codable {
         case compaction(CompactionPart)
         case stepStart(StepStart)
@@ -4567,7 +4567,7 @@ public enum AISchema {
         }
     }
 
-    // parity: ai/src/schema/events.ts#LLMResponse [status=implemented hash=4f3d79dc961b]
+    // parity: ai/src/schema/events.ts#LLMResponse [status=implemented hash=82a06a1bcc00]
     public struct LLMResponse: Equatable, Sendable, Codable {
         // parity: ai/src/schema/events.ts#LLMResponse.Output [status=implemented hash=f825ee5c00f2]
         public struct Output: Sendable {
@@ -4863,7 +4863,7 @@ public enum AISchema {
         }
 
         /// Return a completed response only after the terminal finish.
-        // parity: ai/src/schema/events.ts#ResponseFold.complete [status=implemented hash=1c03c90895a7]
+        // parity: ai/src/schema/events.ts#ResponseFold.complete [status=implemented hash=11bec2f1a18d]
         public static func complete(_ state: State) -> LLMResponse? {
             guard let finishReason = state.finishReason else { return nil }
             return LLMResponse(
@@ -4875,7 +4875,7 @@ public enum AISchema {
         }
 
         /// Output that arrived before a failure, or `nil` if only `step-start` did; an unfinished response reports `error`.
-        // parity: ai/src/schema/events.ts#ResponseFold.partial [status=implemented hash=b9e912c730dd]
+        // parity: ai/src/schema/events.ts#ResponseFold.partial [status=implemented hash=1abbf93ebb2b]
         public static func partial(_ state: State) -> LLMResponse? {
             if state.events.allSatisfy(\.isStepStart) { return nil }
             var copy = state

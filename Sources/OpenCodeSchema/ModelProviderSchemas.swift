@@ -6,7 +6,7 @@
 
 public enum ModelCompatibilitySchema {
     /// Open-ended reasoning field name (`reasoning`, `reasoning_content`, `reasoning_text`, or custom string).
-    // parity: schema/src/model-compatibility.ts#ReasoningField [status=implemented hash=838dae69b58d]
+    // parity: schema/src/model-compatibility.ts#ReasoningField [status=implemented hash=6ee50e180013]
     public struct ReasoningField: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -31,20 +31,20 @@ public enum ModelCompatibilitySchema {
         }
     }
 
-    // parity: schema/src/model-compatibility.ts#MaxTokensField [status=implemented hash=ba672e40bdd1]
+    // parity: schema/src/model-compatibility.ts#MaxTokensField [status=implemented hash=b908f74468dd]
     public enum MaxTokensField: String, Equatable, Hashable, Sendable, Codable {
         case maxCompletionTokens = "max_completion_tokens"
         case maxTokens = "max_tokens"
     }
 
-    // parity: schema/src/model-compatibility.ts#MediaInput [status=implemented hash=0162e8008d56]
+    // parity: schema/src/model-compatibility.ts#MediaInput [status=implemented hash=e1c61b03d1dc]
     public enum MediaInput: String, Equatable, Hashable, Sendable, Codable {
         case assets
         case state
         case root
     }
 
-    // parity: schema/src/model-compatibility.ts#CacheFormat [status=implemented hash=217fe26e1403]
+    // parity: schema/src/model-compatibility.ts#CacheFormat [status=implemented hash=6e0b1624e07a]
     public enum CacheFormat: String, Equatable, Hashable, Sendable, Codable {
         case anthropic
         case alibaba
@@ -151,7 +151,7 @@ public enum ModelCompatibilitySchema {
 // MARK: - src/provider.ts
 
 public enum ProviderSchema {
-    // parity: schema/src/provider.ts#ID [status=implemented hash=65f097b352c0]
+    // parity: schema/src/provider.ts#ID [status=implemented hash=f88a2ddc9c9d]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -201,7 +201,7 @@ public enum ProviderSchema {
         case disabled
     }
 
-    // parity: schema/src/provider.ts#Compaction [status=implemented hash=4a259649e3da]
+    // parity: schema/src/provider.ts#Compaction [status=implemented hash=88f7a92a4ea6]
     public enum Compaction: Equatable, Hashable, Sendable, Codable {
         case summary
         case native
@@ -238,14 +238,14 @@ public enum ProviderSchema {
         }
     }
 
-    // parity: schema/src/provider.ts#Transport [status=implemented hash=6c5f0c9249f6]
+    // parity: schema/src/provider.ts#Transport [status=implemented hash=3e5544413c63]
     public enum Transport: String, Equatable, Hashable, Sendable, Codable {
         case http
         case websocket
     }
 
     /// Prompt-cache lifetime matching `^\d+(ms|s|m|h|d)$`.
-    // parity: schema/src/provider.ts#CacheTTL [status=implemented hash=b691d05dc8e0]
+    // parity: schema/src/provider.ts#CacheTTL [status=implemented hash=cef0cf78144b]
     public struct CacheTTL: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -291,7 +291,7 @@ public enum ProviderSchema {
         }
     }
 
-    // parity: schema/src/provider.ts#CacheWarming [status=implemented hash=d84c2e8e2902]
+    // parity: schema/src/provider.ts#CacheWarming [status=implemented hash=be30df80f209]
     public enum CacheWarming: Equatable, Hashable, Sendable, Codable {
         case enabled(Bool)
         case configured(CacheWarmingConfig)
@@ -316,7 +316,7 @@ public enum ProviderSchema {
         }
     }
 
-    // parity: schema/src/provider.ts#Cache [status=implemented hash=1f97b3b0aa77]
+    // parity: schema/src/provider.ts#Cache [status=implemented hash=b1a0c0487039]
     public struct Cache: Equatable, Hashable, Sendable, Codable {
         public let ttl: CacheTTL?
         public let warming: CacheWarming?
@@ -327,7 +327,7 @@ public enum ProviderSchema {
         }
     }
 
-    // parity: schema/src/provider.ts#Encoding [status=implemented hash=d87b33b9340a]
+    // parity: schema/src/provider.ts#Encoding [status=implemented hash=41e86203f10a]
     public enum Encoding: String, Equatable, Hashable, Sendable, Codable {
         case zstd
         case gzip
@@ -371,7 +371,7 @@ public enum ProviderSchema {
         }
     }
 
-    // parity: schema/src/provider.ts#Tls [status=implemented hash=aa8faca91581]
+    // parity: schema/src/provider.ts#Tls [status=implemented hash=3369d9b2f018]
     public struct Tls: Equatable, Hashable, Sendable, Codable {
         public let cert: String
         public let key: String
@@ -385,7 +385,7 @@ public enum ProviderSchema {
     }
 
     /// Flat `StructWithRest` provider settings preserving typed OpenCode keys alongside arbitrary provider options.
-    // parity: schema/src/provider.ts#Settings [status=implemented hash=0d5d152897e0]
+    // parity: schema/src/provider.ts#Settings [status=implemented hash=a5a4c54a7176]
     public struct Settings: Equatable, Hashable, Sendable, Codable {
         public let timeout: TimeoutOption?
         public let headerTimeout: TimeoutOption?
@@ -598,7 +598,7 @@ public enum ModelSchema {
         }
     }
 
-    // parity: schema/src/model.ts#Ref [status=implemented hash=86d4a4329620]
+    // parity: schema/src/model.ts#Ref [status=implemented hash=230e3ff71246]
     public struct Ref: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let providerID: ProviderSchema.ID
@@ -675,7 +675,7 @@ public enum ModelSchema {
     }
 
     /// Open-ended model output category (`chat`, `decision`, `image`, `video`, or custom string).
-    // parity: schema/src/model.ts#Type [status=implemented hash=1cd078de09d9]
+    // parity: schema/src/model.ts#Type [status=implemented hash=e0834d986184]
     public struct ModelType: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -702,7 +702,7 @@ public enum ModelSchema {
     }
 
     /// Flat `StructWithRest` model settings (`compaction`, `cache`, `encoding`, plus arbitrary provider keys).
-    // parity: schema/src/model.ts#Settings [status=implemented hash=8d8e675a43b4]
+    // parity: schema/src/model.ts#Settings [status=implemented hash=51a95d227702]
     public struct Settings: Equatable, Hashable, Sendable, Codable {
         public let compaction: ProviderSchema.Compaction?
         public let cache: ProviderSchema.Cache?
@@ -1025,7 +1025,7 @@ public enum ModelSchema {
 // MARK: - src/agent.ts
 
 public enum AgentSchema {
-    // parity: schema/src/agent.ts#ID [status=implemented hash=586ebc76dd62]
+    // parity: schema/src/agent.ts#ID [status=implemented hash=5c65a46d6da8]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1067,7 +1067,7 @@ public enum AgentSchema {
         }
     }
 
-    // parity: schema/src/agent.ts#Color [status=implemented hash=01480d28c0da]
+    // parity: schema/src/agent.ts#Color [status=implemented hash=a56b59407f81]
     public struct Color: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1161,7 +1161,7 @@ public enum AgentSchema {
 // MARK: - src/credential.ts
 
 public enum CredentialSchema {
-    // parity: schema/src/credential.ts#ID [status=implemented hash=5587a2f58a02]
+    // parity: schema/src/credential.ts#ID [status=implemented hash=6ca8239b4445]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1344,7 +1344,7 @@ public enum CredentialSchema {
         }
     }
 
-    // parity: schema/src/credential.ts#Value [status=implemented hash=861758562e1c]
+    // parity: schema/src/credential.ts#Value [status=implemented hash=fb54b91e7fbd]
     public enum Value: Equatable, Hashable, Sendable, Codable {
         case oauth(OAuth)
         case key(Key)
@@ -1482,7 +1482,7 @@ public enum CredentialLegacySchema {
     }
 
     /// Decodes an `auth export` entry of either pre-v2.1 or current shape into canonical `CredentialSchema.Entry`.
-    // parity: schema/src/credential-legacy.ts#Entry [status=implemented hash=dee8da343bfb]
+    // parity: schema/src/credential-legacy.ts#Entry [status=implemented hash=13353bd1b79e]
     public struct Entry: Equatable, Hashable, Sendable, Codable {
         public let entry: CredentialSchema.Entry
 
@@ -1618,7 +1618,7 @@ public enum ConnectionSchema {
         }
     }
 
-    // parity: schema/src/connection.ts#Info [status=implemented hash=8d2278d6ccdc]
+    // parity: schema/src/connection.ts#Info [status=implemented hash=39fd60560619]
     public enum Info: Equatable, Hashable, Sendable, Codable {
         case credential(CredentialInfo)
         case env(EnvInfo)
@@ -1758,7 +1758,7 @@ public enum GenerateSchema {
         }
     }
 
-    // parity: schema/src/generate.ts#Native [status=implemented hash=5efa7cec66f5]
+    // parity: schema/src/generate.ts#Native [status=implemented hash=5b0cf857d4bb]
     public typealias Native = [String: JSONValue]
 
     // MARK: Image
@@ -1801,7 +1801,7 @@ public enum GenerateSchema {
     }
 
     /// Open-ended image resolution tier (`1K`, `2K`, `4K`, or custom string).
-    // parity: schema/src/generate.ts#ImageResolution [status=implemented hash=16b8d8c837b8]
+    // parity: schema/src/generate.ts#ImageResolution [status=implemented hash=d3c2f999cdf1]
     public struct ImageResolution: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1919,7 +1919,7 @@ public enum GenerateSchema {
     // MARK: Video
 
     /// Strict video job identifier matching `^video_[0-9a-f]{12}[0-9A-Za-z]{14}$`.
-    // parity: schema/src/generate.ts#VideoID [status=implemented hash=e37f3a4f9d99]
+    // parity: schema/src/generate.ts#VideoID [status=implemented hash=5884be37fefb]
     public struct VideoID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1995,7 +1995,7 @@ public enum GenerateSchema {
     }
 
     /// Open-ended video resolution tier (`480p`, `720p`, `1080p`, `4k`, or custom string).
-    // parity: schema/src/generate.ts#VideoResolution [status=implemented hash=b98530fbc7d8]
+    // parity: schema/src/generate.ts#VideoResolution [status=implemented hash=77fc99ea157a]
     public struct VideoResolution: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2058,7 +2058,7 @@ public enum GenerateSchema {
 
     /// failed: the provider failed the job. cancelled: the provider cancelled it. expired: the provider expired it.
     /// unknown: the provider gave no result in time.
-    // parity: schema/src/generate.ts#VideoErrorReason [status=implemented hash=500b377a0272]
+    // parity: schema/src/generate.ts#VideoErrorReason [status=implemented hash=6550339c5549]
     public enum VideoErrorReason: String, Equatable, Hashable, Sendable, Codable {
         case failed
         case cancelled
@@ -2340,7 +2340,7 @@ public enum GenerateSchema {
     }
 
     /// Typed choice value where `true` (`.bool(true)`) and `"true"` (`.string("true")`) are distinct.
-    // parity: schema/src/generate.ts#ChoiceValue [status=implemented hash=c035676a1d0f]
+    // parity: schema/src/generate.ts#ChoiceValue [status=implemented hash=3ace5f52dd6e]
     public enum ChoiceValue: Equatable, Hashable, Sendable, Codable {
         case string(String)
         case bool(Bool)

@@ -315,7 +315,7 @@ public enum SimulationNetwork {
     }
 
     /// Creates an isolated simulated network run with its own route table and bounded request log.
-    // parity: simulation/src/backend/network.ts#make [status=implemented hash=ab5fa7484c87]
+    // parity: simulation/src/backend/network.ts#make [status=implemented hash=947546fe2b87]
     public static func make(
         routes: [Route] = [],
         clockMs: @escaping @Sendable () -> Double = { Double(Flock.currentEpochMs()) }

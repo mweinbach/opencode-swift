@@ -98,7 +98,7 @@ public enum CoreDatabaseSchema {
     }
 
     /// Column codec enforcing normalized absolute paths (`database/path.ts#absoluteColumn`).
-    // parity: core/src/database/path.ts#absoluteColumn [status=implemented hash=6113eb88df68]
+    // parity: core/src/database/path.ts#absoluteColumn [status=implemented hash=1c355f9f3f24]
     public static let absoluteColumn = ColumnCodec<String>(
         dataType: "text",
         toDriver: { input in try requireAbsolute(input) },
@@ -106,7 +106,7 @@ public enum CoreDatabaseSchema {
     )
 
     /// Column codec preserving legacy empty directory values while validating real directories.
-    // parity: core/src/database/path.ts#directoryColumn [status=implemented hash=f92b269d72e8]
+    // parity: core/src/database/path.ts#directoryColumn [status=implemented hash=5987b009cb3b]
     public static let directoryColumn = ColumnCodec<String>(
         dataType: "text",
         toDriver: { input in input.isEmpty ? input : try requireAbsolute(input) },
@@ -114,7 +114,7 @@ public enum CoreDatabaseSchema {
     )
 
     /// Column codec normalizing relative storage paths to forward slashes on Windows.
-    // parity: core/src/database/path.ts#pathColumn [status=implemented hash=132df29ef1dd]
+    // parity: core/src/database/path.ts#pathColumn [status=implemented hash=d9a176969573]
     public static let pathColumn = ColumnCodec<String>(
         dataType: "text",
         toDriver: { input in storagePath(input) },
@@ -122,7 +122,7 @@ public enum CoreDatabaseSchema {
     )
 
     /// Column codec encoding/decoding JSON arrays of absolute paths.
-    // parity: core/src/database/path.ts#absoluteArrayColumn [status=implemented hash=bf783b2280ea]
+    // parity: core/src/database/path.ts#absoluteArrayColumn [status=implemented hash=d42325f8008c]
     public static let absoluteArrayColumn = ColumnCodec<[String]>(
         dataType: "text",
         toDriver: { inputs in
@@ -173,13 +173,13 @@ public enum CoreDatabaseSchema {
 
     // MARK: - event/sql.ts
 
-    // parity: core/src/event/sql.ts#EventSequenceTable [status=implemented hash=f0ef54cdf52f]
+    // parity: core/src/event/sql.ts#EventSequenceTable [status=implemented hash=e218dd4e81b3]
     public static let eventSequenceTable = TableDescriptor(
         name: "event_sequence",
         columns: ["aggregate_id", "seq", "owner_id"]
     )
 
-    // parity: core/src/event/sql.ts#EventTable [status=implemented hash=37c112ad95db]
+    // parity: core/src/event/sql.ts#EventTable [status=implemented hash=a6ded0e21bbd]
     public static let eventTable = TableDescriptor(
         name: "event",
         columns: ["id", "aggregate_id", "seq", "created", "type", "data"]
@@ -190,7 +190,7 @@ public enum CoreDatabaseSchema {
     // parity: core/src/session/sql.ts#SessionPartData [status=implemented hash=b9d2327f8f54]
     public typealias SessionPartData = SessionMessageSchema.AssistantContentEncoded
 
-    // parity: core/src/session/sql.ts#SessionTable [status=implemented hash=75113160ba3e]
+    // parity: core/src/session/sql.ts#SessionTable [status=implemented hash=f7c716eaba0f]
     public static let sessionTable = TableDescriptor(
         name: "session_v2",
         columns: [
@@ -204,49 +204,49 @@ public enum CoreDatabaseSchema {
         ]
     )
 
-    // parity: core/src/session/sql.ts#SessionMessageTable [status=implemented hash=347654f7d6f1]
+    // parity: core/src/session/sql.ts#SessionMessageTable [status=implemented hash=7cdce96d4be1]
     public static let sessionMessageTable = TableDescriptor(
         name: "session_message",
         columns: ["id", "session_id", "type", "seq", "time_created", "time_updated", "data"]
     )
 
-    // parity: core/src/session/sql.ts#SessionPartTable [status=implemented hash=302f1ad22faa]
+    // parity: core/src/session/sql.ts#SessionPartTable [status=implemented hash=032436de362c]
     public static let sessionPartTable = TableDescriptor(
         name: "session_part",
         columns: ["message_id", "session_id", "ordinal", "type", "call_id", "time_created", "time_updated", "data"]
     )
 
-    // parity: core/src/session/sql.ts#SessionInboxTable [status=implemented hash=eabdf9818737]
+    // parity: core/src/session/sql.ts#SessionInboxTable [status=implemented hash=4ee068a52bc7]
     public static let sessionInboxTable = TableDescriptor(
         name: "session_inbox",
         columns: ["id", "session_id", "type", "payload", "delivery", "enqueued_seq", "time_created"]
     )
 
-    // parity: core/src/session/sql.ts#InstructionEntryTable [status=implemented hash=c1363f689532]
+    // parity: core/src/session/sql.ts#InstructionEntryTable [status=implemented hash=b526a9138669]
     public static let instructionEntryTable = TableDescriptor(
         name: "instruction_entry",
         columns: ["session_id", "key", "value", "removed", "time_created", "time_updated"]
     )
 
-    // parity: core/src/session/sql.ts#InstructionBlobTable [status=implemented hash=12b01f6ac2f3]
+    // parity: core/src/session/sql.ts#InstructionBlobTable [status=implemented hash=861e077380a6]
     public static let instructionBlobTable = TableDescriptor(
         name: "instruction_blob",
         columns: ["hash", "value"]
     )
 
-    // parity: core/src/session/sql.ts#InstructionStateTable [status=implemented hash=8edf04c4911d]
+    // parity: core/src/session/sql.ts#InstructionStateTable [status=implemented hash=375c4b7fa71c]
     public static let instructionStateTable = TableDescriptor(
         name: "instruction_state",
         columns: ["session_id", "epoch_start", "through_seq", "initial_values", "current_values"]
     )
 
-    // parity: core/src/session/sql.ts#BlobTable [status=implemented hash=f187d6eda24e]
+    // parity: core/src/session/sql.ts#BlobTable [status=implemented hash=0860506d76e1]
     public static let blobTable = TableDescriptor(
         name: "blob",
         columns: ["hash", "mime", "bytes", "width", "height", "data", "time_created"]
     )
 
-    // parity: core/src/session/sql.ts#BlobRefTable [status=implemented hash=349c746f5b19]
+    // parity: core/src/session/sql.ts#BlobRefTable [status=implemented hash=e76e66cd99c9]
     public static let blobRefTable = TableDescriptor(
         name: "blob_ref",
         columns: ["session_id", "message_id", "hash", "seq"]

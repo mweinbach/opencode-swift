@@ -1,6 +1,6 @@
 /// Pure-Swift path, MIME, and directory-containment helpers matching `packages/util/src/fs-util.ts`.
 public enum FSPathUtil {
-    // parity: util/src/fs-util.ts#FSUtil.FileSystemError [status=implemented hash=81fb24d92e0b]
+    // parity: util/src/fs-util.ts#FSUtil.FileSystemError [status=implemented hash=3aed6031e01a]
     public struct FileSystemError: Error, Equatable, Sendable, CustomStringConvertible {
         public let method: String
         public let detail: String?

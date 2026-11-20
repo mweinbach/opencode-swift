@@ -12,7 +12,7 @@ import OpenCodeUtil
 // MARK: - Client Error (packages/client/src/promise/generated/client-error.ts)
 
 /// Failure reason reported by `ClientError`.
-// parity: client/src/promise/generated/client-error.ts#ClientErrorReason [status=implemented hash=0fa449cfaf3f]
+// parity: client/src/promise/generated/client-error.ts#ClientErrorReason [status=implemented hash=f8988eea9254]
 public enum ClientErrorReason: String, Equatable, Hashable, Sendable, Codable, CaseIterable {
     case transport = "Transport"
     case unexpectedStatus = "UnexpectedStatus"
@@ -3602,15 +3602,15 @@ public typealias PluginCheckOutput = LocationSchema.ResponseEnvelope<[PluginSche
 public typealias PluginUpdateOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#SessionListOutput [status=implemented hash=4386cadc923d]
 public typealias SessionListOutput = SessionsResponse
-// parity: client/src/promise/generated/types.ts#SessionCreateOutput [status=implemented hash=9de8114c7144]
+// parity: client/src/promise/generated/types.ts#SessionCreateOutput [status=implemented hash=134c1de2e259]
 public typealias SessionCreateOutput = SessionSchema.Info
-// parity: client/src/promise/generated/types.ts#SessionActiveOutput [status=implemented hash=1469f55000e2]
+// parity: client/src/promise/generated/types.ts#SessionActiveOutput [status=implemented hash=58f4e2698687]
 public typealias SessionActiveOutput = [String: SessionActiveInfo]
-// parity: client/src/promise/generated/types.ts#SessionGetOutput [status=implemented hash=58aeaf67e3ff]
+// parity: client/src/promise/generated/types.ts#SessionGetOutput [status=implemented hash=3ac3cdbb8b2a]
 public typealias SessionGetOutput = SessionSchema.Info
 // parity: client/src/promise/generated/types.ts#SessionRemoveOutput [status=implemented hash=8038c7096a55]
 public typealias SessionRemoveOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionForkOutput [status=implemented hash=d71684836bf4]
+// parity: client/src/promise/generated/types.ts#SessionForkOutput [status=implemented hash=fda6cef4eb80]
 public typealias SessionForkOutput = SessionSchema.Info
 // parity: client/src/promise/generated/types.ts#SessionSwitchAgentOutput [status=implemented hash=b21348f24be3]
 public typealias SessionSwitchAgentOutput = ClientEmptyResponse
@@ -3620,27 +3620,27 @@ public typealias SessionSwitchModelOutput = ClientEmptyResponse
 public typealias SessionUpdateOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#SessionMoveOutput [status=implemented hash=3e397844fd81]
 public typealias SessionMoveOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionPromptOutput [status=implemented hash=44825e465352]
+// parity: client/src/promise/generated/types.ts#SessionPromptOutput [status=implemented hash=3affe52bb71d]
 public typealias SessionPromptOutput = SessionInboxSchema.User
 // parity: client/src/promise/generated/types.ts#SessionCommandOutput [status=implemented hash=b64a45dfdb63]
 public typealias SessionCommandOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionSyntheticOutput [status=implemented hash=74c840873c94]
+// parity: client/src/promise/generated/types.ts#SessionSyntheticOutput [status=implemented hash=89791fbc36bd]
 public typealias SessionSyntheticOutput = SessionInboxSchema.Synthetic
 // parity: client/src/promise/generated/types.ts#SessionShellOutput [status=implemented hash=59b22dc80787]
 public typealias SessionShellOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionCompactOutput [status=implemented hash=59bfef5753da]
+// parity: client/src/promise/generated/types.ts#SessionCompactOutput [status=implemented hash=5857bb0d98c5]
 public typealias SessionCompactOutput = SessionInboxSchema.Compaction
-// parity: client/src/promise/generated/types.ts#SessionRevertStageOutput [status=implemented hash=0bbc3b68706b]
+// parity: client/src/promise/generated/types.ts#SessionRevertStageOutput [status=implemented hash=dd6fb2486f87]
 public typealias SessionRevertStageOutput = SessionRevertSchema.Revert
 // parity: client/src/promise/generated/types.ts#SessionRevertClearOutput [status=implemented hash=4bfe23826bc6]
 public typealias SessionRevertClearOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#SessionRevertCommitOutput [status=implemented hash=e586e6dc58aa]
 public typealias SessionRevertCommitOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionContextOutput [status=implemented hash=0bea7f589809]
+// parity: client/src/promise/generated/types.ts#SessionContextOutput [status=implemented hash=afbfa7238815]
 public typealias SessionContextOutput = [SessionMessageSchema.Info]
-// parity: client/src/promise/generated/types.ts#SessionDiffOutput [status=implemented hash=6eb7f51d9030]
+// parity: client/src/promise/generated/types.ts#SessionDiffOutput [status=implemented hash=73e710ab5c9c]
 public typealias SessionDiffOutput = [FileDiffSchema.Info]
-// parity: client/src/promise/generated/types.ts#SessionInboxListOutput [status=implemented hash=3d7d935f3311]
+// parity: client/src/promise/generated/types.ts#SessionInboxListOutput [status=implemented hash=bd37a5e7a869]
 public typealias SessionInboxListOutput = [SessionInboxSchema.Info]
 // parity: client/src/promise/generated/types.ts#SessionInboxCancelOutput [status=implemented hash=8af65ea26464]
 public typealias SessionInboxCancelOutput = ClientEmptyResponse
@@ -3652,13 +3652,13 @@ public typealias SessionGenerateOutput = SessionGenerateData
 public typealias SessionInterruptOutput = SessionInterruptResponse
 // parity: client/src/promise/generated/types.ts#SessionBackgroundOutput [status=implemented hash=6878a2fc8282]
 public typealias SessionBackgroundOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#SessionMessageGetOutput [status=implemented hash=dd6cf147e6f5]
+// parity: client/src/promise/generated/types.ts#SessionMessageGetOutput [status=implemented hash=8f1d0c898cff]
 public typealias SessionMessageGetOutput = SessionMessageSchema.Info
-// parity: client/src/promise/generated/types.ts#SessionFormListOutput [status=implemented hash=ecc8754355a1]
+// parity: client/src/promise/generated/types.ts#SessionFormListOutput [status=implemented hash=579334f25051]
 public typealias SessionFormListOutput = [FormSchema.Info]
-// parity: client/src/promise/generated/types.ts#SessionFormCreateOutput [status=implemented hash=8e05c50697f9]
+// parity: client/src/promise/generated/types.ts#SessionFormCreateOutput [status=implemented hash=579ed9694f7f]
 public typealias SessionFormCreateOutput = FormSchema.Info
-// parity: client/src/promise/generated/types.ts#SessionFormGetOutput [status=implemented hash=1bd6be8fa2e5]
+// parity: client/src/promise/generated/types.ts#SessionFormGetOutput [status=implemented hash=3e5cac3bb9ac]
 public typealias SessionFormGetOutput = FormSchema.Detail
 // parity: client/src/promise/generated/types.ts#SessionFormReplyOutput [status=implemented hash=aeecdb5453da]
 public typealias SessionFormReplyOutput = ClientEmptyResponse
@@ -3668,17 +3668,17 @@ public typealias SessionFormCancelOutput = ClientEmptyResponse
 public typealias SessionEnvironmentOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#SessionViewOutput [status=implemented hash=5f0a83819bc8]
 public typealias SessionViewOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#ExperimentalSessionStatsOutput [status=implemented hash=6266ceb04039]
+// parity: client/src/promise/generated/types.ts#ExperimentalSessionStatsOutput [status=implemented hash=b0e47b0b352a]
 public typealias ExperimentalSessionStatsOutput = SessionStatsSchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalSessionImportOutput [status=implemented hash=7d337451acab]
+// parity: client/src/promise/generated/types.ts#ExperimentalSessionImportOutput [status=implemented hash=024ad780bfad]
 public typealias ExperimentalSessionImportOutput = SessionSchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalSessionExportOutput [status=implemented hash=beb63f18723f]
+// parity: client/src/promise/generated/types.ts#ExperimentalSessionExportOutput [status=implemented hash=24bcab51114c]
 public typealias ExperimentalSessionExportOutput = SessionTransferSchema.Data
 // parity: client/src/promise/generated/types.ts#ExperimentalSessionSkillOutput [status=implemented hash=78154ad9c13f]
 public typealias ExperimentalSessionSkillOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ExperimentalSessionWaitOutput [status=implemented hash=4ca37a946fe7]
 public typealias ExperimentalSessionWaitOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#ExperimentalSessionInstructionsEntryListOutput [status=implemented hash=b848c8c0e6ca]
+// parity: client/src/promise/generated/types.ts#ExperimentalSessionInstructionsEntryListOutput [status=implemented hash=f0fee61a61ff]
 public typealias ExperimentalSessionInstructionsEntryListOutput = [InstructionEntrySchema.Info]
 // parity: client/src/promise/generated/types.ts#ExperimentalSessionInstructionsEntryPutOutput [status=implemented hash=954343fc987a]
 public typealias ExperimentalSessionInstructionsEntryPutOutput = ClientEmptyResponse
@@ -3748,9 +3748,9 @@ public typealias ExperimentalMcpConnectOutput = ClientEmptyResponse
 public typealias ExperimentalMcpDisconnectOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ExperimentalMcpClientTokenOutput [status=implemented hash=c57f4d66c544]
 public typealias ExperimentalMcpClientTokenOutput = LocationSchema.ResponseEnvelope<PtyTicketSchema.ConnectToken>
-// parity: client/src/promise/generated/types.ts#CredentialListOutput [status=implemented hash=55db2375c8b9]
+// parity: client/src/promise/generated/types.ts#CredentialListOutput [status=implemented hash=3379642de534]
 public typealias CredentialListOutput = [CredentialSchema.Entry]
-// parity: client/src/promise/generated/types.ts#CredentialCreateOutput [status=implemented hash=687fbf5ab902]
+// parity: client/src/promise/generated/types.ts#CredentialCreateOutput [status=implemented hash=b196e1e13889]
 public typealias CredentialCreateOutput = CredentialSchema.Entry
 // parity: client/src/promise/generated/types.ts#CredentialUpdateOutput [status=implemented hash=17fc4f325ba3]
 public typealias CredentialUpdateOutput = ClientEmptyResponse
@@ -3766,17 +3766,17 @@ public typealias ProjectUpdateOutput = ProjectSchema.Info
 public typealias FormListOutput = LocationSchema.ResponseEnvelope<[FormSchema.Info]>
 // parity: client/src/promise/generated/types.ts#PermissionRequestListOutput [status=implemented hash=5254dfd99eca]
 public typealias PermissionRequestListOutput = LocationSchema.ResponseEnvelope<[PermissionSchema.Request]>
-// parity: client/src/promise/generated/types.ts#PermissionSavedListOutput [status=implemented hash=3f38edee58bc]
+// parity: client/src/promise/generated/types.ts#PermissionSavedListOutput [status=implemented hash=0d86142ed881]
 public typealias PermissionSavedListOutput = [PermissionSavedSchema.Info]
-// parity: client/src/promise/generated/types.ts#PermissionSavedUpdateOutput [status=implemented hash=fd8598d966da]
+// parity: client/src/promise/generated/types.ts#PermissionSavedUpdateOutput [status=implemented hash=60ef4efe429d]
 public typealias PermissionSavedUpdateOutput = PermissionSavedSchema.Info
 // parity: client/src/promise/generated/types.ts#PermissionSavedRemoveOutput [status=implemented hash=9b7a3c824f8a]
 public typealias PermissionSavedRemoveOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#PermissionCreateOutput [status=implemented hash=6e26669dac72]
+// parity: client/src/promise/generated/types.ts#PermissionCreateOutput [status=implemented hash=d79b5c213402]
 public typealias PermissionCreateOutput = PermissionCreateData
-// parity: client/src/promise/generated/types.ts#PermissionListOutput [status=implemented hash=1bdd60e11aab]
+// parity: client/src/promise/generated/types.ts#PermissionListOutput [status=implemented hash=b46e9bf84ce0]
 public typealias PermissionListOutput = [PermissionSchema.Request]
-// parity: client/src/promise/generated/types.ts#PermissionGetOutput [status=implemented hash=a811819d1d18]
+// parity: client/src/promise/generated/types.ts#PermissionGetOutput [status=implemented hash=0bbb9b41d3ab]
 public typealias PermissionGetOutput = PermissionSchema.Request
 // parity: client/src/promise/generated/types.ts#PermissionReplyOutput [status=implemented hash=1679a38c440e]
 public typealias PermissionReplyOutput = ClientEmptyResponse
@@ -3812,39 +3812,39 @@ public typealias PtyUpdateOutput = LocationSchema.ResponseEnvelope<PtySchema.Inf
 public typealias PtyRemoveOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#PtyConnectTokenOutput [status=implemented hash=3c4e759c0651]
 public typealias PtyConnectTokenOutput = LocationSchema.ResponseEnvelope<PtyTicketSchema.ConnectToken>
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyReadOutput [status=implemented hash=1fd48bbb5feb]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyReadOutput [status=implemented hash=3f6aafcb5dd3]
 public typealias ExperimentalPersistentPtyReadOutput = PersistentPtySchema.ReadResult?
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyListOutput [status=implemented hash=852f71c27bf7]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyListOutput [status=implemented hash=145f11256841]
 public typealias ExperimentalPersistentPtyListOutput = [PersistentPtySchema.Info]
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyCreateOutput [status=implemented hash=d500a84b8a51]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyCreateOutput [status=implemented hash=14e431caee2b]
 public typealias ExperimentalPersistentPtyCreateOutput = PersistentPtySchema.Info
 // parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyShutdownOutput [status=implemented hash=1ed23324ee74]
 public typealias ExperimentalPersistentPtyShutdownOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyHandoffOutput [status=implemented hash=70b8ce6e4987]
 public typealias ExperimentalPersistentPtyHandoffOutput = PersistentPtyHandoffResponse
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyGetOutput [status=implemented hash=c17e868e896b]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyGetOutput [status=implemented hash=3ef28632a317]
 public typealias ExperimentalPersistentPtyGetOutput = PersistentPtySchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyUpdateOutput [status=implemented hash=e50742343bfd]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyUpdateOutput [status=implemented hash=972c6d2461fa]
 public typealias ExperimentalPersistentPtyUpdateOutput = PersistentPtySchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtySnapshotOutput [status=implemented hash=420d57407690]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtySnapshotOutput [status=implemented hash=b50f1bf42ec2]
 public typealias ExperimentalPersistentPtySnapshotOutput = PersistentPtySchema.Snapshot
 // parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyRemoveOutput [status=implemented hash=99f675ad905c]
 public typealias ExperimentalPersistentPtyRemoveOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyConnectTokenOutput [status=implemented hash=e2e9f8cc9e79]
+// parity: client/src/promise/generated/types.ts#ExperimentalPersistentPtyConnectTokenOutput [status=implemented hash=e5f9acbffb72]
 public typealias ExperimentalPersistentPtyConnectTokenOutput = PtyTicketSchema.ConnectToken
 // parity: client/src/promise/generated/types.ts#ExperimentalMediaGetOutput [status=implemented hash=fb2591276869]
 public typealias ExperimentalMediaGetOutput = [UInt8]
 // parity: client/src/promise/generated/types.ts#ExperimentalBlobGetOutput [status=implemented hash=615d33028afd]
 public typealias ExperimentalBlobGetOutput = [UInt8]
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationCreateOutput [status=implemented hash=cdfc44ee0c25]
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationCreateOutput [status=implemented hash=e5a3da425e2a]
 public typealias ExperimentalAutomationCreateOutput = AutomationSchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationListOutput [status=implemented hash=44ad268d9a0b]
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationListOutput [status=implemented hash=bdf17055978e]
 public typealias ExperimentalAutomationListOutput = [AutomationSchema.Info]
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationGetOutput [status=implemented hash=2ed2e3dc01ba]
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationGetOutput [status=implemented hash=13367198266d]
 public typealias ExperimentalAutomationGetOutput = AutomationSchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationPauseOutput [status=implemented hash=78bbfc01c570]
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationPauseOutput [status=implemented hash=7c4d5f6768e9]
 public typealias ExperimentalAutomationPauseOutput = AutomationSchema.Info
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationResumeOutput [status=implemented hash=ca375fd27ec8]
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationResumeOutput [status=implemented hash=fdfc959de4c4]
 public typealias ExperimentalAutomationResumeOutput = AutomationSchema.Info
 // parity: client/src/promise/generated/types.ts#ExperimentalAutomationDeleteOutput [status=implemented hash=38103a7850e7]
 public typealias ExperimentalAutomationDeleteOutput = ClientEmptyResponse
@@ -3862,7 +3862,7 @@ public typealias ExperimentalArtifactsUpdateOutput = LocationSchema.ResponseEnve
 public typealias ExperimentalArtifactsDeleteOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ExperimentalArtifactsViewOutput [status=implemented hash=287f0790c515]
 public typealias ExperimentalArtifactsViewOutput = [UInt8]
-// parity: client/src/promise/generated/types.ts#ExperimentalJobListOutput [status=implemented hash=37262703c7fe]
+// parity: client/src/promise/generated/types.ts#ExperimentalJobListOutput [status=implemented hash=a78149e88b66]
 public typealias ExperimentalJobListOutput = [JobSchema.Info]
 // parity: client/src/promise/generated/types.ts#ExperimentalJobCancelOutput [status=implemented hash=3ca7b13e8938]
 public typealias ExperimentalJobCancelOutput = ClientEmptyResponse
@@ -3902,7 +3902,7 @@ public typealias VcsDiffOutput = LocationSchema.ResponseEnvelope<[FileDiffSchema
 public typealias DebugLocationListOutput = [LocationSchema.PublicRef]
 // parity: client/src/promise/generated/types.ts#DebugLocationEvictOutput [status=implemented hash=430ec551a4b9]
 public typealias DebugLocationEvictOutput = ClientEmptyResponse
-// parity: client/src/promise/generated/types.ts#ExperimentalMigrationV1StatusOutput [status=implemented hash=caa2f54ddcc8]
+// parity: client/src/promise/generated/types.ts#ExperimentalMigrationV1StatusOutput [status=implemented hash=168272306181]
 public typealias ExperimentalMigrationV1StatusOutput = OpenCodeProtocol.V1MigrationStatus
 // parity: client/src/promise/generated/types.ts#WebsearchProvidersOutput [status=implemented hash=f82d597cfc08]
 public typealias WebsearchProvidersOutput = LocationSchema.ResponseEnvelope<[WebSearchSchema.Provider]>
@@ -3989,7 +3989,7 @@ public enum PromiseWire {
     public typealias AgentID = AgentSchema.ID
     // parity: client/src/promise/generated/types.ts#ProviderID [status=implemented hash=43c582faf65f]
     public typealias ProviderID = ProviderSchema.ID
-    // parity: client/src/promise/generated/types.ts#ProviderCompaction [status=implemented hash=8908b8271e83]
+    // parity: client/src/promise/generated/types.ts#ProviderCompaction [status=implemented hash=0fe088c0bedd]
     public typealias ProviderCompaction = ProviderSchema.Compaction
     // parity: client/src/promise/generated/types.ts#ProviderCacheTTL [status=implemented hash=99cc034a6e40]
     public typealias ProviderCacheTTL = ProviderSchema.CacheTTL
@@ -4007,11 +4007,11 @@ public enum PromiseWire {
     public typealias PermissionEffect = PermissionSchema.Effect
     // parity: client/src/promise/generated/types.ts#PluginID [status=implemented hash=6373c3b97c8b]
     public typealias PluginID = PluginSchema.ID
-    // parity: client/src/promise/generated/types.ts#PluginSource [status=implemented hash=797ed7e4346d]
+    // parity: client/src/promise/generated/types.ts#PluginSource [status=implemented hash=5e56ca1b11dd]
     public typealias PluginSource = PluginSchema.Source
     // parity: client/src/promise/generated/types.ts#PluginFeatures [status=implemented hash=c7a80481c9b6]
     public typealias PluginFeatures = PluginSchema.Features
-    // parity: client/src/promise/generated/types.ts#PluginState [status=implemented hash=7c8b6be0953c]
+    // parity: client/src/promise/generated/types.ts#PluginState [status=implemented hash=f257d57fb3f8]
     public typealias PluginState = PluginSchema.State
     // parity: client/src/promise/generated/types.ts#PluginGuiBundle [status=implemented hash=c75e6606972c]
     public typealias PluginGuiBundle = PluginSchema.GuiBundle
@@ -4037,7 +4037,7 @@ public enum PromiseWire {
     public typealias SessionActive = SessionActiveInfo
     // parity: client/src/promise/generated/types.ts#PromptBase64 [status=implemented hash=b9b8ed0bcf4f]
     public typealias PromptBase64 = PromptSchema.Base64
-    // parity: client/src/promise/generated/types.ts#PromptFileSource [status=implemented hash=625bb0026a4c]
+    // parity: client/src/promise/generated/types.ts#PromptFileSource [status=implemented hash=df27fc65b059]
     public typealias PromptFileSource = PromptSchema.FileSource
     // parity: client/src/promise/generated/types.ts#PromptMention [status=implemented hash=cd4032e4a888]
     public typealias PromptMention = PromptSchema.PromptMention
@@ -4103,9 +4103,9 @@ public enum PromiseWire {
     public typealias ToolFileContent1 = ToolSchema.FileContent
     // parity: client/src/promise/generated/types.ts#SessionMessageToolStateRunning1 [status=implemented hash=5ca1fad5aa19]
     public typealias SessionMessageToolStateRunning1 = SessionMessageSchema.ToolStateRunning
-    // parity: client/src/promise/generated/types.ts#ModelType [status=implemented hash=d42a96017ef0]
+    // parity: client/src/promise/generated/types.ts#ModelType [status=implemented hash=90e2a861ca3f]
     public typealias ModelType = ModelSchema.ModelType
-    // parity: client/src/promise/generated/types.ts#ModelReasoningField [status=implemented hash=377694d10b8f]
+    // parity: client/src/promise/generated/types.ts#ModelReasoningField [status=implemented hash=f30662c8c6db]
     public typealias ModelReasoningField = ModelCompatibilitySchema.ReasoningField
     // parity: client/src/promise/generated/types.ts#ModelMaxTokensField [status=implemented hash=69c805a9695b]
     public typealias ModelMaxTokensField = ModelCompatibilitySchema.MaxTokensField
@@ -4155,9 +4155,9 @@ public enum PromiseWire {
     public typealias ConnectionStatus = ConnectionSchema.Status
     // parity: client/src/promise/generated/types.ts#IntegrationAttemptID [status=implemented hash=0c4a8b3e473d]
     public typealias IntegrationAttemptID = IntegrationSchema.AttemptID
-    // parity: client/src/promise/generated/types.ts#IntegrationAttemptStatus [status=implemented hash=6e4359b2cab8]
+    // parity: client/src/promise/generated/types.ts#IntegrationAttemptStatus [status=implemented hash=52c13b77898b]
     public typealias IntegrationAttemptStatus = IntegrationSchema.AttemptStatus
-    // parity: client/src/promise/generated/types.ts#IntegrationCommandAttemptStatus [status=implemented hash=0ef7882fbad6]
+    // parity: client/src/promise/generated/types.ts#IntegrationCommandAttemptStatus [status=implemented hash=561bfe366307]
     public typealias IntegrationCommandAttemptStatus = IntegrationSchema.CommandAttemptStatus
     // parity: client/src/promise/generated/types.ts#McpStatusConnected [status=implemented hash=1f695c5755ec]
     public typealias McpStatusConnected = McpSchema.Status
@@ -4205,7 +4205,7 @@ public enum PromiseWire {
     public typealias FormWhen1 = FormSchema.When
     // parity: client/src/promise/generated/types.ts#FormValue1 [status=implemented hash=5df68b0c176c]
     public typealias FormValue1 = FormSchema.Value
-    // parity: client/src/promise/generated/types.ts#SessionStatus [status=implemented hash=3eee93865eab]
+    // parity: client/src/promise/generated/types.ts#SessionStatus [status=implemented hash=73f62dc2cfb3]
     public typealias SessionStatus = SessionStatusEventSchema.Info
     // parity: client/src/promise/generated/types.ts#PersistentPtyHandoff [status=implemented hash=78cc0927c759]
     public typealias PersistentPtyHandoff = PersistentPtySchema.Handoff
@@ -4257,7 +4257,7 @@ public enum PromiseWire {
     public typealias ConfigCompactionPercent = ConfigCompactionSchema.Percent
     // parity: client/src/promise/generated/types.ts#ConfigWorktree [status=implemented hash=b22ca5a15022]
     public typealias ConfigWorktree = ConfigWorktreeSchema.Info
-    // parity: client/src/promise/generated/types.ts#ConfigModelReasoning [status=implemented hash=ed95b17c7186]
+    // parity: client/src/promise/generated/types.ts#ConfigModelReasoning [status=implemented hash=aaa253cd6aa3]
     public typealias ConfigModelReasoning = ConfigProviderSchema.Reasoning
     // parity: client/src/promise/generated/types.ts#ConfigShellOption [status=implemented hash=8e01e9b2c442]
     public typealias ConfigShellOption = ConfigShellSchema.Option
@@ -4277,17 +4277,17 @@ public enum PromiseWire {
     public typealias ModelRef = ModelSchema.Ref
     // parity: client/src/promise/generated/types.ts#ProviderCache [status=implemented hash=130a258bf594]
     public typealias ProviderCache = ProviderSchema.Cache
-    // parity: client/src/promise/generated/types.ts#ModelVariantSettings [status=implemented hash=3669c7475452]
+    // parity: client/src/promise/generated/types.ts#ModelVariantSettings [status=implemented hash=14a33812181d]
     public typealias ModelVariantSettings = ModelSchema.VariantSettings
-    // parity: client/src/promise/generated/types.ts#ConfigModelVariantSettings [status=implemented hash=0c24ec95c46c]
+    // parity: client/src/promise/generated/types.ts#ConfigModelVariantSettings [status=implemented hash=58c910caf1c6]
     public typealias ConfigModelVariantSettings = ConfigProviderSchema.VariantConfig
     // parity: client/src/promise/generated/types.ts#PermissionRule [status=implemented hash=8eedad7d41cb]
     public typealias PermissionRule = PermissionSchema.Rule
     // parity: client/src/promise/generated/types.ts#PluginInfo [status=implemented hash=842ebaceba44]
     public typealias PluginInfo = PluginSchema.Info
-    // parity: client/src/promise/generated/types.ts#AutomationTarget [status=implemented hash=0bc5d9ef67a3]
+    // parity: client/src/promise/generated/types.ts#AutomationTarget [status=implemented hash=56264e127423]
     public typealias AutomationTarget = AutomationSchema.Target
-    // parity: client/src/promise/generated/types.ts#SessionForkBoundary [status=implemented hash=dadbb25d5a2d]
+    // parity: client/src/promise/generated/types.ts#SessionForkBoundary [status=implemented hash=34d972a192de]
     public typealias SessionForkBoundary = SessionForkSchema.Boundary
     // parity: client/src/promise/generated/types.ts#SessionMessageAgentSelected [status=implemented hash=c81563bcfbb9]
     public typealias SessionMessageAgentSelected = SessionMessageSchema.AgentSelected
@@ -4351,11 +4351,11 @@ public enum PromiseWire {
     public typealias FormMultiselectField = FormSchema.MultiselectField
     // parity: client/src/promise/generated/types.ts#FormAnswer [status=implemented hash=2eae5a38e8bf]
     public typealias FormAnswer = FormSchema.Answer
-    // parity: client/src/promise/generated/types.ts#SessionStatsTools [status=implemented hash=d72fa01049c9]
+    // parity: client/src/promise/generated/types.ts#SessionStatsTools [status=implemented hash=d13651701add]
     public typealias SessionStatsTools = SessionStatsSchema.Tools
     // parity: client/src/promise/generated/types.ts#InstructionEntryInfo [status=implemented hash=02a2ad3aa209]
     public typealias InstructionEntryInfo = InstructionEntrySchema.Info
-    // parity: client/src/promise/generated/types.ts#InstructionEntrySnapshot [status=implemented hash=3dedfcece4f1]
+    // parity: client/src/promise/generated/types.ts#InstructionEntrySnapshot [status=implemented hash=fded6677ae62]
     public typealias InstructionEntrySnapshot = InstructionEntrySchema.Snapshot
     // parity: client/src/promise/generated/types.ts#EventLogSynced [status=implemented hash=b70114e79ee6]
     public typealias EventLogSynced = EventLogSchema.Synced
@@ -4471,13 +4471,13 @@ public enum PromiseWire {
     public typealias SessionMessageCompactionCompleted = SessionMessageSchema.CompactionCompleted
     // parity: client/src/promise/generated/types.ts#SessionStatsModelUsage [status=implemented hash=5cf1066931c9]
     public typealias SessionStatsModelUsage = SessionStatsSchema.ModelUsage
-    // parity: client/src/promise/generated/types.ts#ProviderSettings [status=implemented hash=309c7035ac04]
+    // parity: client/src/promise/generated/types.ts#ProviderSettings [status=implemented hash=a5bada286ec1]
     public typealias ProviderSettings = ProviderSchema.Settings
-    // parity: client/src/promise/generated/types.ts#ModelSettings [status=implemented hash=80de7d3f9f1a]
+    // parity: client/src/promise/generated/types.ts#ModelSettings [status=implemented hash=42ad6873ae45]
     public typealias ModelSettings = ModelSchema.Settings
-    // parity: client/src/promise/generated/types.ts#ConfigProviderSettings [status=implemented hash=d7edb4b82654]
+    // parity: client/src/promise/generated/types.ts#ConfigProviderSettings [status=implemented hash=90625cf041f5]
     public typealias ConfigProviderSettings = ConfigProviderSchema.Settings
-    // parity: client/src/promise/generated/types.ts#ConfigModelSettings [status=implemented hash=50688122b3e2]
+    // parity: client/src/promise/generated/types.ts#ConfigModelSettings [status=implemented hash=3f034a72c06f]
     public typealias ConfigModelSettings = ConfigProviderSchema.ModelSettings
     // parity: client/src/promise/generated/types.ts#ModelVariant [status=implemented hash=fd1e8b58cc9c]
     public typealias ModelVariant = ModelSchema.Variant
@@ -4499,9 +4499,9 @@ public enum PromiseWire {
     public typealias SessionMessageToolStateCompleted = SessionMessageSchema.ToolStateCompleted
     // parity: client/src/promise/generated/types.ts#SessionMessageToolStateError [status=implemented hash=ea65839218a5]
     public typealias SessionMessageToolStateError = SessionMessageSchema.ToolStateError
-    // parity: client/src/promise/generated/types.ts#FormField [status=implemented hash=aa6e70a9beeb]
+    // parity: client/src/promise/generated/types.ts#FormField [status=implemented hash=946caa92d5f2]
     public typealias FormField = FormSchema.Field
-    // parity: client/src/promise/generated/types.ts#FormState [status=implemented hash=75c4645cfa26]
+    // parity: client/src/promise/generated/types.ts#FormState [status=implemented hash=b923b26b7679]
     public typealias FormState = FormSchema.State
     // parity: client/src/promise/generated/types.ts#SessionAgentSelected [status=implemented hash=64e4ac3a3efe]
     public typealias SessionAgentSelected = OpenCodeProtocol.OpenCodeEvent
@@ -4696,7 +4696,7 @@ public enum PromiseWire {
     public typealias GenerateVideoCreateResponse = ClientDataEnvelope<GenerateSchema.VideoRunning>
     // parity: client/src/promise/generated/types.ts#GenerateVideoCompleted [status=implemented hash=79e94412317b]
     public typealias GenerateVideoCompleted = GenerateSchema.VideoCompleted
-    // parity: client/src/promise/generated/types.ts#GenerateDecisionAnswer [status=implemented hash=039b65e7e2c6]
+    // parity: client/src/promise/generated/types.ts#GenerateDecisionAnswer [status=implemented hash=d0822e93c90d]
     public typealias GenerateDecisionAnswer = GenerateSchema.DecisionAnswer
     // parity: client/src/promise/generated/types.ts#VoiceModelsResponse [status=implemented hash=039e5f962b81]
     public typealias VoiceModelsResponse = ClientDataEnvelope<VoiceModelsData>
@@ -4716,11 +4716,11 @@ public enum PromiseWire {
     public typealias PersistentPtyUpdated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#PersistentPtySnapshot [status=implemented hash=f171d2fd0541]
     public typealias PersistentPtySnapshot = PersistentPtySchema.Snapshot
-    // parity: client/src/promise/generated/types.ts#FormField1 [status=implemented hash=b715bf745e6e]
+    // parity: client/src/promise/generated/types.ts#FormField1 [status=implemented hash=732556367695]
     public typealias FormField1 = FormSchema.Field
     // parity: client/src/promise/generated/types.ts#FormReplied [status=implemented hash=335fb5199eb5]
     public typealias FormReplied = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#AutomationTrigger [status=implemented hash=58cd5d142065]
+    // parity: client/src/promise/generated/types.ts#AutomationTrigger [status=implemented hash=37dec4a1aada]
     public typealias AutomationTrigger = AutomationSchema.Trigger
     // parity: client/src/promise/generated/types.ts#ArtifactContent [status=implemented hash=1b2da4e73e2a]
     public typealias ArtifactContent = ArtifactSchema.Content
@@ -4730,7 +4730,7 @@ public enum PromiseWire {
     public typealias SessionInboxMove = SessionInboxSchema.Move
     // parity: client/src/promise/generated/types.ts#ReferenceInfo [status=implemented hash=4e50342e9062]
     public typealias ReferenceInfo = ReferenceSchema.Info
-    // parity: client/src/promise/generated/types.ts#SessionMessageCompaction [status=implemented hash=df335d12bd55]
+    // parity: client/src/promise/generated/types.ts#SessionMessageCompaction [status=implemented hash=db1d16163d3c]
     public typealias SessionMessageCompaction = SessionMessageSchema.Compaction
     // parity: client/src/promise/generated/types.ts#SessionStatsInfo [status=implemented hash=82429abda7e6]
     public typealias SessionStatsInfo = SessionStatsSchema.Info
@@ -4746,7 +4746,7 @@ public enum PromiseWire {
     public typealias SessionCreated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#SessionPermissions [status=implemented hash=dbb835113dd0]
     public typealias SessionPermissions = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=589635b55f5e]
+    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=7ed658f0ef74]
     public typealias ConfigEntry = ConfigSchema.Entry
     // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=d3beed292bfa]
     public typealias AutomationAction = AutomationSchema.Action
@@ -4760,7 +4760,7 @@ public enum PromiseWire {
     public typealias SessionMessageAssistantTool = SessionMessageSchema.AssistantTool
     // parity: client/src/promise/generated/types.ts#FormFields [status=implemented hash=c7a26b668228]
     public typealias FormFields = FormSchema.Fields
-    // parity: client/src/promise/generated/types.ts#SessionInboxItem [status=implemented hash=bdeb60485470]
+    // parity: client/src/promise/generated/types.ts#SessionInboxItem [status=implemented hash=b21d2713584b]
     public typealias SessionInboxItem = SessionInboxSchema.Item
     // parity: client/src/promise/generated/types.ts#SessionMessageAssistantTool1 [status=implemented hash=9d59c09f25ed]
     public typealias SessionMessageAssistantTool1 = SessionMessageSchema.AssistantTool
@@ -4792,7 +4792,7 @@ public enum PromiseWire {
     public typealias IntegrationExternalMethod = IntegrationSchema.ExternalMethod
     // parity: client/src/promise/generated/types.ts#SessionInboxEnqueued [status=implemented hash=a8a7de2fa1dc]
     public typealias SessionInboxEnqueued = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#SessionMessageAssistantContentEncoded [status=implemented hash=8cff3ad8c0af]
+    // parity: client/src/promise/generated/types.ts#SessionMessageAssistantContentEncoded [status=implemented hash=f2c3849e67d8]
     public typealias SessionMessageAssistantContentEncoded = SessionMessageSchema.AssistantContentEncoded
     // parity: client/src/promise/generated/types.ts#GenerateVideoGetResponse [status=implemented hash=972b73e25370]
     public typealias GenerateVideoGetResponse = ClientDataEnvelope<GenerateSchema.VideoJob>
@@ -4800,9 +4800,9 @@ public enum PromiseWire {
     public typealias GenerateDecisionsResponse = ClientDataEnvelope<GenerateSchema.DecisionResult>
     // parity: client/src/promise/generated/types.ts#FormInfo1 [status=implemented hash=ac36ae6ec538]
     public typealias FormInfo1 = FormSchema.Info
-    // parity: client/src/promise/generated/types.ts#SessionMessageInfo [status=implemented hash=73b1a2093f23]
+    // parity: client/src/promise/generated/types.ts#SessionMessageInfo [status=implemented hash=73e6a5a18d5b]
     public typealias SessionMessageInfo = SessionMessageSchema.Info
-    // parity: client/src/promise/generated/types.ts#IntegrationMethod [status=implemented hash=e48303ea25b7]
+    // parity: client/src/promise/generated/types.ts#IntegrationMethod [status=implemented hash=026aeacd2bfd]
     public typealias IntegrationMethod = IntegrationSchema.Method
     // parity: client/src/promise/generated/types.ts#SessionMessageContentUpdated [status=implemented hash=ef7cf2e1c652]
     public typealias SessionMessageContentUpdated = OpenCodeProtocol.OpenCodeEvent
@@ -4812,7 +4812,7 @@ public enum PromiseWire {
     public typealias SessionTransferData = SessionTransferSchema.Data
     // parity: client/src/promise/generated/types.ts#IntegrationInfo [status=implemented hash=67080374447c]
     public typealias IntegrationInfo = IntegrationSchema.Info
-    // parity: client/src/promise/generated/types.ts#SessionEventDurable [status=implemented hash=8df683f228df]
+    // parity: client/src/promise/generated/types.ts#SessionEventDurable [status=implemented hash=89c554c21442]
     public typealias SessionEventDurable = SessionEventSchema.DurableEvent
     // parity: client/src/promise/generated/types.ts#V2Event [status=implemented hash=846c84da91fc]
     public typealias V2Event = OpenCodeProtocol.OpenCodeEvent
@@ -6258,11 +6258,11 @@ public struct RpcCallOptions: Sendable {
 }
 
 /// Argument tuple representation matching upstream `RpcArguments`.
-// parity: client/src/promise/rpc.ts#RpcArguments [status=adapted hash=836151c1e499]
+// parity: client/src/promise/rpc.ts#RpcArguments [status=adapted hash=e4809ac87825]
 public typealias RpcArguments<Input, Options> = (input: Input, options: Options?)
 
 /// Typed RPC event payload matching upstream `RpcEventPayload`.
-// parity: client/src/promise/rpc.ts#RpcEventPayload [status=implemented hash=ebf02ee49b96]
+// parity: client/src/promise/rpc.ts#RpcEventPayload [status=implemented hash=1795b6c5ca25]
 public typealias RpcEventPayload = OpenCodeEvent
 
 /// Events interface for a bound Promise RPC client.
@@ -6354,7 +6354,7 @@ public struct PromiseRpcEvents: Sendable {
 }
 
 /// Bound Promise-style RPC client for one `RpcSchema.PortableDefinition`.
-// parity: client/src/promise/rpc.ts#RpcClient [status=implemented hash=073718a355d8]
+// parity: client/src/promise/rpc.ts#RpcClient [status=implemented hash=049cf0df9768]
 public struct RpcClient: Sendable {
     public let definition: RpcSchema.PortableDefinition
     public let events: PromiseRpcEvents
@@ -6397,7 +6397,7 @@ public struct RpcApi: Sendable {
 }
 
 /// Builds a Promise `RpcApi` backed by `raw.rpc.call` and a shared event stream.
-// parity: client/src/promise/rpc.ts#makeRpc [status=implemented hash=b2e6a6f5b9bf]
+// parity: client/src/promise/rpc.ts#makeRpc [status=implemented hash=118129095a61]
 public func makeRpc(
     raw: GeneratedOpenCodeClient,
     events: SharedEventsHub<OpenCodeEvent>
@@ -6659,7 +6659,7 @@ public enum PromiseService {
     }
 
     /// Discover a healthy, compatible local service without starting one.
-    // parity: client/src/promise/service.ts#discover [status=implemented hash=02b22845f895]
+    // parity: client/src/promise/service.ts#discover [status=implemented hash=c4216d03ce79]
     public static func discover(
         options: ServiceDiscoverOptions = ServiceDiscoverOptions(),
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -6679,7 +6679,7 @@ public enum PromiseService {
     }
 
     /// Ensure a healthy, compatible local service is running.
-    // parity: client/src/promise/service.ts#ensure [status=implemented hash=e4cf96270698]
+    // parity: client/src/promise/service.ts#ensure [status=implemented hash=61bb07bc6b75]
     public static func ensure(
         options: ServiceEnsureOptions = ServiceEnsureOptions(),
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -6797,7 +6797,7 @@ public enum PromiseService {
     }
 
     /// Stop the registered local service.
-    // parity: client/src/promise/service.ts#stop [status=implemented hash=61cac4f955cf]
+    // parity: client/src/promise/service.ts#stop [status=implemented hash=f28eb8a16af0]
     public static func stop(
         options: ServiceStopOptions = ServiceStopOptions(),
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,

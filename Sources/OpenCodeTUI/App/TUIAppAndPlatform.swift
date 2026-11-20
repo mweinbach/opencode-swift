@@ -437,7 +437,7 @@ public enum TUIAttention {
     }
 
     /// Creates a focus-aware TUI attention host coordinating terminal OSC notifications and audio cues.
-    // parity: tui/src/attention.ts#createTuiAttention [status=implemented hash=5c2ce5410930]
+    // parity: tui/src/attention.ts#createTuiAttention [status=implemented hash=d3cc34e2cecd]
     public static func createTuiAttention(
         renderer: any AttentionRenderer,
         config: TUIConfig.ResolvedAttention,
@@ -906,7 +906,7 @@ public enum TUIEditor {
     }
 
     /// Outcome of querying Zed's active editor selection database.
-    // parity: tui/src/editor-zed.ts#ZedSelectionResult [status=implemented hash=a5c6ec53ff69]
+    // parity: tui/src/editor-zed.ts#ZedSelectionResult [status=implemented hash=2fa592d9b3d7]
     public enum ZedSelectionResult: Equatable, Hashable, Sendable {
         case selection(TUIContext.EditorSelection)
         case empty
@@ -1108,7 +1108,7 @@ public enum TUIEditor {
     }
 
     /// Suspends `renderer`, opens `$VISUAL` or `$EDITOR` on a temporary markdown buffer, and returns the edited text.
-    // parity: tui/src/editor.ts#openEditor [status=adapted hash=048e7c67ea52]
+    // parity: tui/src/editor.ts#openEditor [status=adapted hash=ad9b88ad3217]
     public static func openEditor(
         value: String,
         renderer: CliRenderer,
@@ -1261,7 +1261,7 @@ public enum TUIApp {
     }
 
     /// TUI clipboard service with explicit `dispose()` ownership.
-    // parity: tui/src/clipboard.ts#OwnedClipboardService [status=implemented hash=9663de1b44f2]
+    // parity: tui/src/clipboard.ts#OwnedClipboardService [status=implemented hash=96ac72b78f5f]
     public struct OwnedClipboardService: Sendable {
         public let service: TUIContext.ClipboardService
         public let dispose: @Sendable () async throws -> Void
@@ -1368,7 +1368,7 @@ public enum TUIApp {
         }
 
         /// Named DevTools telemetry group.
-        // parity: tui/src/devtools/index.ts#Group [status=implemented hash=d2a6dd74bb66]
+        // parity: tui/src/devtools/index.ts#Group [status=implemented hash=7ba164964176]
         public struct Group: Equatable, Hashable, Sendable, Codable {
             public let id: String
             public var title: String
@@ -1402,7 +1402,7 @@ public enum TUIApp {
         private static let groupsStorage = Mutex<[Group]>([])
 
         /// Registers or updates a DevTools group and returns a handle for setting key/value telemetry.
-        // parity: tui/src/devtools/index.ts#register [status=implemented hash=9d7eb33355d4]
+        // parity: tui/src/devtools/index.ts#register [status=implemented hash=37f9d8f08be4]
         public static func register(id: String, title: String) -> GroupHandle {
             groupsStorage.withLock { groups in
                 if let idx = groups.firstIndex(where: { $0.id == id }) {
@@ -1581,7 +1581,7 @@ public enum TUIApp {
     }
 
     /// Resolves TUI configuration, theme, route, and OpenTUI renderer lifecycle for an OpenCode TUI session.
-    // parity: tui/src/app.tsx#run [status=adapted hash=c0450ef34a97]
+    // parity: tui/src/app.tsx#run [status=adapted hash=3cc65b82ce3e]
     public static func run(_ input: TuiInput) async throws -> RunResult {
         let log: TUIContext.LogSink = input.log ?? { _, _, _ in }
         let rawConfig = try await input.config.get()

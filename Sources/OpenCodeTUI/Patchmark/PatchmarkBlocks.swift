@@ -3,7 +3,7 @@
 // is produced by forking only the open spine (the open last-child chain) of the tree.
 
 /// Internal block node type in `BlockParser`'s persistent tree.
-// parity: patchmark/src/blocks.ts#BlockType [status=implemented hash=34396db81ae7]
+// parity: patchmark/src/blocks.ts#BlockType [status=implemented hash=19719c53c152]
 public enum BlockType: String, Equatable, Hashable, Sendable {
     case document
     case blockQuote = "block_quote"

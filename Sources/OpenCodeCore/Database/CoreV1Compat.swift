@@ -14,7 +14,7 @@ public enum CoreV1Config {
     // MARK: - v1/config/permission.ts
 
     public enum Permission {
-        // parity: core/src/v1/config/permission.ts#Action [status=implemented hash=c4ec2390f9b3]
+        // parity: core/src/v1/config/permission.ts#Action [status=implemented hash=2d8ea0231497]
         public enum Action: String, Equatable, Hashable, Sendable, Codable {
             case ask
             case allow
@@ -68,7 +68,7 @@ public enum CoreV1Config {
         }
 
         /// Factory mirroring upstream `Entries(value)` schema codec constructor (rejects arrays, preserves entry order).
-        // parity: core/src/v1/config/permission.ts#Entries [status=implemented hash=78a83edee0c6]
+        // parity: core/src/v1/config/permission.ts#Entries [status=implemented hash=38aed2c80e79]
         public static func entriesCodec<Value: Equatable & Hashable & Sendable & Codable>(
             _ valueType: Value.Type
         ) -> EntriesCodec<Value> {
@@ -101,10 +101,10 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/permission.ts#Object [status=implemented hash=1a915e2a8922]
+        // parity: core/src/v1/config/permission.ts#Object [status=implemented hash=6c1e2974f00e]
         public typealias Object = Entries<Action>
 
-        // parity: core/src/v1/config/permission.ts#Rule [status=implemented hash=387061fc63f9]
+        // parity: core/src/v1/config/permission.ts#Rule [status=implemented hash=b75d4de9b7da]
         public enum Rule: Equatable, Hashable, Sendable, Codable {
             case action(Action)
             case object(Object)
@@ -132,7 +132,7 @@ public enum CoreV1Config {
 
         private static let actionOnlyKeys: Set<String> = ["question", "websearch", "doom_loop"]
 
-        // parity: core/src/v1/config/permission.ts#Info [status=implemented hash=78b3d72f354c]
+        // parity: core/src/v1/config/permission.ts#Info [status=implemented hash=996697d6a602]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let rules: [Entry<Rule>]
 
@@ -170,7 +170,7 @@ public enum CoreV1Config {
     // MARK: - v1/config/agent.ts
 
     public enum Agent {
-        // parity: core/src/v1/config/agent.ts#Info [status=implemented hash=443e4f06049d]
+        // parity: core/src/v1/config/agent.ts#Info [status=implemented hash=cc78c718dd1c]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let model: String?
             public let variant: String?
@@ -310,7 +310,7 @@ public enum CoreV1Config {
     // MARK: - v1/config/command.ts
 
     public enum Command {
-        // parity: core/src/v1/config/command.ts#Info [status=implemented hash=4ba1e7e54eda]
+        // parity: core/src/v1/config/command.ts#Info [status=implemented hash=61d97abbd398]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let template: String
             public let description: String?
@@ -340,7 +340,7 @@ public enum CoreV1Config {
     // MARK: - v1/config/mcp.ts
 
     public enum MCP {
-        // parity: core/src/v1/config/mcp.ts#Local [status=implemented hash=fa8eb54ef757]
+        // parity: core/src/v1/config/mcp.ts#Local [status=implemented hash=2b3d9c2811ee]
         public struct Local: Equatable, Hashable, Sendable, Codable {
             public let command: [String]
             public let cwd: String?
@@ -395,7 +395,7 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/mcp.ts#OAuth [status=implemented hash=79a9c1144f52]
+        // parity: core/src/v1/config/mcp.ts#OAuth [status=implemented hash=d1bb2f84a211]
         public struct OAuth: Equatable, Hashable, Sendable, Codable {
             public let clientId: String?
             public let clientSecret: String?
@@ -444,7 +444,7 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/mcp.ts#Remote [status=implemented hash=d5cbc06591fe]
+        // parity: core/src/v1/config/mcp.ts#Remote [status=implemented hash=7ad13d579ef7]
         public struct Remote: Equatable, Hashable, Sendable, Codable {
             public let url: String
             public let enabled: Bool?
@@ -499,7 +499,7 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/mcp.ts#Info [status=implemented hash=1fe831599960]
+        // parity: core/src/v1/config/mcp.ts#Info [status=implemented hash=ffd8c858b673]
         public enum Info: Equatable, Hashable, Sendable, Codable {
             case local(Local)
             case remote(Remote)
@@ -660,7 +660,7 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/provider.ts#Model [status=implemented hash=615a0926f886]
+        // parity: core/src/v1/config/provider.ts#Model [status=implemented hash=c0b7d8ee0354]
         public struct Model: Equatable, Hashable, Sendable, Codable {
             public let id: String?
             public let name: String?
@@ -730,7 +730,7 @@ public enum CoreV1Config {
             }
         }
 
-        // parity: core/src/v1/config/provider.ts#Info [status=implemented hash=8d1acef8dcf6]
+        // parity: core/src/v1/config/provider.ts#Info [status=implemented hash=12b218e33e09]
         public struct Info: Equatable, Hashable, Sendable, Codable {
             public let api: String?
             public let name: String?

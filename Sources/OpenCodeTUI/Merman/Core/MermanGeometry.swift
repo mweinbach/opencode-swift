@@ -178,7 +178,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/core/geometry.ts#clampPoint [status=implemented hash=76600e4e2f0d]
+    // parity: merman/src/core/geometry.ts#clampPoint [status=implemented hash=166b89ea84ef]
     public static func clampPoint(_ pt: DiagramPoint, min minPoint: DiagramPoint = DiagramPoint(x: 0, y: 0)) -> DiagramPoint {
         DiagramPoint(x: max(minPoint.x, pt.x), y: max(minPoint.y, pt.y))
     }
@@ -308,7 +308,7 @@ extension Merman {
         return endCoordinate - sign * min(terminalClearance, max(1, abs(delta) - 1))
     }
 
-    // parity: merman/src/core/geometry.ts#orthogonalPath [status=implemented hash=84cda69a44f6]
+    // parity: merman/src/core/geometry.ts#orthogonalPath [status=implemented hash=ab7ecf89d665]
     public static func orthogonalPath(
         _ start: DiagramPoint,
         _ end: DiagramPoint,

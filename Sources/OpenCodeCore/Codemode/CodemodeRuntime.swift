@@ -12,7 +12,7 @@ import Synchronization
 public enum CodemodeEngine {
     // MARK: - ToolError (src/codemode/tool-error.ts)
 
-    // parity: codemode/src/codemode/tool-error.ts#ToolError [status=implemented hash=54eea5e6e50d]
+    // parity: codemode/src/codemode/tool-error.ts#ToolError [status=implemented hash=2f9f13d2db6f]
     public final class ToolError: Error, Sendable, CustomStringConvertible {
         public static let tag = "ToolError"
         public let message: String
@@ -26,7 +26,7 @@ public enum CodemodeEngine {
         public var description: String { message }
     }
 
-    // parity: codemode/src/codemode/tool-error.ts#toolError [status=implemented hash=2115db29e5df]
+    // parity: codemode/src/codemode/tool-error.ts#toolError [status=implemented hash=ae16a7591129]
     public static func toolError(_ message: String, cause: Error? = nil) -> ToolError {
         ToolError(message: message, cause: cause.map { String(describing: $0) })
     }
@@ -71,7 +71,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/tool.ts#DurableOptions [status=implemented hash=cbbfa718d069]
+        // parity: codemode/src/codemode/tool.ts#DurableOptions [status=implemented hash=fad62ef64bbb]
         public struct DurableOptions: Sendable {
             public let start: @Sendable (JSONValue, ToolContext) async throws -> JSONValue
             public let wait: @Sendable (JSONValue, ToolContext) async throws -> JSONValue
@@ -175,17 +175,17 @@ public enum CodemodeEngine {
             return false
         }
 
-        // parity: codemode/src/codemode/tool.ts#idempotent [status=implemented hash=2bff51af893b]
+        // parity: codemode/src/codemode/tool.ts#idempotent [status=implemented hash=2f07a8998f1e]
         public static func idempotent(_ execute: @escaping ExecuteFn) -> ExecutionMode {
             .idempotent(Idempotent(execute: execute))
         }
 
-        // parity: codemode/src/codemode/tool.ts#durable [status=implemented hash=ce2fffd285af]
+        // parity: codemode/src/codemode/tool.ts#durable [status=implemented hash=b993fb305f21]
         public static func durable(_ options: DurableOptions) -> ExecutionMode {
             .durable(Durable(options: options))
         }
 
-        // parity: codemode/src/codemode/tool.ts#make [status=implemented hash=a7213db0d912]
+        // parity: codemode/src/codemode/tool.ts#make [status=implemented hash=eb33bdcf5228]
         public static func make(_ options: Options) -> Definition {
             Definition(
                 description: options.description,
@@ -236,7 +236,7 @@ public enum CodemodeEngine {
             return false
         }
 
-        // parity: codemode/src/codemode/namespace.ts#make [status=implemented hash=a8d4cc09b31c]
+        // parity: codemode/src/codemode/namespace.ts#make [status=implemented hash=7af5f4d42139]
         public static func make(_ options: Options) -> Definition {
             Definition(description: options.description, tools: options.tools)
         }
@@ -248,7 +248,7 @@ public enum CodemodeEngine {
         // parity: codemode/src/codemode/extension.ts#Snapshot [status=implemented hash=d8607566a4b1]
         public typealias Snapshot = CodemodeLanguage.Host.Snapshot
 
-        // parity: codemode/src/codemode/extension.ts#Services [status=implemented hash=5db9d2c08cbd]
+        // parity: codemode/src/codemode/extension.ts#Services [status=implemented hash=bf21f502e568]
         public struct Services: Sendable {
             public init() {}
         }
@@ -584,12 +584,12 @@ public enum CodemodeEngine {
             toTypeScript(tool.input, decoded: false, pretty: pretty)
         }
 
-        // parity: codemode/src/codemode/tool-schema.ts#isEmptyInput [status=implemented hash=75f08751e5d3]
+        // parity: codemode/src/codemode/tool-schema.ts#isEmptyInput [status=implemented hash=8d19e08f3cac]
         public static func isEmptyInput(_ tool: Tool.Definition) -> Bool {
             inputTypeScript(tool, pretty: false) == "{}"
         }
 
-        // parity: codemode/src/codemode/tool-schema.ts#outputTypeScript [status=implemented hash=7a403e794b25]
+        // parity: codemode/src/codemode/tool-schema.ts#outputTypeScript [status=implemented hash=f5768f4bd994]
         public static func outputTypeScript(_ tool: Tool.Definition, pretty: Bool = false) -> String {
             guard let out = tool.output else { return "void" }
             return toTypeScript(out, decoded: true, pretty: pretty)
@@ -603,7 +603,7 @@ public enum CodemodeEngine {
             return value
         }
 
-        // parity: codemode/src/codemode/tool-schema.ts#decodeOutput [status=implemented hash=bd1e53f84dfa]
+        // parity: codemode/src/codemode/tool-schema.ts#decodeOutput [status=implemented hash=aaff51be498e]
         public static func decodeOutput(_ tool: Tool.Definition, _ value: JSONValue) throws -> JSONValue {
             guard let out = tool.output else { return .null }
             if case .validated(_, let decode) = out {
@@ -656,7 +656,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/tool-runtime.ts#CallResult [status=implemented hash=3da0f02fb325]
+        // parity: codemode/src/codemode/tool-runtime.ts#CallResult [status=implemented hash=738803ffa3ba]
         public enum CallResult: Sendable {
             case success(JSONValue)
             case failure(String)
@@ -718,7 +718,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/tool-runtime.ts#toolExpression [status=implemented hash=8d3dc2266986]
+        // parity: codemode/src/codemode/tool-runtime.ts#toolExpression [status=implemented hash=e4851cc8e245]
         public static func toolExpression(_ path: String) -> String {
             "tools" + path.split(separator: ".", omittingEmptySubsequences: false).map { seg -> String in
                 let s = String(seg)
@@ -726,7 +726,7 @@ public enum CodemodeEngine {
             }.joined()
         }
 
-        // parity: codemode/src/codemode/tool-runtime.ts#searchSignature [status=implemented hash=034b1bf717e3]
+        // parity: codemode/src/codemode/tool-runtime.ts#searchSignature [status=implemented hash=a90bbda0ca88]
         public static let searchSignature: String = """
         search(query: string | {
           query?: string,
@@ -1025,7 +1025,7 @@ public enum CodemodeEngine {
             ])
         }
 
-        // parity: codemode/src/codemode/tool-runtime.ts#toolCalls [status=implemented hash=e110d8159c38]
+        // parity: codemode/src/codemode/tool-runtime.ts#toolCalls [status=implemented hash=b36c645c5bea]
         public static func toolCalls(_ metadata: JSONValue) -> [ToolCall] {
             guard case .object(let dict) = metadata,
                   case .array(let list) = dict["calls"]
@@ -1044,7 +1044,7 @@ public enum CodemodeEngine {
             return cur
         }
 
-        // parity: codemode/src/codemode/tool-runtime.ts#globals [status=implemented hash=6fde1ee9ddfb]
+        // parity: codemode/src/codemode/tool-runtime.ts#globals [status=implemented hash=bf99b23bd7a0]
         public static func globals(
             prepared: Prepared,
             hooks: Hooks,
@@ -1657,7 +1657,7 @@ public enum CodemodeEngine {
     // parity: codemode/src/codemode/codemode.ts#SuspendOptions [status=implemented hash=4d826935ccbe]
     public typealias SuspendOptions = CodemodeLanguage.SuspendOptions
 
-    // parity: codemode/src/codemode/codemode.ts#Environment [status=implemented hash=099e9e7fcd01]
+    // parity: codemode/src/codemode/codemode.ts#Environment [status=implemented hash=03c7ff86c93e]
     public struct Environment: Sendable {
         public init() {}
     }
@@ -1665,7 +1665,7 @@ public enum CodemodeEngine {
     // parity: codemode/src/codemode/codemode.ts#DataValue [status=implemented hash=b15f1b0b3f89]
     public typealias DataValue = JSONValue
 
-    // parity: codemode/src/codemode/codemode.ts#Input [status=implemented hash=92460d1eba6a]
+    // parity: codemode/src/codemode/codemode.ts#Input [status=implemented hash=a83f29f89419]
     public struct Input: Equatable, Hashable, Sendable, Codable {
         public let code: String
 
@@ -1689,10 +1689,10 @@ public enum CodemodeEngine {
         case truncated = "Truncated"
     }
 
-    // parity: codemode/src/codemode/codemode.ts#Diagnostic [status=implemented hash=5a0a46ec2687]
+    // parity: codemode/src/codemode/codemode.ts#Diagnostic [status=implemented hash=bd43cb37552f]
     public typealias Diagnostic = CodemodeLanguage.Diagnostic
 
-    // parity: codemode/src/codemode/codemode.ts#Success [status=implemented hash=aff44dde6573]
+    // parity: codemode/src/codemode/codemode.ts#Success [status=implemented hash=927b631be09c]
     public struct Success: Equatable, Sendable, Codable {
         public let ok: Bool
         public let value: DataValue
@@ -1717,7 +1717,7 @@ public enum CodemodeEngine {
         }
     }
 
-    // parity: codemode/src/codemode/codemode.ts#Failure [status=implemented hash=5b3f72fd957f]
+    // parity: codemode/src/codemode/codemode.ts#Failure [status=implemented hash=1e644695767a]
     public struct Failure: Equatable, Sendable, Codable {
         public let ok: Bool
         public let error: Diagnostic
@@ -1816,7 +1816,7 @@ public enum CodemodeEngine {
         case suspended(Suspended)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#Options [status=implemented hash=43a070637965]
+    // parity: codemode/src/codemode/codemode.ts#Options [status=implemented hash=662e47630d63]
     public struct Options: Sendable {
         public let tools: Tools
         public let hooks: ToolRuntime.Hooks
@@ -1836,7 +1836,7 @@ public enum CodemodeEngine {
         }
     }
 
-    // parity: codemode/src/codemode/codemode.ts#ExecuteOptions [status=implemented hash=e22a9f8e71d2]
+    // parity: codemode/src/codemode/codemode.ts#ExecuteOptions [status=implemented hash=eef6c9830f5a]
     public struct ExecuteOptions: Sendable {
         public let code: String
         public let bindings: [String: DataValue]?
@@ -1896,7 +1896,7 @@ public enum CodemodeEngine {
         }
     }
 
-    // parity: codemode/src/codemode/codemode.ts#execute [status=implemented hash=b3dc03fa7ccd]
+    // parity: codemode/src/codemode/codemode.ts#execute [status=implemented hash=47fe8d98c9ac]
     public static func execute(_ options: ExecuteOptions) async throws -> ExecutionResult {
         let rt = try make(Options(
             tools: options.tools,
@@ -2076,7 +2076,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/openapi/types.ts#SecurityScheme [status=implemented hash=18044dd55cbc]
+        // parity: codemode/src/codemode/openapi/types.ts#SecurityScheme [status=implemented hash=abdcca772e17]
         public enum SecurityScheme: Equatable, Hashable, Sendable, Codable {
             case apiKey(name: String, location: String)
             case http(scheme: String)
@@ -2084,7 +2084,7 @@ public enum CodemodeEngine {
             case openIdConnect
         }
 
-        // parity: codemode/src/codemode/openapi/types.ts#Credential [status=implemented hash=e5e2f821c522]
+        // parity: codemode/src/codemode/openapi/types.ts#Credential [status=implemented hash=77c2280fd9c7]
         public enum Credential: Equatable, Hashable, Sendable, Codable {
             case bearer(token: String)
             case basic(username: String, password: String)
@@ -2106,7 +2106,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/openapi/types.ts#AuthResolver [status=implemented hash=e5b925324430]
+        // parity: codemode/src/codemode/openapi/types.ts#AuthResolver [status=implemented hash=207ca85f0961]
         public typealias AuthResolver = @Sendable (AuthContext) async throws -> Credential?
 
         // parity: codemode/src/codemode/openapi/types.ts#Options [status=implemented hash=c3165e6616d7]
@@ -2159,7 +2159,7 @@ public enum CodemodeEngine {
             }
         }
 
-        // parity: codemode/src/codemode/openapi/types.ts#Parsed [status=implemented hash=14735d91d099]
+        // parity: codemode/src/codemode/openapi/types.ts#Parsed [status=implemented hash=fd7377b3b3aa]
         public enum Parsed<T: Sendable>: Sendable {
             case ok(T)
             case err(String)
@@ -2684,7 +2684,7 @@ public enum CodemodeEngine {
 
         // MARK: OpenAPI Runtime Invoke via HTTPTransport (src/codemode/openapi/runtime.ts)
 
-        // parity: codemode/src/codemode/openapi/runtime.ts#invoke [status=implemented hash=f8af8b690976]
+        // parity: codemode/src/codemode/openapi/runtime.ts#invoke [status=implemented hash=1ce723b536b8]
         public static func invoke(
             plan: Plan,
             input: JSONValue,

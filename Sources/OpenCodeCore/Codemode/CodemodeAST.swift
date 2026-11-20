@@ -185,12 +185,12 @@ public enum CodemodeLanguage {
     public static let supportedSyntaxMessage: String =
         "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
 
-    // parity: psychoscript/src/runtime/model.ts#sourceLocation [status=implemented hash=f075447b8fab]
+    // parity: psychoscript/src/runtime/model.ts#sourceLocation [status=implemented hash=2641387568fb]
     public static func sourceLocation(_ node: AstNode) -> SourceLocation {
         node.location ?? SourceLocation(line: 1, column: 1)
     }
 
-    // parity: psychoscript/src/runtime/model.ts#formatLocation [status=implemented hash=f753edfea735]
+    // parity: psychoscript/src/runtime/model.ts#formatLocation [status=implemented hash=5577f87aae9c]
     public static func formatLocation(_ location: SourceLocation?) -> String {
         guard let location else { return "" }
         return " (line \(location.line), col \(location.column))"
@@ -2961,7 +2961,7 @@ public enum CodemodeLanguage {
     // parity: psychoscript/src/opcodes.ts#OpCode [status=implemented hash=5c1abc58d768]
     public typealias OpCode = Int32
 
-    // parity: psychoscript/src/opcodes.ts#Op [status=implemented hash=d04be9d8e1b8]
+    // parity: psychoscript/src/opcodes.ts#Op [status=implemented hash=c1d3f3562f21]
     public enum Op {
         public static let PUSH_UNDEF: OpCode = 0
         public static let PUSH_NULL: OpCode = 1
@@ -3075,7 +3075,7 @@ public enum CodemodeLanguage {
         public static let SET_HOME: OpCode = 98
     }
 
-    // parity: psychoscript/src/opcodes.ts#OpNames [status=implemented hash=9cf37ccf2611]
+    // parity: psychoscript/src/opcodes.ts#OpNames [status=implemented hash=5ff4dbc18498]
     public static let OpNames: [String] = [
         "PUSH_UNDEF", "PUSH_NULL", "PUSH_BOOL", "PUSH_INT", "PUSH_CONST",
         "POP", "POPN", "DUP", "PICK", "ROT",
@@ -3099,7 +3099,7 @@ public enum CodemodeLanguage {
         "", "GET_SUPER", "PUT_SUPER", "SET_HOME",
     ]
 
-    // parity: psychoscript/src/opcodes.ts#BinOp [status=implemented hash=658848825af8]
+    // parity: psychoscript/src/opcodes.ts#BinOp [status=implemented hash=c90ae5c9c248]
     public enum BinOp {
         public static let DIV: Int32 = 0
         public static let MOD: Int32 = 1
@@ -3117,7 +3117,7 @@ public enum CodemodeLanguage {
     // parity: psychoscript/src/opcodes.ts#BinOpSymbols [status=implemented hash=14f46cb71c1f]
     public static let BinOpSymbols: [String] = ["/", "%", "**", "&", "|", "^", "<<", ">>", ">>>", "==", "!="]
 
-    // parity: psychoscript/src/opcodes.ts#UnaryOp [status=implemented hash=1d24a4cb2539]
+    // parity: psychoscript/src/opcodes.ts#UnaryOp [status=implemented hash=df86bd3c251a]
     public enum UnaryOp {
         public static let NEG: Int32 = 0
         public static let PLUS: Int32 = 1
@@ -3129,7 +3129,7 @@ public enum CodemodeLanguage {
     // parity: psychoscript/src/opcodes.ts#UnaryOpSymbols [status=implemented hash=de626f06a1aa]
     public static let UnaryOpSymbols: [String] = ["-", "+", "~", "typeof", "void"]
 
-    // parity: psychoscript/src/opcodes.ts#CondKind [status=implemented hash=9c2fe7b1f7c7]
+    // parity: psychoscript/src/opcodes.ts#CondKind [status=implemented hash=f0184cc79ec3]
     public enum CondKind {
         public static let TRUTHY_KEEP: Int32 = 0
         public static let FALSY_KEEP: Int32 = 1
@@ -3139,14 +3139,14 @@ public enum CodemodeLanguage {
         public static let NULLISH_METHOD: Int32 = 5
     }
 
-    // parity: psychoscript/src/opcodes.ts#PutKind [status=implemented hash=2f4d2dcc427b]
+    // parity: psychoscript/src/opcodes.ts#PutKind [status=implemented hash=8ed6402effcb]
     public enum PutKind {
         public static let ASSIGN: Int32 = 0
         public static let INIT: Int32 = 1
         public static let CONST: Int32 = 2
     }
 
-    // parity: psychoscript/src/opcodes.ts#CheckBaseKind [status=implemented hash=9b2d4503c30c]
+    // parity: psychoscript/src/opcodes.ts#CheckBaseKind [status=implemented hash=ac7860b5449d]
     public enum CheckBaseKind {
         public static let READ: Int32 = 0
         public static let WRITE_PROP: Int32 = 1
@@ -3154,7 +3154,7 @@ public enum CodemodeLanguage {
         public static let DESTRUCTURE: Int32 = 3
     }
 
-    // parity: psychoscript/src/opcodes.ts#IterContext [status=implemented hash=14c7967d510f]
+    // parity: psychoscript/src/opcodes.ts#IterContext [status=implemented hash=0b6949e490aa]
     public enum IterContext {
         public static let FOR_OF: Int32 = 0
         public static let DESTRUCTURE: Int32 = 1
@@ -3165,7 +3165,7 @@ public enum CodemodeLanguage {
         public static let CHECK_OBJECT: Int32 = 6
     }
 
-    // parity: psychoscript/src/opcodes.ts#ImportKind [status=implemented hash=2567db403bce]
+    // parity: psychoscript/src/opcodes.ts#ImportKind [status=implemented hash=9cebc642ecd6]
     public enum ImportKind {
         public static let DEFAULT: Int32 = 0
         public static let NAMESPACE: Int32 = 1
@@ -3174,7 +3174,7 @@ public enum CodemodeLanguage {
         public static let DYNAMIC: Int32 = 4
     }
 
-    // parity: psychoscript/src/opcodes.ts#CodeFlags [status=implemented hash=79bd197d305d]
+    // parity: psychoscript/src/opcodes.ts#CodeFlags [status=implemented hash=142f1ad562ec]
     public enum CodeFlags {
         public static let ARROW: Int = 1 << 0
         public static let ASYNC: Int = 1 << 1
@@ -3446,7 +3446,7 @@ public enum CodemodeLanguage {
         )
     }
 
-    // parity: psychoscript/src/code.ts#codeFromJson [status=implemented hash=efe0a72be173]
+    // parity: psychoscript/src/code.ts#codeFromJson [status=implemented hash=b1149631888c]
     public static func codeFromJson(_ data: CodeJson, sourceObj: Source) -> Code {
         Code(
             source: data.source,
@@ -3908,7 +3908,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/compiler/scope.ts#ResolvedRef [status=implemented hash=1d39cfd0c2ff]
+    // parity: psychoscript/src/compiler/scope.ts#ResolvedRef [status=implemented hash=b398ad8b0c7d]
     public enum ResolvedRef: Equatable, Sendable {
         case local(Decl)
         case upval(upvalIndex: Int, decl: Decl)
@@ -4462,7 +4462,7 @@ public enum CodemodeLanguage {
 
     // MARK: - Signals (src/language/runtime/signals.ts)
 
-    // parity: psychoscript/src/runtime/signals.ts#Completion [status=implemented hash=d093dc453cd1]
+    // parity: psychoscript/src/runtime/signals.ts#Completion [status=implemented hash=404d0eecd82c]
     public enum Completion: Sendable {
         case ok(Value)
         case error(Error)
@@ -4473,17 +4473,17 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/signals.ts#normal [status=implemented hash=24ad11f9c1ee]
+    // parity: psychoscript/src/runtime/signals.ts#normal [status=implemented hash=3c0022296e16]
     public static func normal(_ value: Value) -> Completion {
         .ok(value)
     }
 
-    // parity: psychoscript/src/runtime/signals.ts#abrupt [status=implemented hash=daa652f750ea]
+    // parity: psychoscript/src/runtime/signals.ts#abrupt [status=implemented hash=4864a3d5338e]
     public static func abrupt(_ error: Error) -> Completion {
         .error(error)
     }
 
-    // parity: psychoscript/src/runtime/signals.ts#PushKind [status=implemented hash=44259b0a6f09]
+    // parity: psychoscript/src/runtime/signals.ts#PushKind [status=implemented hash=87757772466c]
     public enum PushKind: String, Equatable, Hashable, Sendable, Codable {
         case jsonStringify = "JSON.stringify"
         case asyncFromSyncIterator = "AsyncFromSyncIterator"
@@ -4614,7 +4614,7 @@ public enum CodemodeLanguage {
         return nodeCoreModules.contains(head)
     }
 
-    // parity: psychoscript/src/runtime/modules.ts#resolveModule [status=implemented hash=bdfc6475869d]
+    // parity: psychoscript/src/runtime/modules.ts#resolveModule [status=implemented hash=8c45e24369d7]
     public static func resolveModule(
         _ specifier: String,
         global: (String) -> Value,
@@ -5794,7 +5794,7 @@ function replaceWith(matches, rest, callback) {
         }
     }
 
-    // parity: psychoscript/src/prelude/bytecode.ts#saveCodes [status=implemented hash=795e32c362b7]
+    // parity: psychoscript/src/prelude/bytecode.ts#saveCodes [status=implemented hash=8acb41112bf0]
     public static func saveCodes(_ codes: [Code], sourceCode: String) -> SavedCodes {
         SavedCodes(
             version: COMPILER_VERSION,

@@ -430,7 +430,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/write.ts#name [status=implemented hash=6db2bcc94bcb]
         public static let name: String = "write"
 
-        // parity: core/src/tool/plugin/write.ts#Input [status=implemented hash=e8f54ee6219e]
+        // parity: core/src/tool/plugin/write.ts#Input [status=implemented hash=7009b8f3e6e2]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let path: String
             public let content: String
@@ -490,7 +490,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/edit.ts#name [status=implemented hash=b20e3c6061b6]
         public static let name: String = "edit"
 
-        // parity: core/src/tool/plugin/edit.ts#Input [status=implemented hash=303b9858bec0]
+        // parity: core/src/tool/plugin/edit.ts#Input [status=implemented hash=ec673face672]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let path: String
             public let oldString: String
@@ -765,7 +765,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/patch.ts#name [status=implemented hash=8f409e0bcf21]
         public static let name: String = "patch"
 
-        // parity: core/src/tool/plugin/patch.ts#Input [status=implemented hash=48f8c07949ef]
+        // parity: core/src/tool/plugin/patch.ts#Input [status=implemented hash=60946eabb601]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let patchText: String
 
@@ -1026,7 +1026,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/glob.ts#name [status=implemented hash=dc4782538050]
         public static let name: String = "glob"
 
-        // parity: core/src/tool/plugin/glob.ts#Input [status=implemented hash=9310ffc38764]
+        // parity: core/src/tool/plugin/glob.ts#Input [status=implemented hash=f2ba2b1689cb]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let pattern: String
             public let path: String?
@@ -1146,7 +1146,7 @@ extension CoreTool {
         // parity: core/src/tool/plugin/grep.ts#name [status=implemented hash=3a0156dd2d23]
         public static let name: String = "grep"
 
-        // parity: core/src/tool/plugin/grep.ts#Input [status=implemented hash=69b0391a8eaf]
+        // parity: core/src/tool/plugin/grep.ts#Input [status=implemented hash=3cdbcc04052c]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let pattern: String
             public let path: String?
@@ -1362,7 +1362,7 @@ extension CoreTool {
         private static let backgroundInstruction =
             "You will be notified automatically when the command finishes. The notification will include the command's output. Unless the user explicitly asks otherwise, DO NOT poll for completion, even if you need the final result to continue."
 
-        // parity: core/src/tool/plugin/shell.ts#Input [status=implemented hash=e4f6f1f2e95d]
+        // parity: core/src/tool/plugin/shell.ts#Input [status=implemented hash=5f3c2fd0a542]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let command: String
             public let workdir: String?
@@ -1416,7 +1416,7 @@ extension CoreTool {
             )
         }
 
-        // parity: core/src/tool/plugin/shell.ts#reattach [status=adapted hash=8e073f756597]
+        // parity: core/src/tool/plugin/shell.ts#reattach [status=adapted hash=01f929ee0d50]
         public static func reattach(
             shell: any CoreShell.Interface,
             info: ShellSchema.Info,

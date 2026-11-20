@@ -9,7 +9,7 @@ public enum ToolSchema {
     public typealias Metadata = [String: JSONValue]
 
     /// Optional wire encoding of a tool's single required string field.
-    // parity: schema/src/tool.ts#Freeform [status=implemented hash=71cd45b1cb4e]
+    // parity: schema/src/tool.ts#Freeform [status=implemented hash=b0ce838dcd97]
     public enum Freeform: Equatable, Hashable, Sendable, Codable {
         case text
         case regex(pattern: String)
@@ -55,7 +55,7 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#FreeformFormat [status=implemented hash=30e39714ae8e]
+    // parity: schema/src/tool.ts#FreeformFormat [status=implemented hash=eb8edeaa034c]
     public enum FreeformFormat: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case text
         case regex
@@ -168,7 +168,7 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Options [status=implemented hash=e038aa8a25d1]
+    // parity: schema/src/tool.ts#Options [status=implemented hash=fc9ade3d5c96]
     public struct Options: Equatable, Hashable, Sendable, Codable {
         public let namespace: String?
         public let permission: String?
@@ -287,7 +287,7 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Error [status=implemented hash=9ee1b6b168e2]
+    // parity: schema/src/tool.ts#Error [status=implemented hash=8e9f055fe6ec]
     public struct ToolError: Swift.Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "Tool.Error"
         public let message: String
@@ -388,7 +388,7 @@ public enum ToolSchema {
         }
     }
 
-    // parity: schema/src/tool.ts#Content [status=implemented hash=afd804a36e0e]
+    // parity: schema/src/tool.ts#Content [status=implemented hash=6adfa0144357]
     public enum Content: Equatable, Hashable, Sendable, Codable {
         case text(TextContent)
         case file(FileContent)
@@ -497,7 +497,7 @@ public enum ToolSchema {
 // MARK: - src/mcp.ts
 
 public enum McpSchema {
-    // parity: schema/src/mcp.ts#TimeoutConfig [status=implemented hash=0739f0332413]
+    // parity: schema/src/mcp.ts#TimeoutConfig [status=implemented hash=cf1424a461a3]
     public struct TimeoutConfig: Equatable, Hashable, Sendable, Codable {
         public let startup: SchemaPrimitive.PositiveInt?
         public let catalog: SchemaPrimitive.PositiveInt?
@@ -521,7 +521,7 @@ public enum McpSchema {
         case rev20260728 = "2026-07-28"
     }
 
-    // parity: schema/src/mcp.ts#LocalConfig [status=implemented hash=865dbf61d034]
+    // parity: schema/src/mcp.ts#LocalConfig [status=implemented hash=d518171edd28]
     public struct LocalConfig: Equatable, Hashable, Sendable, Codable {
         public let command: [String]
         public let cwd: String?
@@ -591,7 +591,7 @@ public enum McpSchema {
         }
     }
 
-    // parity: schema/src/mcp.ts#OAuthConfig [status=implemented hash=0500872f0dcf]
+    // parity: schema/src/mcp.ts#OAuthConfig [status=implemented hash=e333e0ed3e63]
     public struct OAuthConfig: Equatable, Hashable, Sendable, Codable {
         public let clientID: String?
         public let clientSecret: String?
@@ -677,7 +677,7 @@ public enum McpSchema {
         }
     }
 
-    // parity: schema/src/mcp.ts#RemoteConfig [status=implemented hash=b9cf607a54c2]
+    // parity: schema/src/mcp.ts#RemoteConfig [status=implemented hash=bd7d05a38f04]
     public struct RemoteConfig: Equatable, Hashable, Sendable, Codable {
         public let url: String
         public let headers: [String: String]?
@@ -838,7 +838,7 @@ public enum McpSchema {
         }
     }
 
-    // parity: schema/src/mcp.ts#SubscriptionStatus [status=implemented hash=aea280392d85]
+    // parity: schema/src/mcp.ts#SubscriptionStatus [status=implemented hash=2be7ef66dce6]
     public enum SubscriptionStatus: Equatable, Hashable, Sendable, Codable {
         public struct EndError: Equatable, Hashable, Sendable, Codable {
             public let code: Double
@@ -989,7 +989,7 @@ public enum McpSchema {
         }
     }
 
-    // parity: schema/src/mcp.ts#ResourceContentPart [status=implemented hash=bf770ee94cb6]
+    // parity: schema/src/mcp.ts#ResourceContentPart [status=implemented hash=f68ae94fcdcb]
     public enum ResourceContentPart: Equatable, Hashable, Sendable, Codable {
         case text(uri: String, text: String, mimeType: String? = nil)
         case blob(uri: String, blob: String, mimeType: String? = nil)
@@ -1057,7 +1057,7 @@ public enum McpSchema {
 // MARK: - src/plugin.ts
 
 public enum PluginSchema {
-    // parity: schema/src/plugin.ts#ID [status=implemented hash=16b7d9ad7b4c]
+    // parity: schema/src/plugin.ts#ID [status=implemented hash=b554fe429c65]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1078,7 +1078,7 @@ public enum PluginSchema {
         }
     }
 
-    // parity: schema/src/plugin.ts#Source [status=implemented hash=2eb379a70b43]
+    // parity: schema/src/plugin.ts#Source [status=implemented hash=2bade1f6bc27]
     public enum Source: Equatable, Hashable, Sendable, Codable {
         case builtin
         case package(target: String, version: String? = nil, outdated: Bool? = nil, updating: Bool? = nil)
@@ -1139,7 +1139,7 @@ public enum PluginSchema {
         }
     }
 
-    // parity: schema/src/plugin.ts#Features [status=implemented hash=2ea330317692]
+    // parity: schema/src/plugin.ts#Features [status=implemented hash=a618d05301e2]
     public struct Features: Equatable, Hashable, Sendable, Codable {
         public let server: Bool?
         public let tui: Bool?
@@ -1190,7 +1190,7 @@ public enum PluginSchema {
         }
     }
 
-    // parity: schema/src/plugin.ts#State [status=implemented hash=9e7e743e2467]
+    // parity: schema/src/plugin.ts#State [status=implemented hash=5aa4a3a9b0a9]
     public enum State: Equatable, Hashable, Sendable, Codable {
         case active
         case failed(error: String, ref: String? = nil)
@@ -1258,7 +1258,7 @@ public enum PluginSchema {
 // MARK: - src/skill.ts
 
 public enum SkillSchema {
-    // parity: schema/src/skill.ts#ID [status=implemented hash=1862a25c20dc]
+    // parity: schema/src/skill.ts#ID [status=implemented hash=4996eedbc6af]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1279,7 +1279,7 @@ public enum SkillSchema {
         }
     }
 
-    // parity: schema/src/skill.ts#Name [status=implemented hash=94708410556c]
+    // parity: schema/src/skill.ts#Name [status=implemented hash=07e23e273106]
     public struct Name: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1480,7 +1480,7 @@ public enum SkillSchema {
 
 public enum InstructionSchema {
     /// Namespaced instruction key matching `^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._/-]*$`.
-    // parity: schema/src/instruction.ts#Key [status=implemented hash=d05d05f10975]
+    // parity: schema/src/instruction.ts#Key [status=implemented hash=b049539b16dc]
     public struct Key: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1517,7 +1517,7 @@ public enum InstructionSchema {
     }
 
     /// Lowercase SHA-256 hex digest matching `^[a-f0-9]{64}$`.
-    // parity: schema/src/instruction.ts#Hash [status=implemented hash=03877f60fa2e]
+    // parity: schema/src/instruction.ts#Hash [status=implemented hash=962e9c1cb57f]
     public struct Hash: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1631,7 +1631,7 @@ public enum InstructionSchema {
 
 public enum InstructionEntrySchema {
     /// Slash-free client-facing key matching `^[a-z0-9][a-z0-9._-]*$`.
-    // parity: schema/src/instruction-entry.ts#Key [status=implemented hash=a58e73b507b9]
+    // parity: schema/src/instruction-entry.ts#Key [status=implemented hash=d13ec758389e]
     public struct Key: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1667,7 +1667,7 @@ public enum InstructionEntrySchema {
         }
     }
 
-    // parity: schema/src/instruction-entry.ts#Info [status=implemented hash=c746782b9ada]
+    // parity: schema/src/instruction-entry.ts#Info [status=implemented hash=88b58f16ebe8]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let key: Key
         public let value: JSONValue
@@ -1690,13 +1690,13 @@ public enum InstructionEntrySchema {
         }
     }
 
-    // parity: schema/src/instruction-entry.ts#Snapshot [status=implemented hash=647fc74d0dcd]
+    // parity: schema/src/instruction-entry.ts#Snapshot [status=implemented hash=d0d6837d224b]
     public typealias Snapshot = [SnapshotEntry]
 
     // parity: schema/src/instruction-entry.ts#MaxValueBytes [status=implemented hash=fab379cc07f6]
     public static let maxValueBytes: Int = 256 * 1024
 
-    // parity: schema/src/instruction-entry.ts#ValueTooLargeError [status=implemented hash=823aa4c1844a]
+    // parity: schema/src/instruction-entry.ts#ValueTooLargeError [status=implemented hash=1a872136be3b]
     public struct ValueTooLargeError: Swift.Error, Equatable, Hashable, Sendable, Codable {
         public static let tag = "InstructionEntryValueTooLargeError"
         public static let httpApiStatus = 413
@@ -1741,7 +1741,7 @@ public enum InstructionEntrySchema {
 // MARK: - src/permission.ts
 
 public enum PermissionSchema {
-    // parity: schema/src/permission.ts#ID [status=implemented hash=65ced5331a1b]
+    // parity: schema/src/permission.ts#ID [status=implemented hash=7a07181d4eb0]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1784,7 +1784,7 @@ public enum PermissionSchema {
         }
     }
 
-    // parity: schema/src/permission.ts#Source [status=implemented hash=bc9fc59a445e]
+    // parity: schema/src/permission.ts#Source [status=implemented hash=5b881e45e5be]
     public enum Source: Equatable, Hashable, Sendable, Codable {
         case tool(messageID: String, id: String)
 
@@ -1813,7 +1813,7 @@ public enum PermissionSchema {
         }
     }
 
-    // parity: schema/src/permission.ts#Request [status=implemented hash=d72850e01c4e]
+    // parity: schema/src/permission.ts#Request [status=implemented hash=118023628c57]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let sessionID: SessionID
@@ -1845,7 +1845,7 @@ public enum PermissionSchema {
         }
     }
 
-    // parity: schema/src/permission.ts#Reply [status=implemented hash=aad11968996a]
+    // parity: schema/src/permission.ts#Reply [status=implemented hash=55e2bda1b939]
     public enum Reply: String, Equatable, Hashable, Sendable, Codable {
         case once
         case always
@@ -1871,7 +1871,7 @@ public enum PermissionSchema {
         public static let definitions: [SchemaPrimitive.EventDescriptor] = [asked, replied]
     }
 
-    // parity: schema/src/permission.ts#Effect [status=implemented hash=7ae9317e7c25]
+    // parity: schema/src/permission.ts#Effect [status=implemented hash=0466ce4d785e]
     public enum Effect: String, Equatable, Hashable, Sendable, Codable {
         case allow
         case deny
@@ -1891,14 +1891,14 @@ public enum PermissionSchema {
         }
     }
 
-    // parity: schema/src/permission.ts#Ruleset [status=implemented hash=3ae5a45f8f97]
+    // parity: schema/src/permission.ts#Ruleset [status=implemented hash=e4feba8a4bae]
     public typealias Ruleset = [Rule]
 }
 
 // MARK: - src/permission-saved.ts
 
 public enum PermissionSavedSchema {
-    // parity: schema/src/permission-saved.ts#ID [status=implemented hash=e4d00cb709d9]
+    // parity: schema/src/permission-saved.ts#ID [status=implemented hash=447fc0674566]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -1923,7 +1923,7 @@ public enum PermissionSavedSchema {
         }
     }
 
-    // parity: schema/src/permission-saved.ts#Info [status=implemented hash=def3bbf3aa19]
+    // parity: schema/src/permission-saved.ts#Info [status=implemented hash=774c6dec45d4]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public struct Time: Equatable, Hashable, Sendable, Codable {
             public let created: SchemaPrimitive.DateTimeUtcFromMillis
@@ -1957,7 +1957,7 @@ public enum PermissionSavedSchema {
 // MARK: - src/websearch.ts
 
 public enum WebSearchSchema {
-    // parity: schema/src/websearch.ts#ID [status=implemented hash=77486bfc1a2a]
+    // parity: schema/src/websearch.ts#ID [status=implemented hash=818d028f5863]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2041,7 +2041,7 @@ public enum WebSearchSchema {
         }
     }
 
-    // parity: schema/src/websearch.ts#Response [status=implemented hash=e37142b5c059]
+    // parity: schema/src/websearch.ts#Response [status=implemented hash=b53799f6e2de]
     public struct Response: Equatable, Hashable, Sendable, Codable {
         public let providerID: ID
         public let results: [Result]
@@ -2062,7 +2062,7 @@ public enum WebSearchSchema {
 // MARK: - src/artifact.ts
 
 public enum ArtifactSchema {
-    // parity: schema/src/artifact.ts#ID [status=implemented hash=543b60d757e3]
+    // parity: schema/src/artifact.ts#ID [status=implemented hash=a23710a2ae6e]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2100,7 +2100,7 @@ public enum ArtifactSchema {
         }
     }
 
-    // parity: schema/src/artifact.ts#ProviderID [status=implemented hash=a5b5216d0463]
+    // parity: schema/src/artifact.ts#ProviderID [status=implemented hash=b9a32b2a7fea]
     public struct ProviderID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2137,7 +2137,7 @@ public enum ArtifactSchema {
         }
     }
 
-    // parity: schema/src/artifact.ts#Capability [status=implemented hash=f8ec3c80061f]
+    // parity: schema/src/artifact.ts#Capability [status=implemented hash=9ef8e9fef146]
     public enum Capability: String, Equatable, Hashable, Sendable, Codable {
         case `static`
         case serverCode = "server-code"
@@ -2282,7 +2282,7 @@ public enum ArtifactSchema {
 // MARK: - src/form.ts
 
 public enum FormSchema {
-    // parity: schema/src/form.ts#ID [status=implemented hash=2e73655afd9d]
+    // parity: schema/src/form.ts#ID [status=implemented hash=527dbcbc381d]
     public struct ID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
         public let rawValue: String
 
@@ -2325,10 +2325,10 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Metadata [status=implemented hash=2e45065cc1c8]
+    // parity: schema/src/form.ts#Metadata [status=implemented hash=274225d72d47]
     public typealias Metadata = [String: JSONValue]
 
-    // parity: schema/src/form.ts#Option [status=implemented hash=28fc62b59cd4]
+    // parity: schema/src/form.ts#Option [status=implemented hash=69d136accddc]
     public struct Option: Equatable, Hashable, Sendable, Codable {
         public let value: String
         public let label: String
@@ -2341,7 +2341,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#When [status=implemented hash=33eed0dddd7a]
+    // parity: schema/src/form.ts#When [status=implemented hash=468df053b4e1]
     public struct When: Equatable, Hashable, Sendable, Codable {
         public enum Operator: String, Equatable, Hashable, Sendable, Codable {
             case eq
@@ -2390,7 +2390,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#StringField [status=implemented hash=df0e2fc8b9e0]
+    // parity: schema/src/form.ts#StringField [status=implemented hash=0c2cbee3174f]
     public struct StringField: Equatable, Hashable, Sendable, Codable {
         public enum Format: String, Equatable, Hashable, Sendable, Codable {
             case email
@@ -2503,7 +2503,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#NumberField [status=implemented hash=d022a81cc8ec]
+    // parity: schema/src/form.ts#NumberField [status=implemented hash=6a98b6c27be6]
     public struct NumberField: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let title: String?
@@ -2579,7 +2579,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#IntegerField [status=implemented hash=8fa722f03b0a]
+    // parity: schema/src/form.ts#IntegerField [status=implemented hash=92aeda781004]
     public struct IntegerField: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let title: String?
@@ -2655,7 +2655,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#BooleanField [status=implemented hash=75c269302acb]
+    // parity: schema/src/form.ts#BooleanField [status=implemented hash=74f7dcd8aa73]
     public struct BooleanField: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let title: String?
@@ -2719,7 +2719,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#MultiselectField [status=implemented hash=2319ff6a5ed3]
+    // parity: schema/src/form.ts#MultiselectField [status=implemented hash=e6abd030150b]
     public struct MultiselectField: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let title: String?
@@ -2807,7 +2807,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#ExternalField [status=implemented hash=eabbdc209673]
+    // parity: schema/src/form.ts#ExternalField [status=implemented hash=d9d55fa19688]
     public struct ExternalField: Equatable, Hashable, Sendable, Codable {
         public let key: String
         public let url: String
@@ -2848,7 +2848,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Field [status=implemented hash=86e54ee8962a]
+    // parity: schema/src/form.ts#Field [status=implemented hash=d90edb2acf26]
     public enum Field: Equatable, Hashable, Sendable, Codable {
         case string(StringField)
         case number(NumberField)
@@ -2899,7 +2899,7 @@ public enum FormSchema {
     }
 
     /// Non-empty list of form fields matching `Schema.NonEmptyArray(Field)`.
-    // parity: schema/src/form.ts#Fields [status=implemented hash=9dd5bdf5cdd9]
+    // parity: schema/src/form.ts#Fields [status=implemented hash=11bdfb9fafcd]
     public struct Fields: Equatable, Hashable, Sendable, Codable, RandomAccessCollection {
         public let elements: [Field]
 
@@ -2934,7 +2934,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Info [status=implemented hash=929350716188]
+    // parity: schema/src/form.ts#Info [status=implemented hash=86e88b75a684]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let sessionID: String
@@ -2951,7 +2951,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Value [status=implemented hash=55bcea1be62a]
+    // parity: schema/src/form.ts#Value [status=implemented hash=3c61399f0cc7]
     public enum Value: Equatable, Hashable, Sendable, Codable {
         case string(String)
         case number(Double)
@@ -3003,10 +3003,10 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Answer [status=implemented hash=2d3b9049817f]
+    // parity: schema/src/form.ts#Answer [status=implemented hash=ea87ec659a3d]
     public typealias Answer = [String: Value]
 
-    // parity: schema/src/form.ts#State [status=implemented hash=3a600c27b0b0]
+    // parity: schema/src/form.ts#State [status=implemented hash=2b2cc8e3af1f]
     public enum State: Equatable, Hashable, Sendable, Codable {
         case pending
         case answered(answer: Answer)
@@ -3052,7 +3052,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Detail [status=implemented hash=6fe1129c8cf4]
+    // parity: schema/src/form.ts#Detail [status=implemented hash=f379795d3319]
     public struct Detail: Equatable, Hashable, Sendable, Codable {
         public let id: ID
         public let sessionID: String
@@ -3078,7 +3078,7 @@ public enum FormSchema {
         }
     }
 
-    // parity: schema/src/form.ts#Reply [status=implemented hash=a40e92795082]
+    // parity: schema/src/form.ts#Reply [status=implemented hash=5e092215cebb]
     public struct Reply: Equatable, Hashable, Sendable, Codable {
         public let answer: Answer
 
@@ -3243,10 +3243,10 @@ public enum RpcSchema {
         return definition
     }
 
-    // parity: schema/src/rpc.ts#Input [status=adapted hash=2c43f2d65946]
+    // parity: schema/src/rpc.ts#Input [status=adapted hash=3c19a1ac7e39]
     public typealias Input<T> = T
 
-    // parity: schema/src/rpc.ts#Output [status=adapted hash=451c7ceab72d]
+    // parity: schema/src/rpc.ts#Output [status=adapted hash=7963947ad03f]
     public typealias Output<T> = T
 
     // parity: schema/src/rpc.ts#HandlerOutput [status=adapted hash=319bc9cbd24e]
@@ -3273,7 +3273,7 @@ public enum RpcSchema {
         case `internal` = "rpc.internal"
     }
 
-    // parity: schema/src/rpc.ts#SystemError [status=implemented hash=8b88c17c9139]
+    // parity: schema/src/rpc.ts#SystemError [status=implemented hash=f70d3c09a345]
     public struct SystemError: Swift.Error, Equatable, Hashable, Sendable, Codable {
         public let type: SystemErrorCode
         public let message: String
@@ -3284,10 +3284,10 @@ public enum RpcSchema {
         }
     }
 
-    // parity: schema/src/rpc.ts#ErrorName [status=adapted hash=a367d9425873]
+    // parity: schema/src/rpc.ts#ErrorName [status=adapted hash=6948f18d0352]
     public typealias ErrorName = String
 
-    // parity: schema/src/rpc.ts#HandlerErrorFor [status=adapted hash=1e4459fc29d4]
+    // parity: schema/src/rpc.ts#HandlerErrorFor [status=adapted hash=52995e5888a3]
     public struct HandlerErrorFor<Data: Equatable & Hashable & Sendable & Codable>: Swift.Error, Equatable, Hashable, Sendable, Codable {
         public let type: ErrorName
         public let message: String
@@ -3300,16 +3300,16 @@ public enum RpcSchema {
         }
     }
 
-    // parity: schema/src/rpc.ts#HandlerError [status=adapted hash=bb682c63d0e2]
+    // parity: schema/src/rpc.ts#HandlerError [status=adapted hash=bddde09de14b]
     public typealias HandlerError = HandlerErrorFor<JSONValue>
 
-    // parity: schema/src/rpc.ts#MethodErrorFor [status=adapted hash=2b9f613a6951]
+    // parity: schema/src/rpc.ts#MethodErrorFor [status=adapted hash=2fb86fcedeba]
     public typealias MethodErrorFor<Data: Equatable & Hashable & Sendable & Codable> = Failure<Data>
 
-    // parity: schema/src/rpc.ts#MethodError [status=adapted hash=be00615258f1]
+    // parity: schema/src/rpc.ts#MethodError [status=adapted hash=ca74fa55cb59]
     public typealias MethodError = Failure<JSONValue>
 
-    // parity: schema/src/rpc.ts#ErrorArguments [status=adapted hash=271c06bf91bf]
+    // parity: schema/src/rpc.ts#ErrorArguments [status=adapted hash=cf08224804c6]
     public struct ErrorArguments<Data: Equatable & Hashable & Sendable & Codable>: Equatable, Hashable, Sendable {
         public let type: ErrorName
         public let message: String
@@ -3326,13 +3326,13 @@ public enum RpcSchema {
     public typealias ErrorFactory<Data: Equatable & Hashable & Sendable & Codable> =
         @Sendable (ErrorName, String, Data?) -> HandlerErrorFor<Data>
 
-    // parity: schema/src/rpc.ts#EventInputData [status=adapted hash=8d4b6e8bd976]
+    // parity: schema/src/rpc.ts#EventInputData [status=adapted hash=3e3e4ee6fef9]
     public typealias EventInputData = [String: JSONValue]
 
-    // parity: schema/src/rpc.ts#EventData [status=adapted hash=97e9a94e0a27]
+    // parity: schema/src/rpc.ts#EventData [status=adapted hash=31f7f483cc05]
     public typealias EventData = [String: JSONValue]
 
-    // parity: schema/src/rpc.ts#EventInput [status=adapted hash=a0537ce24799]
+    // parity: schema/src/rpc.ts#EventInput [status=adapted hash=cc1fb1d63420]
     public struct EventInput: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let data: EventInputData
@@ -3343,7 +3343,7 @@ public enum RpcSchema {
         }
     }
 
-    // parity: schema/src/rpc.ts#EventPayload [status=implemented hash=5340b0c3af7f]
+    // parity: schema/src/rpc.ts#EventPayload [status=implemented hash=2ae73169af88]
     public struct EventPayload: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let type: String

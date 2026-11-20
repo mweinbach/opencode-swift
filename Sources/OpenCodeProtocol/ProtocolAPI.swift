@@ -1,7 +1,7 @@
 import OpenCodeSchema
 
 /// Composed HTTP API contract matching `packages/protocol/src/api.ts#Api`.
-// parity: protocol/src/api.ts#Api [status=implemented hash=09a60190f670]
+// parity: protocol/src/api.ts#Api [status=implemented hash=fa1e3141881d]
 public struct ProtocolApi: Equatable, Hashable, Sendable, Codable {
     public let identifier: String
     public let title: String
@@ -117,7 +117,7 @@ private func makeApiFromGroup(
 
 /// Composes the full OpenCode HTTP API contract with custom event definitions and injected middleware descriptors.
 /// Protocol owns middleware placement, while Server injects concrete keys so Core service identities stay downstream.
-// parity: protocol/src/api.ts#makeApi [status=implemented hash=41a6a7bb813b]
+// parity: protocol/src/api.ts#makeApi [status=implemented hash=9767cbefeb43]
 public func makeApi(
     definitions: [String],
     locationMiddleware: MiddlewareDescriptor,
@@ -133,7 +133,7 @@ public func makeApi(
 }
 
 /// Composes the full OpenCode HTTP API contract using the default `EventGroup` (`EventManifest.ServerDefinitions`).
-// parity: protocol/src/api.ts#makeDefaultApi [status=implemented hash=f835f3e348a5]
+// parity: protocol/src/api.ts#makeDefaultApi [status=implemented hash=94c9a7f6658f]
 public func makeDefaultApi(
     locationMiddleware: MiddlewareDescriptor,
     formLocationMiddleware: MiddlewareDescriptor,

@@ -65,7 +65,7 @@ public func isTransientError(_ error: (any Error)?, depth: Int = 0) -> Bool {
 }
 
 /// Retries an async operation with exponential backoff matching `util/src/retry.ts`.
-// parity: util/src/retry.ts#retry [status=implemented hash=90375e6855b4]
+// parity: util/src/retry.ts#retry [status=implemented hash=11eece25901e]
 public func retry<T: Sendable>(
     options: RetryOptions = RetryOptions(),
     sleep: (@Sendable (Int) async throws -> Void)? = nil,

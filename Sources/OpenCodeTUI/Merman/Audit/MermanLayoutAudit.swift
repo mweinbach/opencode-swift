@@ -53,7 +53,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/test/diagram.ts#expectDiagram [status=implemented hash=386e9bec1432]
+    // parity: merman/src/test/diagram.ts#expectDiagram [status=implemented hash=5eedf33f2141]
     public static func expectDiagram(_ value: String) -> DiagramExpectation {
         DiagramExpectation(value: value)
     }

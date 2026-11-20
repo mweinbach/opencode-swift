@@ -56,7 +56,7 @@ public enum CoreBus {
     }
 
     /// Fatal validation or replay divergence error on durable event operations.
-    // parity: core/src/bus.ts#InvalidDurableEventError [status=implemented hash=237faa163886]
+    // parity: core/src/bus.ts#InvalidDurableEventError [status=implemented hash=dd1aceecf4b5]
     public struct InvalidDurableEventError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Bus.InvalidDurableEvent"
         public let type: String
@@ -124,7 +124,7 @@ public enum CoreBus {
     }
 
     /// Single durable event input for atomic batch publication via `publishAll`.
-    // parity: core/src/bus.ts#PublishInput [status=implemented hash=93070d0f4e55]
+    // parity: core/src/bus.ts#PublishInput [status=implemented hash=e818663b9ca8]
     public struct PublishInput: Sendable {
         public let definition: EventSchema.Definition
         public let data: JSONValue
@@ -165,7 +165,7 @@ public enum CoreBus {
     }
 
     /// Payload type emitted by a live subscription.
-    // parity: core/src/bus.ts#SubscribePayload [status=implemented hash=87068f73804f]
+    // parity: core/src/bus.ts#SubscribePayload [status=implemented hash=f93deaf043b3]
     public typealias SubscribePayload = AnyEvent
 
     /// Subscription factory interface (`Bus.Subscribe`).
@@ -216,7 +216,7 @@ public enum CoreBus {
     }
 
     /// Reads the latest durable sequence for `aggregateID` (or `-1` if no sequence row exists).
-    // parity: core/src/bus.ts#latestSequence [status=implemented hash=87d6abdec288]
+    // parity: core/src/bus.ts#latestSequence [status=implemented hash=3d1293366748]
     public static func latestSequence(db: any SQLiteDatabase, aggregateID: String) throws -> Int64 {
         let row = try db.queryOne(
             "SELECT `seq` FROM `event_sequence` WHERE `aggregate_id` = ?",
@@ -226,7 +226,7 @@ public enum CoreBus {
     }
 
     /// Reserves an inherited sequence watermark on `event_sequence` (`seq = max(seq, reserved)`).
-    // parity: core/src/bus.ts#reserveSequence [status=implemented hash=4446494c7147]
+    // parity: core/src/bus.ts#reserveSequence [status=implemented hash=f357a239d837]
     public static func reserveSequence(db: any SQLiteDatabase, aggregateID: String, seq: Int64) throws {
         _ = try db.execute(
             """
@@ -1216,7 +1216,7 @@ public enum CoreEventLogger {
         "config.updated",
     ]
 
-    // parity: core/src/event-logger.ts#layer [status=implemented hash=3c07d53eb9ee]
+    // parity: core/src/event-logger.ts#layer [status=implemented hash=e1f73c01aa2e]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, scope in
         guard let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self) else {
             return LayerNode.Output()
@@ -1237,7 +1237,7 @@ public enum CoreEventLogger {
         return LayerNode.Output()
     }
 
-    // parity: core/src/event-logger.ts#node [status=implemented hash=fa5c2a2d9ad4]
+    // parity: core/src/event-logger.ts#node [status=implemented hash=0b47235bd880]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         "event-logger",
         layer,

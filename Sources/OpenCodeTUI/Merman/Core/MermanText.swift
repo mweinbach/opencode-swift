@@ -107,7 +107,7 @@ extension Merman {
         value.map { String($0) }
     }
 
-    // parity: merman/src/core/text.ts#measureDiagramTextBox [status=implemented hash=ab5d74f626ce]
+    // parity: merman/src/core/text.ts#measureDiagramTextBox [status=implemented hash=b3a2ef828461]
     public static func measureDiagramTextBox(
         _ value: String,
         paddingX: Int = 0,

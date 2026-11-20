@@ -13,7 +13,7 @@ import OpenCodeUtil
 // MARK: - 1. Migration Handler (server/src/handlers/migration.ts)
 
 /// Handlers for `server.migration` (`GET /api/experimental/migration/v1`).
-// parity: server/src/handlers/migration.ts#MigrationHandler [status=implemented hash=21daefbd1be2]
+// parity: server/src/handlers/migration.ts#MigrationHandler [status=implemented hash=cfef5574eaa5]
 public let MigrationHandler = ServerHandlerGroup(
     groupIdentifier: "server.migration",
     routes: [
@@ -49,7 +49,7 @@ public let MigrationHandler = ServerHandlerGroup(
 
 /// Handlers for `server.model` (`GET /api/model`, `GET /api/model/default`).
 /// Never waits for async plugin loading; returns currently available models immediately.
-// parity: server/src/handlers/model.ts#ModelHandler [status=implemented hash=64e8dd97ae1d]
+// parity: server/src/handlers/model.ts#ModelHandler [status=implemented hash=03928556aebd]
 public let ModelHandler = ServerHandlerGroup(
     groupIdentifier: "server.model",
     routes: [
@@ -96,7 +96,7 @@ public let ModelHandler = ServerHandlerGroup(
 // MARK: - 3. Permission Handler (server/src/handlers/permission.ts)
 
 /// Handlers for `server.permission` (location pending requests, session permissions, and saved permissions).
-// parity: server/src/handlers/permission.ts#PermissionHandler [status=implemented hash=179da1ff6a70]
+// parity: server/src/handlers/permission.ts#PermissionHandler [status=implemented hash=fe5f143a6a01]
 public let PermissionHandler = ServerHandlerGroup(
     groupIdentifier: "server.permission",
     routes: [
@@ -291,7 +291,7 @@ public enum InboundSocketMessage: Equatable, Sendable {
 }
 
 /// Runs a single-writer outbound queue raced against inbound socket reads, guaranteeing detach on every exit.
-// parity: server/src/handlers/pty-socket.ts#runPtySocket [status=implemented hash=dbccb42de211]
+// parity: server/src/handlers/pty-socket.ts#runPtySocket [status=implemented hash=49c4c36fa9da]
 public func runPtySocket(
     socket: any ServerWebSocketConnection,
     outbox: AsyncStream<Outbound>,
@@ -337,7 +337,7 @@ public func runPtySocket(
 }
 
 /// Retains a Location while a WebSocket is open and closes the socket with code `1012` if the Location shuts down.
-// parity: server/src/handlers/pty-socket.ts#holdLocation [status=implemented hash=9dad2eb91690]
+// parity: server/src/handlers/pty-socket.ts#holdLocation [status=implemented hash=4b14b3ba7e29]
 public let holdLocation: @Sendable (
     CoreLocation.Lifecycle.Service,
     AsyncStream<Outbound>.Continuation
@@ -356,7 +356,7 @@ public let holdLocation: @Sendable (
 // MARK: - 5. Experimental & Persistent PTY Group Handler (server/src/handlers/persistent-pty.ts)
 
 /// Handlers for `server.experimental` composing media, blob, job, artifacts, automation, and persistentPty routes.
-// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=51d38380c696]
+// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=011631c57760]
 public let PersistentPtyHandler: ServerHandlerGroup = {
     let artifact = makeArtifact()
     let job = makeJob()
@@ -727,7 +727,7 @@ public let PersistentPtyHandler: ServerHandlerGroup = {
 
 /// Handlers for `server.plugin` (`list`, `gui`, `check`, `update`).
 /// CRITICAL INVARIANT: Never waits for async plugin loading (`awaitActivation` is NEVER called).
-// parity: server/src/handlers/plugin.ts#PluginHandler [status=implemented hash=1241d26fc861]
+// parity: server/src/handlers/plugin.ts#PluginHandler [status=implemented hash=09a6699d5d7b]
 public let PluginHandler = ServerHandlerGroup(
     groupIdentifier: "server.plugin",
     routes: [
@@ -874,7 +874,7 @@ public let PluginHandler = ServerHandlerGroup(
 // MARK: - 7. Project Handler (server/src/handlers/project.ts)
 
 /// Handlers for `server.project` (`GET /api/project`, `PATCH /api/project/:projectID`).
-// parity: server/src/handlers/project.ts#ProjectHandler [status=implemented hash=97412101e000]
+// parity: server/src/handlers/project.ts#ProjectHandler [status=implemented hash=c61971fd1249]
 public let ProjectHandler = ServerHandlerGroup(
     groupIdentifier: "server.project",
     routes: [
@@ -925,7 +925,7 @@ public let ProjectHandler = ServerHandlerGroup(
 
 /// Handlers for `server.provider` (`GET /api/provider`, `GET /api/provider/:providerID`).
 /// Never waits for async plugin loading; answers with currently registered providers immediately.
-// parity: server/src/handlers/provider.ts#ProviderHandler [status=implemented hash=a524e2c4ea46]
+// parity: server/src/handlers/provider.ts#ProviderHandler [status=implemented hash=4c28000b5e57]
 public let ProviderHandler = ServerHandlerGroup(
     groupIdentifier: "server.provider",
     routes: [
@@ -960,7 +960,7 @@ public let ProviderHandler = ServerHandlerGroup(
 // MARK: - 9. PTY Handler (server/src/handlers/pty.ts)
 
 /// Handlers for `server.pty` (list, create, get, update, remove, connectToken, connect WebSocket).
-// parity: server/src/handlers/pty.ts#PtyHandler [status=implemented hash=978b39617e0f]
+// parity: server/src/handlers/pty.ts#PtyHandler [status=implemented hash=16fde3d4916a]
 public let PtyHandler = ServerHandlerGroup(
     groupIdentifier: "server.pty",
     routes: [
@@ -1194,7 +1194,7 @@ public let ReferenceHandler = ServerHandlerGroup(
 
 /// Handlers for `server.rpc` (`POST /api/rpc/:rpcID/:method`).
 /// Never waits for async plugin loading; calls currently registered RPC handlers immediately.
-// parity: server/src/handlers/rpc.ts#RpcHandler [status=implemented hash=bd53bd722607]
+// parity: server/src/handlers/rpc.ts#RpcHandler [status=implemented hash=4661ca4fbbe8]
 public let RpcHandler = ServerHandlerGroup(
     groupIdentifier: "server.rpc",
     routes: [
@@ -1231,7 +1231,7 @@ public let RpcHandler = ServerHandlerGroup(
 // MARK: - 12. Server Handler (server/src/handlers/server.ts)
 
 /// Handlers for `server.server` (`GET /api/info`, `POST /api/pair`, `GET /auth/connect/:code`).
-// parity: server/src/handlers/server.ts#ServerHandler [status=implemented hash=4c80ccef29f7]
+// parity: server/src/handlers/server.ts#ServerHandler [status=implemented hash=d694cd8def2c]
 public let ServerHandler = ServerHandlerGroup(
     groupIdentifier: "server.server",
     routes: [
@@ -1301,7 +1301,7 @@ public let ServerHandler = ServerHandlerGroup(
 // MARK: - 13. Session Handler (server/src/handlers/session.ts)
 
 /// Handlers for `server.session` (all 35 session, inbox, revert, transfer, instructions, form, and log routes).
-// parity: server/src/handlers/session.ts#SessionHandler [status=implemented hash=f79bc896c01d]
+// parity: server/src/handlers/session.ts#SessionHandler [status=implemented hash=fca712728fe8]
 public let SessionHandler = ServerHandlerGroup(
     groupIdentifier: "server.session",
     routes: [
@@ -2803,7 +2803,7 @@ private func isValidTimeZoneIdentifier(_ identifier: String) -> Bool {
 // MARK: - 14. Shell Handler (server/src/handlers/shell.ts)
 
 /// Handlers for `server.shell` (`list`, `create`, `get`, `output`, `remove`).
-// parity: server/src/handlers/shell.ts#ShellHandler [status=implemented hash=4a2943e9e0e4]
+// parity: server/src/handlers/shell.ts#ShellHandler [status=implemented hash=e0792e7d2209]
 public let ShellHandler = ServerHandlerGroup(
     groupIdentifier: "server.shell",
     routes: [
@@ -2927,7 +2927,7 @@ public let SkillHandler = ServerHandlerGroup(
 // MARK: - 16. Usage Handler (server/src/handlers/usage.ts)
 
 /// Handlers for `server.usage` (`GET /api/experimental/usage/limits`).
-// parity: server/src/handlers/usage.ts#UsageHandler [status=implemented hash=8d62b15958c6]
+// parity: server/src/handlers/usage.ts#UsageHandler [status=implemented hash=da135e847ce1]
 public let UsageHandler = ServerHandlerGroup(
     groupIdentifier: "server.usage",
     routes: [
@@ -2953,7 +2953,7 @@ public let UsageHandler = ServerHandlerGroup(
 // MARK: - 17. VCS Handler (server/src/handlers/vcs.ts)
 
 /// Handlers for `server.vcs` (`init`, `get`, `base`, `status`, `branch.list`, `diff`).
-// parity: server/src/handlers/vcs.ts#VcsHandler [status=implemented hash=a2e5b9b16ed3]
+// parity: server/src/handlers/vcs.ts#VcsHandler [status=implemented hash=2a99ce07fef1]
 public let VcsHandler = ServerHandlerGroup(
     groupIdentifier: "server.vcs",
     routes: [
@@ -3081,7 +3081,7 @@ public let VcsHandler = ServerHandlerGroup(
 // MARK: - 18. Voice Handler (server/src/handlers/voice.ts)
 
 /// Handlers for `server.voice` (`GET /api/experimental/voice/models`, `POST /api/experimental/voice/session`).
-// parity: server/src/handlers/voice.ts#VoiceHandler [status=implemented hash=23530e2fa260]
+// parity: server/src/handlers/voice.ts#VoiceHandler [status=implemented hash=52d0823cb1b8]
 public let VoiceHandler = ServerHandlerGroup(
     groupIdentifier: "server.voice",
     routes: [
@@ -3167,7 +3167,7 @@ private func resolveVoiceBaseLocation(_ runtime: ServerAppRuntime) async throws 
 // MARK: - 19. WebSearch Handler (server/src/handlers/websearch.ts)
 
 /// Handlers for `server.websearch` (`GET /api/websearch/provider`, `POST /api/websearch`).
-// parity: server/src/handlers/websearch.ts#WebSearchHandler [status=implemented hash=c5c409e49d3a]
+// parity: server/src/handlers/websearch.ts#WebSearchHandler [status=implemented hash=9cbe51ece627]
 public let WebSearchHandler = ServerHandlerGroup(
     groupIdentifier: "server.websearch",
     routes: [
@@ -3250,7 +3250,7 @@ public let WebSearchHandler = ServerHandlerGroup(
 // MARK: - 20. Worktree Handler (server/src/handlers/worktree.ts)
 
 /// Handlers for `server.worktree` (`list`, `create`, `remove`, `refresh`).
-// parity: server/src/handlers/worktree.ts#WorktreeHandler [status=implemented hash=f7167c4cd6a8]
+// parity: server/src/handlers/worktree.ts#WorktreeHandler [status=implemented hash=568a01e2de8b]
 public let WorktreeHandler = ServerHandlerGroup(
     groupIdentifier: "server.worktree",
     routes: [
@@ -3360,7 +3360,7 @@ private func mapAnyWorktreeError(_ error: any Error) -> any Error {
 // MARK: - 21. Composed Server API & Handlers Registry (server/src/api.ts, server/src/handlers.ts)
 
 /// Server HTTP API contract composed from `OpenCodeProtocol.makeDefaultApi` with concrete server middleware keys.
-// parity: server/src/api.ts#Api [status=implemented hash=08a60495c11c]
+// parity: server/src/api.ts#Api [status=implemented hash=8592775bcdd7]
 public let Api: ProtocolApi = makeDefaultApi(
     locationMiddleware: LocationMiddleware.descriptor,
     formLocationMiddleware: FormLocationMiddleware.descriptor,

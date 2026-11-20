@@ -81,7 +81,7 @@ public enum QR {
     }
 
     /// Renders `text` as an SVG QR Code with 10-unit modules and a quiet zone of `border` modules.
-    // parity: util/src/qr.ts#renderSVG [status=implemented hash=3b2029585703]
+    // parity: util/src/qr.ts#renderSVG [status=implemented hash=47ec7a89a6ea]
     public static func renderSVG(
         _ text: String,
         border: Int = 1,
@@ -102,7 +102,7 @@ public enum QR {
     }
 
     /// Renders `text` as a terminal QR Code using Unicode half-block characters (two rows per line).
-    // parity: util/src/qr.ts#renderUnicodeCompact [status=implemented hash=b4d21a2e4691]
+    // parity: util/src/qr.ts#renderUnicodeCompact [status=implemented hash=268627d8ee12]
     public static func renderUnicodeCompact(_ text: String, border: Int = 1) throws -> String {
         let modules = addBorder(try encode(text), border: border)
         let lineCount = (modules.count + 1) / 2

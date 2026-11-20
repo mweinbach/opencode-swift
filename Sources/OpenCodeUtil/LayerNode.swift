@@ -190,7 +190,7 @@ public enum LayerNode {
     // parity: util/src/effect/layer-node.ts#TagConfig [status=implemented hash=e366ddd6e71c]
     public typealias TagConfig = [String: [String]]
 
-    // parity: util/src/effect/layer-node.ts#TagMaker [status=implemented hash=720df069caa3]
+    // parity: util/src/effect/layer-node.ts#TagMaker [status=implemented hash=d3cbddbc7f3a]
     public typealias TagMaker = @Sendable (String, ExecutableLayer, [Graph]) -> Provider
 
     // parity: util/src/effect/layer-node.ts#Tags [status=implemented hash=9912ce945ee5]
@@ -211,7 +211,7 @@ public enum LayerNode {
         }
     }
 
-    // parity: util/src/effect/layer-node.ts#tags [status=implemented hash=ca2088e658a4]
+    // parity: util/src/effect/layer-node.ts#tags [status=implemented hash=ecd4d6c1127f]
     public static func tags(_ config: TagConfig) -> Tags {
         var map: [String: Tag] = [:]
         for key in config.keys {
@@ -220,7 +220,7 @@ public enum LayerNode {
         return Tags(values: map, allowedDependencies: config)
     }
 
-    // parity: util/src/effect/layer-node.ts#make [status=implemented hash=2717f96c2efd]
+    // parity: util/src/effect/layer-node.ts#make [status=implemented hash=07e39af681a3]
     public static func make(
         name: String,
         layer: ExecutableLayer,
@@ -320,7 +320,7 @@ public enum LayerNode {
     }
 
     /// Resolves replacements, validates acyclicity and bindings, and compiles `root` into an executable graph.
-    // parity: util/src/effect/layer-node.ts#compile [status=implemented hash=a250dd7de616]
+    // parity: util/src/effect/layer-node.ts#compile [status=implemented hash=399d4ae52c74]
     public static func compile(_ root: Graph, options: CompileOptions = CompileOptions()) throws -> CompiledGraph {
         let shared = options.shared
         var replacementMap: [ObjectIdentifier: Node] = [:]

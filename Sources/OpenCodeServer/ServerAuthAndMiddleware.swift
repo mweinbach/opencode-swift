@@ -140,7 +140,7 @@ public enum ContentHeaders {
     private static let textType = "text/plain; charset=utf-8"
 
     /// Safe download headers for raw file bytes.
-    // parity: server/src/content-headers.ts#download [status=implemented hash=e44c01d29c56]
+    // parity: server/src/content-headers.ts#download [status=implemented hash=49fc92dbea41]
     public static func download(path: String? = nil, mime: String) -> [String: String] {
         let safeType = isActiveBrowserMime(mime) ? textType : mime
         let baseName: String
@@ -258,7 +258,7 @@ public struct CorsOptions: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Service tag for `CorsOptions`.
-// parity: server/src/cors.ts#CorsConfig [status=adapted hash=891de45fe954]
+// parity: server/src/cors.ts#CorsConfig [status=adapted hash=43659dd5924d]
 public enum CorsConfig {
     public static let serviceKey = "@opencode/ServerCorsConfig"
     public static let defaultValue: CorsOptions? = nil
@@ -445,7 +445,7 @@ public enum RequestSite {
     }
 
     /// Middleware rejecting disallowed cross-site API requests with `403 ForbiddenError`.
-    // parity: server/src/request-site.ts#middleware [status=implemented hash=74288edd3225]
+    // parity: server/src/request-site.ts#middleware [status=implemented hash=7745b20b638b]
     public static let middleware: @Sendable (CorsOptions?) -> @Sendable (@escaping ServerHTTPHandler) -> ServerHTTPHandler = { options in
         { next in
             { request in
@@ -480,7 +480,7 @@ public let withoutParentSpan: @Sendable (@escaping @Sendable () async throws -> 
 // MARK: - 8. Server Options (server/src/options.ts)
 
 /// Configuration surface for `OpenCodeServer` matching `packages/server/src/options.ts`.
-// parity: server/src/options.ts#ServerOptions [status=implemented hash=f9b84e3cccaa]
+// parity: server/src/options.ts#ServerOptions [status=implemented hash=892c16914cf1]
 public struct ServerOptions: Sendable {
     public struct AppOptions: Equatable, Hashable, Sendable, Codable {
         public let name: String?
@@ -655,7 +655,7 @@ public enum ServerPairing {
         }
     }
 
-    // parity: server/src/pairing.ts#node [status=adapted hash=b5892664844f]
+    // parity: server/src/pairing.ts#node [status=adapted hash=f295b9fcbf23]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service()),
@@ -674,7 +674,7 @@ public enum ServerInfo {
         }
     }
 
-    // parity: server/src/server-info.ts#Service [status=implemented hash=87dbf66fd7c5]
+    // parity: server/src/server-info.ts#Service [status=implemented hash=c833304b62f9]
     public final class Service: Sendable {
         public static let serviceKey = "@opencode/server/ServerInfo"
         public let urls: @Sendable () -> [String]
@@ -692,7 +692,7 @@ public enum ServerInfo {
         }
     }
 
-    // parity: server/src/server-info.ts#layer [status=adapted hash=8506b1fabb71]
+    // parity: server/src/server-info.ts#layer [status=adapted hash=385c519d9100]
     public static func layer(
         urls: @escaping @Sendable () -> [String],
         tmp: String,
@@ -741,7 +741,7 @@ public enum ServerInfo {
 // MARK: - 11. Service Status State Machine (server/src/service-status.ts)
 
 public enum ServiceStatus {
-    // parity: server/src/service-status.ts#State [status=implemented hash=8ffa385ecb84]
+    // parity: server/src/service-status.ts#State [status=implemented hash=8100e16840c1]
     public enum State: String, Equatable, Hashable, Sendable, Codable {
         case starting
         case ready
@@ -787,7 +787,7 @@ public enum ServiceStatus {
         }
     }
 
-    // parity: server/src/service-status.ts#make [status=implemented hash=cc7db241d05f]
+    // parity: server/src/service-status.ts#make [status=implemented hash=157d3f3b154e]
     public static func make(initial: State = .starting) -> Store {
         Store(initial: initial)
     }
@@ -800,7 +800,7 @@ public enum ServiceStatus {
 public typealias LocationServices = ServerLocationBundle
 
 /// Location middleware descriptor (`@opencode/HttpApiLocation`).
-// parity: server/src/location.ts#LocationMiddleware [status=implemented hash=67646ce6ed90]
+// parity: server/src/location.ts#LocationMiddleware [status=implemented hash=cf941f763fcd]
 public final class LocationMiddleware: Sendable {
     public static let id = "@opencode/HttpApiLocation"
     public static let descriptor = MiddlewareDescriptor(
@@ -840,7 +840,7 @@ public func response<A: Equatable & Hashable & Sendable & Codable>(
 }
 
 /// Validates a raw session ID parameter and loads the session info (throwing `InvalidRequestError` or `SessionNotFoundError`).
-// parity: server/src/location.ts#sessionInfo [status=implemented hash=440a874c3fa4]
+// parity: server/src/location.ts#sessionInfo [status=implemented hash=3261f7456ba4]
 public let sessionInfo: @Sendable (any CoreSession.Interface, String) throws -> SessionSchema.Info = { sessions, rawID in
     let id: SessionID
     do {
@@ -873,7 +873,7 @@ public func requestRef(
 }
 
 /// Middleware layer resolving `LocationServices` for an inbound request.
-// parity: server/src/location.ts#layer [status=adapted hash=92d2217fca60]
+// parity: server/src/location.ts#layer [status=adapted hash=70eb607eaf63]
 public let layer: @Sendable (ServerAppRuntime, ServerHTTPRequest) async throws -> LocationServices = { runtime, request in
     let ref = requestRef(request, defaultDirectory: runtime.defaultDirectory)
     return try await locationErrors {
@@ -974,7 +974,7 @@ private func authorizedSessionCookie(
 }
 
 /// Authorization middleware checking route exemptions (pairing connect, ticketed PTY/MCP WebSockets) and auth credentials.
-// parity: server/src/middleware/authorization.ts#authorizationLayer [status=implemented hash=1de24f229529]
+// parity: server/src/middleware/authorization.ts#authorizationLayer [status=implemented hash=c1b59186de32]
 public let authorizationLayer: @Sendable (
     ServerAuth.Info,
     String,
@@ -998,7 +998,7 @@ public let authorizationLayer: @Sendable (
 
 /// Replaces unexpected unhandled server failures with a structured `500 UnknownError` carrying a log reference
 /// (and a human-readable message for SQLite storage failures).
-// parity: server/src/middleware/defect-response.ts#defectResponseLayer [status=implemented hash=b419e766aa0b]
+// parity: server/src/middleware/defect-response.ts#defectResponseLayer [status=implemented hash=24412dbc524c]
 public let defectResponseLayer: @Sendable (any Error, ServerHTTPRequest) -> ServerHTTPResponse = { error, _ in
     if let encoded = ServerErrorResponse.encode(error) {
         return encoded
@@ -1010,7 +1010,7 @@ public let defectResponseLayer: @Sendable (any Error, ServerHTTPRequest) -> Serv
 }
 
 /// Transforms request schema decoding failures into `400 InvalidRequestError` and response encoding failures into `500 UnknownError`.
-// parity: server/src/middleware/schema-error.ts#schemaErrorLayer [status=implemented hash=cb2379ad7528]
+// parity: server/src/middleware/schema-error.ts#schemaErrorLayer [status=implemented hash=45c2bf205752]
 public let schemaErrorLayer: @Sendable (String, String) -> ServerHTTPResponse = { kind, rawReason in
     let limit = 1024
     let reason: String
@@ -1033,7 +1033,7 @@ public let schemaErrorLayer: @Sendable (String, String) -> ServerHTTPResponse = 
 }
 
 /// Form location middleware descriptor (`@opencode/HttpApiFormLocation`), supporting the temporary `sessionID == "global"` MCP elicitation sentinel.
-// parity: server/src/middleware/form-location.ts#FormLocationMiddleware [status=implemented hash=930e5ffd67b1]
+// parity: server/src/middleware/form-location.ts#FormLocationMiddleware [status=implemented hash=cbe65525a16b]
 public final class FormLocationMiddleware: Sendable {
     public static let id = "@opencode/HttpApiFormLocation"
     public static let descriptor = MiddlewareDescriptor(
@@ -1052,7 +1052,7 @@ public enum FormLocationResolution: Sendable {
 }
 
 /// Resolves location services for form routes without booting a cold Location on `session.form.list`.
-// parity: server/src/middleware/form-location.ts#formLocationLayer [status=implemented hash=f0a595214a06]
+// parity: server/src/middleware/form-location.ts#formLocationLayer [status=implemented hash=ea326e11ed0a]
 public let formLocationLayer: @Sendable (
     ServerAppRuntime,
     ServerHTTPRequest,
@@ -1078,7 +1078,7 @@ public let formLocationLayer: @Sendable (
 }
 
 /// Session location middleware descriptor (`@opencode/HttpApiSessionLocation`).
-// parity: server/src/middleware/session-location.ts#SessionLocationMiddleware [status=implemented hash=35d4859b6cfa]
+// parity: server/src/middleware/session-location.ts#SessionLocationMiddleware [status=implemented hash=b729d9b95662]
 public final class SessionLocationMiddleware: Sendable {
     public static let id = "@opencode/HttpApiSessionLocation"
     public static let descriptor = MiddlewareDescriptor(
@@ -1092,7 +1092,7 @@ public final class SessionLocationMiddleware: Sendable {
 }
 
 /// Resolves the Location owning `sessionIDParam` for session-scoped location endpoints.
-// parity: server/src/middleware/session-location.ts#sessionLocationLayer [status=implemented hash=aeb725a85c37]
+// parity: server/src/middleware/session-location.ts#sessionLocationLayer [status=implemented hash=99ef41a50bf9]
 public let sessionLocationLayer: @Sendable (
     ServerAppRuntime,
     String
@@ -1108,7 +1108,7 @@ public let sessionLocationLayer: @Sendable (
 // MARK: - 15. Route Composition (server/src/routes.ts)
 
 /// Creates an authenticated HTTP router backed by `ServerAppRuntime` (`options.password` enables Basic/Bearer/cookie auth).
-// parity: server/src/routes.ts#createRoutes [status=adapted hash=47b755449844]
+// parity: server/src/routes.ts#createRoutes [status=adapted hash=5621bb83e78d]
 public func createRoutes(
     options: ServerOptions = ServerOptions(),
     serviceURLs: @escaping @Sendable () -> [String] = { [] },
@@ -1149,7 +1149,7 @@ public func createRoutes(
 }
 
 /// Creates an unauthenticated embedded HTTP router (for in-process SDK / CLI / tests).
-// parity: server/src/routes.ts#createEmbeddedRoutes [status=adapted hash=81ab9b6ba6f8]
+// parity: server/src/routes.ts#createEmbeddedRoutes [status=adapted hash=60d80f49d2ed]
 public func createEmbeddedRoutes(
     options: ServerOptions = ServerOptions(),
     overrides: [LayerNode.Replacement] = [],
@@ -1250,7 +1250,7 @@ public enum ServerFetch {
 
     /// Eagerly builds the OpenCode server router without binding a TCP listener, forks suspended session recovery,
     /// and returns a web-standard fetch handler wrapped with RequestSite and CORS middlewares.
-    // parity: server/src/fetch.ts#make [status=adapted hash=d8f338cfca11]
+    // parity: server/src/fetch.ts#make [status=adapted hash=e37dc8de285a]
     public static func make(
         options: ServerOptions = ServerOptions(),
         boot: BootOptions = BootOptions()
@@ -1358,7 +1358,7 @@ public enum ServerProcess {
     public typealias ApplicationRun = @Sendable (ServerAppRuntime) async -> Void
 
     /// Starts the real HTTP/1.1 + SSE + WebSocket TCP server process with startup/ready/stopping lifecycle dispatch.
-    // parity: server/src/process.ts#start [status=adapted hash=0c0df8b5813a]
+    // parity: server/src/process.ts#start [status=adapted hash=d786fa4dc2d5]
     public static func start(
         options: ServerOptions,
         lifecycle: (any Lifecycle)? = nil,

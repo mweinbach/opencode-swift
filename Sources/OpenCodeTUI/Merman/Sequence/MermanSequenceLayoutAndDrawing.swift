@@ -83,7 +83,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/sequence/placement.ts#SequenceStepPlacement [status=implemented hash=ba0aa2a17bf1]
+    // parity: merman/src/sequence/placement.ts#SequenceStepPlacement [status=implemented hash=97fe8a758d65]
     public enum SequenceStepPlacement: Equatable, Hashable, Sendable, Codable {
         case note(note: SequenceNote, textLines: [String], textX: Int, textY: Int)
         case fragment(
@@ -579,7 +579,7 @@ extension Merman {
         return adjusted
     }
 
-    // parity: merman/src/sequence/placement.ts#createSequencePlacementPlan [status=implemented hash=eba88bd2e907]
+    // parity: merman/src/sequence/placement.ts#createSequencePlacementPlan [status=implemented hash=4e48c2416ef9]
     public static func createSequencePlacementPlan(
         _ diagram: SequenceDiagram,
         options: SequenceDiagramRenderOptions = SequenceDiagramRenderOptions()
@@ -969,7 +969,7 @@ extension Merman {
         }
     }
 
-    // parity: merman/src/sequence/drawing.ts#drawSequenceDiagramGrid [status=implemented hash=32df9e48f6c5]
+    // parity: merman/src/sequence/drawing.ts#drawSequenceDiagramGrid [status=implemented hash=7ccd93544988]
     public static func drawSequenceDiagramGrid(
         _ diagram: SequenceDiagram,
         options: SequenceDiagramRenderOptions = SequenceDiagramRenderOptions()
@@ -1089,7 +1089,7 @@ extension Merman {
 
     // MARK: - Sequence Diagram (`sequence/diagram.ts`)
 
-    // parity: merman/src/sequence/diagram.ts#renderSequenceDiagram [status=implemented hash=1b35e235f36e]
+    // parity: merman/src/sequence/diagram.ts#renderSequenceDiagram [status=implemented hash=175a995c1602]
     public static func renderSequenceDiagram(
         _ content: String,
         options: SequenceDiagramRenderOptions = SequenceDiagramRenderOptions()

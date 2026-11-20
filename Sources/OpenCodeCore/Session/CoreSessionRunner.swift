@@ -216,7 +216,7 @@ public enum CoreSessionUsage {
         max(0, finite(value ?? 0))
     }
 
-    // parity: core/src/session/usage.ts#tokens [status=implemented hash=2cc73906bf02]
+    // parity: core/src/session/usage.ts#tokens [status=implemented hash=f3860bf76b6e]
     public static func tokens(_ usage: AISchema.Usage?) -> SessionSchema.TokenUsage {
         SessionSchema.TokenUsage(
             input: safe(usage?.nonCachedInputTokens),
@@ -268,7 +268,7 @@ public enum CoreSessionUsage {
         return Recorded(tokens: normalized, cost: finite(cost))
     }
 
-    // parity: core/src/session/usage.ts#add [status=implemented hash=078a2e4faa68]
+    // parity: core/src/session/usage.ts#add [status=implemented hash=c5df8e8ec148]
     public static func add(_ a: Recorded, _ b: Recorded) -> Recorded {
         Recorded(
             tokens: SessionSchema.TokenUsage(
@@ -812,17 +812,17 @@ public enum CoreSessionModelTransport {
         }
     }
 
-    // parity: core/src/session/model-transport.ts#makeLayer [status=adapted hash=c4a002e6bd56]
+    // parity: core/src/session/model-transport.ts#makeLayer [status=adapted hash=a4eff0992869]
     public static func makeLayer(connector: AITransport.WebSocketConnector? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { _, _ in
             LayerNode.Output([Service.serviceKey: Service(connector: connector)])
         }
     }
 
-    // parity: core/src/session/model-transport.ts#layer [status=adapted hash=1fcfe2c0aaca]
+    // parity: core/src/session/model-transport.ts#layer [status=adapted hash=fa4420ebaee3]
     public static let layer: LayerNode.ExecutableLayer = makeLayer()
 
-    // parity: core/src/session/model-transport.ts#node [status=adapted hash=2f8379e76979]
+    // parity: core/src/session/model-transport.ts#node [status=adapted hash=7b21c4bffe93]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         layer,
@@ -834,7 +834,7 @@ public enum CoreSessionModelTransport {
 
 /// Location-scoped model resolution (`packages/core/src/session/runner/model.ts`).
 public enum CoreSessionRunnerModel {
-    // parity: core/src/session/runner/model.ts#ModelNotSelectedError [status=implemented hash=f647dbb4bf58]
+    // parity: core/src/session/runner/model.ts#ModelNotSelectedError [status=implemented hash=33d7c37aae86]
     public struct ModelNotSelectedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionRunnerModel.ModelNotSelectedError"
         public let sessionID: SessionID
@@ -848,7 +848,7 @@ public enum CoreSessionRunnerModel {
         public var description: String { message }
     }
 
-    // parity: core/src/session/runner/model.ts#ModelUnavailableError [status=implemented hash=f30948de079b]
+    // parity: core/src/session/runner/model.ts#ModelUnavailableError [status=implemented hash=2479bf5006b4]
     public struct ModelUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionRunnerModel.ModelUnavailableError"
         public let providerID: String
@@ -919,7 +919,7 @@ public enum CoreSessionRunnerModel {
         case title
     }
 
-    // parity: core/src/session/runner/model.ts#resolved [status=implemented hash=c41ce2798733]
+    // parity: core/src/session/runner/model.ts#resolved [status=implemented hash=072109551988]
     public static func resolved(
         _ model: AISchema.LanguageModel,
         capabilities: ModelSchema.Capabilities = ModelSchema.Capabilities.default(),
@@ -1019,7 +1019,7 @@ public enum CoreSessionRunnerModel {
         }
     }
 
-    // parity: core/src/session/runner/model.ts#node [status=adapted hash=03abcd6c254d]
+    // parity: core/src/session/runner/model.ts#node [status=adapted hash=f7257033c4dd]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { _, _ in
@@ -1204,7 +1204,7 @@ public enum CoreSessionModelRequest {
         return min(requested, max(outputTokenMin, room))
     }
 
-    // parity: core/src/session/model-request.ts#baseTranscript [status=implemented hash=8e9ac58e84a1]
+    // parity: core/src/session/model-request.ts#baseTranscript [status=implemented hash=b672fd421df5]
     public static func baseTranscript(
         agent: AgentProfile,
         model: CoreSessionRunnerModel.Resolved,
@@ -1444,14 +1444,14 @@ public enum CoreSessionModelRequest {
         }
     }
 
-    // parity: core/src/session/model-request.ts#layer [status=adapted hash=851f1901873a]
+    // parity: core/src/session/model-request.ts#layer [status=adapted hash=a574d32085f5]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let transport = deps.get(CoreSessionModelTransport.Service.serviceKey, as: (any CoreSessionModelTransport.Interface).self)
             ?? CoreSessionModelTransport.Service()
         return LayerNode.Output([Service.serviceKey: Service(modelTransport: transport)])
     }
 
-    // parity: core/src/session/model-request.ts#node [status=adapted hash=4763d51ec299]
+    // parity: core/src/session/model-request.ts#node [status=adapted hash=dacf47cbf42f]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         layer,
@@ -1640,7 +1640,7 @@ public enum CoreSessionContext {
 
     /// Tool snapshots are chosen for the selected model (`SessionRunnerModel.select`); the model policy, web search
     /// availability and the `full_codemode` flag live behind the injected `selectTools`.
-    // parity: core/src/session/context.ts#node [status=adapted hash=7e10baf6f065]
+    // parity: core/src/session/context.ts#node [status=adapted hash=162dfb3e4163]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -2441,7 +2441,7 @@ public enum CoreSessionRunnerRetry {
         }
     }
 
-    // parity: core/src/session/runner/retry.ts#policy [status=implemented hash=57777c79182d]
+    // parity: core/src/session/runner/retry.ts#policy [status=implemented hash=f711ec81bf93]
     public static func policy(
         sessionID: SessionID,
         maxAttempts: Int = 5,
@@ -2452,7 +2452,7 @@ public enum CoreSessionRunnerRetry {
         return RetryPolicy(maxAttempts: maxAttempts, baseDelayMs: baseDelayMs, maxDelayMs: maxDelayMs)
     }
 
-    // parity: core/src/session/runner/retry.ts#make [status=implemented hash=b0879aa33197]
+    // parity: core/src/session/runner/retry.ts#make [status=implemented hash=2a659036a988]
     public static func make(
         bus: CoreBus.Service,
         sessionID: SessionID,
@@ -2490,7 +2490,7 @@ public enum CoreSessionRunnerRetry {
 /// Single-step LLM executor: runs one explicit `llm.stream` call, executes local tool calls
 /// concurrently, and persists step/tool events to `CoreBus` (`packages/core/src/session/runner/step.ts`).
 public enum CoreSessionStep {
-    // parity: core/src/session/runner/step.ts#Outcome [status=implemented hash=73b4cb9bb3cf]
+    // parity: core/src/session/runner/step.ts#Outcome [status=implemented hash=3eae5c450574]
     public enum Outcome: Equatable, Sendable {
         case completed(needsContinuation: Bool)
         case retry(error: SessionErrorSchema.Error, decision: CoreSessionRunnerRetry.Decision, freshAssistant: Bool)
@@ -2692,7 +2692,7 @@ public enum CoreSessionStep {
         }
     }
 
-    // parity: core/src/session/runner/step.ts#make [status=implemented hash=31e0161c4471]
+    // parity: core/src/session/runner/step.ts#make [status=implemented hash=3dcc13de793c]
     public static func make(bus: CoreBus.Service, llm: any AIRoute.Interface) -> Runner {
         Runner(bus: bus, llm: llm)
     }
@@ -2707,7 +2707,7 @@ public enum CoreSessionStep {
 /// - Promotes pending inbox items according to steer/queue/control ordering rules.
 /// - Resets agent step allowance once per promoted user-input batch.
 public enum CoreSessionRunner {
-    // parity: core/src/session/runner/index.ts#RunError [status=implemented hash=de8d1693bc34]
+    // parity: core/src/session/runner/index.ts#RunError [status=implemented hash=2d2589e0d799]
     public typealias RunError = any Error
 
     // parity: core/src/session/runner/index.ts#Continuation [status=implemented hash=65fe245aa945]
@@ -2719,7 +2719,7 @@ public enum CoreSessionRunner {
         }
     }
 
-    // parity: core/src/session/runner/index.ts#DrainResult [status=implemented hash=1de5fdb6f038]
+    // parity: core/src/session/runner/index.ts#DrainResult [status=implemented hash=c867885ed030]
     public enum DrainResult: Equatable, Hashable, Sendable {
         case complete
         case moved(continuation: Continuation?, stepped: Bool)
@@ -3075,7 +3075,7 @@ public enum CoreSessionRunner {
         }
     }
 
-    // parity: core/src/session/runner/llm.ts#node [status=adapted hash=14dca14523a4]
+    // parity: core/src/session/runner/llm.ts#node [status=adapted hash=2dca69db17a1]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

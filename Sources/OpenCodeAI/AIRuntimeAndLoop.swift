@@ -684,10 +684,10 @@ public enum AIPackage {
         }
     }
 
-    // parity: ai/src/provider-package.ts#Model [status=implemented hash=8f2f07080469]
+    // parity: ai/src/provider-package.ts#Model [status=implemented hash=4aa75aecc47b]
     public typealias Model = @Sendable (String, Settings?) -> AISchema.LanguageModel
 
-    // parity: ai/src/provider-package.ts#Definition [status=implemented hash=2453204f8641]
+    // parity: ai/src/provider-package.ts#Definition [status=implemented hash=82f5aa03f587]
     public struct Definition: Sendable {
         public let model: Model
 
@@ -1183,7 +1183,7 @@ public enum AIToolUpdates {
     }
 
     /// Apply one change: removals first, then additions replace a same-named item in place or append.
-    // parity: ai/src/tool-updates.ts#foldTools [status=implemented hash=ab275823c3b8]
+    // parity: ai/src/tool-updates.ts#foldTools [status=implemented hash=672cb72e4a13]
     public static func foldTools<Item>(
         _ tools: [Item],
         add: [Item],
@@ -1443,7 +1443,7 @@ public enum AITool {
     // parity: ai/src/tool.ts#ToolToModelOutput [status=implemented hash=7dfbfd286552]
     public typealias ToolToModelOutput = @Sendable (ToolModelOutputInput) -> [ToolSchema.Content]
 
-    // parity: ai/src/tool.ts#FreeformOption [status=implemented hash=cf32b77d23ad]
+    // parity: ai/src/tool.ts#FreeformOption [status=implemented hash=cfd70f6a2355]
     public typealias FreeformOption = AISchema.Freeform?
 
     // parity: ai/src/tool.ts#NoExecute [status=adapted hash=8cf1e6a3362c]
@@ -1503,7 +1503,7 @@ public enum AITool {
         }
     }
 
-    // parity: ai/src/tool.ts#ExecutableTool [status=implemented hash=6e474f2fd0a3]
+    // parity: ai/src/tool.ts#ExecutableTool [status=implemented hash=a86231063b25]
     public typealias ExecutableTool = Tool
 
     // parity: ai/src/tool.ts#ToolChangesInput [status=implemented hash=35abd7d42733]
@@ -1557,7 +1557,7 @@ public enum AITool {
         }
     }
 
-    // parity: ai/src/tool.ts#ToolOptions [status=implemented hash=f17c6b9ee954]
+    // parity: ai/src/tool.ts#ToolOptions [status=implemented hash=0f96fed01357]
     public struct ToolOptions: Sendable {
         public let name: String
         public let description: String
@@ -1616,7 +1616,7 @@ public enum AITool {
         return rest
     }
 
-    // parity: ai/src/tool.ts#build [status=implemented hash=9557ed3385be]
+    // parity: ai/src/tool.ts#build [status=implemented hash=a94acaaba964]
     public static func build(_ config: ToolOptions, execute: ToolExecute?) throws(AISchema.AIError) -> Tool {
         let inputSchema: AISchema.JsonSchema
         let decodeFn: @Sendable (JSONValue) throws -> JSONValue
@@ -1669,7 +1669,7 @@ public enum AITool {
         )
     }
 
-    // parity: ai/src/tool.ts#tool [status=implemented hash=bc00c1d82a29]
+    // parity: ai/src/tool.ts#tool [status=implemented hash=392f28433200]
     public static func tool(_ config: ToolOptions) throws(AISchema.AIError) -> Tool {
         try build(config, execute: config.execute)
     }
@@ -1812,7 +1812,7 @@ public enum AITool {
     }
 
     /// Run a step's tool calls concurrently, preserving call order.
-    // parity: ai/src/tool-runtime.ts#runTools [status=implemented hash=d4a17c9d9882]
+    // parity: ai/src/tool-runtime.ts#runTools [status=implemented hash=14fc2ba89bfb]
     public static func runTools(_ tools: [Tool], calls: [PendingCall]) async throws -> [DispatchResult] {
         guard !calls.isEmpty else { return [] }
         var ordered = [DispatchResult?](repeating: nil, count: calls.count)
@@ -1833,7 +1833,7 @@ public enum AITool {
         return ordered.compactMap { $0 }
     }
 
-    // parity: ai/src/tool-runtime.ts#ToolRuntime [status=implemented hash=de029082e5fc]
+    // parity: ai/src/tool-runtime.ts#ToolRuntime [status=implemented hash=075ceb5ca813]
     public enum ToolRuntime {
         public static func dispatch(_ tools: [Tool], call: AISchema.ToolCallPart) async throws -> DispatchResult {
             try await AITool.dispatch(tools, call: call)
@@ -1880,7 +1880,7 @@ public enum AILoop {
     }
 
     /// The step's assistant message followed by one tool message per call, in call order.
-    // parity: ai/src/loop.ts#stepMessages [status=implemented hash=1f1cd0277d58]
+    // parity: ai/src/loop.ts#stepMessages [status=implemented hash=a0d8af937ec9]
     public static func stepMessages(
         response: AISchema.LLMResponse,
         calls: [AITool.PendingCall],
@@ -1901,7 +1901,7 @@ public enum AILoop {
     }
 
     /// The request for the step after `response`, with its messages and tool results appended.
-    // parity: ai/src/loop.ts#nextRequest [status=implemented hash=c4b253f35e17]
+    // parity: ai/src/loop.ts#nextRequest [status=implemented hash=431f7f3e8cac]
     public static func nextRequest(
         _ request: AISchema.LLMRequest,
         response: AISchema.LLMResponse,
@@ -1969,7 +1969,7 @@ public enum AILoop {
         }
     }
 
-    // parity: ai/src/loop.ts#CollectResult [status=implemented hash=77aa6402f3eb]
+    // parity: ai/src/loop.ts#CollectResult [status=implemented hash=512b1a3359ec]
     public typealias CollectResult = Collected
 
     /// Run a stream from `stream` or `loop` to the end and fold its events into the final `Collected` result.
@@ -2054,7 +2054,7 @@ public enum AILoop {
 ///
 /// Ports `packages/ai/src/llm.ts`.
 public enum AILLM {
-    // parity: ai/src/llm.ts#PromptOrMessages [status=implemented hash=e9f33d1743b3]
+    // parity: ai/src/llm.ts#PromptOrMessages [status=implemented hash=91a8e4cffc6a]
     public enum PromptOrMessages: Sendable {
         case prompt(AISchema.Message.UserContentInput)
         case messages([AISchema.Message.Input])
@@ -2085,10 +2085,10 @@ public enum AILLM {
         }
     }
 
-    // parity: ai/src/llm.ts#ObjectEvent [status=implemented hash=ff381c0a4a61]
+    // parity: ai/src/llm.ts#ObjectEvent [status=implemented hash=52bae6660a1f]
     public typealias ObjectEvent = AISchema.LLMEvent
 
-    // parity: ai/src/llm.ts#LoopObjectEvent [status=implemented hash=7a2964f89154]
+    // parity: ai/src/llm.ts#LoopObjectEvent [status=implemented hash=8f8136dad39b]
     public typealias LoopObjectEvent = AISchema.LLMEvent
 
     public enum SystemInput: Sendable {
@@ -2338,7 +2338,7 @@ public enum AILLM {
         }
     }
 
-    // parity: ai/src/llm.ts#generate [status=implemented hash=7d77e4922a78]
+    // parity: ai/src/llm.ts#generate [status=implemented hash=a0ff64363147]
     public static func generate(
         _ input: LLMRequestInput,
         options: AIRoute.StreamOptions? = nil,
@@ -2368,7 +2368,7 @@ public enum AILLM {
         return ObjectResponse(response: response, object: decoded)
     }
 
-    // parity: ai/src/llm.ts#stream [status=implemented hash=d567cb83823c]
+    // parity: ai/src/llm.ts#stream [status=implemented hash=69ee53404f28]
     public static func stream(
         _ input: LLMRequestInput,
         options: AIRoute.StreamOptions? = nil,
@@ -2417,7 +2417,7 @@ public enum AILLM {
 
     /// Stream model calls, executing client tool calls between steps until no pending calls remain,
     /// output hits `length`, or `until` returns `true`.
-    // parity: ai/src/llm.ts#loop [status=implemented hash=c6f878f2ee9b]
+    // parity: ai/src/llm.ts#loop [status=implemented hash=4f81f39628f3]
     public static func loop(
         _ input: LLMLoopInput,
         options: AIRoute.StreamOptions? = nil,
@@ -2559,7 +2559,7 @@ public enum AILLM {
 public enum AIMedia {
     private static let octetStream = "application/octet-stream"
 
-    // parity: ai/src/media.ts#Source [status=implemented hash=72a54222141a]
+    // parity: ai/src/media.ts#Source [status=implemented hash=a3b36f39b972]
     public enum Source: Equatable, Hashable, Sendable, Codable {
         case bytes(data: [UInt8], mediaType: String)
         case base64(data: String, mediaType: String)
@@ -2709,7 +2709,7 @@ public enum AIMedia {
         return .other
     }
 
-    // parity: ai/src/media.ts#Info [status=implemented hash=0ecf42de4863]
+    // parity: ai/src/media.ts#Info [status=implemented hash=223ff4f12b5d]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let width: Double?
         public let height: Double?
@@ -2771,7 +2771,7 @@ public enum AIMedia {
         }
     }
 
-    // parity: ai/src/media.ts#AssetEncoded [status=implemented hash=4274ccf79369]
+    // parity: ai/src/media.ts#AssetEncoded [status=implemented hash=fffbbf76e4e1]
     public struct AssetEncoded: Equatable, Hashable, Sendable, Codable {
         public let source: Source
         public let info: Info?
@@ -2990,7 +2990,7 @@ public enum AIMedia {
         }
     }
 
-    // parity: ai/src/media.ts#AssetSchema [status=adapted hash=337ef619c4be]
+    // parity: ai/src/media.ts#AssetSchema [status=adapted hash=922f03a54e4b]
     public static func AssetSchema(_ encoded: AssetEncoded) -> Asset {
         Asset(Asset.Input(source: encoded.source, info: encoded.info, providerMetadata: encoded.providerMetadata))
     }
@@ -3037,7 +3037,7 @@ public enum AIMedia {
         try ImageAsset(validating: asset)
     }
 
-    // parity: ai/src/media.ts#from [status=implemented hash=5b034aa03be7]
+    // parity: ai/src/media.ts#from [status=implemented hash=ef245309eaed]
     public static func from(_ source: Source, options: AssetOptions? = nil) -> Asset {
         Asset(Asset.Input(
             source: source,
@@ -3048,17 +3048,17 @@ public enum AIMedia {
         ))
     }
 
-    // parity: ai/src/media.ts#bytes [status=implemented hash=b7d4d0f5a9e8]
+    // parity: ai/src/media.ts#bytes [status=implemented hash=a762ce066e46]
     public static func bytes(_ data: [UInt8], mediaType: String? = nil, options: AssetOptions? = nil) -> Asset {
         from(.bytes(data: data, mediaType: mediaType ?? AIUtils.detectMediaType(data) ?? octetStream), options: options)
     }
 
-    // parity: ai/src/media.ts#base64 [status=implemented hash=67c1f7d7dd50]
+    // parity: ai/src/media.ts#base64 [status=implemented hash=6dd92815ebb0]
     public static func base64(_ data: String, mediaType: String, options: AssetOptions? = nil) -> Asset {
         from(.base64(data: data, mediaType: mediaType), options: options)
     }
 
-    // parity: ai/src/media.ts#url [status=implemented hash=10e3ae92ca2c]
+    // parity: ai/src/media.ts#url [status=implemented hash=d93c045ab710]
     public static func url(
         _ value: String,
         mediaType: String? = nil,
@@ -3068,7 +3068,7 @@ public enum AIMedia {
         from(.url(url: value, mediaType: mediaType, expiresAt: expiresAt), options: options)
     }
 
-    // parity: ai/src/media.ts#ref [status=implemented hash=ec0d291d0c69]
+    // parity: ai/src/media.ts#ref [status=implemented hash=56ae528143f7]
     public static func ref(
         provider: String,
         id: String,
@@ -3193,7 +3193,7 @@ public enum AIMedia {
         return try ImageAsset(validating: asset)
     }
 
-    // parity: ai/src/media.ts#file [status=implemented hash=dfa27af1eea9]
+    // parity: ai/src/media.ts#file [status=implemented hash=bff57334467d]
     public static func file(
         _ path: String,
         options: AssetOptions? = nil,
@@ -3208,7 +3208,7 @@ public enum AIMedia {
         return bytes(data, mediaType: AIUtils.fileMediaType(data, path: path), options: options)
     }
 
-    // parity: ai/src/media.ts#write [status=implemented hash=50b19445f52f]
+    // parity: ai/src/media.ts#write [status=implemented hash=fa8cf0d4ced3]
     public static func write(
         _ asset: Asset,
         to path: String,
@@ -3286,19 +3286,19 @@ public enum AIMedia {
             }
         }
 
-        // parity: ai/src/media-model.ts#MediaModel.InlineRouteInput [status=implemented hash=abd041d7d504]
+        // parity: ai/src/media-model.ts#MediaModel.InlineRouteInput [status=implemented hash=743ae3acdf03]
         public typealias InlineRouteInput<Request: AIRoute.MediaRoute.MediaRequest, Response: Sendable> =
             RouteInput<Request, AIRoute.MediaProtocol.Inline<Request, Response>>
 
-        // parity: ai/src/media-model.ts#MediaModel.StreamRouteInput [status=implemented hash=41309efcbd74]
+        // parity: ai/src/media-model.ts#MediaModel.StreamRouteInput [status=implemented hash=71b6c96fc49c]
         public typealias StreamRouteInput<Request: AIRoute.MediaRoute.MediaRequest, Event: Sendable, Frame: Sendable, State: Sendable> =
             RouteInput<AIRoute.MediaProtocol.Addressed<Request>, AIRoute.MediaProtocol.Streamed<Request, Event, Frame, State>>
 
-        // parity: ai/src/media-model.ts#MediaModel.QueuedRouteInput [status=implemented hash=374420ff6afb]
+        // parity: ai/src/media-model.ts#MediaModel.QueuedRouteInput [status=implemented hash=517a5f366c5e]
         public typealias QueuedRouteInput<Request: AIRoute.MediaRoute.MediaRequest, Response: Sendable, Token: Codable & Sendable> =
             RouteInput<Request, AIRoute.MediaProtocol.Queued<Request, Response, Token>>
 
-        // parity: ai/src/media-model.ts#MediaModel.AnyRouteInput [status=implemented hash=7a29dba05ca9]
+        // parity: ai/src/media-model.ts#MediaModel.AnyRouteInput [status=implemented hash=002f00ab64d3]
         public enum AnyRouteInput<Request: AIRoute.MediaRoute.MediaRequest, Event: Sendable, Response: Sendable, Frame: Sendable, State: Sendable, Token: Codable & Sendable>: Sendable {
             case inline(InlineRouteInput<Request, Response>)
             case stream(StreamRouteInput<Request, Event, Frame, State>)
@@ -3377,7 +3377,7 @@ public enum AIMedia {
         }
     }
 
-    // parity: ai/src/media-model.ts#tryRequest [status=implemented hash=770485c7383e]
+    // parity: ai/src/media-model.ts#tryRequest [status=implemented hash=aaa1eb0778c1]
     public static func tryRequest<A>(_ make: () throws -> A) throws(AISchema.AIError) -> A {
         do {
             return try make()
@@ -3432,7 +3432,7 @@ public enum AIMedia {
             }
         }
 
-        // parity: ai/src/media-client.ts#notQueued [status=implemented hash=35c8d81d77c7]
+        // parity: ai/src/media-client.ts#notQueued [status=implemented hash=ce1f1c1da1cf]
         public static func notQueued(
             modality: String,
             provider: AISchema.ProviderID,
@@ -3526,7 +3526,7 @@ public enum AIMedia {
             )
         }
 
-        // parity: ai/src/media-client.ts#make [status=implemented hash=113eaecc3777]
+        // parity: ai/src/media-client.ts#make [status=implemented hash=3011edc02d55]
         public static func make<Req: RoutedRequest>(
             executor: AIRequestExecutor.RequestExecutorService,
             input: Input<Req.Event, Req.Response>
@@ -3605,7 +3605,7 @@ public enum AIGeneration {
         }
     }
 
-    // parity: ai/src/generation.ts#ProgressEvent [status=implemented hash=08e311dfe503]
+    // parity: ai/src/generation.ts#ProgressEvent [status=implemented hash=6a3b517cceb8]
     public struct ProgressEvent: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let progress: Double?
@@ -3634,7 +3634,7 @@ public enum AIGeneration {
     // parity: ai/src/generation.ts#Observation [status=implemented hash=7fb25b095419]
     public typealias Observation = ProgressEvent
 
-    // parity: ai/src/generation.ts#Event [status=implemented hash=203e2b9cbb42]
+    // parity: ai/src/generation.ts#Event [status=implemented hash=46567b68c412]
     public enum Event: Equatable, Hashable, Sendable, Codable {
         case progress(ProgressEvent)
         case finished(id: String, status: Status, reason: Reason?)
@@ -3832,7 +3832,7 @@ public enum AIGeneration {
 /// Decision models, question/answer schemas, request normalization, and client answer validation.
 /// Ports `packages/ai/src/{decision,decision-client}.ts`.
 public enum AIDecision {
-    // parity: ai/src/decision.ts#DecisionTextPart [status=implemented hash=0f3be5723150]
+    // parity: ai/src/decision.ts#DecisionTextPart [status=implemented hash=18c5d142365c]
     public struct DecisionTextPart: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public init(text: String) { self.text = text }
@@ -3848,7 +3848,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionJsonPart [status=implemented hash=0eaa201e5dc4]
+    // parity: ai/src/decision.ts#DecisionJsonPart [status=implemented hash=d88c1bd9382a]
     public struct DecisionJsonPart: Equatable, Hashable, Sendable, Codable {
         public let value: JSONValue
         public init(value: JSONValue) { self.value = value }
@@ -3864,7 +3864,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionMediaPart [status=implemented hash=29c3f5930370]
+    // parity: ai/src/decision.ts#DecisionMediaPart [status=implemented hash=21e2abd1fd41]
     public struct DecisionMediaPart: Equatable, Sendable, Codable {
         public let media: AIMedia.Asset
         public let filename: String?
@@ -3926,7 +3926,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionPartInput [status=implemented hash=f2775a456945]
+    // parity: ai/src/decision.ts#DecisionPartInput [status=implemented hash=aec7d87c8175]
     public enum DecisionPartInput: Sendable {
         case text(DecisionTextPart)
         case json(DecisionJsonPart)
@@ -3958,7 +3958,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#PredicateQuestion [status=implemented hash=11db0007f9e1]
+    // parity: ai/src/decision.ts#PredicateQuestion [status=implemented hash=72246159446e]
     public struct PredicateQuestion: Equatable, Hashable, Sendable, Codable {
         public struct Criteria: Equatable, Hashable, Sendable, Codable {
             public let trueCriteria: String?
@@ -3993,7 +3993,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#ChoiceQuestion [status=implemented hash=f221acdd93ed]
+    // parity: ai/src/decision.ts#ChoiceQuestion [status=implemented hash=cca412cbf651]
     public struct ChoiceQuestion: Equatable, Hashable, Sendable, Codable {
         public struct Option: Equatable, Hashable, Sendable, Codable {
             public let value: ChoiceValue
@@ -4027,7 +4027,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#ScoreQuestion [status=implemented hash=6950e6d5f81d]
+    // parity: ai/src/decision.ts#ScoreQuestion [status=implemented hash=5db0a4de149b]
     public struct ScoreQuestion: Equatable, Hashable, Sendable, Codable {
         public struct Level: Equatable, Hashable, Sendable, Codable {
             public let label: String
@@ -4099,7 +4099,7 @@ public enum AIDecision {
     // parity: ai/src/decision.ts#DecisionQuestions [status=implemented hash=aca8c86d6f3e]
     public typealias DecisionQuestions = [DecisionQuestion]
 
-    // parity: ai/src/decision.ts#PredicateAnswer [status=implemented hash=3ee028d0f42f]
+    // parity: ai/src/decision.ts#PredicateAnswer [status=implemented hash=086bbb18bb38]
     public struct PredicateAnswer: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let probability: Double
@@ -4121,7 +4121,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#ChoiceAnswer [status=implemented hash=05de144b77c6]
+    // parity: ai/src/decision.ts#ChoiceAnswer [status=implemented hash=eb72f2874fc4]
     public struct ChoiceAnswer: Equatable, Hashable, Sendable, Codable {
         public struct Entry: Equatable, Hashable, Sendable, Codable {
             public let value: ChoiceValue
@@ -4159,7 +4159,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#ScoreAnswer [status=implemented hash=b5ddaeacdf9e]
+    // parity: ai/src/decision.ts#ScoreAnswer [status=implemented hash=0d8482cad4ba]
     public struct ScoreAnswer: Equatable, Hashable, Sendable, Codable {
         public struct Entry: Equatable, Hashable, Sendable, Codable {
             public let value: Int
@@ -4207,7 +4207,7 @@ public enum AIDecision {
         public init(stringLiteral value: String) { self.rawValue = value }
     }
 
-    // parity: ai/src/decision.ts#ErrorAnswer [status=implemented hash=f4706684be0f]
+    // parity: ai/src/decision.ts#ErrorAnswer [status=implemented hash=fbba015d7817]
     public struct ErrorAnswer: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let reason: ErrorReason
@@ -4272,7 +4272,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#AnswerFor [status=adapted hash=448b3d9ada16]
+    // parity: ai/src/decision.ts#AnswerFor [status=adapted hash=3cb5c54444b2]
     public typealias AnswerFor = DecisionAnswer
 
     // parity: ai/src/decision.ts#AnswersFor [status=adapted hash=63d5afd51bde]
@@ -4295,7 +4295,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionModelCompatibility [status=implemented hash=358931442db6]
+    // parity: ai/src/decision.ts#DecisionModelCompatibility [status=implemented hash=e04848b152ba]
     public struct DecisionModelCompatibility: Equatable, Hashable, Sendable, Codable {
         public enum MediaInput: String, Equatable, Hashable, Sendable, Codable {
             case assets
@@ -4341,7 +4341,7 @@ public enum AIDecision {
             }
         }
 
-        // parity: ai/src/decision.ts#DecisionModel.MakeInput [status=implemented hash=dd1adc466d86]
+        // parity: ai/src/decision.ts#DecisionModel.MakeInput [status=implemented hash=06c0051fae5f]
         public struct MakeInput: Sendable {
             public let id: String
             public let provider: String
@@ -4396,7 +4396,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionModelSchema [status=adapted hash=9277159776b8]
+    // parity: ai/src/decision.ts#DecisionModelSchema [status=adapted hash=bd95f8567c99]
     public static func DecisionModelSchema(_ value: Any) -> DecisionModel? {
         value as? DecisionModel
     }
@@ -4404,7 +4404,7 @@ public enum AIDecision {
     // parity: ai/src/decision.ts#DecisionModelOptions [status=adapted hash=352cfb49a96a]
     public typealias DecisionModelOptions = DecisionOptions
 
-    // parity: ai/src/decision.ts#DecisionRequest [status=implemented hash=cbeda1b33eee]
+    // parity: ai/src/decision.ts#DecisionRequest [status=implemented hash=959081317e2d]
     public struct DecisionRequest: AIRoute.MediaRoute.MediaRequest, Sendable {
         public let model: DecisionModel
         public let input: [DecisionPart]
@@ -4445,7 +4445,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionRequestInput [status=implemented hash=acfaa0eba33d]
+    // parity: ai/src/decision.ts#DecisionRequestInput [status=implemented hash=f88eec045257]
     public struct DecisionRequestInput: Sendable {
         public let model: DecisionModel
         public let input: DecisionInput
@@ -4477,7 +4477,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionUsage [status=implemented hash=f7e8ce310b75]
+    // parity: ai/src/decision.ts#DecisionUsage [status=implemented hash=7a1fd3340790]
     public struct DecisionUsage: Equatable, Hashable, Sendable, Codable {
         public let inputTokens: Double?
         public let outputTokens: Double?
@@ -4491,7 +4491,7 @@ public enum AIDecision {
         }
     }
 
-    // parity: ai/src/decision.ts#DecisionResponse [status=implemented hash=7a3adf195339]
+    // parity: ai/src/decision.ts#DecisionResponse [status=implemented hash=b41a78db646c]
     public struct DecisionResponse: Equatable, Hashable, Sendable, Codable {
         public let answers: [DecisionAnswer]
         public let usage: DecisionUsage?
@@ -4506,7 +4506,7 @@ public enum AIDecision {
     // parity: ai/src/decision.ts#DecisionResponseFor [status=adapted hash=b955a2fda07e]
     public typealias DecisionResponseFor = DecisionResponse
 
-    // parity: ai/src/decision.ts#request [status=implemented hash=8f6791e50ab1]
+    // parity: ai/src/decision.ts#request [status=implemented hash=b6b6ced5b0dd]
     public static func request(_ input: DecisionRequestInput) throws(AISchema.AIError) -> DecisionRequest {
         let parts: [DecisionPart]
         switch input.input {
@@ -4564,7 +4564,7 @@ public enum AIDecision {
         return try await client.generate(normalized)
     }
 
-    // parity: ai/src/decision.ts#Decision [status=implemented hash=86150e3f2df4]
+    // parity: ai/src/decision.ts#Decision [status=implemented hash=628cb130d4e7]
     public enum Decision {
         public static func request(_ input: DecisionRequestInput) throws(AISchema.AIError) -> DecisionRequest {
             try AIDecision.request(input)
@@ -4580,7 +4580,7 @@ public enum AIDecision {
 
     // MARK: - src/decision-client.ts
 
-    // parity: ai/src/decision-client.ts#DecisionClient [status=implemented hash=52f5982b2df6]
+    // parity: ai/src/decision-client.ts#DecisionClient [status=implemented hash=fff1f4a01c2b]
     public enum DecisionClient {
         // parity: ai/src/decision-client.ts#Execute [status=implemented hash=6af9517c737d]
         public typealias Execute = AIRoute.MediaRoute.Execute
@@ -4641,7 +4641,7 @@ public enum AIDecision {
             return true
         }
 
-        // parity: ai/src/decision-client.ts#layer [status=implemented hash=da9849eb82cb]
+        // parity: ai/src/decision-client.ts#layer [status=implemented hash=bae827205bd4]
         public static func layer(executor: AIRequestExecutor.RequestExecutorService) -> Service {
             Service { request in
                 let response = try await request.model.route.generate(request) { req, mw in
@@ -4745,7 +4745,7 @@ public enum AIEmbedding {
             }
         }
 
-        // parity: ai/src/embedding.ts#EmbeddingModel.MakeInput [status=implemented hash=f774da45c43d]
+        // parity: ai/src/embedding.ts#EmbeddingModel.MakeInput [status=implemented hash=ca54159163bb]
         public struct MakeInput: Sendable {
             public let id: String
             public let provider: String
@@ -4794,7 +4794,7 @@ public enum AIEmbedding {
         }
     }
 
-    // parity: ai/src/embedding.ts#EmbeddingModelSchema [status=adapted hash=6919d235531f]
+    // parity: ai/src/embedding.ts#EmbeddingModelSchema [status=adapted hash=e75eb57aed35]
     public static func EmbeddingModelSchema(_ value: Any) -> EmbeddingModel? {
         value as? EmbeddingModel
     }
@@ -4802,7 +4802,7 @@ public enum AIEmbedding {
     // parity: ai/src/embedding.ts#EmbeddingModelOptions [status=adapted hash=f9dc5ca84fb8]
     public typealias EmbeddingModelOptions = EmbeddingOptions
 
-    // parity: ai/src/embedding.ts#EmbeddingRequest [status=implemented hash=00da2e1617e4]
+    // parity: ai/src/embedding.ts#EmbeddingRequest [status=implemented hash=098db628bfd0]
     public struct EmbeddingRequest: AIRoute.MediaRoute.MediaRequest, Sendable {
         public let model: EmbeddingModel
         public let values: [EmbeddingValue]
@@ -4846,7 +4846,7 @@ public enum AIEmbedding {
         }
     }
 
-    // parity: ai/src/embedding.ts#EmbeddingRequestInput [status=implemented hash=de375909f4cc]
+    // parity: ai/src/embedding.ts#EmbeddingRequestInput [status=implemented hash=d48e3111e463]
     public struct EmbeddingRequestInput: Sendable {
         public let model: EmbeddingModel
         public let values: [EmbeddingValueInput]
@@ -4881,13 +4881,13 @@ public enum AIEmbedding {
         }
     }
 
-    // parity: ai/src/embedding.ts#EmbeddingUsage [status=implemented hash=73f097d2af04]
+    // parity: ai/src/embedding.ts#EmbeddingUsage [status=implemented hash=8ffb564fcc45]
     public struct EmbeddingUsage: Equatable, Hashable, Sendable, Codable {
         public let inputTokens: Double?
         public init(inputTokens: Double? = nil) { self.inputTokens = inputTokens }
     }
 
-    // parity: ai/src/embedding.ts#EmbeddingResponse [status=implemented hash=df860b4de7c8]
+    // parity: ai/src/embedding.ts#EmbeddingResponse [status=implemented hash=13abc6594b1b]
     public struct EmbeddingResponse: Equatable, Hashable, Sendable, Codable {
         public let embeddings: [[Double]]
         public let usage: EmbeddingUsage?
@@ -4899,7 +4899,7 @@ public enum AIEmbedding {
         }
     }
 
-    // parity: ai/src/embedding.ts#request [status=implemented hash=31801940a981]
+    // parity: ai/src/embedding.ts#request [status=implemented hash=7d12db13b95f]
     public static func request(_ input: EmbeddingRequestInput) throws(AISchema.AIError) -> EmbeddingRequest {
         var values: [EmbeddingValue] = []
         values.reserveCapacity(input.values.count)
@@ -4945,7 +4945,7 @@ public enum AIEmbedding {
         return try await client.generate(normalized)
     }
 
-    // parity: ai/src/embedding.ts#Embedding [status=implemented hash=638c2d6a2d20]
+    // parity: ai/src/embedding.ts#Embedding [status=implemented hash=77f695e8414d]
     public enum Embedding {
         public static func request(_ input: EmbeddingRequestInput) throws(AISchema.AIError) -> EmbeddingRequest {
             try AIEmbedding.request(input)
@@ -4961,7 +4961,7 @@ public enum AIEmbedding {
 
     // MARK: - src/embedding-client.ts
 
-    // parity: ai/src/embedding-client.ts#EmbeddingClient [status=implemented hash=b8436d6c1880]
+    // parity: ai/src/embedding-client.ts#EmbeddingClient [status=implemented hash=a3d4b3e22d66]
     public enum EmbeddingClient {
         // parity: ai/src/embedding-client.ts#Execute [status=implemented hash=6af9517c737d]
         public typealias Execute = AIRoute.MediaRoute.Execute
@@ -4990,7 +4990,7 @@ public enum AIEmbedding {
             try await client.generate(request)
         }
 
-        // parity: ai/src/embedding-client.ts#layer [status=implemented hash=9040f95c7176]
+        // parity: ai/src/embedding-client.ts#layer [status=implemented hash=c0abd21d347e]
         public static func layer(executor: AIRequestExecutor.RequestExecutorService) -> Service {
             Service { request in
                 let response = try await request.model.route.generate(request) { req, mw in
@@ -5081,7 +5081,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageModelSchema [status=adapted hash=aba1fe6f0cf4]
+    // parity: ai/src/image.ts#ImageModelSchema [status=adapted hash=1a65c9cc0126]
     public static func ImageModelSchema(_ value: Any) -> ImageModel? {
         value as? ImageModel
     }
@@ -5089,7 +5089,7 @@ public enum AIImage {
     // parity: ai/src/image.ts#ImageModelOptions [status=adapted hash=d2157c3bc85c]
     public typealias ImageModelOptions = ImageOptions
 
-    // parity: ai/src/image.ts#ImageRequest [status=implemented hash=29a6bee7270e]
+    // parity: ai/src/image.ts#ImageRequest [status=implemented hash=04902537cf05]
     public struct ImageRequest: AIMedia.MediaClient.RoutedRequest, Sendable {
         public typealias Event = ImageEvent
         public typealias Response = ImageResponse
@@ -5136,7 +5136,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageRequestInput [status=implemented hash=df6ed2dd2f2c]
+    // parity: ai/src/image.ts#ImageRequestInput [status=implemented hash=8d5c48cb558f]
     public struct ImageRequestInput: Sendable {
         public let model: ImageModel
         public let prompt: String
@@ -5195,7 +5195,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageResponse [status=implemented hash=aaf429aafb1d]
+    // parity: ai/src/image.ts#ImageResponse [status=implemented hash=3d44e35c0056]
     public struct ImageResponse: Equatable, Sendable, Codable {
         public let images: [AIMedia.Asset]
         public let usage: AISchema.MediaUsage?
@@ -5207,7 +5207,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImagePartialEvent [status=implemented hash=4cba4b643389]
+    // parity: ai/src/image.ts#ImagePartialEvent [status=implemented hash=be7ae5477545]
     public struct ImagePartialEvent: Equatable, Sendable, Codable {
         public let index: Int
         public let image: AIMedia.Asset
@@ -5226,7 +5226,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageOutputEvent [status=implemented hash=6a09fcb95a24]
+    // parity: ai/src/image.ts#ImageOutputEvent [status=implemented hash=d40cf2ee8ae3]
     public struct ImageOutputEvent: Equatable, Sendable, Codable {
         public let index: Int
         public let image: AIMedia.Asset
@@ -5245,7 +5245,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageFinishEvent [status=implemented hash=f3f3a0e360b3]
+    // parity: ai/src/image.ts#ImageFinishEvent [status=implemented hash=f0b69a5d3601]
     public struct ImageFinishEvent: Equatable, Hashable, Sendable, Codable {
         public let usage: AISchema.MediaUsage?
         public let providerMetadata: AISchema.ProviderMetadata?
@@ -5267,7 +5267,7 @@ public enum AIImage {
         }
     }
 
-    // parity: ai/src/image.ts#ImageEvent [status=implemented hash=6aa1affb388a]
+    // parity: ai/src/image.ts#ImageEvent [status=implemented hash=82bb017f3135]
     public enum ImageEvent: Equatable, Sendable, Codable {
         case generationProgress(AIGeneration.ProgressEvent)
         case imagePartial(ImagePartialEvent)
@@ -5316,7 +5316,7 @@ public enum AIImage {
         return ImageResponse(images: images, usage: finish.usage, providerMetadata: finish.providerMetadata)
     }
 
-    // parity: ai/src/image.ts#request [status=implemented hash=da3373d232be]
+    // parity: ai/src/image.ts#request [status=implemented hash=8b5a05cf70db]
     public static func request(_ input: ImageRequestInput) throws(AISchema.AIError) -> ImageRequest {
         var assets: [AIMedia.Asset]? = nil
         if let rawImages = input.images {
@@ -5391,7 +5391,7 @@ public enum AIImage {
         try await client.cancel(model: model, id: id)
     }
 
-    // parity: ai/src/image.ts#Image [status=implemented hash=44679a9ff528]
+    // parity: ai/src/image.ts#Image [status=implemented hash=37f91c12e9cf]
     public enum Image {
         public static func request(_ input: ImageRequestInput) throws(AISchema.AIError) -> ImageRequest {
             try AIImage.request(input)
@@ -5400,9 +5400,9 @@ public enum AIImage {
 
     // MARK: - src/image-client.ts
 
-    // parity: ai/src/image-client.ts#ImageClient [status=implemented hash=a1a44b539686]
+    // parity: ai/src/image-client.ts#ImageClient [status=implemented hash=56a33035628e]
     public enum ImageClient {
-        // parity: ai/src/image-client.ts#Interface [status=implemented hash=8fcfa3f5f888]
+        // parity: ai/src/image-client.ts#Interface [status=implemented hash=12c562a3ce16]
         public protocol Interface: Sendable {
             func generate(_ request: ImageRequest, options: AIGeneration.AwaitOptions?) async throws -> ImageResponse
             func stream(_ request: ImageRequest, options: AIGeneration.AwaitOptions?) -> AsyncThrowingStream<ImageEvent, Error>
@@ -5469,7 +5469,7 @@ public enum AIImage {
             return events
         }
 
-        // parity: ai/src/image-client.ts#layer [status=implemented hash=272cb3fb8659]
+        // parity: ai/src/image-client.ts#layer [status=implemented hash=90d7ef52087e]
         public static func layer(executor: AIRequestExecutor.RequestExecutorService) -> Service {
             let media: AIMedia.MediaClient.Interface<ImageRequest> = AIMedia.MediaClient.operations(
                 execute: { req, mw in try await executor.execute(req, middleware: mw) },
@@ -5547,7 +5547,7 @@ public enum AISpeech {
     // parity: ai/src/speech.ts#SpeechRoute [status=implemented hash=30b0219b5d9d]
     public typealias SpeechRoute = AIRoute.MediaRoute.AnyRoute<SpeechRequest, SpeechEvent, SpeechResponse>
 
-    // parity: ai/src/speech.ts#SpeechVoice [status=implemented hash=7e32f278dd42]
+    // parity: ai/src/speech.ts#SpeechVoice [status=implemented hash=fad991b600f7]
     public enum SpeechVoice: Equatable, Hashable, Sendable, Codable {
         case named(String)
         case custom(id: String)
@@ -5586,7 +5586,7 @@ public enum AISpeech {
         public init(stringLiteral value: String) { self.rawValue = value }
     }
 
-    // parity: ai/src/speech.ts#SpeechTimestamp [status=implemented hash=bfc176018e98]
+    // parity: ai/src/speech.ts#SpeechTimestamp [status=implemented hash=75771e198527]
     public struct SpeechTimestamp: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public let startSeconds: Double
@@ -5644,13 +5644,13 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechModelSchema [status=adapted hash=9b3af186feab]
+    // parity: ai/src/speech.ts#SpeechModelSchema [status=adapted hash=e7135ee0f3ab]
     public static func SpeechModelSchema(_ value: Any) -> SpeechModel? { value as? SpeechModel }
 
     // parity: ai/src/speech.ts#SpeechModelOptions [status=adapted hash=08faf41d459a]
     public typealias SpeechModelOptions = SpeechOptions
 
-    // parity: ai/src/speech.ts#SpeechRequest [status=implemented hash=e574a0636868]
+    // parity: ai/src/speech.ts#SpeechRequest [status=implemented hash=88a0c1cf0f31]
     public struct SpeechRequest: AIMedia.MediaClient.RoutedRequest, Sendable {
         public typealias Event = SpeechEvent
         public typealias Response = SpeechResponse
@@ -5703,10 +5703,10 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechRequestInput [status=implemented hash=564347efb4c4]
+    // parity: ai/src/speech.ts#SpeechRequestInput [status=implemented hash=2137a2672233]
     public typealias SpeechRequestInput = SpeechRequest
 
-    // parity: ai/src/speech.ts#SpeechResponse [status=implemented hash=9acd83e03b1a]
+    // parity: ai/src/speech.ts#SpeechResponse [status=implemented hash=48f2337829fd]
     public struct SpeechResponse: Equatable, Sendable, Codable {
         public let audio: AIMedia.Asset
         public let timestamps: [SpeechTimestamp]?
@@ -5725,7 +5725,7 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechAudioDeltaEvent [status=implemented hash=96a9b2cc136f]
+    // parity: ai/src/speech.ts#SpeechAudioDeltaEvent [status=implemented hash=7b1505e8ed62]
     public struct SpeechAudioDeltaEvent: Equatable, Hashable, Sendable, Codable {
         public let chunk: [UInt8]
         public init(chunk: [UInt8]) { self.chunk = chunk }
@@ -5741,7 +5741,7 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechTimestampsEvent [status=implemented hash=66f7f4de2dc8]
+    // parity: ai/src/speech.ts#SpeechTimestampsEvent [status=implemented hash=334f9b73e4c0]
     public struct SpeechTimestampsEvent: Equatable, Hashable, Sendable, Codable {
         public let items: [SpeechTimestamp]
         public init(items: [SpeechTimestamp]) { self.items = items }
@@ -5757,7 +5757,7 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechFinishEvent [status=implemented hash=91328645493e]
+    // parity: ai/src/speech.ts#SpeechFinishEvent [status=implemented hash=e3dd0811470a]
     public struct SpeechFinishEvent: Equatable, Sendable, Codable {
         public let audio: AIMedia.Asset
         public let usage: AISchema.MediaUsage?
@@ -5783,7 +5783,7 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#SpeechEvent [status=implemented hash=352f5ff61f47]
+    // parity: ai/src/speech.ts#SpeechEvent [status=implemented hash=b66b93fa6573]
     public enum SpeechEvent: Equatable, Sendable, Codable {
         case generationProgress(AIGeneration.ProgressEvent)
         case audioDelta(SpeechAudioDeltaEvent)
@@ -5837,7 +5837,7 @@ public enum AISpeech {
         )
     }
 
-    // parity: ai/src/speech.ts#request [status=implemented hash=1b1bc9bffe5c]
+    // parity: ai/src/speech.ts#request [status=implemented hash=caf1e964c75a]
     public static func request(_ input: SpeechRequestInput) -> SpeechRequest { input }
 
     // parity: ai/src/speech.ts#generate [status=implemented hash=646a54cf6573]
@@ -5865,14 +5865,14 @@ public enum AISpeech {
         }
     }
 
-    // parity: ai/src/speech.ts#Speech [status=implemented hash=b854bb5bf464]
+    // parity: ai/src/speech.ts#Speech [status=implemented hash=d54654d0b070]
     public enum Speech {
         public static func request(_ input: SpeechRequestInput) -> SpeechRequest { AISpeech.request(input) }
     }
 
     // MARK: - src/speech-client.ts
 
-    // parity: ai/src/speech-client.ts#SpeechClient [status=implemented hash=39c939aa77f6]
+    // parity: ai/src/speech-client.ts#SpeechClient [status=implemented hash=a942eace32b6]
     public enum SpeechClient {
         // parity: ai/src/speech-client.ts#Interface [status=implemented hash=5d1d460ff9d9]
         public typealias Interface = AIMedia.MediaClient.Interface<SpeechRequest>
@@ -5924,7 +5924,7 @@ public enum AITranscription {
         case word
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionSegment [status=implemented hash=b221a89db293]
+    // parity: ai/src/transcription.ts#TranscriptionSegment [status=implemented hash=a15b4314aa7b]
     public struct TranscriptionSegment: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public let startSeconds: Double
@@ -5938,7 +5938,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionWord [status=implemented hash=2c294d586d5f]
+    // parity: ai/src/transcription.ts#TranscriptionWord [status=implemented hash=fae52623cd97]
     public struct TranscriptionWord: Equatable, Hashable, Sendable, Codable {
         public let text: String
         public let startSeconds: Double
@@ -5954,7 +5954,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionModel [status=implemented hash=563f49ce7525]
+    // parity: ai/src/transcription.ts#TranscriptionModel [status=implemented hash=406676d66715]
     public struct TranscriptionModel: Sendable {
         public let id: AISchema.ModelID
         public let provider: AISchema.ProviderID
@@ -6000,13 +6000,13 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionModelSchema [status=adapted hash=0a5f67c8a234]
+    // parity: ai/src/transcription.ts#TranscriptionModelSchema [status=adapted hash=858c37225b79]
     public static func TranscriptionModelSchema(_ value: Any) -> TranscriptionModel? { value as? TranscriptionModel }
 
     // parity: ai/src/transcription.ts#TranscriptionModelOptions [status=adapted hash=eeb9b7ac45de]
     public typealias TranscriptionModelOptions = TranscriptionOptions
 
-    // parity: ai/src/transcription.ts#TranscriptionRequest [status=implemented hash=ca58ce5558a8]
+    // parity: ai/src/transcription.ts#TranscriptionRequest [status=implemented hash=2de2340f1bf0]
     public struct TranscriptionRequest: AIMedia.MediaClient.RoutedRequest, Sendable {
         public typealias Event = TranscriptionEvent
         public typealias Response = TranscriptionResponse
@@ -6056,7 +6056,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionRequestInput [status=implemented hash=de88f557b0b8]
+    // parity: ai/src/transcription.ts#TranscriptionRequestInput [status=implemented hash=10c9dece47d0]
     public typealias TranscriptionRequestInput = TranscriptionRequest
 
     // parity: ai/src/transcription.ts#TranscriptionResponse [status=implemented hash=090f6c5f80b5]
@@ -6088,7 +6088,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionTextDeltaEvent [status=implemented hash=244382b1d602]
+    // parity: ai/src/transcription.ts#TranscriptionTextDeltaEvent [status=implemented hash=3a57d1e18d82]
     public struct TranscriptionTextDeltaEvent: Equatable, Hashable, Sendable, Codable {
         public let delta: String
         public init(delta: String) { self.delta = delta }
@@ -6104,7 +6104,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionSegmentEvent [status=implemented hash=6fb164b586d1]
+    // parity: ai/src/transcription.ts#TranscriptionSegmentEvent [status=implemented hash=8847c15a8674]
     public struct TranscriptionSegmentEvent: Equatable, Hashable, Sendable, Codable {
         public let segment: TranscriptionSegment
         public init(segment: TranscriptionSegment) { self.segment = segment }
@@ -6120,7 +6120,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionFinishEvent [status=implemented hash=39abc536b85f]
+    // parity: ai/src/transcription.ts#TranscriptionFinishEvent [status=implemented hash=531180ea15d8]
     public struct TranscriptionFinishEvent: Equatable, Hashable, Sendable, Codable {
         public let response: TranscriptionResponse
         public init(_ response: TranscriptionResponse) { self.response = response }
@@ -6141,7 +6141,7 @@ public enum AITranscription {
         }
     }
 
-    // parity: ai/src/transcription.ts#TranscriptionEvent [status=implemented hash=b41e394b648b]
+    // parity: ai/src/transcription.ts#TranscriptionEvent [status=implemented hash=47abffaa45a3]
     public enum TranscriptionEvent: Equatable, Hashable, Sendable, Codable {
         case generationProgress(AIGeneration.ProgressEvent)
         case textDelta(TranscriptionTextDeltaEvent)
@@ -6181,7 +6181,7 @@ public enum AITranscription {
         )))
     }
 
-    // parity: ai/src/transcription.ts#request [status=implemented hash=ee7232e16b89]
+    // parity: ai/src/transcription.ts#request [status=implemented hash=0c0c6c3edcee]
     public static func request(_ input: TranscriptionRequestInput) -> TranscriptionRequest { input }
 
     // parity: ai/src/transcription.ts#generate [status=implemented hash=af581f30f0b2]
@@ -6234,7 +6234,7 @@ public enum AITranscription {
         try await client.operations.resume(model.descriptor, model.route, token)
     }
 
-    // parity: ai/src/transcription.ts#Transcription [status=implemented hash=fe9a75135796]
+    // parity: ai/src/transcription.ts#Transcription [status=implemented hash=da369e2048c1]
     public enum Transcription {
         public static func request(_ input: TranscriptionRequestInput) -> TranscriptionRequest {
             AITranscription.request(input)
@@ -6243,7 +6243,7 @@ public enum AITranscription {
 
     // MARK: - src/transcription-client.ts
 
-    // parity: ai/src/transcription-client.ts#TranscriptionClient [status=implemented hash=ab7731708821]
+    // parity: ai/src/transcription-client.ts#TranscriptionClient [status=implemented hash=b2f3b1323650]
     public enum TranscriptionClient {
         // parity: ai/src/transcription-client.ts#Interface [status=implemented hash=5379beb88d8c]
         public typealias Interface = AIMedia.MediaClient.Interface<TranscriptionRequest>
@@ -6405,13 +6405,13 @@ public enum AIVideo {
         }
     }
 
-    // parity: ai/src/video.ts#VideoModelSchema [status=adapted hash=d33a3ca0b394]
+    // parity: ai/src/video.ts#VideoModelSchema [status=adapted hash=f74610447b14]
     public static func VideoModelSchema(_ value: Any) -> VideoModel? { value as? VideoModel }
 
     // parity: ai/src/video.ts#VideoModelOptions [status=adapted hash=330e21821eca]
     public typealias VideoModelOptions = VideoOptions
 
-    // parity: ai/src/video.ts#VideoRequest [status=implemented hash=b6f6ebaac22a]
+    // parity: ai/src/video.ts#VideoRequest [status=implemented hash=e9684b081363]
     public struct VideoRequest: AIRoute.MediaRoute.MediaRequest, Sendable {
         public let model: VideoModel
         public let prompt: String
@@ -6463,7 +6463,7 @@ public enum AIVideo {
         }
     }
 
-    // parity: ai/src/video.ts#VideoRequestInput [status=implemented hash=d7a4d095eb27]
+    // parity: ai/src/video.ts#VideoRequestInput [status=implemented hash=4f675948d315]
     public struct VideoRequestInput: Sendable {
         public let model: VideoModel
         public let prompt: String
@@ -6531,7 +6531,7 @@ public enum AIVideo {
         }
     }
 
-    // parity: ai/src/video.ts#VideoResponse [status=implemented hash=c20f7b39e595]
+    // parity: ai/src/video.ts#VideoResponse [status=implemented hash=774e0a2d09e8]
     public struct VideoResponse: Equatable, Sendable, Codable {
         public let videos: [AIMedia.Asset]
         public let usage: AISchema.MediaUsage?
@@ -6545,7 +6545,7 @@ public enum AIVideo {
         }
     }
 
-    // parity: ai/src/video.ts#request [status=implemented hash=2bc9075336a9]
+    // parity: ai/src/video.ts#request [status=implemented hash=9a7b11e7bc61]
     public static func request(_ input: VideoRequestInput) throws(AISchema.AIError) -> VideoRequest {
         let startImg: AIMedia.ImageAsset? = if let s = input.start { try AIMedia.image(s) } else { nil }
         let endImg: AIMedia.ImageAsset? = if let e = input.end { try AIMedia.image(e) } else { nil }
@@ -6594,7 +6594,7 @@ public enum AIVideo {
         try await client.cancel(model: model, id: id)
     }
 
-    // parity: ai/src/video.ts#Video [status=implemented hash=a0e824c593aa]
+    // parity: ai/src/video.ts#Video [status=implemented hash=a54d77cca80f]
     public enum Video {
         public static func request(_ input: VideoRequestInput) throws(AISchema.AIError) -> VideoRequest {
             try AIVideo.request(input)
@@ -6603,7 +6603,7 @@ public enum AIVideo {
 
     // MARK: - src/video-client.ts
 
-    // parity: ai/src/video-client.ts#VideoClient [status=implemented hash=373879cc22af]
+    // parity: ai/src/video-client.ts#VideoClient [status=implemented hash=a257c2acbc0a]
     public enum VideoClient {
         // parity: ai/src/video-client.ts#Interface [status=implemented hash=9568c31bdfc3]
         public protocol Interface: Sendable {
@@ -6642,7 +6642,7 @@ public enum AIVideo {
         // parity: ai/src/video-client.ts#Service [status=implemented hash=7eb3438ade39]
         public typealias Service = VideoClientService
 
-        // parity: ai/src/video-client.ts#layer [status=implemented hash=d62bc1e88856]
+        // parity: ai/src/video-client.ts#layer [status=implemented hash=814ee6dd4e9b]
         public static func layer(executor: AIRequestExecutor.RequestExecutorService) -> Service {
             let exec: AIRoute.MediaRoute.Execute = { req, mw in try await executor.execute(req, middleware: mw) }
             return Service(
@@ -6872,7 +6872,7 @@ public enum AIExperimental {
         }
     }
 
-    // parity: ai/src/experimental/extraction.ts#ExtractionAnswerFor [status=adapted hash=0b4af6f302e6]
+    // parity: ai/src/experimental/extraction.ts#ExtractionAnswerFor [status=adapted hash=f5ec4f826029]
     public typealias ExtractionAnswerFor = [String: JSONValue]
 
     // parity: ai/src/experimental/extraction.ts#ExtractionAnswersFor [status=adapted hash=9b77a9d81b47]
@@ -6915,7 +6915,7 @@ public enum AIExperimental {
     // parity: ai/src/experimental/extraction.ts#ExtractionRoute [status=implemented hash=ffd16ac6324a]
     public typealias ExtractionRoute = AIRoute.MediaRoute.InlineRoute<ExtractionRequest, ExtractionResponse>
 
-    // parity: ai/src/experimental/extraction.ts#ExtractionModel [status=implemented hash=50a8f3f6db2a]
+    // parity: ai/src/experimental/extraction.ts#ExtractionModel [status=implemented hash=70f19bde08f4]
     public struct ExtractionModel: Sendable {
         public let id: AISchema.ModelID
         public let provider: AISchema.ProviderID
@@ -6950,7 +6950,7 @@ public enum AIExperimental {
     // parity: ai/src/experimental/extraction.ts#ExtractionModelOptions [status=adapted hash=55b4efa07e93]
     public typealias ExtractionModelOptions = ExtractionOptions
 
-    // parity: ai/src/experimental/extraction.ts#ExtractionRequest [status=implemented hash=903feea4e460]
+    // parity: ai/src/experimental/extraction.ts#ExtractionRequest [status=implemented hash=41774b857ed1]
     public struct ExtractionRequest: AIRoute.MediaRoute.MediaRequest, Sendable {
         public let model: ExtractionModel
         public let input: String
@@ -6987,10 +6987,10 @@ public enum AIExperimental {
         }
     }
 
-    // parity: ai/src/experimental/extraction.ts#ExtractionRequestInput [status=implemented hash=3c48f0eeb4dc]
+    // parity: ai/src/experimental/extraction.ts#ExtractionRequestInput [status=implemented hash=2b37514fdf10]
     public typealias ExtractionRequestInput = ExtractionRequest
 
-    // parity: ai/src/experimental/extraction.ts#ExtractionResponse [status=implemented hash=edfc4b2f47d1]
+    // parity: ai/src/experimental/extraction.ts#ExtractionResponse [status=implemented hash=86bf12d7ba08]
     public struct ExtractionResponse: Equatable, Hashable, Sendable, Codable {
         public let answers: [String: [String: JSONValue]]
         public let usage: AISchema.Usage?
@@ -7010,7 +7010,7 @@ public enum AIExperimental {
     // parity: ai/src/experimental/extraction.ts#ExtractionResponseFor [status=adapted hash=889e21a668c4]
     public typealias ExtractionResponseFor = ExtractionResponse
 
-    // parity: ai/src/experimental/extraction.ts#request [status=implemented hash=bf28e4f41fea]
+    // parity: ai/src/experimental/extraction.ts#request [status=implemented hash=3c452fbf3268]
     public static func extractionRequest(_ input: ExtractionRequestInput) -> ExtractionRequest { input }
 
     // parity: ai/src/experimental/extraction.ts#generate [status=implemented hash=eedb16b42def]
@@ -7029,7 +7029,7 @@ public enum AIExperimental {
         }
     }
 
-    // parity: ai/src/experimental/extraction.ts#Extraction [status=implemented hash=849fd2324ac0]
+    // parity: ai/src/experimental/extraction.ts#Extraction [status=implemented hash=d768c46ad0d2]
     public enum Extraction {
         public static func request(_ input: ExtractionRequestInput) -> ExtractionRequest {
             AIExperimental.extractionRequest(input)
@@ -7045,7 +7045,7 @@ public enum AIExperimental {
 
     // MARK: - src/experimental/cloudflare-run-extraction.ts
 
-    // parity: ai/src/experimental/cloudflare-run-extraction.ts#CloudflareRunExtraction [status=implemented hash=3fe2788670f7]
+    // parity: ai/src/experimental/cloudflare-run-extraction.ts#CloudflareRunExtraction [status=implemented hash=b5e57c9812f8]
     public enum CloudflareRunExtraction {
         private static let routeIdentity = AIRoute.MediaProtocol.identity(
             id: "cloudflare-run-extraction",
@@ -7053,7 +7053,7 @@ public enum AIExperimental {
             provider: "cloudflare-workers-ai"
         )
 
-        // parity: ai/src/experimental/cloudflare-run-extraction.ts#protocol [status=implemented hash=22cf7557a65a]
+        // parity: ai/src/experimental/cloudflare-run-extraction.ts#protocol [status=implemented hash=174f8223c407]
         public static let `protocol`: AIRoute.MediaProtocol.Inline<ExtractionRequest, ExtractionResponse> = AIRoute.MediaProtocol.inline(
             routeIdentity,
             bodyFrom: { (request: ExtractionRequest) in
@@ -7128,7 +7128,7 @@ public enum AIExperimental {
             }
         )
 
-        // parity: ai/src/experimental/cloudflare-run-extraction.ts#model [status=implemented hash=785436246dd3]
+        // parity: ai/src/experimental/cloudflare-run-extraction.ts#model [status=implemented hash=af704244a12e]
         public static func model(_ input: AIRoute.MediaRoute.ModelInput) -> ExtractionModel {
             ExtractionModel(
                 id: input.id,
@@ -7155,7 +7155,7 @@ public enum AIExperimental {
         case websocket
     }
 
-    // parity: ai/src/experimental/realtime.ts#RealtimeTransportInput [status=implemented hash=7883b46572f7]
+    // parity: ai/src/experimental/realtime.ts#RealtimeTransportInput [status=implemented hash=5c3479a7ab9c]
     public enum RealtimeTransportInput: Equatable, Hashable, Sendable {
         case webrtc(sdp: String, dcid: Int? = nil)
         case websocket
@@ -7168,7 +7168,7 @@ public enum AIExperimental {
         }
     }
 
-    // parity: ai/src/experimental/realtime.ts#RealtimeTransport [status=implemented hash=0adc916d0095]
+    // parity: ai/src/experimental/realtime.ts#RealtimeTransport [status=implemented hash=5037dff48dd6]
     public enum RealtimeTransport: Equatable, Hashable, Sendable, Codable {
         case webrtc(sdp: String)
         case websocket(url: String, token: String, expiresAt: Double)
@@ -7214,7 +7214,7 @@ public enum AIExperimental {
         public let transports: [RealtimeTransportType]
     }
 
-    // parity: ai/src/experimental/realtime.ts#engines [status=implemented hash=4812be659414]
+    // parity: ai/src/experimental/realtime.ts#engines [status=implemented hash=f7ead25b8654]
     public static let engines: [RealtimeEngineSpec] = [
         RealtimeEngineSpec(family: "gpt-live", model: "gpt-live-1", id: "openai-live", provider: "openai", transports: [.webrtc]),
         RealtimeEngineSpec(family: "gpt-realtime", model: "gpt-realtime-2.1", id: "openai-realtime", provider: "openai", transports: [.webrtc, .websocket]),
@@ -7231,7 +7231,7 @@ public enum AIExperimental {
     private static let xaiRealtimeBase = "https://api.x.ai/v1"
     private static let googleRealtimeBase = "https://generativelanguage.googleapis.com/v1beta"
 
-    // parity: ai/src/experimental/realtime.ts#connect [status=implemented hash=ba5d05bc9768]
+    // parity: ai/src/experimental/realtime.ts#connect [status=implemented hash=4d6eaf7e9751]
     public static func connect(
         _ input: RealtimeConnectInput,
         executor: AIRequestExecutor.RequestExecutorService,
@@ -7456,7 +7456,7 @@ public enum AIExperimental {
         return "\(pad(Int(year), width: 4))-\(pad(Int(m), width: 2))-\(pad(Int(d), width: 2))T\(pad(hour, width: 2)):\(pad(minute, width: 2)):\(pad(second, width: 2)).\(pad(ms, width: 3))Z"
     }
 
-    // parity: ai/src/experimental/realtime.ts#Realtime [status=implemented hash=5fa49a35758f]
+    // parity: ai/src/experimental/realtime.ts#Realtime [status=implemented hash=7abadb86cf2d]
     public enum Realtime {
         public static var engines: [RealtimeEngineSpec] { AIExperimental.engines }
         public static func engine(_ model: String) -> RealtimeEngineSpec? { AIExperimental.engine(model) }
@@ -7833,13 +7833,13 @@ public enum AIClient {
         }
     }
 
-    // parity: ai/src/index.ts#make [status=implemented hash=758af99bc4cc]
+    // parity: ai/src/index.ts#make [status=implemented hash=6163abb31969]
     public static func make(_ options: Options) -> Client {
         Client(services: layerWith(options.executor), fileSystem: options.fileSystem)
     }
 
     /// Construct a tool whose `execute` throws arbitrary errors mapped to `ToolFailure`.
-    // parity: ai/src/index.ts#tool [status=implemented hash=bc00c1d82a29]
+    // parity: ai/src/index.ts#tool [status=implemented hash=5b84979ee6ae]
     public static func tool(_ config: AITool.ToolOptions) throws(AISchema.AIError) -> AITool.Tool {
         let wrappedExecute: AITool.ToolExecute?
         if let exec = config.execute {
@@ -7859,7 +7859,7 @@ public enum AIClient {
     }
 
     /// Effect-style facade namespace mirroring `packages/ai/src/effect.ts#ai`.
-    // parity: ai/src/effect.ts#ai [status=adapted hash=081794c9e2fc]
+    // parity: ai/src/effect.ts#ai [status=adapted hash=32e18ec6b4aa]
     public enum effectAPI {
         public static func request(_ input: AILLM.LLMRequestInput) throws(AISchema.AIError) -> AISchema.LLMRequest {
             try AILLM.request(input)
@@ -7898,7 +7898,7 @@ public enum AIClient {
 ///
 /// Ports `packages/ai/src/testing.ts`.
 public enum AITesting {
-    // parity: ai/src/testing.ts#Response [status=implemented hash=6a34c199e8ef]
+    // parity: ai/src/testing.ts#Response [status=implemented hash=5cbaab7ffcf7]
     public enum Response: Sendable {
         case events([AISchema.LLMEvent])
         case stream(AsyncThrowingStream<AISchema.LLMEvent, Error>)
@@ -7906,7 +7906,7 @@ public enum AITesting {
         case checkpoint(AISchema.CompactionCheckpointResponse)
     }
 
-    // parity: ai/src/testing.ts#Gate [status=implemented hash=99d8a2caadde]
+    // parity: ai/src/testing.ts#Gate [status=implemented hash=2e97112fecb4]
     public struct Gate: Sendable {
         public let started: @Sendable () async -> Void
         public let release: @Sendable () async -> Void
@@ -7945,7 +7945,7 @@ public enum AITesting {
         func gate() async -> Gate
     }
 
-    // parity: ai/src/testing.ts#complete [status=implemented hash=aa13e36d0c79]
+    // parity: ai/src/testing.ts#complete [status=implemented hash=fb681edad3f4]
     public static func complete(
         reason: AISchema.FinishReasonDetails,
         usage: AISchema.UsageInput? = nil,
@@ -7967,12 +7967,12 @@ public enum AITesting {
         return out
     }
 
-    // parity: ai/src/testing.ts#stop [status=implemented hash=af5fb6bf8bda]
+    // parity: ai/src/testing.ts#stop [status=implemented hash=12bc0ceb4ff3]
     public static func stop(_ events: AISchema.LLMEvent...) -> [AISchema.LLMEvent] {
         complete(reason: AISchema.FinishReasonDetails(normalized: .stop), events: events)
     }
 
-    // parity: ai/src/testing.ts#toolCalls [status=implemented hash=f4584a73ee19]
+    // parity: ai/src/testing.ts#toolCalls [status=implemented hash=651819f0f4ac]
     public static func toolCalls(_ events: AISchema.LLMEvent...) -> [AISchema.LLMEvent] {
         complete(reason: AISchema.FinishReasonDetails(normalized: .toolCalls), events: events)
     }
@@ -7990,7 +7990,7 @@ public enum AITesting {
         complete(reason: AISchema.FinishReasonDetails(normalized: .stop), events: textEvents(value, id: id))
     }
 
-    // parity: ai/src/testing.ts#textWithUsage [status=implemented hash=7af3fbcd52eb]
+    // parity: ai/src/testing.ts#textWithUsage [status=implemented hash=ff5eeb2446be]
     public static func textWithUsage(_ value: String, id: String = "text-0", inputTokens: Double) -> [AISchema.LLMEvent] {
         complete(
             reason: AISchema.FinishReasonDetails(normalized: .stop),
@@ -7999,7 +7999,7 @@ public enum AITesting {
         )
     }
 
-    // parity: ai/src/testing.ts#toolCall [status=implemented hash=e6139a2b5fe4]
+    // parity: ai/src/testing.ts#toolCall [status=implemented hash=f5015459f237]
     public static func toolCall(id: String, name: String, input: JSONValue) -> [AISchema.LLMEvent] {
         toolCalls(.toolCall(AISchema.ToolCall(id: id, name: name, input: input)))
     }
@@ -8213,7 +8213,7 @@ public enum AITesting {
         }
     }
 
-    // parity: ai/src/testing.ts#testLayer [status=implemented hash=1148de5f09a0]
+    // parity: ai/src/testing.ts#testLayer [status=implemented hash=daa1aef0d1d1]
     public static func testLayer(_ options: LayerOptions = LayerOptions()) -> Test {
         Test(options: options)
     }

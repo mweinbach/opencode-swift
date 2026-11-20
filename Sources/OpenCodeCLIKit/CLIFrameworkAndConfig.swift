@@ -47,7 +47,7 @@ public enum CLIUtil {
         }()
         // parity: cli/src/version.ts#OPENCODE_ARTIFACT [status=implemented hash=a68bef1bc782]
         public static let OPENCODE_ARTIFACT: String = "cli"
-        // parity: cli/src/version.ts#OPENCODE_HIGHLIGHTS [status=implemented hash=0ea9a722a821]
+        // parity: cli/src/version.ts#OPENCODE_HIGHLIGHTS [status=implemented hash=50532af0ac5a]
         public static let OPENCODE_HIGHLIGHTS: [ReleaseHighlight] = []
 
         // parity: cli/src/version.ts#OPENCODE_LOCAL [status=implemented hash=f27e42b689b3]
@@ -300,7 +300,7 @@ public enum CLIUtil {
         public static let DEADLINE: Duration = .seconds(10)
 
         /// Installs a bounded signal teardown guard matching `ShutdownDeadline.install`.
-        // parity: cli/src/shutdown-deadline.ts#install [status=adapted hash=da4143a575a2]
+        // parity: cli/src/shutdown-deadline.ts#install [status=adapted hash=8e000542ea49]
         public static func install(
             _ deadline: Duration = DEADLINE,
             _ context: CLIContext = CLIContext.current,
@@ -393,7 +393,7 @@ public enum CLIUtil {
         }
 
         /// Listens for `SIGPROF` on non-Windows hosts and writes a diagnostic `.cpuprofile` to `global.log`.
-        // parity: cli/src/cpu-profile.ts#listen [status=adapted hash=e5053e2b1f87]
+        // parity: cli/src/cpu-profile.ts#listen [status=adapted hash=76fa74adaa8a]
         public static let listen: @Sendable (CLIContext) -> Listener = { context in
             if context.platformOS == .windows {
                 return Listener(stop: {}, trigger: { nil })
@@ -445,7 +445,7 @@ public enum CLIUtil {
         }
 
         /// Listens for `SIGUSR1` on non-Windows hosts and writes a heap snapshot to `global.log`.
-        // parity: cli/src/heap.ts#listen [status=adapted hash=f311bb409531]
+        // parity: cli/src/heap.ts#listen [status=adapted hash=c3b81f289dbf]
         public static let listen: @Sendable (CLIContext) -> Listener = { context in
             if context.platformOS == .windows {
                 return Listener(stop: {}, trigger: { nil })
@@ -494,7 +494,7 @@ public enum CLIUtil {
         public typealias Exchange = @Sendable (_ port: Int, _ payload: String) async throws -> String
 
         /// OpenSSH askpass IPC protocol over loopback TCP (`127.0.0.1:OPENCODE_SSH_ASKPASS_PORT`).
-        // parity: cli/src/ssh-askpass.ts#askpass [status=adapted hash=3217e721c497]
+        // parity: cli/src/ssh-askpass.ts#askpass [status=adapted hash=49cb3ff1263b]
         public static let askpass: @Sendable (CLIContext, Exchange?) async -> Int32 = { context, customExchange in
             guard let portStr = context.envVariable("OPENCODE_SSH_ASKPASS_PORT"),
                   let port = Int(portStr),
@@ -687,7 +687,7 @@ public enum CLIUtil {
         }
 
         /// Loads Web UI assets from an embedded archive or local source directory.
-        // parity: cli/src/app-assets.ts#load [status=adapted hash=4093820d5c4e]
+        // parity: cli/src/app-assets.ts#load [status=adapted hash=684800d52b7e]
         public static func load(
             embeddedArchive: [UInt8]? = nil,
             decompress: (@Sendable ([UInt8]) throws -> [UInt8])? = nil,
@@ -831,7 +831,7 @@ public enum CLIUtil {
             "--disable-warning=ExperimentalWarning",
         ]
 
-        // parity: cli/src/node/target.ts#attentionSoundAssets [status=implemented hash=cf0974d6f8d4]
+        // parity: cli/src/node/target.ts#attentionSoundAssets [status=implemented hash=869eba978538]
         public static let attentionSoundAssets: [String] = [
             "@opencode/ui/audio/bip-bop-01.mp3",
             "@opencode/ui/audio/bip-bop-03.mp3",
@@ -996,7 +996,7 @@ public enum CLIFramework {
             }
         }
 
-        // parity: cli/src/framework/spec.ts#Node [status=implemented hash=17f3ec3afa9e]
+        // parity: cli/src/framework/spec.ts#Node [status=implemented hash=d8d508df50a9]
         public protocol Node: Sendable {
             var name: String { get }
             var description: String? { get }
@@ -1052,7 +1052,7 @@ public enum CLIFramework {
             }
         }
 
-        // parity: cli/src/framework/spec.ts#make [status=implemented hash=2717f96c2efd]
+        // parity: cli/src/framework/spec.ts#make [status=implemented hash=7729684f0cbd]
         public static func make(_ name: String, options: Options = Options()) -> CommandNode {
             let primary = options.aliases.first
             let extraAliases: [CommandNode] = options.aliases.dropFirst().map { alias in
@@ -1084,7 +1084,7 @@ public enum CLIFramework {
 
     public enum Runtime {
         /// Parsed invocation payload handed to command handlers.
-        // parity: cli/src/framework/runtime.ts#Input [status=adapted hash=7923a76f3f21]
+        // parity: cli/src/framework/runtime.ts#Input [status=adapted hash=89f37cb5e32d]
         public struct Input: Equatable, Sendable {
             public let commandPath: [String]
             public let booleans: [String: Bool]
@@ -1165,7 +1165,7 @@ public enum CLIFramework {
         public typealias LazyLoader = @Sendable () async -> HandlerFn
 
         /// Hierarchical command handler registration map mirroring `Runtime.Handlers<Node>`.
-        // parity: cli/src/framework/runtime.ts#Handlers [status=adapted hash=31115a867634]
+        // parity: cli/src/framework/runtime.ts#Handlers [status=adapted hash=070ea0bfed78]
         public indirect enum Handlers: Sendable {
             case leaf(LazyLoader)
             case branch(selfHandler: LazyLoader?, children: [String: Handlers])
@@ -1251,7 +1251,7 @@ public enum CLIFramework {
 
         /// Parses `arguments` against `commands`, handles `--help` and `--version`, sets global flags,
         /// and dispatches the matched command handler.
-        // parity: cli/src/framework/runtime.ts#run [status=adapted hash=33319181cd95]
+        // parity: cli/src/framework/runtime.ts#run [status=adapted hash=8189683f2327]
         public static func run(
             _ commands: Spec.CommandNode,
             handlers boundHandlers: [BoundHandler],
@@ -1685,7 +1685,7 @@ public enum CLIConfig {
     public static let SchemaURL = "https://opencode.ai/v2/cli.json"
 
     /// CLI configuration document (`$schema` + all `TUIConfig.Info` settings).
-    // parity: cli/src/config/schema.ts#Info [status=implemented hash=2763e4c55004]
+    // parity: cli/src/config/schema.ts#Info [status=implemented hash=8bb587c8f3bb]
     public struct Info: Equatable, Sendable, Codable {
         public var schema: String?
         public var tui: TUIConfig.Info
@@ -2055,7 +2055,7 @@ public enum CLIConfig {
         }
     }
 
-    // parity: cli/src/config/config.ts#layer [status=adapted hash=024374f43432]
+    // parity: cli/src/config/config.ts#layer [status=adapted hash=eba11449aae9]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { _, _ in
         let service = Service(context: CLIContext.current)
         return LayerNode.Output([Service.serviceKey: service])
@@ -2090,7 +2090,7 @@ public enum CLIConfig {
 
         /// Migrates existing `cli.json` (legacy `terminal.copy_on_select` and V1 keybind names)
         /// or creates `cli.json` from V1 `tui.json` + `kv.json`.
-        // parity: cli/src/config/migrate.ts#run [status=implemented hash=742f5843b585]
+        // parity: cli/src/config/migrate.ts#run [status=implemented hash=6335646cc5f8]
         public static func run(
             _ input: Input,
             fileSystem: any OpenCodeFileSystem = CLIContext.current.fileSystem
@@ -3402,7 +3402,7 @@ public enum CLIUI {
             }
         }
 
-        // parity: cli/src/ui/prompt.ts#openUrl [status=implemented hash=6c6e28956e2f]
+        // parity: cli/src/ui/prompt.ts#openUrl [status=implemented hash=79c3c58af983]
         public static func openUrl(
             _ url: String,
             launcher: (@Sendable (String) async throws -> Void)? = nil

@@ -1,5 +1,5 @@
 /// Branded Workspace identifier (`wrk_<26 ascending chars>`).
-// parity: schema/src/workspace-id.ts#WorkspaceID [status=implemented hash=8a553a2cbb88]
+// parity: schema/src/workspace-id.ts#WorkspaceID [status=implemented hash=7f9a293fa514]
 public struct WorkspaceID: RawRepresentable, Hashable, Sendable, Codable, CustomStringConvertible {
     public let rawValue: String
 

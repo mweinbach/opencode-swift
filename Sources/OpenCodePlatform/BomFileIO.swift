@@ -2,7 +2,7 @@ import OpenCodeUtil
 
 /// File-backed BOM helpers matching `util/src/bom.ts#readFile` and `syncFile`.
 public enum BomFileIO {
-    // parity: util/src/bom.ts#readFile [status=implemented hash=47ed372886c6]
+    // parity: util/src/bom.ts#readFile [status=implemented hash=cf531169cc47]
     public static func readFile(
         fs: any OpenCodeFileSystem,
         filepath: String
@@ -10,7 +10,7 @@ public enum BomFileIO {
         Bom.decodeBytes(try await fs.readFile(at: filepath))
     }
 
-    // parity: util/src/bom.ts#syncFile [status=implemented hash=41fee28053c4]
+    // parity: util/src/bom.ts#syncFile [status=implemented hash=bc8f47e47d58]
     public static func syncFile(
         fs: any OpenCodeFileSystem,
         filepath: String,

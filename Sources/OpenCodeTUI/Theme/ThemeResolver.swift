@@ -380,7 +380,7 @@ public func selectTheme(_ document: ThemeDocument, mode: Mode = .light) throws -
 }
 
 /// Selects and merges the requested `mode` (or first supported mode) from a `ThemeDocument`, returning both theme and resolved mode.
-// parity: theme/src/tui/select.ts#selectThemeMode [status=implemented hash=494ed9fe9ca3]
+// parity: theme/src/tui/select.ts#selectThemeMode [status=implemented hash=e79ee3a5171c]
 public func selectThemeMode(_ document: ThemeDocument, mode: Mode = .light) throws -> SelectedThemeMode {
     let modes = themeModes(document)
     guard let firstMode = modes.first else {

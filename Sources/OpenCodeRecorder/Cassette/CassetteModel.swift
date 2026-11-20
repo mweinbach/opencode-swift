@@ -168,7 +168,7 @@ public struct Cassette: Equatable, Sendable, Codable {
 }
 
 /// Runtime schema for `Cassette`.
-// parity: http-recorder/src/cassette/model.ts#CassetteSchema [status=implemented hash=5e5983326c71]
+// parity: http-recorder/src/cassette/model.ts#CassetteSchema [status=implemented hash=f4b7a8bf150e]
 public let CassetteSchema = RecorderSchema<Cassette>(
     name: "Cassette",
     decode: { value in

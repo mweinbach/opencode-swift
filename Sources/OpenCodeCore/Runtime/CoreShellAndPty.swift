@@ -14,7 +14,7 @@ public enum CoreShell {
     // MARK: - Shell Scanner (`core/src/shell/scan.ts`)
 
     public enum Scan {
-        // parity: core/src/shell/scan.ts#OpaqueReason [status=implemented hash=b4353bfd628a]
+        // parity: core/src/shell/scan.ts#OpaqueReason [status=implemented hash=2f6f9daccc27]
         public enum OpaqueReason: String, Equatable, Hashable, Sendable, Codable {
             case commandSubstitution = "command-substitution"
             case compoundCommand = "compound-command"
@@ -59,7 +59,7 @@ public enum CoreShell {
             }
         }
 
-        // parity: core/src/shell/scan.ts#Result [status=implemented hash=28c825e178d8]
+        // parity: core/src/shell/scan.ts#Result [status=implemented hash=ae7a3f1b3bed]
         public enum Result: Equatable, Hashable, Sendable {
             case scanned(commands: [Command])
             case opaque(reason: OpaqueReason)
@@ -152,7 +152,7 @@ public enum CoreShell {
         }
 
         /// Scans a shell command into permission resources, save patterns, and directory operands (`cd ...`).
-        // parity: core/src/shell/parse.ts#scan [status=adapted hash=837d112160a0]
+        // parity: core/src/shell/parse.ts#scan [status=adapted hash=afeb3f81e4e6]
         public static func scan(command: String, shell: String, cwd: String, home: Home = .server) throws -> Result {
             let resolvedHome: String?
             switch home {
@@ -599,7 +599,7 @@ public enum CoreShell {
             }
         }
 
-        // parity: core/src/shell/select.ts#Options [status=implemented hash=acdbb17d0890]
+        // parity: core/src/shell/select.ts#Options [status=implemented hash=f60d2d5b2b3a]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let gitbash: String?
 
@@ -692,7 +692,7 @@ public enum CoreShell {
             }
         }
 
-        // parity: core/src/shell/select.ts#environment [status=implemented hash=3adcd2f75d35]
+        // parity: core/src/shell/select.ts#environment [status=implemented hash=332b72194d05]
         public static func environment(
             compatible: Bool = false,
             env: any EnvironmentProviding = SystemEnvironment.shared,
@@ -835,7 +835,7 @@ public enum CoreShell {
 
     // MARK: - Core Shell Execution Service (`core/src/shell.ts`)
 
-    // parity: core/src/shell.ts#NotFoundError [status=implemented hash=11702508e949]
+    // parity: core/src/shell.ts#NotFoundError [status=implemented hash=14a02944aec6]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Shell.NotFoundError"
         public let id: ShellSchema.ID
@@ -860,7 +860,7 @@ public enum CoreShell {
         case killed
     }
 
-    // parity: core/src/shell.ts#ToolCall [status=implemented hash=1e6578da75d5]
+    // parity: core/src/shell.ts#ToolCall [status=implemented hash=d722594660c1]
     public struct ToolCall: Equatable, Hashable, Sendable, Codable {
         public let sessionID: String
         public let assistantMessageID: String
@@ -1304,7 +1304,7 @@ public enum CoreShell {
     }
 
     /// Cleans up expired `sh_*.out` files older than `RETENTION`.
-    // parity: core/src/shell.ts#cleanup [status=implemented hash=9758b3a6552f]
+    // parity: core/src/shell.ts#cleanup [status=implemented hash=085f5da598ac]
     public static func cleanup(
         globalPaths: Global.Interface = Global.make(),
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
@@ -1328,14 +1328,14 @@ public enum CoreShell {
         )
     }
 
-    // parity: core/src/shell.ts#daemonNode [status=adapted hash=9e82fe7a5c1c]
+    // parity: core/src/shell.ts#daemonNode [status=adapted hash=13c1fd5a2341]
     public static let daemonNode: LayerNode.Provider = AppNode.makeGlobalNode(
         Daemon.serviceKey,
         LayerNode.ExecutableLayer.succeed(key: Daemon.serviceKey, value: Daemon() as any DaemonInterface),
         []
     )
 
-    // parity: core/src/shell.ts#node [status=adapted hash=07f0b8100386]
+    // parity: core/src/shell.ts#node [status=adapted hash=c356306dfe05]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -1669,7 +1669,7 @@ public enum CorePty {
         // parity: core/src/pty/ticket.ts#ConnectToken [status=implemented hash=77110e49863b]
         public typealias ConnectToken = PtyTicketSchema.ConnectToken
 
-        // parity: core/src/pty/ticket.ts#Target [status=implemented hash=f793376c14cf]
+        // parity: core/src/pty/ticket.ts#Target [status=implemented hash=0177018861b4]
         public enum Target: Equatable, Hashable, Sendable, Codable {
             case pty(PtySchema.ID)
             case mcpClient(String)
@@ -1766,7 +1766,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/pty/ticket.ts#make [status=implemented hash=42d13716857c]
+        // parity: core/src/pty/ticket.ts#make [status=implemented hash=cf9ea0c63234]
         public static func make(
             ttlMs: Int64 = defaultTtlMs,
             nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() }
@@ -1774,7 +1774,7 @@ public enum CorePty {
             Service(ttlMs: ttlMs, nowMs: nowMs)
         }
 
-        // parity: core/src/pty/ticket.ts#node [status=adapted hash=0690353164c9]
+        // parity: core/src/pty/ticket.ts#node [status=adapted hash=7ea7d0749e66]
         public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: make() as any Interface),
@@ -1836,7 +1836,7 @@ public enum CorePty {
         }
     }
 
-    // parity: core/src/pty.ts#NotFoundError [status=implemented hash=6bbcd6ccf736]
+    // parity: core/src/pty.ts#NotFoundError [status=implemented hash=bd8f20013b8a]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Pty.NotFoundError"
         public let ptyID: ID
@@ -1848,7 +1848,7 @@ public enum CorePty {
         public var description: String { "PTY session not found: \(ptyID.rawValue)" }
     }
 
-    // parity: core/src/pty.ts#ExitedError [status=implemented hash=bf0b20272b47]
+    // parity: core/src/pty.ts#ExitedError [status=implemented hash=a0f1f50d6140]
     public struct ExitedError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "Pty.ExitedError"
         public let ptyID: ID
@@ -2282,7 +2282,7 @@ public enum CorePty {
         }
     }
 
-    // parity: core/src/pty.ts#node [status=adapted hash=9a07b38bb101]
+    // parity: core/src/pty.ts#node [status=adapted hash=2ebd5071b8e4]
     public static let node: LayerNode.Provider = AppNode.makeLocationNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -2348,7 +2348,7 @@ public enum CorePty {
         }
 
         /// Default native PTY daemon binary binding (`core/src/persistent-pty/pty-binding.ts#default`).
-        // parity: core/src/persistent-pty/pty-binding.ts#default [status=adapted hash=7c9e106c63ba]
+        // parity: core/src/persistent-pty/pty-binding.ts#default [status=adapted hash=73ce7229059a]
         public static let ptyBinding: PtyBindingDescriptor? = {
             if let override = SystemEnvironment.shared.variable("OPENCODE_PTY_BIN"), !override.isEmpty {
                 return .path(override)
@@ -2359,22 +2359,22 @@ public enum CorePty {
         // parity: core/src/persistent-pty/daemon.ts#Metadata [status=implemented hash=1a80e9f0220c]
         public typealias Metadata = [String: JSONValue]
 
-        // parity: core/src/persistent-pty/daemon.ts#ProcessInfo [status=implemented hash=ecf7d912fce9]
+        // parity: core/src/persistent-pty/daemon.ts#ProcessInfo [status=implemented hash=e9987a94eaa3]
         public typealias ProcessInfo = ProcessDaemon.ProcessInfo
 
         // parity: core/src/persistent-pty/daemon.ts#Signal [status=implemented hash=f2920e0faffd]
         public typealias Signal = ProcessDaemon.ProcessSignal
 
-        // parity: core/src/persistent-pty/daemon.ts#WireResponse [status=implemented hash=103df49e9daf]
+        // parity: core/src/persistent-pty/daemon.ts#WireResponse [status=implemented hash=fe7bd461d99a]
         public typealias WireResponse = ProcessDaemon.Response
 
-        // parity: core/src/persistent-pty/daemon.ts#Exited [status=implemented hash=25e7ad2653c3]
+        // parity: core/src/persistent-pty/daemon.ts#Exited [status=implemented hash=88bf73ec0731]
         public typealias Exited = ProcessDaemon.ProcessExit
 
         // parity: core/src/persistent-pty/daemon.ts#Role [status=implemented hash=d82b7305bc66]
         public typealias Role = ProcessDaemon.AttachmentRole
 
-        // parity: core/src/persistent-pty/daemon.ts#StreamEvent [status=implemented hash=4050d49d2d4d]
+        // parity: core/src/persistent-pty/daemon.ts#StreamEvent [status=implemented hash=2edc63d3e524]
         public typealias StreamEvent = ProcessDaemon.StreamEvent
 
         // parity: core/src/persistent-pty/daemon.ts#SubscribeInput [status=implemented hash=49932216e136]
@@ -2429,7 +2429,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/daemon.ts#DaemonError [status=implemented hash=69c7fc08e599]
+        // parity: core/src/persistent-pty/daemon.ts#DaemonError [status=implemented hash=e6b8e5daf5b1]
         public struct DaemonError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public enum Kind: String, Equatable, Hashable, Sendable, Codable {
                 case connect
@@ -2566,7 +2566,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/daemon.ts#makeDaemonTransport [status=adapted hash=6861993f1804]
+        // parity: core/src/persistent-pty/daemon.ts#makeDaemonTransport [status=adapted hash=79f53e95025b]
         public static func makeDaemonTransport(
             root: String,
             backend: ProcessDaemon.BackendMode = CorePty.defaultBackend
@@ -2578,7 +2578,7 @@ public enum CorePty {
     // MARK: - Persistent PTY Service (`core/src/persistent-pty/index.ts`)
 
     public enum Persistent {
-        // parity: core/src/persistent-pty/index.ts#Options [status=implemented hash=cb026121f7e6]
+        // parity: core/src/persistent-pty/index.ts#Options [status=implemented hash=76b980a7fe18]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let handoff: PersistentPtySchema.Handoff?
             public let root: String?
@@ -2621,7 +2621,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/index.ts#UnavailableError [status=implemented hash=4b837ca153d4]
+        // parity: core/src/persistent-pty/index.ts#UnavailableError [status=implemented hash=eb1440615650]
         public struct UnavailableError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "PersistentPty.UnavailableError"
             public let message: String
@@ -2630,7 +2630,7 @@ public enum CorePty {
             public var description: String { message }
         }
 
-        // parity: core/src/persistent-pty/index.ts#RequestError [status=implemented hash=a8df123e75af]
+        // parity: core/src/persistent-pty/index.ts#RequestError [status=implemented hash=8b1157403b9e]
         public struct RequestError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "PersistentPty.RequestError"
             public let message: String
@@ -2639,7 +2639,7 @@ public enum CorePty {
             public var description: String { message }
         }
 
-        // parity: core/src/persistent-pty/index.ts#NotFoundError [status=implemented hash=8f433fa428e3]
+        // parity: core/src/persistent-pty/index.ts#NotFoundError [status=implemented hash=ab06c30777f6]
         public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "PersistentPty.NotFoundError"
             public let ptyID: PtySchema.ID
@@ -2648,7 +2648,7 @@ public enum CorePty {
             public var description: String { "Persistent PTY not found: \(ptyID.rawValue)" }
         }
 
-        // parity: core/src/persistent-pty/index.ts#ProcessNotFoundError [status=implemented hash=f947cb49fe5c]
+        // parity: core/src/persistent-pty/index.ts#ProcessNotFoundError [status=implemented hash=fab13ac4d13f]
         public struct ProcessNotFoundError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "PersistentPty.ProcessNotFoundError"
             public let processID: UInt64
@@ -2657,7 +2657,7 @@ public enum CorePty {
             public var description: String { "Persistent pipe process not found: \(processID)" }
         }
 
-        // parity: core/src/persistent-pty/index.ts#InvalidCwdError [status=implemented hash=b6be32fbe9b5]
+        // parity: core/src/persistent-pty/index.ts#InvalidCwdError [status=implemented hash=e47831715012]
         public struct InvalidCwdError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
             public static let tag = "PersistentPty.InvalidCwdError"
             public let cwd: String
@@ -3267,7 +3267,7 @@ public enum CorePty {
             }
         }
 
-        // parity: core/src/persistent-pty/index.ts#configured [status=adapted hash=f70ed791c2ee]
+        // parity: core/src/persistent-pty/index.ts#configured [status=adapted hash=c70c6cc5af6d]
         public static func configured(_ options: Options? = nil) -> LayerNode.Provider {
             AppNode.makeGlobalNode(
                 Service.serviceKey,

@@ -82,7 +82,7 @@ public struct CoreSessionLiveSnapshotBridge: CoreSessionSnapshotBridge, Sendable
 
 /// Stages, clears, and commits session history + workspace reverts (`packages/core/src/session/revert.ts`).
 public enum CoreSessionRevert {
-    // parity: core/src/session/revert.ts#stage [status=implemented hash=566591ac1964]
+    // parity: core/src/session/revert.ts#stage [status=implemented hash=f5cec1bf174e]
     public static func stage(
         db: any SQLiteDatabase,
         bus: CoreBus.Service,
@@ -132,7 +132,7 @@ public enum CoreSessionRevert {
         return revert
     }
 
-    // parity: core/src/session/revert.ts#clear [status=implemented hash=0d4220d84a9a]
+    // parity: core/src/session/revert.ts#clear [status=implemented hash=7c60027c7420]
     public static func clear(
         bus: CoreBus.Service,
         session: SessionSchema.Info,
@@ -150,7 +150,7 @@ public enum CoreSessionRevert {
         )
     }
 
-    // parity: core/src/session/revert.ts#commit [status=implemented hash=0b0f6b2aa57c]
+    // parity: core/src/session/revert.ts#commit [status=implemented hash=66345ee0c92a]
     public static func commit(bus: CoreBus.Service, session: SessionSchema.Info) async throws {
         guard let revert = session.revert else { return }
         _ = try await bus.publish(
@@ -199,7 +199,7 @@ public enum CoreSessionRevert {
 
 /// Session directory/project relocation service (`packages/core/src/session/move.ts`).
 public enum CoreSessionMove {
-    // parity: core/src/session/move.ts#DestinationNotFoundError [status=implemented hash=96f2b32e1a81]
+    // parity: core/src/session/move.ts#DestinationNotFoundError [status=implemented hash=c3ea9a5d69b5]
     public struct DestinationNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.DestinationNotFoundError"
         public let directory: String
@@ -211,7 +211,7 @@ public enum CoreSessionMove {
         public var description: String { "Destination directory not found: \(directory)" }
     }
 
-    // parity: core/src/session/move.ts#DestinationNotDirectoryError [status=implemented hash=c2c7a9a079a8]
+    // parity: core/src/session/move.ts#DestinationNotDirectoryError [status=implemented hash=bd933e2b95c4]
     public struct DestinationNotDirectoryError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.DestinationNotDirectoryError"
         public let directory: String
@@ -223,7 +223,7 @@ public enum CoreSessionMove {
         public var description: String { "Destination is not a directory: \(directory)" }
     }
 
-    // parity: core/src/session/move.ts#DestinationUnavailableError [status=implemented hash=a3b0a70b785f]
+    // parity: core/src/session/move.ts#DestinationUnavailableError [status=implemented hash=2638e1b2d24e]
     public struct DestinationUnavailableError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.DestinationUnavailableError"
         public let directory: String
@@ -348,7 +348,7 @@ public enum CoreSessionMove {
         }
     }
 
-    // parity: core/src/session/move.ts#node [status=adapted hash=1fb9ad70fcac]
+    // parity: core/src/session/move.ts#node [status=adapted hash=d2d179e7796d]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -378,7 +378,7 @@ public enum CoreSessionMove {
 
 /// Computes snapshot diffs across a turn bounded by message IDs (`packages/core/src/session/diff.ts`).
 public enum CoreSessionDiff {
-    // parity: core/src/session/diff.ts#TurnRangeError [status=implemented hash=6e416d692ab8]
+    // parity: core/src/session/diff.ts#TurnRangeError [status=implemented hash=76ddbde77e03]
     public struct TurnRangeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionDiff.TurnRangeError"
         public let sessionID: SessionID
@@ -396,7 +396,7 @@ public enum CoreSessionDiff {
         }
     }
 
-    // parity: core/src/session/diff.ts#turn [status=implemented hash=82d5f5003383]
+    // parity: core/src/session/diff.ts#turn [status=implemented hash=f7b515aa5fbc]
     public static func turn(
         db: any SQLiteDatabase,
         session: SessionSchema.Info,
@@ -454,7 +454,7 @@ public enum CoreSessionDiff {
 /// Aggregates session, step, token, cost, activity, model, and tool usage statistics from SQLite
 /// (`packages/core/src/session/stats.ts`).
 public enum CoreSessionStats {
-    // parity: core/src/session/stats.ts#InvalidRangeError [status=implemented hash=8b305be5bf32]
+    // parity: core/src/session/stats.ts#InvalidRangeError [status=implemented hash=92af089edd8f]
     public struct InvalidRangeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionStats.InvalidRangeError"
         public let from: Int64
@@ -507,7 +507,7 @@ public enum CoreSessionStats {
         return "\(ys)-\(ms)-\(ds)"
     }
 
-    // parity: core/src/session/stats.ts#get [status=implemented hash=ac9e2319e614]
+    // parity: core/src/session/stats.ts#get [status=implemented hash=021442e02e0b]
     public static func get(db: any SQLiteDatabase, input: QueryInput = QueryInput()) throws -> SessionStatsSchema.Info {
         let to = input.to ?? Flock.currentEpochMs()
         if let from = input.from, from >= to {
@@ -697,7 +697,7 @@ public enum CoreSessionTransfer {
     // parity: core/src/session/transfer.ts#Data [status=implemented hash=d2d2803eb35b]
     public typealias Data = SessionTransferSchema.Data
 
-    // parity: core/src/session/transfer.ts#ImportConflictError [status=implemented hash=97f8584160f0]
+    // parity: core/src/session/transfer.ts#ImportConflictError [status=implemented hash=067661f5d33e]
     public struct ImportConflictError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "SessionTransfer.ImportConflictError"
         public let sessionID: SessionID
@@ -866,7 +866,7 @@ public enum CoreSessionTransfer {
         }
     }
 
-    // parity: core/src/session/transfer.ts#node [status=adapted hash=f955b4aa8e07]
+    // parity: core/src/session/transfer.ts#node [status=adapted hash=bf90770f0cb6]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -912,7 +912,7 @@ public enum CoreSessionCommand {
         }
     }
 
-    // parity: core/src/session/command.ts#execute [status=implemented hash=482aa7ee2b1f]
+    // parity: core/src/session/command.ts#execute [status=implemented hash=fc5ea17ee0eb]
     public static func execute(
         session: CoreSession.Service,
         sessionID: SessionID,
@@ -942,7 +942,7 @@ public enum CoreSessionCommand {
 
 /// Interactive user shell execution recording (`packages/core/src/session/shell.ts`).
 public enum CoreSessionShell {
-    // parity: core/src/session/shell.ts#start [status=implemented hash=b59b36999087]
+    // parity: core/src/session/shell.ts#start [status=implemented hash=37aa8653318d]
     public static func start(
         bus: CoreBus.Service,
         session: SessionSchema.Info,
@@ -1003,7 +1003,7 @@ public enum CoreSessionShell {
 
 /// Skill activation helper (`packages/core/src/session/skill.ts`).
 public enum CoreSessionSkill {
-    // parity: core/src/session/skill.ts#get [status=implemented hash=c30f7b26d3f3]
+    // parity: core/src/session/skill.ts#get [status=implemented hash=350a5f8477ae]
     public static func get(
         bus: CoreBus.Service,
         sessionID: SessionID,
@@ -1205,7 +1205,7 @@ public enum CoreSession {
         }
     }
 
-    // parity: core/src/session/session.ts#make [status=implemented hash=9ee40a846d72]
+    // parity: core/src/session/session.ts#make [status=implemented hash=8214825b14d3]
     public static func make(id: SessionID, service: Service) -> Handle {
         Handle(id: id, service: service)
     }
@@ -1532,7 +1532,7 @@ public enum CoreSession {
         }
     }
 
-    // parity: core/src/session.ts#node [status=adapted hash=9c5a4b3c1db0]
+    // parity: core/src/session.ts#node [status=adapted hash=fa3e31b5a099]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

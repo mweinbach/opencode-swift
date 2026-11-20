@@ -95,7 +95,7 @@ public enum Flock {
     }
 
     /// Acquires an exclusive lock directory for `key` with stale recovery, exponential backoff, and heartbeat.
-    // parity: util/src/flock.ts#Flock.acquire [status=implemented hash=ee502e5c3024]
+    // parity: util/src/flock.ts#Flock.acquire [status=implemented hash=5fa8459dcadd]
     public static func acquire(
         _ key: String,
         options: Options = Options(),
@@ -145,7 +145,7 @@ public enum Flock {
     }
 
     /// Runs `body` while holding an exclusive lock for `key`, guaranteeing release on exit.
-    // parity: util/src/flock.ts#Flock.withLock [status=implemented hash=7ef59d710f47]
+    // parity: util/src/flock.ts#Flock.withLock [status=implemented hash=c465a3c1a52f]
     public static func withLock<T: Sendable>(
         _ key: String,
         options: Options = Options(),
@@ -308,7 +308,7 @@ public enum Flock {
 /// Service-injected flock abstraction matching `packages/util/src/effect-flock.ts`.
 // parity: util/src/effect-flock.ts#EffectFlock [status=implemented hash=10da3a02061c]
 public enum EffectFlock {
-    // parity: util/src/effect-flock.ts#EffectFlock.LockTimeoutError [status=implemented hash=99a198d0e976]
+    // parity: util/src/effect-flock.ts#EffectFlock.LockTimeoutError [status=implemented hash=247bb7d9a9e2]
     public struct LockTimeoutError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public let key: String
 
@@ -319,7 +319,7 @@ public enum EffectFlock {
         public var description: String { "LockTimeoutError: timed out acquiring lock '\(key)'" }
     }
 
-    // parity: util/src/effect-flock.ts#EffectFlock.LockCompromisedError [status=implemented hash=5f2400a5b830]
+    // parity: util/src/effect-flock.ts#EffectFlock.LockCompromisedError [status=implemented hash=77702e53bd26]
     public struct LockCompromisedError: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public let detail: String
 
@@ -400,7 +400,7 @@ public enum EffectFlock {
         }
     }
 
-    // parity: util/src/effect-flock.ts#EffectFlock.node [status=implemented hash=48efd3a37f87]
+    // parity: util/src/effect-flock.ts#EffectFlock.node [status=implemented hash=c26a88c40356]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in

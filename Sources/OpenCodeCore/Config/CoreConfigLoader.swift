@@ -237,7 +237,7 @@ public enum CoreConfigEntry: Equatable, Hashable, Sendable {
 
 public enum CoreConfigManaged {
     /// A document from managed configuration: the system config directory or MDM managed preferences.
-    // parity: core/src/config/managed.ts#Document [status=implemented hash=e3bfac62df97]
+    // parity: core/src/config/managed.ts#Document [status=implemented hash=3d4536ba0fd7]
     public struct Document: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath?
         public let info: ConfigSchema.Info
@@ -254,7 +254,7 @@ public enum CoreConfigManaged {
 public enum CoreConfigIntegration {
     /// Decodes a policy array while silently dropping statements whose `action` or `effect` is
     /// unrecognized by this version (forward compatibility with newer remote sources).
-    // parity: core/src/config/integration.ts#Policies [status=implemented hash=965ab0fccbf5]
+    // parity: core/src/config/integration.ts#Policies [status=implemented hash=3d016bf4bbed]
     public struct Policies: Equatable, Hashable, Sendable, Codable {
         public let items: [ConfigPolicySchema.Info]
 
@@ -297,7 +297,7 @@ public enum CoreConfigIntegration {
     }
 
     /// Allow-listed keys of a remote config (`providers`, `mcp`, `policies`, `websearch`).
-    // parity: core/src/config/integration.ts#Remote [status=implemented hash=3832cc5a1eb5]
+    // parity: core/src/config/integration.ts#Remote [status=implemented hash=9c0bd2356687]
     public struct Remote: Equatable, Hashable, Sendable, Codable {
         public let providers: [String: ConfigProviderSchema.Info]?
         public let mcp: ConfigMCPSchema.Info?
@@ -333,7 +333,7 @@ public enum CoreConfigIntegration {
     }
 
     /// A config document delivered by an integration connection (e.g. OpenCode Console).
-    // parity: core/src/config/integration.ts#Document [status=implemented hash=23055650cc41]
+    // parity: core/src/config/integration.ts#Document [status=implemented hash=0a9cb5e001b3]
     public struct Document: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath?
         public let info: ConfigSchema.Info
@@ -357,7 +357,7 @@ public enum CoreConfigIntegration {
     }
 
     /// A config document delivered by a well-known origin.
-    // parity: core/src/config/integration.ts#WellKnownDocument [status=implemented hash=cfaa601692e4]
+    // parity: core/src/config/integration.ts#WellKnownDocument [status=implemented hash=98533906c4a6]
     public struct WellKnownDocument: Equatable, Hashable, Sendable, Codable {
         public let path: SchemaPrimitive.AbsolutePath?
         public let info: ConfigSchema.Info
@@ -407,7 +407,7 @@ public enum CoreConfigIntegration {
     }
 
     /// Builds a sanitized integration document from remote config (strips local `env`, credential keys, and local MCP servers).
-    // parity: core/src/config/integration.ts#make [status=implemented hash=55f9608aec9e]
+    // parity: core/src/config/integration.ts#make [status=implemented hash=5dc0482476a4]
     public static func make(_ input: MakeInput) -> Document {
         let sanitizedProviders: [String: ConfigProviderSchema.Info]? = input.info.providers.map { map in
             var out: [String: ConfigProviderSchema.Info] = [:]
@@ -992,7 +992,7 @@ public enum CoreConfigVariable {
     }
 
     /// Applies `{env:VAR}` and `{file:path}` substitutions to config text.
-    // parity: core/src/config/variable.ts#substitute [status=implemented hash=74f62ff8cd1a]
+    // parity: core/src/config/variable.ts#substitute [status=implemented hash=db54f5797490]
     public static func substitute(
         _ input: SubstituteInput,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
@@ -1139,7 +1139,7 @@ public enum CoreConfigNormalize {
         }
     }
 
-    // parity: core/src/config/normalize.ts#Result [status=implemented hash=c5ad6b675dd8]
+    // parity: core/src/config/normalize.ts#Result [status=implemented hash=da67c6408d96]
     public enum Result: Equatable, Hashable, Sendable {
         case normalized(encoded: [String: JSONValue], diagnostics: [Diagnostic])
         case rejected(diagnostics: [Diagnostic])
@@ -1643,7 +1643,7 @@ public enum CoreConfigDiscovery {
     }
 
     /// Discovers all eligible config sources across system, global, explicit, and ancestor project directories.
-    // parity: core/src/config/discovery.ts#discover [status=implemented hash=045b5231dcc0]
+    // parity: core/src/config/discovery.ts#discover [status=implemented hash=814ca7c0a28d]
     public static func discover(
         directory: String,
         options: CoreConfig.Options? = nil,
@@ -1864,7 +1864,7 @@ public enum CoreConfigWatch {
     }
 
     /// Returns a predicate identifying paths whose content or presence feeds the loaded config.
-    // parity: core/src/config/watch.ts#inputs [status=implemented hash=054ca8cc797a]
+    // parity: core/src/config/watch.ts#inputs [status=implemented hash=4f9fdc12982b]
     public static func inputs(
         sources: CoreConfigDiscovery.Sources,
         references: Set<String>,
@@ -1976,7 +1976,7 @@ public enum CoreConfig {
         case custom(String)
     }
 
-    // parity: core/src/config.ts#Options [status=implemented hash=b8589d05dce2]
+    // parity: core/src/config.ts#Options [status=implemented hash=f06cfb36b814]
     public struct Options: Equatable, Hashable, Sendable {
         public let project: Bool?
         public let global: Bool?
@@ -2457,7 +2457,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#testLayer [status=adapted hash=41336500d1bd]
+    // parity: core/src/config.ts#testLayer [status=adapted hash=6300bb046047]
     public static func testLayer(
         initial: [CoreConfigEntry] = [],
         compatibility: CompatibilityRoots = CompatibilityRoots()
@@ -2471,7 +2471,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#layer [status=adapted hash=edd155b1c42a]
+    // parity: core/src/config.ts#layer [status=adapted hash=880f93656adb]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, _ in
             let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)

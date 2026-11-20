@@ -150,7 +150,7 @@ public enum Logging {
 
     /// Compacts `target` in place when its size exceeds `max`, retaining approximately the trailing `keep` bytes
     /// aligned forward to the next newline boundary.
-    // parity: util/src/observability/logging.ts#trim [status=implemented hash=4ad03e5456c5]
+    // parity: util/src/observability/logging.ts#trim [status=implemented hash=3bd786eb2e3d]
     public static func trim(
         target: String,
         max maxBytes: Int = LOG_MAX_BYTES,
@@ -512,7 +512,7 @@ public enum Otlp {
         return attrs
     }
 
-    // parity: util/src/observability/otlp.ts#resource [status=implemented hash=fda9351650d9]
+    // parity: util/src/observability/otlp.ts#resource [status=implemented hash=100e3f83b10a]
     public static func resource(
         app: App = App(),
         environment: any EnvironmentProviding = SystemEnvironment.shared,
@@ -543,7 +543,7 @@ public enum Otlp {
         ]
     }
 
-    // parity: util/src/observability/otlp.ts#tracingLayer [status=implemented hash=f691d9439716]
+    // parity: util/src/observability/otlp.ts#tracingLayer [status=implemented hash=ed568472d03d]
     public static func tracingLayer(options: Options?, app: App) -> LayerNode.ExecutableLayer {
         guard let endpoint = options?.endpoint, !endpoint.isEmpty else {
             return LayerNode.ExecutableLayer.empty
@@ -556,7 +556,7 @@ public enum Otlp {
 // MARK: - Observability (`observability.ts`)
 
 public enum Observability {
-    // parity: util/src/observability.ts#Options [status=implemented hash=0a2aa998f1ba]
+    // parity: util/src/observability.ts#Options [status=implemented hash=2abdcbee46b4]
     public struct Options: Equatable, Hashable, Sendable, Codable {
         public let endpoint: String?
         public let headers: String?
@@ -590,7 +590,7 @@ public enum Observability {
         }
     }
 
-    // parity: util/src/observability.ts#layer [status=implemented hash=5bdc4711a997]
+    // parity: util/src/observability.ts#layer [status=implemented hash=fdd59de6c214]
     public static func layer(
         options: Options? = nil,
         environment: any EnvironmentProviding = SystemEnvironment.shared,
@@ -625,7 +625,7 @@ public enum Observability {
         }
     }
 
-    // parity: util/src/observability.ts#node [status=implemented hash=3e6a40fdb0c8]
+    // parity: util/src/observability.ts#node [status=implemented hash=4243c1e97d46]
     public static let node: LayerNode.Provider = LayerNode.make(
         name: "observability",
         layer: layer(),

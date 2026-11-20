@@ -23,7 +23,7 @@ public enum CoreSessionSchema {
 
 /// Complete typed session error hierarchy (`packages/core/src/session/error.ts`).
 public enum CoreSessionErrors {
-    // parity: core/src/session/error.ts#NotFoundError [status=implemented hash=7da886e8cc82]
+    // parity: core/src/session/error.ts#NotFoundError [status=implemented hash=f388dbf0ba1d]
     public struct NotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.NotFoundError"
         public let sessionID: SessionID
@@ -35,7 +35,7 @@ public enum CoreSessionErrors {
         public var description: String { "Session not found: \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#InvalidListCursorError [status=implemented hash=aff85e925c6c]
+    // parity: core/src/session/error.ts#InvalidListCursorError [status=implemented hash=650091bd48b7]
     public struct InvalidListCursorError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.InvalidListCursorError"
         public init() {}
@@ -44,7 +44,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#MessageNotFoundError [status=implemented hash=af311e98ee93]
+    // parity: core/src/session/error.ts#MessageNotFoundError [status=implemented hash=8f3e3ba97bab]
     public struct MessageNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.MessageNotFoundError"
         public let sessionID: SessionID
@@ -58,7 +58,7 @@ public enum CoreSessionErrors {
         public var description: String { "Message \(messageID.rawValue) not found in session \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#ForkEmptyError [status=implemented hash=5043e30af634]
+    // parity: core/src/session/error.ts#ForkEmptyError [status=implemented hash=e86845e09fb2]
     public struct ForkEmptyError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.ForkEmptyError"
         public let sessionID: SessionID
@@ -72,7 +72,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#MessageDecodeError [status=implemented hash=a1996b518f07]
+    // parity: core/src/session/error.ts#MessageDecodeError [status=implemented hash=3ec9f0b46adc]
     public struct MessageDecodeError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.MessageDecodeError"
         public let sessionID: SessionID
@@ -88,7 +88,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#AgentNotFoundError [status=implemented hash=7ffd1bde9bd7]
+    // parity: core/src/session/error.ts#AgentNotFoundError [status=implemented hash=0548c68ea605]
     public struct AgentNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.AgentNotFoundError"
         public let sessionID: SessionID
@@ -104,7 +104,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#StepFailedError [status=implemented hash=8b9510f82a7f]
+    // parity: core/src/session/error.ts#StepFailedError [status=implemented hash=09076883741a]
     public struct StepFailedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.StepFailedError"
         public let error: SessionErrorSchema.Error
@@ -118,7 +118,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#PromptConflictError [status=implemented hash=253b0716ab09]
+    // parity: core/src/session/error.ts#PromptConflictError [status=implemented hash=f299e9835789]
     public struct PromptConflictError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.PromptConflictError"
         public let sessionID: SessionID
@@ -132,7 +132,7 @@ public enum CoreSessionErrors {
         public var description: String { "Prompt conflict for message \(messageID.rawValue) in session \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#SyntheticConflictError [status=implemented hash=8467c6cabbac]
+    // parity: core/src/session/error.ts#SyntheticConflictError [status=implemented hash=b1eddded7aa0]
     public struct SyntheticConflictError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.SyntheticConflictError"
         public let sessionID: SessionID
@@ -146,7 +146,7 @@ public enum CoreSessionErrors {
         public var description: String { "Synthetic conflict for input \(inputID.rawValue) in session \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#AttachmentError [status=implemented hash=02bd17763829]
+    // parity: core/src/session/error.ts#AttachmentError [status=implemented hash=327bc0bc3a11]
     public struct AttachmentError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.AttachmentError"
         public let uri: String
@@ -160,7 +160,7 @@ public enum CoreSessionErrors {
         public var description: String { message }
     }
 
-    // parity: core/src/session/error.ts#CompactionConflictError [status=implemented hash=ced3f7791c88]
+    // parity: core/src/session/error.ts#CompactionConflictError [status=implemented hash=5882f9d6dbe8]
     public struct CompactionConflictError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.CompactionConflictError"
         public let sessionID: SessionID
@@ -174,7 +174,7 @@ public enum CoreSessionErrors {
         public var description: String { "Compaction conflict for input \(inputID.rawValue) in session \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#BusyError [status=implemented hash=e2b1c1472cd5]
+    // parity: core/src/session/error.ts#BusyError [status=implemented hash=520399be5907]
     public struct BusyError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.BusyError"
         public let sessionID: SessionID
@@ -186,7 +186,7 @@ public enum CoreSessionErrors {
         public var description: String { "Session \(sessionID.rawValue) is currently busy" }
     }
 
-    // parity: core/src/session/error.ts#InboxConflictError [status=implemented hash=f24c355227b4]
+    // parity: core/src/session/error.ts#InboxConflictError [status=implemented hash=0e5bf1abf7b0]
     public struct InboxConflictError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.InboxConflictError"
         public let sessionID: SessionID
@@ -200,7 +200,7 @@ public enum CoreSessionErrors {
         public var description: String { "Inbox conflict for item \(inboxID.rawValue) in session \(sessionID.rawValue)" }
     }
 
-    // parity: core/src/session/error.ts#SkillNotFoundError [status=implemented hash=345739215aa7]
+    // parity: core/src/session/error.ts#SkillNotFoundError [status=implemented hash=f7f1a19edc32]
     public struct SkillNotFoundError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Session.SkillNotFoundError"
         public let skill: String
@@ -545,12 +545,12 @@ public enum CoreSessionBlob {
         public let hashes: Set<String>
     }
 
-    // parity: core/src/session/blob.ts#enabled [status=adapted hash=5ae23d0edda4]
+    // parity: core/src/session/blob.ts#enabled [status=adapted hash=e43443b50c68]
     public static func enabled(flagEnabled: Bool = false) -> Bool {
         flagEnabled
     }
 
-    // parity: core/src/session/blob.ts#enabledFor [status=adapted hash=60d89ba79d5c]
+    // parity: core/src/session/blob.ts#enabledFor [status=adapted hash=c9af44c0c0b6]
     public static func enabledFor(
         _ session: SessionSchema.Info,
         resolver: (@Sendable (SessionSchema.Info) async -> Bool)? = nil
@@ -559,7 +559,7 @@ public enum CoreSessionBlob {
         return await resolver(session)
     }
 
-    // parity: core/src/session/blob.ts#ForkMedia [status=adapted hash=cabe166922ca]
+    // parity: core/src/session/blob.ts#ForkMedia [status=adapted hash=9fe94d53d15e]
     @TaskLocal public static var forkMedia: Bool = false
 
     // parity: core/src/session/blob.ts#hashBytes [status=implemented hash=1a9272a537a1]
@@ -715,7 +715,7 @@ public enum CoreSessionBlob {
         return copy
     }
 
-    // parity: core/src/session/blob.ts#hydrate [status=implemented hash=49db7a9ed5c0]
+    // parity: core/src/session/blob.ts#hydrate [status=implemented hash=dee0eec6b83c]
     public static func hydrate(_ db: any SQLiteDatabase, rows: [StoredMessageRow]) throws -> [StoredMessageRow] {
         var hashes = Set<String>()
         for row in rows { collectHashes(from: row.data, into: &hashes) }
@@ -732,7 +732,7 @@ public enum CoreSessionBlob {
         }
     }
 
-    // parity: core/src/session/blob.ts#hydrateInbox [status=implemented hash=0a07b5ffbb1c]
+    // parity: core/src/session/blob.ts#hydrateInbox [status=implemented hash=4adca68474d4]
     public static func hydrateInbox(_ db: any SQLiteDatabase, rows: [StoredInboxRow]) throws -> [StoredInboxRow] {
         var hashes = Set<String>()
         for row in rows { collectHashes(from: row.payload, into: &hashes) }
@@ -749,7 +749,7 @@ public enum CoreSessionBlob {
         }
     }
 
-    // parity: core/src/session/blob.ts#keepRefs [status=implemented hash=f89c145f4c83]
+    // parity: core/src/session/blob.ts#keepRefs [status=implemented hash=d46a735f9fa4]
     public static func keepRefs(
         _ db: any SQLiteDatabase,
         rows: [StoredMessageRow]
@@ -779,7 +779,7 @@ public enum CoreSessionBlob {
         return (rewritten, meta)
     }
 
-    // parity: core/src/session/blob.ts#keepInboxRefs [status=implemented hash=108461eaa488]
+    // parity: core/src/session/blob.ts#keepInboxRefs [status=implemented hash=c262e3717313]
     public static func keepInboxRefs(
         _ db: any SQLiteDatabase,
         rows: [StoredInboxRow]
@@ -822,7 +822,7 @@ public enum CoreSessionBlob {
         }
     }
 
-    // parity: core/src/session/blob.ts#read [status=implemented hash=a76030cd4491]
+    // parity: core/src/session/blob.ts#read [status=implemented hash=2e1b05087ee8]
     public static func read(_ db: any SQLiteDatabase, hash: String) throws -> (mime: String, data: [UInt8])? {
         guard let row = try db.queryOne(
             """
@@ -838,7 +838,7 @@ public enum CoreSessionBlob {
         return (mime, bytes)
     }
 
-    // parity: core/src/session/blob.ts#save [status=implemented hash=1479187fad61]
+    // parity: core/src/session/blob.ts#save [status=implemented hash=1edbce8df201]
     public static func save(_ db: any SQLiteDatabase, blobs: [BlobInsert]) throws {
         guard !blobs.isEmpty else { return }
         let now = Flock.currentEpochMs()
@@ -932,7 +932,7 @@ public enum CoreSessionBlob {
         return SplitResult(data: finalData, moved: moved, blobs: Array(pending.values), hashes: hashes)
     }
 
-    // parity: core/src/session/blob.ts#externalizePayload [status=implemented hash=c423e50b2164]
+    // parity: core/src/session/blob.ts#externalizePayload [status=implemented hash=cbfb427ecdcd]
     public static func externalizePayload(
         _ db: any SQLiteDatabase,
         payload: [String: JSONValue],
@@ -945,7 +945,7 @@ public enum CoreSessionBlob {
         return res.data
     }
 
-    // parity: core/src/session/blob.ts#externalize [status=implemented hash=e5044424bc6a]
+    // parity: core/src/session/blob.ts#externalize [status=implemented hash=1a2f7bbde7b6]
     public static func externalize(
         _ db: any SQLiteDatabase,
         messageData: [String: JSONValue],
@@ -958,7 +958,7 @@ public enum CoreSessionBlob {
         return (res.data, true)
     }
 
-    // parity: core/src/session/blob.ts#externalizePart [status=implemented hash=e6ac61c25622]
+    // parity: core/src/session/blob.ts#externalizePart [status=implemented hash=bea2722ae515]
     public static func externalizePart(
         _ db: any SQLiteDatabase,
         part: SessionMessageSchema.AssistantContent,
@@ -974,7 +974,7 @@ public enum CoreSessionBlob {
         return (decoded, true)
     }
 
-    // parity: core/src/session/blob.ts#externalizeRow [status=implemented hash=a19e8f35750b]
+    // parity: core/src/session/blob.ts#externalizeRow [status=implemented hash=b8df7f5f14c1]
     public static func externalizeRow(_ db: any SQLiteDatabase, data: [String: JSONValue]) throws -> [String: JSONValue] {
         let res = split(data)
         guard res.moved else { return data }
@@ -982,14 +982,14 @@ public enum CoreSessionBlob {
         return res.data
     }
 
-    // parity: core/src/session/blob.ts#recordRefs [status=implemented hash=dc8accdc7794]
+    // parity: core/src/session/blob.ts#recordRefs [status=implemented hash=07bf448a71b9]
     public static func recordRefs(_ db: any SQLiteDatabase, owner: Owner, data: [String: JSONValue]) throws {
         var hashes = Set<String>()
         collectHashes(from: data, into: &hashes)
         try recordHashes(db, owner: owner, hashes: hashes)
     }
 
-    // parity: core/src/session/blob.ts#recordHashes [status=implemented hash=e3f981b655cb]
+    // parity: core/src/session/blob.ts#recordHashes [status=implemented hash=241030e31ce0]
     public static func recordHashes(_ db: any SQLiteDatabase, owner: Owner, hashes: Set<String>) throws {
         guard !hashes.isEmpty else { return }
         var existingHashes: [String] = []
@@ -1018,7 +1018,7 @@ public enum CoreSessionBlob {
         }
     }
 
-    // parity: core/src/session/blob.ts#syncRefs [status=implemented hash=7a17ba0b05f3]
+    // parity: core/src/session/blob.ts#syncRefs [status=implemented hash=602a4bf93d6d]
     public static func syncRefs(_ db: any SQLiteDatabase, owner: Owner, data: [String: JSONValue]) throws {
         try recordRefs(db, owner: owner, data: data)
         var present = Set<String>()
@@ -1156,7 +1156,7 @@ public enum CoreSessionHistory {
         return dict
     }
 
-    // parity: core/src/session/history.ts#isNativeCompaction [status=implemented hash=f6ade73739d9]
+    // parity: core/src/session/history.ts#isNativeCompaction [status=implemented hash=9fd96222778a]
     public static func isNativeCompaction(_ message: SessionMessageSchema.Info) -> Bool {
         guard case .compaction(.completed(let comp)) = message else { return false }
         return comp.native?["messages"] != nil
@@ -1208,7 +1208,7 @@ public enum CoreSessionHistory {
         )
     }
 
-    // parity: core/src/session/history.ts#withParts [status=implemented hash=cd841830fe74]
+    // parity: core/src/session/history.ts#withParts [status=implemented hash=197ef73d1161]
     public static func withParts(
         _ db: any SQLiteDatabase,
         rows: [CoreSessionBlob.StoredMessageRow]
@@ -1256,7 +1256,7 @@ public enum CoreSessionHistory {
         return upgraded
     }
 
-    // parity: core/src/session/history.ts#decodePartRowSync [status=implemented hash=c074118e0a72]
+    // parity: core/src/session/history.ts#decodePartRowSync [status=implemented hash=89e63ba4eb08]
     public static func decodePartRowSync(_ row: SQLiteRow) throws -> SessionMessageSchema.AssistantContent {
         guard let raw = row.string("data"),
               let type = row.string("type"),
@@ -1283,7 +1283,7 @@ public enum CoreSessionHistory {
         }
     }
 
-    // parity: core/src/session/history.ts#decodeMessageRows [status=implemented hash=ab927143ecf7]
+    // parity: core/src/session/history.ts#decodeMessageRows [status=implemented hash=77eb0d6a490b]
     public static func decodeMessageRows(
         _ db: any SQLiteDatabase,
         rows: [CoreSessionBlob.StoredMessageRow]
@@ -1293,7 +1293,7 @@ public enum CoreSessionHistory {
         return try hydrated.map { try decodeMessageRow($0) }
     }
 
-    // parity: core/src/session/history.ts#loadMessageRow [status=implemented hash=361c85c35f89]
+    // parity: core/src/session/history.ts#loadMessageRow [status=implemented hash=92996da3043a]
     public static func loadMessageRow(
         _ db: any SQLiteDatabase,
         row: CoreSessionBlob.StoredMessageRow
@@ -1302,7 +1302,7 @@ public enum CoreSessionHistory {
         return try decodeMessageRow(hydrated.first ?? row)
     }
 
-    // parity: core/src/session/history.ts#decodeMessageRowsWithRefs [status=implemented hash=00dcfa037851]
+    // parity: core/src/session/history.ts#decodeMessageRowsWithRefs [status=implemented hash=d7494bc4ff2a]
     public static func decodeMessageRowsWithRefs(
         _ db: any SQLiteDatabase,
         rows: [CoreSessionBlob.StoredMessageRow]
@@ -1453,7 +1453,7 @@ public enum CoreSessionHistory {
         }
     }
 
-    // parity: core/src/session/history.ts#load [status=implemented hash=27834ec6d307]
+    // parity: core/src/session/history.ts#load [status=implemented hash=a637be396949]
     public static func load(
         _ db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1462,7 +1462,7 @@ public enum CoreSessionHistory {
         try messageEntries(db, sessionID: sessionID, boundary: boundary).map(\.message)
     }
 
-    // parity: core/src/session/history.ts#entriesForRunner [status=implemented hash=e37df446b103]
+    // parity: core/src/session/history.ts#entriesForRunner [status=implemented hash=7aa6bcd569b2]
     public static func entriesForRunner(
         _ db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1476,7 +1476,7 @@ public enum CoreSessionHistory {
         }
     }
 
-    // parity: core/src/session/history.ts#preview [status=implemented hash=7648127d1b56]
+    // parity: core/src/session/history.ts#preview [status=implemented hash=1701876b9c2e]
     public static func preview(
         _ db: any SQLiteDatabase,
         sessionID: SessionID,
@@ -1501,7 +1501,7 @@ public enum CoreSessionHistory {
         }
     }
 
-    // parity: core/src/session/history.ts#synthetics [status=implemented hash=4c6327669698]
+    // parity: core/src/session/history.ts#synthetics [status=implemented hash=6c4f1a57f652]
     public static func synthetics(
         _ db: any SQLiteDatabase,
         sessionID: SessionID
@@ -1520,7 +1520,7 @@ public enum CoreSessionHistory {
         return try parsed.map { try decodeMessageRow($0) }
     }
 
-    // parity: core/src/session/history.ts#incompleteAssistants [status=implemented hash=09a1320b239c]
+    // parity: core/src/session/history.ts#incompleteAssistants [status=implemented hash=97791fd8693a]
     public static func incompleteAssistants(
         _ db: any SQLiteDatabase,
         sessionID: SessionID
@@ -1549,7 +1549,7 @@ public enum CoreSessionHistory {
         return try decodeMessageRows(db, rows: parsed)
     }
 
-    // parity: core/src/session/history.ts#firstUserMessage [status=implemented hash=ac3728094df8]
+    // parity: core/src/session/history.ts#firstUserMessage [status=implemented hash=84d8d7f1c289]
     public static func firstUserMessage(
         _ db: any SQLiteDatabase,
         sessionID: SessionID
@@ -1924,7 +1924,7 @@ public enum CoreSessionStore {
         }
     }
 
-    // parity: core/src/session/store.ts#node [status=adapted hash=98f3fa69d10f]
+    // parity: core/src/session/store.ts#node [status=adapted hash=788769187e33]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
@@ -3648,7 +3648,7 @@ public enum CoreSessionProjector {
         try CoreSessionMessageUpdater.update(adapter: adapter, event: event, created: created, metadata: metadata)
     }
 
-    // parity: core/src/session/projector.ts#node [status=adapted hash=29bb5a42a2a5]
+    // parity: core/src/session/projector.ts#node [status=adapted hash=938365788edf]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         "session-projector",
         LayerNode.ExecutableLayer { deps, _ in

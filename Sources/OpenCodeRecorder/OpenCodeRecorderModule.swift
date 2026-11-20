@@ -6,7 +6,7 @@ public enum OpenCodeRecorderModule {
 }
 
 /// Public HTTP and WebSocket cassette recording facade matching `packages/http-recorder/src/index.ts#HttpRecorder`.
-// parity: http-recorder/src/index.ts#HttpRecorder [status=implemented hash=2a8c107fb98b]
+// parity: http-recorder/src/index.ts#HttpRecorder [status=implemented hash=d0d600747bf0]
 public enum HttpRecorder {
     // parity: http-recorder/src/index.ts#HttpRecorder.JsonValue [status=implemented hash=2d0702c16ad2]
     public typealias JsonValue = OpenCodeRecorder.JsonValue

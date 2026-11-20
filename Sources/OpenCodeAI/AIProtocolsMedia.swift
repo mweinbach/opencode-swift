@@ -424,25 +424,25 @@ extension AIProtocols {
         // parity: ai/src/protocols/alibaba-images.ts#PATH [status=implemented hash=27ab16aeb685]
         public static let PATH = "/services/aigc/multimodal-generation/generation"
 
-        // parity: ai/src/protocols/alibaba-images.ts#AlibabaImageOptions [status=implemented hash=68d293979af4]
+        // parity: ai/src/protocols/alibaba-images.ts#AlibabaImageOptions [status=implemented hash=a457a961d911]
         public typealias AlibabaImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/alibaba-images.ts#Request [status=implemented hash=52a04160fbc7]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/alibaba-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/alibaba-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "alibaba-images", name: "Alibaba Images", provider: "alibaba"),
             mode: .inline,
             path: PATH
         )
 
-        // parity: ai/src/protocols/alibaba-images.ts#model [status=implemented hash=6a93000bf9e0]
+        // parity: ai/src/protocols/alibaba-images.ts#model [status=implemented hash=abf777b06d34]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/alibaba-images.ts#AlibabaImages [status=implemented hash=c9f4054fc133]
+        // parity: ai/src/protocols/alibaba-images.ts#AlibabaImages [status=implemented hash=88aab82a16b1]
         public static let AlibabaImages = AIProtocols.AlibabaImages.self
     }
 
@@ -458,19 +458,19 @@ extension AIProtocols {
         // parity: ai/src/protocols/assemblyai-transcription.ts#UPLOAD_PATH [status=implemented hash=95a896564a6a]
         public static let UPLOAD_PATH = "/v2/upload"
 
-        // parity: ai/src/protocols/assemblyai-transcription.ts#AssemblyAITranscriptionOptions [status=implemented hash=66db719a9692]
+        // parity: ai/src/protocols/assemblyai-transcription.ts#AssemblyAITranscriptionOptions [status=implemented hash=7f748f1b86a7]
         public typealias AssemblyAITranscriptionOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/assemblyai-transcription.ts#Request [status=implemented hash=ae2fc21d671a]
         public typealias Request = TranscriptionRequestPayload
 
-        // parity: ai/src/protocols/assemblyai-transcription.ts#Token [status=implemented hash=ca68b738b186]
+        // parity: ai/src/protocols/assemblyai-transcription.ts#Token [status=implemented hash=0581afea4c14]
         public struct Token: Equatable, Hashable, Sendable, Codable {
             public let transcriptID: String
             public init(transcriptID: String) { self.transcriptID = transcriptID }
         }
 
-        // parity: ai/src/protocols/assemblyai-transcription.ts#protocol [status=implemented hash=037842d32075]
+        // parity: ai/src/protocols/assemblyai-transcription.ts#protocol [status=implemented hash=108a03f17d63]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "assemblyai-transcription", name: "AssemblyAI", provider: "assemblyai"),
             mode: .queued,
@@ -478,12 +478,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/assemblyai-transcription.ts#model [status=implemented hash=c2dd45b37590]
+        // parity: ai/src/protocols/assemblyai-transcription.ts#model [status=implemented hash=6096dac4e957]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/assemblyai-transcription.ts#AssemblyAITranscription [status=implemented hash=0deea6803c6d]
+        // parity: ai/src/protocols/assemblyai-transcription.ts#AssemblyAITranscription [status=implemented hash=a2d8bba59152]
         public static let AssemblyAITranscription = AIProtocols.AssemblyAITranscription.self
     }
 
@@ -505,13 +505,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/cartesia-speech.ts#CartesiaEncoding [status=implemented hash=e659e0a52d26]
         public typealias CartesiaEncoding = AIProtocolUtils.SpeechStream.PcmEncoding
 
-        // parity: ai/src/protocols/cartesia-speech.ts#CartesiaSpeechOptions [status=implemented hash=1b4952b339d5]
+        // parity: ai/src/protocols/cartesia-speech.ts#CartesiaSpeechOptions [status=implemented hash=77653b8fd1f7]
         public typealias CartesiaSpeechOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/cartesia-speech.ts#Request [status=implemented hash=8f386fc9e7be]
         public typealias Request = SpeechRequestPayload
 
-        // parity: ai/src/protocols/cartesia-speech.ts#protocol [status=implemented hash=462ef07f59c9]
+        // parity: ai/src/protocols/cartesia-speech.ts#protocol [status=implemented hash=d0cc2da7275d]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "cartesia-speech", name: "Cartesia", provider: "cartesia"),
             mode: .stream,
@@ -519,19 +519,19 @@ extension AIProtocols {
             path: BYTES_PATH
         )
 
-        // parity: ai/src/protocols/cartesia-speech.ts#model [status=implemented hash=43d92a99c499]
+        // parity: ai/src/protocols/cartesia-speech.ts#model [status=implemented hash=db5aabf853cf]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/cartesia-speech.ts#CartesiaSpeech [status=implemented hash=b6fd92a9a368]
+        // parity: ai/src/protocols/cartesia-speech.ts#CartesiaSpeech [status=implemented hash=46895865cd3f]
         public static let CartesiaSpeech = AIProtocols.CartesiaSpeech.self
     }
 
     // MARK: - 4. CloudflareRunDecisions (packages/ai/src/protocols/cloudflare-run-decisions.ts — 3 symbols)
 
     public enum CloudflareRunDecisions {
-        // parity: ai/src/protocols/cloudflare-run-decisions.ts#protocol [status=implemented hash=0c4459b549fc]
+        // parity: ai/src/protocols/cloudflare-run-decisions.ts#protocol [status=implemented hash=f8577cecaa59]
         public static let `protocol` = DecisionProtocolSpec(
             id: "cloudflare-run-decisions",
             name: "Cloudflare Run Decisions",
@@ -541,7 +541,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/cloudflare-run-decisions.ts#route [status=implemented hash=e488ef52b189]
+        // parity: ai/src/protocols/cloudflare-run-decisions.ts#route [status=implemented hash=85f644ec7476]
         public static let route = DecisionRouteSpec(
             id: "cloudflare-run-decisions",
             provider: "cloudflare-workers-ai",
@@ -549,31 +549,31 @@ extension AIProtocols {
             pathBuilder: { modelID in "/\(modelID)" }
         )
 
-        // parity: ai/src/protocols/cloudflare-run-decisions.ts#CloudflareRunDecisions [status=implemented hash=5d0d0f14d5f1]
+        // parity: ai/src/protocols/cloudflare-run-decisions.ts#CloudflareRunDecisions [status=implemented hash=d68e2d21c690]
         public static let CloudflareRunDecisions = AIProtocols.CloudflareRunDecisions.self
     }
 
     // MARK: - 5. CloudflareWorkersAIImages (packages/ai/src/protocols/cloudflare-workers-ai-images.ts — 5 symbols)
 
     public enum CloudflareWorkersAIImages {
-        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#CloudflareWorkersAIImageOptions [status=implemented hash=6496e61ef66a]
+        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#CloudflareWorkersAIImageOptions [status=implemented hash=82c6d1c29265]
         public typealias CloudflareWorkersAIImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#Request [status=implemented hash=163fb959970f]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "cloudflare-workers-ai-images", name: "Cloudflare Workers AI Images", provider: "cloudflare-workers-ai"),
             mode: .inline
         )
 
-        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#model [status=implemented hash=cc4d8047dc9f]
+        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#model [status=implemented hash=961dcfe05aa4]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input, pathOverride: "/\(input.id)")
         }
 
-        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#CloudflareWorkersAIImages [status=implemented hash=60a880751516]
+        // parity: ai/src/protocols/cloudflare-workers-ai-images.ts#CloudflareWorkersAIImages [status=implemented hash=19dad9db5879]
         public static let CloudflareWorkersAIImages = AIProtocols.CloudflareWorkersAIImages.self
     }
 
@@ -589,13 +589,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/deepgram-speech.ts#DeepgramEncoding [status=implemented hash=4e5c0fc0fe62]
         public typealias DeepgramEncoding = String
 
-        // parity: ai/src/protocols/deepgram-speech.ts#DeepgramSpeechOptions [status=implemented hash=99fe387c82ea]
+        // parity: ai/src/protocols/deepgram-speech.ts#DeepgramSpeechOptions [status=implemented hash=14b4237a4c98]
         public typealias DeepgramSpeechOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/deepgram-speech.ts#Request [status=implemented hash=560a21e16471]
         public typealias Request = SpeechRequestPayload
 
-        // parity: ai/src/protocols/deepgram-speech.ts#protocol [status=implemented hash=bf40225b95bc]
+        // parity: ai/src/protocols/deepgram-speech.ts#protocol [status=implemented hash=698ac4ffa9ea]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "deepgram-speech", name: "Deepgram", provider: "deepgram"),
             mode: .stream,
@@ -603,12 +603,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/deepgram-speech.ts#model [status=implemented hash=1e39f292f031]
+        // parity: ai/src/protocols/deepgram-speech.ts#model [status=implemented hash=9685a30465f3]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/deepgram-speech.ts#DeepgramSpeech [status=implemented hash=192ffa13fd8b]
+        // parity: ai/src/protocols/deepgram-speech.ts#DeepgramSpeech [status=implemented hash=362b3b12d292]
         public static let DeepgramSpeech = AIProtocols.DeepgramSpeech.self
     }
 
@@ -623,7 +623,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/deepgram-transcription.ts#PATH [status=implemented hash=dca308dcac99]
         public static let PATH = "/v1/listen"
 
-        // parity: ai/src/protocols/deepgram-transcription.ts#DeepgramTranscriptionOptions [status=implemented hash=fc5b3e0b5222]
+        // parity: ai/src/protocols/deepgram-transcription.ts#DeepgramTranscriptionOptions [status=implemented hash=2b21f8e48b1e]
         public typealias DeepgramTranscriptionOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/deepgram-transcription.ts#Request [status=implemented hash=c7a294bf58a6]
@@ -756,7 +756,7 @@ extension AIProtocols {
             )
         }
 
-        // parity: ai/src/protocols/deepgram-transcription.ts#protocol [status=implemented hash=2ce8755724dc]
+        // parity: ai/src/protocols/deepgram-transcription.ts#protocol [status=implemented hash=48203598c073]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .inline,
@@ -807,12 +807,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/deepgram-transcription.ts#model [status=implemented hash=878217d650d2]
+        // parity: ai/src/protocols/deepgram-transcription.ts#model [status=implemented hash=1af1524f717f]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/deepgram-transcription.ts#DeepgramTranscription [status=implemented hash=865725519976]
+        // parity: ai/src/protocols/deepgram-transcription.ts#DeepgramTranscription [status=implemented hash=ca1514ca3079]
         public static let DeepgramTranscription = AIProtocols.DeepgramTranscription.self
     }
 
@@ -827,10 +827,10 @@ extension AIProtocols {
         // parity: ai/src/protocols/elevenlabs-speech.ts#PATH [status=implemented hash=11a9ef52923a]
         public static let PATH = "/v1/text-to-speech"
 
-        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsOutputFormat [status=implemented hash=6c118966f4ce]
+        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsOutputFormat [status=implemented hash=37ac60dd5922]
         public typealias ElevenLabsOutputFormat = String
 
-        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsSpeechOptions [status=implemented hash=4b5dec88d564]
+        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsSpeechOptions [status=implemented hash=46ddfbac8ccd]
         public typealias ElevenLabsSpeechOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/elevenlabs-speech.ts#Request [status=implemented hash=97ed8161a20a]
@@ -955,7 +955,7 @@ extension AIProtocols {
             return events
         }
 
-        // parity: ai/src/protocols/elevenlabs-speech.ts#protocol [status=implemented hash=4dec28f6877d]
+        // parity: ai/src/protocols/elevenlabs-speech.ts#protocol [status=implemented hash=699b27e6663f]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .stream,
@@ -997,12 +997,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/elevenlabs-speech.ts#model [status=implemented hash=92f1b6aa91f6]
+        // parity: ai/src/protocols/elevenlabs-speech.ts#model [status=implemented hash=734377e50dce]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsSpeech [status=implemented hash=0014c198c3a2]
+        // parity: ai/src/protocols/elevenlabs-speech.ts#ElevenLabsSpeech [status=implemented hash=f1e22f4afd54]
         public static let ElevenLabsSpeech = AIProtocols.ElevenLabsSpeech.self
     }
 
@@ -1015,13 +1015,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/elevenlabs-transcription.ts#PATH [status=implemented hash=fab9f6321ee5]
         public static let PATH = "/v1/speech-to-text"
 
-        // parity: ai/src/protocols/elevenlabs-transcription.ts#ElevenLabsTranscriptionOptions [status=implemented hash=a6b9c171b2fc]
+        // parity: ai/src/protocols/elevenlabs-transcription.ts#ElevenLabsTranscriptionOptions [status=implemented hash=6a4d1748c251]
         public typealias ElevenLabsTranscriptionOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/elevenlabs-transcription.ts#Request [status=implemented hash=0dffb2c6bc51]
         public typealias Request = TranscriptionRequestPayload
 
-        // parity: ai/src/protocols/elevenlabs-transcription.ts#protocol [status=implemented hash=ac1d8349b514]
+        // parity: ai/src/protocols/elevenlabs-transcription.ts#protocol [status=implemented hash=0973adfe9fae]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "elevenlabs-transcription", name: "ElevenLabs", provider: "elevenlabs"),
             mode: .inline,
@@ -1029,12 +1029,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/elevenlabs-transcription.ts#model [status=implemented hash=4f9ee2933015]
+        // parity: ai/src/protocols/elevenlabs-transcription.ts#model [status=implemented hash=92d899c272cb]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/elevenlabs-transcription.ts#ElevenLabsTranscription [status=implemented hash=40c187fc97bf]
+        // parity: ai/src/protocols/elevenlabs-transcription.ts#ElevenLabsTranscription [status=implemented hash=e5dd8f6ca874]
         public static let ElevenLabsTranscription = AIProtocols.ElevenLabsTranscription.self
     }
 
@@ -1047,7 +1047,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-decisions.ts#OptionsInput [status=implemented hash=f75e9b8ed22c]
         public typealias OptionsInput = [String: JSONValue]
 
-        // parity: ai/src/protocols/google-decisions.ts#protocol [status=implemented hash=dd17ba538021]
+        // parity: ai/src/protocols/google-decisions.ts#protocol [status=implemented hash=ba63abf33f5a]
         public static let `protocol` = DecisionProtocolSpec(
             id: "google-decisions",
             name: "Google Decisions",
@@ -1057,7 +1057,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/google-decisions.ts#route [status=implemented hash=c99a4814ded5]
+        // parity: ai/src/protocols/google-decisions.ts#route [status=implemented hash=95918b34d6c4]
         public static let route = DecisionRouteSpec(
             id: "google-decisions",
             provider: "google",
@@ -1076,7 +1076,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-embed-content.ts#MAX_BATCH [status=implemented hash=0232bf763a89]
         public static let MAX_BATCH = 100
 
-        // parity: ai/src/protocols/google-embed-content.ts#TaskType [status=implemented hash=38995862b2e1]
+        // parity: ai/src/protocols/google-embed-content.ts#TaskType [status=implemented hash=a7e96105dcf9]
         public typealias TaskType = String
 
         // parity: ai/src/protocols/google-embed-content.ts#OptionsInput [status=implemented hash=f0b4bb236a5c]
@@ -1125,7 +1125,7 @@ extension AIProtocols {
             return cfg
         }
 
-        // parity: ai/src/protocols/google-embed-content.ts#protocol [status=implemented hash=c1e02e2cec22]
+        // parity: ai/src/protocols/google-embed-content.ts#protocol [status=implemented hash=4f83b9656707]
         public static let `protocol` = EmbeddingProtocolSpec(
             id: "google-embed-content",
             name: "Google embedContent",
@@ -1160,7 +1160,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/google-embed-content.ts#vertexProtocol [status=implemented hash=db79bb2dc4e6]
+        // parity: ai/src/protocols/google-embed-content.ts#vertexProtocol [status=implemented hash=ed4dcd4e220b]
         public static let vertexProtocol = EmbeddingProtocolSpec(
             id: "google-vertex-embed-content",
             name: "Google Vertex embedContent",
@@ -1190,7 +1190,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/google-embed-content.ts#route [status=implemented hash=f7172ea6d720]
+        // parity: ai/src/protocols/google-embed-content.ts#route [status=implemented hash=71ffa8b422e0]
         public static let route = EmbeddingRouteSpec(
             id: "google-embed-content",
             provider: "google",
@@ -1200,7 +1200,7 @@ extension AIProtocols {
             maxValues: MAX_BATCH
         )
 
-        // parity: ai/src/protocols/google-embed-content.ts#GoogleEmbedContent [status=implemented hash=c7d838de1807]
+        // parity: ai/src/protocols/google-embed-content.ts#GoogleEmbedContent [status=implemented hash=082a20e0ba87]
         public static let GoogleEmbedContent = AIProtocols.GoogleEmbedContent.self
     }
 
@@ -1212,7 +1212,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-images.ts#DEFAULT_BASE_URL [status=implemented hash=ae7b30027e03]
         public static let DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-        // parity: ai/src/protocols/google-images.ts#GoogleImageOptions [status=implemented hash=950cf5daf5d6]
+        // parity: ai/src/protocols/google-images.ts#GoogleImageOptions [status=implemented hash=c9d62852f77d]
         public typealias GoogleImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/google-images.ts#Request [status=implemented hash=513264af475e]
@@ -1342,7 +1342,7 @@ extension AIProtocols {
             )
         }
 
-        // parity: ai/src/protocols/google-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/google-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .inline,
@@ -1370,12 +1370,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/google-images.ts#model [status=implemented hash=23a027c23eb9]
+        // parity: ai/src/protocols/google-images.ts#model [status=implemented hash=443b38f1f584]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input, pathOverride: "/models/\(input.id):generateContent")
         }
 
-        // parity: ai/src/protocols/google-images.ts#GoogleImages [status=implemented hash=32ce11fe1ab7]
+        // parity: ai/src/protocols/google-images.ts#GoogleImages [status=implemented hash=1cffb2303779]
         public static let GoogleImages = AIProtocols.GoogleImages.self
     }
 
@@ -1388,7 +1388,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-interactions-video.ts#PATH [status=implemented hash=d93a8211098f]
         public static let PATH = "/interactions"
 
-        // parity: ai/src/protocols/google-interactions-video.ts#GoogleVideoOptions [status=implemented hash=de0034fcebc6]
+        // parity: ai/src/protocols/google-interactions-video.ts#GoogleVideoOptions [status=implemented hash=c06d9cec5967]
         public typealias GoogleVideoOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/google-interactions-video.ts#Request [status=implemented hash=1aae4c979925]
@@ -1397,7 +1397,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-interactions-video.ts#Token [status=implemented hash=3db348ce72a1]
         public typealias Token = String
 
-        // parity: ai/src/protocols/google-interactions-video.ts#protocol [status=implemented hash=1480833e8bd3]
+        // parity: ai/src/protocols/google-interactions-video.ts#protocol [status=implemented hash=87ae2e318d66]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "google-interactions-video", name: "Google Video", provider: "google"),
             mode: .queued,
@@ -1405,12 +1405,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/google-interactions-video.ts#model [status=implemented hash=ec588dbd7b0a]
+        // parity: ai/src/protocols/google-interactions-video.ts#model [status=implemented hash=bf1a33ad89ca]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/google-interactions-video.ts#GoogleInteractionsVideo [status=implemented hash=f9c80ae47383]
+        // parity: ai/src/protocols/google-interactions-video.ts#GoogleInteractionsVideo [status=implemented hash=b30302f4fd50]
         public static let GoogleInteractionsVideo = AIProtocols.GoogleInteractionsVideo.self
     }
 
@@ -1420,25 +1420,25 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-speech.ts#DEFAULT_BASE_URL [status=implemented hash=ae7b30027e03]
         public static let DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-        // parity: ai/src/protocols/google-speech.ts#GoogleSpeechOptions [status=implemented hash=24d02db83ed0]
+        // parity: ai/src/protocols/google-speech.ts#GoogleSpeechOptions [status=implemented hash=27c6de263ecb]
         public typealias GoogleSpeechOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/google-speech.ts#Request [status=implemented hash=fecd1ffd582e]
         public typealias Request = SpeechRequestPayload
 
-        // parity: ai/src/protocols/google-speech.ts#protocol [status=implemented hash=2297854cbca2]
+        // parity: ai/src/protocols/google-speech.ts#protocol [status=implemented hash=ecd7211a9c38]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "google-speech", name: "Google Speech", provider: "google"),
             mode: .stream,
             defaultBaseURL: DEFAULT_BASE_URL
         )
 
-        // parity: ai/src/protocols/google-speech.ts#model [status=implemented hash=e936971ed3d9]
+        // parity: ai/src/protocols/google-speech.ts#model [status=implemented hash=7be3fba6225b]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input, pathOverride: AIProtocolUtils.GeminiGenerateContent.path(model: input.id, streaming: true))
         }
 
-        // parity: ai/src/protocols/google-speech.ts#GoogleSpeech [status=implemented hash=bd37e83cc4e5]
+        // parity: ai/src/protocols/google-speech.ts#GoogleSpeech [status=implemented hash=94cc181ab910]
         public static let GoogleSpeech = AIProtocols.GoogleSpeech.self
     }
 
@@ -1448,25 +1448,25 @@ extension AIProtocols {
         // parity: ai/src/protocols/google-transcription.ts#DEFAULT_BASE_URL [status=implemented hash=ae7b30027e03]
         public static let DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-        // parity: ai/src/protocols/google-transcription.ts#GoogleTranscriptionOptions [status=implemented hash=e70faa35a8d3]
+        // parity: ai/src/protocols/google-transcription.ts#GoogleTranscriptionOptions [status=implemented hash=6bafcbc366e0]
         public typealias GoogleTranscriptionOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/google-transcription.ts#Request [status=implemented hash=f70e255f0961]
         public typealias Request = TranscriptionRequestPayload
 
-        // parity: ai/src/protocols/google-transcription.ts#protocol [status=implemented hash=853d56766669]
+        // parity: ai/src/protocols/google-transcription.ts#protocol [status=implemented hash=6da0d4b58198]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "google-transcription", name: "Google Transcription", provider: "google"),
             mode: .stream,
             defaultBaseURL: DEFAULT_BASE_URL
         )
 
-        // parity: ai/src/protocols/google-transcription.ts#model [status=implemented hash=eca87337bdb5]
+        // parity: ai/src/protocols/google-transcription.ts#model [status=implemented hash=72af5a1a043c]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input, pathOverride: AIProtocolUtils.GeminiGenerateContent.path(model: input.id, streaming: true))
         }
 
-        // parity: ai/src/protocols/google-transcription.ts#GoogleTranscription [status=implemented hash=f1359b2ba1e1]
+        // parity: ai/src/protocols/google-transcription.ts#GoogleTranscription [status=implemented hash=8bf01245d299]
         public static let GoogleTranscription = AIProtocols.GoogleTranscription.self
     }
 
@@ -1486,7 +1486,7 @@ extension AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/google-vertex-predict-embeddings.ts#protocol [status=implemented hash=7fa9e4c38a3f]
+        // parity: ai/src/protocols/google-vertex-predict-embeddings.ts#protocol [status=implemented hash=02776290d209]
         public static let `protocol` = EmbeddingProtocolSpec(
             id: "google-vertex-predict-embeddings",
             name: "Google Vertex Predict Embeddings",
@@ -1540,7 +1540,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/google-vertex-predict-embeddings.ts#GoogleVertexPredictEmbeddings [status=implemented hash=7e72ea2544a5]
+        // parity: ai/src/protocols/google-vertex-predict-embeddings.ts#GoogleVertexPredictEmbeddings [status=implemented hash=a005dc1427be]
         public static let GoogleVertexPredictEmbeddings = AIProtocols.GoogleVertexPredictEmbeddings.self
     }
 
@@ -1556,7 +1556,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/meta-images.ts#Request [status=implemented hash=e92ff3a61f7d]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/meta-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/meta-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "meta-images", name: "Meta Images", provider: "meta"),
             mode: .inline,
@@ -1564,7 +1564,7 @@ extension AIProtocols {
             path: "/responses"
         )
 
-        // parity: ai/src/protocols/meta-images.ts#model [status=implemented hash=83cb67ca4115]
+        // parity: ai/src/protocols/meta-images.ts#model [status=implemented hash=62d4fb63fcfe]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
@@ -1579,13 +1579,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/minimax-images.ts#PATH [status=implemented hash=8dbe77a7f9ba]
         public static let PATH = "/image_generation"
 
-        // parity: ai/src/protocols/minimax-images.ts#MiniMaxImageOptions [status=implemented hash=1bb55dda48f0]
+        // parity: ai/src/protocols/minimax-images.ts#MiniMaxImageOptions [status=implemented hash=b5c12b8bc29e]
         public typealias MiniMaxImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/minimax-images.ts#Request [status=implemented hash=7525daf2128e]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/minimax-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/minimax-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "minimax-images", name: "MiniMax Images", provider: "minimax"),
             mode: .inline,
@@ -1593,12 +1593,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/minimax-images.ts#model [status=implemented hash=f69c391c2a85]
+        // parity: ai/src/protocols/minimax-images.ts#model [status=implemented hash=10ce8464b141]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/minimax-images.ts#MiniMaxImages [status=implemented hash=51f49808d238]
+        // parity: ai/src/protocols/minimax-images.ts#MiniMaxImages [status=implemented hash=0686fe140bd7]
         public static let MiniMaxImages = AIProtocols.MiniMaxImages.self
     }
 
@@ -1623,7 +1623,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/minimax-video.ts#FILE_PATH [status=implemented hash=23849ef9707d]
         public static let FILE_PATH = "/v1/files/retrieve"
 
-        // parity: ai/src/protocols/minimax-video.ts#MiniMaxVideoOptions [status=implemented hash=bcd292f524ee]
+        // parity: ai/src/protocols/minimax-video.ts#MiniMaxVideoOptions [status=implemented hash=ee417425c046]
         public typealias MiniMaxVideoOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/minimax-video.ts#Request [status=implemented hash=92ffd4f20077]
@@ -1632,7 +1632,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/minimax-video.ts#Token [status=implemented hash=3db348ce72a1]
         public typealias Token = String
 
-        // parity: ai/src/protocols/minimax-video.ts#protocol [status=implemented hash=e660004989d4]
+        // parity: ai/src/protocols/minimax-video.ts#protocol [status=implemented hash=9ff264dd38c0]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "minimax-video", name: "MiniMax Video", provider: "minimax"),
             mode: .queued,
@@ -1640,7 +1640,7 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/minimax-video.ts#hailuoProtocol [status=implemented hash=938836a58031]
+        // parity: ai/src/protocols/minimax-video.ts#hailuoProtocol [status=implemented hash=bf1d7df625ae]
         public static let hailuoProtocol = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "minimax-hailuo-video", name: "MiniMax Hailuo Video", provider: "minimax"),
             mode: .queued,
@@ -1648,12 +1648,12 @@ extension AIProtocols {
             path: HAILUO_PATH
         )
 
-        // parity: ai/src/protocols/minimax-video.ts#h3Model [status=implemented hash=4e612547fdb0]
+        // parity: ai/src/protocols/minimax-video.ts#h3Model [status=implemented hash=6da6272e061b]
         public static func h3Model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/minimax-video.ts#hailuoModel [status=implemented hash=2a188847ec79]
+        // parity: ai/src/protocols/minimax-video.ts#hailuoModel [status=implemented hash=731f0bfd2390]
         public static func hailuoModel(_ input: MediaModelInput) -> MediaModelHandle {
             hailuoProtocol.makeModel(input)
         }
@@ -1668,7 +1668,7 @@ extension AIProtocols {
             isHailuo(input.id) ? hailuoModel(input) : h3Model(input)
         }
 
-        // parity: ai/src/protocols/minimax-video.ts#MiniMaxVideo [status=implemented hash=f759f11ca94e]
+        // parity: ai/src/protocols/minimax-video.ts#MiniMaxVideo [status=implemented hash=ed7ffed619ee]
         public static let MiniMaxVideo = AIProtocols.MiniMaxVideo.self
     }
 
@@ -1684,7 +1684,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-decisions.ts#OptionsInput [status=implemented hash=f75e9b8ed22c]
         public typealias OptionsInput = [String: JSONValue]
 
-        // parity: ai/src/protocols/openai-decisions.ts#protocol [status=implemented hash=b72e3d89e394]
+        // parity: ai/src/protocols/openai-decisions.ts#protocol [status=implemented hash=31eae38a33a4]
         public static let `protocol` = DecisionProtocolSpec(
             id: "openai-decisions",
             name: "OpenAI Decisions",
@@ -1696,7 +1696,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/openai-decisions.ts#route [status=implemented hash=75fd1f0a3aef]
+        // parity: ai/src/protocols/openai-decisions.ts#route [status=implemented hash=f30b7b60d617]
         public static let route = DecisionRouteSpec(
             id: "openai-decisions",
             provider: "openai",
@@ -1705,7 +1705,7 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/openai-decisions.ts#OpenAIDecisions [status=implemented hash=6831402606bd]
+        // parity: ai/src/protocols/openai-decisions.ts#OpenAIDecisions [status=implemented hash=1cc21bb2cddd]
         public static let OpenAIDecisions = AIProtocols.OpenAIDecisions.self
     }
 
@@ -1751,7 +1751,7 @@ extension AIProtocols {
             return out
         }
 
-        // parity: ai/src/protocols/openai-embeddings.ts#protocol [status=implemented hash=2e346b027db9]
+        // parity: ai/src/protocols/openai-embeddings.ts#protocol [status=implemented hash=94858471b7b4]
         public static let `protocol` = EmbeddingProtocolSpec(
             id: "openai-embeddings",
             name: "OpenAI Embeddings",
@@ -1813,7 +1813,7 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/openai-embeddings.ts#route [status=implemented hash=0da12329409e]
+        // parity: ai/src/protocols/openai-embeddings.ts#route [status=implemented hash=1149b90cf75b]
         public static let route = EmbeddingRouteSpec(
             id: "openai-embeddings",
             provider: "openai",
@@ -1822,7 +1822,7 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/openai-embeddings.ts#OpenAIEmbeddings [status=implemented hash=020454b03b5c]
+        // parity: ai/src/protocols/openai-embeddings.ts#OpenAIEmbeddings [status=implemented hash=a02bc183319e]
         public static let OpenAIEmbeddings = AIProtocols.OpenAIEmbeddings.self
     }
 
@@ -1840,7 +1840,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-images.ts#EDIT_PATH [status=implemented hash=4f5d44e3ad14]
         public static let EDIT_PATH = "/images/edits"
 
-        // parity: ai/src/protocols/openai-images.ts#OpenAIImageOptions [status=implemented hash=87d4ff9ae9b4]
+        // parity: ai/src/protocols/openai-images.ts#OpenAIImageOptions [status=implemented hash=3b2ee0b4bb89]
         public typealias OpenAIImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/openai-images.ts#Request [status=implemented hash=3cd9daa23813]
@@ -2032,7 +2032,7 @@ extension AIProtocols {
             )
         }
 
-        // parity: ai/src/protocols/openai-images.ts#protocol [status=implemented hash=67acee9f2c33]
+        // parity: ai/src/protocols/openai-images.ts#protocol [status=implemented hash=da6e8c6b762d]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .inline,
@@ -2063,13 +2063,13 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/openai-images.ts#model [status=implemented hash=20a6a9827cf3]
+        // parity: ai/src/protocols/openai-images.ts#model [status=implemented hash=22a5ce3eac63]
         public static func model(_ input: MediaModelInput, imageInput: OpenAIImageInput = .edits) -> MediaModelHandle {
             _ = imageInput
             return `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/openai-images.ts#OpenAIImages [status=implemented hash=347f95615e0a]
+        // parity: ai/src/protocols/openai-images.ts#OpenAIImages [status=implemented hash=98128782094b]
         public static let OpenAIImages = AIProtocols.OpenAIImages.self
     }
 
@@ -2086,7 +2086,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-speech.ts#PATH [status=implemented hash=f3777d5f6bc0]
         public static let PATH = "/audio/speech"
 
-        // parity: ai/src/protocols/openai-speech.ts#OpenAISpeechOptions [status=implemented hash=40aa56548d7f]
+        // parity: ai/src/protocols/openai-speech.ts#OpenAISpeechOptions [status=implemented hash=932f3dd2be4f]
         public typealias OpenAISpeechOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/openai-speech.ts#Request [status=implemented hash=da62c94cf290]
@@ -2188,7 +2188,7 @@ extension AIProtocols {
             return events
         }
 
-        // parity: ai/src/protocols/openai-speech.ts#protocol [status=implemented hash=98af27e9358f]
+        // parity: ai/src/protocols/openai-speech.ts#protocol [status=implemented hash=9c37a4e6e9cf]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .stream,
@@ -2222,12 +2222,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/openai-speech.ts#model [status=implemented hash=f945df719144]
+        // parity: ai/src/protocols/openai-speech.ts#model [status=implemented hash=fd6fa57e138d]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/openai-speech.ts#OpenAISpeech [status=implemented hash=9049292b675c]
+        // parity: ai/src/protocols/openai-speech.ts#OpenAISpeech [status=implemented hash=dd07439a46b1]
         public static let OpenAISpeech = AIProtocols.OpenAISpeech.self
     }
 
@@ -2242,7 +2242,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openai-transcription.ts#PATH [status=implemented hash=c49cf2ccf6b6]
         public static let PATH = "/audio/transcriptions"
 
-        // parity: ai/src/protocols/openai-transcription.ts#OpenAITranscriptionOptions [status=implemented hash=89657e28856f]
+        // parity: ai/src/protocols/openai-transcription.ts#OpenAITranscriptionOptions [status=implemented hash=17e813958b22]
         public typealias OpenAITranscriptionOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/openai-transcription.ts#Request [status=implemented hash=b35dbdd7ad13]
@@ -2453,7 +2453,7 @@ extension AIProtocols {
             return events
         }
 
-        // parity: ai/src/protocols/openai-transcription.ts#protocol [status=implemented hash=7b276d1d40f2]
+        // parity: ai/src/protocols/openai-transcription.ts#protocol [status=implemented hash=03e9142e6c73]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .stream,
@@ -2497,12 +2497,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/openai-transcription.ts#model [status=implemented hash=ea04abff90e8]
+        // parity: ai/src/protocols/openai-transcription.ts#model [status=implemented hash=f4c2cabea6a9]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/openai-transcription.ts#OpenAITranscription [status=implemented hash=d3d7a35453ac]
+        // parity: ai/src/protocols/openai-transcription.ts#OpenAITranscription [status=implemented hash=c3bd98e95856]
         public static let OpenAITranscription = AIProtocols.OpenAITranscription.self
     }
 
@@ -2515,7 +2515,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openrouter-video.ts#PATH [status=implemented hash=365083670db9]
         public static let PATH = "/videos"
 
-        // parity: ai/src/protocols/openrouter-video.ts#OpenRouterVideoOptions [status=implemented hash=efb09a37acbb]
+        // parity: ai/src/protocols/openrouter-video.ts#OpenRouterVideoOptions [status=implemented hash=414b0b629eea]
         public typealias OpenRouterVideoOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/openrouter-video.ts#Request [status=implemented hash=48d02dadda1e]
@@ -2524,7 +2524,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/openrouter-video.ts#Token [status=implemented hash=3db348ce72a1]
         public typealias Token = String
 
-        // parity: ai/src/protocols/openrouter-video.ts#protocol [status=implemented hash=1bbddd2ca7ba]
+        // parity: ai/src/protocols/openrouter-video.ts#protocol [status=implemented hash=8bf0d04ef0ad]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "openrouter-video", name: "OpenRouter Video", provider: "openrouter"),
             mode: .queued,
@@ -2532,12 +2532,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/openrouter-video.ts#model [status=implemented hash=9636accbda25]
+        // parity: ai/src/protocols/openrouter-video.ts#model [status=implemented hash=0ea6ba16e9c5]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/openrouter-video.ts#OpenRouterVideo [status=implemented hash=c990c6299cb5]
+        // parity: ai/src/protocols/openrouter-video.ts#OpenRouterVideo [status=implemented hash=0b04ebd1e7af]
         public static let OpenRouterVideo = AIProtocols.OpenRouterVideo.self
     }
 
@@ -2553,7 +2553,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/seedance-video.ts#PATH [status=implemented hash=c9999adb2411]
         public static let PATH = "/contents/generations/tasks"
 
-        // parity: ai/src/protocols/seedance-video.ts#SeedanceVideoOptions [status=implemented hash=7a4257ce6d95]
+        // parity: ai/src/protocols/seedance-video.ts#SeedanceVideoOptions [status=implemented hash=b170b0a4d131]
         public typealias SeedanceVideoOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/seedance-video.ts#Request [status=implemented hash=3118ffc4310e]
@@ -2603,7 +2603,7 @@ extension AIProtocols {
             }
         }
 
-        // parity: ai/src/protocols/seedance-video.ts#SeedanceVideo [status=implemented hash=b4447b203695]
+        // parity: ai/src/protocols/seedance-video.ts#SeedanceVideo [status=implemented hash=c50d07fe4328]
         public static let SeedanceVideo = ProviderRegistry(
             volcengine: ProviderEndpoint(provider: .volcengine),
             byteplus: ProviderEndpoint(provider: .byteplus)
@@ -2636,13 +2636,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/xai-images.ts#EDIT_PATH [status=implemented hash=4f5d44e3ad14]
         public static let EDIT_PATH = "/images/edits"
 
-        // parity: ai/src/protocols/xai-images.ts#XAIImageOptions [status=implemented hash=613d0e24b39f]
+        // parity: ai/src/protocols/xai-images.ts#XAIImageOptions [status=implemented hash=055a4486ded6]
         public typealias XAIImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/xai-images.ts#Request [status=implemented hash=57a5c6dbf3c6]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/xai-images.ts#resolution [status=implemented hash=571513d918fc]
+        // parity: ai/src/protocols/xai-images.ts#resolution [status=implemented hash=5e9d44f3e1cb]
         public static func resolution(_ requested: String?) -> String? {
             guard let requested else { return nil }
             return (AIProtocolUtils.ImageSizing.tier(requested) ?? 1.0) < 1.5 ? "1k" : "2k"
@@ -2716,7 +2716,7 @@ extension AIProtocols {
             return DecodedImageResponse(images: images, usage: nil, providerMetadata: usageMeta)
         }
 
-        // parity: ai/src/protocols/xai-images.ts#protocol [status=implemented hash=ddeb3a42695c]
+        // parity: ai/src/protocols/xai-images.ts#protocol [status=implemented hash=32b174ab3a05]
         public static let `protocol` = MediaProtocolSpec(
             identity: routeIdentity,
             mode: .inline,
@@ -2749,12 +2749,12 @@ extension AIProtocols {
             }
         )
 
-        // parity: ai/src/protocols/xai-images.ts#model [status=implemented hash=b1f1a2e21049]
+        // parity: ai/src/protocols/xai-images.ts#model [status=implemented hash=509784433d9d]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/xai-images.ts#XAIImages [status=implemented hash=218256aa10ab]
+        // parity: ai/src/protocols/xai-images.ts#XAIImages [status=implemented hash=5c790159f0d3]
         public static let XAIImages = AIProtocols.XAIImages.self
     }
 
@@ -2776,7 +2776,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/xai-video.ts#STATUS_PATH [status=implemented hash=823277b18653]
         public static let STATUS_PATH = "/videos"
 
-        // parity: ai/src/protocols/xai-video.ts#XAIVideoOptions [status=implemented hash=8fbeee9be4f3]
+        // parity: ai/src/protocols/xai-video.ts#XAIVideoOptions [status=implemented hash=7e6945a45b5a]
         public typealias XAIVideoOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/xai-video.ts#Request [status=implemented hash=cde0226bdc76]
@@ -2785,7 +2785,7 @@ extension AIProtocols {
         // parity: ai/src/protocols/xai-video.ts#Token [status=implemented hash=3db348ce72a1]
         public typealias Token = String
 
-        // parity: ai/src/protocols/xai-video.ts#protocol [status=implemented hash=22c1b5ec2702]
+        // parity: ai/src/protocols/xai-video.ts#protocol [status=implemented hash=ebe276feedbf]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "xai-video", name: "xAI Video", provider: "xai"),
             mode: .queued,
@@ -2793,12 +2793,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/xai-video.ts#model [status=implemented hash=c308ae45f397]
+        // parity: ai/src/protocols/xai-video.ts#model [status=implemented hash=921f76b35e84]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/xai-video.ts#XAIVideo [status=implemented hash=f80ab3d74128]
+        // parity: ai/src/protocols/xai-video.ts#XAIVideo [status=implemented hash=2203767c5687]
         public static let XAIVideo = AIProtocols.XAIVideo.self
     }
 
@@ -2811,13 +2811,13 @@ extension AIProtocols {
         // parity: ai/src/protocols/zai-images.ts#PATH [status=implemented hash=bb919f32959f]
         public static let PATH = "/images/generations"
 
-        // parity: ai/src/protocols/zai-images.ts#ZAIImageOptions [status=implemented hash=2f7ce57416f5]
+        // parity: ai/src/protocols/zai-images.ts#ZAIImageOptions [status=implemented hash=fb0deff4273d]
         public typealias ZAIImageOptions = [String: JSONValue]
 
         // parity: ai/src/protocols/zai-images.ts#Request [status=implemented hash=b4603ea8320c]
         public typealias Request = ImageRequestPayload
 
-        // parity: ai/src/protocols/zai-images.ts#protocol [status=implemented hash=39c16089ff60]
+        // parity: ai/src/protocols/zai-images.ts#protocol [status=implemented hash=e72e73089689]
         public static let `protocol` = MediaProtocolSpec(
             identity: AIProtocolUtils.MediaIdentity(id: "zai-images", name: "Z.ai Images", provider: "zai"),
             mode: .inline,
@@ -2825,12 +2825,12 @@ extension AIProtocols {
             path: PATH
         )
 
-        // parity: ai/src/protocols/zai-images.ts#model [status=implemented hash=9918339341ca]
+        // parity: ai/src/protocols/zai-images.ts#model [status=implemented hash=cd0c9338f567]
         public static func model(_ input: MediaModelInput) -> MediaModelHandle {
             `protocol`.makeModel(input)
         }
 
-        // parity: ai/src/protocols/zai-images.ts#ZAIImages [status=implemented hash=0053cec11267]
+        // parity: ai/src/protocols/zai-images.ts#ZAIImages [status=implemented hash=bea08b21c522]
         public static let ZAIImages = AIProtocols.ZAIImages.self
     }
 }

@@ -9,7 +9,7 @@ import OpenCodeUtil
 /// Drive manifest loading, validation, and registry path resolution (`packages/simulation/src/manifest.ts`).
 public enum DriveManifest {
     /// Loopback WebSocket endpoints and optional viewport/recording configuration for a Drive instance.
-    // parity: simulation/src/manifest.ts#Manifest [status=implemented hash=7ee528f5bafd]
+    // parity: simulation/src/manifest.ts#Manifest [status=implemented hash=7f7a003dc0b3]
     public struct Manifest: Equatable, Hashable, Sendable, Codable {
         public struct Endpoints: Equatable, Hashable, Sendable, Codable {
             public let ui: String
@@ -122,7 +122,7 @@ public enum DriveManifest {
     }
 
     /// Tagged error returned when Drive manifest configuration, I/O, or JSON decoding fails.
-    // parity: simulation/src/manifest.ts#ResolveError [status=implemented hash=66f4fbdc5bb1]
+    // parity: simulation/src/manifest.ts#ResolveError [status=implemented hash=2f29ba49ebaf]
     public struct ResolveError: Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
         public static let tag = "DriveManifest.ResolveError"
 
@@ -187,7 +187,7 @@ public enum DriveManifest {
     )
 
     /// Resolves and validates the Drive manifest from `OPENCODE_DRIVE`, `DRIVE_REGISTRY_DIR`, and `XDG_STATE_HOME`.
-    // parity: simulation/src/manifest.ts#resolve [status=implemented hash=181dcf45b07d]
+    // parity: simulation/src/manifest.ts#resolve [status=implemented hash=e7fdcfbc2ad5]
     public static func resolve(
         environment: any EnvironmentProviding = SystemEnvironment.shared,
         fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared

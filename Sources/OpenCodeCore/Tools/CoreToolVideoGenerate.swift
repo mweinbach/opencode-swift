@@ -29,14 +29,14 @@ extension CoreTool {
             "flac": "audio/flac",
         ]
 
-        // parity: core/src/tool/plugin/video-generate.ts#description [status=implemented hash=cd7cebc2544d]
+        // parity: core/src/tool/plugin/video-generate.ts#description [status=implemented hash=987a1c0f6e00]
         public static let description: String = [
             "Generates a video from a prompt, optionally starting or ending on given images and guided by reference images, videos or audio.",
             "Only call this when the user asks for a video: videos are slow and expensive.",
             "It runs in the background, and you are notified with every saved file when it finishes. Never poll, sleep, or check for the file while you wait.",
         ].joined(separator: "\n")
 
-        // parity: core/src/tool/plugin/video-generate.ts#Input [status=implemented hash=e246b4e6aa15]
+        // parity: core/src/tool/plugin/video-generate.ts#Input [status=implemented hash=728a276f8e8a]
         public struct Input: Equatable, Hashable, Sendable, Codable {
             public let prompt: String
             public let start: String?
@@ -142,7 +142,7 @@ extension CoreTool {
             "required": .array([.string("prompt")]),
         ]
 
-        // parity: core/src/tool/plugin/video-generate.ts#Output [status=implemented hash=354a3b69390c]
+        // parity: core/src/tool/plugin/video-generate.ts#Output [status=implemented hash=36634a7f0860]
         public struct Output: Equatable, Hashable, Sendable, Codable {
             /// The video job's ID, repeated in its completion notice.
             public let id: String
@@ -160,7 +160,7 @@ extension CoreTool {
 
         /// The completion notice for a background video job, tagged with its job ID like
         /// `<background-result kind="image" id=…>` notices.
-        // parity: core/src/tool/plugin/video-generate.ts#notice [status=implemented hash=ed4e3aedf659]
+        // parity: core/src/tool/plugin/video-generate.ts#notice [status=implemented hash=6ac6fe1767b8]
         public static func notice(id: String, state: String, body: String) -> String {
             "<background-result kind=\"video\" id=\"\(id)\" state=\"\(state)\">\n\(body)\n</background-result>"
         }
@@ -236,7 +236,7 @@ extension CoreTool {
 
         /// Wait for a video the server is generating, then copy each of its videos from the blob store into the
         /// workspace, as a background Job; when the job settles, post its completion notice to the session.
-        // parity: core/src/tool/plugin/video-generate.ts#track [status=adapted hash=212ab0d27a4f]
+        // parity: core/src/tool/plugin/video-generate.ts#track [status=adapted hash=87f7ca87aca8]
         public static func track(_ input: TrackInput) async throws {
             let run: @Sendable () async throws -> String = {
                 do {

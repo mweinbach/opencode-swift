@@ -310,7 +310,7 @@ extension Merman {
         return StateDiagramDrawingResult(grid: grid, diagram: diagram, layout: layout, transitionPlans: transitionPlans)
     }
 
-    // parity: merman/src/state/drawing.ts#createStateDiagramDrawing [status=implemented hash=bd21dd8f7fa7]
+    // parity: merman/src/state/drawing.ts#createStateDiagramDrawing [status=implemented hash=2e034c5cadbf]
     public static func createStateDiagramDrawing(
         _ sourceDiagram: StateDiagram,
         options: StateDiagramRenderOptions = StateDiagramRenderOptions()
@@ -344,7 +344,7 @@ extension Merman {
         return fallback
     }
 
-    // parity: merman/src/state/drawing.ts#drawStateDiagramGrid [status=implemented hash=85320d8237d6]
+    // parity: merman/src/state/drawing.ts#drawStateDiagramGrid [status=implemented hash=200bbe52f0af]
     public static func drawStateDiagramGrid(
         _ sourceDiagram: StateDiagram,
         options: StateDiagramRenderOptions = StateDiagramRenderOptions()
@@ -354,7 +354,7 @@ extension Merman {
 
     // MARK: - State Diagram (`state/diagram.ts`)
 
-    // parity: merman/src/state/diagram.ts#renderStateDiagram [status=implemented hash=f938956a7c27]
+    // parity: merman/src/state/diagram.ts#renderStateDiagram [status=implemented hash=e44d0d379f7d]
     public static func renderStateDiagram(
         _ content: String,
         options: StateDiagramRenderOptions = StateDiagramRenderOptions()
