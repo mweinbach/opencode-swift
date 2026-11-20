@@ -47,6 +47,7 @@ case "${CMD}" in
     ;;
   check)
     require_bun
+    bun test "${ROOT_DIR}/Tools/parity"
     bun "${ROOT_DIR}/Tools/parity/diff.ts" --check-snapshots
     bun "${OPENTUI_DIR}/Tools/parity/diff.ts" --check-snapshots
     bun "${ROOT_DIR}/Tools/parity/audit.ts" --fail-on-drift --strict --no-write
@@ -57,6 +58,7 @@ case "${CMD}" in
     ;;
   all)
     require_bun
+    bun test "${ROOT_DIR}/Tools/parity"
     bun "${ROOT_DIR}/Tools/parity/scanner.ts"
     bun "${OPENTUI_DIR}/Tools/parity/scanner.ts"
     bun "${ROOT_DIR}/Tools/parity/diff.ts" --write-snapshots

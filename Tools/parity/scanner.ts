@@ -64,9 +64,10 @@ export interface UpstreamManifest {
 }
 
 const ROOT_DIR = path.resolve(import.meta.dir, "../..")
-const UPSTREAM_DIR = path.join(ROOT_DIR, "upstream/opencode")
+// Overrides exist only for hash-migration tooling (scanning an older upstream tree side by side).
+const UPSTREAM_DIR = process.env.PARITY_UPSTREAM_DIR ?? path.join(ROOT_DIR, "upstream/opencode")
 const LOCK_FILE = path.join(ROOT_DIR, "upstream.lock.json")
-const MANIFEST_PATH = path.join(ROOT_DIR, "parity/upstream-manifest.json")
+const MANIFEST_PATH = process.env.PARITY_MANIFEST_OUT ?? path.join(ROOT_DIR, "parity/upstream-manifest.json")
 
 const TS_TRANSPILER = new Bun.Transpiler({ loader: "ts" })
 const TSX_TRANSPILER = new Bun.Transpiler({ loader: "tsx" })
@@ -482,8 +483,71 @@ function skipBalancedTS(source: string, openIndex: number, openChar: string, clo
 
 /**
  * Unbounded balanced snippet extraction for TypeScript/TSX using the real TS/TSX lexical state machine.
+ *
+ * v2 (default) ends the snippet at the end of the *statement*: a closing `}` only terminates when
+ * paren/bracket/brace depth are all zero AND the statement does not continue (`.pipe(...)`, `as const`,
+ * `=> {`, a function body after a destructured parameter or object return type, `, nextElement`, ...).
+ * v1 (PARITY_SNIPPET_V1=1, kept only for hash migration) stopped at the first `}` returning brace depth
+ * to zero — e.g. `function f({ a }: X) { body }` hashed only `function f({ a }`, and
+ * `export const Endpoints = [A({..}), B(..)]` hashed only up to A's first object literal — which left
+ * upstream body changes invisible to drift detection.
  */
-function extractBalancedSnippetTS(source: string, startIndex: number, isTsx: boolean): string {
+const SNIPPET_V1 = process.env.PARITY_SNIPPET_V1 === "1"
+
+const CONTINUE_ACROSS_LINES = new Set([".", "?", ":", "|", "&", "=", ",", "+", "*", "%", "^"])
+const CONTINUE_SAME_LINE = new Set(["(", "[", "{", "<", ">", "!", "-", "/"])
+const CONTINUE_WORDS = new Set(["as", "satisfies", "extends", "implements", "in", "instanceof", "of", "keyof"])
+
+function statementContinuesTS(source: string, from: number): boolean {
+  const n = source.length
+  let j = from
+  let sawNewline = false
+  while (j < n) {
+    const c = source[j]!
+    if (c === "\n") {
+      sawNewline = true
+      j++
+    } else if (c === " " || c === "\t" || c === "\r") {
+      j++
+    } else if (c === "/" && source[j + 1] === "/") {
+      while (j < n && source[j] !== "\n") j++
+    } else if (c === "/" && source[j + 1] === "*") {
+      const end = source.indexOf("*/", j + 2)
+      j = end < 0 ? n : end + 2
+    } else {
+      break
+    }
+  }
+  if (j >= n) return false
+  const c = source[j]!
+  if (c === "." && source.startsWith("...", j)) return false
+  if (CONTINUE_ACROSS_LINES.has(c)) return true
+  if (!sawNewline && CONTINUE_SAME_LINE.has(c)) return true
+  const word = /^[A-Za-z_$][\w$]*/.exec(source.slice(j, j + 24))?.[0]
+  return word !== undefined && CONTINUE_WORDS.has(word)
+}
+
+/** Remove a trailing `// comment` from one line, ignoring `//` inside quotes/templates (e.g. URLs). */
+function stripTrailingLineCommentTS(line: string): string {
+  let quote: string | null = null
+  for (let k = 0; k < line.length; k++) {
+    const c = line[k]!
+    if (quote) {
+      if (c === "\\") k++
+      else if (c === quote) quote = null
+    } else if (c === '"' || c === "'" || c === "`") {
+      quote = c
+    } else if (c === "/" && line[k + 1] === "/") {
+      return line.slice(0, k)
+    }
+  }
+  return line
+}
+
+const LINE_CONTINUATION_SUFFIXES = ["=", "(", ",", "|", "&", "=>", "?", ":", ".", "+", "-", "*", "{", "[", "<", "??", "&&", "||"]
+const LINE_CONTINUATION_WORDS = /(?:^|[^\w$])(?:extends|implements|as|satisfies|keyof|typeof|new|return|await|yield)$/
+
+export function extractBalancedSnippetTS(source: string, startIndex: number, isTsx: boolean): string {
   const n = source.length
   const state = createTSLexState()
   let seenOpenBrace = false
@@ -517,24 +581,57 @@ function extractBalancedSnippetTS(source: string, startIndex: number, isTsx: boo
     if (ch === "}") {
       const inTpl = state.tplBraceStack.length > 0 && state.braceDepth - 1 === state.tplBraceStack[state.tplBraceStack.length - 1]
       const next = stepTSLexer(source, i, isTsx, state)
-      if (!inTpl && seenOpenBrace && state.braceDepth <= 0) {
+      if (SNIPPET_V1) {
+        if (!inTpl && seenOpenBrace && state.braceDepth <= 0) {
+          return source.slice(startIndex, i + 1)
+        }
+      } else if (
+        !inTpl &&
+        seenOpenBrace &&
+        state.braceDepth <= 0 &&
+        state.parenDepth <= 0 &&
+        state.bracketDepth <= 0 &&
+        state.tplBraceStack.length === 0 &&
+        !statementContinuesTS(source, i + 1)
+      ) {
         return source.slice(startIndex, i + 1)
       }
       i = next
       continue
     }
 
-    if (ch === "\n" && !seenOpenBrace && state.parenDepth === 0 && state.braceDepth === 0 && state.tplBraceStack.length === 0) {
+    if (
+      !SNIPPET_V1 &&
+      ch === ";" &&
+      state.parenDepth === 0 &&
+      state.braceDepth === 0 &&
+      state.bracketDepth === 0 &&
+      state.tplBraceStack.length === 0
+    ) {
+      return source.slice(startIndex, i + 1)
+    }
+
+    const atNewlineBoundary = SNIPPET_V1
+      ? ch === "\n" && !seenOpenBrace && state.parenDepth === 0 && state.braceDepth === 0 && state.tplBraceStack.length === 0
+      : ch === "\n" && state.parenDepth === 0 && state.braceDepth === 0 && state.bracketDepth === 0 && state.tplBraceStack.length === 0
+    if (atNewlineBoundary) {
       const restLine = source.slice(startIndex, i).trim()
-      if (
-        restLine.length > 0 &&
-        !restLine.endsWith("=") &&
-        !restLine.endsWith("(") &&
-        !restLine.endsWith(",") &&
-        !restLine.endsWith("|") &&
-        !restLine.endsWith("&") &&
-        !restLine.endsWith("=>")
-      ) {
+      const continues = SNIPPET_V1
+        ? restLine.endsWith("=") ||
+          restLine.endsWith("(") ||
+          restLine.endsWith(",") ||
+          restLine.endsWith("|") ||
+          restLine.endsWith("&") ||
+          restLine.endsWith("=>")
+        : (() => {
+            const lastLine = stripTrailingLineCommentTS(restLine.split("\n").pop() ?? "").trimEnd()
+            return (
+              LINE_CONTINUATION_SUFFIXES.some((s) => lastLine.endsWith(s)) ||
+              LINE_CONTINUATION_WORDS.test(lastLine) ||
+              statementContinuesTS(source, i + 1)
+            )
+          })()
+      if (restLine.length > 0 && !continues) {
         return source.slice(startIndex, i)
       }
       i++
@@ -2333,7 +2430,10 @@ export async function runScan(): Promise<UpstreamManifest> {
 
   const external: Array<{ package: string; repository: string; tag?: string; commit: string; commitDate: string }> = []
   for (const pkg of TRACKED_PACKAGES) {
-    const pkgRoot = packageRoot(ROOT_DIR, pkg)
+    const externalOverride = pkg.external ? process.env[`PARITY_${pkg.upstreamPackage.toUpperCase()}_DIR`] : undefined
+    const pkgRoot = pkg.external
+      ? (externalOverride ?? packageRoot(ROOT_DIR, pkg))
+      : path.join(UPSTREAM_DIR, "packages", pkg.upstreamPackage)
     if (pkg.external) {
       if (!fs.existsSync(path.join(pkgRoot, "src"))) {
         throw new Error(`Missing ${pkg.upstreamPackage} checkout at ${pkgRoot}. Run ./scripts/parity.sh sync first.`)
