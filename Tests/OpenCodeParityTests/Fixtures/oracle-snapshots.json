@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "generatedAt": "2026-11-20T19:08:52.789Z",
-  "vectorCount": 1107,
+  "generatedAt": "2026-11-20T20:14:49.232Z",
+  "vectorCount": 1349,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -10166,7 +10166,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001bTdGlHmXIcPraK"
+      "expectedValue": "bcfe56800001y89v4NLYz3ZlCD"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10177,7 +10177,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002z1X3OwU3s9cy9d"
+      "expectedValue": "bcfe56800002Cl0P4hBQQbLJ1v"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10188,7 +10188,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffewFKRyisan4UJUp"
+      "expectedValue": "4301a97feffe04ZXozdkNZAysN"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10199,7 +10199,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdKRJEWySYALlU3h"
+      "expectedValue": "4301a97feffdljiBvU2hF4gIWC"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10207,7 +10207,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1fa5c908c0012kr9OzCl55A8H1"
+      "expectedValue": "1fa98daf3001yecgsL25ksVjCv"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10215,7 +10215,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e05a36f73ffdW2RJ6o19xWMYvZ"
+      "expectedValue": "e0567250cffddotiU1404AcVm4"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10223,7 +10223,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "8a7d12d6-2a70-4d70-a517-76718a754ad4"
+      "expectedValue": "9fb1caad-ddd8-48c5-a4ae-4416682907c6"
     },
     {
       "fn": "latex/src/render.ts#renderLatexToString",
@@ -14174,6 +14174,5573 @@
       "expectedValue": {
         "path": "src/app.ts",
         "selection": null
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: NaN and Infinity checks",
+      "args": [
+        "return [NaN === NaN, Object.is(NaN, NaN), isNaN(\"x\"), Number.isNaN(\"x\"), 1/0, -1/0, String(0/0), String(1/0)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          false,
+          true,
+          true,
+          false,
+          null,
+          null,
+          "NaN",
+          "Infinity"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: negative zero",
+      "args": [
+        "return [Object.is(-0, 0), Object.is(-0 * 1, -0), 1 / -0 === -Infinity, String(-0), (-0).toString(), JSON.stringify(-0), [-0].includes(0), [-0].indexOf(0), Math.sign(-0) === 0 && 1/Math.sign(-0)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          false,
+          true,
+          true,
+          "0",
+          "0",
+          "0",
+          true,
+          0,
+          null
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: string to number coercion",
+      "args": [
+        "return [Number(\"\"), Number(\" 42 \"), Number(\"0x1f\"), Number(\"0b101\"), Number(\"0o17\"), Number(\"1e3\"), Number(\"12px\"), +\"  -3.5\\n\", Number(null), Number(undefined), Number(true), Number([]), Number([7]), Number([1,2]), Number({})].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "0",
+          "42",
+          "31",
+          "5",
+          "15",
+          "1000",
+          "NaN",
+          "-3.5",
+          "0",
+          "NaN",
+          "1",
+          "0",
+          "7",
+          "NaN",
+          "NaN"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: parseInt / parseFloat",
+      "args": [
+        "return [parseInt(\"08\"), parseInt(\"0x10\"), parseInt(\"10\", 2), parseInt(\"z\", 36), parseInt(\"  12abc\"), parseInt(\"\"), parseFloat(\"3.14more\"), parseFloat(\".5\"), parseFloat(\"-.5e2\"), parseInt(\"123\", 0), parseInt(\"1\", 37)].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "8",
+          "16",
+          "2",
+          "35",
+          "12",
+          "NaN",
+          "3.14",
+          "0.5",
+          "-50",
+          "123",
+          "NaN"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: number to string formatting",
+      "args": [
+        "return [0.1 + 0.2, 1e21, 1e-7, 123456789012345680000, 2**53, 2**53 + 1, -1e-7, 100, 1.5e300 * 1e10, 5e-324].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "0.30000000000000004",
+          "1e+21",
+          "1e-7",
+          "123456789012345680000",
+          "9007199254740992",
+          "9007199254740992",
+          "-1e-7",
+          "100",
+          "Infinity",
+          "5e-324"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: toFixed / toPrecision / toExponential",
+      "args": [
+        "return [(1.005).toFixed(2), (1.45).toFixed(1), (0).toFixed(2), (-1.5).toFixed(0), (123.456).toPrecision(4), (0.00001234).toPrecision(2), (1234.5678).toExponential(2), (255).toString(16), (255).toString(2), (-255).toString(36), (0.5).toString(2), (1e21).toFixed(2)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "1.00",
+          "1.4",
+          "0.00",
+          "-2",
+          "123.5",
+          "0.000012",
+          "1.23e+3",
+          "ff",
+          "11111111",
+          "-73",
+          "0.1",
+          "1e+21"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: integer ops and bitwise",
+      "args": [
+        "return [7 % 3, -7 % 3, 7 % -3, 5.5 % 2, 2 ** 10, (-8) ** (1/3), 1 << 31, 1 << 32, -1 >>> 0, -1 >> 28, ~5, 5 & 3, 5 | 3, 5 ^ 3, 2**32 | 0, Math.trunc(-4.7)].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "1",
+          "-1",
+          "1",
+          "1.5",
+          "1024",
+          "NaN",
+          "-2147483648",
+          "1",
+          "4294967295",
+          "-1",
+          "-6",
+          "1",
+          "7",
+          "6",
+          "0",
+          "-4"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: loose equality table",
+      "args": [
+        "return [null == undefined, null == 0, \"\" == 0, \"0\" == false, [] == false, [0] == false, [1] == 1, \"1\" == 1, NaN == NaN, ({}) == \"[object Object]\", null >= 0, undefined == 0]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          false,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          true,
+          true,
+          false
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: plus operator coercion",
+      "args": [
+        "return [1 + \"2\", \"3\" - 1, \"3\" * \"4\", [] + [], [] + {}, [1,2] + [3], true + 1, null + 1, undefined + 1, \"a\" + null, 1 + 2 + \"3\", \"1\" + 2 + 3].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "12",
+          "2",
+          "12",
+          "",
+          "[object Object]",
+          "1,23",
+          "2",
+          "1",
+          "NaN",
+          "anull",
+          "33",
+          "123"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: relational comparisons on strings",
+      "args": [
+        "return [\"a\" < \"b\", \"B\" < \"a\", \"10\" < \"9\", 10 < 9, \"10\" < 9, \"abc\" < \"abd\", null < 1, undefined < 1, [2] > 1]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          true,
+          true,
+          false,
+          false,
+          true,
+          true,
+          false,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: Number statics",
+      "args": [
+        "return [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER, Number.EPSILON > 0, Number.isInteger(5.0), Number.isInteger(5.1), Number.isSafeInteger(2**53), Number.isFinite(\"5\"), isFinite(\"5\"), Number.parseFloat === parseFloat, Number.MAX_VALUE > 1e308, Number.MIN_VALUE]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          9007199254740991,
+          -9007199254740991,
+          true,
+          true,
+          false,
+          false,
+          false,
+          true,
+          false,
+          true,
+          5e-324
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: BigInt literal unsupported",
+      "args": [
+        "return 10n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: BigInt literals are not supported. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: BigInt global absent",
+      "args": [
+        "return typeof BigInt"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "undefined",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: typeof table",
+      "args": [
+        "return [typeof 1, typeof \"s\", typeof true, typeof undefined, typeof null, typeof {}, typeof [], typeof (() => 1), typeof Symbol.iterator, typeof class {}, typeof Math, typeof undeclaredThing]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "number",
+          "string",
+          "boolean",
+          "undefined",
+          "object",
+          "object",
+          "object",
+          "function",
+          "symbol",
+          "function",
+          "object",
+          "undefined"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: increment / compound assignment",
+      "args": [
+        "let a = 1; let b = a++ + ++a; let c = 10; c -= 3; c *= 2; c /= 7; c **= 3; let d = 5; d %= 3; d <<= 4; d ||= 9; let e = 0; e ||= 7; let f = 1; f &&= 8; let g = null; g ??= \"x\"; return [a, b, c, d, e, f, g]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          4,
+          8,
+          32,
+          7,
+          8,
+          "x"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: surrogate pairs length and indexing",
+      "args": [
+        "const s = \"a😀b\"; return [s.length, s.charCodeAt(1), s.charCodeAt(2), s.codePointAt(1), s.codePointAt(2), [...s].length, Array.from(s), s.split(\"\").length, s.slice(1, 3) === \"😀\", s.indexOf(\"b\"), s.at(-1), \"😀\".split(\"\").map(c => c.length)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          4,
+          55357,
+          56832,
+          128512,
+          56832,
+          3,
+          [
+            "a",
+            "😀",
+            "b"
+          ],
+          4,
+          true,
+          3,
+          "b",
+          [
+            1,
+            1
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: String.fromCodePoint / fromCharCode / normalize",
+      "args": [
+        "return [String.fromCodePoint(0x1F600).length, String.fromCharCode(72, 105), \"é\".normalize(\"NFD\").length, \"e\\u0301\".normalize(\"NFC\").length, \"\\u00C5\" === \"\\u212B\".normalize(\"NFC\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          "Hi",
+          2,
+          1,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: localeCompare and sort",
+      "args": [
+        "return [[\"b\", \"a\", \"C\", \"á\"].sort((x, y) => x.localeCompare(y)), \"a\".localeCompare(\"b\"), \"b\".localeCompare(\"a\"), \"a\".localeCompare(\"a\"), \"a\".localeCompare(\"A\"), \"10\".localeCompare(\"9\", undefined, { numeric: true })]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "a",
+            "á",
+            "b",
+            "C"
+          ],
+          -1,
+          1,
+          0,
+          -1,
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: padStart / padEnd",
+      "args": [
+        "return [\"5\".padStart(3, \"0\"), \"abc\".padStart(6, \"12\"), \"abc\".padStart(2), \"x\".padEnd(4, \"ab\"), \"x\".padEnd(3), \"abc\".padEnd(5, \"\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "005",
+          "121abc",
+          "abc",
+          "xaba",
+          "x  ",
+          "abc"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: replaceAll and replace patterns",
+      "args": [
+        "return [\"a.b.c\".replaceAll(\".\", \"-\"), \"aaa\".replace(\"a\", \"b\"), \"abc\".replace(\"b\", \"[$&]\"), \"abc\".replace(\"b\", \"$`|$'\"), \"x-y\".replace(/(\\w)-(\\w)/, \"$2-$1\"), \"aXbX\".replaceAll(/x/gi, (m, i) => i), \"$1\".replace(\"$1\", \"$$\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "a-b-c",
+          "baa",
+          "a[b]c",
+          "aa|cc",
+          "y-x",
+          "a1b3",
+          "$"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: replaceAll with non-global regex throws",
+      "args": [
+        "try { \"a\".replaceAll(/a/, \"b\"); return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "String.replaceAll requires a regular expression with the global (g) flag: write /a/g, or use String.replace to replace only the first match."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: split with regex and limit",
+      "args": [
+        "return [\"a1b22c333\".split(/\\d+/), \"a,b,,c\".split(\",\"), \"abc\".split(\"\"), \"a1b2\".split(/(\\d)/), \"one  two\".split(\" \", 2), \"\".split(\",\"), \"\".split(\"\"), \"abc\".split(/(?:)/u)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "a",
+            "b",
+            "c",
+            ""
+          ],
+          [
+            "a",
+            "b",
+            "",
+            "c"
+          ],
+          [
+            "a",
+            "b",
+            "c"
+          ],
+          [
+            "a",
+            "1",
+            "b",
+            "2",
+            ""
+          ],
+          [
+            "one",
+            ""
+          ],
+          [
+            ""
+          ],
+          [],
+          [
+            "a",
+            "b",
+            "c"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: trim / case / repeat / at",
+      "args": [
+        "return [\" \\t x \\n\".trim(), \"  y\".trimStart(), \"z  \".trimEnd(), \"İ\".toLowerCase().length, \"ß\".toUpperCase(), \"ab\".repeat(3), \"abc\".at(-1), \"abc\".at(5), \"Straße\".toLocaleUpperCase()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "x",
+          "y",
+          "z",
+          2,
+          "SS",
+          "ababab",
+          "c",
+          null,
+          "STRASSE"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: indexOf / includes / startsWith / slice / substring",
+      "args": [
+        "const s = \"hello world\"; return [s.indexOf(\"o\"), s.lastIndexOf(\"o\"), s.indexOf(\"o\", 5), s.includes(\"wor\"), s.startsWith(\"world\", 6), s.endsWith(\"hello\", 5), s.slice(-5), s.slice(3, -3), s.substring(5, 2), s.substr ? \"has substr\" : \"no substr\", s.search(/w/)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          4,
+          7,
+          7,
+          true,
+          true,
+          true,
+          "world",
+          "lo wo",
+          "llo",
+          "has substr",
+          6
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: template literals and raw",
+      "args": [
+        "const x = 3; const tag = (s, ...v) => s.raw.join(\"|\") + v.join(\",\"); return [`a${x}b${x * 2}`, tag`one${1}two\\n${2}`, String.raw`\\n${x}`, `multi\nline`]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "a3b6",
+          "one|two\\n|1,2",
+          "\\n3",
+          "multi\nline"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: string comparison of unicode code units",
+      "args": [
+        "return [\"\\uFF61\" < \"\\uD83D\\uDE00\", [\"😀\", \"\\uFF61\", \"a\"].sort(), \"😀\".localeCompare(\"a\") > 0]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          false,
+          [
+            "a",
+            "😀",
+            "｡"
+          ],
+          false
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: matchAll and match",
+      "args": [
+        "const r = [...\"a1b2c3\".matchAll(/[a-z](\\d)/g)].map(m => [m[0], m[1], m.index]); return [r, \"abc\".match(/z/), \"abab\".match(/a/g), \"abc\".match(/(?<first>a)b/).groups.first]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            [
+              "a1",
+              "1",
+              0
+            ],
+            [
+              "b2",
+              "2",
+              2
+            ],
+            [
+              "c3",
+              "3",
+              4
+            ]
+          ],
+          null,
+          [
+            "a",
+            "a"
+          ],
+          "a"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: String() of various values",
+      "args": [
+        "return [String(null), String(undefined), String(123), String([1, [2, 3]]), String({}), String(() => 1).length > 0, String(Symbol.iterator), `${[1,2]}`, String(new Error(\"m\")), String(true)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "null",
+          "undefined",
+          "123",
+          "1,2,3",
+          "[object Object]",
+          true,
+          "Symbol(psychoscript.iterator)",
+          "1,2",
+          "Error: m",
+          "true"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "string: codePointAt / charAt out of range",
+      "args": [
+        "return [\"abc\".charAt(9), \"abc\".charCodeAt(9), \"abc\".codePointAt(9) === undefined, \"abc\"[9] === undefined]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "",
+          null,
+          true,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: sort stability with comparator",
+      "args": [
+        "const a = [{k:1,v:\"a\"},{k:0,v:\"b\"},{k:1,v:\"c\"},{k:0,v:\"d\"},{k:1,v:\"e\"}]; return a.sort((x, y) => x.k - y.k).map(o => o.v).join(\"\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "bdace",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: default sort is lexicographic",
+      "args": [
+        "return [[10, 9, 1, 100].sort(), [3, undefined, 1, null].sort(), [\"b\", undefined, \"a\"].sort().length, [true, false].sort()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            10,
+            100,
+            9
+          ],
+          [
+            1,
+            3,
+            null,
+            null
+          ],
+          3,
+          [
+            false,
+            true
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: toSorted / toReversed / with / toSpliced",
+      "args": [
+        "const a = [3, 1, 2]; return [a.toSorted(), a.toReversed(), a.with(1, 9), a.toSpliced(1, 1, \"x\", \"y\"), a]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            1,
+            3
+          ],
+          [
+            3,
+            9,
+            2
+          ],
+          [
+            3,
+            "x",
+            "y",
+            2
+          ],
+          [
+            3,
+            1,
+            2
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: splice variants",
+      "args": [
+        "const a = [1,2,3,4,5]; const r1 = a.splice(1, 2); const b = [1,2,3]; const r2 = b.splice(-1, 0, \"x\"); const c = [1,2,3]; const r3 = c.splice(1); return [a, r1, b, r2, c, r3]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            4,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            1,
+            2,
+            "x",
+            3
+          ],
+          [],
+          [
+            1
+          ],
+          [
+            2,
+            3
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: flat / flatMap",
+      "args": [
+        "return [[1, [2, [3, [4]]]].flat(), [1, [2, [3, [4]]]].flat(Infinity), [1, 2].flatMap(x => [x, x * 10]), [[1], [[2]]].flatMap(x => x)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2,
+            [
+              3,
+              [
+                4
+              ]
+            ]
+          ],
+          [
+            1,
+            2,
+            3,
+            4
+          ],
+          [
+            1,
+            10,
+            2,
+            20
+          ],
+          [
+            1,
+            [
+              2
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: holes",
+      "args": [
+        "const a = [1, , 3]; const b = new Array(3); return [a.length, 1 in a, a.indexOf(undefined), a.includes(undefined), a.map(x => x * 2), Object.keys(a), JSON.stringify(a), b.length, JSON.stringify(b), a.forEach.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          false,
+          -1,
+          true,
+          [
+            2,
+            null,
+            6
+          ],
+          [
+            "0",
+            "2"
+          ],
+          "[1,null,3]",
+          3,
+          "[null,null,null]",
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: Array.from / of / fill / keys / entries",
+      "args": [
+        "return [Array.from({ length: 3 }, (_, i) => i * i), Array.of(7, 8), new Array(3).fill(0), [...[5,6].keys()], [...[\"a\",\"b\"].entries()], Array.from(\"ab\"), Array.from(new Set([1,1,2])), Array.from(new Map([[1, 2]]))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            0,
+            1,
+            4
+          ],
+          [
+            7,
+            8
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            [
+              0,
+              "a"
+            ],
+            [
+              1,
+              "b"
+            ]
+          ],
+          [
+            "a",
+            "b"
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            [
+              1,
+              2
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: find / findLast / findIndex / some / every",
+      "args": [
+        "const a = [1, 5, 8, 12]; return [a.find(x => x > 4), a.findLast(x => x < 10), a.findIndex(x => x > 100), a.findLastIndex(x => x % 2), a.some(x => x > 10), a.every(x => x > 0), [].every(x => false)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          5,
+          8,
+          -1,
+          1,
+          true,
+          true,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: reduce / reduceRight / empty reduce error",
+      "args": [
+        "let err; try { [].reduce((a, b) => a + b) } catch (e) { err = [e.name, e.message] } return [[1,2,3].reduce((a,b) => a + b), [\"a\",\"b\",\"c\"].reduceRight((a, b) => a + b), [1].reduce((a, b) => a + b, 10), err]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          6,
+          "cba",
+          11,
+          [
+            "TypeError",
+            "Array.reduce of an empty array with no initial value."
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: join / toString / nested and null",
+      "args": [
+        "return [[1, null, undefined, 2].join(\"-\"), [[1, 2], [3]].toString(), [].join(), [1].join(undefined)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "1---2",
+          "1,2,3",
+          "",
+          "1"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: length truncation and growth",
+      "args": [
+        "const a = [1,2,3,4]; a.length = 2; const b = [1]; b[4] = 5; return [a, b.length, JSON.stringify(b)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2
+          ],
+          5,
+          "[1,null,null,null,5]"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: indexOf / lastIndexOf / includes NaN",
+      "args": [
+        "return [[NaN].indexOf(NaN), [NaN].includes(NaN), [1,2,1].lastIndexOf(1), [1,2,3].indexOf(3, -1), [\"1\"].includes(1)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          -1,
+          true,
+          2,
+          2,
+          false
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: copyWithin / reverse / shift / unshift",
+      "args": [
+        "const a = [1,2,3,4,5]; a.copyWithin(0, 3); const b = [1,2,3]; b.reverse(); const s = b.shift(); const n = b.unshift(9, 8); return [a, b, s, n]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            4,
+            5,
+            3,
+            4,
+            5
+          ],
+          [
+            9,
+            8,
+            2,
+            1
+          ],
+          3,
+          4
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: Array.isArray and array-likes",
+      "args": [
+        "return [Array.isArray([]), Array.isArray({ length: 0 }), Array.prototype.slice.call({ 0: \"a\", 1: \"b\", length: 2 }), Array.prototype.map.call(\"ab\", c => c + c)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: Array.prototype.slice called on incompatible receiver a data object. (line 1, col 58)",
+          "location": {
+            "line": 1,
+            "column": 58
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: spread and rest",
+      "args": [
+        "const [a, ...rest] = [1, 2, 3]; const f = (...xs) => xs.length; return [a, rest, f(...[1, 2], 3, ...[]), [...\"hi\", ...[1]], Math.max(...[3, 9, 2])]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          [
+            2,
+            3
+          ],
+          3,
+          [
+            "h",
+            "i",
+            1
+          ],
+          9
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: at / concat with spreadable",
+      "args": [
+        "return [[1,2,3].at(-1), [1].concat(2, [3, [4]]), [].concat.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          [
+            1,
+            2,
+            3,
+            [
+              4
+            ]
+          ],
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: sort comparator returning non-numbers",
+      "args": [
+        "return [[3, 1, 2].sort(() => 0), [3, 1, 2].sort((a, b) => a > b), [3, 1, 2].sort((a, b) => (a > b ? 1 : -1))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            3,
+            1,
+            2
+          ],
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            1,
+            2,
+            3
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: sort throws on bad comparator",
+      "args": [
+        "try { [1, 2].sort(\"x\"); return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Array.sort expects a function callback."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: Array.prototype.group-like via Object.groupBy",
+      "args": [
+        "return [Object.groupBy([1, 2, 3, 4], x => (x % 2 ? \"odd\" : \"even\")), [...Map.groupBy([1, 2, 3], x => x > 1).entries()]]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          {
+            "odd": [
+              1,
+              3
+            ],
+            "even": [
+              2,
+              4
+            ]
+          },
+          [
+            [
+              false,
+              [
+                1
+              ]
+            ],
+            [
+              true,
+              [
+                2,
+                3
+              ]
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "array: invalid array length",
+      "args": [
+        "try { new Array(-1); return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "RangeError",
+          "Invalid array length."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: property order integer keys first",
+      "args": [
+        "const o = { b: 1, 2: 1, a: 1, 1: 1, \"-1\": 1, \"01\": 1 }; o.c = 1; o[0] = 1; return [Object.keys(o), JSON.stringify(o)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "0",
+            "1",
+            "2",
+            "b",
+            "a",
+            "-1",
+            "01",
+            "c"
+          ],
+          "{\"0\":1,\"1\":1,\"2\":1,\"b\":1,\"a\":1,\"-1\":1,\"01\":1,\"c\":1}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: spread and overriding",
+      "args": [
+        "const a = { x: 1, y: 2 }; const b = { ...a, y: 3, z: 4 }; const c = { ...null, ...undefined, ...\"hi\", ...[9] }; return [b, c]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          {
+            "x": 1,
+            "y": 3,
+            "z": 4
+          },
+          {
+            "0": 9,
+            "1": "i"
+          }
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: destructuring defaults and renames",
+      "args": [
+        "const { a = 1, b: { c = 2 } = {}, d: e = 3, ...rest } = { a: undefined, d: null, f: 6, g: 7 }; const [x = 10, [y] = [20], z = x + 1] = [undefined, undefined]; return [a, c, e, rest, x, y, z]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2,
+          null,
+          {
+            "f": 6,
+            "g": 7
+          },
+          10,
+          20,
+          11
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: destructuring from null throws",
+      "args": [
+        "try { const { a } = null; return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Cannot destructure null as it is null."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: getters and setters in literals",
+      "args": [
+        "let log = []; const o = { _v: 1, get v() { log.push(\"get\"); return this._v }, set v(x) { log.push(\"set \" + x); this._v = x * 2 } }; o.v = 5; const r = o.v; return [r, log, Object.keys(o), JSON.stringify(o)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          10,
+          [
+            "set 5",
+            "get",
+            "get"
+          ],
+          [
+            "_v",
+            "v"
+          ],
+          "{\"_v\":10,\"v\":10}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: defineProperty enumerable and writable",
+      "args": [
+        "const o = {}; Object.defineProperty(o, \"hidden\", { value: 1 }); Object.defineProperty(o, \"shown\", { value: 2, enumerable: true }); let msg; try { o.hidden = 5 } catch (e) { msg = e.message } return [Object.keys(o), o.hidden, msg, JSON.stringify(Object.getOwnPropertyDescriptor(o, \"shown\"))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "shown"
+          ],
+          1,
+          "Cannot assign to read only property 'hidden'.",
+          "{\"value\":2,\"writable\":false,\"enumerable\":true,\"configurable\":false}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: defineProperty accessor",
+      "args": [
+        "const o = {}; let n = 0; Object.defineProperty(o, \"c\", { get() { return ++n }, enumerable: true, configurable: true }); return [o.c, o.c, Object.keys(o), typeof Object.getOwnPropertyDescriptor(o, \"c\").get]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2,
+          [
+            "c"
+          ],
+          "function"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: entries / fromEntries / values",
+      "args": [
+        "const o = { a: 1, b: [2] }; return [Object.entries(o), Object.fromEntries([[\"x\", 1], [\"y\", 2]]), Object.fromEntries(new Map([[\"m\", 3]])), Object.values(o)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            [
+              "a",
+              1
+            ],
+            [
+              "b",
+              [
+                2
+              ]
+            ]
+          ],
+          {
+            "x": 1,
+            "y": 2
+          },
+          {
+            "m": 3
+          },
+          [
+            1,
+            [
+              2
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: freeze / seal / isFrozen",
+      "args": [
+        "const f = Object.freeze({ a: 1, n: { b: 2 } }); let m1, m2; try { f.a = 2 } catch (e) { m1 = e.message } try { f.z = 1 } catch (e) { m2 = e.message } f.n.b = 3; const s = Object.seal({ q: 1 }); s.q = 2; let m3; try { delete s.q } catch (e) { m3 = e.message } return [f.a, f.n.b, m1, m2, Object.isFrozen(f), s.q, m3, Object.isSealed(s)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          3,
+          "Cannot assign to read only property 'a'.",
+          "Cannot add property z, object is not extensible.",
+          true,
+          2,
+          "Cannot delete property 'q'.",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: assign / hasOwn / in / delete",
+      "args": [
+        "const t = Object.assign({ a: 1 }, { b: 2 }, null, { a: 3 }); const d = delete t.b; return [t, d, Object.hasOwn(t, \"a\"), \"toString\" in t, Object.hasOwn(t, \"toString\"), t.hasOwnProperty(\"a\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          {
+            "a": 3
+          },
+          true,
+          true,
+          true,
+          false,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: computed and shorthand keys",
+      "args": [
+        "const k = \"dyn\"; const x = 5; const o = { [k + 1]: 1, x, [`t${2}`]: 2, f() { return this.x }, 3.5: \"n\" }; return [Object.keys(o), o.f()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "dyn1",
+            "x",
+            "t2",
+            "f",
+            "3.5"
+          ],
+          5
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: Object.create null and prototype chain",
+      "args": [
+        "const p = { greet() { return \"hi \" + this.n } }; const o = Object.create(p); o.n = \"bob\"; const n = Object.create(null); n.a = 1; return [o.greet(), Object.getPrototypeOf(o) === p, Object.keys(n), typeof n.toString, p.isPrototypeOf(o)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "hi bob",
+          true,
+          [
+            "a"
+          ],
+          "undefined",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: setPrototypeOf unsupported",
+      "args": [
+        "try { Object.setPrototypeOf({}, null); return \"allowed\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Object.setPrototypeOf is not a function."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: __proto__ assignment rejected",
+      "args": [
+        "try { const o = {}; o.__proto__ = { x: 1 }; return [o.x] } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          null
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: toString / valueOf protocol",
+      "args": [
+        "const o = { valueOf() { return 42 }, toString() { return \"str\" } }; return [o + 1, `${o}`, String(o), o * 2, [o] + \"\"]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          43,
+          "str",
+          "str",
+          84,
+          "str"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: getOwnPropertyNames and keys of arrays and strings",
+      "args": [
+        "return [Object.getOwnPropertyNames([1, 2]), Object.keys(\"ab\"), Object.entries([7, 8])]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "0",
+            "1",
+            "length"
+          ],
+          [
+            "0",
+            "1"
+          ],
+          [
+            [
+              "0",
+              7
+            ],
+            [
+              "1",
+              8
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: structuredClone",
+      "args": [
+        "const src = { d: new Date(0), m: new Map([[1, { x: 1 }]]), s: new Set([1]), a: [1, { b: 2 }] }; const c = structuredClone(src); c.a[1].b = 9; return [src.a[1].b, c.d.toISOString(), c.m.get(1).x, c.s.has(1), c.m !== src.m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          "1970-01-01T00:00:00.000Z",
+          1,
+          true,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: structuredClone of function throws",
+      "args": [
+        "try { structuredClone({ f() {} }); return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "DataCloneError: a function could not be cloned."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: property access on undefined error text",
+      "args": [
+        "try { const o = undefined; return o.x } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Cannot read properties of undefined (reading 'x')."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "object: calling a non-function error text",
+      "args": [
+        "try { const o = { a: 1 }; o.a() } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "o.a is not a function."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: fields, methods, static",
+      "args": [
+        "class A { x = 1; static count = 0; static make() { A.count++; return new A() } inc() { return ++this.x } } const a = A.make(); a.inc(); return [a.x, A.count, Object.keys(a), typeof A, A.name]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          1,
+          [
+            "x"
+          ],
+          "function",
+          "A"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: extends and super",
+      "args": [
+        "class B { constructor(n) { this.n = n } hello() { return \"B\" + this.n } static s() { return \"sB\" } } class C extends B { constructor() { super(7) } hello() { return \"C>\" + super.hello() } static s() { return \"sC>\" + super.s() } } const c = new C(); return [c.hello(), C.s(), c instanceof B, c instanceof C, Object.getPrototypeOf(C) === B]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "C>B7",
+          "sC>sB",
+          true,
+          true,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: getters setters in classes",
+      "args": [
+        "class T { #no; } return 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Private class members (#name) are not supported. Use a regular property instead. (line 1, col 11)",
+          "location": {
+            "line": 1,
+            "column": 11
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: accessors and static accessors",
+      "args": [
+        "class T { constructor() { this._t = 1 } get t() { return this._t * 10 } set t(v) { this._t = v } static get k() { return \"K\" } } const t = new T(); t.t = 4; return [t.t, T.k, Object.keys(t)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          40,
+          "K",
+          [
+            "_t"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: field initializer order and this",
+      "args": [
+        "const log = []; class P { a = log.push(\"P.a\"); constructor() { log.push(\"P.ctor\") } } class Q extends P { b = log.push(\"Q.b\"); constructor() { log.push(\"Q.before\"); super(); log.push(\"Q.after\") } } new Q(); return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "Q.before",
+          "P.a",
+          "P.ctor",
+          "Q.b",
+          "Q.after"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: calling class without new",
+      "args": [
+        "class K {} try { K() } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Class constructor K cannot be invoked without 'new'"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: this before super",
+      "args": [
+        "class P {} class Q extends P { constructor() { this.x = 1; super() } } try { new Q() } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "ReferenceError",
+          "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: extending built-in Error",
+      "args": [
+        "class MyErr extends Error { constructor(m) { super(m); this.name = \"MyErr\" } } const e = new MyErr(\"bad\"); return [e instanceof Error, e instanceof MyErr, e.message, String(e), e.name]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          true,
+          "bad",
+          "MyErr: bad",
+          "MyErr"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: instanceof with primitive and non-callable",
+      "args": [
+        "let m; try { ({}) instanceof 5 } catch (e) { m = [e.name, e.message] } return [1 instanceof Number, [] instanceof Object, m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          false,
+          true,
+          [
+            "TypeError",
+            "The right-hand side of 'instanceof' is not callable."
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: new on plain function unsupported",
+      "args": [
+        "function F() { this.a = 1 } try { new F(); return \"allowed\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "F is not a constructor: only classes can be constructed with new. Use a class, or call it as a function that returns an object."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: class expression and computed method names",
+      "args": [
+        "const name = \"dyn\"; const K = class Named { [name]() { return Named.name } static [name + \"S\"] = 2 }; return [new K().dyn(), K.dynS, K.name]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "Named",
+          2,
+          "Named"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: static blocks unsupported",
+      "args": [
+        "class S { static { this.x = 1 } } return S.x"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Class static blocks are not supported. Assign static fields instead. (line 1, col 11)",
+          "location": {
+            "line": 1,
+            "column": 11
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "class: method this lost when extracted",
+      "args": [
+        "class A { v = 3; get() { return this?.v } } const g = new A().get; return [g(), new A().get()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          null,
+          3
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: counter closures",
+      "args": [
+        "const make = () => { let n = 0; return { inc: () => ++n, get: () => n } }; const a = make(), b = make(); a.inc(); a.inc(); b.inc(); return [a.get(), b.get()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: let per-iteration binding vs var",
+      "args": [
+        "const fs = []; for (let i = 0; i < 3; i++) fs.push(() => i); const gs = []; for (var j = 0; j < 3; j++) gs.push(() => j); return [fs.map(f => f()), gs.map(g => g())]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            0,
+            1,
+            2
+          ],
+          [
+            3,
+            3,
+            3
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: arrow this vs method this",
+      "args": [
+        "const o = { v: 1, m() { return [this.v, (() => this.v)()] }, a: () => typeof this }; return [o.m(), o.a()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            1
+          ],
+          "undefined"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: function this in strict mode is undefined",
+      "args": [
+        "function f() { return this === undefined } const o = { f }; return [f(), o.f()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          false
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: call / apply / bind",
+      "args": [
+        "function f(a, b) { return [this && this.x, a, b] } const b = f.bind({ x: 1 }, \"p\"); return [f.call({ x: 2 }, 3, 4), f.apply({ x: 3 }, [5, 6]), b(\"q\"), b.name, b.length, f.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            2,
+            3,
+            4
+          ],
+          [
+            3,
+            5,
+            6
+          ],
+          [
+            1,
+            "p",
+            "q"
+          ],
+          "bound f",
+          1,
+          2
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: hoisting of functions and TDZ",
+      "args": [
+        "const r = hoisted(); function hoisted() { return \"ok\" } let m; try { tdz; let tdz = 1 } catch (e) { m = [e.name, e.message] } return [r, m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "ok",
+          [
+            "ReferenceError",
+            "Cannot access 'tdz' before initialization."
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: const reassignment error",
+      "args": [
+        "const c = 1; try { c = 2 } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Cannot assign to constant 'c'."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: recursion and default params referencing earlier ones",
+      "args": [
+        "const fib = n => (n < 2 ? n : fib(n - 1) + fib(n - 2)); const f = (a, b = a * 2, c = a + b) => [a, b, c]; return [fib(15), f(1), f(1, 1), f.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          610,
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            1,
+            1,
+            2
+          ],
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: arguments object",
+      "args": [
+        "function f() { return [arguments.length, Array.from(arguments), typeof arguments] } return f(1, \"a\", null)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          [
+            1,
+            "a",
+            null
+          ],
+          "object"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: IIFE and named function expression scope",
+      "args": [
+        "const r = (function fact(n) { return n <= 1 ? 1 : n * fact(n - 1) })(5); return [r, typeof fact]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          120,
+          "undefined"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: undeclared variable assignment in strict mode",
+      "args": [
+        "try { undeclaredVar = 1; return \"no\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "ReferenceError",
+          "Unknown identifier 'undeclaredVar'."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "closure: reading undeclared variable",
+      "args": [
+        "try { return missingName + 1 } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "ReferenceError",
+          "Unknown identifier 'missingName'."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: basic generator protocol",
+      "args": [
+        "function* g() { const x = yield 1; yield x * 2; return \"done\" } const it = g(); return [it.next(), it.next(5), it.next(), it.next()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          {
+            "value": 1,
+            "done": false
+          },
+          {
+            "value": 10,
+            "done": false
+          },
+          {
+            "value": "done",
+            "done": true
+          },
+          {
+            "done": true
+          }
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: return and throw",
+      "args": [
+        "function* g() { try { yield 1; yield 2 } finally { yield \"cleanup\" } } const a = g(); const r = [a.next(), a.return(\"r\"), a.next(), a.next()]; const b = g(); b.next(); let caught; try { b.throw(new Error(\"x\")); b.next(); b.next() } catch (e) { caught = e.message } return [r, caught]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            {
+              "value": 1,
+              "done": false
+            },
+            {
+              "value": "cleanup",
+              "done": false
+            },
+            {
+              "value": "r",
+              "done": true
+            },
+            {
+              "done": true
+            }
+          ],
+          "x"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: yield* delegation and spread",
+      "args": [
+        "function* inner() { yield 1; yield 2; return \"ret\" } function* outer() { const r = yield* inner(); yield r; yield* [3, 4] } return [...outer()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2,
+          "ret",
+          3,
+          4
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: infinite generator with take via iterator helpers",
+      "args": [
+        "function* nat() { let i = 0; while (true) yield i++ } return nat().filter(x => x % 2).map(x => x * x).take(4).toArray()"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          9,
+          25,
+          49
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: custom iterable with Symbol.iterator",
+      "args": [
+        "const it = { from: 1, to: 4, [Symbol.iterator]() { let c = this.from, t = this.to; return { next: () => (c <= t ? { value: c++, done: false } : { value: undefined, done: true }) } } }; const out = []; for (const x of it) out.push(x); return [out, [...it], Array.from(it, x => x * 2)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2,
+            3,
+            4
+          ],
+          [
+            1,
+            2,
+            3,
+            4
+          ],
+          [
+            2,
+            4,
+            6,
+            8
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: iterator close on break",
+      "args": [
+        "const log = []; function* g() { try { yield 1; yield 2 } finally { log.push(\"closed\") } } for (const x of g()) { log.push(x); break } return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          "closed"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: async generator and for await",
+      "args": [
+        "async function* ag() { yield 1; await null; yield 2; yield Promise.resolve(3) } const out = []; for await (const v of ag()) out.push(v); return out"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2,
+          3
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: generator object toString and typeof",
+      "args": [
+        "function* g() {} const it = g(); return [typeof it.next, String(it), it[Symbol.iterator]() === it]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "function",
+          "[object Generator]",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "generator: Iterator.from and helpers drop/flatMap/reduce",
+      "args": [
+        "return [Iterator.from([1, 2, 3, 4]).drop(1).flatMap(x => [x, -x]).toArray(), [5, 6].values().reduce((a, b) => a + b), [1, 2, 3].values().some(x => x > 2), [1,2,3].values().find(x => x > 1)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            2,
+            -2,
+            3,
+            -3,
+            4,
+            -4
+          ],
+          11,
+          true,
+          2
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: microtask order across await and then",
+      "args": [
+        "const log = []; const p = Promise.resolve(); p.then(() => log.push(\"then1\")).then(() => log.push(\"then2\")); (async () => { log.push(\"async start\"); await null; log.push(\"after await1\"); await null; log.push(\"after await2\") })(); log.push(\"sync end\"); await new Promise(r => r()); await null; await null; await null; return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "async start",
+          "sync end",
+          "then1",
+          "after await1",
+          "then2",
+          "after await2"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: await of thenable and resolved promise ordering",
+      "args": [
+        "const log = []; const thenable = { then(r) { log.push(\"thenable.then\"); r(\"T\") } }; (async () => { log.push(await thenable) })(); Promise.resolve().then(() => log.push(\"p1\")).then(() => log.push(\"p2\")).then(() => log.push(\"p3\")); for (let i = 0; i < 6; i++) await null; return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "thenable.then",
+          "p1",
+          "T",
+          "p2",
+          "p3"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: async function returning promise takes extra ticks",
+      "args": [
+        "const log = []; async function a() { return Promise.resolve(\"a\") } async function b() { return \"b\" } a().then(v => log.push(v)); b().then(v => log.push(v)); Promise.resolve().then(() => log.push(1)).then(() => log.push(2)).then(() => log.push(3)).then(() => log.push(4)); for (let i = 0; i < 8; i++) await null; return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "b",
+          1,
+          2,
+          "a",
+          3,
+          4
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: console.log ordering with microtasks",
+      "args": [
+        "console.log(\"A\"); queueMicrotask?.(() => console.log(\"micro\")); Promise.resolve().then(() => console.log(\"C\")); console.log(\"B\"); await null; await null; return \"done\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "ReferenceError: Unknown identifier 'queueMicrotask'. (line 1, col 19)",
+          "location": {
+            "line": 1,
+            "column": 19
+          }
+        },
+        "logs": [
+          "A"
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: Promise.all ordering and rejection",
+      "args": [
+        "const r1 = await Promise.all([asyncDouble(1), 2, Promise.resolve(3)]); let r2; try { await Promise.all([Promise.resolve(1), Promise.reject(new Error(\"no\")), new Promise(() => {})]) } catch (e) { r2 = e.message } return [r1, r2, await Promise.all([])]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            2,
+            2,
+            3
+          ],
+          "no",
+          []
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: Promise.race / any",
+      "args": [
+        "const r1 = await Promise.race([new Promise(() => {}), Promise.resolve(\"fast\")]); const r2 = await Promise.any([Promise.reject(1), Promise.resolve(2)]); let r3; try { await Promise.any([Promise.reject(new Error(\"a\")), Promise.reject(new Error(\"b\"))]) } catch (e) { r3 = [e.name, e.message, e.errors.map(x => x.message)] } return [r1, r2, r3]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "fast",
+          2,
+          [
+            "AggregateError",
+            "All promises were rejected",
+            [
+              "a",
+              "b"
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: Promise.allSettled shape",
+      "args": [
+        "return await Promise.allSettled([1, Promise.reject(new TypeError(\"t\")), asyncDouble(4)]).then(rs => rs.map(r => r.status === \"fulfilled\" ? r : { status: r.status, reason: String(r.reason) }))"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          {
+            "status": "fulfilled",
+            "value": 1
+          },
+          {
+            "status": "rejected",
+            "reason": "TypeError: t"
+          },
+          {
+            "status": "fulfilled",
+            "value": 8
+          }
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: unhandled rejection at top level",
+      "args": [
+        "Promise.reject(new Error(\"floating\")); await null; return \"after\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "after",
+        "logs": [],
+        "warnings": [
+          {
+            "kind": "ExecutionFailure",
+            "message": "Unhandled rejection from an un-awaited promise: Error: floating"
+          }
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: uncaught await rejection error",
+      "args": [
+        "await Promise.reject(new RangeError(\"out of range\"))"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "RangeError: out of range"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: rejecting with non-error value",
+      "args": [
+        "await Promise.reject({ code: 42 })"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Uncaught: {\"code\":42}"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: throwing a string",
+      "args": [
+        "throw \"plain string\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Uncaught: plain string"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: finally ordering and passthrough",
+      "args": [
+        "const log = []; const v = await Promise.resolve(1).finally(() => { log.push(\"f1\"); return 99 }).then(x => { log.push(\"then \" + x); return x }); let e; try { await Promise.reject(new Error(\"r\")).finally(() => log.push(\"f2\")) } catch (err) { e = err.message } return [v, e, log]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          "r",
+          [
+            "f1",
+            "then 1",
+            "f2"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: Promise.withResolvers and resolve with promise",
+      "args": [
+        "const { promise, resolve } = Promise.withResolvers(); setTimeoutish: { resolve(Promise.resolve(\"inner\")) } return [await promise, typeof Promise.withResolvers]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "inner",
+          "function"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: async host function interleaving",
+      "args": [
+        "const log = []; const a = asyncDouble(1).then(v => log.push(\"a\" + v)); const b = (async () => { log.push(\"b start\"); const v = await asyncDouble(10); log.push(\"b\" + v) })(); log.push(\"sync\"); await Promise.all([a, b]); return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "b start",
+          "sync",
+          "a2",
+          "b20"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: pending promise left at end warns",
+      "args": [
+        "asyncDouble(1); new Promise(() => {}); return \"end\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "end",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: await in non-async function is syntax error",
+      "args": [
+        "function f() { await 1 } return f()"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Unexpected token. Code must be plain JavaScript written as a program body. (line 1, col 22)",
+          "location": {
+            "line": 1,
+            "column": 22
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: chained then with thrown error and catch recovery",
+      "args": [
+        "return await Promise.resolve(1).then(() => { throw new Error(\"mid\") }).then(() => \"skipped\").catch(e => \"caught \" + e.message).then(v => v + \"!\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "caught mid!",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "async: setTimeout is not available",
+      "args": [
+        "return [typeof setTimeout, typeof setInterval, typeof queueMicrotask, typeof fetch, typeof process, typeof require]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "undefined",
+          "undefined",
+          "undefined",
+          "undefined",
+          "undefined",
+          "function"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: error types and names",
+      "args": [
+        "return [new TypeError(\"t\"), new RangeError(\"r\"), new SyntaxError(\"s\"), new ReferenceError(\"f\"), new URIError(\"u\"), new EvalError(\"e\"), new Error(\"x\")].map(e => [e.name, e.message, e instanceof Error, String(e)])"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "TypeError",
+            "t",
+            true,
+            "TypeError: t"
+          ],
+          [
+            "RangeError",
+            "r",
+            true,
+            "RangeError: r"
+          ],
+          [
+            "SyntaxError",
+            "s",
+            true,
+            "SyntaxError: s"
+          ],
+          [
+            "ReferenceError",
+            "f",
+            true,
+            "ReferenceError: f"
+          ],
+          [
+            "URIError",
+            "u",
+            true,
+            "URIError: u"
+          ],
+          [
+            "EvalError",
+            "e",
+            true,
+            "EvalError: e"
+          ],
+          [
+            "Error",
+            "x",
+            true,
+            "Error: x"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: stack text at top level",
+      "args": [
+        "const e = new Error(\"boom\")\nreturn e.stack"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "Error: boom\n    at <program>:1:11",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: stack text inside nested functions",
+      "args": [
+        "function inner() { return new Error(\"deep\") }\nfunction outer() {\n  return inner()\n}\nreturn outer().stack"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "Error: deep\n    at inner (<program>:1:27)\n    at outer (<program>:3:10)\n    at <program>:5:8",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: stack of thrown TypeError from runtime",
+      "args": [
+        "try {\n  null.x\n} catch (e) {\n  return [e.stack, e.constructor === TypeError]\n}"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError: Cannot read properties of null (reading 'x').\n    at <program>:2:3",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: error cause and AggregateError",
+      "args": [
+        "const e = new Error(\"outer\", { cause: new Error(\"inner\") }); const a = new AggregateError([new Error(\"1\")], \"agg\"); return [e.cause.message, \"cause\" in new Error(\"x\"), a.name, a.message, a.errors.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "inner",
+          false,
+          "AggregateError",
+          "agg",
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: try/finally ordering with return override",
+      "args": [
+        "const log = []; function f() { try { log.push(\"try\"); return \"try\" } finally { log.push(\"finally\") } } function g() { try { throw new Error(\"x\") } catch (e) { log.push(\"catch\"); return \"catch\" } finally { return \"finally wins\" } } return [f(), g(), log]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "try",
+          "finally wins",
+          [
+            "try",
+            "finally",
+            "catch"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: nested try/catch rethrow",
+      "args": [
+        "const log = []; try { try { throw new Error(\"a\") } catch (e) { log.push(\"inner \" + e.message); throw new TypeError(\"b\") } finally { log.push(\"inner finally\") } } catch (e) { log.push(\"outer \" + e.name + \" \" + e.message) } return log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "inner a",
+          "inner finally",
+          "outer TypeError b"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: optional catch binding",
+      "args": [
+        "try { throw 1 } catch { return \"caught without binding\" }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "caught without binding",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: uncaught TypeError diagnostic",
+      "args": [
+        "const x = null\nx.prop"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: Cannot read properties of null (reading 'prop'). (line 2, col 1)",
+          "location": {
+            "line": 2,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: uncaught custom error class diagnostic",
+      "args": [
+        "class AppError extends Error { constructor(m) { super(m); this.name = \"AppError\" } }\nthrow new AppError(\"custom failure\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "AppError: custom failure"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: error thrown with location on later line",
+      "args": [
+        "let a = 1\nlet b = 2\nthrow new Error(\"line three\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: line three"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: JSON.stringify of Error and own props",
+      "args": [
+        "const e = new Error(\"m\"); e.code = 7; return [JSON.stringify(e), Object.keys(e), e.toString()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "{\"name\":\"Error\",\"message\":\"m\",\"code\":7}",
+          [
+            "code"
+          ],
+          "Error: m"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: host failure kind and suggestions",
+      "args": [
+        "lookup(\"zzz\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "NotFound",
+          "message": "No item zzz",
+          "suggestions": [
+            "a",
+            "b"
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: host failure caught in program",
+      "args": [
+        "try { lookup(42) } catch (e) { return [e.name, e.message, e instanceof Error] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "Error",
+          "No item 42",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: host function results",
+      "args": [
+        "return [double(4), echo({ a: [1, \"x\", null] }), lookup(\"a\"), math2.add(2, 3), Object.keys(math2)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          8,
+          {
+            "a": [
+              1,
+              "x",
+              null
+            ]
+          },
+          "item:a",
+          5,
+          [
+            "add"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: missing namespace member",
+      "args": [
+        "math2.nope(1)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: math2.nope is not a function. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "error: stack overflow is RangeError",
+      "args": [
+        "function r() { return r() + 1 } try { r() } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "RangeError",
+          "Maximum call stack size exceeded"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: stringify edge cases",
+      "args": [
+        "return [JSON.stringify({ u: undefined, f() {}, n: null, nan: NaN, inf: -Infinity, d: new Date(0), nested: [undefined, () => 1] }), JSON.stringify(undefined), JSON.stringify(\"\\u2028\\u00e9\\n\\u0007\"), JSON.stringify({ a: 1, b: [1, 2] }, null, 2), JSON.stringify([1, 2], null, \"--\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "{\"n\":null,\"nan\":null,\"inf\":null,\"d\":\"1970-01-01T00:00:00.000Z\",\"nested\":[null,null]}",
+          null,
+          "\" é\\n\\u0007\"",
+          "{\n  \"a\": 1,\n  \"b\": [\n    1,\n    2\n  ]\n}",
+          "[\n--1,\n--2\n]"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: stringify replacer function and array",
+      "args": [
+        "return [JSON.stringify({ a: 1, b: 2, c: { a: 3 } }, [\"a\", \"c\"]), JSON.stringify({ a: 1, b: \"x\" }, (k, v) => (typeof v === \"number\" ? v * 10 : v)), JSON.stringify({ toJSON() { return { t: 1 } } })]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "{\"a\":1,\"c\":{\"a\":3}}",
+          "{\"a\":10,\"b\":\"x\"}",
+          "{\"t\":1}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: stringify circular throws",
+      "args": [
+        "const o = {}; o.self = o; try { JSON.stringify(o) } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "InvalidDataValue",
+          "message": "TypeError: Object assignment result contains a circular value. (line 1, col 15)",
+          "location": {
+            "line": 1,
+            "column": 15
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: parse edge cases and reviver",
+      "args": [
+        "return [JSON.parse(\"[1, \\\"a\\\", null, true, {\\\"x\\\": 1.5e2}]\"), JSON.parse('{\"a\":1,\"b\":{\"c\":2}}', (k, v) => (typeof v === \"number\" ? v + 1 : v)), JSON.parse('\"\\\\u00e9\"'), JSON.parse(\" 5 \"), JSON.parse('{\"__proto__\": 1}').__proto__]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            "a",
+            null,
+            true,
+            {
+              "x": 150
+            }
+          ],
+          {
+            "a": 2,
+            "b": {
+              "c": 3
+            }
+          },
+          "é",
+          5,
+          1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: parse errors",
+      "args": [
+        "const out = []; for (const s of [\"{\", \"[1,]\", \"{'a':1}\", \"\", \"undefined\", \"01\"]) { try { JSON.parse(s); out.push(\"ok\") } catch (e) { out.push(e.name) } } return out"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "SyntaxError",
+          "SyntaxError",
+          "SyntaxError",
+          "SyntaxError",
+          "SyntaxError",
+          "SyntaxError"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: parse error message prefix",
+      "args": [
+        "try { JSON.parse(\"{bad\") } catch (e) { const p = \"JSON.parse received invalid JSON: \"; return [e.name, e.message.startsWith(p) ? p : e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "SyntaxError",
+          "JSON.parse received invalid JSON: "
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: return value crossing drops functions and undefined",
+      "args": [
+        "return { a: undefined, b: () => 1, c: [undefined, function () {}], d: NaN, e: new Date(86400000), m: new Map([[1, 2]]), s: new Set([1]) }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": {
+          "c": [
+            null,
+            null
+          ],
+          "d": null,
+          "e": "1970-01-02T00:00:00.000Z",
+          "m": {},
+          "s": [
+            1
+          ]
+        },
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: return value crossing of nested special objects",
+      "args": [
+        "return [new Uint8Array([1, 2]), new URL(\"https://x.test/a?b=1\"), /re/g, new Error(\"e\"), Symbol.iterator === Symbol.iterator]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "InvalidDataValue",
+          "message": "TypeError: A Uint8Array cannot cross to the host; pass text instead, e.g. `new TextDecoder().decode(bytes)` or `bytes.toBase64()`."
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: returning undefined",
+      "args": [
+        "return undefined"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": null,
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: no return statement",
+      "args": [
+        "const x = 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": null,
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: returning a function at top level",
+      "args": [
+        "return () => 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": null,
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "json: returning a promise is awaited",
+      "args": [
+        "return Promise.resolve({ resolved: true })"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": {
+          "resolved": true
+        },
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: fixed timestamp UTC getters",
+      "args": [
+        "const d = new Date(Date.UTC(2024, 1, 29, 13, 45, 30, 123)); return [d.toISOString(), d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCDay(), d.getUTCHours(), d.getUTCMilliseconds(), d.getTime(), d.valueOf() === +d]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "2024-02-29T13:45:30.123Z",
+          2024,
+          1,
+          29,
+          4,
+          13,
+          123,
+          1709214330123,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: parsing ISO and date-only strings",
+      "args": [
+        "return [Date.parse(\"2020-01-01\"), Date.parse(\"2020-01-01T00:00:00Z\"), Date.parse(\"2020-01-01T00:00:00.000+02:00\"), new Date(\"2020-06-15T12:00:00Z\").toISOString(), isNaN(Date.parse(\"not a date\"))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1577836800000,
+          1577836800000,
+          1577829600000,
+          "2020-06-15T12:00:00.000Z",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: invalid date behavior",
+      "args": [
+        "const d = new Date(\"garbage\"); let m; try { d.toISOString() } catch (e) { m = [e.name, e.message] } return [String(d), d.getTime(), m, JSON.stringify({ d })]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "Invalid Date",
+          null,
+          [
+            "RangeError",
+            "Invalid time value."
+          ],
+          "{\"d\":null}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: UTC setters and overflow",
+      "args": [
+        "const d = new Date(0); d.setUTCFullYear(2023, 0, 31); d.setUTCMonth(1); const e = new Date(Date.UTC(2020, 0, 1)); e.setUTCDate(0); e.setUTCHours(25); return [d.toISOString(), e.toISOString()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "2023-03-03T00:00:00.000Z",
+          "2020-01-01T01:00:00.000Z"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: Date.UTC edge args",
+      "args": [
+        "return [Date.UTC(2020), Date.UTC(99, 0), Date.UTC(2020, 12, 1), Date.UTC(1969, 11, 31, 23, 59, 59, 999), new Date(8.64e15).toISOString(), String(new Date(8.64e15 + 1).getTime())]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1577836800000,
+          915148800000,
+          1609459200000,
+          -1,
+          "+275760-09-13T00:00:00.000Z",
+          "NaN"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: toJSON and date in JSON",
+      "args": [
+        "const d = new Date(Date.UTC(2001, 8, 9, 1, 46, 40)); return [d.toJSON(), JSON.stringify([d]), typeof Date.now()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "2001-09-09T01:46:40.000Z",
+          "[\"2001-09-09T01:46:40.000Z\"]",
+          "number"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: toUTCString format",
+      "args": [
+        "return [new Date(0).toUTCString(), new Date(Date.UTC(2024, 11, 25, 8, 5, 3)).toUTCString()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "Thu, 01 Jan 1970 00:00:00 GMT",
+          "Wed, 25 Dec 2024 08:05:03 GMT"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "date: date arithmetic and comparison",
+      "args": [
+        "const a = new Date(Date.UTC(2024, 0, 1)), b = new Date(Date.UTC(2024, 2, 1)); return [(b - a) / 86400000, a < b, a.getTime() === new Date(a).getTime(), new Date(a.getTime() + 36e5).toISOString()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          60,
+          true,
+          true,
+          "2024-01-01T01:00:00.000Z"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "math: rounding functions",
+      "args": [
+        "return [Math.round(2.5), Math.round(-2.5), Math.round(0.49999999999999994), Math.floor(-0.5), Math.ceil(-0.5), Math.trunc(1.9), Math.fround(5.5), Math.round(-0.4)].map(x => Object.is(x, -0) ? \"-0\" : x)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          -2,
+          0,
+          -1,
+          "-0",
+          1,
+          5.5,
+          "-0"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "math: min max with NaN and empty",
+      "args": [
+        "return [Math.max(), Math.min(), Math.max(1, NaN), Math.max(-0, 0), Math.min(0, -0), Math.max(\"7\", 3)].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "-Infinity",
+          "Infinity",
+          "NaN",
+          "0",
+          "0",
+          "7"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "math: transcendental functions",
+      "args": [
+        "return [Math.sqrt(2), Math.cbrt(27), Math.hypot(3, 4), Math.log2(8), Math.log10(1000), Math.exp(1) === Math.E, Math.atan2(1, 1) * 4 === Math.PI, Math.sin(0), Math.pow(2, -1), Math.abs(-3), Math.clz32(1), Math.imul(3, 4), Math.sign(-3)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1.4142135623730951,
+          3,
+          5,
+          3,
+          3,
+          true,
+          true,
+          0,
+          0.5,
+          3,
+          31,
+          12,
+          -1
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "math: Math.random is in range",
+      "args": [
+        "const r = Math.random(); return [r >= 0 && r < 1, typeof r]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          "number"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "math: pow edge cases",
+      "args": [
+        "return [Math.pow(NaN, 0), Math.pow(1, Infinity), 0 ** -1, (-2) ** 2, Math.pow(-8, 1/3)].map(String)"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "1",
+          "NaN",
+          "Infinity",
+          "4",
+          "NaN"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: flags and source",
+      "args": [
+        "const r = /a.b/gimsuy; return [r.flags, r.source, r.global, r.sticky, r.unicode, r.dotAll, String(new RegExp(\"x/y\", \"g\")), new RegExp(\"\").source]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "gimsuy",
+          "a.b",
+          true,
+          true,
+          true,
+          true,
+          "/x\\/y/g",
+          "(?:)"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: named groups and exec",
+      "args": [
+        "const m = /(?<year>\\d{4})-(?<month>\\d{2})/.exec(\"on 2024-05!\"); return [m.index, m[0], m.groups.year, m.groups.month, m.input, m.length]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          "2024-05",
+          "2024",
+          "05",
+          "on 2024-05!",
+          3
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: lastIndex with global and sticky",
+      "args": [
+        "const g = /a/g; const s = \"aXa\"; const out = []; let m; while ((m = g.exec(s))) out.push([m.index, g.lastIndex]); const y = /a/y; y.lastIndex = 1; const r1 = y.test(s); y.lastIndex = 2; const r2 = y.test(s); return [out, g.lastIndex, r1, r2, y.lastIndex]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            [
+              0,
+              1
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          0,
+          false,
+          true,
+          3
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: test with global regex advances lastIndex",
+      "args": [
+        "const r = /o/g; return [r.test(\"foo\"), r.lastIndex, r.test(\"foo\"), r.lastIndex, r.test(\"foo\"), r.lastIndex]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          2,
+          true,
+          3,
+          false,
+          0
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: replace with named group refs and function",
+      "args": [
+        "return [\"2024-05\".replace(/(?<y>\\d+)-(?<m>\\d+)/, \"$<m>/$<y>\"), \"a-b\".replace(/(?<x>\\w)/g, (...args) => JSON.stringify(args[args.length - 1]))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "05/2024",
+          "{\"x\":\"a\"}-{\"x\":\"b\"}"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: lookbehind, unicode classes and backreferences",
+      "args": [
+        "return [\"$10 €20\".match(/(?<=\\$)\\d+/)[0], /\\p{L}+/u.exec(\"123 héllo\")[0], /(\\w)\\1/.test(\"hello\"), \"aaa\".match(/a*?/)[0].length, /^.$/u.test(\"😀\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "10",
+          "héllo",
+          true,
+          0,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: invalid regexp syntax error",
+      "args": [
+        "try { new RegExp(\"(\") } catch (e) { const p = 'new RegExp(...) received \"(\", which is not a valid regular expression pattern ('; const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; return [e.name, e.message.startsWith(p), e.message.endsWith(hint)] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "SyntaxError",
+          true,
+          false
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: split and match with sticky / unicode sets",
+      "args": [
+        "return [\"a1b2\".split(/\\d/y), \"x\".match(/x/y)[0], RegExp.prototype.toString.call(/a/g), /[\\u{1F600}]/u.test(\"😀\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "a",
+            "b",
+            ""
+          ],
+          "x",
+          "/a/g",
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: regexp literal invalid flags is parse error",
+      "args": [
+        "return /a/zz"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Invalid regular expression flag. Code must be plain JavaScript written as a program body. (line 1, col 9)",
+          "location": {
+            "line": 1,
+            "column": 9
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "regexp: Symbol.replace style escape",
+      "args": [
+        "return [\"a+b\".replace(new RegExp(\"\\\\+\"), \" plus \"), \"x.y\".split(\".\").join(RegExp.escape ? \"has\" : \"no\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "a plus b",
+          "xhasy"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: Map insertion order and key equality",
+      "args": [
+        "const m = new Map([[\"b\", 1], [\"a\", 2]]); m.set(NaN, \"nan\"); m.set(0, \"zero\"); m.set(-0, \"negzero\"); m.set(\"b\", 3); m.delete(\"a\"); m.set(\"a\", 4); return [[...m.keys()].map(String), m.get(NaN), m.get(0), m.size, [...m.values()]]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            "b",
+            "NaN",
+            "0",
+            "a"
+          ],
+          "nan",
+          "negzero",
+          4,
+          [
+            3,
+            "nan",
+            "negzero",
+            4
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: Set ordering and operations",
+      "args": [
+        "const s = new Set([3, 1, 3, 2]); s.add(1); s.delete(3); s.add(3); const objs = new Set([{}, {}]); return [[...s], s.size, objs.size, s.has(2), [...new Set(\"hello\")].join(\"\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2,
+            3
+          ],
+          3,
+          2,
+          true,
+          "helo"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: Set methods union/intersection/difference",
+      "args": [
+        "const a = new Set([1, 2, 3]), b = new Set([2, 3, 4]); return [[...a.union(b)], [...a.intersection(b)], [...a.difference(b)], [...a.symmetricDifference(b)], a.isSubsetOf(new Set([1,2,3,4])), a.isDisjointFrom(new Set([9]))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2,
+            3,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            1
+          ],
+          [
+            1,
+            4
+          ],
+          true,
+          true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: Map forEach and iteration during mutation",
+      "args": [
+        "const m = new Map([[1, \"a\"], [2, \"b\"]]); const seen = []; for (const [k] of m) { seen.push(k); if (k === 1) { m.delete(2); m.set(3, \"c\") } } const fe = []; new Map([[\"x\", 1]]).forEach((v, k, map) => fe.push([k, v, map.size])); return [seen, fe]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            3
+          ],
+          [
+            [
+              "x",
+              1,
+              1
+            ]
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: WeakMap and WeakSet",
+      "args": [
+        "const k = {}; const wm = new WeakMap([[k, 1]]); const ws = new WeakSet([k]); let m; try { wm.set(1, 2) } catch (e) { m = [e.name, e.message] } return [wm.get(k), wm.has({}), ws.has(k), m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          false,
+          true,
+          [
+            "TypeError",
+            "Invalid value used as weak map key: a number cannot be held weakly."
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: WeakRef unsupported",
+      "args": [
+        "return typeof WeakRef"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "undefined",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "collections: Map with object keys and entries spread",
+      "args": [
+        "const k1 = { id: 1 }; const m = new Map(); m.set(k1, \"one\").set([1], \"arr\"); return [m.get(k1), m.get([1]), [...m.entries()].length, Object.fromEntries(new Map([[\"a\", 1]]))]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "one",
+          null,
+          2,
+          {
+            "a": 1
+          }
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: TextEncoder / TextDecoder round trip",
+      "args": [
+        "const enc = new TextEncoder().encode(\"héllo😀\"); return [Array.from(enc), enc.length, new TextDecoder().decode(enc), new TextDecoder().decode(new Uint8Array([0xff, 0x41])), new TextEncoder().encoding]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            104,
+            195,
+            169,
+            108,
+            108,
+            111,
+            240,
+            159,
+            152,
+            128
+          ],
+          10,
+          "héllo😀",
+          "�A",
+          "utf-8"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: btoa / atob",
+      "args": [
+        "let m; try { btoa(\"😀\") } catch (e) { m = e.name } return [btoa(\"hello\"), atob(\"aGVsbG8=\"), atob(\"YQ\"), btoa(\"\"), m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "aGVsbG8=",
+          "hello",
+          "a",
+          "",
+          "TypeError"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: atob invalid input",
+      "args": [
+        "try { atob(\"@@@\") } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "The string contains invalid characters."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: Buffer from / toString encodings",
+      "args": [
+        "const b = Buffer.from(\"héllo\"); return [b.length, b.toString(\"hex\"), b.toString(\"base64\"), Buffer.from(\"aGk=\", \"base64\").toString(), Buffer.from(\"6869\", \"hex\").toString(\"utf8\"), Buffer.from([104, 105]).toString(), b.toString(\"base64url\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          6,
+          "68c3a96c6c6f",
+          "aMOpbGxv",
+          "hi",
+          "hi",
+          "hi",
+          "aMOpbGxv"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: Buffer concat / slice / equals / compare",
+      "args": [
+        "const a = Buffer.from(\"ab\"), b = Buffer.from(\"cd\"); const c = Buffer.concat([a, b]); return [c.toString(), c.subarray(1, 3).toString(), a.equals(Buffer.from(\"ab\")), Buffer.compare(a, b), Buffer.isBuffer(c), Buffer.byteLength(\"😀\"), Buffer.alloc(3, 1).toJSON()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "abcd",
+          "bc",
+          true,
+          -1,
+          true,
+          4,
+          {
+            "type": "Buffer",
+            "data": [
+              1,
+              1,
+              1
+            ]
+          }
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: Uint8Array basics",
+      "args": [
+        "const u = new Uint8Array([1, 2, 300, -1]); const v = u.subarray(1, 3); v[0] = 9; return [Array.from(u), u.length, u.byteLength, Array.from(u.slice(2)), u instanceof Uint8Array, Array.from(Uint8Array.from([1, 2], x => x * 2)), u.join(\"-\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            9,
+            44,
+            255
+          ],
+          4,
+          null,
+          [
+            44,
+            255
+          ],
+          true,
+          [
+            2,
+            4
+          ],
+          "1-9-44-255"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: Uint8Array base64 and hex helpers",
+      "args": [
+        "const u = new Uint8Array([72, 105, 255]); return [typeof u.toBase64 === \"function\" ? u.toBase64() : \"none\", typeof u.toHex === \"function\" ? u.toHex() : \"none\", typeof Uint8Array.fromBase64 === \"function\" ? Array.from(Uint8Array.fromBase64(\"SGn/\")) : \"none\"]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "SGn/",
+          "4869ff",
+          [
+            72,
+            105,
+            255
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: ArrayBuffer and DataView",
+      "args": [
+        "const buf = new ArrayBuffer(4); const dv = new DataView(buf); dv.setUint16(0, 0x1234); dv.setUint8(2, 255); return [buf.byteLength, Array.from(new Uint8Array(buf)), dv.getUint16(0), dv.getUint16(0, true), dv.getInt8(2)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "ReferenceError: Unknown identifier 'ArrayBuffer'. (line 1, col 17)",
+          "location": {
+            "line": 1,
+            "column": 17
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: other typed arrays unsupported",
+      "args": [
+        "return typeof Int32Array"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "undefined",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: URL and URLSearchParams",
+      "args": [
+        "const u = new URL(\"https://user:pw@example.com:8080/a/b?x=1&y=2#frag\"); const p = new URLSearchParams(\"a=1&b=2&a=3\"); p.append(\"c\", \"x y\"); return [u.host, u.pathname, u.search, u.hash, u.searchParams.get(\"y\"), u.origin, p.getAll(\"a\"), p.toString(), new URL(\"../c\", \"https://h.test/a/b/\").href]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "example.com:8080",
+          "/a/b",
+          "?x=1&y=2",
+          "#frag",
+          "2",
+          "https://example.com:8080",
+          [
+            "1",
+            "3"
+          ],
+          "a=1&b=2&a=3&c=x+y",
+          "https://h.test/a/c"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: encodeURIComponent and friends",
+      "args": [
+        "return [encodeURIComponent(\"a b&c/é😀\"), encodeURI(\"https://x.test/a b?q=é\"), decodeURIComponent(\"%E2%82%AC\"), escape ? \"escape\" : \"none\"]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "ReferenceError: Unknown identifier 'escape'. (line 1, col 112)",
+          "location": {
+            "line": 1,
+            "column": 112
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: decodeURIComponent malformed",
+      "args": [
+        "try { decodeURIComponent(\"%E2%82\") } catch (e) { const p = \"decodeURIComponent received malformed URI data: \"; return [e.name, e.message.startsWith(p) ? p : e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "URIError",
+          "decodeURIComponent received malformed URI data: "
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "bytes: Headers",
+      "args": [
+        "const h = new Headers({ \"Content-Type\": \"text/plain\" }); h.append(\"X-A\", \"1\"); h.append(\"x-a\", \"2\"); return [h.get(\"content-type\"), h.get(\"X-A\"), h.has(\"x-a\"), [...h.keys()]]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "text/plain",
+          "1, 2",
+          true,
+          [
+            "content-type",
+            "x-a"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: labeled break and continue",
+      "args": [
+        "const out = []; outer: for (let i = 0; i < 3; i++) { for (let j = 0; j < 3; j++) { if (j === 1) continue outer; if (i === 2) break outer; out.push([i, j]) } } blk: { out.push(\"in block\"); break blk; out.push(\"unreachable\") } return out"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          "in block"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: switch fallthrough and default placement",
+      "args": [
+        "const f = (x) => { const log = []; switch (x) { case 1: log.push(1); case 2: log.push(2); break; default: log.push(\"d\"); case 3: log.push(3) } return log }; return [f(1), f(2), f(3), f(9)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          [
+            1,
+            2
+          ],
+          [
+            2
+          ],
+          [
+            3
+          ],
+          [
+            "d",
+            3
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: switch uses strict equality",
+      "args": [
+        "const f = (x) => { switch (x) { case \"1\": return \"string\"; case 1: return \"number\"; default: return \"none\" } }; return [f(1), f(\"1\"), f(true)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "number",
+          "string",
+          "none"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: optional chaining and nullish coalescing",
+      "args": [
+        "const o = { a: { b: null, f() { return \"f\" } }, arr: [1] }; return [o?.a?.b?.c, o.x?.y.z, o.a.f?.(), o.a.g?.(), o.arr?.[0], o.nope?.[0], null ?? \"d\", 0 ?? \"d\", \"\" ?? \"d\", false || \"or\", (null || undefined) ?? \"both\"]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          null,
+          null,
+          "f",
+          null,
+          1,
+          null,
+          "d",
+          0,
+          "",
+          "or",
+          "both"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: do-while, for-in, for-of with destructuring",
+      "args": [
+        "let i = 0; do { i++ } while (i < 3); const keys = []; for (const k in { a: 1, b: 2 }) keys.push(k); const pairs = []; for (const [k, v] of Object.entries({ x: 1 })) pairs.push(k + v); const arrIn = []; for (const k in [\"p\", \"q\"]) arrIn.push(k); return [i, keys, pairs, arrIn]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          3,
+          [
+            "a",
+            "b"
+          ],
+          [
+            "x1"
+          ],
+          [
+            "0",
+            "1"
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: comma, void, ternary chains, short-circuit side effects",
+      "args": [
+        "let n = 0; const r = (n++, n++, n); const v = void 0; const t = n > 5 ? \"big\" : n > 1 ? \"mid\" : \"small\"; let side = 0; false && side++; true || side++; return [r, v === undefined, t, side]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          true,
+          "mid",
+          0
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: with statement unsupported",
+      "args": [
+        "with ({ a: 1 }) { return a }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Syntax 'WithStatement' is not supported. This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: eval unsupported",
+      "args": [
+        "return eval(\"1 + 1\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "ReferenceError: Unknown identifier 'eval'. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: Function constructor unsupported",
+      "args": [
+        "return new Function(\"return 1\")()"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: The Function constructor is not supported; write the function inline. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: export unsupported",
+      "args": [
+        "export const x = 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Exports aren't available. Return the result instead. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: TypeScript syntax unsupported",
+      "args": [
+        "const x: number = 1; return x"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Unexpected token. Code must be plain JavaScript written as a program body. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: Proxy and Reflect unsupported",
+      "args": [
+        "return [typeof Proxy, typeof Reflect]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "undefined",
+          "undefined"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: Symbol() unsupported",
+      "args": [
+        "return Symbol(\"x\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: Symbol is not callable; only Symbol.asyncIterator and Symbol.iterator are available. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: unsupported syntax only fails when reached",
+      "args": [
+        "function f() { with (x) {} }\nfunction g() { class Q { #p } }\nfunction h() { return 5n }\nreturn [typeof f, typeof g, typeof h]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "function",
+          "function",
+          "function"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: unsupported syntax fails after earlier statements ran",
+      "args": [
+        "console.log(\"before\")\nclass A { #x = 1 }\nconsole.log(\"after\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Private class members (#name) are not supported. Use a regular property instead. (line 2, col 11)",
+          "location": {
+            "line": 2,
+            "column": 11
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": [
+          "before"
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: debugger statement is unsupported",
+      "args": [
+        "console.log(\"b\")\ndebugger"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Syntax 'DebuggerStatement' is not supported. This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols. (line 2, col 1)",
+          "location": {
+            "line": 2,
+            "column": 1
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": [
+          "b"
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: static block reached at run time",
+      "args": [
+        "const log = []\nlog.push(1)\nclass S { static { log.push(2) } }\nreturn log"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "UnsupportedSyntax",
+          "message": "SyntaxError: Class static blocks are not supported. Assign static fields instead. (line 3, col 11)",
+          "location": {
+            "line": 3,
+            "column": 11
+          },
+          "suggestions": [
+            "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "arith: BigInt literal after a log",
+      "args": [
+        "console.log(\"first\"); const n = 10n; return n"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: BigInt literals are not supported. (line 1, col 33)",
+          "location": {
+            "line": 1,
+            "column": 33
+          }
+        },
+        "logs": [
+          "first"
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: debugger and getter on undefined var",
+      "args": [
+        "return typeof globalThis"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "undefined",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: syntax error location",
+      "args": [
+        "let a = 1\nlet b = = 2"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Unexpected token. Code must be plain JavaScript written as a program body. (line 2, col 9)",
+          "location": {
+            "line": 2,
+            "column": 9
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: unterminated string syntax error",
+      "args": [
+        "return \"abc"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "SyntaxError: Unterminated string constant. Code must be plain JavaScript written as a program body. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: empty program",
+      "args": [
+        "   "
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ParseError",
+          "message": "Code cannot be empty."
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: top-level return of expression without semicolons",
+      "args": [
+        "const a = [1, 2]\nconst b = a.map(x => x * 2)\nreturn b"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          2,
+          4
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: import of unknown module",
+      "args": [
+        "import x from \"fs\"\nreturn x"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: Cannot import \"fs\": this runtime doesn't provide it. (line 1, col 8)",
+          "location": {
+            "line": 1,
+            "column": 8
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: require of unknown module",
+      "args": [
+        "const fs = require(\"fs\"); return fs"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: Cannot import \"fs\": this runtime doesn't provide it. (line 1, col 12)",
+          "location": {
+            "line": 1,
+            "column": 12
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: delete of non-configurable and variables",
+      "args": [
+        "const a = [1, 2]; const r = delete a[0]; let m; try { delete Object.prototype } catch (e) { m = e.name } return [r, a, 0 in a, m]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          [
+            null,
+            2
+          ],
+          false,
+          "TypeError"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "control: getter on globalThis and global names",
+      "args": [
+        "return [typeof globalThis, typeof console.log, typeof Host]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "undefined",
+          "function",
+          "undefined"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "console: console formatting of values",
+      "args": [
+        "console.log(\"str\", 1, -0, null, undefined, true, [1, \"a\", [2]], { a: { b: { c: { d: 1 } } } }); console.warn(\"warn\"); console.error(\"err\", new Error(\"e\")); console.info(\"info\"); console.debug(\"dbg\"); return \"ok\""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "ok",
+        "logs": [
+          "str 1 0 null undefined true [1,\"a\",[2]] {\"a\":{\"b\":{\"c\":{\"d\":1}}}}",
+          "[warn] warn",
+          "[error] err Error: e",
+          "info",
+          "[debug] dbg"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "console: console.log of special objects",
+      "args": [
+        "console.log(new Map([[1, 2]]), new Set([\"a\"]), new Date(0), /x/g, () => 1, Symbol.iterator, NaN, [undefined, null]); return 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": 1,
+        "logs": [
+          "Map(1) [[1,2]] Set(1) [\"a\"] 1970-01-01T00:00:00.000Z /x/g [opaque reference] Symbol(psychoscript.iterator) NaN [null,null]"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "console: console.log format specifiers",
+      "args": [
+        "console.log(\"%s is %d years and %i\", \"Bob\", 42.5, 7.9, \"extra\"); console.log(\"%o %O %j\", { a: 1 }, [1], 2); console.log(\"100%\"); return 1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": 1,
+        "logs": [
+          "%s is %d years and %i Bob 42.5 7.9 extra",
+          "%o %O %j {\"a\":1} [1] 2",
+          "100%"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "console: console.table / dir / group",
+      "args": [
+        "console.dir({ x: 1 }); console.group?.(\"g\"); console.log(\"inside\"); console.groupEnd?.(); return typeof console.table"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "function",
+        "logs": [
+          "{\"x\":1}",
+          "inside"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "console: logs kept on failure",
+      "args": [
+        "console.log(\"before\"); throw new Error(\"after logging\")"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: after logging"
+        },
+        "logs": [
+          "before"
+        ]
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: timeout on infinite loop",
+      "args": [
+        "while (true) {}",
+        {
+          "timeoutMs": 50
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "TimeoutExceeded",
+          "message": "Execution timed out after 50ms."
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: timeout on infinite async loop",
+      "args": [
+        "while (true) { await null }",
+        {
+          "timeoutMs": 50
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "TimeoutExceeded",
+          "message": "Execution timed out after 50ms."
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: timeout on never-settling await",
+      "args": [
+        "await new Promise(() => {})",
+        {
+          "timeoutMs": 50
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: The program is waiting on a promise that can never settle: nothing else is running, so nothing can resolve it. There are no timers or sleep, so don't wait or poll inside a program. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: maxOutputBytes truncates result",
+      "args": [
+        "return \"x\".repeat(100)",
+        {
+          "maxOutputBytes": 20
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "\"xxxxxxxxxxxxxxxxxxx [result truncated: 102 bytes exceeds the 20-byte output limit; return a smaller value]",
+        "logs": [],
+        "warnings": [],
+        "truncated": true
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: maxOutputBytes truncates logs",
+      "args": [
+        "for (let i = 0; i < 10; i++) console.log(\"line \" + i); return 1",
+        {
+          "maxOutputBytes": 30
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": 1,
+        "logs": [
+          "line 0",
+          "line 1",
+          "line 2",
+          "line 3",
+          "[logs truncated: showing 4 of 10 lines]"
+        ],
+        "warnings": [],
+        "truncated": true
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: maxOutputBytes zero",
+      "args": [
+        "console.log(\"a\"); return { a: 1 }",
+        {
+          "maxOutputBytes": 0
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": " [result truncated: 7 bytes exceeds the 0-byte output limit; return a smaller value]",
+        "logs": [
+          "[logs truncated: showing 0 of 1 lines]"
+        ],
+        "warnings": [],
+        "truncated": true
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: long loop without step limit completes",
+      "args": [
+        "let s = 0; for (let i = 0; i < 1200000; i++) s += i % 7; return s"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": 3599994,
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: string length cap",
+      "args": [
+        "try { \"x\".repeat(2 ** 25) } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "RangeError",
+          "Invalid string length"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: array length cap",
+      "args": [
+        "try { new Array(10000001).fill(0); return \"ok\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "RangeError",
+          "Invalid array length."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: deep nesting crossing to host",
+      "args": [
+        "let o = 1; for (let i = 0; i < 40; i++) o = [o]; try { echo(o); return \"ok\" } catch (e) { return [e.name, e.message] }"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "TypeError",
+          "Argument 1 to echo exceeds the maximum value depth of 32."
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "limits: deep nesting in return value",
+      "args": [
+        "let o = 1; for (let i = 0; i < 40; i++) o = { o }; return o"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "RangeError: Value exceeds the maximum depth of 32."
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: function in host argument errors by default",
+      "args": [
+        "echo({ f() {} })"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: Argument 1 to echo contains a function, which cannot be passed to the host. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: function in host argument dropped",
+      "args": [
+        "return echo({ a: 1, f() {}, arr: [() => 1, 2] })",
+        {
+          "translate": {
+            "functions": "drop"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": {
+          "a": 1,
+          "arr": [
+            null,
+            2
+          ]
+        },
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: promise in host argument errors by default",
+      "args": [
+        "echo(Promise.resolve(1))"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "TypeError: Argument 1 to echo contains an un-awaited Promise, which cannot be passed to the host. (line 1, col 1)",
+          "location": {
+            "line": 1,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: promise in host argument awaited",
+      "args": [
+        "return echo({ p: Promise.resolve(5), q: asyncDouble(3) })",
+        {
+          "translate": {
+            "promises": "await"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": {
+          "p": 5,
+          "q": 6
+        },
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: host copies Date Map Set back",
+      "args": [
+        "const r = echo({ d: new Date(0), m: new Map([[\"k\", 1]]), s: new Set([2]), u: new Uint8Array([7]) }); return [r.d instanceof Date, r.d.toISOString(), r.m.get(\"k\"), r.s.has(2), r.u[0]]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          true,
+          "1970-01-01T00:00:00.000Z",
+          1,
+          true,
+          7
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "translate: host arguments are copies",
+      "args": [
+        "const o = { n: 1 }; const r = echo(o); r.n = 2; return [o.n, r.n, r === o]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2,
+          false
+        ],
+        "logs": [],
+        "warnings": []
       }
     },
     {

@@ -1,0 +1,1488 @@
+[
+  {
+    "fn": "psychoscript/src/runtime.ts#execute",
+    "description": "Differential corpus for psychoscript (Code Mode's JavaScript-subset language): each case runs a program through upstream Runtime.make({ globals }).execute(program) (Tools/parity/psychoscript-oracle.ts) and the Swift CodemodeLanguage.makeRuntime port (Sources/OpenCodeParityRunner/PsychoscriptParity.swift) and compares the canonical outcome { ok, value | error: { kind, message, location?, suggestions? }, logs, warnings, truncated? }. args: [program, options?] where options = { timeoutMs?, maxOutputBytes?, translate? }. Names are prefixed with their category.",
+    "cases": [
+      {
+        "name": "arith: NaN and Infinity checks",
+        "args": [
+          "return [NaN === NaN, Object.is(NaN, NaN), isNaN(\"x\"), Number.isNaN(\"x\"), 1/0, -1/0, String(0/0), String(1/0)]"
+        ]
+      },
+      {
+        "name": "arith: negative zero",
+        "args": [
+          "return [Object.is(-0, 0), Object.is(-0 * 1, -0), 1 / -0 === -Infinity, String(-0), (-0).toString(), JSON.stringify(-0), [-0].includes(0), [-0].indexOf(0), Math.sign(-0) === 0 && 1/Math.sign(-0)]"
+        ]
+      },
+      {
+        "name": "arith: string to number coercion",
+        "args": [
+          "return [Number(\"\"), Number(\" 42 \"), Number(\"0x1f\"), Number(\"0b101\"), Number(\"0o17\"), Number(\"1e3\"), Number(\"12px\"), +\"  -3.5\\n\", Number(null), Number(undefined), Number(true), Number([]), Number([7]), Number([1,2]), Number({})].map(String)"
+        ]
+      },
+      {
+        "name": "arith: parseInt / parseFloat",
+        "args": [
+          "return [parseInt(\"08\"), parseInt(\"0x10\"), parseInt(\"10\", 2), parseInt(\"z\", 36), parseInt(\"  12abc\"), parseInt(\"\"), parseFloat(\"3.14more\"), parseFloat(\".5\"), parseFloat(\"-.5e2\"), parseInt(\"123\", 0), parseInt(\"1\", 37)].map(String)"
+        ]
+      },
+      {
+        "name": "arith: number to string formatting",
+        "args": [
+          "return [0.1 + 0.2, 1e21, 1e-7, 123456789012345680000, 2**53, 2**53 + 1, -1e-7, 100, 1.5e300 * 1e10, 5e-324].map(String)"
+        ]
+      },
+      {
+        "name": "arith: toFixed / toPrecision / toExponential",
+        "args": [
+          "return [(1.005).toFixed(2), (1.45).toFixed(1), (0).toFixed(2), (-1.5).toFixed(0), (123.456).toPrecision(4), (0.00001234).toPrecision(2), (1234.5678).toExponential(2), (255).toString(16), (255).toString(2), (-255).toString(36), (0.5).toString(2), (1e21).toFixed(2)]"
+        ]
+      },
+      {
+        "name": "arith: integer ops and bitwise",
+        "args": [
+          "return [7 % 3, -7 % 3, 7 % -3, 5.5 % 2, 2 ** 10, (-8) ** (1/3), 1 << 31, 1 << 32, -1 >>> 0, -1 >> 28, ~5, 5 & 3, 5 | 3, 5 ^ 3, 2**32 | 0, Math.trunc(-4.7)].map(String)"
+        ]
+      },
+      {
+        "name": "arith: loose equality table",
+        "args": [
+          "return [null == undefined, null == 0, \"\" == 0, \"0\" == false, [] == false, [0] == false, [1] == 1, \"1\" == 1, NaN == NaN, ({}) == \"[object Object]\", null >= 0, undefined == 0]"
+        ]
+      },
+      {
+        "name": "arith: plus operator coercion",
+        "args": [
+          "return [1 + \"2\", \"3\" - 1, \"3\" * \"4\", [] + [], [] + {}, [1,2] + [3], true + 1, null + 1, undefined + 1, \"a\" + null, 1 + 2 + \"3\", \"1\" + 2 + 3].map(String)"
+        ]
+      },
+      {
+        "name": "arith: relational comparisons on strings",
+        "args": [
+          "return [\"a\" < \"b\", \"B\" < \"a\", \"10\" < \"9\", 10 < 9, \"10\" < 9, \"abc\" < \"abd\", null < 1, undefined < 1, [2] > 1]"
+        ]
+      },
+      {
+        "name": "arith: Number statics",
+        "args": [
+          "return [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER, Number.EPSILON > 0, Number.isInteger(5.0), Number.isInteger(5.1), Number.isSafeInteger(2**53), Number.isFinite(\"5\"), isFinite(\"5\"), Number.parseFloat === parseFloat, Number.MAX_VALUE > 1e308, Number.MIN_VALUE]"
+        ]
+      },
+      {
+        "name": "arith: BigInt literal unsupported",
+        "args": [
+          "return 10n"
+        ]
+      },
+      {
+        "name": "arith: BigInt global absent",
+        "args": [
+          "return typeof BigInt"
+        ]
+      },
+      {
+        "name": "arith: typeof table",
+        "args": [
+          "return [typeof 1, typeof \"s\", typeof true, typeof undefined, typeof null, typeof {}, typeof [], typeof (() => 1), typeof Symbol.iterator, typeof class {}, typeof Math, typeof undeclaredThing]"
+        ]
+      },
+      {
+        "name": "arith: increment / compound assignment",
+        "args": [
+          "let a = 1; let b = a++ + ++a; let c = 10; c -= 3; c *= 2; c /= 7; c **= 3; let d = 5; d %= 3; d <<= 4; d ||= 9; let e = 0; e ||= 7; let f = 1; f &&= 8; let g = null; g ??= \"x\"; return [a, b, c, d, e, f, g]"
+        ]
+      },
+      {
+        "name": "string: surrogate pairs length and indexing",
+        "args": [
+          "const s = \"a😀b\"; return [s.length, s.charCodeAt(1), s.charCodeAt(2), s.codePointAt(1), s.codePointAt(2), [...s].length, Array.from(s), s.split(\"\").length, s.slice(1, 3) === \"😀\", s.indexOf(\"b\"), s.at(-1), \"😀\".split(\"\").map(c => c.length)]"
+        ]
+      },
+      {
+        "name": "string: String.fromCodePoint / fromCharCode / normalize",
+        "args": [
+          "return [String.fromCodePoint(0x1F600).length, String.fromCharCode(72, 105), \"é\".normalize(\"NFD\").length, \"e\\u0301\".normalize(\"NFC\").length, \"\\u00C5\" === \"\\u212B\".normalize(\"NFC\")]"
+        ]
+      },
+      {
+        "name": "string: localeCompare and sort",
+        "args": [
+          "return [[\"b\", \"a\", \"C\", \"á\"].sort((x, y) => x.localeCompare(y)), \"a\".localeCompare(\"b\"), \"b\".localeCompare(\"a\"), \"a\".localeCompare(\"a\"), \"a\".localeCompare(\"A\"), \"10\".localeCompare(\"9\", undefined, { numeric: true })]"
+        ]
+      },
+      {
+        "name": "string: padStart / padEnd",
+        "args": [
+          "return [\"5\".padStart(3, \"0\"), \"abc\".padStart(6, \"12\"), \"abc\".padStart(2), \"x\".padEnd(4, \"ab\"), \"x\".padEnd(3), \"abc\".padEnd(5, \"\")]"
+        ]
+      },
+      {
+        "name": "string: replaceAll and replace patterns",
+        "args": [
+          "return [\"a.b.c\".replaceAll(\".\", \"-\"), \"aaa\".replace(\"a\", \"b\"), \"abc\".replace(\"b\", \"[$&]\"), \"abc\".replace(\"b\", \"$`|$'\"), \"x-y\".replace(/(\\w)-(\\w)/, \"$2-$1\"), \"aXbX\".replaceAll(/x/gi, (m, i) => i), \"$1\".replace(\"$1\", \"$$\")]"
+        ]
+      },
+      {
+        "name": "string: replaceAll with non-global regex throws",
+        "args": [
+          "try { \"a\".replaceAll(/a/, \"b\"); return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "string: split with regex and limit",
+        "args": [
+          "return [\"a1b22c333\".split(/\\d+/), \"a,b,,c\".split(\",\"), \"abc\".split(\"\"), \"a1b2\".split(/(\\d)/), \"one  two\".split(\" \", 2), \"\".split(\",\"), \"\".split(\"\"), \"abc\".split(/(?:)/u)]"
+        ]
+      },
+      {
+        "name": "string: trim / case / repeat / at",
+        "args": [
+          "return [\" \\t x \\n\".trim(), \"  y\".trimStart(), \"z  \".trimEnd(), \"İ\".toLowerCase().length, \"ß\".toUpperCase(), \"ab\".repeat(3), \"abc\".at(-1), \"abc\".at(5), \"Straße\".toLocaleUpperCase()]"
+        ]
+      },
+      {
+        "name": "string: indexOf / includes / startsWith / slice / substring",
+        "args": [
+          "const s = \"hello world\"; return [s.indexOf(\"o\"), s.lastIndexOf(\"o\"), s.indexOf(\"o\", 5), s.includes(\"wor\"), s.startsWith(\"world\", 6), s.endsWith(\"hello\", 5), s.slice(-5), s.slice(3, -3), s.substring(5, 2), s.substr ? \"has substr\" : \"no substr\", s.search(/w/)]"
+        ]
+      },
+      {
+        "name": "string: template literals and raw",
+        "args": [
+          "const x = 3; const tag = (s, ...v) => s.raw.join(\"|\") + v.join(\",\"); return [`a${x}b${x * 2}`, tag`one${1}two\\n${2}`, String.raw`\\n${x}`, `multi\nline`]"
+        ]
+      },
+      {
+        "name": "string: string comparison of unicode code units",
+        "args": [
+          "return [\"\\uFF61\" < \"\\uD83D\\uDE00\", [\"😀\", \"\\uFF61\", \"a\"].sort(), \"😀\".localeCompare(\"a\") > 0]"
+        ]
+      },
+      {
+        "name": "string: matchAll and match",
+        "args": [
+          "const r = [...\"a1b2c3\".matchAll(/[a-z](\\d)/g)].map(m => [m[0], m[1], m.index]); return [r, \"abc\".match(/z/), \"abab\".match(/a/g), \"abc\".match(/(?<first>a)b/).groups.first]"
+        ]
+      },
+      {
+        "name": "string: String() of various values",
+        "args": [
+          "return [String(null), String(undefined), String(123), String([1, [2, 3]]), String({}), String(() => 1).length > 0, String(Symbol.iterator), `${[1,2]}`, String(new Error(\"m\")), String(true)]"
+        ]
+      },
+      {
+        "name": "string: codePointAt / charAt out of range",
+        "args": [
+          "return [\"abc\".charAt(9), \"abc\".charCodeAt(9), \"abc\".codePointAt(9) === undefined, \"abc\"[9] === undefined]"
+        ]
+      },
+      {
+        "name": "array: sort stability with comparator",
+        "args": [
+          "const a = [{k:1,v:\"a\"},{k:0,v:\"b\"},{k:1,v:\"c\"},{k:0,v:\"d\"},{k:1,v:\"e\"}]; return a.sort((x, y) => x.k - y.k).map(o => o.v).join(\"\")"
+        ]
+      },
+      {
+        "name": "array: default sort is lexicographic",
+        "args": [
+          "return [[10, 9, 1, 100].sort(), [3, undefined, 1, null].sort(), [\"b\", undefined, \"a\"].sort().length, [true, false].sort()]"
+        ]
+      },
+      {
+        "name": "array: toSorted / toReversed / with / toSpliced",
+        "args": [
+          "const a = [3, 1, 2]; return [a.toSorted(), a.toReversed(), a.with(1, 9), a.toSpliced(1, 1, \"x\", \"y\"), a]"
+        ]
+      },
+      {
+        "name": "array: splice variants",
+        "args": [
+          "const a = [1,2,3,4,5]; const r1 = a.splice(1, 2); const b = [1,2,3]; const r2 = b.splice(-1, 0, \"x\"); const c = [1,2,3]; const r3 = c.splice(1); return [a, r1, b, r2, c, r3]"
+        ]
+      },
+      {
+        "name": "array: flat / flatMap",
+        "args": [
+          "return [[1, [2, [3, [4]]]].flat(), [1, [2, [3, [4]]]].flat(Infinity), [1, 2].flatMap(x => [x, x * 10]), [[1], [[2]]].flatMap(x => x)]"
+        ]
+      },
+      {
+        "name": "array: holes",
+        "args": [
+          "const a = [1, , 3]; const b = new Array(3); return [a.length, 1 in a, a.indexOf(undefined), a.includes(undefined), a.map(x => x * 2), Object.keys(a), JSON.stringify(a), b.length, JSON.stringify(b), a.forEach.length]"
+        ]
+      },
+      {
+        "name": "array: Array.from / of / fill / keys / entries",
+        "args": [
+          "return [Array.from({ length: 3 }, (_, i) => i * i), Array.of(7, 8), new Array(3).fill(0), [...[5,6].keys()], [...[\"a\",\"b\"].entries()], Array.from(\"ab\"), Array.from(new Set([1,1,2])), Array.from(new Map([[1, 2]]))]"
+        ]
+      },
+      {
+        "name": "array: find / findLast / findIndex / some / every",
+        "args": [
+          "const a = [1, 5, 8, 12]; return [a.find(x => x > 4), a.findLast(x => x < 10), a.findIndex(x => x > 100), a.findLastIndex(x => x % 2), a.some(x => x > 10), a.every(x => x > 0), [].every(x => false)]"
+        ]
+      },
+      {
+        "name": "array: reduce / reduceRight / empty reduce error",
+        "args": [
+          "let err; try { [].reduce((a, b) => a + b) } catch (e) { err = [e.name, e.message] } return [[1,2,3].reduce((a,b) => a + b), [\"a\",\"b\",\"c\"].reduceRight((a, b) => a + b), [1].reduce((a, b) => a + b, 10), err]"
+        ]
+      },
+      {
+        "name": "array: join / toString / nested and null",
+        "args": [
+          "return [[1, null, undefined, 2].join(\"-\"), [[1, 2], [3]].toString(), [].join(), [1].join(undefined)]"
+        ]
+      },
+      {
+        "name": "array: length truncation and growth",
+        "args": [
+          "const a = [1,2,3,4]; a.length = 2; const b = [1]; b[4] = 5; return [a, b.length, JSON.stringify(b)]"
+        ]
+      },
+      {
+        "name": "array: indexOf / lastIndexOf / includes NaN",
+        "args": [
+          "return [[NaN].indexOf(NaN), [NaN].includes(NaN), [1,2,1].lastIndexOf(1), [1,2,3].indexOf(3, -1), [\"1\"].includes(1)]"
+        ]
+      },
+      {
+        "name": "array: copyWithin / reverse / shift / unshift",
+        "args": [
+          "const a = [1,2,3,4,5]; a.copyWithin(0, 3); const b = [1,2,3]; b.reverse(); const s = b.shift(); const n = b.unshift(9, 8); return [a, b, s, n]"
+        ]
+      },
+      {
+        "name": "array: Array.isArray and array-likes",
+        "args": [
+          "return [Array.isArray([]), Array.isArray({ length: 0 }), Array.prototype.slice.call({ 0: \"a\", 1: \"b\", length: 2 }), Array.prototype.map.call(\"ab\", c => c + c)]"
+        ]
+      },
+      {
+        "name": "array: spread and rest",
+        "args": [
+          "const [a, ...rest] = [1, 2, 3]; const f = (...xs) => xs.length; return [a, rest, f(...[1, 2], 3, ...[]), [...\"hi\", ...[1]], Math.max(...[3, 9, 2])]"
+        ]
+      },
+      {
+        "name": "array: at / concat with spreadable",
+        "args": [
+          "return [[1,2,3].at(-1), [1].concat(2, [3, [4]]), [].concat.length]"
+        ]
+      },
+      {
+        "name": "array: sort comparator returning non-numbers",
+        "args": [
+          "return [[3, 1, 2].sort(() => 0), [3, 1, 2].sort((a, b) => a > b), [3, 1, 2].sort((a, b) => (a > b ? 1 : -1))]"
+        ]
+      },
+      {
+        "name": "array: sort throws on bad comparator",
+        "args": [
+          "try { [1, 2].sort(\"x\"); return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "array: Array.prototype.group-like via Object.groupBy",
+        "args": [
+          "return [Object.groupBy([1, 2, 3, 4], x => (x % 2 ? \"odd\" : \"even\")), [...Map.groupBy([1, 2, 3], x => x > 1).entries()]]"
+        ]
+      },
+      {
+        "name": "array: invalid array length",
+        "args": [
+          "try { new Array(-1); return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: property order integer keys first",
+        "args": [
+          "const o = { b: 1, 2: 1, a: 1, 1: 1, \"-1\": 1, \"01\": 1 }; o.c = 1; o[0] = 1; return [Object.keys(o), JSON.stringify(o)]"
+        ]
+      },
+      {
+        "name": "object: spread and overriding",
+        "args": [
+          "const a = { x: 1, y: 2 }; const b = { ...a, y: 3, z: 4 }; const c = { ...null, ...undefined, ...\"hi\", ...[9] }; return [b, c]"
+        ]
+      },
+      {
+        "name": "object: destructuring defaults and renames",
+        "args": [
+          "const { a = 1, b: { c = 2 } = {}, d: e = 3, ...rest } = { a: undefined, d: null, f: 6, g: 7 }; const [x = 10, [y] = [20], z = x + 1] = [undefined, undefined]; return [a, c, e, rest, x, y, z]"
+        ]
+      },
+      {
+        "name": "object: destructuring from null throws",
+        "args": [
+          "try { const { a } = null; return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: getters and setters in literals",
+        "args": [
+          "let log = []; const o = { _v: 1, get v() { log.push(\"get\"); return this._v }, set v(x) { log.push(\"set \" + x); this._v = x * 2 } }; o.v = 5; const r = o.v; return [r, log, Object.keys(o), JSON.stringify(o)]"
+        ]
+      },
+      {
+        "name": "object: defineProperty enumerable and writable",
+        "args": [
+          "const o = {}; Object.defineProperty(o, \"hidden\", { value: 1 }); Object.defineProperty(o, \"shown\", { value: 2, enumerable: true }); let msg; try { o.hidden = 5 } catch (e) { msg = e.message } return [Object.keys(o), o.hidden, msg, JSON.stringify(Object.getOwnPropertyDescriptor(o, \"shown\"))]"
+        ]
+      },
+      {
+        "name": "object: defineProperty accessor",
+        "args": [
+          "const o = {}; let n = 0; Object.defineProperty(o, \"c\", { get() { return ++n }, enumerable: true, configurable: true }); return [o.c, o.c, Object.keys(o), typeof Object.getOwnPropertyDescriptor(o, \"c\").get]"
+        ]
+      },
+      {
+        "name": "object: entries / fromEntries / values",
+        "args": [
+          "const o = { a: 1, b: [2] }; return [Object.entries(o), Object.fromEntries([[\"x\", 1], [\"y\", 2]]), Object.fromEntries(new Map([[\"m\", 3]])), Object.values(o)]"
+        ]
+      },
+      {
+        "name": "object: freeze / seal / isFrozen",
+        "args": [
+          "const f = Object.freeze({ a: 1, n: { b: 2 } }); let m1, m2; try { f.a = 2 } catch (e) { m1 = e.message } try { f.z = 1 } catch (e) { m2 = e.message } f.n.b = 3; const s = Object.seal({ q: 1 }); s.q = 2; let m3; try { delete s.q } catch (e) { m3 = e.message } return [f.a, f.n.b, m1, m2, Object.isFrozen(f), s.q, m3, Object.isSealed(s)]"
+        ]
+      },
+      {
+        "name": "object: assign / hasOwn / in / delete",
+        "args": [
+          "const t = Object.assign({ a: 1 }, { b: 2 }, null, { a: 3 }); const d = delete t.b; return [t, d, Object.hasOwn(t, \"a\"), \"toString\" in t, Object.hasOwn(t, \"toString\"), t.hasOwnProperty(\"a\")]"
+        ]
+      },
+      {
+        "name": "object: computed and shorthand keys",
+        "args": [
+          "const k = \"dyn\"; const x = 5; const o = { [k + 1]: 1, x, [`t${2}`]: 2, f() { return this.x }, 3.5: \"n\" }; return [Object.keys(o), o.f()]"
+        ]
+      },
+      {
+        "name": "object: Object.create null and prototype chain",
+        "args": [
+          "const p = { greet() { return \"hi \" + this.n } }; const o = Object.create(p); o.n = \"bob\"; const n = Object.create(null); n.a = 1; return [o.greet(), Object.getPrototypeOf(o) === p, Object.keys(n), typeof n.toString, p.isPrototypeOf(o)]"
+        ]
+      },
+      {
+        "name": "object: setPrototypeOf unsupported",
+        "args": [
+          "try { Object.setPrototypeOf({}, null); return \"allowed\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: __proto__ assignment rejected",
+        "args": [
+          "try { const o = {}; o.__proto__ = { x: 1 }; return [o.x] } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: toString / valueOf protocol",
+        "args": [
+          "const o = { valueOf() { return 42 }, toString() { return \"str\" } }; return [o + 1, `${o}`, String(o), o * 2, [o] + \"\"]"
+        ]
+      },
+      {
+        "name": "object: getOwnPropertyNames and keys of arrays and strings",
+        "args": [
+          "return [Object.getOwnPropertyNames([1, 2]), Object.keys(\"ab\"), Object.entries([7, 8])]"
+        ]
+      },
+      {
+        "name": "object: structuredClone",
+        "args": [
+          "const src = { d: new Date(0), m: new Map([[1, { x: 1 }]]), s: new Set([1]), a: [1, { b: 2 }] }; const c = structuredClone(src); c.a[1].b = 9; return [src.a[1].b, c.d.toISOString(), c.m.get(1).x, c.s.has(1), c.m !== src.m]"
+        ]
+      },
+      {
+        "name": "object: structuredClone of function throws",
+        "args": [
+          "try { structuredClone({ f() {} }); return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: property access on undefined error text",
+        "args": [
+          "try { const o = undefined; return o.x } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "object: calling a non-function error text",
+        "args": [
+          "try { const o = { a: 1 }; o.a() } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "class: fields, methods, static",
+        "args": [
+          "class A { x = 1; static count = 0; static make() { A.count++; return new A() } inc() { return ++this.x } } const a = A.make(); a.inc(); return [a.x, A.count, Object.keys(a), typeof A, A.name]"
+        ]
+      },
+      {
+        "name": "class: extends and super",
+        "args": [
+          "class B { constructor(n) { this.n = n } hello() { return \"B\" + this.n } static s() { return \"sB\" } } class C extends B { constructor() { super(7) } hello() { return \"C>\" + super.hello() } static s() { return \"sC>\" + super.s() } } const c = new C(); return [c.hello(), C.s(), c instanceof B, c instanceof C, Object.getPrototypeOf(C) === B]"
+        ]
+      },
+      {
+        "name": "class: getters setters in classes",
+        "args": [
+          "class T { #no; } return 1"
+        ]
+      },
+      {
+        "name": "class: accessors and static accessors",
+        "args": [
+          "class T { constructor() { this._t = 1 } get t() { return this._t * 10 } set t(v) { this._t = v } static get k() { return \"K\" } } const t = new T(); t.t = 4; return [t.t, T.k, Object.keys(t)]"
+        ]
+      },
+      {
+        "name": "class: field initializer order and this",
+        "args": [
+          "const log = []; class P { a = log.push(\"P.a\"); constructor() { log.push(\"P.ctor\") } } class Q extends P { b = log.push(\"Q.b\"); constructor() { log.push(\"Q.before\"); super(); log.push(\"Q.after\") } } new Q(); return log"
+        ]
+      },
+      {
+        "name": "class: calling class without new",
+        "args": [
+          "class K {} try { K() } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "class: this before super",
+        "args": [
+          "class P {} class Q extends P { constructor() { this.x = 1; super() } } try { new Q() } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "class: extending built-in Error",
+        "args": [
+          "class MyErr extends Error { constructor(m) { super(m); this.name = \"MyErr\" } } const e = new MyErr(\"bad\"); return [e instanceof Error, e instanceof MyErr, e.message, String(e), e.name]"
+        ]
+      },
+      {
+        "name": "class: instanceof with primitive and non-callable",
+        "args": [
+          "let m; try { ({}) instanceof 5 } catch (e) { m = [e.name, e.message] } return [1 instanceof Number, [] instanceof Object, m]"
+        ]
+      },
+      {
+        "name": "class: new on plain function unsupported",
+        "args": [
+          "function F() { this.a = 1 } try { new F(); return \"allowed\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "class: class expression and computed method names",
+        "args": [
+          "const name = \"dyn\"; const K = class Named { [name]() { return Named.name } static [name + \"S\"] = 2 }; return [new K().dyn(), K.dynS, K.name]"
+        ]
+      },
+      {
+        "name": "class: static blocks unsupported",
+        "args": [
+          "class S { static { this.x = 1 } } return S.x"
+        ]
+      },
+      {
+        "name": "class: method this lost when extracted",
+        "args": [
+          "class A { v = 3; get() { return this?.v } } const g = new A().get; return [g(), new A().get()]"
+        ]
+      },
+      {
+        "name": "closure: counter closures",
+        "args": [
+          "const make = () => { let n = 0; return { inc: () => ++n, get: () => n } }; const a = make(), b = make(); a.inc(); a.inc(); b.inc(); return [a.get(), b.get()]"
+        ]
+      },
+      {
+        "name": "closure: let per-iteration binding vs var",
+        "args": [
+          "const fs = []; for (let i = 0; i < 3; i++) fs.push(() => i); const gs = []; for (var j = 0; j < 3; j++) gs.push(() => j); return [fs.map(f => f()), gs.map(g => g())]"
+        ]
+      },
+      {
+        "name": "closure: arrow this vs method this",
+        "args": [
+          "const o = { v: 1, m() { return [this.v, (() => this.v)()] }, a: () => typeof this }; return [o.m(), o.a()]"
+        ]
+      },
+      {
+        "name": "closure: function this in strict mode is undefined",
+        "args": [
+          "function f() { return this === undefined } const o = { f }; return [f(), o.f()]"
+        ]
+      },
+      {
+        "name": "closure: call / apply / bind",
+        "args": [
+          "function f(a, b) { return [this && this.x, a, b] } const b = f.bind({ x: 1 }, \"p\"); return [f.call({ x: 2 }, 3, 4), f.apply({ x: 3 }, [5, 6]), b(\"q\"), b.name, b.length, f.length]"
+        ]
+      },
+      {
+        "name": "closure: hoisting of functions and TDZ",
+        "args": [
+          "const r = hoisted(); function hoisted() { return \"ok\" } let m; try { tdz; let tdz = 1 } catch (e) { m = [e.name, e.message] } return [r, m]"
+        ]
+      },
+      {
+        "name": "closure: const reassignment error",
+        "args": [
+          "const c = 1; try { c = 2 } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "closure: recursion and default params referencing earlier ones",
+        "args": [
+          "const fib = n => (n < 2 ? n : fib(n - 1) + fib(n - 2)); const f = (a, b = a * 2, c = a + b) => [a, b, c]; return [fib(15), f(1), f(1, 1), f.length]"
+        ]
+      },
+      {
+        "name": "closure: arguments object",
+        "args": [
+          "function f() { return [arguments.length, Array.from(arguments), typeof arguments] } return f(1, \"a\", null)"
+        ]
+      },
+      {
+        "name": "closure: IIFE and named function expression scope",
+        "args": [
+          "const r = (function fact(n) { return n <= 1 ? 1 : n * fact(n - 1) })(5); return [r, typeof fact]"
+        ]
+      },
+      {
+        "name": "closure: undeclared variable assignment in strict mode",
+        "args": [
+          "try { undeclaredVar = 1; return \"no\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "closure: reading undeclared variable",
+        "args": [
+          "try { return missingName + 1 } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "generator: basic generator protocol",
+        "args": [
+          "function* g() { const x = yield 1; yield x * 2; return \"done\" } const it = g(); return [it.next(), it.next(5), it.next(), it.next()]"
+        ]
+      },
+      {
+        "name": "generator: return and throw",
+        "args": [
+          "function* g() { try { yield 1; yield 2 } finally { yield \"cleanup\" } } const a = g(); const r = [a.next(), a.return(\"r\"), a.next(), a.next()]; const b = g(); b.next(); let caught; try { b.throw(new Error(\"x\")); b.next(); b.next() } catch (e) { caught = e.message } return [r, caught]"
+        ]
+      },
+      {
+        "name": "generator: yield* delegation and spread",
+        "args": [
+          "function* inner() { yield 1; yield 2; return \"ret\" } function* outer() { const r = yield* inner(); yield r; yield* [3, 4] } return [...outer()]"
+        ]
+      },
+      {
+        "name": "generator: infinite generator with take via iterator helpers",
+        "args": [
+          "function* nat() { let i = 0; while (true) yield i++ } return nat().filter(x => x % 2).map(x => x * x).take(4).toArray()"
+        ]
+      },
+      {
+        "name": "generator: custom iterable with Symbol.iterator",
+        "args": [
+          "const it = { from: 1, to: 4, [Symbol.iterator]() { let c = this.from, t = this.to; return { next: () => (c <= t ? { value: c++, done: false } : { value: undefined, done: true }) } } }; const out = []; for (const x of it) out.push(x); return [out, [...it], Array.from(it, x => x * 2)]"
+        ]
+      },
+      {
+        "name": "generator: iterator close on break",
+        "args": [
+          "const log = []; function* g() { try { yield 1; yield 2 } finally { log.push(\"closed\") } } for (const x of g()) { log.push(x); break } return log"
+        ]
+      },
+      {
+        "name": "generator: async generator and for await",
+        "args": [
+          "async function* ag() { yield 1; await null; yield 2; yield Promise.resolve(3) } const out = []; for await (const v of ag()) out.push(v); return out"
+        ]
+      },
+      {
+        "name": "generator: generator object toString and typeof",
+        "args": [
+          "function* g() {} const it = g(); return [typeof it.next, String(it), it[Symbol.iterator]() === it]"
+        ]
+      },
+      {
+        "name": "generator: Iterator.from and helpers drop/flatMap/reduce",
+        "args": [
+          "return [Iterator.from([1, 2, 3, 4]).drop(1).flatMap(x => [x, -x]).toArray(), [5, 6].values().reduce((a, b) => a + b), [1, 2, 3].values().some(x => x > 2), [1,2,3].values().find(x => x > 1)]"
+        ]
+      },
+      {
+        "name": "async: microtask order across await and then",
+        "args": [
+          "const log = []; const p = Promise.resolve(); p.then(() => log.push(\"then1\")).then(() => log.push(\"then2\")); (async () => { log.push(\"async start\"); await null; log.push(\"after await1\"); await null; log.push(\"after await2\") })(); log.push(\"sync end\"); await new Promise(r => r()); await null; await null; await null; return log"
+        ]
+      },
+      {
+        "name": "async: await of thenable and resolved promise ordering",
+        "args": [
+          "const log = []; const thenable = { then(r) { log.push(\"thenable.then\"); r(\"T\") } }; (async () => { log.push(await thenable) })(); Promise.resolve().then(() => log.push(\"p1\")).then(() => log.push(\"p2\")).then(() => log.push(\"p3\")); for (let i = 0; i < 6; i++) await null; return log"
+        ]
+      },
+      {
+        "name": "async: async function returning promise takes extra ticks",
+        "args": [
+          "const log = []; async function a() { return Promise.resolve(\"a\") } async function b() { return \"b\" } a().then(v => log.push(v)); b().then(v => log.push(v)); Promise.resolve().then(() => log.push(1)).then(() => log.push(2)).then(() => log.push(3)).then(() => log.push(4)); for (let i = 0; i < 8; i++) await null; return log"
+        ]
+      },
+      {
+        "name": "async: console.log ordering with microtasks",
+        "args": [
+          "console.log(\"A\"); queueMicrotask?.(() => console.log(\"micro\")); Promise.resolve().then(() => console.log(\"C\")); console.log(\"B\"); await null; await null; return \"done\""
+        ]
+      },
+      {
+        "name": "async: Promise.all ordering and rejection",
+        "args": [
+          "const r1 = await Promise.all([asyncDouble(1), 2, Promise.resolve(3)]); let r2; try { await Promise.all([Promise.resolve(1), Promise.reject(new Error(\"no\")), new Promise(() => {})]) } catch (e) { r2 = e.message } return [r1, r2, await Promise.all([])]"
+        ]
+      },
+      {
+        "name": "async: Promise.race / any",
+        "args": [
+          "const r1 = await Promise.race([new Promise(() => {}), Promise.resolve(\"fast\")]); const r2 = await Promise.any([Promise.reject(1), Promise.resolve(2)]); let r3; try { await Promise.any([Promise.reject(new Error(\"a\")), Promise.reject(new Error(\"b\"))]) } catch (e) { r3 = [e.name, e.message, e.errors.map(x => x.message)] } return [r1, r2, r3]"
+        ]
+      },
+      {
+        "name": "async: Promise.allSettled shape",
+        "args": [
+          "return await Promise.allSettled([1, Promise.reject(new TypeError(\"t\")), asyncDouble(4)]).then(rs => rs.map(r => r.status === \"fulfilled\" ? r : { status: r.status, reason: String(r.reason) }))"
+        ]
+      },
+      {
+        "name": "async: unhandled rejection at top level",
+        "args": [
+          "Promise.reject(new Error(\"floating\")); await null; return \"after\""
+        ]
+      },
+      {
+        "name": "async: uncaught await rejection error",
+        "args": [
+          "await Promise.reject(new RangeError(\"out of range\"))"
+        ]
+      },
+      {
+        "name": "async: rejecting with non-error value",
+        "args": [
+          "await Promise.reject({ code: 42 })"
+        ]
+      },
+      {
+        "name": "async: throwing a string",
+        "args": [
+          "throw \"plain string\""
+        ]
+      },
+      {
+        "name": "async: finally ordering and passthrough",
+        "args": [
+          "const log = []; const v = await Promise.resolve(1).finally(() => { log.push(\"f1\"); return 99 }).then(x => { log.push(\"then \" + x); return x }); let e; try { await Promise.reject(new Error(\"r\")).finally(() => log.push(\"f2\")) } catch (err) { e = err.message } return [v, e, log]"
+        ]
+      },
+      {
+        "name": "async: Promise.withResolvers and resolve with promise",
+        "args": [
+          "const { promise, resolve } = Promise.withResolvers(); setTimeoutish: { resolve(Promise.resolve(\"inner\")) } return [await promise, typeof Promise.withResolvers]"
+        ]
+      },
+      {
+        "name": "async: async host function interleaving",
+        "args": [
+          "const log = []; const a = asyncDouble(1).then(v => log.push(\"a\" + v)); const b = (async () => { log.push(\"b start\"); const v = await asyncDouble(10); log.push(\"b\" + v) })(); log.push(\"sync\"); await Promise.all([a, b]); return log"
+        ]
+      },
+      {
+        "name": "async: pending promise left at end warns",
+        "args": [
+          "asyncDouble(1); new Promise(() => {}); return \"end\""
+        ]
+      },
+      {
+        "name": "async: await in non-async function is syntax error",
+        "args": [
+          "function f() { await 1 } return f()"
+        ]
+      },
+      {
+        "name": "async: chained then with thrown error and catch recovery",
+        "args": [
+          "return await Promise.resolve(1).then(() => { throw new Error(\"mid\") }).then(() => \"skipped\").catch(e => \"caught \" + e.message).then(v => v + \"!\")"
+        ]
+      },
+      {
+        "name": "async: setTimeout is not available",
+        "args": [
+          "return [typeof setTimeout, typeof setInterval, typeof queueMicrotask, typeof fetch, typeof process, typeof require]"
+        ]
+      },
+      {
+        "name": "error: error types and names",
+        "args": [
+          "return [new TypeError(\"t\"), new RangeError(\"r\"), new SyntaxError(\"s\"), new ReferenceError(\"f\"), new URIError(\"u\"), new EvalError(\"e\"), new Error(\"x\")].map(e => [e.name, e.message, e instanceof Error, String(e)])"
+        ]
+      },
+      {
+        "name": "error: stack text at top level",
+        "args": [
+          "const e = new Error(\"boom\")\nreturn e.stack"
+        ]
+      },
+      {
+        "name": "error: stack text inside nested functions",
+        "args": [
+          "function inner() { return new Error(\"deep\") }\nfunction outer() {\n  return inner()\n}\nreturn outer().stack"
+        ]
+      },
+      {
+        "name": "error: stack of thrown TypeError from runtime",
+        "args": [
+          "try {\n  null.x\n} catch (e) {\n  return [e.stack, e.constructor === TypeError]\n}"
+        ]
+      },
+      {
+        "name": "error: error cause and AggregateError",
+        "args": [
+          "const e = new Error(\"outer\", { cause: new Error(\"inner\") }); const a = new AggregateError([new Error(\"1\")], \"agg\"); return [e.cause.message, \"cause\" in new Error(\"x\"), a.name, a.message, a.errors.length]"
+        ]
+      },
+      {
+        "name": "error: try/finally ordering with return override",
+        "args": [
+          "const log = []; function f() { try { log.push(\"try\"); return \"try\" } finally { log.push(\"finally\") } } function g() { try { throw new Error(\"x\") } catch (e) { log.push(\"catch\"); return \"catch\" } finally { return \"finally wins\" } } return [f(), g(), log]"
+        ]
+      },
+      {
+        "name": "error: nested try/catch rethrow",
+        "args": [
+          "const log = []; try { try { throw new Error(\"a\") } catch (e) { log.push(\"inner \" + e.message); throw new TypeError(\"b\") } finally { log.push(\"inner finally\") } } catch (e) { log.push(\"outer \" + e.name + \" \" + e.message) } return log"
+        ]
+      },
+      {
+        "name": "error: optional catch binding",
+        "args": [
+          "try { throw 1 } catch { return \"caught without binding\" }"
+        ]
+      },
+      {
+        "name": "error: uncaught TypeError diagnostic",
+        "args": [
+          "const x = null\nx.prop"
+        ]
+      },
+      {
+        "name": "error: uncaught custom error class diagnostic",
+        "args": [
+          "class AppError extends Error { constructor(m) { super(m); this.name = \"AppError\" } }\nthrow new AppError(\"custom failure\")"
+        ]
+      },
+      {
+        "name": "error: error thrown with location on later line",
+        "args": [
+          "let a = 1\nlet b = 2\nthrow new Error(\"line three\")"
+        ]
+      },
+      {
+        "name": "error: JSON.stringify of Error and own props",
+        "args": [
+          "const e = new Error(\"m\"); e.code = 7; return [JSON.stringify(e), Object.keys(e), e.toString()]"
+        ]
+      },
+      {
+        "name": "error: host failure kind and suggestions",
+        "args": [
+          "lookup(\"zzz\")"
+        ]
+      },
+      {
+        "name": "error: host failure caught in program",
+        "args": [
+          "try { lookup(42) } catch (e) { return [e.name, e.message, e instanceof Error] }"
+        ]
+      },
+      {
+        "name": "error: host function results",
+        "args": [
+          "return [double(4), echo({ a: [1, \"x\", null] }), lookup(\"a\"), math2.add(2, 3), Object.keys(math2)]"
+        ]
+      },
+      {
+        "name": "error: missing namespace member",
+        "args": [
+          "math2.nope(1)"
+        ]
+      },
+      {
+        "name": "error: stack overflow is RangeError",
+        "args": [
+          "function r() { return r() + 1 } try { r() } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "json: stringify edge cases",
+        "args": [
+          "return [JSON.stringify({ u: undefined, f() {}, n: null, nan: NaN, inf: -Infinity, d: new Date(0), nested: [undefined, () => 1] }), JSON.stringify(undefined), JSON.stringify(\"\\u2028\\u00e9\\n\\u0007\"), JSON.stringify({ a: 1, b: [1, 2] }, null, 2), JSON.stringify([1, 2], null, \"--\")]"
+        ]
+      },
+      {
+        "name": "json: stringify replacer function and array",
+        "args": [
+          "return [JSON.stringify({ a: 1, b: 2, c: { a: 3 } }, [\"a\", \"c\"]), JSON.stringify({ a: 1, b: \"x\" }, (k, v) => (typeof v === \"number\" ? v * 10 : v)), JSON.stringify({ toJSON() { return { t: 1 } } })]"
+        ]
+      },
+      {
+        "name": "json: stringify circular throws",
+        "args": [
+          "const o = {}; o.self = o; try { JSON.stringify(o) } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "json: parse edge cases and reviver",
+        "args": [
+          "return [JSON.parse(\"[1, \\\"a\\\", null, true, {\\\"x\\\": 1.5e2}]\"), JSON.parse('{\"a\":1,\"b\":{\"c\":2}}', (k, v) => (typeof v === \"number\" ? v + 1 : v)), JSON.parse('\"\\\\u00e9\"'), JSON.parse(\" 5 \"), JSON.parse('{\"__proto__\": 1}').__proto__]"
+        ]
+      },
+      {
+        "name": "json: parse errors",
+        "args": [
+          "const out = []; for (const s of [\"{\", \"[1,]\", \"{'a':1}\", \"\", \"undefined\", \"01\"]) { try { JSON.parse(s); out.push(\"ok\") } catch (e) { out.push(e.name) } } return out"
+        ]
+      },
+      {
+        "name": "json: parse error message prefix",
+        "args": [
+          "try { JSON.parse(\"{bad\") } catch (e) { const p = \"JSON.parse received invalid JSON: \"; return [e.name, e.message.startsWith(p) ? p : e.message] }"
+        ]
+      },
+      {
+        "name": "json: return value crossing drops functions and undefined",
+        "args": [
+          "return { a: undefined, b: () => 1, c: [undefined, function () {}], d: NaN, e: new Date(86400000), m: new Map([[1, 2]]), s: new Set([1]) }"
+        ]
+      },
+      {
+        "name": "json: return value crossing of nested special objects",
+        "args": [
+          "return [new Uint8Array([1, 2]), new URL(\"https://x.test/a?b=1\"), /re/g, new Error(\"e\"), Symbol.iterator === Symbol.iterator]"
+        ]
+      },
+      {
+        "name": "json: returning undefined",
+        "args": [
+          "return undefined"
+        ]
+      },
+      {
+        "name": "json: no return statement",
+        "args": [
+          "const x = 1"
+        ]
+      },
+      {
+        "name": "json: returning a function at top level",
+        "args": [
+          "return () => 1"
+        ]
+      },
+      {
+        "name": "json: returning a promise is awaited",
+        "args": [
+          "return Promise.resolve({ resolved: true })"
+        ]
+      },
+      {
+        "name": "date: fixed timestamp UTC getters",
+        "args": [
+          "const d = new Date(Date.UTC(2024, 1, 29, 13, 45, 30, 123)); return [d.toISOString(), d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCDay(), d.getUTCHours(), d.getUTCMilliseconds(), d.getTime(), d.valueOf() === +d]"
+        ]
+      },
+      {
+        "name": "date: parsing ISO and date-only strings",
+        "args": [
+          "return [Date.parse(\"2020-01-01\"), Date.parse(\"2020-01-01T00:00:00Z\"), Date.parse(\"2020-01-01T00:00:00.000+02:00\"), new Date(\"2020-06-15T12:00:00Z\").toISOString(), isNaN(Date.parse(\"not a date\"))]"
+        ]
+      },
+      {
+        "name": "date: invalid date behavior",
+        "args": [
+          "const d = new Date(\"garbage\"); let m; try { d.toISOString() } catch (e) { m = [e.name, e.message] } return [String(d), d.getTime(), m, JSON.stringify({ d })]"
+        ]
+      },
+      {
+        "name": "date: UTC setters and overflow",
+        "args": [
+          "const d = new Date(0); d.setUTCFullYear(2023, 0, 31); d.setUTCMonth(1); const e = new Date(Date.UTC(2020, 0, 1)); e.setUTCDate(0); e.setUTCHours(25); return [d.toISOString(), e.toISOString()]"
+        ]
+      },
+      {
+        "name": "date: Date.UTC edge args",
+        "args": [
+          "return [Date.UTC(2020), Date.UTC(99, 0), Date.UTC(2020, 12, 1), Date.UTC(1969, 11, 31, 23, 59, 59, 999), new Date(8.64e15).toISOString(), String(new Date(8.64e15 + 1).getTime())]"
+        ]
+      },
+      {
+        "name": "date: toJSON and date in JSON",
+        "args": [
+          "const d = new Date(Date.UTC(2001, 8, 9, 1, 46, 40)); return [d.toJSON(), JSON.stringify([d]), typeof Date.now()]"
+        ]
+      },
+      {
+        "name": "date: toUTCString format",
+        "args": [
+          "return [new Date(0).toUTCString(), new Date(Date.UTC(2024, 11, 25, 8, 5, 3)).toUTCString()]"
+        ]
+      },
+      {
+        "name": "date: date arithmetic and comparison",
+        "args": [
+          "const a = new Date(Date.UTC(2024, 0, 1)), b = new Date(Date.UTC(2024, 2, 1)); return [(b - a) / 86400000, a < b, a.getTime() === new Date(a).getTime(), new Date(a.getTime() + 36e5).toISOString()]"
+        ]
+      },
+      {
+        "name": "math: rounding functions",
+        "args": [
+          "return [Math.round(2.5), Math.round(-2.5), Math.round(0.49999999999999994), Math.floor(-0.5), Math.ceil(-0.5), Math.trunc(1.9), Math.fround(5.5), Math.round(-0.4)].map(x => Object.is(x, -0) ? \"-0\" : x)"
+        ]
+      },
+      {
+        "name": "math: min max with NaN and empty",
+        "args": [
+          "return [Math.max(), Math.min(), Math.max(1, NaN), Math.max(-0, 0), Math.min(0, -0), Math.max(\"7\", 3)].map(String)"
+        ]
+      },
+      {
+        "name": "math: transcendental functions",
+        "args": [
+          "return [Math.sqrt(2), Math.cbrt(27), Math.hypot(3, 4), Math.log2(8), Math.log10(1000), Math.exp(1) === Math.E, Math.atan2(1, 1) * 4 === Math.PI, Math.sin(0), Math.pow(2, -1), Math.abs(-3), Math.clz32(1), Math.imul(3, 4), Math.sign(-3)]"
+        ]
+      },
+      {
+        "name": "math: Math.random is in range",
+        "args": [
+          "const r = Math.random(); return [r >= 0 && r < 1, typeof r]"
+        ]
+      },
+      {
+        "name": "math: pow edge cases",
+        "args": [
+          "return [Math.pow(NaN, 0), Math.pow(1, Infinity), 0 ** -1, (-2) ** 2, Math.pow(-8, 1/3)].map(String)"
+        ]
+      },
+      {
+        "name": "regexp: flags and source",
+        "args": [
+          "const r = /a.b/gimsuy; return [r.flags, r.source, r.global, r.sticky, r.unicode, r.dotAll, String(new RegExp(\"x/y\", \"g\")), new RegExp(\"\").source]"
+        ]
+      },
+      {
+        "name": "regexp: named groups and exec",
+        "args": [
+          "const m = /(?<year>\\d{4})-(?<month>\\d{2})/.exec(\"on 2024-05!\"); return [m.index, m[0], m.groups.year, m.groups.month, m.input, m.length]"
+        ]
+      },
+      {
+        "name": "regexp: lastIndex with global and sticky",
+        "args": [
+          "const g = /a/g; const s = \"aXa\"; const out = []; let m; while ((m = g.exec(s))) out.push([m.index, g.lastIndex]); const y = /a/y; y.lastIndex = 1; const r1 = y.test(s); y.lastIndex = 2; const r2 = y.test(s); return [out, g.lastIndex, r1, r2, y.lastIndex]"
+        ]
+      },
+      {
+        "name": "regexp: test with global regex advances lastIndex",
+        "args": [
+          "const r = /o/g; return [r.test(\"foo\"), r.lastIndex, r.test(\"foo\"), r.lastIndex, r.test(\"foo\"), r.lastIndex]"
+        ]
+      },
+      {
+        "name": "regexp: replace with named group refs and function",
+        "args": [
+          "return [\"2024-05\".replace(/(?<y>\\d+)-(?<m>\\d+)/, \"$<m>/$<y>\"), \"a-b\".replace(/(?<x>\\w)/g, (...args) => JSON.stringify(args[args.length - 1]))]"
+        ]
+      },
+      {
+        "name": "regexp: lookbehind, unicode classes and backreferences",
+        "args": [
+          "return [\"$10 €20\".match(/(?<=\\$)\\d+/)[0], /\\p{L}+/u.exec(\"123 héllo\")[0], /(\\w)\\1/.test(\"hello\"), \"aaa\".match(/a*?/)[0].length, /^.$/u.test(\"😀\")]"
+        ]
+      },
+      {
+        "name": "regexp: invalid regexp syntax error",
+        "args": [
+          "try { new RegExp(\"(\") } catch (e) { const p = 'new RegExp(...) received \"(\", which is not a valid regular expression pattern ('; const hint = '). To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead.'; return [e.name, e.message.startsWith(p), e.message.endsWith(hint)] }"
+        ]
+      },
+      {
+        "name": "regexp: split and match with sticky / unicode sets",
+        "args": [
+          "return [\"a1b2\".split(/\\d/y), \"x\".match(/x/y)[0], RegExp.prototype.toString.call(/a/g), /[\\u{1F600}]/u.test(\"😀\")]"
+        ]
+      },
+      {
+        "name": "regexp: regexp literal invalid flags is parse error",
+        "args": [
+          "return /a/zz"
+        ]
+      },
+      {
+        "name": "regexp: Symbol.replace style escape",
+        "args": [
+          "return [\"a+b\".replace(new RegExp(\"\\\\+\"), \" plus \"), \"x.y\".split(\".\").join(RegExp.escape ? \"has\" : \"no\")]"
+        ]
+      },
+      {
+        "name": "collections: Map insertion order and key equality",
+        "args": [
+          "const m = new Map([[\"b\", 1], [\"a\", 2]]); m.set(NaN, \"nan\"); m.set(0, \"zero\"); m.set(-0, \"negzero\"); m.set(\"b\", 3); m.delete(\"a\"); m.set(\"a\", 4); return [[...m.keys()].map(String), m.get(NaN), m.get(0), m.size, [...m.values()]]"
+        ]
+      },
+      {
+        "name": "collections: Set ordering and operations",
+        "args": [
+          "const s = new Set([3, 1, 3, 2]); s.add(1); s.delete(3); s.add(3); const objs = new Set([{}, {}]); return [[...s], s.size, objs.size, s.has(2), [...new Set(\"hello\")].join(\"\")]"
+        ]
+      },
+      {
+        "name": "collections: Set methods union/intersection/difference",
+        "args": [
+          "const a = new Set([1, 2, 3]), b = new Set([2, 3, 4]); return [[...a.union(b)], [...a.intersection(b)], [...a.difference(b)], [...a.symmetricDifference(b)], a.isSubsetOf(new Set([1,2,3,4])), a.isDisjointFrom(new Set([9]))]"
+        ]
+      },
+      {
+        "name": "collections: Map forEach and iteration during mutation",
+        "args": [
+          "const m = new Map([[1, \"a\"], [2, \"b\"]]); const seen = []; for (const [k] of m) { seen.push(k); if (k === 1) { m.delete(2); m.set(3, \"c\") } } const fe = []; new Map([[\"x\", 1]]).forEach((v, k, map) => fe.push([k, v, map.size])); return [seen, fe]"
+        ]
+      },
+      {
+        "name": "collections: WeakMap and WeakSet",
+        "args": [
+          "const k = {}; const wm = new WeakMap([[k, 1]]); const ws = new WeakSet([k]); let m; try { wm.set(1, 2) } catch (e) { m = [e.name, e.message] } return [wm.get(k), wm.has({}), ws.has(k), m]"
+        ]
+      },
+      {
+        "name": "collections: WeakRef unsupported",
+        "args": [
+          "return typeof WeakRef"
+        ]
+      },
+      {
+        "name": "collections: Map with object keys and entries spread",
+        "args": [
+          "const k1 = { id: 1 }; const m = new Map(); m.set(k1, \"one\").set([1], \"arr\"); return [m.get(k1), m.get([1]), [...m.entries()].length, Object.fromEntries(new Map([[\"a\", 1]]))]"
+        ]
+      },
+      {
+        "name": "bytes: TextEncoder / TextDecoder round trip",
+        "args": [
+          "const enc = new TextEncoder().encode(\"héllo😀\"); return [Array.from(enc), enc.length, new TextDecoder().decode(enc), new TextDecoder().decode(new Uint8Array([0xff, 0x41])), new TextEncoder().encoding]"
+        ]
+      },
+      {
+        "name": "bytes: btoa / atob",
+        "args": [
+          "let m; try { btoa(\"😀\") } catch (e) { m = e.name } return [btoa(\"hello\"), atob(\"aGVsbG8=\"), atob(\"YQ\"), btoa(\"\"), m]"
+        ]
+      },
+      {
+        "name": "bytes: atob invalid input",
+        "args": [
+          "try { atob(\"@@@\") } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "bytes: Buffer from / toString encodings",
+        "args": [
+          "const b = Buffer.from(\"héllo\"); return [b.length, b.toString(\"hex\"), b.toString(\"base64\"), Buffer.from(\"aGk=\", \"base64\").toString(), Buffer.from(\"6869\", \"hex\").toString(\"utf8\"), Buffer.from([104, 105]).toString(), b.toString(\"base64url\")]"
+        ]
+      },
+      {
+        "name": "bytes: Buffer concat / slice / equals / compare",
+        "args": [
+          "const a = Buffer.from(\"ab\"), b = Buffer.from(\"cd\"); const c = Buffer.concat([a, b]); return [c.toString(), c.subarray(1, 3).toString(), a.equals(Buffer.from(\"ab\")), Buffer.compare(a, b), Buffer.isBuffer(c), Buffer.byteLength(\"😀\"), Buffer.alloc(3, 1).toJSON()]"
+        ]
+      },
+      {
+        "name": "bytes: Uint8Array basics",
+        "args": [
+          "const u = new Uint8Array([1, 2, 300, -1]); const v = u.subarray(1, 3); v[0] = 9; return [Array.from(u), u.length, u.byteLength, Array.from(u.slice(2)), u instanceof Uint8Array, Array.from(Uint8Array.from([1, 2], x => x * 2)), u.join(\"-\")]"
+        ]
+      },
+      {
+        "name": "bytes: Uint8Array base64 and hex helpers",
+        "args": [
+          "const u = new Uint8Array([72, 105, 255]); return [typeof u.toBase64 === \"function\" ? u.toBase64() : \"none\", typeof u.toHex === \"function\" ? u.toHex() : \"none\", typeof Uint8Array.fromBase64 === \"function\" ? Array.from(Uint8Array.fromBase64(\"SGn/\")) : \"none\"]"
+        ]
+      },
+      {
+        "name": "bytes: ArrayBuffer and DataView",
+        "args": [
+          "const buf = new ArrayBuffer(4); const dv = new DataView(buf); dv.setUint16(0, 0x1234); dv.setUint8(2, 255); return [buf.byteLength, Array.from(new Uint8Array(buf)), dv.getUint16(0), dv.getUint16(0, true), dv.getInt8(2)]"
+        ]
+      },
+      {
+        "name": "bytes: other typed arrays unsupported",
+        "args": [
+          "return typeof Int32Array"
+        ]
+      },
+      {
+        "name": "bytes: URL and URLSearchParams",
+        "args": [
+          "const u = new URL(\"https://user:pw@example.com:8080/a/b?x=1&y=2#frag\"); const p = new URLSearchParams(\"a=1&b=2&a=3\"); p.append(\"c\", \"x y\"); return [u.host, u.pathname, u.search, u.hash, u.searchParams.get(\"y\"), u.origin, p.getAll(\"a\"), p.toString(), new URL(\"../c\", \"https://h.test/a/b/\").href]"
+        ]
+      },
+      {
+        "name": "bytes: encodeURIComponent and friends",
+        "args": [
+          "return [encodeURIComponent(\"a b&c/é😀\"), encodeURI(\"https://x.test/a b?q=é\"), decodeURIComponent(\"%E2%82%AC\"), escape ? \"escape\" : \"none\"]"
+        ]
+      },
+      {
+        "name": "bytes: decodeURIComponent malformed",
+        "args": [
+          "try { decodeURIComponent(\"%E2%82\") } catch (e) { const p = \"decodeURIComponent received malformed URI data: \"; return [e.name, e.message.startsWith(p) ? p : e.message] }"
+        ]
+      },
+      {
+        "name": "bytes: Headers",
+        "args": [
+          "const h = new Headers({ \"Content-Type\": \"text/plain\" }); h.append(\"X-A\", \"1\"); h.append(\"x-a\", \"2\"); return [h.get(\"content-type\"), h.get(\"X-A\"), h.has(\"x-a\"), [...h.keys()]]"
+        ]
+      },
+      {
+        "name": "control: labeled break and continue",
+        "args": [
+          "const out = []; outer: for (let i = 0; i < 3; i++) { for (let j = 0; j < 3; j++) { if (j === 1) continue outer; if (i === 2) break outer; out.push([i, j]) } } blk: { out.push(\"in block\"); break blk; out.push(\"unreachable\") } return out"
+        ]
+      },
+      {
+        "name": "control: switch fallthrough and default placement",
+        "args": [
+          "const f = (x) => { const log = []; switch (x) { case 1: log.push(1); case 2: log.push(2); break; default: log.push(\"d\"); case 3: log.push(3) } return log }; return [f(1), f(2), f(3), f(9)]"
+        ]
+      },
+      {
+        "name": "control: switch uses strict equality",
+        "args": [
+          "const f = (x) => { switch (x) { case \"1\": return \"string\"; case 1: return \"number\"; default: return \"none\" } }; return [f(1), f(\"1\"), f(true)]"
+        ]
+      },
+      {
+        "name": "control: optional chaining and nullish coalescing",
+        "args": [
+          "const o = { a: { b: null, f() { return \"f\" } }, arr: [1] }; return [o?.a?.b?.c, o.x?.y.z, o.a.f?.(), o.a.g?.(), o.arr?.[0], o.nope?.[0], null ?? \"d\", 0 ?? \"d\", \"\" ?? \"d\", false || \"or\", (null || undefined) ?? \"both\"]"
+        ]
+      },
+      {
+        "name": "control: do-while, for-in, for-of with destructuring",
+        "args": [
+          "let i = 0; do { i++ } while (i < 3); const keys = []; for (const k in { a: 1, b: 2 }) keys.push(k); const pairs = []; for (const [k, v] of Object.entries({ x: 1 })) pairs.push(k + v); const arrIn = []; for (const k in [\"p\", \"q\"]) arrIn.push(k); return [i, keys, pairs, arrIn]"
+        ]
+      },
+      {
+        "name": "control: comma, void, ternary chains, short-circuit side effects",
+        "args": [
+          "let n = 0; const r = (n++, n++, n); const v = void 0; const t = n > 5 ? \"big\" : n > 1 ? \"mid\" : \"small\"; let side = 0; false && side++; true || side++; return [r, v === undefined, t, side]"
+        ]
+      },
+      {
+        "name": "control: with statement unsupported",
+        "args": [
+          "with ({ a: 1 }) { return a }"
+        ]
+      },
+      {
+        "name": "control: eval unsupported",
+        "args": [
+          "return eval(\"1 + 1\")"
+        ]
+      },
+      {
+        "name": "control: Function constructor unsupported",
+        "args": [
+          "return new Function(\"return 1\")()"
+        ]
+      },
+      {
+        "name": "control: export unsupported",
+        "args": [
+          "export const x = 1"
+        ]
+      },
+      {
+        "name": "control: TypeScript syntax unsupported",
+        "args": [
+          "const x: number = 1; return x"
+        ]
+      },
+      {
+        "name": "control: Proxy and Reflect unsupported",
+        "args": [
+          "return [typeof Proxy, typeof Reflect]"
+        ]
+      },
+      {
+        "name": "control: Symbol() unsupported",
+        "args": [
+          "return Symbol(\"x\")"
+        ]
+      },
+      {
+        "name": "control: unsupported syntax only fails when reached",
+        "args": [
+          "function f() { with (x) {} }\nfunction g() { class Q { #p } }\nfunction h() { return 5n }\nreturn [typeof f, typeof g, typeof h]"
+        ]
+      },
+      {
+        "name": "control: unsupported syntax fails after earlier statements ran",
+        "args": [
+          "console.log(\"before\")\nclass A { #x = 1 }\nconsole.log(\"after\")"
+        ]
+      },
+      {
+        "name": "control: debugger statement is unsupported",
+        "args": [
+          "console.log(\"b\")\ndebugger"
+        ]
+      },
+      {
+        "name": "control: static block reached at run time",
+        "args": [
+          "const log = []\nlog.push(1)\nclass S { static { log.push(2) } }\nreturn log"
+        ]
+      },
+      {
+        "name": "arith: BigInt literal after a log",
+        "args": [
+          "console.log(\"first\"); const n = 10n; return n"
+        ]
+      },
+      {
+        "name": "control: debugger and getter on undefined var",
+        "args": [
+          "return typeof globalThis"
+        ]
+      },
+      {
+        "name": "control: syntax error location",
+        "args": [
+          "let a = 1\nlet b = = 2"
+        ]
+      },
+      {
+        "name": "control: unterminated string syntax error",
+        "args": [
+          "return \"abc"
+        ]
+      },
+      {
+        "name": "control: empty program",
+        "args": [
+          "   "
+        ]
+      },
+      {
+        "name": "control: top-level return of expression without semicolons",
+        "args": [
+          "const a = [1, 2]\nconst b = a.map(x => x * 2)\nreturn b"
+        ]
+      },
+      {
+        "name": "control: import of unknown module",
+        "args": [
+          "import x from \"fs\"\nreturn x"
+        ]
+      },
+      {
+        "name": "control: require of unknown module",
+        "args": [
+          "const fs = require(\"fs\"); return fs"
+        ]
+      },
+      {
+        "name": "control: delete of non-configurable and variables",
+        "args": [
+          "const a = [1, 2]; const r = delete a[0]; let m; try { delete Object.prototype } catch (e) { m = e.name } return [r, a, 0 in a, m]"
+        ]
+      },
+      {
+        "name": "control: getter on globalThis and global names",
+        "args": [
+          "return [typeof globalThis, typeof console.log, typeof Host]"
+        ]
+      },
+      {
+        "name": "console: console formatting of values",
+        "args": [
+          "console.log(\"str\", 1, -0, null, undefined, true, [1, \"a\", [2]], { a: { b: { c: { d: 1 } } } }); console.warn(\"warn\"); console.error(\"err\", new Error(\"e\")); console.info(\"info\"); console.debug(\"dbg\"); return \"ok\""
+        ]
+      },
+      {
+        "name": "console: console.log of special objects",
+        "args": [
+          "console.log(new Map([[1, 2]]), new Set([\"a\"]), new Date(0), /x/g, () => 1, Symbol.iterator, NaN, [undefined, null]); return 1"
+        ]
+      },
+      {
+        "name": "console: console.log format specifiers",
+        "args": [
+          "console.log(\"%s is %d years and %i\", \"Bob\", 42.5, 7.9, \"extra\"); console.log(\"%o %O %j\", { a: 1 }, [1], 2); console.log(\"100%\"); return 1"
+        ]
+      },
+      {
+        "name": "console: console.table / dir / group",
+        "args": [
+          "console.dir({ x: 1 }); console.group?.(\"g\"); console.log(\"inside\"); console.groupEnd?.(); return typeof console.table"
+        ]
+      },
+      {
+        "name": "console: logs kept on failure",
+        "args": [
+          "console.log(\"before\"); throw new Error(\"after logging\")"
+        ]
+      },
+      {
+        "name": "limits: timeout on infinite loop",
+        "args": [
+          "while (true) {}",
+          {
+            "timeoutMs": 50
+          }
+        ]
+      },
+      {
+        "name": "limits: timeout on infinite async loop",
+        "args": [
+          "while (true) { await null }",
+          {
+            "timeoutMs": 50
+          }
+        ]
+      },
+      {
+        "name": "limits: timeout on never-settling await",
+        "args": [
+          "await new Promise(() => {})",
+          {
+            "timeoutMs": 50
+          }
+        ]
+      },
+      {
+        "name": "limits: maxOutputBytes truncates result",
+        "args": [
+          "return \"x\".repeat(100)",
+          {
+            "maxOutputBytes": 20
+          }
+        ]
+      },
+      {
+        "name": "limits: maxOutputBytes truncates logs",
+        "args": [
+          "for (let i = 0; i < 10; i++) console.log(\"line \" + i); return 1",
+          {
+            "maxOutputBytes": 30
+          }
+        ]
+      },
+      {
+        "name": "limits: maxOutputBytes zero",
+        "args": [
+          "console.log(\"a\"); return { a: 1 }",
+          {
+            "maxOutputBytes": 0
+          }
+        ]
+      },
+      {
+        "name": "limits: long loop without step limit completes",
+        "args": [
+          "let s = 0; for (let i = 0; i < 1200000; i++) s += i % 7; return s"
+        ]
+      },
+      {
+        "name": "limits: string length cap",
+        "args": [
+          "try { \"x\".repeat(2 ** 25) } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "limits: array length cap",
+        "args": [
+          "try { new Array(10000001).fill(0); return \"ok\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "limits: deep nesting crossing to host",
+        "args": [
+          "let o = 1; for (let i = 0; i < 40; i++) o = [o]; try { echo(o); return \"ok\" } catch (e) { return [e.name, e.message] }"
+        ]
+      },
+      {
+        "name": "limits: deep nesting in return value",
+        "args": [
+          "let o = 1; for (let i = 0; i < 40; i++) o = { o }; return o"
+        ]
+      },
+      {
+        "name": "translate: function in host argument errors by default",
+        "args": [
+          "echo({ f() {} })"
+        ]
+      },
+      {
+        "name": "translate: function in host argument dropped",
+        "args": [
+          "return echo({ a: 1, f() {}, arr: [() => 1, 2] })",
+          {
+            "translate": {
+              "functions": "drop"
+            }
+          }
+        ]
+      },
+      {
+        "name": "translate: promise in host argument errors by default",
+        "args": [
+          "echo(Promise.resolve(1))"
+        ]
+      },
+      {
+        "name": "translate: promise in host argument awaited",
+        "args": [
+          "return echo({ p: Promise.resolve(5), q: asyncDouble(3) })",
+          {
+            "translate": {
+              "promises": "await"
+            }
+          }
+        ]
+      },
+      {
+        "name": "translate: host copies Date Map Set back",
+        "args": [
+          "const r = echo({ d: new Date(0), m: new Map([[\"k\", 1]]), s: new Set([2]), u: new Uint8Array([7]) }); return [r.d instanceof Date, r.d.toISOString(), r.m.get(\"k\"), r.s.has(2), r.u[0]]"
+        ]
+      },
+      {
+        "name": "translate: host arguments are copies",
+        "args": [
+          "const o = { n: 1 }; const r = echo(o); r.n = 2; return [o.n, r.n, r === o]"
+        ]
+      }
+    ]
+  }
+]

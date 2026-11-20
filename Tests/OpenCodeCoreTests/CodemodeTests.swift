@@ -131,9 +131,11 @@ struct CodemodeTests {
             Issue.record("Expected UnsupportedSyntax for a private class member")
         }
 
+        // Upstream compiles a BigInt literal to a TypeError thrown where it runs.
         let bigIntRes = try await CodemodeEngine.execute(.init(code: "const n = 123n;"))
         if case .failure(let f) = bigIntRes {
-            #expect(f.error.kind == "UnsupportedSyntax")
+            #expect(f.error.kind == "ExecutionFailure")
+            #expect(f.error.message.hasPrefix("TypeError: BigInt literals are not supported."))
         } else {
             Issue.record("Expected UnsupportedSyntax for BigInt")
         }
@@ -442,7 +444,8 @@ struct CodemodeTests {
             console.log("starting", 1);
             console.warn("careful");
             console.error("oops");
-            tools.slow(); // intentionally unawaited -> cancelled with warning
+            tools.slow(); // intentionally unawaited -> interrupted silently, as upstream does
+            Promise.reject(new Error("never handled")); // an unhandled rejection is a warning
             return { answer: 42, items: ["a", "b"] };
             """,
             tools: tools
@@ -453,7 +456,7 @@ struct CodemodeTests {
             return
         }
         #expect(ok.logs == ["starting 1", "[warn] careful", "[error] oops"])
-        #expect(ok.warnings?.isEmpty == false)
+        #expect(ok.warnings?.map(\.message) == ["Unhandled rejection from an un-awaited promise: Error: never handled"])
 
         let rawFormatted = result.formattedOutput()
         let pretty = formatExecuteOutput(rawFormatted)

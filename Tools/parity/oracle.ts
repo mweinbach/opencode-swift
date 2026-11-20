@@ -1314,10 +1314,48 @@ function invoke(fn: string, args: unknown[]): unknown {
   }
 }
 
+// psychoscript (Code Mode's language) needs the real `effect` package, which the stub plugin above would shadow in
+// this process, so its requests (`psychoscript/...`) are forwarded in one batch to a clean child process running
+// `psychoscript-oracle.ts` against the real upstream/psychoscript sources. See that file for the canonical outcome.
+const PSYCHOSCRIPT_PREFIX = "psychoscript/"
+
+async function runPsychoscriptOracle(lines: string[]): Promise<void> {
+  if (lines.length === 0) return
+  const proc = Bun.spawn(["bun", path.join(import.meta.dir, "psychoscript-oracle.ts")], {
+    cwd: ROOT_DIR,
+    stdin: new Blob([lines.join("\n") + "\n"]),
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (exitCode !== 0) {
+    for (const line of lines) {
+      const req = JSON.parse(line) as { id: string }
+      process.stdout.write(
+        JSON.stringify({ id: req.id, ok: false, value: null, error: `psychoscript oracle exited ${exitCode}: ${stderr}` }) +
+          "\n",
+      )
+    }
+    return
+  }
+  for (const line of stdout.split("\n")) {
+    if (line.trim()) process.stdout.write(line + "\n")
+  }
+}
+
 const input = await Bun.stdin.text()
+const psychoscriptLines: string[] = []
 for (const line of input.split("\n")) {
   if (!line.trim()) continue
   const req = JSON.parse(line) as { id: string; fn: string; args: unknown[] }
+  if (req.fn.startsWith(PSYCHOSCRIPT_PREFIX)) {
+    psychoscriptLines.push(line)
+    continue
+  }
   try {
     const raw = invoke(req.fn, req.args)
     const value = normalizeUndefinedToNull(raw)
@@ -1333,3 +1371,5 @@ for (const line of input.split("\n")) {
     )
   }
 }
+
+await runPsychoscriptOracle(psychoscriptLines)
