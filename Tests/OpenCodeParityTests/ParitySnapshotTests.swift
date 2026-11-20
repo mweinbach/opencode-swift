@@ -699,6 +699,8 @@ struct ParitySnapshotTests {
 
         var idGenerator = Identifier.Generator()
         for tc in snapshots.cases {
+            // psychoscript programs run on the async Code Mode runtime; see `verifyPsychoscriptSnapshots`.
+            if tc.fn == PsychoscriptParity.executeFunction { continue }
             if tc.compare == "expect_error" {
                 #expect(!tc.expectedOk)
                 #expect(throws: (any Error).self, "Expected error for [\(tc.fn)] \(tc.name)") {
@@ -723,6 +725,26 @@ struct ParitySnapshotTests {
             default:
                 Issue.record("Unknown compare mode: \(tc.compare)")
             }
+        }
+    }
+
+    /// The psychoscript (Code Mode language) corpus, `parity/vectors/psychoscript.json`: each program's canonical
+    /// outcome from the Swift `CodemodeLanguage` runtime must equal the one upstream `Runtime.make(...).execute`
+    /// recorded.
+    @Test("psychoscript program corpus matches upstream Runtime.execute outcomes")
+    func verifyPsychoscriptSnapshots() async throws {
+        let snapshots = try SnapshotLoader.load(relativeTo: #filePath)
+        let cases = snapshots.cases.filter { $0.fn == PsychoscriptParity.executeFunction }
+        for tc in cases {
+            #expect(tc.compare == "exact", "Unsupported compare mode \(tc.compare) for [\(tc.fn)] \(tc.name)")
+            #expect(tc.expectedOk, "Upstream oracle failed for [\(tc.fn)] \(tc.name)")
+            guard let program = tc.args.first?.str else {
+                Issue.record("Missing program for [\(tc.fn)] \(tc.name)")
+                continue
+            }
+            let options = tc.args.count > 1 ? Self.toSchemaJSON(tc.args[1]) : nil
+            let outcome = try await PsychoscriptParity.execute(program, options: options)
+            #expect(Self.fromSchemaJSON(outcome) == tc.expectedValue, "Mismatch for [\(tc.fn)] \(tc.name)")
         }
     }
 }

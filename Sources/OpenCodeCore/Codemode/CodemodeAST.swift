@@ -1007,11 +1007,12 @@ public enum CodemodeLanguage {
         private mutating func advance() -> Unicode.Scalar {
             let sc = scalars[index]
             index += 1
-            if sc == "\n" {
+            if sc == "\n" || sc == "\u{2028}" || sc == "\u{2029}" {
                 line += 1
                 column = 1
             } else {
-                column += 1
+                // Columns count UTF-16 code units, as acorn's positions do.
+                column += sc.value > 0xFFFF ? 2 : 1
             }
             return sc
         }
@@ -1097,7 +1098,13 @@ public enum CodemodeLanguage {
 
             // Number literal
             if isDigit(ch) || (ch == "." && peek(1).map(isDigit) == true) {
-                let num = try readNumber(startLoc: startLoc)
+                let num: Double
+                do {
+                    num = try readNumber(startLoc: startLoc)
+                } catch is BigIntLiteralMarker {
+                    // Upstream compiles a BigInt literal to a TypeError thrown where it is evaluated.
+                    return Token(kind: .identifier(CodemodeLanguage.bigIntMarker), location: startLoc, precededByNewline: sawNewline)
+                }
                 return Token(kind: .number(num), location: startLoc, precededByNewline: sawNewline)
             }
 
@@ -1116,6 +1123,11 @@ public enum CodemodeLanguage {
             // RegExp literal when allowed by parser context
             if ch == "/" && allowRegex && peek(1) != "/" && peek(1) != "*" {
                 let (pattern, flags) = try readRegExp(startLoc: startLoc)
+                // As acorn does: unknown or repeated flags are a syntax error, reported just past the opening slash.
+                let validFlags = Set("dgimsuvy")
+                if flags.contains(where: { !validFlags.contains($0) }) || Set(flags).count != flags.count {
+                    throw makeSyntaxFailure("Invalid regular expression flag", at: SourceLocation(line: startLoc.line, column: startLoc.column + 1))
+                }
                 return Token(kind: .regExp(pattern: pattern, flags: flags), location: startLoc, precededByNewline: sawNewline)
             }
 
@@ -1305,12 +1317,8 @@ public enum CodemodeLanguage {
                         if c != "_" { hex.unicodeScalars.append(c) }
                     }
                     if peek() == "n" {
-                        throw ParseFailure(diagnostic: Diagnostic(
-                            kind: "UnsupportedSyntax",
-                            message: "BigInt literals are not supported.\(CodemodeLanguage.formatLocation(startLoc))",
-                            location: startLoc,
-                            suggestions: [CodemodeLanguage.supportedSyntaxMessage]
-                        ))
+                        _ = advance()
+                        throw BigIntLiteralMarker()
                     }
                     guard !hex.isEmpty, let v = UInt64(hex, radix: 16) else {
                         throw makeSyntaxFailure("Invalid hexadecimal number literal", at: startLoc)
@@ -1324,12 +1332,8 @@ public enum CodemodeLanguage {
                         if c != "_" { bin.unicodeScalars.append(c) }
                     }
                     if peek() == "n" {
-                        throw ParseFailure(diagnostic: Diagnostic(
-                            kind: "UnsupportedSyntax",
-                            message: "BigInt literals are not supported.\(CodemodeLanguage.formatLocation(startLoc))",
-                            location: startLoc,
-                            suggestions: [CodemodeLanguage.supportedSyntaxMessage]
-                        ))
+                        _ = advance()
+                        throw BigIntLiteralMarker()
                     }
                     guard !bin.isEmpty, let v = UInt64(bin, radix: 2) else {
                         throw makeSyntaxFailure("Invalid binary number literal", at: startLoc)
@@ -1343,12 +1347,8 @@ public enum CodemodeLanguage {
                         if c != "_" { oct.unicodeScalars.append(c) }
                     }
                     if peek() == "n" {
-                        throw ParseFailure(diagnostic: Diagnostic(
-                            kind: "UnsupportedSyntax",
-                            message: "BigInt literals are not supported.\(CodemodeLanguage.formatLocation(startLoc))",
-                            location: startLoc,
-                            suggestions: [CodemodeLanguage.supportedSyntaxMessage]
-                        ))
+                        _ = advance()
+                        throw BigIntLiteralMarker()
                     }
                     guard !oct.isEmpty, let v = UInt64(oct, radix: 8) else {
                         throw makeSyntaxFailure("Invalid octal number literal", at: startLoc)
@@ -1388,12 +1388,8 @@ public enum CodemodeLanguage {
                 }
             }
             if peek() == "n" {
-                throw ParseFailure(diagnostic: Diagnostic(
-                    kind: "UnsupportedSyntax",
-                    message: "BigInt literals are not supported.\(CodemodeLanguage.formatLocation(startLoc))",
-                    location: startLoc,
-                    suggestions: [CodemodeLanguage.supportedSyntaxMessage]
-                ))
+                _ = advance()
+                        throw BigIntLiteralMarker()
             }
             guard let value = Double(raw) else {
                 throw makeSyntaxFailure("Invalid number literal '\(raw)'", at: startLoc)
@@ -1490,6 +1486,11 @@ public enum CodemodeLanguage {
         private var allowRegexForNext: Bool = true
         /// The functions being parsed, innermost last: whether `super.x` and `super()` may appear in them.
         private var functionContexts: [FunctionContext] = []
+        /// Whether each enclosing function is async, innermost last (empty at the program's top level, where `await`
+        /// is allowed). In a non-async function `await` is an identifier, as acorn parses scripts.
+        private var asyncContexts: [Bool] = []
+        /// The unsupported member the class just parsed had (the first): the class becomes a throw at that member.
+        private var lastClassUnsupported: (String, SourceLocation)? = nil
 
         private struct FunctionContext {
             let isArrow: Bool
@@ -1563,7 +1564,7 @@ public enum CodemodeLanguage {
         private func unsupported(_ message: String, at loc: SourceLocation) -> ParseFailure {
             ParseFailure(diagnostic: Diagnostic(
                 kind: "UnsupportedSyntax",
-                message: "\(message)\(CodemodeLanguage.formatLocation(loc))",
+                message: "SyntaxError: \(message)\(CodemodeLanguage.formatLocation(loc))",
                 location: loc,
                 suggestions: [CodemodeLanguage.supportedSyntaxMessage]
             ))
@@ -1593,7 +1594,12 @@ public enum CodemodeLanguage {
                     location: loc
                 ))
             case .keyword("class"):
-                return .classDecl(try parseClass(requireName: true, loc: loc))
+                let cls = try parseClass(requireName: true, loc: loc)
+                if let (message, at) = lastClassUnsupported {
+                    lastClassUnsupported = nil
+                    return .expression(CodemodeLanguage.unsupportedThrow(message: message, at: at), loc)
+                }
+                return .classDecl(cls)
             case .keyword("import"):
                 // Check for dynamic import(...) expression vs static import declaration
                 let savedLexer = lexer
@@ -1700,11 +1706,17 @@ public enum CodemodeLanguage {
             case .keyword("try"):
                 return try parseTryStatement(loc: loc)
             case .keyword("with"):
-                throw unsupported("'with' statements are not supported.", at: loc)
+                // Upstream compiles unsupported syntax to an error thrown where it runs.
+                _ = try advance(allowRegex: false)
+                try expectPunct("(")
+                _ = try parseExpression()
+                try expectPunct(")")
+                _ = try parseStatement()
+                return .expression(CodemodeLanguage.unsupportedThrow("WithStatement", at: loc), loc)
             case .keyword("debugger"):
                 _ = try advance(allowRegex: true)
                 try consumeSemicolon()
-                return .empty(loc)
+                return .expression(CodemodeLanguage.unsupportedThrow("DebuggerStatement", at: loc), loc)
             default:
                 return try parseExpressionOrLabelStatement()
             }
@@ -1752,6 +1764,8 @@ public enum CodemodeLanguage {
                 try consumeSemicolon()
                 return .importDecl(specifiers: [], source: src, loc: loc)
             }
+            // Upstream reports a failed import at its first specifier (the IMPORT op's site).
+            let specifierLoc = current.location
             var specifiers: [ImportSpecifier] = []
             if case .identifier(let defName) = current.kind {
                 specifiers.append(.defaultImport(local: defName))
@@ -1797,7 +1811,7 @@ public enum CodemodeLanguage {
             }
             _ = try advance(allowRegex: true)
             try consumeSemicolon()
-            return .importDecl(specifiers: specifiers, source: source, loc: loc)
+            return .importDecl(specifiers: specifiers, source: source, loc: specifiers.isEmpty ? loc : specifierLoc)
         }
 
         private mutating func parseVariableStatement(kind: VariableKind, loc: SourceLocation) throws -> Statement {
@@ -1985,7 +1999,11 @@ public enum CodemodeLanguage {
                 throw syntaxError("Function statement requires a name", at: current.location)
             }
             functionContexts.append(.plain)
-            defer { functionContexts.removeLast() }
+            asyncContexts.append(isAsync)
+            defer {
+                functionContexts.removeLast()
+                asyncContexts.removeLast()
+            }
             let params = try parseParameterList()
             let stmts = try parseBlockStatements()
             return FunctionPayload(
@@ -2009,7 +2027,11 @@ public enum CodemodeLanguage {
         ) throws -> FunctionPayload {
             let derived = if case .classConstructor(true) = kind { true } else { false }
             functionContexts.append(FunctionContext(isArrow: false, isMethod: true, isDerivedConstructor: derived))
-            defer { functionContexts.removeLast() }
+            asyncContexts.append(isAsync)
+            defer {
+                functionContexts.removeLast()
+                asyncContexts.removeLast()
+            }
             let params = try parseParameterList()
             let stmts = try parseBlockStatements()
             return FunctionPayload(
@@ -2035,6 +2057,8 @@ public enum CodemodeLanguage {
         // The class elements: methods, accessors and fields with plain or computed names, static or not. Private
         // members and static blocks are refused, as upstream's `supportedClassMember` does.
         private mutating func parseClass(requireName: Bool, loc: SourceLocation) throws -> ClassPayload {
+            var unsupportedMember: (String, SourceLocation)? = nil
+            defer { lastClassUnsupported = unsupportedMember }
             _ = try advance(allowRegex: false) // class
             var name: String? = nil
             if case .identifier(let id) = current.kind {
@@ -2065,12 +2089,19 @@ public enum CodemodeLanguage {
                     } else {
                         isStatic = true
                         if isPunct("{") {
-                            throw unsupported("Class static blocks are not supported. Assign static fields instead.", at: mLoc)
+                            if unsupportedMember == nil {
+                                unsupportedMember = ("Class static blocks are not supported. Assign static fields instead.", mLoc)
+                            }
+                            _ = try parseBlockStatement()
+                            continue
                         }
                     }
                 }
                 if isPunct("#") {
-                    throw unsupported("Private class members (#name) are not supported. Use a regular property instead.", at: mLoc)
+                    if unsupportedMember == nil {
+                        unsupportedMember = ("Private class members (#name) are not supported. Use a regular property instead.", current.location)
+                    }
+                    _ = try advance(allowRegex: false)
                 }
                 var isAsync = false
                 var isGenerator = false
@@ -2103,7 +2134,10 @@ public enum CodemodeLanguage {
                     }
                 }
                 if isPunct("#") {
-                    throw unsupported("Private class members (#name) are not supported. Use a regular property instead.", at: mLoc)
+                    if unsupportedMember == nil {
+                        unsupportedMember = ("Private class members (#name) are not supported. Use a regular property instead.", current.location)
+                    }
+                    _ = try advance(allowRegex: false)
                 }
                 let key = try parsePropertyKey()
                 let keyName = Self.staticKeyName(key)
@@ -2146,7 +2180,11 @@ public enum CodemodeLanguage {
                 var value: Expression? = nil
                 if try matchPunct("=") {
                     functionContexts.append(.method)
-                    defer { functionContexts.removeLast() }
+                    asyncContexts.append(false)
+                    defer {
+                        functionContexts.removeLast()
+                        asyncContexts.removeLast()
+                    }
                     value = try parseAssignmentExpression(allowIn: true)
                 }
                 members.append(ClassMember(kind: .field, isStatic: isStatic, key: key, function: nil, value: value, loc: mLoc))
@@ -2401,7 +2439,7 @@ public enum CodemodeLanguage {
                 _ = try advance(allowRegex: false)
                 if !current.precededByNewline && isPunct("=>") {
                     _ = try advance(allowRegex: true)
-                    let body = try parseArrowBody(allowIn: allowIn)
+                    let body = try parseArrowBody(allowIn: allowIn, isAsync: isAsync)
                     return .function(FunctionPayload(
                         name: nil,
                         params: [.identifier(name: singleParam, loc: loc)],
@@ -2420,7 +2458,7 @@ public enum CodemodeLanguage {
             if isPunct("(") {
                 if let params = try? parseParameterList(), !current.precededByNewline && isPunct("=>") {
                     _ = try advance(allowRegex: true)
-                    let body = try parseArrowBody(allowIn: allowIn)
+                    let body = try parseArrowBody(allowIn: allowIn, isAsync: isAsync)
                     return .function(FunctionPayload(
                         name: nil,
                         params: params,
@@ -2441,9 +2479,13 @@ public enum CodemodeLanguage {
             return nil
         }
 
-        private mutating func parseArrowBody(allowIn: Bool) throws -> FunctionBody {
+        private mutating func parseArrowBody(allowIn: Bool, isAsync: Bool) throws -> FunctionBody {
             functionContexts.append(.arrow)
-            defer { functionContexts.removeLast() }
+            asyncContexts.append(isAsync)
+            defer {
+                functionContexts.removeLast()
+                asyncContexts.removeLast()
+            }
             if isPunct("{") {
                 return .block(try parseBlockStatements())
             }
@@ -2573,6 +2615,11 @@ public enum CodemodeLanguage {
             let loc = current.location
             switch current.kind {
             case .keyword("await"):
+                if asyncContexts.last == false {
+                    // Not an async function: `await` is an ordinary identifier here.
+                    _ = try advance(allowRegex: false)
+                    return try parseMemberAndCallSuffixes(base: .identifier(name: "await", loc: loc), allowCall: true)
+                }
                 _ = try advance(allowRegex: true)
                 return .awaitExpr(argument: try parseUnaryExpression(), loc: loc)
             case .punct("!"):
@@ -2657,17 +2704,21 @@ public enum CodemodeLanguage {
         private mutating func parseMemberAndCallSuffixes(base: Expression, allowCall: Bool) throws -> Expression {
             var expr = base
             var hasOptional = false
+            // As in acorn (upstream's parser), a member, call or tagged template node starts where its chain starts;
+            // only the property key keeps the suffix's own position.
+            let chainStart = base.location
             while true {
-                let loc = current.location
+                let suffixLoc = current.location
+                let loc = chainStart ?? suffixLoc
                 if isPunct(".") {
                     _ = try advance(allowRegex: false)
                     let propName = try parsePropertyOrIdentName()
-                    expr = .member(object: expr, property: .identifier(propName, loc), optional: false, loc: loc)
+                    expr = .member(object: expr, property: .identifier(propName, suffixLoc), optional: false, loc: loc)
                 } else if isPunct("[") {
                     _ = try advance(allowRegex: true)
                     let keyExpr = try parseExpression()
                     try expectPunct("]", allowRegex: false)
-                    expr = .member(object: expr, property: .computed(keyExpr, loc), optional: false, loc: loc)
+                    expr = .member(object: expr, property: .computed(keyExpr, suffixLoc), optional: false, loc: loc)
                 } else if isPunct("?.") {
                     hasOptional = true
                     _ = try advance(allowRegex: true)
@@ -2675,14 +2726,14 @@ public enum CodemodeLanguage {
                         _ = try advance(allowRegex: true)
                         let keyExpr = try parseExpression()
                         try expectPunct("]", allowRegex: false)
-                        expr = .member(object: expr, property: .computed(keyExpr, loc), optional: true, loc: loc)
+                        expr = .member(object: expr, property: .computed(keyExpr, suffixLoc), optional: true, loc: loc)
                     } else if isPunct("(") {
-                        guard allowCall else { throw syntaxError("Optional call not allowed in new expression", at: loc) }
+                        guard allowCall else { throw syntaxError("Optional call not allowed in new expression", at: suffixLoc) }
                         let args = try parseCallArguments()
                         expr = .call(callee: expr, arguments: args, optional: true, loc: loc)
                     } else {
                         let propName = try parsePropertyOrIdentName()
-                        expr = .member(object: expr, property: .identifier(propName, loc), optional: true, loc: loc)
+                        expr = .member(object: expr, property: .identifier(propName, suffixLoc), optional: true, loc: loc)
                     }
                 } else if allowCall && isPunct("(") {
                     let args = try parseCallArguments()
@@ -2765,7 +2816,12 @@ public enum CodemodeLanguage {
             case .keyword("function"):
                 return .function(try parseFunction(isAsync: false, requireName: false, loc: loc))
             case .keyword("class"):
-                return .classExpr(try parseClass(requireName: false, loc: loc))
+                let cls = try parseClass(requireName: false, loc: loc)
+                if let (message, at) = lastClassUnsupported {
+                    lastClassUnsupported = nil
+                    return CodemodeLanguage.unsupportedThrow(message: message, at: at)
+                }
+                return .classExpr(cls)
             case .keyword("super"):
                 return try parseSuper(loc: loc)
             case .keyword("import"):

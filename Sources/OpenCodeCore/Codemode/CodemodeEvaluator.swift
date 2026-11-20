@@ -487,10 +487,48 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/objects.ts#Arr [status=implemented hash=ee5c9661cb82]
     public final class Arr: Obj, @unchecked Sendable {
         private let itemsStorage: Mutex<[Value]>
+        /// Indices with no element (holes: elisions, `new Array(n)`, `delete a[i]`, growth past the end). The slot
+        /// reads as undefined, but the index is not an own property, and the callback methods skip it. Replacing
+        /// the items wholesale fills every hole.
+        private let holeStorage = Mutex<Set<Int>>([])
 
-        public init(proto: Obj? = nil, items: [Value] = []) {
+        public init(proto: Obj? = nil, items: [Value] = [], holes: Set<Int> = []) {
             self.itemsStorage = Mutex(items)
             super.init(proto: proto)
+            if !holes.isEmpty { holeStorage.withLock { $0 = holes } }
+        }
+
+        public var holes: Set<Int> { holeStorage.withLock { $0 } }
+
+        public func isHole(_ index: Int) -> Bool { holeStorage.withLock { $0.contains(index) } }
+
+        /// `delete a[i]`: the element is gone, leaving a hole.
+        public func removeItem(at index: Int) {
+            CodemodeLanguage.changed(self)
+            let size = count
+            itemsStorage.withLock { list in
+                if index < list.count { list[index] = .undefined }
+            }
+            holeStorage.withLock { h in
+                if index < size { h.insert(index) }
+            }
+        }
+
+        /// Sets the length: truncating drops elements and holes past it; growing adds holes.
+        public func setLength(_ newLen: Int) {
+            CodemodeLanguage.changed(self)
+            let old = count
+            itemsStorage.withLock { list in
+                if newLen < list.count {
+                    list.removeSubrange(newLen..<list.count)
+                } else if newLen > list.count {
+                    list.append(contentsOf: repeatElement(Value.undefined, count: newLen - list.count))
+                }
+            }
+            holeStorage.withLock { h in
+                h = h.filter { $0 < newLen }
+                if newLen > old { for i in old..<newLen { h.insert(i) } }
+            }
         }
 
         public override var tag: String { "Array" }
@@ -510,6 +548,7 @@ extension CodemodeLanguage {
             set {
                 CodemodeLanguage.changed(self)
                 itemsStorage.withLock { $0 = newValue }
+                holeStorage.withLock { if !$0.isEmpty { $0.removeAll() } }
             }
         }
 
@@ -526,11 +565,16 @@ extension CodemodeLanguage {
         public func setItem(at index: Int, value: Value) throws {
             try CodemodeLanguage.checkArrayLength(index + 1)
             CodemodeLanguage.changed(self)
+            let oldCount = count
             itemsStorage.withLock { list in
                 if index >= list.count {
                     list.append(contentsOf: repeatElement(Value.undefined, count: index - list.count + 1))
                 }
                 list[index] = value
+            }
+            holeStorage.withLock { h in
+                if index > oldCount { for i in oldCount..<index { h.insert(i) } }
+                h.remove(index)
             }
         }
 
@@ -699,7 +743,7 @@ extension CodemodeLanguage {
             self.code = code
             super.init(proto: proto)
             CodemodeLanguage.define(self, "name", .string(payload.name ?? ""), CodemodeLanguage.readonly)
-            CodemodeLanguage.define(self, "length", .number(Double(payload.params.count)), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "length", .number(Double(payload.expectedArgumentCount)), CodemodeLanguage.readonly)
         }
 
         /// [[HomeObject]]: the prototype or constructor a class method was defined on.
@@ -890,19 +934,38 @@ extension CodemodeLanguage {
         }
     }
 
+    /// The "already resolved" record a `resolve`/`reject` pair shares: only the first call of either settles.
+    public final class ResolvingFlag: Sendable {
+        private let done = Mutex(false)
+        public init() {}
+        /// Marks the pair used; false when it already was.
+        public func claim() -> Bool {
+            done.withLock { d -> Bool in
+                if d { return false }
+                d = true
+                return true
+            }
+        }
+    }
+
     // parity: psychoscript/src/runtime/objects.ts#Resolver [status=implemented hash=bac9ce16190b]
     public final class Resolver: Callable, @unchecked Sendable {
         public let promise: PromiseObj
         public let isReject: Bool
+        public let flag: ResolvingFlag
 
-        public init(proto: Obj?, promise: PromiseObj, isReject: Bool) {
+        public init(proto: Obj?, promise: PromiseObj, isReject: Bool, flag: ResolvingFlag = ResolvingFlag()) {
             self.promise = promise
             self.isReject = isReject
+            self.flag = flag
             super.init(proto: proto)
+            CodemodeLanguage.define(self, "length", .number(1), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "name", .string(""), CodemodeLanguage.readonly)
         }
 
         // parity: psychoscript/src/runtime/objects.ts#Resolver.invoke [status=implemented hash=3adb149c1f68]
         public func invoke(thisValue _: Value, args: [Value]) -> NativeResult {
+            guard flag.claim() else { return .undefined }
             let arg = args.first ?? .undefined
             if isReject {
                 promise.reject(arg)
@@ -919,22 +982,35 @@ extension CodemodeLanguage {
         case rejected(Value)
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#PromiseObj [status=implemented hash=bfc6c5015f28]
+    /// A promise reaction: runs as a job once the promise settles (upstream `VmScheduler.then`).
+    public typealias PromiseReaction = @Sendable (PromiseOutcome) async -> Void
+
+    // parity: psychoscript/src/runtime/objects.ts#PromiseObj [status=adapted hash=bfc6c5015f28]
     public final class PromiseObj: Opaque, @unchecked Sendable {
         private struct State: Sendable {
             var status: PromiseStatus = .pending
-            var task: Task<PromiseOutcome, Never>? = nil
             var observed: Bool = false
             var hostCallKey: String? = nil
+            var reactions: [PromiseReaction] = []
             var nextWaiterId: Int = 1
             var waiters: [Int: CheckedContinuation<PromiseOutcome, Never>] = [:]
         }
 
         private let pState: Mutex<State>
+        /// The run this promise belongs to: its reactions run as that run's jobs, in order.
+        public let scheduler: ProgramScheduler?
+        /// Creation order, which orders unhandled-rejection warnings.
+        public let id: Int
 
         public init(proto: Obj?, status: PromiseStatus = .pending, task: Task<PromiseOutcome, Never>? = nil, hostCallKey: String? = nil) {
-            self.pState = Mutex(State(status: status, task: task, observed: false, hostCallKey: hostCallKey))
+            let scheduler = ProgramScheduler.current
+            self.scheduler = scheduler
+            self.id = scheduler?.newPromiseId() ?? 0
+            self.pState = Mutex(State(status: status, observed: false, hostCallKey: hostCallKey))
             super.init(proto: proto)
+            if case .rejected(let reason) = status {
+                scheduler?.noteUnhandled(self, reason)
+            }
             if let task {
                 attachTask(task)
             }
@@ -955,36 +1031,89 @@ extension CodemodeLanguage {
             pState.withLock { $0.status }
         }
 
+        public var isPending: Bool {
+            if case .pending = status { return true }
+            return false
+        }
+
         public var isObserved: Bool {
             get { pState.withLock { $0.observed } }
-            set { pState.withLock { $0.observed = newValue } }
+            set {
+                pState.withLock { $0.observed = newValue }
+                if newValue { scheduler?.noteHandled(self) }
+            }
         }
 
         public var hostCallKey: String? {
             pState.withLock { $0.hostCallKey }
         }
 
+        /// Settles with the outcome of host work running outside the job loop: the outcome is delivered through the
+        /// run's inbox, so it lands between jobs like upstream host completions.
         public func attachTask(_ task: Task<PromiseOutcome, Never>) {
-            pState.withLock { $0.task = task }
+            guard let scheduler else {
+                Task { [weak self] in
+                    let outcome = await task.value
+                    self?.settle(outcome)
+                }
+                return
+            }
+            let seq = scheduler.beginHostWork()
             Task { [weak self] in
                 let outcome = await task.value
-                self?.settle(outcome)
+                let promise = self
+                scheduler.deliver(seq: seq) { promise?.settle(outcome) }
+            }
+        }
+
+        /// Adds a reaction (upstream `VmScheduler.then`): queued now if settled, else when it settles. Marks the
+        /// promise handled.
+        public func addReaction(_ reaction: @escaping PromiseReaction) {
+            let settled = pState.withLock { s -> PromiseOutcome? in
+                s.observed = true
+                switch s.status {
+                case .pending:
+                    s.reactions.append(reaction)
+                    return nil
+                case .fulfilled(let v): return .fulfilled(v)
+                case .rejected(let r): return .rejected(r)
+                }
+            }
+            guard let settled else { return }
+            if case .rejected = settled { scheduler?.noteHandled(self) }
+            schedule(reaction, settled)
+        }
+
+        private func schedule(_ reaction: @escaping PromiseReaction, _ outcome: PromiseOutcome) {
+            if let scheduler {
+                scheduler.enqueue { await reaction(outcome) }
+            } else {
+                Task { await reaction(outcome) }
             }
         }
 
         public func settle(_ outcome: PromiseOutcome) {
-            let toResume = pState.withLock { s -> [CheckedContinuation<PromiseOutcome, Never>] in
-                guard case .pending = s.status else { return [] }
+            let taken = pState.withLock { s -> (reactions: [PromiseReaction], waiters: [CheckedContinuation<PromiseOutcome, Never>], handled: Bool)? in
+                guard case .pending = s.status else { return nil }
                 switch outcome {
                 case .fulfilled(let v): s.status = .fulfilled(v)
                 case .rejected(let r): s.status = .rejected(r)
                 }
+                let reactions = s.reactions
+                s.reactions = []
                 let list = Array(s.waiters.values)
                 s.waiters.removeAll()
-                return list
+                return (reactions, list, s.observed)
             }
-            for cont in toResume {
+            guard let taken else { return }
+            if case .rejected(let reason) = outcome, !taken.handled {
+                scheduler?.noteUnhandled(self, reason)
+            }
+            for cont in taken.waiters {
                 cont.resume(returning: outcome)
+            }
+            for reaction in taken.reactions {
+                schedule(reaction, outcome)
             }
         }
 
@@ -997,17 +1126,18 @@ extension CodemodeLanguage {
         }
 
         public func cancelTask() {
-            let (t, toResume) = pState.withLock { s -> (Task<PromiseOutcome, Never>?, [CheckedContinuation<PromiseOutcome, Never>]) in
+            let toResume = pState.withLock { s -> [CheckedContinuation<PromiseOutcome, Never>] in
                 let list = Array(s.waiters.values)
                 s.waiters.removeAll()
-                return (s.task, list)
+                return list
             }
-            t?.cancel()
             for cont in toResume {
                 cont.resume(returning: .rejected(.string("Cancelled")))
             }
         }
 
+        /// Waits for the outcome from outside the run's job loop (host code). Program code awaits with
+        /// `Evaluator.awaitValue`, which parks its fiber instead.
         public func awaitOutcome() async -> PromiseOutcome {
             let fast = pState.withLock { s -> PromiseOutcome? in
                 s.observed = true
@@ -1017,7 +1147,11 @@ extension CodemodeLanguage {
                 case .pending: return nil
                 }
             }
-            if let fast { return fast }
+            if let fast {
+                if case .rejected = fast { scheduler?.noteHandled(self) }
+                return fast
+            }
+            scheduler?.noteHandled(self)
 
             let waiterId = pState.withLock { s -> Int in
                 let id = s.nextWaiterId
@@ -1062,21 +1196,40 @@ extension CodemodeLanguage {
         case completed
     }
 
-    // parity: psychoscript/src/runtime/objects.ts#GeneratorObj [status=implemented hash=fa9a9b25f698]
+    // parity: psychoscript/src/runtime/objects.ts#GeneratorObj [status=adapted hash=fa9a9b25f698]
     public final class GeneratorObj: Opaque, @unchecked Sendable {
+        /// A request an async generator has not answered yet (upstream AsyncGeneratorRequest).
+        struct AsyncRequest: Sendable {
+            let kind: GeneratorRequestKind
+            let value: Value
+            let promise: PromiseObj
+        }
+
         private struct State: Sendable {
             var genState: GeneratorState
             var values: [Value]
             var index: Int = 0
             var returnValue: Value = .undefined
+            var body: (@Sendable () async throws -> Value)? = nil
+            var fiber: Fiber? = nil
+            var failure: PendingThrowBox? = nil
+            var requests: [AsyncRequest] = []
         }
 
         private let gState: Mutex<State>
         public let isAsync: Bool
 
+        /// A generator replaying values computed ahead of time (built-in iterators made as generators).
         public init(proto: Obj?, values: [Value] = [], returnValue: Value = .undefined, isAsync: Bool = false) {
             self.isAsync = isAsync
             self.gState = Mutex(State(genState: .suspendedStart, values: values, index: 0, returnValue: returnValue))
+            super.init(proto: proto)
+        }
+
+        /// A program generator: `body` runs lazily, as a fiber, while `next`/`return`/`throw` drive it.
+        public init(proto: Obj?, isAsync: Bool, body: @escaping @Sendable () async throws -> Value) {
+            self.isAsync = isAsync
+            self.gState = Mutex(State(genState: .suspendedStart, values: [], index: 0, returnValue: .undefined, body: body))
             super.init(proto: proto)
         }
 
@@ -1088,6 +1241,8 @@ extension CodemodeLanguage {
         public var state: GeneratorState {
             gState.withLock { $0.genState }
         }
+
+        var isLazy: Bool { gState.withLock { $0.body != nil } }
 
         public func stepNext() -> Step {
             gState.withLock { s in
@@ -1110,6 +1265,172 @@ extension CodemodeLanguage {
                 s.genState = .completed
                 return Step(value: value, done: true)
             }
+        }
+
+        // MARK: Lazy (fiber) generators
+
+        /// Runs the body until it yields or completes, starting it or resuming it from its `yield` with `input`.
+        private func drive(_ input: FiberInput, scheduler: ProgramScheduler) async -> FiberSignal {
+            let (fiber, body) = gState.withLock { s -> (Fiber?, (@Sendable () async throws -> Value)?) in
+                s.genState = .executing
+                return (s.fiber, s.fiber == nil ? s.body : nil)
+            }
+            if let fiber {
+                return await fiber.resume(input)
+            }
+            guard let body else { return .finished }
+            let started = Fiber(allowsAwait: isAsync, generator: self)
+            gState.withLock { $0.fiber = started }
+            return await started.start(scheduler: scheduler) { [weak self] in
+                do {
+                    let value = try await body()
+                    self?.gState.withLock { $0.returnValue = value }
+                } catch ControlSignal.returnValue(let value) {
+                    // `return(v)` completed the body from a `yield`.
+                    self?.gState.withLock { $0.returnValue = value }
+                } catch {
+                    self?.gState.withLock { $0.failure = PendingThrowBox(error) }
+                }
+            }
+        }
+
+        /// What the body's run ended with, once it parked or finished.
+        private func settleSignal(_ signal: FiberSignal) -> Swift.Result<Step, Error>? {
+            switch signal {
+            case .awaiting:
+                return nil
+            case .yielded(let v):
+                gState.withLock { $0.genState = .suspendedYield }
+                return .success(Step(value: v, done: false))
+            case .finished:
+                return gState.withLock { s -> Swift.Result<Step, Error> in
+                    s.genState = .completed
+                    s.fiber = nil
+                    if let failure = s.failure {
+                        s.failure = nil
+                        return .failure(failure.error)
+                    }
+                    let value = s.returnValue
+                    s.returnValue = .undefined
+                    return .success(Step(value: value, done: true))
+                }
+            }
+        }
+
+        /// One `next`/`return`/`throw` on a synchronous program generator (upstream `generatorStep`).
+        public func syncStep(_ kind: GeneratorRequestKind, _ value: Value, scheduler: ProgramScheduler) async throws -> Step {
+            let current = state
+            switch current {
+            case .executing:
+                throw typeError("Generator is already running.")
+            case .completed:
+                switch kind {
+                case .next: return Step(value: .undefined, done: true)
+                case .return: return Step(value: value, done: true)
+                case .throw: throw Throw(value)
+                }
+            case .suspendedStart:
+                if kind == .return {
+                    gState.withLock { $0.genState = .completed; $0.body = nil }
+                    return Step(value: value, done: true)
+                }
+                if kind == .throw {
+                    gState.withLock { $0.genState = .completed; $0.body = nil }
+                    throw Throw(value)
+                }
+            case .suspendedYield:
+                break
+            }
+            let input: FiberInput
+            switch kind {
+            case .next: input = .outcome(.fulfilled(value))
+            case .throw: input = .outcome(.rejected(value))
+            case .return: input = .returning(value)
+            }
+            let signal = await drive(input, scheduler: scheduler)
+            switch settleSignal(signal) {
+            case .success(let step)?: return step
+            case .failure(let error)?: throw error
+            case nil: throw typeError("A synchronous generator cannot await.")
+            }
+        }
+
+        /// Inside the body: `yield value` (or `await` in an async generator, see `Evaluator.awaitValue`).
+        func yieldFromBody(_ value: Value, fiber: Fiber) async -> FiberInput {
+            await fiber.park(.yielded(value))
+        }
+
+        // MARK: Async generators (upstream AsyncGeneratorEnqueue / AsyncGeneratorResumeNext)
+
+        /// `next`/`return`/`throw` on an async program generator: queues the request and answers with its promise.
+        public func asyncEnqueue(_ kind: GeneratorRequestKind, _ value: Value, builtins: Builtins, eval: Evaluator) async -> PromiseObj {
+            let promise = PromiseObj(proto: builtins.Promise)
+            let idle = gState.withLock { s -> Bool in
+                s.requests.append(AsyncRequest(kind: kind, value: value, promise: promise))
+                return s.genState != .executing
+            }
+            if idle { await resumeNext(builtins: builtins, eval: eval) }
+            return promise
+        }
+
+        /// Answers queued requests while the generator is not running.
+        func resumeNext(builtins: Builtins, eval: Evaluator) async {
+            while true {
+                let next = gState.withLock { s -> (AsyncRequest, GeneratorState)? in
+                    guard s.genState != .executing, let head = s.requests.first else { return nil }
+                    return (head, s.genState)
+                }
+                guard let (request, current) = next else { return }
+                if current == .completed || (current == .suspendedStart && request.kind != .next) {
+                    gState.withLock { s in
+                        s.genState = .completed
+                        s.body = nil
+                        s.requests.removeFirst()
+                    }
+                    switch request.kind {
+                    case .next:
+                        request.promise.fulfill(.object(iteratorResult(builtins, value: .undefined, done: true)))
+                    case .throw:
+                        request.promise.reject(request.value)
+                    case .return:
+                        // `return(v)` on a completed async generator awaits `v` first.
+                        let awaited = eval.promiseResolve(request.value)
+                        awaited.addReaction { outcome in
+                            switch outcome {
+                            case .fulfilled(let v): request.promise.fulfill(.object(iteratorResult(builtins, value: v, done: true)))
+                            case .rejected(let r): request.promise.reject(r)
+                            }
+                        }
+                    }
+                    continue
+                }
+                let input: FiberInput
+                switch request.kind {
+                case .next: input = .outcome(.fulfilled(request.value))
+                case .throw: input = .outcome(.rejected(request.value))
+                case .return: input = .returning(request.value)
+                }
+                let signal = await drive(input, scheduler: eval.scheduler)
+                await handleAsyncSignal(signal, builtins: builtins, eval: eval)
+                return
+            }
+        }
+
+        /// The body parked or finished after running: answers the head request, then the rest.
+        func handleAsyncSignal(_ signal: FiberSignal, builtins: Builtins, eval: Evaluator) async {
+            guard let outcome = settleSignal(signal) else { return }
+            let head = gState.withLock { s -> AsyncRequest? in
+                s.requests.isEmpty ? nil : s.requests.removeFirst()
+            }
+            if let head {
+                switch outcome {
+                case .success(let step):
+                    head.promise.fulfill(.object(iteratorResult(builtins, value: step.value, done: step.done)))
+                case .failure(let error):
+                    head.promise.reject(materialize(builtins, error))
+                }
+            }
+            await resumeNext(builtins: builtins, eval: eval)
         }
     }
 
@@ -1308,7 +1629,7 @@ extension CodemodeLanguage {
         @inline(never)
         public func toISOString() throws -> String {
             let ms = epochMs
-            guard ms.isFinite else { throw CodemodeLanguage.rangeError("Invalid time value") }
+            guard ms.isFinite else { throw CodemodeLanguage.rangeError("Invalid time value.") }
             return CodemodeLanguage.formatISODate(epochMs: ms)
         }
 
@@ -1347,7 +1668,7 @@ extension CodemodeLanguage {
             self.pattern = pattern
             self.flags = String(Set(flags).sorted())
             super.init(proto: proto)
-            CodemodeLanguage.define(self, "source", .string(pattern.isEmpty ? "(?:)" : pattern), CodemodeLanguage.readonly)
+            CodemodeLanguage.define(self, "source", .string(CodemodeLanguage.escapeRegExpPattern(pattern)), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "flags", .string(self.flags), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "global", .bool(flags.contains("g")), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "ignoreCase", .bool(flags.contains("i")), CodemodeLanguage.readonly)
@@ -1356,6 +1677,9 @@ extension CodemodeLanguage {
             CodemodeLanguage.define(self, "unicode", .bool(flags.contains("u")), CodemodeLanguage.readonly)
             CodemodeLanguage.define(self, "sticky", .bool(flags.contains("y")), CodemodeLanguage.readonly)
         }
+
+        /// The pattern as `RegExp.prototype.source` shows it (EscapeRegExpPattern).
+        public var source: String { CodemodeLanguage.escapeRegExpPattern(pattern) }
 
         public var lastIndex: Int {
             get { lastIndexBox.withLock { $0 } }
@@ -1382,7 +1706,7 @@ extension CodemodeLanguage {
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toString [status=implemented hash=0e8045c353fa]
         public override func jsToString() -> String {
-            "/\(pattern.isEmpty ? "(?:)" : pattern)/\(flags)"
+            "/\(source)/\(flags)"
         }
 
         // parity: psychoscript/src/runtime/objects.ts#RegExpObj.toHost [status=implemented hash=cb210836aa66]
@@ -1722,17 +2046,60 @@ extension CodemodeLanguage {
     }
 
     // parity: psychoscript/src/runtime/objects.ts#Bytes [status=implemented hash=75eb8520f393]
+    /// The memory a Uint8Array views; `subarray` makes another view of the same store (upstream: a host
+    /// Uint8Array's ArrayBuffer).
+    public final class ByteStore: Sendable {
+        let bytes: Mutex<[UInt8]>
+        init(_ data: [UInt8]) { bytes = Mutex(data) }
+    }
+
     public class Bytes: Wrapper, @unchecked Sendable {
-        private let bytesBox: Mutex<[UInt8]>
+        public let store: ByteStore
+        public let offset: Int
+        public let length: Int
 
         public init(proto: Obj?, data: [UInt8]) {
-            self.bytesBox = Mutex(data)
+            self.store = ByteStore(data)
+            self.offset = 0
+            self.length = data.count
             super.init(proto: proto)
         }
 
+        /// A view of `length` bytes of `store` from `offset`.
+        public init(proto: Obj?, store: ByteStore, offset: Int, length: Int) {
+            self.store = store
+            self.offset = offset
+            self.length = length
+            super.init(proto: proto)
+        }
+
+        /// The viewed bytes; assigning writes them through to the store (a view's length is fixed).
         public var data: [UInt8] {
-            get { bytesBox.withLock { $0 } }
-            set { bytesBox.withLock { $0 = newValue } }
+            get {
+                let (start, count) = (offset, length)
+                return store.bytes.withLock { Array($0[start..<(start + count)]) }
+            }
+            set {
+                let (start, count) = (offset, length)
+                store.bytes.withLock { all in
+                    let n = min(count, newValue.count)
+                    if n > 0 { all.replaceSubrange(start..<(start + n), with: newValue[0..<n]) }
+                }
+            }
+        }
+
+        /// Writes one byte through to the store.
+        public func setByte(_ index: Int, _ value: UInt8) {
+            guard index >= 0, index < length else { return }
+            let at = offset + index
+            store.bytes.withLock { $0[at] = value }
+        }
+
+        /// A view of `start..<end` of these bytes, of the same kind (a Buffer's is a Buffer).
+        public func view(_ builtins: Builtins, start: Int, end: Int) -> Bytes {
+            let count = max(0, end - start)
+            if self is BufferObj { return BufferObj(proto: builtins.Buffer, store: store, offset: offset + start, length: count) }
+            return Bytes(proto: builtins.Uint8Array, store: store, offset: offset + start, length: count)
         }
 
         public override var tag: String { "Uint8Array" }
@@ -1942,7 +2309,7 @@ extension CodemodeLanguage {
         case .bool(let b): return b ? "true" : "false"
         case .number(let n): return formatJSNumber(n)
         case .string(let s): return s
-        case .symbol(let sym): return sym.description
+        case .symbol(let sym): return symbolString(sym)
         case .hostNamespace: return "[object Object]"
         case .object(let obj):
             if let arr = obj as? Arr {
@@ -1962,20 +2329,7 @@ extension CodemodeLanguage {
         case .bool(let b): return b ? 1 : 0
         case .number(let n): return n
         case .string(let s):
-            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { return 0 }
-            if trimmed == "Infinity" || trimmed == "+Infinity" { return .infinity }
-            if trimmed == "-Infinity" { return -.infinity }
-            if trimmed.hasPrefix("0x") || trimmed.hasPrefix("0X") {
-                return UInt64(trimmed.dropFirst(2), radix: 16).map(Double.init) ?? .nan
-            }
-            if trimmed.hasPrefix("0b") || trimmed.hasPrefix("0B") {
-                return UInt64(trimmed.dropFirst(2), radix: 2).map(Double.init) ?? .nan
-            }
-            if trimmed.hasPrefix("0o") || trimmed.hasPrefix("0O") {
-                return UInt64(trimmed.dropFirst(2), radix: 8).map(Double.init) ?? .nan
-            }
-            return Double(trimmed) ?? .nan
+            return stringToNumber(s)
         case .symbol: return .nan
         case .hostNamespace: return .nan
         case .object(let obj): return obj.toNumber()
@@ -2024,13 +2378,13 @@ extension CodemodeLanguage {
             if s == "length" {
                 return .data(value: .number(Double(arr.count)), writable: true, enumerable: false, configurable: false)
             }
-            if let idx = parseArrayIndex(s), idx < arr.count {
+            if let idx = parseArrayIndex(s), idx < arr.count, !arr.isHole(idx) {
                 return .data(value: arr.item(at: idx), writable: true, enumerable: true, configurable: true)
             }
         }
         if let bytes = obj as? Bytes, case .string(let s) = key {
-            if s == "length" || s == "byteLength" {
-                return .data(value: .number(Double(bytes.data.count)), writable: false, enumerable: false, configurable: false)
+            if s == "length" {
+                return .data(value: .number(Double(bytes.length)), writable: false, enumerable: false, configurable: false)
             }
             if let idx = parseArrayIndex(s), idx < bytes.data.count {
                 return .data(value: .number(Double(bytes.data[idx])), writable: true, enumerable: true, configurable: false)
@@ -2364,13 +2718,7 @@ extension CodemodeLanguage {
         }
         let newLen = Int(length)
         try checkArrayLength(newLen)
-        var items = arr.items
-        if newLen < items.count {
-            items.removeSubrange(newLen..<items.count)
-        } else if newLen > items.count {
-            items.append(contentsOf: repeatElement(Value.undefined, count: newLen - items.count))
-        }
-        arr.items = items
+        arr.setLength(newLen)
         return true
     }
 
@@ -2700,17 +3048,39 @@ extension CodemodeLanguage {
             }
             if let arr = obj as? Arr {
                 if let idx = parseArrayIndex(s) {
-                    var items = arr.items
-                    if idx < items.count {
-                        items[idx] = .undefined
-                        arr.items = items
-                    }
+                    arr.removeItem(at: idx)
                     return true
                 }
                 if s == "length" { return false }
             }
         }
+        if let slot = own(obj, key), !slot.configurable { return false }
         return obj.deleteSlot(key)
+    }
+
+    /// Object.seal / Object.freeze: no new properties, and every own property non-configurable (and, frozen,
+    /// read-only).
+    static func lockProperties(_ obj: Obj, freeze: Bool) {
+        obj.extensible = false
+        for (k, slot) in obj.allSlotsSnapshot() {
+            switch slot {
+            case .data(let val, let w, let e, _):
+                obj.setSlot(k, .data(value: val, writable: freeze ? false : w, enumerable: e, configurable: false))
+            case .accessor(let g, let st, let e, _):
+                obj.setSlot(k, .accessor(get: g, set: st, enumerable: e, configurable: false))
+            }
+        }
+    }
+
+    static func isLocked(_ obj: Obj, frozen: Bool) -> Bool {
+        if obj.extensible { return false }
+        // Array elements live outside the property table and follow the array's extensibility.
+        if obj is Arr { return true }
+        for (_, slot) in obj.allSlotsSnapshot() {
+            if slot.configurable { return false }
+            if frozen, case .data(_, true, _, _) = slot { return false }
+        }
+        return true
     }
 
     // parity: psychoscript/src/runtime/objects.ts#ownKeys [status=implemented hash=feef712030dc]
@@ -2718,7 +3088,8 @@ extension CodemodeLanguage {
         var idxKeys: [(Int, String)] = []
         var strKeys: [String] = []
         if let arr = obj as? Arr {
-            for i in 0..<arr.count { idxKeys.append((i, String(i))) }
+            let holes = arr.holes
+            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, String(i))) }
         } else if let bytes = obj as? Bytes {
             for i in 0..<bytes.data.count { idxKeys.append((i, String(i))) }
         }
@@ -2739,7 +3110,8 @@ extension CodemodeLanguage {
         var idxKeys: [(Int, String)] = []
         var strKeys: [String] = []
         if let arr = obj as? Arr {
-            for i in 0..<arr.count { idxKeys.append((i, String(i))) }
+            let holes = arr.holes
+            for i in 0..<arr.count where !holes.contains(i) { idxKeys.append((i, String(i))) }
         } else if let bytes = obj as? Bytes {
             for i in 0..<bytes.data.count { idxKeys.append((i, String(i))) }
         }
@@ -2832,6 +3204,39 @@ extension CodemodeLanguage {
         case .symbol(let s): return .symbol(s)
         case .string(let s): return .string(s)
         default: return .string(coerceToString(value))
+        }
+    }
+
+    /// Native engines name the callee (`search(...).catch is not a function`), including call chains; nil when a link
+    /// cannot be named, so a chain is either named completely or not at all.
+    // Upstream: psychoscript/src/runtime/operations.ts#calleeDescription (implemented).
+    public static func calleeDescription(_ expr: Expression?) -> String? {
+        guard let expr else { return nil }
+        switch expr {
+        case .identifier(let name, _):
+            return name
+        case .call(let callee, _, _, _):
+            return calleeDescription(callee).map { "\($0)(...)" }
+        case .member(let object, let property, _, _):
+            let key: String?
+            switch property {
+            case .identifier(let name, _): key = name
+            case .computed(.literalString(let value, _), _): key = value
+            default: key = nil
+            }
+            guard let key, let target = calleeDescription(object) else { return nil }
+            return "\(target).\(key)"
+        default:
+            return nil
+        }
+    }
+
+    /// Whether `callCallable` can call `value` (a program or built-in function, or a host namespace path).
+    public static func isCallableValue(_ value: Value) -> Bool {
+        switch value {
+        case .hostNamespace: return true
+        case .object(let obj): return obj is Callable
+        default: return false
         }
     }
 
@@ -3045,6 +3450,8 @@ extension CodemodeLanguage {
                 }
             }
             if let gen = obj as? GeneratorObj {
+                // A program generator runs its body as it is stepped: through its `next`, as program code.
+                if gen.isLazy { return nil }
                 return Cursor { gen.stepNext() }
             }
             return obj.iterator(builtins)
@@ -3194,9 +3601,6 @@ extension CodemodeLanguage {
     public static func writableReference(_ base: Value, _ key: PropertyKey, node: AstNode? = nil) throws -> Obj {
         guard case .object(let obj) = base else {
             throw typeError("Cannot set properties of \(describeValue(base)).", node: node)
-        }
-        if key == .string("__proto__") {
-            throw typeError("Setting __proto__ is not supported.", node: node)
         }
         return obj
     }
@@ -3472,7 +3876,7 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/native.ts#receiver [status=implemented hash=e777c1817fa6]
     public static func receiver<T: Obj>(_ type: T.Type, _ value: Value, _ method: String) throws -> T {
         guard case .object(let obj) = value, let typed = obj as? T else {
-            throw typeError("\(method) called on incompatible receiver.")
+            throw typeError("\(method) called on incompatible receiver \(describeValue(value)).")
         }
         return typed
     }
@@ -3517,7 +3921,8 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/callback.ts#requireCallback [status=implemented hash=1f3e31a6c3db]
     public static func requireCallback(_ value: Value, _ method: String) throws -> Callable {
         guard case .object(let obj) = value, let callable = obj as? Callable else {
-            throw typeError("\(method) expects a callback function.")
+            // Upstream labels callbacks without `.prototype` (`Array.map`, `Map.forEach`).
+            throw typeError("\(method.replacingOccurrences(of: ".prototype.", with: ".")) expects a function callback.")
         }
         return callable
     }
@@ -3788,7 +4193,7 @@ extension CodemodeLanguage {
 
     public static func toJsonValue(_ value: Value, depth: Int = 0, dropFunctions: Bool = false) throws -> JSONValue? {
         guard depth <= MAX_VALUE_DEPTH else {
-            throw invalidData("Value exceeds maximum nesting depth of \(MAX_VALUE_DEPTH).")
+            throw rangeError("Value exceeds the maximum depth of \(MAX_VALUE_DEPTH).")
         }
         switch value {
         case .undefined: return nil
@@ -3823,10 +4228,7 @@ extension CodemodeLanguage {
                 return .object(out)
             }
             if obj is Bytes {
-                throw HostFailure(
-                    kind: "InvalidDataValue",
-                    message: "A Uint8Array cannot cross to a tool; pass text instead, e.g. `new TextDecoder().decode(bytes)` or `bytes.toBase64()`."
-                )
+                throw invalidData("A Uint8Array cannot cross to the host; pass text instead, e.g. `new TextDecoder().decode(bytes)` or `bytes.toBase64()`.")
             }
             if let arr = obj as? Arr {
                 var list: [JSONValue] = []
@@ -4352,7 +4754,7 @@ extension CodemodeLanguage {
         translate: Translate
     ) -> Native {
         let invoke: NativeCall = { _, args, _, eval in
-            let preparedArgs = try await prepareHostArgs(args, translate: translate, eval: eval)
+            let preparedArgs = try await prepareHostArgs(args, name: name, translate: translate, takesFunctions: hostFn.takesFunctions, eval: eval)
             let key = hostCalls.nextKey()
             let callInfo = Host.Call(key: key)
             let record = HostCall(key: key, label: name, path: name, status: .running)
@@ -4459,22 +4861,25 @@ extension CodemodeLanguage {
         return .object(copy)
     }
 
-    private static func prepareHostArgs(_ args: [Value], translate: Translate, eval: Evaluator) async throws -> [Value] {
+    private static func prepareHostArgs(_ args: [Value], name: String, translate: Translate, takesFunctions: Bool, eval: Evaluator) async throws -> [Value] {
         var seen = Set<ObjectIdentifier>()
         var crossedArgs: [Value] = []
         for arg in args { crossedArgs.append(try await crossProgramGetters(arg, eval: eval, seen: &seen)) }
         var out: [Value] = []
         out.reserveCapacity(args.count)
-        for arg in crossedArgs {
-            if translate.promises == .await, case .object(let p as PromiseObj) = arg {
-                let settled = await p.awaitOutcome()
-                switch settled {
-                case .fulfilled(let v): out.append(v)
-                case .rejected(let r): throw Throw(r)
-                }
-            } else {
-                out.append(arg)
-            }
+        for (index, arg) in crossedArgs.enumerated() {
+            var ancestors = Set<ObjectIdentifier>()
+            let copied = try await copyToHost(
+                arg,
+                label: "Argument \(index + 1) to \(name)",
+                depth: 0,
+                translate: translate,
+                takesFunctions: takesFunctions,
+                ancestors: &ancestors,
+                builtins: eval.builtins,
+                eval: eval
+            )
+            out.append(copied ?? .undefined)
         }
         return out
     }
@@ -5080,12 +5485,27 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/promises.ts#capability [status=implemented hash=c4d2d5ed2b57]
     public static func capability(_ builtins: Builtins) -> (promise: PromiseObj, resolve: Resolver, reject: Resolver) {
         let p = PromiseObj(proto: builtins.Promise)
-        let res = Resolver(proto: builtins.Function, promise: p, isReject: false)
-        let rej = Resolver(proto: builtins.Function, promise: p, isReject: true)
+        let flag = ResolvingFlag()
+        let res = Resolver(proto: builtins.Function, promise: p, isReject: false, flag: flag)
+        let rej = Resolver(proto: builtins.Function, promise: p, isReject: true, flag: flag)
         return (p, res, rej)
     }
 
-    // parity: psychoscript/src/runtime/promises.ts#react [status=implemented hash=27fc80564313]
+    /// Settles `target` with a handler's result: a value is resolved (a thenable adopted), a throw rejects.
+    static func settleFromCall(_ target: PromiseObj, eval: Evaluator, _ call: () async throws -> Value) async {
+        do {
+            let result = try await call()
+            eval.resolvePromise(target, with: result)
+        } catch let intr as Interruption {
+            _ = intr
+        } catch {
+            target.reject(materialize(eval.builtins, error))
+        }
+    }
+
+    // parity: psychoscript/src/runtime/promises.ts#react [status=adapted hash=27fc80564313]
+    /// `promise.then(onFulfilled, onRejected)`: a PromiseReactionJob calls the handler, whose result or failure
+    /// settles the derived promise; a missing handler passes the outcome through.
     public static func react(
         _ promise: PromiseObj,
         onFulfilled: Value,
@@ -5093,183 +5513,168 @@ extension CodemodeLanguage {
         builtins: Builtins,
         eval: Evaluator
     ) -> PromiseObj {
-        let next = PromiseObj(proto: builtins.Promise)
-        let task = Task<PromiseOutcome, Never> {
-            let outcome = await promise.awaitOutcome()
+        let derived = PromiseObj(proto: builtins.Promise)
+        let fulfilled: Callable? = if case .object(let cb as Callable) = onFulfilled { cb } else { nil }
+        let rejected: Callable? = if case .object(let cb as Callable) = onRejected { cb } else { nil }
+        promise.addReaction { outcome in
             switch outcome {
-            case .fulfilled(let val):
-                if case .object(let cb as Callable) = onFulfilled {
-                    do {
-                        let mapped = try await eval.callCallable(.object(cb), thisValue: .undefined, args: [val], site: nil)
-                        return await settleValue(mapped)
-                    } catch {
-                        return .rejected(materialize(builtins, error))
-                    }
+            case .fulfilled(let value):
+                guard let fulfilled else { derived.fulfill(value); return }
+                await settleFromCall(derived, eval: eval) {
+                    try await eval.callCallable(.object(fulfilled), thisValue: .undefined, args: [value], site: nil)
                 }
-                return .fulfilled(val)
             case .rejected(let reason):
-                if case .object(let cb as Callable) = onRejected {
-                    do {
-                        let mapped = try await eval.callCallable(.object(cb), thisValue: .undefined, args: [reason], site: nil)
-                        return await settleValue(mapped)
-                    } catch {
-                        return .rejected(materialize(builtins, error))
-                    }
+                guard let rejected else { derived.reject(reason); return }
+                await settleFromCall(derived, eval: eval) {
+                    try await eval.callCallable(.object(rejected), thisValue: .undefined, args: [reason], site: nil)
                 }
-                return .rejected(reason)
             }
         }
-        next.attachTask(task)
-        eval.trackPromise(next)
-        return next
+        return derived
     }
 
-    internal static func settleValue(_ value: Value) async -> PromiseOutcome {
-        if case .object(let p as PromiseObj) = value {
-            return await p.awaitOutcome()
-        }
-        return .fulfilled(value)
-    }
-
-    // parity: psychoscript/src/runtime/promises.ts#adoptThenable [status=implemented hash=5c6dc5131e28]
+    // parity: psychoscript/src/runtime/promises.ts#adoptThenable [status=adapted hash=5c6dc5131e28]
+    /// `Promise.resolve(value)`: a promise as is, anything else a new promise resolved with it.
     public static func adoptThenable(_ value: Value, builtins: Builtins, eval: Evaluator) -> PromiseObj {
-        if case .object(let p as PromiseObj) = value { return p }
-        if case .object(let obj) = value, case .object(let thenFn as Callable) = get(obj, "then") {
-            let innerCap = capability(builtins)
-            let outer = PromiseObj(proto: builtins.Promise)
-            let task = Task<PromiseOutcome, Never> {
-                do {
-                    _ = try await eval.callCallable(.object(thenFn), thisValue: value, args: [.object(innerCap.resolve), .object(innerCap.reject)], site: nil)
-                    return await innerCap.promise.awaitOutcome()
-                } catch {
-                    return .rejected(materialize(builtins, error))
-                }
-            }
-            outer.attachTask(task)
-            eval.trackPromise(outer)
-            return outer
-        }
-        return PromiseObj(proto: builtins.Promise, status: .fulfilled(value))
+        _ = builtins
+        return eval.promiseResolve(value)
     }
 
-    // parity: psychoscript/src/runtime/promises.ts#finishCombination [status=implemented hash=b007713d1f94]
+    // parity: psychoscript/src/runtime/promises.ts#finishCombination [status=adapted hash=b007713d1f94]
+    /// Promise.all / allSettled / race / any: each element is resolved to a promise observed through a reaction, so
+    /// the result settles in the job where the deciding element's reaction runs, or at once for an empty input.
     public static func finishCombination(
         _ kind: Combination,
         items: [Value],
         builtins: Builtins,
         eval: Evaluator
     ) -> PromiseObj {
-        let out = PromiseObj(proto: builtins.Promise)
-        let promises = items.map { adoptThenable($0, builtins: builtins, eval: eval) }
-        let task = Task<PromiseOutcome, Never> {
-            switch kind {
-            case .all:
-                if promises.isEmpty {
-                    return .fulfilled(.object(Arr(proto: builtins.Array, items: [])))
-                }
-                var results = Array(repeating: Value.undefined, count: promises.count)
-                return await withTaskGroup(of: (Int, PromiseOutcome).self) { group in
-                    for (idx, p) in promises.enumerated() {
-                        group.addTask { (idx, await p.awaitOutcome()) }
-                    }
-                    for await (idx, outcome) in group {
-                        switch outcome {
-                        case .fulfilled(let v):
-                            results[idx] = v
-                        case .rejected(let r):
-                            group.cancelAll()
-                            return .rejected(r)
-                        }
-                    }
-                    return .fulfilled(.object(Arr(proto: builtins.Array, items: results)))
-                }
-            case .allSettled:
-                if promises.isEmpty {
-                    return .fulfilled(.object(Arr(proto: builtins.Array, items: [])))
-                }
-                var results = Array(repeating: Value.undefined, count: promises.count)
-                await withTaskGroup(of: (Int, PromiseOutcome).self) { group in
-                    for (idx, p) in promises.enumerated() {
-                        group.addTask { (idx, await p.awaitOutcome()) }
-                    }
-                    for await (idx, outcome) in group {
-                        let entry = Obj(proto: builtins.Object)
-                        switch outcome {
-                        case .fulfilled(let v):
-                            define(entry, "status", .string("fulfilled"))
-                            define(entry, "value", v)
-                        case .rejected(let r):
-                            define(entry, "status", .string("rejected"))
-                            define(entry, "reason", r)
-                        }
-                        results[idx] = .object(entry)
-                    }
-                }
-                return .fulfilled(.object(Arr(proto: builtins.Array, items: results)))
-            case .race:
-                guard !promises.isEmpty else {
-                    return .rejected(.string("Promise.race called with empty iterable"))
-                }
-                return await withTaskGroup(of: PromiseOutcome.self) { group in
-                    for p in promises {
-                        group.addTask { await p.awaitOutcome() }
-                    }
-                    let first = await group.next() ?? .rejected(.undefined)
-                    group.cancelAll()
-                    return first
-                }
-            case .any:
-                if promises.isEmpty {
-                    let agg = createAggregateErrorValue(builtins, errors: [], message: "All promises were rejected")
-                    return .rejected(.object(agg))
-                }
-                var errors = Array(repeating: Value.undefined, count: promises.count)
-                return await withTaskGroup(of: (Int, PromiseOutcome).self) { group in
-                    for (idx, p) in promises.enumerated() {
-                        group.addTask { (idx, await p.awaitOutcome()) }
-                    }
-                    for await (idx, outcome) in group {
-                        switch outcome {
-                        case .fulfilled(let v):
-                            group.cancelAll()
-                            return .fulfilled(v)
-                        case .rejected(let r):
-                            errors[idx] = r
-                        }
-                    }
-                    let agg = createAggregateErrorValue(builtins, errors: errors, message: "All promises were rejected")
-                    return .rejected(.object(agg))
+        final class Box: @unchecked Sendable {
+            var values: [Value]
+            var remaining: Int
+            var done = false
+            init(count: Int) {
+                values = Array(repeating: .undefined, count: count)
+                remaining = count + 1
+            }
+        }
+        let made = PromiseObj(proto: builtins.Promise)
+        let box = Box(count: items.count)
+        let finish: @Sendable () -> Void = {
+            box.remaining -= 1
+            guard box.remaining == 0, !box.done else { return }
+            box.done = true
+            if kind == .any {
+                made.reject(.object(createAggregateErrorValue(builtins, errors: box.values, message: "All promises were rejected")))
+            } else {
+                eval.resolvePromise(made, with: .object(Arr(proto: builtins.Array, items: box.values)))
+            }
+        }
+        for (index, item) in items.enumerated() {
+            let member = eval.promiseResolve(item)
+            member.addReaction { outcome in
+                guard !box.done else { return }
+                switch (kind, outcome) {
+                case (.race, .fulfilled(let v)):
+                    box.done = true
+                    eval.resolvePromise(made, with: v)
+                case (.race, .rejected(let r)), (.all, .rejected(let r)):
+                    box.done = true
+                    made.reject(r)
+                case (.all, .fulfilled(let v)):
+                    box.values[index] = v
+                    finish()
+                case (.any, .fulfilled(let v)):
+                    box.done = true
+                    eval.resolvePromise(made, with: v)
+                case (.any, .rejected(let r)):
+                    box.values[index] = r
+                    finish()
+                case (.allSettled, .fulfilled(let v)):
+                    box.values[index] = .object(record(builtins, [("status", .string("fulfilled")), ("value", v)]))
+                    finish()
+                case (.allSettled, .rejected(let r)):
+                    box.values[index] = .object(record(builtins, [("status", .string("rejected")), ("reason", r)]))
+                    finish()
                 }
             }
         }
-        out.attachTask(task)
-        eval.trackPromise(out)
-        return out
+        if kind == .race {
+            box.remaining = Int.max
+        } else {
+            finish()
+        }
+        return made
     }
 
     // parity: psychoscript/src/runtime/promises.ts#promiseLike [status=implemented hash=75ac1d5b30fc]
     public static func promiseLike(_ builtins: Builtins, value: Value) -> Value {
         guard case .object(let obj) = value else { return value }
         if !hasOwn(obj, "then") {
-            let captured = value
+            // The hidden then/catch/finally settle with a plain copy, so awaiting the result does not recurse.
+            let copy = Obj(proto: builtins.Object)
+            for key in ownKeys(obj) {
+                if let slot = own(obj, .string(key)) { copy.setSlot(.string(key), slot) }
+            }
+            if obj.hasProgramAccessors { copy.hasProgramAccessors = true }
+            let captured: Value = .object(copy)
             define(obj, "then", .object(nativeFn(builtins, name: "then", length: 2) { _, args, _, eval in
-                let p = PromiseObj(proto: builtins.Promise, status: .fulfilled(captured))
+                let p = eval.promiseResolve(captured)
                 return .object(react(p, onFulfilled: args.first ?? .undefined, onRejected: args.count > 1 ? args[1] : .undefined, builtins: builtins, eval: eval))
             }), hidden)
-            define(obj, "catch", .object(nativeFn(builtins, name: "catch", length: 1) { _, _, _, _ in
-                .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(captured)))
+            define(obj, "catch", .object(nativeFn(builtins, name: "catch", length: 1) { _, args, _, eval in
+                let p = eval.promiseResolve(captured)
+                return .object(react(p, onFulfilled: .undefined, onRejected: args.first ?? .undefined, builtins: builtins, eval: eval))
             }), hidden)
             define(obj, "finally", .object(nativeFn(builtins, name: "finally", length: 1) { _, args, _, eval in
-                if case .object(let cb as Callable) = args.first {
-                    _ = try await eval.callCallable(.object(cb), thisValue: .undefined, args: [], site: nil)
-                }
-                return .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(captured)))
+                .object(chainFinally(eval.promiseResolve(captured), cleanup: args.first ?? .undefined, builtins: builtins, eval: eval))
             }), hidden)
         }
         return value
     }
 
-    // parity: psychoscript/src/runtime/promises.ts#promiseGlobal [status=implemented hash=77e17a1c5fc2]
+    /// Promise.prototype.finally: the cleanup runs as a reaction; once its own result settles (one more job, the
+    /// spec's `then(valueThunk)`), the original outcome passes through, and a failing cleanup wins.
+    static func chainFinally(_ source: PromiseObj, cleanup: Value, builtins: Builtins, eval: Evaluator) -> PromiseObj {
+        let made = PromiseObj(proto: builtins.Promise)
+        guard case .object(let cb as Callable) = cleanup else {
+            source.addReaction { outcome in made.settle(outcome) }
+            return made
+        }
+        source.addReaction { outcome in
+            let result: Value
+            do {
+                result = try await eval.callCallable(.object(cb), thisValue: .undefined, args: [], site: nil)
+            } catch is Interruption {
+                return
+            } catch {
+                made.reject(materialize(builtins, error))
+                return
+            }
+            let after = eval.promiseResolve(result)
+            let cleaned = PromiseObj(proto: builtins.Promise)
+            after.addReaction { cleanupOutcome in
+                switch cleanupOutcome {
+                case .fulfilled: cleaned.fulfill(.undefined)
+                case .rejected(let r): cleaned.reject(r)
+                }
+            }
+            cleaned.addReaction { cleanedOutcome in
+                switch cleanedOutcome {
+                case .fulfilled:
+                    switch outcome {
+                    case .fulfilled(let v): eval.resolvePromise(made, with: v)
+                    case .rejected(let r): made.reject(r)
+                    }
+                case .rejected(let r):
+                    made.reject(r)
+                }
+            }
+        }
+        return made
+    }
+
+    // parity: psychoscript/src/runtime/promises.ts#promiseGlobal [status=adapted hash=77e17a1c5fc2]
     public static func promiseGlobal(_ builtins: Builtins) -> Native {
         methods(builtins, builtins.Promise, [
             Method("then", 2) { thisVal, args, _, eval in
@@ -5285,25 +5690,7 @@ extension CodemodeLanguage {
             },
             Method("finally", 1) { thisVal, args, _, eval in
                 let p = try receiver(PromiseObj.self, thisVal, "Promise.prototype.finally")
-                let onFinally = args.first ?? .undefined
-                let out = PromiseObj(proto: builtins.Promise)
-                let task = Task<PromiseOutcome, Never> {
-                    let outcome = await p.awaitOutcome()
-                    if case .object(let cb as Callable) = onFinally {
-                        do {
-                            let res = try await eval.callCallable(.object(cb), thisValue: .undefined, args: [], site: nil)
-                            if case .object(let innerP as PromiseObj) = res {
-                                if case .rejected(let r) = await innerP.awaitOutcome() { return .rejected(r) }
-                            }
-                        } catch {
-                            return .rejected(materialize(builtins, error))
-                        }
-                    }
-                    return outcome
-                }
-                out.attachTask(task)
-                eval.trackPromise(out)
-                return .object(out)
+                return .object(chainFinally(p, cleanup: args.first ?? .undefined, builtins: builtins, eval: eval))
             },
         ])
 
@@ -5312,12 +5699,16 @@ extension CodemodeLanguage {
             length: 1,
             call: requiresNew("Promise"),
             construct: { args, _, eval in
-                let executor = try requireCallback(args.first ?? .undefined, "Promise")
+                guard case .object(let executor as Fn) = args.first ?? .undefined else {
+                    throw typeError("new Promise(...) expects an executor function (e.g. new Promise((resolve, reject) => { ... })).")
+                }
                 let cap = capability(builtins)
                 do {
                     _ = try await eval.callCallable(.object(executor), thisValue: .undefined, args: [.object(cap.resolve), .object(cap.reject)], site: nil)
+                } catch let intr as Interruption {
+                    throw intr
                 } catch {
-                    cap.promise.reject(materialize(builtins, error))
+                    if cap.resolve.flag.claim() { cap.promise.reject(materialize(builtins, error)) }
                 }
                 return .object(cap.promise)
             }
@@ -5325,9 +5716,7 @@ extension CodemodeLanguage {
 
         methods(builtins, ctor, [
             Method("resolve", 1) { _, args, _, eval in
-                let val = args.first ?? .undefined
-                if case .object(let p as PromiseObj) = val { return .object(p) }
-                return .object(adoptThenable(val, builtins: builtins, eval: eval))
+                .object(eval.promiseResolve(args.first ?? .undefined))
             },
             Method("reject", 1) { _, args, _, _ in
                 .object(PromiseObj(proto: builtins.Promise, status: .rejected(args.first ?? .undefined)))
@@ -5357,14 +5746,15 @@ extension CodemodeLanguage {
                 ]))
             },
             Method("try", 1) { _, args, _, eval in
-                let cb = try requireCallback(args.first ?? .undefined, "Promise.try")
-                let rest = args.count > 1 ? Array(args.dropFirst()) : []
-                do {
-                    let res = try await eval.callCallable(.object(cb), thisValue: .undefined, args: rest, site: nil)
-                    return .object(adoptThenable(res, builtins: builtins, eval: eval))
-                } catch {
-                    return .object(PromiseObj(proto: builtins.Promise, status: .rejected(materialize(builtins, error))))
+                guard isCallableValue(args.first ?? .undefined) else {
+                    throw typeError("Promise.try expects a function, received \(describeValue(args.first ?? .undefined)).")
                 }
+                let rest = args.count > 1 ? Array(args.dropFirst()) : []
+                let made = PromiseObj(proto: builtins.Promise)
+                await settleFromCall(made, eval: eval) {
+                    try await eval.callCallable(args[0], thisValue: .undefined, args: rest, site: nil)
+                }
+                return .object(made)
             },
         ])
         return ctor
@@ -5503,31 +5893,39 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/runtime/generators.ts#generatorGlobals [status=implemented hash=d08aa9052536]
     public static func generatorGlobals(_ builtins: Builtins) {
-        let nextMethod = Method("next", 1) { thisVal, args, _, _ in
-            let gen = try receiver(GeneratorObj.self, thisVal, "Generator.prototype.next")
-            let res = try generatorStep(gen, request: generatorRequest(.next, args.first ?? .undefined), builtins: builtins)
-            if gen.isAsync {
-                return .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(res))))
+        // A program generator steps its body lazily (`GeneratorObj.syncStep` / `asyncEnqueue`); a generator made from
+        // values ahead of time replays them.
+        @Sendable func step(_ kind: GeneratorRequestKind, _ thisVal: Value, _ args: [Value], _ eval: Evaluator, _ name: String) async throws -> Value {
+            let gen = try receiver(GeneratorObj.self, thisVal, "Generator.prototype.\(name)")
+            let value = args.first ?? .undefined
+            if gen.isLazy || gen.state == .executing {
+                if gen.isAsync {
+                    return .object(await gen.asyncEnqueue(kind, value, builtins: builtins, eval: eval))
+                }
+                let result = try await gen.syncStep(kind, value, scheduler: eval.scheduler)
+                return .object(iteratorResult(builtins, value: result.value, done: result.done))
             }
-            return .object(res)
-        }
-        let returnMethod = Method("return", 1) { thisVal, args, _, _ in
-            let gen = try receiver(GeneratorObj.self, thisVal, "Generator.prototype.return")
-            let res = completeGeneratorReturn(gen, args.first ?? .undefined, builtins: builtins)
-            if gen.isAsync {
-                return .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(res))))
+            switch kind {
+            case .next:
+                let res = try generatorStep(gen, request: generatorRequest(.next, value), builtins: builtins)
+                return gen.isAsync ? .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(res)))) : .object(res)
+            case .return:
+                let res = completeGeneratorReturn(gen, value, builtins: builtins)
+                return gen.isAsync ? .object(PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(res)))) : .object(res)
+            case .throw:
+                if gen.isAsync {
+                    unwindGenerator(gen)
+                    return .object(PromiseObj(proto: builtins.Promise, status: .rejected(value)))
+                }
+                return .object(try generatorStep(gen, request: generatorRequest(.throw, value), builtins: builtins))
             }
-            return .object(res)
         }
-        let throwMethod = Method("throw", 1) { thisVal, args, _, _ in
-            let gen = try receiver(GeneratorObj.self, thisVal, "Generator.prototype.throw")
-            if gen.isAsync {
-                unwindGenerator(gen)
-                return .object(PromiseObj(proto: builtins.Promise, status: .rejected(args.first ?? .undefined)))
-            }
-            return .object(try generatorStep(gen, request: generatorRequest(.throw, args.first ?? .undefined), builtins: builtins))
-        }
+        let nextMethod = Method("next", 1) { thisVal, args, _, eval in try await step(.next, thisVal, args, eval, "next") }
+        let returnMethod = Method("return", 1) { thisVal, args, _, eval in try await step(.return, thisVal, args, eval, "return") }
+        let throwMethod = Method("throw", 1) { thisVal, args, _, eval in try await step(.throw, thisVal, args, eval, "throw") }
         methods(builtins, builtins.Generator, [nextMethod, returnMethod, throwMethod])
+        // Iterator helpers (`map`, `take`, ...) are lazy generators over their source.
+        methods(builtins, builtins.IteratorHelper, [nextMethod, returnMethod])
         methods(builtins, builtins.AsyncGenerator, [nextMethod, returnMethod, throwMethod])
         define(builtins.Generator, .symbol(IteratorSymbol), .object(nativeFn(builtins, name: "[Symbol.iterator]") { thisVal, _, _, _ in thisVal }), hidden)
         define(builtins.AsyncGenerator, .symbol(AsyncIteratorSymbol), .object(nativeFn(builtins, name: "[Symbol.asyncIterator]") { thisVal, _, _, _ in thisVal }), hidden)
@@ -5820,27 +6218,20 @@ extension CodemodeLanguage {
                 return .bool(strictEqual(a, b))
             },
             Method("freeze", 1) { _, args, _, _ in
-                if case .object(let obj) = args.first {
-                    obj.extensible = false
-                    for (k, slot) in obj.allSlotsSnapshot() {
-                        if case .data(let val, _, let e, _) = slot {
-                            obj.setSlot(k, .data(value: val, writable: false, enumerable: e, configurable: false))
-                        }
-                    }
-                }
+                if case .object(let obj) = args.first { lockProperties(obj, freeze: true) }
                 return args.first ?? .undefined
             },
             Method("isFrozen", 1) { _, args, _, _ in
                 guard case .object(let obj) = args.first else { return .bool(true) }
-                return .bool(!obj.extensible)
+                return .bool(isLocked(obj, frozen: true))
             },
             Method("seal", 1) { _, args, _, _ in
-                if case .object(let obj) = args.first { obj.extensible = false }
+                if case .object(let obj) = args.first { lockProperties(obj, freeze: false) }
                 return args.first ?? .undefined
             },
             Method("isSealed", 1) { _, args, _, _ in
                 guard case .object(let obj) = args.first else { return .bool(true) }
-                return .bool(!obj.extensible)
+                return .bool(isLocked(obj, frozen: false))
             },
             Method("getPrototypeOf", 1) { _, args, _, _ in
                 guard case .object(let obj) = args.first else { return .null }
@@ -5853,7 +6244,9 @@ extension CodemodeLanguage {
                     return .object(Arr(proto: builtins.Array, items: ks.map { .string($0) }))
                 }
                 try requireObjectCoercible(value, "getOwnPropertyNames")
-                let names: [String] = if case .object(let obj) = value { ownKeys(obj) } else { primitiveKeys(value) }
+                var names: [String] = if case .object(let obj) = value { ownKeys(obj) } else { primitiveKeys(value) }
+                if case .object(let obj) = value, obj is Arr, !names.contains("length") { names.append("length") }
+                if case .string = value, !names.contains("length") { names.append("length") }
                 return .object(Arr(proto: builtins.Array, items: names.map { .string($0) }))
             },
             Method("defineProperty", 3) { _, args, _, eval in
@@ -6064,8 +6457,9 @@ extension CodemodeLanguage {
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.indexOf")
                 let needle = args.first ?? .undefined
                 let list = arr.items
+                let holes = arr.holes
                 let from = args.count > 1 ? resolveSliceIndex(coerceToInteger(args[1]), length: list.count) : 0
-                for i in from..<list.count where strictEqual(list[i], needle) {
+                for i in from..<list.count where !holes.contains(i) && strictEqual(list[i], needle) {
                     return .number(Double(i))
                 }
                 return .number(-1)
@@ -6127,19 +6521,23 @@ extension CodemodeLanguage {
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.map")
                 let thisArg = args.count > 1 ? args[1] : .undefined
                 let list = arr.items
+                let holes = arr.holes
                 var out: [Value] = []
                 out.reserveCapacity(list.count)
                 for (idx, item) in list.enumerated() {
+                    // A hole stays a hole: the callback is not called for it.
+                    if holes.contains(idx) { out.append(.undefined); continue }
                     out.append(try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil))
                 }
-                return .object(Arr(proto: builtins.Array, items: out))
+                return .object(Arr(proto: builtins.Array, items: out, holes: holes.filter { $0 < out.count }))
             },
             Method("filter", 1) { thisVal, args, _, eval in
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.filter")
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.filter")
                 let thisArg = args.count > 1 ? args[1] : .undefined
                 var out: [Value] = []
-                for (idx, item) in arr.items.enumerated() {
+                let holes = arr.holes
+                for (idx, item) in arr.items.enumerated() where !holes.contains(idx) {
                     let res = try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil)
                     if res.isTruthy { out.append(item) }
                 }
@@ -6150,7 +6548,8 @@ extension CodemodeLanguage {
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.flatMap")
                 let thisArg = args.count > 1 ? args[1] : .undefined
                 var out: [Value] = []
-                for (idx, item) in arr.items.enumerated() {
+                let holes = arr.holes
+                for (idx, item) in arr.items.enumerated() where !holes.contains(idx) {
                     let res = try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil)
                     if case .object(let sub as Arr) = res { out.append(contentsOf: sub.items) }
                     else { out.append(res) }
@@ -6178,7 +6577,8 @@ extension CodemodeLanguage {
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.forEach")
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.forEach")
                 let thisArg = args.count > 1 ? args[1] : .undefined
-                for (idx, item) in arr.items.enumerated() {
+                let holes = arr.holes
+                for (idx, item) in arr.items.enumerated() where !holes.contains(idx) {
                     _ = try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil)
                 }
                 return .undefined
@@ -6193,7 +6593,7 @@ extension CodemodeLanguage {
                     acc = args[1]
                     startIdx = 0
                 } else {
-                    guard !list.isEmpty else { throw typeError("Reduce of empty array with no initial value.") }
+                    guard !list.isEmpty else { throw typeError("Array.reduce of an empty array with no initial value.") }
                     acc = list[0]
                     startIdx = 1
                 }
@@ -6212,7 +6612,7 @@ extension CodemodeLanguage {
                     acc = args[1]
                     startIdx = list.count - 1
                 } else {
-                    guard !list.isEmpty else { throw typeError("Reduce of empty array with no initial value.") }
+                    guard !list.isEmpty else { throw typeError("Array.reduceRight of an empty array with no initial value.") }
                     acc = list[list.count - 1]
                     startIdx = list.count - 2
                 }
@@ -6273,7 +6673,8 @@ extension CodemodeLanguage {
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.some")
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.some")
                 let thisArg = args.count > 1 ? args[1] : .undefined
-                for (idx, item) in arr.items.enumerated() {
+                let holes = arr.holes
+                for (idx, item) in arr.items.enumerated() where !holes.contains(idx) {
                     if try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil).isTruthy {
                         return .bool(true)
                     }
@@ -6284,7 +6685,8 @@ extension CodemodeLanguage {
                 let arr = try receiver(Arr.self, thisVal, "Array.prototype.every")
                 let cb = try requireCallback(args.first ?? .undefined, "Array.prototype.every")
                 let thisArg = args.count > 1 ? args[1] : .undefined
-                for (idx, item) in arr.items.enumerated() {
+                let holes = arr.holes
+                for (idx, item) in arr.items.enumerated() where !holes.contains(idx) {
                     if !(try await eval.callCallable(.object(cb), thisValue: thisArg, args: [item, .number(Double(idx)), thisVal], site: nil).isTruthy) {
                         return .bool(false)
                     }
@@ -6315,11 +6717,11 @@ extension CodemodeLanguage {
         let makeArray: @Sendable ([Value]) throws -> Value = { args in
             if args.count == 1, case .number(let len) = args[0] {
                 let intLen = Int(len)
-                guard len.isFinite && Double(intLen) == len && intLen >= 0 else {
-                    throw rangeError("Invalid array length")
+                guard len.isFinite && Double(intLen) == len && intLen >= 0 && intLen <= MAX_ARRAY_LENGTH else {
+                    throw rangeError("Invalid array length.")
                 }
                 try checkArrayLength(intLen)
-                return .object(Arr(proto: builtins.Array, items: Array(repeating: .undefined, count: intLen)))
+                return .object(Arr(proto: builtins.Array, items: Array(repeating: .undefined, count: intLen), holes: Set(0..<intLen)))
             }
             return .object(Arr(proto: builtins.Array, items: args))
         }
@@ -6548,20 +6950,7 @@ extension CodemodeLanguage {
                 if case .object(let rx as RegExpObj) = search {
                     return .string(try await regexReplace(str, regex: rx, replacement: rep, replaceAll: rx.flags.contains("g"), eval: eval))
                 }
-                let needle = coerceToString(search)
-                if let range = str.range(of: needle) {
-                    let sub: String
-                    if case .object(let fn as Callable) = rep {
-                        let offset = str[..<range.lowerBound].utf16.count
-                        sub = coerceToString(try await eval.callCallable(.object(fn), thisValue: .undefined, args: [.string(needle), .number(Double(offset)), .string(str)], site: nil))
-                    } else {
-                        sub = coerceToString(rep)
-                    }
-                    var copy = str
-                    copy.replaceSubrange(range, with: sub)
-                    return .string(copy)
-                }
-                return .string(str)
+                return .string(try await stringReplace(str, needle: coerceToString(search), replacement: rep, all: false, eval: eval))
             },
             Method("replaceAll", 2) { thisVal, args, _, eval in
                 let str = coerceToString(thisVal)
@@ -6569,25 +6958,11 @@ extension CodemodeLanguage {
                 let rep = args.count > 1 ? args[1] : .undefined
                 if case .object(let rx as RegExpObj) = search {
                     guard rx.flags.contains("g") else {
-                        throw typeError("String.prototype.replaceAll called with a non-global RegExp argument.")
+                        throw typeError("String.replaceAll requires a regular expression with the global (g) flag: write /\(rx.source)/\(rx.flags)g, or use String.replace to replace only the first match.")
                     }
                     return .string(try await regexReplace(str, regex: rx, replacement: rep, replaceAll: true, eval: eval))
                 }
-                let needle = coerceToString(search)
-                if case .object(let fn as Callable) = rep {
-                    if needle.isEmpty { return .string(str) }
-                    var out = ""
-                    var cursor = str.startIndex
-                    while let range = str.range(of: needle, range: cursor..<str.endIndex) {
-                        out += str[cursor..<range.lowerBound]
-                        let offset = str[..<range.lowerBound].utf16.count
-                        out += coerceToString(try await eval.callCallable(.object(fn), thisValue: .undefined, args: [.string(needle), .number(Double(offset)), .string(str)], site: nil))
-                        cursor = range.upperBound
-                    }
-                    out += str[cursor...]
-                    return .string(out)
-                }
-                return .string(str.replacingOccurrences(of: needle, with: coerceToString(rep)))
+                return .string(try await stringReplace(str, needle: coerceToString(search), replacement: rep, all: true, eval: eval))
             },
             Method("match", 1) { thisVal, args, _, _ in
                 let str = coerceToString(thisVal)
@@ -6672,7 +7047,11 @@ extension CodemodeLanguage {
         let ctor = constructor(builtins, builtins.String, NativeOptions(
             name: "String",
             length: 1,
-            call: { _, args, _, _ in .string(args.isEmpty ? "" : coerceToString(args[0])) }
+            call: { _, args, _, eval in
+                if args.isEmpty { return .string("") }
+                if case .symbol(let sym) = args[0] { return .string(symbolString(sym)) }
+                return .string(try await eval.toStringValue(args[0]))
+            }
         ))
         methods(builtins, ctor, [
             Method("fromCharCode", 1) { _, args, _, _ in
@@ -7019,29 +7398,11 @@ extension CodemodeLanguage {
     public static func jsonGlobal(_ builtins: Builtins) -> Obj {
         let j = Obj(proto: builtins.Object)
         methods(builtins, j, [
-            Method("parse", 2) { _, args, _, _ in
-                let text = coerceToString(args.first ?? .undefined)
-                guard let parsed = PureJSON.parse(text) else {
-                    throw syntaxError("JSON.parse: unexpected character")
-                }
-                return pureJsonToValue(builtins, parsed)
+            Method("parse", 2) { _, args, _, eval in
+                try await jsonParse(args, builtins: builtins, eval: eval)
             },
-            Method("stringify", 3) { _, args, _, _ in
-                let value = args.first ?? .undefined
-                let spaceArg = args.count > 2 ? args[2] : .undefined
-                let indent: Int
-                switch spaceArg {
-                case .number(let n): indent = max(0, min(10, Int(n)))
-                case .string(let s): indent = min(10, s.count)
-                default: indent = 0
-                }
-                var seen = Set<ObjectIdentifier>()
-                guard let pure = try valueToPureJSON(value, seen: &seen) else {
-                    return .undefined
-                }
-                let text = indent > 0 ? PureJSON.stringifyPretty(pure, indent: indent) : PureJSON.stringifyCompact(pure)
-                try checkStringLength(text.utf16.count)
-                return .string(text)
+            Method("stringify", 3) { _, args, _, eval in
+                try await jsonStringify(args, builtins: builtins, eval: eval)
             },
         ])
         return j
@@ -7119,7 +7480,7 @@ extension CodemodeLanguage {
         case .bool(let b): return b ? "true" : "false"
         case .number(let n): return formatJSNumber(n)
         case .string(let s): return jsonEscapeString(s)
-        case .symbol(let sym): return sym.description
+        case .symbol(let sym): return symbolString(sym)
         case .hostNamespace: return "[opaque reference]"
         case .object(let obj):
             if depth > 32 { return "..." }
@@ -7485,7 +7846,7 @@ extension CodemodeLanguage {
                     if case .string(let s) = args[0] {
                         return .object(DateObj(proto: builtins.Date, epochMs: parseISODate(s)))
                     }
-                    return .object(DateObj(proto: builtins.Date, epochMs: coerceToNumber(args[0])))
+                    return .object(DateObj(proto: builtins.Date, epochMs: timeClip(coerceToNumber(args[0]))))
                 }
                 let y = coerceToInteger(args[0])
                 let fullYear = (y >= 0 && y <= 99) ? 1900 + y : y
@@ -7511,7 +7872,7 @@ extension CodemodeLanguage {
                 let min = args.count > 4 ? coerceToInteger(args[4]) : 0
                 let sec = args.count > 5 ? coerceToInteger(args[5]) : 0
                 let ms = args.count > 6 ? coerceToInteger(args[6]) : 0
-                return .number(makeUTCEpochMs(year: fullYear, month: m, day: day, hour: h, minute: min, second: sec, ms: ms))
+                return .number(timeClip(makeUTCEpochMs(year: fullYear, month: m, day: day, hour: h, minute: min, second: sec, ms: ms)))
             },
         ])
         return ctor
@@ -7521,41 +7882,115 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/stdlib/regexp.ts#withHostRegex [status=adapted hash=976b7d368513]
     public static func withHostRegex<T>(_ pattern: String, flags: String, _ body: (NSRegularExpression) throws -> T) throws -> T {
+        let regex = try compileHostRegex(pattern, flags: flags)
+        return try body(regex)
+    }
+
+    /// The host (ICU) form of a JavaScript pattern: `(?:)` for the empty pattern, and `\u{...}` code point escapes
+    /// as ICU's `\x{...}` under the `u` flag.
+    static func icuPattern(_ pattern: String, flags: String) -> String {
+        if pattern.isEmpty { return "(?:)" }
+        guard flags.contains("u") || flags.contains("v"), pattern.contains("\\u{") else { return pattern }
+        var out = ""
+        var chars = Array(pattern)[...]
+        while let c = chars.first {
+            chars = chars.dropFirst()
+            if c == "\\", let next = chars.first {
+                if next == "u", chars.dropFirst().first == "{" {
+                    out += "\\x"
+                    chars = chars.dropFirst()
+                    continue
+                }
+                out.append(c)
+                out.append(next)
+                chars = chars.dropFirst()
+                continue
+            }
+            out.append(c)
+        }
+        return out
+    }
+
+    static func compileHostRegex(_ pattern: String, flags: String) throws -> NSRegularExpression {
         var opts: NSRegularExpression.Options = []
         if flags.contains("i") { opts.insert(.caseInsensitive) }
         if flags.contains("m") { opts.insert(.anchorsMatchLines) }
         if flags.contains("s") { opts.insert(.dotMatchesLineSeparators) }
-        do {
-            let regex = try NSRegularExpression(pattern: pattern, options: opts)
-            return try body(regex)
-        } catch let pt as PendingThrow {
-            throw pt
-        } catch {
-            throw syntaxError("Invalid regular expression: /\(pattern)/\(flags): \(error)")
-        }
+        return try NSRegularExpression(pattern: icuPattern(pattern, flags: flags), options: opts)
     }
 
+    /// The names of a pattern's named groups, in group order.
+    static func namedGroups(_ pattern: String) -> [String] {
+        var names: [String] = []
+        let chars = Array(pattern)
+        var i = 0
+        var inClass = false
+        while i < chars.count {
+            let c = chars[i]
+            if c == "\\" { i += 2; continue }
+            if c == "[" { inClass = true } else if c == "]" { inClass = false }
+            if !inClass, c == "(", i + 2 < chars.count, chars[i + 1] == "?", chars[i + 2] == "<", i + 3 < chars.count, chars[i + 3] != "=", chars[i + 3] != "!" {
+                var j = i + 3
+                var name = ""
+                while j < chars.count, chars[j] != ">" { name.append(chars[j]); j += 1 }
+                names.append(name)
+                i = j
+            }
+            i += 1
+        }
+        return names
+    }
+
+    /// A match as `exec` returns it: the groups, `index`, `input`, and `groups` (named groups, or undefined).
     // parity: psychoscript/src/stdlib/regexp.ts#matchToValue [status=implemented hash=36713a943eac]
     public static func matchToValue(
         _ match: NSTextCheckingResult,
         in string: String,
-        builtins: Builtins
+        builtins: Builtins,
+        pattern: String = ""
     ) -> Value {
         let ns = string as NSString
         var items: [Value] = []
         for idx in 0..<match.numberOfRanges {
             let r = match.range(at: idx)
-            if r.location == NSNotFound {
-                items.append(.undefined)
-            } else {
-                items.append(.string(ns.substring(with: r)))
-            }
+            items.append(r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
         }
         let arr = Arr(proto: builtins.Array, items: items)
         define(arr, "index", .number(Double(match.range.location)))
         define(arr, "input", .string(string))
+        let names = namedGroups(pattern)
+        if names.isEmpty {
+            define(arr, "groups", .undefined)
+        } else {
+            let groups = Obj(proto: builtins.Object)
+            for name in names {
+                let r = match.range(withName: name)
+                define(groups, name, r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+            }
+            define(arr, "groups", .object(groups))
+        }
         return .object(arr)
     }
+
+    /// Why a pattern does not compile, as upstream shows the host engine's reason.
+    static func regexFailureReason(_ pattern: String) -> String {
+        var depth = 0
+        var inClass = false
+        let chars = Array(pattern)
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if c == "\\" { i += 2; continue }
+            if inClass { if c == "]" { inClass = false } } else if c == "[" { inClass = true } else if c == "(" { depth += 1 } else if c == ")" { depth -= 1; if depth < 0 { return "unmatched parentheses" } }
+            i += 1
+        }
+        if depth > 0 { return "missing )" }
+        if inClass { return "missing terminating ] for character class" }
+        if pattern.hasSuffix("\\") { return "\\ at end of pattern" }
+        return "invalid pattern"
+    }
+
+    static let escapeRegexHint = "To match special characters like ( ) [ ] { } + * ? . literally, escape them with a backslash (e.g. \"\\\\(\") or test for them with String.includes instead."
 
     // parity: psychoscript/src/stdlib/regexp.ts#constructRegExp [status=implemented hash=08387c9f6fa9]
     public static func constructRegExp(_ builtins: Builtins, args: [Value]) throws -> RegExpObj {
@@ -7563,6 +7998,9 @@ extension CodemodeLanguage {
         let flagsArg = args.count > 1 ? args[1] : .undefined
         let pattern: String
         let flags: String
+        if !flagsArg.isUndefined, case .string = flagsArg {} else if !flagsArg.isUndefined {
+            throw syntaxError("RegExp flags must be a string of flag characters (e.g. \"g\", \"gi\"), not \(flagsArg.isNullish ? "null" : typeofValue(flagsArg)).")
+        }
         if case .object(let existing as RegExpObj) = patternArg {
             pattern = existing.pattern
             flags = flagsArg.isUndefined ? existing.flags : coerceToString(flagsArg)
@@ -7571,51 +8009,156 @@ extension CodemodeLanguage {
             flags = flagsArg.isUndefined ? "" : coerceToString(flagsArg)
         }
         let validFlags = Set("dgimsuvy")
-        for ch in flags where !validFlags.contains(ch) {
-            throw syntaxError("Invalid regular expression flags '\(flags)'.")
+        if flags.contains(where: { !validFlags.contains($0) }) || Set(flags).count != flags.count {
+            throw syntaxError("new RegExp(...) received invalid flags \(jsonQuote(flags)) (Invalid flags supplied to RegExp constructor '\(flags)'). Valid flags are d, g, i, m, s, u, v, and y.")
         }
-        _ = try withHostRegex(pattern, flags: flags) { _ in true }
+        do {
+            _ = try compileHostRegex(pattern, flags: flags)
+        } catch {
+            throw syntaxError("new RegExp(...) received \(jsonQuote(pattern)), which is not a valid regular expression pattern (\(regexFailureReason(pattern))). \(escapeRegexHint)")
+        }
         return RegExpObj(proto: builtins.RegExp, pattern: pattern, flags: flags)
     }
 
-    internal static func regexMatch(_ input: String, regex: RegExpObj, builtins: Builtins) throws -> Value {
-        try withHostRegex(regex.pattern, flags: regex.flags) { rx in
-            let ns = input as NSString
-            let full = NSRange(location: 0, length: ns.length)
-            if regex.flags.contains("g") {
-                let matches = rx.matches(in: input, range: full)
-                if matches.isEmpty { return .null }
-                return .object(Arr(proto: builtins.Array, items: matches.map { .string(ns.substring(with: $0.range)) }))
-            }
-            guard let m = rx.firstMatch(in: input, range: full) else { return .null }
-            return matchToValue(m, in: input, builtins: builtins)
+    /// One `RegExpBuiltinExec` step: a match starting at or after `lastIndex` (exactly at it with `y`), updating
+    /// `lastIndex` for global and sticky expressions.
+    static func regexExec(_ regex: RegExpObj, _ input: String) throws -> NSTextCheckingResult? {
+        let re = try compileHostRegex(regex.pattern, flags: regex.flags)
+        let ns = input as NSString
+        let tracksIndex = regex.flags.contains("g") || regex.flags.contains("y")
+        let start = tracksIndex ? regex.lastIndex : 0
+        if start > ns.length {
+            if tracksIndex { regex.lastIndex = 0 }
+            return nil
         }
+        let options: NSRegularExpression.MatchingOptions = regex.flags.contains("y") ? [.anchored] : []
+        guard let m = re.firstMatch(in: input, options: options.union(.withTransparentBounds), range: NSRange(location: start, length: ns.length - start)) else {
+            if tracksIndex { regex.lastIndex = 0 }
+            return nil
+        }
+        if tracksIndex { regex.lastIndex = m.range.location + m.range.length }
+        return m
+    }
+
+    internal static func regexMatch(_ input: String, regex: RegExpObj, builtins: Builtins) throws -> Value {
+        if regex.flags.contains("g") {
+            regex.lastIndex = 0
+            var found: [Value] = []
+            let ns = input as NSString
+            while let m = try regexExec(regex, input) {
+                found.append(.string(ns.substring(with: m.range)))
+                if m.range.length == 0 { regex.lastIndex = advanceIndex(input, m.range.location, unicode: regex.flags.contains("u")) }
+            }
+            return found.isEmpty ? .null : .object(Arr(proto: builtins.Array, items: found))
+        }
+        guard let m = try regexExec(regex, input) else { return .null }
+        return matchToValue(m, in: input, builtins: builtins, pattern: regex.pattern)
+    }
+
+    /// AdvanceStringIndex: one code unit, or one code point under the `u` flag.
+    static func advanceIndex(_ input: String, _ index: Int, unicode: Bool) -> Int {
+        let units = input.utf16
+        guard unicode, index + 1 < units.count else { return index + 1 }
+        let i = units.index(units.startIndex, offsetBy: index)
+        if UTF16.isLeadSurrogate(units[i]), UTF16.isTrailSurrogate(units[units.index(after: i)]) { return index + 2 }
+        return index + 1
     }
 
     internal static func regexSearch(_ input: String, regex: RegExpObj) throws -> Int {
-        try withHostRegex(regex.pattern, flags: regex.flags) { rx in
-            let ns = input as NSString
-            guard let m = rx.firstMatch(in: input, range: NSRange(location: 0, length: ns.length)) else { return -1 }
-            return m.range.location
-        }
+        let re = try compileHostRegex(regex.pattern, flags: regex.flags)
+        let ns = input as NSString
+        guard let m = re.firstMatch(in: input, range: NSRange(location: 0, length: ns.length)) else { return -1 }
+        return m.range.location
     }
 
+    // Upstream: psychoscript/src/stdlib/regexp.ts#split (implemented).
+    /// RegExp.prototype[Symbol.split]: sticky matching at each position, with captures spliced in.
     internal static func regexSplit(_ input: String, regex: RegExpObj, limit: Int) throws -> [String] {
-        try withHostRegex(regex.pattern, flags: regex.flags) { rx in
-            let ns = input as NSString
-            let matches = rx.matches(in: input, range: NSRange(location: 0, length: ns.length))
-            var parts: [String] = []
-            var lastEnd = 0
-            for m in matches {
-                if parts.count >= limit { break }
-                parts.append(ns.substring(with: NSRange(location: lastEnd, length: m.range.location - lastEnd)))
-                lastEnd = m.range.location + m.range.length
-            }
-            if parts.count < limit {
-                parts.append(ns.substring(from: lastEnd))
-            }
-            return parts
+        let splitter = RegExpObj(proto: nil, pattern: regex.pattern, flags: regex.flags.contains("y") ? regex.flags : regex.flags + "y")
+        let ns = input as NSString
+        let size = ns.length
+        let unicode = regex.flags.contains("u") || regex.flags.contains("v")
+        var parts: [String] = []
+        if limit == 0 { return [] }
+        if size == 0 {
+            splitter.lastIndex = 0
+            return try regexExec(splitter, input) == nil ? [input] : []
         }
+        var p = 0
+        var q = 0
+        while q < size {
+            splitter.lastIndex = q
+            guard let m = try regexExec(splitter, input) else {
+                q = advanceIndex(input, q, unicode: unicode)
+                continue
+            }
+            let e = min(splitter.lastIndex, size)
+            if e == p {
+                q = advanceIndex(input, q, unicode: unicode)
+                continue
+            }
+            parts.append(ns.substring(with: NSRange(location: p, length: q - p)))
+            if parts.count == limit { return parts }
+            p = e
+            for idx in 1..<max(1, m.numberOfRanges) {
+                let r = m.range(at: idx)
+                parts.append(r.location == NSNotFound ? "" : ns.substring(with: r))
+                if parts.count == limit { return parts }
+            }
+            q = p
+        }
+        parts.append(ns.substring(from: p))
+        return parts
+    }
+
+    /// GetSubstitution: `$$`, `$&`, `` $` ``, `$'`, `$n`/`$nn`, and `$<name>`.
+    static func expandReplacement(_ template: String, matched: String, position: Int, input: String, captures: [Value], groups: Value) -> String {
+        let t = Array(template.utf16)
+        let inputUnits = Array(input.utf16)
+        var out: [UInt16] = []
+        var i = 0
+        func units(_ s: String) -> [UInt16] { Array(s.utf16) }
+        let tailStart = min(position + matched.utf16.count, inputUnits.count)
+        while i < t.count {
+            let c = t[i]
+            guard c == 0x24, i + 1 < t.count else { out.append(c); i += 1; continue }
+            let n = t[i + 1]
+            switch n {
+            case 0x24: out.append(0x24); i += 2
+            case 0x26: out += units(matched); i += 2
+            case 0x60: out += inputUnits[0..<min(position, inputUnits.count)]; i += 2
+            case 0x27: out += inputUnits[tailStart...]; i += 2
+            case 0x30...0x39:
+                let d1 = Int(n - 0x30)
+                var consumed = 2
+                var index = d1
+                if i + 2 < t.count, (0x30...0x39).contains(t[i + 2]) {
+                    let two = d1 * 10 + Int(t[i + 2] - 0x30)
+                    if two >= 1 && two <= captures.count { index = two; consumed = 3 }
+                }
+                if index >= 1 && index <= captures.count {
+                    if case .string(let s) = captures[index - 1] { out += units(s) }
+                    i += consumed
+                } else {
+                    out.append(c)
+                    i += 1
+                }
+            case 0x3C:
+                guard case .object(let groupsObj) = groups, let close = t[(i + 2)...].firstIndex(of: 0x3E) else {
+                    out.append(c)
+                    i += 1
+                    continue
+                }
+                let name = String(decoding: t[(i + 2)..<close], as: UTF16.self)
+                let value = get(groupsObj, name)
+                if !value.isUndefined { out += units(coerceToString(value)) }
+                i = close + 1
+            default:
+                out.append(c)
+                i += 1
+            }
+        }
+        return String(decoding: out, as: UTF16.self)
     }
 
     internal static func regexReplace(
@@ -7625,53 +8168,50 @@ extension CodemodeLanguage {
         replaceAll: Bool,
         eval: Evaluator
     ) async throws -> String {
-        let matches: [NSTextCheckingResult] = try withHostRegex(regex.pattern, flags: regex.flags) { rx in
-            let ns = input as NSString
-            let full = NSRange(location: 0, length: ns.length)
-            if replaceAll { return rx.matches(in: input, range: full) }
-            if let first = rx.firstMatch(in: input, range: full) { return [first] }
-            return []
+        var matches: [NSTextCheckingResult] = []
+        if replaceAll {
+            regex.lastIndex = 0
+            while let m = try regexExec(regex, input) {
+                matches.append(m)
+                if m.range.length == 0 { regex.lastIndex = advanceIndex(input, m.range.location, unicode: regex.flags.contains("u")) }
+            }
+        } else if let m = try regexExec(regex, input) {
+            matches.append(m)
         }
         if matches.isEmpty { return input }
         let ns = input as NSString
+        let names = namedGroups(regex.pattern)
         var out = ""
         var cursor = 0
         for m in matches {
-            out += ns.substring(with: NSRange(location: cursor, length: m.range.location - cursor))
-            if case .object(let cb as Callable) = replacement {
-                var cbArgs: [Value] = []
-                for idx in 0..<m.numberOfRanges {
-                    let r = m.range(at: idx)
-                    cbArgs.append(r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+            out += ns.substring(with: NSRange(location: cursor, length: max(0, m.range.location - cursor)))
+            let matched = ns.substring(with: m.range)
+            var captures: [Value] = []
+            for idx in 1..<max(1, m.numberOfRanges) {
+                let r = m.range(at: idx)
+                captures.append(r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
+            }
+            var groups: Value = .undefined
+            if !names.isEmpty {
+                let g = Obj(proto: eval.builtins.Object)
+                for name in names {
+                    let r = m.range(withName: name)
+                    define(g, name, r.location == NSNotFound ? .undefined : .string(ns.substring(with: r)))
                 }
+                groups = .object(g)
+            }
+            if case .object(let cb as Callable) = replacement {
+                var cbArgs: [Value] = [.string(matched)] + captures
                 cbArgs.append(.number(Double(m.range.location)))
                 cbArgs.append(.string(input))
+                if !names.isEmpty { cbArgs.append(groups) }
                 out += coerceToString(try await eval.callCallable(.object(cb), thisValue: .undefined, args: cbArgs, site: nil))
             } else {
-                let tmpl = coerceToString(replacement)
-                var replaced = ""
-                let chars = Array(tmpl)
-                var i = 0
-                while i < chars.count {
-                    if chars[i] == "$" && i + 1 < chars.count {
-                        let next = chars[i + 1]
-                        if next == "$" { replaced.append("$"); i += 2; continue }
-                        if next == "&" { replaced.append(ns.substring(with: m.range)); i += 2; continue }
-                        if let d = Int(String(next)), d >= 1 && d < m.numberOfRanges {
-                            let r = m.range(at: d)
-                            if r.location != NSNotFound { replaced.append(ns.substring(with: r)) }
-                            i += 2
-                            continue
-                        }
-                    }
-                    replaced.append(chars[i])
-                    i += 1
-                }
-                out += replaced
+                out += expandReplacement(coerceToString(replacement), matched: matched, position: m.range.location, input: input, captures: captures, groups: groups)
             }
             cursor = m.range.location + m.range.length
         }
-        out += ns.substring(from: cursor)
+        out += ns.substring(from: min(cursor, ns.length))
         return out
     }
 
@@ -7691,36 +8231,13 @@ extension CodemodeLanguage {
             Method("test", 1) { thisVal, args, _, _ in
                 let rx = try receiver(RegExpObj.self, thisVal, "RegExp.prototype.test")
                 let str = coerceToString(args.first ?? .undefined)
-                let matched: Bool = try withHostRegex(rx.pattern, flags: rx.flags) { re in
-                    let ns = str as NSString
-                    let start = (rx.flags.contains("g") || rx.flags.contains("y")) ? rx.lastIndex : 0
-                    if start > ns.length { rx.lastIndex = 0; return false }
-                    let m = re.firstMatch(in: str, range: NSRange(location: start, length: ns.length - start))
-                    if let m {
-                        if rx.flags.contains("y") && m.range.location != start { rx.lastIndex = 0; return false }
-                        if rx.flags.contains("g") || rx.flags.contains("y") { rx.lastIndex = m.range.location + m.range.length }
-                        return true
-                    }
-                    if rx.flags.contains("g") || rx.flags.contains("y") { rx.lastIndex = 0 }
-                    return false
-                }
-                return .bool(matched)
+                return .bool(try regexExec(rx, str) != nil)
             },
             Method("exec", 1) { thisVal, args, _, _ in
                 let rx = try receiver(RegExpObj.self, thisVal, "RegExp.prototype.exec")
                 let str = coerceToString(args.first ?? .undefined)
-                return try withHostRegex(rx.pattern, flags: rx.flags) { re in
-                    let ns = str as NSString
-                    let start = (rx.flags.contains("g") || rx.flags.contains("y")) ? rx.lastIndex : 0
-                    if start > ns.length { rx.lastIndex = 0; return .null }
-                    guard let m = re.firstMatch(in: str, range: NSRange(location: start, length: ns.length - start)) else {
-                        if rx.flags.contains("g") || rx.flags.contains("y") { rx.lastIndex = 0 }
-                        return .null
-                    }
-                    if rx.flags.contains("y") && m.range.location != start { rx.lastIndex = 0; return .null }
-                    if rx.flags.contains("g") || rx.flags.contains("y") { rx.lastIndex = m.range.location + m.range.length }
-                    return matchToValue(m, in: str, builtins: builtins)
-                }
+                guard let m = try regexExec(rx, str) else { return .null }
+                return matchToValue(m, in: str, builtins: builtins, pattern: rx.pattern)
             },
             Method("toString", 0) { thisVal, _, _, _ in
                 .string(try receiver(RegExpObj.self, thisVal, "RegExp.prototype.toString").jsToString())
@@ -7739,7 +8256,8 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/stdlib/collections.ts#weakKey [status=implemented hash=d9b54883074a]
     public static func weakKey(_ value: Value, method: String) throws -> Obj {
         guard case .object(let obj) = value else {
-            throw typeError("Invalid value used as weak collection key in \(method).")
+            let label = method.hasPrefix("WeakSet") ? "in weak set" : "as weak map key"
+            throw typeError("Invalid value used \(label): \(describeValue(value)) cannot be held weakly.")
         }
         return obj
     }
@@ -7984,7 +8502,8 @@ extension CodemodeLanguage {
             case "encodeURIComponent": return .string(percentEncode(str, preserveURIReserved: false))
             case "encodeURI": return .string(percentEncode(str, preserveURIReserved: true))
             case "decodeURIComponent", "decodeURI":
-                guard let decoded = percentDecode(str) else { throw uriError("URI malformed") }
+                // Upstream appends the host engine's own message (JavaScriptCore: "URI error").
+                guard let decoded = percentDecode(str) else { throw uriError("\(name) received malformed URI data: URI error") }
                 return .string(decoded)
             default:
                 return .string(str)
@@ -8313,9 +8832,10 @@ extension CodemodeLanguage {
         methods(builtins, builtins.Uint8Array, [
             Method("subarray", 2) { tv, args, _, _ in
                 let b = try receiver(Bytes.self, tv, "Uint8Array.prototype.subarray")
-                let s = args.first.map { resolveSliceIndex(coerceToInteger($0), length: b.data.count) } ?? 0
-                let e = args.count > 1 && !args[1].isUndefined ? resolveSliceIndex(coerceToInteger(args[1]), length: b.data.count) : b.data.count
-                return .object(b.derive(builtins, s < e ? Array(b.data[s..<e]) : []))
+                let s = args.first.map { resolveSliceIndex(coerceToInteger($0), length: b.length) } ?? 0
+                let e = args.count > 1 && !args[1].isUndefined ? resolveSliceIndex(coerceToInteger(args[1]), length: b.length) : b.length
+                // A view sharing the receiver's memory.
+                return .object(b.view(builtins, start: s, end: max(s, e)))
             },
             Method("slice", 2) { tv, args, _, _ in
                 let b = try receiver(Bytes.self, tv, "Uint8Array.prototype.slice")
@@ -8587,7 +9107,7 @@ extension CodemodeLanguage {
                     let bytes = try base64ToBytes(str)
                     return .string(String(bytes.map { Character(UnicodeScalar($0)) }))
                 } catch {
-                    throw invalidData("The string to be decoded is not correctly encoded.")
+                    throw typeError("The string contains invalid characters.")
                 }
             }
         }
@@ -8597,9 +9117,10 @@ extension CodemodeLanguage {
     /// The clone reads program getters' values (read ahead in program code); each round starts a fresh copy.
     public static func structuredCloneGlobal(_ builtins: Builtins) -> Native {
         nativeFn(builtins, name: "structuredClone", length: 1) { _, args, _, eval in
-            try await withReads(eval) {
-                guard let json = try toJsonValue(args.first ?? .undefined) else { return .undefined }
-                return try fromJson(builtins, json)
+            if args.isEmpty { throw typeError("structuredClone requires 1 argument") }
+            return try await withReads(eval) {
+                var memo: [ObjectIdentifier: Obj] = [:]
+                return try structuredCloneValue(args[0], builtins: builtins, memo: &memo)
             }
         }
     }
@@ -8755,6 +9276,7 @@ extension CodemodeLanguage {
         for et in errorTypes {
             list.append((et.rawValue, .object(errorGlobal(et, builtins: builtins, trace: { $0.stackTrace() }))))
         }
+        installStdlibExtras(builtins, globals: &list)
         return list
     }
 
@@ -8831,33 +9353,46 @@ extension CodemodeLanguage {
         return Double(totalMs)
     }
 
+    /// Date.parse for the ECMAScript date time string format: date-only forms are UTC, a date-time without an
+    /// offset is local time, `Z` or `±HH:mm` set the offset, and out-of-range fields or times are NaN.
     internal static func parseISODate(_ s: String) -> Double {
-        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Parse YYYY-MM-DD[THH:mm:ss[.sss][Z|+-HH:mm]]
-        let parts = trimmed.split(whereSeparator: { $0 == "T" || $0 == " " })
-        guard let datePart = parts.first else { return .nan }
-        let dFields = datePart.split(separator: "-").compactMap { Int($0) }
-        guard dFields.count >= 2 else { return .nan }
-        let year = dFields[0]
-        let month = dFields[1] - 1
-        let day = dFields.count > 2 ? dFields[2] : 1
-        var hour = 0, minute = 0, second = 0, ms = 0
-        if parts.count > 1 {
-            var timeStr = String(parts[1])
-            if timeStr.hasSuffix("Z") || timeStr.hasSuffix("z") { timeStr.removeLast() }
-            let mainAndMs = timeStr.split(separator: ".")
-            let tFields = mainAndMs[0].split(separator: ":").compactMap { Int($0) }
-            if tFields.count >= 2 {
-                hour = tFields[0]
-                minute = tFields[1]
-                if tFields.count >= 3 { second = tFields[2] }
-            }
-            if mainAndMs.count > 1 {
-                let frac = String(mainAndMs[1].prefix(3)).padding(toLength: 3, withPad: "0", startingAt: 0)
-                ms = Int(frac) ?? 0
-            }
+        let text = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = #"^([+-]\d{6}|\d{4})(?:-(\d{2})(?:-(\d{2}))?)?(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})?)?$"#
+        guard let re = try? NSRegularExpression(pattern: pattern),
+              let m = re.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) else {
+            return .nan
         }
-        return makeUTCEpochMs(year: year, month: month, day: day, hour: hour, minute: minute, second: second, ms: ms)
+        let ns = text as NSString
+        func group(_ i: Int) -> String? {
+            let r = m.range(at: i)
+            return r.location == NSNotFound ? nil : ns.substring(with: r)
+        }
+        guard let yearText = group(1), let year = Int(yearText) else { return .nan }
+        if yearText == "-000000" { return .nan }
+        let month = group(2).flatMap { Int($0) } ?? 1
+        let day = group(3).flatMap { Int($0) } ?? 1
+        let hasTime = group(4) != nil
+        let hour = group(4).flatMap { Int($0) } ?? 0
+        let minute = group(5).flatMap { Int($0) } ?? 0
+        let second = group(6).flatMap { Int($0) } ?? 0
+        var ms = 0
+        if let frac = group(7) { ms = Int(String(frac.prefix(3)).padding(toLength: 3, withPad: "0", startingAt: 0)) ?? 0 }
+        guard (1...12).contains(month), (1...31).contains(day), (0...24).contains(hour), (0...59).contains(minute), (0...59).contains(second) else { return .nan }
+        if hour == 24 && (minute != 0 || second != 0 || ms != 0) { return .nan }
+        var t = makeUTCEpochMs(year: year, month: month - 1, day: day, hour: hour, minute: minute, second: second, ms: ms)
+        if let offset = group(8) {
+            if offset != "Z" {
+                let sign: Double = offset.hasPrefix("-") ? -1 : 1
+                let parts = offset.dropFirst().split(separator: ":").compactMap { Double($0) }
+                guard parts.count == 2, parts[0] <= 23, parts[1] <= 59 else { return .nan }
+                t -= sign * (parts[0] * 3_600_000 + parts[1] * 60_000)
+            }
+        } else if hasTime {
+            // A date-time without an offset is local time.
+            let guess = Date(timeIntervalSince1970: t / 1000)
+            t -= Double(TimeZone.current.secondsFromGMT(for: guess)) * 1000
+        }
+        return timeClip(t)
     }
 
     internal static func percentEncode(_ text: String, preserveURIReserved: Bool) -> String {
@@ -9347,7 +9882,7 @@ extension CodemodeLanguage {
                 }
                 current = env.parent
             }
-            throw CodemodeLanguage.referenceError("\(name) is not defined.", node: node)
+            throw CodemodeLanguage.referenceError("Unknown identifier '\(name)'.", node: node)
         }
 
         /// Whether this environment itself binds `name` (nil when it doesn't), and whether that binding is initialized.
@@ -9377,13 +9912,13 @@ extension CodemodeLanguage {
                 }
                 if let outcome {
                     if outcome == -2 { throw CodemodeLanguage.referenceError("Cannot access '\(name)' before initialization.", node: node) }
-                    if outcome == -1 { throw CodemodeLanguage.typeError("Assignment to constant variable '\(name)'.", node: node) }
+                    if outcome == -1 { throw CodemodeLanguage.typeError("Cannot assign to constant '\(name)'.", node: node) }
                     return
                 }
                 current = env.parent
             }
             // Sloppy-mode global fallback or ReferenceError: match confined mode (disallow undeclared write)
-            throw CodemodeLanguage.referenceError("\(name) is not defined.", node: node)
+            throw CodemodeLanguage.referenceError("Unknown identifier '\(name)'.", node: node)
         }
     }
 
@@ -9413,6 +9948,9 @@ extension CodemodeLanguage {
         public let maxSteps: Int
         public let maxCallDepth: Int
         public let deadlineMs: Double?
+        public let timeoutMs: Int?
+        /// The run's job loop: every program step runs on it, one at a time (see `CodemodeScheduler.swift`).
+        public let scheduler = ProgramScheduler()
         private let state = Mutex<RuntimeState>(RuntimeState())
 
         public init(
@@ -9420,8 +9958,8 @@ extension CodemodeLanguage {
             hostCalls: HostCalls,
             modules: [String: String] = [:],
             translate: Translate = Translate(),
-            maxSteps: Int = 1_000_000,
-            maxCallDepth: Int = 256,
+            maxSteps: Int = Int.max,
+            maxCallDepth: Int = MAX_CALL_DEPTH,
             timeoutMs: Int? = nil
         ) {
             self.builtins = builtins
@@ -9431,6 +9969,7 @@ extension CodemodeLanguage {
             self.translate = translate
             self.maxSteps = maxSteps
             self.maxCallDepth = maxCallDepth
+            self.timeoutMs = timeoutMs
             self.deadlineMs = timeoutMs.map { CodemodeLanguage.currentEpochMs() + Double($0) }
         }
 
@@ -9486,7 +10025,7 @@ extension CodemodeLanguage {
             }
             guard depth <= maxCallDepth else {
                 state.withLock { $0.callDepth -= 1 }
-                throw PendingThrow(type: .rangeError, message: "Execution exceeded the maximum nesting depth.", node: site)
+                throw PendingThrow(type: .rangeError, message: "Maximum call stack size exceeded", node: site)
             }
         }
 
@@ -9510,13 +10049,14 @@ extension CodemodeLanguage {
                     kind: "ExecutionFailure"
                 )
             }
-            if let deadlineMs, currentSteps % 64 == 0, CodemodeLanguage.currentEpochMs() > deadlineMs {
-                throw PendingThrow(
-                    type: .error,
-                    message: "Execution timed out.",
-                    node: loc.map { AstNode(type: "Timeout", location: $0) },
-                    kind: "TimeoutExceeded"
-                )
+            if currentSteps % 64 == 0 { try checkDeadline() }
+        }
+
+        /// The run's time is up: an interruption, which no `catch` or `finally` in the program sees; the run reports
+        /// it as `TimeoutExceeded` (upstream `Effect.timeoutOrElse` around the run).
+        public func checkDeadline() throws {
+            if let deadlineMs, CodemodeLanguage.currentEpochMs() > deadlineMs {
+                throw Interruption("timeout")
             }
         }
 
@@ -9561,7 +10101,7 @@ extension CodemodeLanguage {
                 hosted: modules
             )
             if !resolved.isUndefined { return resolved }
-            throw typeError("Module '\(specifier)' is not available in Code Mode.")
+            throw PendingThrow(type: .error, message: cannotImport(specifier))
         }
 
         public func evaluateProgram(_ program: ProgramAST) async throws -> Value {
@@ -9751,20 +10291,27 @@ extension CodemodeLanguage {
                 }
                 return last
             case .forOfStmt(let left, let right, let body, let isAwait, _):
+                // Steps the iterator one value at a time, and closes it (`return()`) when the loop exits early.
                 let rightVal = try await evalExpression(right, env: env, thisValue: thisValue)
-                let items = try await collectIterable(rightVal, async: isAwait)
+                let iteration = try await openIteration(rightVal, async: isAwait)
                 var last: Value? = nil
-                for rawItem in items {
+                while true {
                     try checkLimits(at: stmt.location)
-                    let item = isAwait ? try await execAwait(rawItem) : rawItem
+                    guard let item = try await iteration.step() else { break }
                     let iterEnv = LexEnv(parent: env, isFunctionScope: false)
-                    try await bindForEachLeft(left, value: item, env: iterEnv, outerEnv: env, thisValue: thisValue)
                     do {
+                        try await bindForEachLeft(left, value: item, env: iterEnv, outerEnv: env, thisValue: thisValue)
                         if let v = try await evalStatement(body, env: iterEnv, thisValue: thisValue) { last = v }
                     } catch ControlSignal.breakLoop(let lbl) where lbl == nil {
+                        try await iteration.close(nil)
                         break
                     } catch ControlSignal.continueLoop(let lbl) where lbl == nil {
                         continue
+                    } catch let intr as Interruption {
+                        throw intr
+                    } catch {
+                        try await iteration.close(error)
+                        throw error
                     }
                 }
                 return last
@@ -9851,8 +10398,13 @@ extension CodemodeLanguage {
                         return nil
                     }
                 }
-            case .importDecl(let specifiers, let source, _):
-                let mod = try loadModule(source)
+            case .importDecl(let specifiers, let source, let importLoc):
+                let mod: Value
+                do {
+                    mod = try loadModule(source)
+                } catch {
+                    throw locate(error, node: AstNode(type: "ImportDeclaration", location: importLoc))
+                }
                 for spec in specifiers {
                     switch spec {
                     case .defaultImport(let local), .namespaceImport(let local):
@@ -10004,7 +10556,9 @@ extension CodemodeLanguage {
                     try await bindPattern(rest, value: .object(Arr(proto: builtins.Array, items: tail)), kind: kind, env: env, thisValue: thisValue, isInit: isInit)
                 }
             case .object(let props, let rest, let loc):
-                try requireMemberBase(value, node: AstNode(type: "ObjectPattern", location: loc))
+                if value.isNullish {
+                    throw typeError("Cannot destructure \(describeValue(value)) as it is \(value.isUndefined ? "undefined" : "null").", node: AstNode(type: "ObjectPattern", location: loc))
+                }
                 var usedKeys = Set<String>()
                 for prop in props {
                     let key = try await evalPropertyKey(prop.key, env: env, thisValue: thisValue)
@@ -10049,14 +10603,19 @@ extension CodemodeLanguage {
             case .literalRegExp(let p, let f, _):
                 return .object(try constructRegExp(builtins, args: [.string(p), .string(f)]))
             case .identifier(let name, let loc):
-                return try env.get(name, node: AstNode(type: "Identifier", location: loc))
+                let node = AstNode(type: "Identifier", location: loc)
+                if let marker = markerError(name, node: node) { throw marker }
+                return try env.get(name, node: node)
             case .thisExpr(let loc):
                 return try resolveThis(env, thisValue, node: AstNode(type: "ThisExpression", location: loc))
             case .array(let elements, _):
                 var items: [Value] = []
+                var holes = Set<Int>()
                 for el in elements {
                     switch el {
-                    case .hole: items.append(.undefined)
+                    case .hole:
+                        holes.insert(items.count)
+                        items.append(.undefined)
                     case .expr(let e): items.append(try await evalExpression(e, env: env, thisValue: thisValue))
                     case .spread(let e, _):
                         let v = try await evalExpression(e, env: env, thisValue: thisValue)
@@ -10064,7 +10623,7 @@ extension CodemodeLanguage {
                     }
                 }
                 try checkArrayLength(items.count)
-                return .object(Arr(proto: builtins.Array, items: items))
+                return .object(Arr(proto: builtins.Array, items: items, holes: holes))
             case .object(let props, _):
                 let obj = Obj(proto: builtins.Object)
                 for p in props {
@@ -10089,6 +10648,12 @@ extension CodemodeLanguage {
                         defineAccessorHalf(obj, k, half: kind == .get ? .get : .set, fn: fn)
                     case .spread(let e, _):
                         let v = try await evalExpression(e, env: env, thisValue: thisValue)
+                        if case .string(let text) = v {
+                            // CopyDataProperties of a string: one property per UTF-16 code unit.
+                            for (i, unit) in text.utf16.enumerated() {
+                                define(obj, String(i), .string(String(decoding: [unit], as: UTF16.self)))
+                            }
+                        }
                         if case .object(let src) = v {
                             // Program getters in the source run as the copy reads them.
                             try await copyDataPropertiesAsync(obj, src, skip: [.string("__proto__")])
@@ -10113,13 +10678,16 @@ extension CodemodeLanguage {
             case .templateLiteral(let quasis, let exprs, _):
                 var out = quasis.first?.cooked ?? ""
                 for (idx, e) in exprs.enumerated() {
-                    out += coerceToString(try await evalExpression(e, env: env, thisValue: thisValue))
+                    out += try await toStringValue(try await evalExpression(e, env: env, thisValue: thisValue))
                     if idx + 1 < quasis.count { out += quasis[idx + 1].cooked }
                 }
                 try checkStringLength(out.utf16.count)
                 return .string(out)
             case .taggedTemplate(let tag, let quasis, let exprs, let loc):
                 let (calleeVal, receiverVal) = try await evalCallee(tag, env: env, thisValue: thisValue)
+                guard isCallableValue(calleeVal) else {
+                    throw notAFunction(calleeDescription(tag), node: AstNode(type: tag.nodeType, location: tag.location ?? loc))
+                }
                 let cookedArr = Arr(proto: builtins.Array, items: quasis.map { .string($0.cooked) })
                 let rawArr = Arr(proto: builtins.Array, items: quasis.map { .string($0.raw) })
                 define(cookedArr, "raw", .object(rawArr), readonly)
@@ -10137,6 +10705,9 @@ extension CodemodeLanguage {
                 let (calleeVal, recvVal) = try await evalCallee(calleeExpr, env: env, thisValue: thisValue)
                 if optional && calleeVal.isNullish { return .undefined }
                 let args = try await evalCallArgs(argSpecs, env: env, thisValue: thisValue)
+                guard isCallableValue(calleeVal) else {
+                    throw notAFunction(calleeDescription(calleeExpr), node: AstNode(type: calleeExpr.nodeType, location: calleeExpr.location ?? loc))
+                }
                 return try await callCallable(calleeVal, thisValue: recvVal, args: args, site: AstNode(type: "CallExpression", location: loc))
             case .newExpr(let calleeExpr, let argSpecs, let loc):
                 let calleeVal = try await evalExpression(calleeExpr, env: env, thisValue: thisValue)
@@ -10146,11 +10717,15 @@ extension CodemodeLanguage {
                     return try await constructClass(classCtor, args: args, newTarget: classCtor, site: node)
                 }
                 guard case .object(let b as Builtin) = calleeVal, let ctor = b.constructFn else {
-                    throw notConstructible(calleeVal, node: node)
+                    throw notConstructible(calleeVal, name: calleeDescription(calleeExpr), node: node)
                 }
                 markSite(node)
-                return try await ctor(args, b, self)
-            case .unary(let op, let arg, _):
+                do {
+                    return try await ctor(args, b, self)
+                } catch {
+                    throw locate(error, node: node)
+                }
+            case .unary(let op, let arg, let unaryLoc):
                 switch op {
                 case .typeof:
                     if case .identifier(let name, _) = arg, !env.hasBinding(name) {
@@ -10168,7 +10743,13 @@ extension CodemodeLanguage {
                     if case .member(let objExpr, let propKey, _, _) = arg {
                         let base = try await evalExpression(objExpr, env: env, thisValue: thisValue)
                         let key = try await evalPropertyKey(propKey, env: env, thisValue: thisValue)
-                        if case .object(let obj) = base { return .bool(remove(obj, key)) }
+                        if case .object(let obj) = base {
+                            // Strict mode: deleting a non-configurable property is a TypeError.
+                            guard remove(obj, key) else {
+                                throw typeError("Cannot delete property '\(keyLabel(key))'.", node: AstNode(type: "UnaryExpression", location: unaryLoc))
+                            }
+                            return .bool(true)
+                        }
                     }
                     return .bool(true)
                 case .void:
@@ -10177,9 +10758,9 @@ extension CodemodeLanguage {
                 case .not:
                     return .bool(!(try await evalExpression(arg, env: env, thisValue: thisValue).isTruthy))
                 case .neg:
-                    return .number(-coerceToNumber(try await evalExpression(arg, env: env, thisValue: thisValue)))
+                    return .number(-(try await toNumberValue(try await evalExpression(arg, env: env, thisValue: thisValue))))
                 case .plus:
-                    return .number(coerceToNumber(try await evalExpression(arg, env: env, thisValue: thisValue)))
+                    return .number(try await toNumberValue(try await evalExpression(arg, env: env, thisValue: thisValue)))
                 case .bitNot:
                     return .number(Double(~toInt32(coerceToNumber(try await evalExpression(arg, env: env, thisValue: thisValue)))))
                 }
@@ -10210,11 +10791,23 @@ extension CodemodeLanguage {
                     throw syntaxError("Invalid left-hand side expression in update operation", node: AstNode(type: "UpdateExpression", location: loc))
                 }
             case .binary(let op, let left, let right, let loc):
-                let l = try await evalExpression(left, env: env, thisValue: thisValue)
-                let r = try await evalExpression(right, env: env, thisValue: thisValue)
+                var l = try await evalExpression(left, env: env, thisValue: thisValue)
+                var r = try await evalExpression(right, env: env, thisValue: thisValue)
                 if op == .instanceof {
                     // A program `Symbol.hasInstance` or `prototype` getter runs as program code.
                     return .bool(try await instanceOf(l, r, node: AstNode(type: "BinaryExpression", location: loc)))
+                }
+                // An object operand with program valueOf/toString converts as program code (ToPrimitive).
+                if op != .seq && op != .sne && op != .in {
+                    let isEquality = op == .eq || op == .ne
+                    let lIsObject = if case .object = l { true } else { false }
+                    let rIsObject = if case .object = r { true } else { false }
+                    if case .object(let lo) = l, convertsInProgram(lo), !(isEquality && (rIsObject || r.isNullish)) {
+                        l = try await toPrimitive(l, hint: op == .add || isEquality ? .default : .number)
+                    }
+                    if case .object(let ro) = r, convertsInProgram(ro), !(isEquality && (lIsObject || l.isNullish)) {
+                        r = try await toPrimitive(r, hint: op == .add || isEquality ? .default : .number)
+                    }
                 }
                 return try applyBinaryOperator(op, l, r, node: AstNode(type: "BinaryExpression", location: loc))
             case .logical(let op, let left, let right, _):
@@ -10247,17 +10840,16 @@ extension CodemodeLanguage {
                 return last
             case .awaitExpr(let arg, let loc):
                 let val = try await evalExpression(arg, env: env, thisValue: thisValue)
-                markSite(AstNode(type: "AwaitExpression", location: loc))
-                return try await awaitValue(val)
+                let node = AstNode(type: "AwaitExpression", location: loc)
+                markSite(node)
+                return try await awaitValue(val, node: node)
             case .yieldExpr(let arg, let delegate, _):
                 let val: Value = if let arg { try await evalExpression(arg, env: env, thisValue: thisValue) } else { .undefined }
+                let isAsync = Fiber.current?.generator?.isAsync ?? false
                 if delegate {
-                    let items = try await collectIterable(val)
-                    state.withLock { $0.yieldBuffer?.append(contentsOf: items) }
-                } else {
-                    state.withLock { $0.yieldBuffer?.append(val) }
+                    return try await yieldDelegate(val, isAsync: isAsync)
                 }
-                return .undefined
+                return try await yieldValue(val, isAsync: isAsync)
             case .importExpr(let srcExpr, _):
                 let spec = coerceToString(try await evalExpression(srcExpr, env: env, thisValue: thisValue))
                 do {
@@ -10287,6 +10879,9 @@ extension CodemodeLanguage {
                     return .undefined
                 }
                 let args = try await evalCallArgs(argSpecs, env: env, thisValue: thisValue)
+                guard isCallableValue(calleeVal) else {
+                    throw notAFunction(calleeDescription(calleeExpr), node: AstNode(type: calleeExpr.nodeType, location: calleeExpr.location ?? loc))
+                }
                 return try await callCallable(calleeVal, thisValue: recvVal, args: args, site: AstNode(type: "CallExpression", location: loc))
             default:
                 return try await evalExpression(expr, env: env, thisValue: thisValue)
@@ -10409,23 +11004,6 @@ extension CodemodeLanguage {
             return out
         }
 
-        public func awaitValue(_ value: Value) async throws -> Value {
-            if case .object(let p as PromiseObj) = value {
-                switch await p.awaitOutcome() {
-                case .fulfilled(let v): return v
-                case .rejected(let r): throw Throw(r)
-                }
-            }
-            if isThenable(value) {
-                let adopted = adoptThenable(value, builtins: builtins, eval: self)
-                switch await adopted.awaitOutcome() {
-                case .fulfilled(let v): return v
-                case .rejected(let r): throw Throw(r)
-                }
-            }
-            return value
-        }
-
         public func callCallable(_ callee: Value, thisValue: Value, args: [Value], site: AstNode?) async throws -> Value {
             try enterCall(site: site)
             defer { exitCall() }
@@ -10453,12 +11031,7 @@ extension CodemodeLanguage {
             }
 
             if let resolver = obj as? Resolver {
-                let arg = args.first ?? .undefined
-                if resolver.isReject {
-                    resolver.promise.reject(arg)
-                } else {
-                    resolver.promise.fulfill(arg)
-                }
+                callResolver(resolver, args.first ?? .undefined)
                 return .undefined
             }
 
@@ -10480,37 +11053,20 @@ extension CodemodeLanguage {
                     throw typeError("Class constructor \(coerceToString(peek(fnObj, .string("name")))) cannot be invoked without 'new'", node: site)
                 }
                 if payload.isGenerator {
-                    let prevBuf = state.withLock { s -> [Value]? in
-                        let old = s.yieldBuffer
-                        s.yieldBuffer = []
-                        return old
+                    // The body runs lazily, as a fiber, while next/return/throw drive it.
+                    let proto: Obj = {
+                        if case .object(let p) = peek(fnObj, .string("prototype")) { return p }
+                        return payload.isAsync ? builtins.AsyncGenerator : builtins.Generator
+                    }()
+                    let gen = GeneratorObj(proto: proto, isAsync: payload.isAsync) { [self] in
+                        try await executeFunctionBody(fnObj, thisValue: thisValue, args: args)
                     }
-                    var retVal: Value = .undefined
-                    do {
-                        retVal = try await executeFunctionBody(fnObj, thisValue: thisValue, args: args)
-                    } catch {
-                        state.withLock { $0.yieldBuffer = prevBuf }
-                        throw error
-                    }
-                    let yielded = state.withLock { s -> [Value] in
-                        let list = s.yieldBuffer ?? []
-                        s.yieldBuffer = prevBuf
-                        return list
-                    }
-                    return .object(execGeneratorStart(builtins, values: yielded, returnValue: retVal, isAsync: payload.isAsync))
+                    return .object(gen)
                 }
                 if payload.isAsync {
-                    let promise = PromiseObj(proto: builtins.Promise)
-                    let task = Task<PromiseOutcome, Never> {
-                        do {
-                            let res = try await self.executeFunctionBody(fnObj, thisValue: thisValue, args: args)
-                            return await CodemodeLanguage.settleValue(res)
-                        } catch {
-                            return .rejected(CodemodeLanguage.materialize(self.builtins, error))
-                        }
+                    let promise = await startAsyncFunction { [self] in
+                        try await executeFunctionBody(fnObj, thisValue: thisValue, args: args)
                     }
-                    promise.attachTask(task)
-                    trackPromise(promise)
                     return .object(promise)
                 }
                 return try await executeFunctionBody(fnObj, thisValue: thisValue, args: args)
@@ -10593,6 +11149,71 @@ extension CodemodeLanguage {
                     return val
                 }
             }
+        }
+
+        /// An open iteration for `for...of`: `step` answers the next value (nil when done), `close` runs IteratorClose
+        /// when the loop exits early: an error exit keeps its error, any other exit sees a failing `return()`.
+        public struct Iteration: Sendable {
+            public let step: @Sendable () async throws -> Value?
+            public let close: @Sendable (Error?) async throws -> Void
+        }
+
+        public func openIteration(_ value: Value, async isAsync: Bool = false) async throws -> Iteration {
+            if !isAsync, let cursor = builtinCursor(value, builtins: builtins) {
+                return Iteration(step: {
+                    let step = try cursor.next()
+                    return step.done ? nil : step.value
+                }, close: { _ in })
+            }
+            var iterFn: Value = .undefined
+            var syncFallback = false
+            if case .object(let source) = value {
+                if isAsync {
+                    iterFn = try await redoRead(source, .symbol(AsyncIteratorSymbol), receiver: value)
+                }
+                if iterFn.isNullish {
+                    iterFn = try await redoRead(source, .symbol(IteratorSymbol), receiver: value)
+                    syncFallback = isAsync
+                }
+            }
+            else if case .string = value {
+                iterFn = get(builtins.String, .symbol(IteratorSymbol))
+            }
+            let viaSync = syncFallback
+            guard case .object(let iterCallable) = iterFn, iterCallable is Callable else {
+                _ = try requireIteratorMethod(value, async: isAsync)
+                throw typeError("\(describeValue(value)) is not iterable.")
+            }
+            let iterVal = try await callCallable(iterFn, thisValue: value, args: [], site: nil)
+            let iterObj = try requireIteratorObject(iterVal)
+            let nextFn = try await redoRead(iterObj, .string("next"), receiver: .object(iterObj))
+            let awaitsSteps = isAsync && !viaSync
+            return Iteration(step: { [self] in
+                var stepVal = try await callCallable(nextFn, thisValue: .object(iterObj), args: [], site: nil)
+                if awaitsSteps { stepVal = try await awaitValue(stepVal) }
+                let stepObj = try requireIteratorObject(stepVal)
+                if try await redoRead(stepObj, .string("done"), receiver: stepVal).isTruthy { return nil }
+                let item = try await redoRead(stepObj, .string("value"), receiver: stepVal)
+                // A for-await over a synchronous iterator awaits each value (Async-from-Sync iterator).
+                return viaSync ? try await awaitValue(item) : item
+            }, close: { [self] error in
+                let closer: Value
+                do {
+                    closer = try await redoRead(iterObj, .string("return"), receiver: .object(iterObj))
+                } catch {
+                    if error is Interruption { throw error }
+                    return
+                }
+                guard isCallableValue(closer) else { return }
+                do {
+                    var result = try await callCallable(closer, thisValue: .object(iterObj), args: [], site: nil)
+                    if awaitsSteps { result = try await awaitValue(result) }
+                    if error == nil { _ = try requireIteratorObject(result) }
+                } catch let closeError {
+                    if closeError is Interruption { throw closeError }
+                    if error == nil { throw closeError }
+                }
+            })
         }
 
         public func collectIterable(_ value: Value, async isAsync: Bool = false) async throws -> [Value] {
@@ -11132,8 +11753,8 @@ extension CodemodeLanguage {
             hostCalls: HostCalls = HostCalls(),
             modules: [String: String] = [:],
             translate: Translate = Translate(),
-            maxSteps: Int = 1_000_000,
-            maxCallDepth: Int = 256,
+            maxSteps: Int = Int.max,
+            maxCallDepth: Int = MAX_CALL_DEPTH,
             timeoutMs: Int? = nil
         ) {
             self.builtins = builtins
@@ -11543,7 +12164,7 @@ extension CodemodeLanguage {
                 hostCalls: hostCalls,
                 modules: setup.modules,
                 translate: setup.translate,
-                maxSteps: setup.limits.maxSteps ?? 1_000_000,
+                maxSteps: setup.limits.maxSteps ?? Int.max,
                 timeoutMs: effectiveTimeout
             )
             let vm = Vm(interpreter: interp)
@@ -11552,29 +12173,27 @@ extension CodemodeLanguage {
             runBox.withLock { $0 = runObj }
 
             let result: Result
+            let scheduler = interp.evaluator.scheduler
             do {
-                let hostMap = setup.globals?(runObj) ?? [:]
-                try interp.evaluator.installBuiltins(hostGlobalsMap: hostMap, bindings: bindings)
-                interp.armProtector()
-                let rawValue = try await runWithOptionalTimeout(timeoutMs: effectiveTimeout) {
-                    try await interp.evaluator.evaluateProgram(program)
+                let jsonVal: JSONValue = try await ProgramScheduler.$current.withValue(scheduler) {
+                    let hostMap = setup.globals?(runObj) ?? [:]
+                    try interp.evaluator.installBuiltins(hostGlobalsMap: hostMap, bindings: bindings)
+                    interp.armProtector()
+                    let rawValue = try await runWithOptionalTimeout(timeoutMs: effectiveTimeout) {
+                        try await interp.evaluator.runProgram(program)
+                    }
+                    // A program getter's value crosses as data: it is read ahead in program code (see `withReads`).
+                    // The result crosses as `JSON.stringify` would write it: functions are left out.
+                    var copied: JSONValue = .null
+                    _ = try await withReads(interp.evaluator) {
+                        copied = try toJsonValue(rawValue, dropFunctions: true) ?? .null
+                        return .undefined
+                    }
+                    return copied
                 }
-                // A program getter's value crosses as data: it is read ahead in program code (see `withReads`).
-                let dropFunctions = setup.translate.functions == .drop
-                var copied: JSONValue = .null
-                _ = try await withReads(interp.evaluator) {
-                    copied = try toJsonValue(rawValue, dropFunctions: dropFunctions) ?? .null
-                    return .undefined
-                }
-                let jsonVal = copied
-                let cancelled = interp.evaluator.cancelPendingWork()
-                var warnings = vm.diagnostics()
-                if cancelled > 0 {
-                    warnings.append(Diagnostic(
-                        kind: "ExecutionFailure",
-                        message: "\(cancelled) pending async operation(s) were cancelled when execution ended. Await all started promises."
-                    ))
-                }
+                // Host work the program left running is interrupted, not awaited, and not reported (upstream).
+                _ = interp.evaluator.cancelPendingWork()
+                let warnings = scheduler.diagnostics() + vm.diagnostics()
                 let logs = interp.logs
                 result = .success(
                     value: jsonVal,
@@ -11585,7 +12204,12 @@ extension CodemodeLanguage {
                 )
             } catch {
                 _ = interp.evaluator.cancelPendingWork()
-                let diag = normalizeError(error)
+                let diag: Diagnostic
+                if let intr = error as? Interruption, intr.reason == "timeout", let limit = setup.limits.timeoutMs {
+                    diag = Diagnostic(kind: "TimeoutExceeded", message: "Execution timed out after \(limit)ms.")
+                } else {
+                    diag = normalizeError(error)
+                }
                 let logs = interp.logs
                 result = .failure(
                     error: diag,
@@ -11643,14 +12267,11 @@ extension CodemodeLanguage {
             }
             group.addTask {
                 try await Task.sleep(for: .milliseconds(timeoutMs))
-                throw PendingThrow(
-                    type: .error,
-                    message: "Execution timed out after \(timeoutMs)ms.",
-                    kind: "TimeoutExceeded"
-                )
+                // The same interruption the job loop's deadline check raises; reported as TimeoutExceeded.
+                throw Interruption("timeout")
             }
             guard let first = try await group.next() else {
-                throw PendingThrow(type: .error, message: "Execution timed out after \(timeoutMs)ms.", kind: "TimeoutExceeded")
+                throw Interruption("timeout")
             }
             group.cancelAll()
             return first
@@ -11960,5 +12581,22 @@ extension CodemodeLanguage {
                 )
             }
         )
+    }
+}
+
+extension CodemodeLanguage.Expression {
+    /// The ESTree node type name (as acorn reports it) for diagnostics sites.
+    var nodeType: String {
+        switch self {
+        case .identifier: return "Identifier"
+        case .member, .superMember: return "MemberExpression"
+        case .call, .superCall: return "CallExpression"
+        case .newExpr: return "NewExpression"
+        case .chain: return "ChainExpression"
+        case .taggedTemplate: return "TaggedTemplateExpression"
+        case .function: return "FunctionExpression"
+        case .classExpr: return "ClassExpression"
+        default: return "Expression"
+        }
     }
 }
