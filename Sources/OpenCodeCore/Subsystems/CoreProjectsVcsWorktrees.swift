@@ -705,8 +705,49 @@ public enum CoreLocation {
             MemoryDriver()
         }
 
-        // parity: core/src/environment/environment.ts#Interface [status=implemented hash=1e89db401665]
+        /// An environment's name: what a path will later use to say where it lives.
+        // parity: core/src/environment/environment.ts#ID [status=implemented hash=134c33d64231]
+        public struct ID: RawRepresentable, Hashable, Comparable, Sendable, Codable,
+            ExpressibleByStringLiteral, CustomStringConvertible
+        {
+            public let rawValue: String
+
+            public init(rawValue: String) {
+                self.rawValue = rawValue
+            }
+
+            public init(stringLiteral value: String) {
+                self.rawValue = value
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.rawValue = try decoder.singleValueContainer().decode(String.self)
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+
+            /// Brands a plain string as an environment ID (`ID.make`).
+            public static func make(_ value: String) -> ID {
+                ID(rawValue: value)
+            }
+
+            public static func < (lhs: ID, rhs: ID) -> Bool {
+                lhs.rawValue < rhs.rawValue
+            }
+
+            public var description: String { rawValue }
+        }
+
+        /// The server's own machine.
+        // parity: core/src/environment/environment.ts#localID [status=implemented hash=8b4e2b8c4caf]
+        public static let localID: ID = ID.make("local")
+
+        // parity: core/src/environment/environment.ts#Interface [status=implemented hash=28fec2c5f219]
         public protocol Interface: Sendable {
+            var id: ID { get }
             var files: any Files.Interface { get }
             var spawner: any ProcessSpawner { get }
         }
@@ -714,28 +755,51 @@ public enum CoreLocation {
         // parity: core/src/environment/environment.ts#Service [status=implemented hash=9274a0bff79e]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Environment"
+            public let id: ID
             public let files: any Files.Interface
             public let spawner: any ProcessSpawner
 
-            public init(driver: Driver) {
+            public init(id: ID = Environment.localID, driver: Driver) {
+                self.id = id
                 self.files = Environment.makeFiles(driver)
                 self.spawner = driver.spawner
             }
 
-            public init(files: any Files.Interface, spawner: any ProcessSpawner) {
+            public init(id: ID = Environment.localID, files: any Files.Interface, spawner: any ProcessSpawner) {
+                self.id = id
                 self.files = files
                 self.spawner = spawner
             }
         }
 
-        // parity: core/src/environment/environment.ts#node [status=implemented hash=bbf1b8f85eec]
+        // parity: core/src/environment/environment.ts#make [status=implemented hash=695cab8ec0ba]
+        public static func make(_ id: ID, _ driver: Driver) -> any Interface {
+            Service(id: id, driver: driver)
+        }
+
+        /// The server's own machine over `fileSystem` (the host disk by default) and the host spawner: the environment
+        /// a Location outside any workspace binds, for services constructed without a layer graph.
+        public static func local(
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+            spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
+        ) -> any Interface {
+            make(localID, makeLocalDriver(spawner: spawner, fileSystem: fileSystem))
+        }
+
+        /// Shared host environment used as the default `environment` of targets and inputs built without one.
+        public static let host: any Interface = local()
+
+        // parity: core/src/environment/environment.ts#node [status=adapted hash=bbf1b8f85eec]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
             LayerNode.ExecutableLayer { deps, _ in
                 let spawner = deps.get(CrossSpawnSpawner.spawnerKey, as: (any ProcessSpawner).self)
                     ?? CrossSpawnSpawner.HostProcessSpawner.shared
+                let location = deps.get(Location.Service.serviceKey, as: Location.Service.self)
                 let driver = makeLocalDriver(spawner: spawner)
-                return LayerNode.Output([Service.serviceKey: Service(driver: driver)])
+                // A workspace-bound Location names its environment after the workspace; otherwise it is this machine.
+                let id = location?.info.workspaceID.map { ID.make($0.rawValue) } ?? localID
+                return LayerNode.Output([Service.serviceKey: Service(id: id, driver: driver)])
             },
             [CrossSpawnSpawner.node, Location.node]
         )
