@@ -65,10 +65,10 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=f13f874b0229]
+    // parity: psychoscript/src/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=d7914b39a121]
     public static let AsyncIteratorSymbol = RuntimeSymbol("Symbol.asyncIterator")
 
-    // parity: psychoscript/src/runtime/model.ts#IteratorSymbol [status=implemented hash=a59775398783]
+    // parity: psychoscript/src/runtime/model.ts#IteratorSymbol [status=implemented hash=2d12c1440ccc]
     public static let IteratorSymbol = RuntimeSymbol("Symbol.iterator")
 
     // parity: psychoscript/src/runtime/model.ts#Throw [status=implemented hash=13d2a2781ff8]
@@ -181,9 +181,9 @@ public enum CodemodeLanguage {
         PendingThrow(type: .uriError, message: message, node: node)
     }
 
-    // parity: psychoscript/src/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=2936dd03bd3a]
+    // parity: psychoscript/src/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=a1c2de2e65cb]
     public static let supportedSyntaxMessage: String =
-        "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: classes, getters/setters, BigInt, and custom Symbols. Use plain functions and data objects instead."
+        "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: private class members, BigInt, and custom Symbols."
 
     // parity: psychoscript/src/runtime/model.ts#sourceLocation [status=implemented hash=f075447b8fab]
     public static func sourceLocation(_ node: AstNode) -> SourceLocation {
@@ -303,6 +303,8 @@ public enum CodemodeLanguage {
         case object(properties: [ObjectPatternProperty], rest: Pattern?, loc: SourceLocation?)
         case assignment(left: Pattern, right: Expression, loc: SourceLocation?)
         case member(object: Expression, property: PropertyKeyExpr, loc: SourceLocation?)
+        /// `super.x = v` (and compound or update assignment) inside a method.
+        case superMember(property: PropertyKeyExpr, loc: SourceLocation?)
 
         public var location: SourceLocation? {
             switch self {
@@ -310,7 +312,8 @@ public enum CodemodeLanguage {
                  .array(_, _, let loc),
                  .object(_, _, let loc),
                  .assignment(_, _, let loc),
-                 .member(_, _, let loc):
+                 .member(_, _, let loc),
+                 .superMember(_, let loc):
                 return loc
             }
         }
@@ -354,6 +357,74 @@ public enum CodemodeLanguage {
     public enum ObjectProperty: Equatable, Sendable {
         case property(key: PropertyKeyExpr, value: Expression, shorthand: Bool, loc: SourceLocation?)
         case spread(Expression, SourceLocation?)
+        /// An object literal's `get key() {}` or `set key(v) {}`.
+        case accessor(kind: AccessorKind, key: PropertyKeyExpr, function: FunctionPayload, loc: SourceLocation?)
+    }
+
+    /// Which half of an accessor a `get` or `set` member defines.
+    public enum AccessorKind: String, Equatable, Hashable, Sendable {
+        case get
+        case set
+    }
+
+    /// What a function is for: a plain function, a method (object literal or class, with a home object for `super`),
+    /// a class constructor (`new` only; a derived one starts without `this`), or a class's field initializer.
+    public enum FunctionKind: Equatable, Hashable, Sendable {
+        case normal
+        case method
+        case classConstructor(derived: Bool)
+        case fieldInit
+    }
+
+    /// One element of a class body: a method, accessor or field, static or on instances.
+    public struct ClassMember: Equatable, Sendable {
+        public enum Kind: Equatable, Hashable, Sendable {
+            case method
+            case getter
+            case setter
+            case field
+        }
+
+        public let kind: Kind
+        public let isStatic: Bool
+        public let key: PropertyKeyExpr
+        /// A method's or accessor's function.
+        public let function: FunctionPayload?
+        /// A field's initializer, when it has one.
+        public let value: Expression?
+        public let loc: SourceLocation?
+
+        public init(kind: Kind, isStatic: Bool, key: PropertyKeyExpr, function: FunctionPayload?, value: Expression?, loc: SourceLocation?) {
+            self.kind = kind
+            self.isStatic = isStatic
+            self.key = key
+            self.function = function
+            self.value = value
+            self.loc = loc
+        }
+
+        public var computed: Bool {
+            if case .computed = key { return true }
+            return false
+        }
+    }
+
+    /// A class declaration or expression. `constructor` is the class's own, or a synthetic one when it has none:
+    /// `constructor() {}`, or `constructor(...args) { super(...args) }` with `extends`.
+    public struct ClassPayload: Equatable, Sendable {
+        public let name: String?
+        public let superClass: Expression?
+        public let constructor: FunctionPayload
+        public let members: [ClassMember]
+        public let loc: SourceLocation?
+
+        public init(name: String?, superClass: Expression?, constructor: FunctionPayload, members: [ClassMember], loc: SourceLocation?) {
+            self.name = name
+            self.superClass = superClass
+            self.constructor = constructor
+            self.members = members
+            self.loc = loc
+        }
     }
 
     public enum CallArgument: Equatable, Sendable {
@@ -379,6 +450,7 @@ public enum CodemodeLanguage {
         public let isGenerator: Bool
         public let isArrow: Bool
         public let loc: SourceLocation?
+        public let kind: FunctionKind
 
         public init(
             name: String?,
@@ -387,7 +459,8 @@ public enum CodemodeLanguage {
             isAsync: Bool,
             isGenerator: Bool,
             isArrow: Bool,
-            loc: SourceLocation?
+            loc: SourceLocation?,
+            kind: FunctionKind = .normal
         ) {
             self.name = name
             self.params = params
@@ -396,6 +469,33 @@ public enum CodemodeLanguage {
             self.isGenerator = isGenerator
             self.isArrow = isArrow
             self.loc = loc
+            self.kind = kind
+        }
+
+        /// The same function, made a method, class constructor or field initializer.
+        public func with(kind: FunctionKind, name: String? = nil) -> FunctionPayload {
+            FunctionPayload(
+                name: name ?? self.name,
+                params: params,
+                body: body,
+                isAsync: isAsync,
+                isGenerator: isGenerator,
+                isArrow: isArrow,
+                loc: loc,
+                kind: kind
+            )
+        }
+
+        /// The number of parameters before the first default or rest one (a function's `length`).
+        public var expectedArgumentCount: Int {
+            var count = 0
+            for param in params {
+                if case .identifier = param { count += 1; continue }
+                if case .array(let elements, .some, _) = param, elements.isEmpty { break }
+                if case .assignment = param { break }
+                count += 1
+            }
+            return count
         }
     }
 
@@ -431,6 +531,12 @@ public enum CodemodeLanguage {
         case yieldExpr(argument: Expression?, delegate: Bool, loc: SourceLocation?)
         case importExpr(source: Expression, loc: SourceLocation?)
         case chain(expression: Expression, loc: SourceLocation?)
+        case classExpr(ClassPayload)
+        /// `super.x` or `super[key]` inside a method: reads from the home object's prototype with `this` as receiver.
+        case superMember(property: PropertyKeyExpr, loc: SourceLocation?)
+        /// `super(...)` in a derived constructor. `passThrough` marks the synthetic default constructor's
+        /// `super(...args)`, which hands its arguments on without iterating them.
+        case superCall(arguments: [CallArgument], passThrough: Bool, loc: SourceLocation?)
 
         public var location: SourceLocation? {
             switch self {
@@ -458,10 +564,14 @@ public enum CodemodeLanguage {
                  .awaitExpr(_, let loc),
                  .yieldExpr(_, _, let loc),
                  .importExpr(_, let loc),
-                 .chain(_, let loc):
+                 .chain(_, let loc),
+                 .superMember(_, let loc),
+                 .superCall(_, _, let loc):
                 return loc
             case .function(let fn):
                 return fn.loc
+            case .classExpr(let cls):
+                return cls.loc
             }
         }
     }
@@ -538,6 +648,7 @@ public enum CodemodeLanguage {
         case tryStmt(block: [Statement], handler: CatchClause?, finalizer: [Statement]?, loc: SourceLocation?)
         case labeled(label: String, body: Statement, loc: SourceLocation?)
         case importDecl(specifiers: [ImportSpecifier], source: String, loc: SourceLocation?)
+        case classDecl(ClassPayload)
 
         public var location: SourceLocation? {
             switch self {
@@ -562,6 +673,8 @@ public enum CodemodeLanguage {
                 return loc
             case .functionDecl(let fn):
                 return fn.loc
+            case .classDecl(let cls):
+                return cls.loc
             }
         }
     }
@@ -669,6 +782,23 @@ public enum CodemodeLanguage {
                         case .spread(let e, let sl):
                             append("SpreadElement", sl)
                             walkExpr(e)
+                        case .accessor(_, let k, let fn, let pl):
+                            append("Property", pl)
+                            if case .computed(let ce, _) = k { walkExpr(ce) }
+                            walkFunction(fn)
+                        }
+                    }
+                case .classExpr(let cls):
+                    append("ClassExpression", cls.loc)
+                    walkClass(cls)
+                case .superMember(let prop, let l):
+                    append("MemberExpression", l)
+                    if case .computed(let ce, _) = prop { walkExpr(ce) }
+                case .superCall(let args, _, let l):
+                    append("CallExpression", l)
+                    for a in args {
+                        switch a {
+                        case .expr(let e), .spread(let e, _): walkExpr(e)
                         }
                     }
                 case .function(let fn):
@@ -719,9 +849,29 @@ public enum CodemodeLanguage {
                 case .chain(let inner, let l): append("ChainExpression", l); walkExpr(inner)
                 }
             }
+            func walkFunction(_ fn: FunctionPayload) {
+                append("FunctionExpression", fn.loc)
+                switch fn.body {
+                case .block(let stmts): for s in stmts { walkStmt(s) }
+                case .expression(let e): walkExpr(e)
+                }
+            }
+            func walkClass(_ cls: ClassPayload) {
+                if let superClass = cls.superClass { walkExpr(superClass) }
+                walkFunction(cls.constructor)
+                for member in cls.members {
+                    append(member.kind == .field ? "PropertyDefinition" : "MethodDefinition", member.loc)
+                    if case .computed(let ce, _) = member.key { walkExpr(ce) }
+                    if let fn = member.function { walkFunction(fn) }
+                    if let value = member.value { walkExpr(value) }
+                }
+            }
             func walkStmt(_ stmt: Statement) {
                 switch stmt {
                 case .empty(let l): append("EmptyStatement", l)
+                case .classDecl(let cls):
+                    append("ClassDeclaration", cls.loc)
+                    walkClass(cls)
                 case .expression(let e, let l): append("ExpressionStatement", l); walkExpr(e)
                 case .block(let stmts, let l): append("BlockStatement", l); for s in stmts { walkStmt(s) }
                 case .variable(_, let decls, let l):
@@ -1315,7 +1465,8 @@ public enum CodemodeLanguage {
             }
             let c = advance()
             let s1 = String(c)
-            let valid1 = "(){}[];,.:?+-*/%&|^~!<=>"
+            // `#` only starts a private class member name, which the parser refuses with its own message.
+            let valid1 = "(){}[];,.:?+-*/%&|^~!<=>#"
             if valid1.contains(s1) {
                 return s1
             }
@@ -1337,6 +1488,18 @@ public enum CodemodeLanguage {
         private var lexer: Lexer
         private var current: Token
         private var allowRegexForNext: Bool = true
+        /// The functions being parsed, innermost last: whether `super.x` and `super()` may appear in them.
+        private var functionContexts: [FunctionContext] = []
+
+        private struct FunctionContext {
+            let isArrow: Bool
+            let isMethod: Bool
+            let isDerivedConstructor: Bool
+
+            static let plain = FunctionContext(isArrow: false, isMethod: false, isDerivedConstructor: false)
+            static let arrow = FunctionContext(isArrow: true, isMethod: false, isDerivedConstructor: false)
+            static let method = FunctionContext(isArrow: false, isMethod: true, isDerivedConstructor: false)
+        }
 
         public init(_ source: String) throws {
             self.lexer = Lexer(source)
@@ -1430,7 +1593,7 @@ public enum CodemodeLanguage {
                     location: loc
                 ))
             case .keyword("class"):
-                throw unsupported("Class declarations are not supported.", at: loc)
+                return .classDecl(try parseClass(requireName: true, loc: loc))
             case .keyword("import"):
                 // Check for dynamic import(...) expression vs static import declaration
                 let savedLexer = lexer
@@ -1821,6 +1984,8 @@ public enum CodemodeLanguage {
             } else if requireName {
                 throw syntaxError("Function statement requires a name", at: current.location)
             }
+            functionContexts.append(.plain)
+            defer { functionContexts.removeLast() }
             let params = try parseParameterList()
             let stmts = try parseBlockStatements()
             return FunctionPayload(
@@ -1832,6 +1997,214 @@ public enum CodemodeLanguage {
                 isArrow: false,
                 loc: loc
             )
+        }
+
+        /// A method's parameters and body, parsed as a method (so `super` may appear in it).
+        private mutating func parseMethodFunction(
+            name: String?,
+            isAsync: Bool,
+            isGenerator: Bool,
+            kind: FunctionKind,
+            loc: SourceLocation
+        ) throws -> FunctionPayload {
+            let derived = if case .classConstructor(true) = kind { true } else { false }
+            functionContexts.append(FunctionContext(isArrow: false, isMethod: true, isDerivedConstructor: derived))
+            defer { functionContexts.removeLast() }
+            let params = try parseParameterList()
+            let stmts = try parseBlockStatements()
+            return FunctionPayload(
+                name: name,
+                params: params,
+                body: .block(stmts),
+                isAsync: isAsync,
+                isGenerator: isGenerator,
+                isArrow: false,
+                loc: loc,
+                kind: kind
+            )
+        }
+
+        private static func staticKeyName(_ key: PropertyKeyExpr) -> String? {
+            switch key {
+            case .identifier(let s, _), .string(let s, _): return s
+            case .number(let n, _): return CodemodeLanguage.formatJSNumber(n)
+            case .computed: return nil
+            }
+        }
+
+        // The class elements: methods, accessors and fields with plain or computed names, static or not. Private
+        // members and static blocks are refused, as upstream's `supportedClassMember` does.
+        private mutating func parseClass(requireName: Bool, loc: SourceLocation) throws -> ClassPayload {
+            _ = try advance(allowRegex: false) // class
+            var name: String? = nil
+            if case .identifier(let id) = current.kind {
+                name = id
+                _ = try advance(allowRegex: false)
+            } else if requireName {
+                throw syntaxError("Class statement requires a name", at: current.location)
+            }
+            var superClass: Expression? = nil
+            if isKeyword("extends") {
+                _ = try advance(allowRegex: true)
+                superClass = try parseLeftHandSideExpression()
+            }
+            try expectPunct("{")
+            var members: [ClassMember] = []
+            var constructor: FunctionPayload? = nil
+            while !isPunct("}") && current.kind != .eof {
+                if try matchPunct(";") { continue }
+                let mLoc = current.location
+                var isStatic = false
+                if isIdent("static") {
+                    let savedLexer = lexer
+                    let savedCurrent = current
+                    _ = try advance(allowRegex: true)
+                    if isPunct("(") || isPunct("=") || isPunct(";") || isPunct("}") {
+                        lexer = savedLexer
+                        current = savedCurrent
+                    } else {
+                        isStatic = true
+                        if isPunct("{") {
+                            throw unsupported("Class static blocks are not supported. Assign static fields instead.", at: mLoc)
+                        }
+                    }
+                }
+                if isPunct("#") {
+                    throw unsupported("Private class members (#name) are not supported. Use a regular property instead.", at: mLoc)
+                }
+                var isAsync = false
+                var isGenerator = false
+                var accessor: AccessorKind? = nil
+                if isIdent("async") {
+                    let savedLexer = lexer
+                    let savedCurrent = current
+                    _ = try advance(allowRegex: true)
+                    if isPunct("(") || isPunct("=") || isPunct(";") || isPunct("}") || current.precededByNewline {
+                        lexer = savedLexer
+                        current = savedCurrent
+                    } else {
+                        isAsync = true
+                    }
+                }
+                if isPunct("*") {
+                    isGenerator = true
+                    _ = try advance(allowRegex: true)
+                }
+                if !isAsync && !isGenerator && (isIdent("get") || isIdent("set")) {
+                    let half: AccessorKind = isIdent("get") ? .get : .set
+                    let savedLexer = lexer
+                    let savedCurrent = current
+                    _ = try advance(allowRegex: true)
+                    if isPunct("(") || isPunct("=") || isPunct(";") || isPunct("}") {
+                        lexer = savedLexer
+                        current = savedCurrent
+                    } else {
+                        accessor = half
+                    }
+                }
+                if isPunct("#") {
+                    throw unsupported("Private class members (#name) are not supported. Use a regular property instead.", at: mLoc)
+                }
+                let key = try parsePropertyKey()
+                let keyName = Self.staticKeyName(key)
+                if isPunct("(") {
+                    let isConstructor = !isStatic && accessor == nil && keyName == "constructor"
+                    if !isStatic && keyName == "constructor" {
+                        if accessor != nil { throw syntaxError("Class constructor may not be an accessor", at: mLoc) }
+                        if isAsync { throw syntaxError("Class constructor may not be an async method", at: mLoc) }
+                        if isGenerator { throw syntaxError("Class constructor may not be a generator", at: mLoc) }
+                    }
+                    if isConstructor {
+                        if constructor != nil { throw syntaxError("A class may only have one constructor", at: mLoc) }
+                        constructor = try parseMethodFunction(
+                            name: name,
+                            isAsync: false,
+                            isGenerator: false,
+                            kind: .classConstructor(derived: superClass != nil),
+                            loc: mLoc
+                        )
+                        continue
+                    }
+                    let fn = try parseMethodFunction(name: keyName, isAsync: isAsync, isGenerator: isGenerator, kind: .method, loc: mLoc)
+                    let kind: ClassMember.Kind = switch accessor {
+                    case .get: .getter
+                    case .set: .setter
+                    case nil: .method
+                    }
+                    members.append(ClassMember(kind: kind, isStatic: isStatic, key: key, function: fn, value: nil, loc: mLoc))
+                    continue
+                }
+                if isAsync || isGenerator || accessor != nil {
+                    throw syntaxError("Expected '(' after class method name", at: current.location)
+                }
+                if keyName == "constructor" {
+                    throw syntaxError("Classes may not have a field named 'constructor'", at: mLoc)
+                }
+                if isStatic && keyName == "prototype" {
+                    throw syntaxError("Classes may not have a static property named 'prototype'", at: mLoc)
+                }
+                var value: Expression? = nil
+                if try matchPunct("=") {
+                    functionContexts.append(.method)
+                    defer { functionContexts.removeLast() }
+                    value = try parseAssignmentExpression(allowIn: true)
+                }
+                members.append(ClassMember(kind: .field, isStatic: isStatic, key: key, function: nil, value: value, loc: mLoc))
+                if try matchPunct(";") { continue }
+                if !isPunct("}") && !current.precededByNewline {
+                    throw syntaxError("Unexpected token", at: current.location)
+                }
+            }
+            try expectPunct("}", allowRegex: false)
+            let ctor = constructor ?? Self.defaultConstructor(name: name, derived: superClass != nil, loc: loc)
+            return ClassPayload(name: name, superClass: superClass, constructor: ctor, members: members, loc: loc)
+        }
+
+        // `constructor() {}`, or `constructor(...args) { super(...args) }` for a derived class.
+        private static func defaultConstructor(name: String?, derived: Bool, loc: SourceLocation) -> FunctionPayload {
+            let args = Expression.identifier(name: "args", loc: loc)
+            return FunctionPayload(
+                name: name,
+                params: derived ? [.array(elements: [], rest: .identifier(name: "args", loc: loc), loc: loc)] : [],
+                body: .block(derived ? [.expression(.superCall(arguments: [.spread(args, loc)], passThrough: true, loc: loc), loc)] : []),
+                isAsync: false,
+                isGenerator: false,
+                isArrow: false,
+                loc: loc,
+                kind: .classConstructor(derived: derived)
+            )
+        }
+
+        // `super.x`, `super[key]` or `super(...)`: only inside the methods (and derived constructors) that may use it.
+        private mutating func parseSuper(loc: SourceLocation) throws -> Expression {
+            _ = try advance(allowRegex: false) // super
+            let owner = functionContexts.last(where: { !$0.isArrow })
+            if isPunct("(") {
+                if functionContexts.last?.isArrow == true {
+                    throw unsupported("super() inside an arrow function is not supported. Call super() directly in the constructor.", at: loc)
+                }
+                guard owner?.isDerivedConstructor == true else {
+                    throw unsupported("'super' is only supported in class methods.", at: loc)
+                }
+                let args = try parseCallArguments()
+                return .superCall(arguments: args, passThrough: false, loc: loc)
+            }
+            guard isPunct(".") || isPunct("[") else {
+                throw syntaxError("'super' keyword unexpected here", at: loc)
+            }
+            guard owner?.isMethod == true else {
+                throw unsupported("'super' is only supported in class methods.", at: loc)
+            }
+            if try matchPunct(".", allowRegex: false) {
+                let propLoc = current.location
+                let propName = try parsePropertyOrIdentName()
+                return .superMember(property: .identifier(propName, propLoc), loc: loc)
+            }
+            let propLoc = current.location
+            _ = try advance(allowRegex: true) // [
+            let keyExpr = try parseExpression()
+            try expectPunct("]", allowRegex: false)
+            return .superMember(property: .computed(keyExpr, propLoc), loc: loc)
         }
 
         private mutating func parseParameterList() throws -> [Pattern] {
@@ -2069,16 +2442,23 @@ public enum CodemodeLanguage {
         }
 
         private mutating func parseArrowBody(allowIn: Bool) throws -> FunctionBody {
+            functionContexts.append(.arrow)
+            defer { functionContexts.removeLast() }
             if isPunct("{") {
                 return .block(try parseBlockStatements())
             }
             return .expression(try parseAssignmentExpression(allowIn: allowIn))
         }
 
-        private func expressionToPattern(_ expr: Expression) throws -> Pattern {
+        private func expressionToPattern(_ expr: Expression, nested: Bool = false) throws -> Pattern {
             switch expr {
             case .identifier(let name, let loc):
                 return .identifier(name: name, loc: loc)
+            case .superMember(let prop, let loc):
+                if nested {
+                    throw unsupported("Destructuring into super.x is not supported.", at: loc ?? SourceLocation(line: 1, column: 1))
+                }
+                return .superMember(property: prop, loc: loc)
             case .member(let obj, let prop, false, let loc):
                 return .member(object: obj, property: prop, loc: loc)
             case .array(let elements, let loc):
@@ -2092,12 +2472,12 @@ public enum CodemodeLanguage {
                         guard idx == elements.count - 1 else {
                             throw syntaxError("Rest element must be last element", at: inner.location ?? loc ?? SourceLocation(line: 1, column: 1))
                         }
-                        rest = try expressionToPattern(inner)
+                        rest = try expressionToPattern(inner, nested: true)
                     case .expr(let inner):
                         if case .assignment(.assign, let l, let r, let al) = inner {
                             patElements.append(.assignment(left: l, right: r, loc: al))
                         } else {
-                            patElements.append(try expressionToPattern(inner))
+                            patElements.append(try expressionToPattern(inner, nested: true))
                         }
                     }
                 }
@@ -2111,15 +2491,17 @@ public enum CodemodeLanguage {
                         guard idx == props.count - 1 else {
                             throw syntaxError("Rest element must be last element", at: inner.location ?? loc ?? SourceLocation(line: 1, column: 1))
                         }
-                        rest = try expressionToPattern(inner)
+                        rest = try expressionToPattern(inner, nested: true)
                     case .property(let k, let v, let sh, _):
                         let patVal: Pattern
                         if case .assignment(.assign, let l, let r, let al) = v {
                             patVal = .assignment(left: l, right: r, loc: al)
                         } else {
-                            patVal = try expressionToPattern(v)
+                            patVal = try expressionToPattern(v, nested: true)
                         }
                         patProps.append(ObjectPatternProperty(key: k, value: patVal, shorthand: sh))
+                    case .accessor(_, _, _, let al):
+                        throw syntaxError("Invalid destructuring assignment target", at: al ?? loc ?? SourceLocation(line: 1, column: 1))
                     }
                 }
                 return .object(properties: patProps, rest: rest, loc: loc)
@@ -2252,6 +2634,9 @@ public enum CodemodeLanguage {
         private mutating func parseNewExpression() throws -> Expression {
             let loc = current.location
             _ = try advance(allowRegex: true) // new
+            if isPunct(".") {
+                throw unsupported("new.target is not supported.", at: loc)
+            }
             let callee: Expression
             if isKeyword("new") {
                 callee = try parseNewExpression()
@@ -2380,7 +2765,9 @@ public enum CodemodeLanguage {
             case .keyword("function"):
                 return .function(try parseFunction(isAsync: false, requireName: false, loc: loc))
             case .keyword("class"):
-                throw unsupported("Class expressions are not supported.", at: loc)
+                return .classExpr(try parseClass(requireName: false, loc: loc))
+            case .keyword("super"):
+                return try parseSuper(loc: loc)
             case .keyword("import"):
                 _ = try advance(allowRegex: true)
                 try expectPunct("(")
@@ -2455,13 +2842,19 @@ public enum CodemodeLanguage {
                 if try matchPunct("...") {
                     props.append(.spread(try parseAssignmentExpression(allowIn: true), pLoc))
                 } else {
-                    // Reject getters/setters (`get foo() {}` / `set foo(v) {}`)
+                    // Getters and setters: `get foo() {}` / `set foo(v) {}`, with plain or computed keys.
                     if isIdent("get") || isIdent("set") {
+                        let half: AccessorKind = isIdent("get") ? .get : .set
                         let savedLexer = lexer
                         let savedCurrent = current
                         _ = try advance(allowRegex: true)
                         if !isPunct(":") && !isPunct(",") && !isPunct("}") && !isPunct("(") && !isPunct("=") {
-                            throw unsupported("Object getters and setters are not supported.", at: pLoc)
+                            let key = try parsePropertyKey()
+                            let fn = try parseMethodFunction(name: nil, isAsync: false, isGenerator: false, kind: .method, loc: pLoc)
+                            props.append(.accessor(kind: half, key: key, function: fn, loc: pLoc))
+                            if !isPunct(",") { break }
+                            _ = try advance(allowRegex: true)
+                            continue
                         }
                         lexer = savedLexer
                         current = savedCurrent
@@ -2488,16 +2881,12 @@ public enum CodemodeLanguage {
 
                     let key = try parsePropertyKey()
                     if isPunct("(") {
-                        let params = try parseParameterList()
-                        let bodyStmts = try parseBlockStatements()
                         let fnName: String? = if case .identifier(let n, _) = key { n } else { nil }
-                        let fnExpr = Expression.function(FunctionPayload(
+                        let fnExpr = Expression.function(try parseMethodFunction(
                             name: fnName,
-                            params: params,
-                            body: .block(bodyStmts),
                             isAsync: isAsyncMethod,
                             isGenerator: isGenMethod,
-                            isArrow: false,
+                            kind: .method,
                             loc: pLoc
                         ))
                         props.append(.property(key: key, value: fnExpr, shorthand: false, loc: pLoc))
@@ -2532,11 +2921,13 @@ public enum CodemodeLanguage {
 
     // MARK: - Opcodes & Bytecode Builder (src/language/opcodes.ts, src/language/code.ts)
 
-    public struct HoleSentinel: Equatable, Hashable, Sendable {
+    public struct HoleSentinel: Equatable, Hashable, Sendable, CustomStringConvertible {
         public init() {}
+
+        public var description: String { "Symbol(psychoscript.hole)" }
     }
 
-    // parity: psychoscript/src/opcodes.ts#HOLE [status=implemented hash=51463278ee59]
+    // parity: psychoscript/src/opcodes.ts#HOLE [status=implemented hash=4c3d6fbe3007]
     public static let HOLE = HoleSentinel()
 
     // parity: psychoscript/src/opcodes.ts#Cell [status=implemented hash=1485a4ccf5f0]
@@ -2570,7 +2961,7 @@ public enum CodemodeLanguage {
     // parity: psychoscript/src/opcodes.ts#OpCode [status=implemented hash=5c1abc58d768]
     public typealias OpCode = Int32
 
-    // parity: psychoscript/src/opcodes.ts#Op [status=implemented hash=564456809cbf]
+    // parity: psychoscript/src/opcodes.ts#Op [status=implemented hash=d04be9d8e1b8]
     public enum Op {
         public static let PUSH_UNDEF: OpCode = 0
         public static let PUSH_NULL: OpCode = 1
@@ -2610,6 +3001,7 @@ public enum CodemodeLanguage {
         public static let NEW_OBJECT: OpCode = 35
         public static let NEW_ARRAY: OpCode = 36
         public static let ARRAY_APPEND: OpCode = 37
+        /// `a` bit 0: computed key on the stack; bit 1: a class field, which throws when it cannot be defined.
         public static let DEFINE_FIELD: OpCode = 38
         public static let COPY_DATA_PROPS: OpCode = 39
         public static let COPY_REST: OpCode = 40
@@ -2660,6 +3052,27 @@ public enum CodemodeLanguage {
         public static let YSTAR: OpCode = 85
         public static let YSTAR_RESULT: OpCode = 86
         public static let END_PROGRAM: OpCode = 87
+        /// Literals, added later: `get x() {}` / `set x(v) {}` (`a` bit 0: computed key; bit 1: setter).
+        public static let DEFINE_ACCESSOR: OpCode = 88
+        /// Classes: `CLASS` turns the constructor on top into a class, `[ctor] -> [ctor, proto]`.
+        public static let CLASS: OpCode = 89
+        /// Defines the method on top on the prototype, or on the constructor when `a` bit 0 is set. `a`: 1 static,
+        /// 2 computed (`[.., key, fn]`), 4 getter, 8 setter (non-enumerable accessors).
+        public static let DEFINE_METHOD: OpCode = 90
+        /// Makes the field-initializer function on top the class's: `[ctor, proto, fn] -> [ctor, proto]`.
+        public static let SET_FIELDS: OpCode = 91
+        /// Runs field initializers: `a` 0 calls the running constructor's on its `this`; `a` 1 a static initializer.
+        public static let INIT_FIELDS: OpCode = 92
+        /// Constructs the parent of the running constructor for its new target (local `bx`).
+        public static let SUPER_CALL: OpCode = 93
+        /// Makes the instance on top the derived constructor's `this` (local `bx`, a cell when `a` is 1). Once only.
+        public static let SUPER_BIND: OpCode = 94
+        /// `super.x`: `[home, this] -> [value]`, keyed by constant `bx` or by a key on top when bit 1 is set.
+        public static let GET_SUPER: OpCode = 96
+        /// `super.x = v`: `[home, this, v] -> [v]`, or `[home, this, key, v] -> [v]` when bit 1 is set.
+        public static let PUT_SUPER: OpCode = 97
+        /// An object literal method that uses `super` gets the object at depth `a` as its home.
+        public static let SET_HOME: OpCode = 98
     }
 
     // parity: psychoscript/src/opcodes.ts#OpNames [status=implemented hash=9cf37ccf2611]
@@ -2681,7 +3094,9 @@ public enum CodemodeLanguage {
         "CALL", "CALL_SPREAD", "NEW", "NEW_SPREAD", "ITER_OPEN",
         "ITER_INIT", "ITER_STEP", "ITER_RESULT", "ITER_CLOSE", "ITER_APPEND_ALL",
         "FOR_IN", "GENERATOR_START", "YIELD", "RESUME", "AWAIT",
-        "YSTAR", "YSTAR_RESULT", "END_PROGRAM",
+        "YSTAR", "YSTAR_RESULT", "END_PROGRAM", "DEFINE_ACCESSOR", "CLASS",
+        "DEFINE_METHOD", "SET_FIELDS", "INIT_FIELDS", "SUPER_CALL", "SUPER_BIND",
+        "", "GET_SUPER", "PUT_SUPER", "SET_HOME",
     ]
 
     // parity: psychoscript/src/opcodes.ts#BinOp [status=implemented hash=658848825af8]
@@ -2759,7 +3174,7 @@ public enum CodemodeLanguage {
         public static let DYNAMIC: Int32 = 4
     }
 
-    // parity: psychoscript/src/opcodes.ts#CodeFlags [status=implemented hash=254080510291]
+    // parity: psychoscript/src/opcodes.ts#CodeFlags [status=implemented hash=79bd197d305d]
     public enum CodeFlags {
         public static let ARROW: Int = 1 << 0
         public static let ASYNC: Int = 1 << 1
@@ -2769,7 +3184,15 @@ public enum CodemodeLanguage {
         public static let USES_ARGUMENTS: Int = 1 << 5
         public static let INTERNAL: Int = 1 << 6
         public static let PROGRAM: Int = 1 << 7
+        /// A class constructor: `new` only, calling it throws.
+        public static let CLASS_CONSTRUCTOR: Int = 1 << 8
         public static let NEEDS_ARGS: Int = 1 << 9
+        /// The constructor of a class with `extends`.
+        public static let DERIVED: Int = 1 << 10
+        /// A class or object literal method, with a home object.
+        public static let METHOD: Int = 1 << 11
+        /// A class's hidden field-initializer function.
+        public static let FIELD_INIT: Int = 1 << 12
     }
 
     // parity: psychoscript/src/opcodes.ts#TemplateSite [status=implemented hash=e7f1125778b0]
@@ -3383,7 +3806,7 @@ public enum CodemodeLanguage {
     // MARK: - Scope Analysis & Compiler (src/language/compiler/scope.ts, compile.ts)
 
     public enum DeclKind: String, Equatable, Hashable, Sendable, Codable {
-        case `var`, `let`, `const`, function, param, `catch`, `import`, `self`, this, arguments
+        case `var`, `let`, `const`, function, param, `catch`, `import`, `self`, this, arguments, home, newTarget
     }
 
     // parity: psychoscript/src/compiler/scope.ts#Decl [status=implemented hash=e572b054f662]
@@ -3442,7 +3865,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/compiler/scope.ts#FunctionInfo [status=implemented hash=07a7a57a342e]
+    // parity: psychoscript/src/compiler/scope.ts#FunctionInfo [status=implemented hash=46d02d55ecf4]
     public struct FunctionInfo: Sendable {
         public let index: Int
         public let parentIndex: Int
@@ -3453,6 +3876,10 @@ public enum CodemodeLanguage {
         public let bodyScope: Scope
         public let allDecls: [Decl]
         public let localNames: [String]
+        /// A method's home object (`super`), when it or an arrow in it uses `super`.
+        public let homeDecl: Decl?
+        /// A derived constructor's new target, which `super()` passes on.
+        public let newTargetDecl: Decl?
 
         public init(
             index: Int,
@@ -3463,7 +3890,9 @@ public enum CodemodeLanguage {
             params: [Pattern],
             bodyScope: Scope,
             allDecls: [Decl],
-            localNames: [String]
+            localNames: [String],
+            homeDecl: Decl? = nil,
+            newTargetDecl: Decl? = nil
         ) {
             self.index = index
             self.parentIndex = parentIndex
@@ -3474,6 +3903,8 @@ public enum CodemodeLanguage {
             self.bodyScope = bodyScope
             self.allDecls = allDecls
             self.localNames = localNames
+            self.homeDecl = homeDecl
+            self.newTargetDecl = newTargetDecl
         }
     }
 
@@ -3484,14 +3915,80 @@ public enum CodemodeLanguage {
         case global(name: String)
     }
 
-    // parity: psychoscript/src/compiler/scope.ts#ScopeAnalysis [status=implemented hash=54496b96c6ec]
+    /// One `super` of a `super.x`: the method whose home object it reads (through arrows) and where it is.
+    public struct SuperRef: Equatable, Sendable {
+        public let ownerIndex: Int
+        public let location: SourceLocation?
+
+        public init(ownerIndex: Int, location: SourceLocation?) {
+            self.ownerIndex = ownerIndex
+            self.location = location
+        }
+    }
+
+    /// A class's synthetic field-initializer functions, when it has instance or static fields.
+    public struct ClassFieldInits: Equatable, Sendable {
+        public let instance: Int?
+        public let `static`: Int?
+
+        public init(instance: Int?, static: Int?) {
+            self.instance = instance
+            self.static = `static`
+        }
+    }
+
+    // parity: psychoscript/src/compiler/scope.ts#ScopeAnalysis [status=implemented hash=eef17b721e89]
     public struct ScopeAnalysis: Sendable {
         public let functions: [FunctionInfo]
         public let globalsReferenced: [String]
+        /// Each `super` of a `super.x` inside a method. Those outside methods are refused by the parser.
+        public let superRefs: [SuperRef]
+        /// Each class (in source order) and its constructor's function index: its own, or the synthetic one.
+        public let classConstructors: [Int]
+        /// Each class's field-initializer function indices, by class (in source order).
+        public let classFieldInits: [Int: ClassFieldInits]
+        /// The fields a synthetic field-initializer function (by function index) defines, in order.
+        public let fieldInitMembers: [Int: [ClassMember]]
+        /// A computed field's key, evaluated once at class definition into a hidden class-scope binding: by class and
+        /// member index, the binding's name.
+        public let fieldKeys: [String: String]
 
-        public init(functions: [FunctionInfo], globalsReferenced: [String]) {
+        public init(
+            functions: [FunctionInfo],
+            globalsReferenced: [String],
+            superRefs: [SuperRef] = [],
+            classConstructors: [Int] = [],
+            classFieldInits: [Int: ClassFieldInits] = [:],
+            fieldInitMembers: [Int: [ClassMember]] = [:],
+            fieldKeys: [String: String] = [:]
+        ) {
             self.functions = functions
             self.globalsReferenced = globalsReferenced
+            self.superRefs = superRefs
+            self.classConstructors = classConstructors
+            self.classFieldInits = classFieldInits
+            self.fieldInitMembers = fieldInitMembers
+            self.fieldKeys = fieldKeys
+        }
+    }
+
+    /// The `super(...args)` of each default derived constructor: it passes its arguments on as they are, without
+    /// iterating them, so an overridden array iterator is not observable (ES2022). The parser marks it `passThrough`.
+    // parity: psychoscript/src/compiler/scope.ts#defaultSuperCalls [status=adapted hash=42a4ea9b8649]
+    public static func defaultSuperCalls(_ expression: Expression) -> Bool {
+        if case .superCall(_, true, _) = expression { return true }
+        return false
+    }
+
+    // parity: psychoscript/src/compiler/scope.ts#ClassNode [status=implemented hash=9ab9f9de1158]
+    public typealias ClassNode = ClassPayload
+
+    /// The class elements compiled so far: methods, accessors and fields with plain or computed names. Anything else
+    /// (private members, static blocks) is refused by the parser before a `ClassMember` exists.
+    // parity: psychoscript/src/compiler/scope.ts#supportedClassMember [status=implemented hash=2490b4025aca]
+    public static func supportedClassMember(_ member: ClassMember) -> Bool {
+        switch member.key {
+        case .computed, .identifier, .string, .number: return true
         }
     }
 
@@ -3513,16 +4010,23 @@ public enum CodemodeLanguage {
             for p in props { out.append(contentsOf: collectPatternNames(p.value)) }
             if let rest { out.append(contentsOf: collectPatternNames(rest)) }
             return out
-        case .member:
+        case .member, .superMember:
             return []
         }
     }
 
-    // parity: psychoscript/src/compiler/scope.ts#analyzeScopes [status=implemented hash=31dcea3b40aa]
+    // parity: psychoscript/src/compiler/scope.ts#analyzeScopes [status=implemented hash=addcc0d3b7ec]
     public static func analyzeScopes(_ source: Source, internal isInternal: Bool = false) -> ScopeAnalysis {
         var functions: [FunctionInfo] = []
         var globalsSet: Set<String> = []
+        var superUses: [(fnIndex: Int, location: SourceLocation?)] = []
+        var classConstructors: [Int] = []
+        var classFieldInits: [Int: ClassFieldInits] = [:]
+        var fieldInitMembers: [Int: [ClassMember]] = [:]
+        var fieldKeys: [String: String] = [:]
+        var classCount = 0
 
+        @discardableResult
         func visitFunction(
             name: String,
             params: [Pattern],
@@ -3532,10 +4036,12 @@ public enum CodemodeLanguage {
             isAsync: Bool,
             isGenerator: Bool,
             parentScope: Scope?,
-            parentFnIndex: Int
-        ) {
+            parentFnIndex: Int,
+            extraFlags: Int = 0,
+            fieldMembers: [ClassMember]? = nil
+        ) -> Int {
             let fnIndex = functions.count
-            var flags = 0
+            var flags = extraFlags
             if isArrow { flags |= CodeFlags.ARROW }
             if isProgram || isAsync { flags |= CodeFlags.ASYNC }
             if isGenerator { flags |= CodeFlags.GENERATOR }
@@ -3559,6 +4065,87 @@ public enum CodemodeLanguage {
                     addDecl(pName, kind: .param, mutable: true)
                 }
             }
+            // `this` starts uninitialized in a derived constructor: `super()` binds it, with its new target.
+            if (flags & CodeFlags.DERIVED) != 0 {
+                addDecl("this", kind: .this, mutable: true)
+                addDecl("%newTarget", kind: .newTarget, mutable: false)
+            }
+
+            // The class body sees its own name as an immutable binding; the constructor and methods are functions in it.
+            func visitClass(_ cls: ClassPayload, _ cur: Scope) {
+                guard cls.members.allSatisfy(supportedClassMember) else { return }
+                let classIndex = classCount
+                classCount += 1
+                let classScope = Scope(parent: cur)
+                if let className = cls.name {
+                    classScope.insert(Decl(name: className, kind: .const, fnIndex: fnIndex, mutable: false))
+                }
+                if let superClass = cls.superClass { walkExpr(superClass, classScope) }
+                let derived = cls.superClass != nil
+                let ctor = cls.constructor
+                let ctorIndex = visitFunction(
+                    name: cls.name ?? "",
+                    params: ctor.params,
+                    body: ctor.body,
+                    isProgram: false,
+                    isArrow: false,
+                    isAsync: false,
+                    isGenerator: false,
+                    parentScope: classScope,
+                    parentFnIndex: fnIndex,
+                    extraFlags: CodeFlags.CLASS_CONSTRUCTOR | CodeFlags.METHOD | (derived ? CodeFlags.DERIVED : 0)
+                )
+                classConstructors.append(ctorIndex)
+                for (memberIndex, member) in cls.members.enumerated() {
+                    guard case .computed(let keyExpr, _) = member.key else { continue }
+                    walkExpr(keyExpr, classScope)
+                    guard member.kind == .field else { continue }
+                    let keyName = "%key\(fieldKeys.count)"
+                    classScope.insert(Decl(name: keyName, kind: .const, fnIndex: fnIndex, mutable: false))
+                    fieldKeys["\(classIndex):\(memberIndex)"] = keyName
+                }
+                for member in cls.members where member.kind != .field {
+                    guard let fn = member.function else { continue }
+                    visitFunction(
+                        name: fn.name ?? "",
+                        params: fn.params,
+                        body: fn.body,
+                        isProgram: false,
+                        isArrow: false,
+                        isAsync: fn.isAsync,
+                        isGenerator: fn.isGenerator,
+                        parentScope: classScope,
+                        parentFnIndex: fnIndex,
+                        extraFlags: CodeFlags.METHOD
+                    )
+                }
+                func fieldInit(_ fields: [ClassMember], _ initName: String) -> Int? {
+                    if fields.isEmpty { return nil }
+                    // A synthetic method whose body is `this` and the field initializers.
+                    let stmts: [Statement] = [.expression(.thisExpr(cls.loc), cls.loc)] + fields.compactMap { field in
+                        field.value.map { Statement.expression($0, field.loc) }
+                    }
+                    return visitFunction(
+                        name: initName,
+                        params: [],
+                        body: .block(stmts),
+                        isProgram: false,
+                        isArrow: false,
+                        isAsync: false,
+                        isGenerator: false,
+                        parentScope: classScope,
+                        parentFnIndex: fnIndex,
+                        extraFlags: CodeFlags.METHOD | CodeFlags.FIELD_INIT,
+                        fieldMembers: fields
+                    )
+                }
+                let fields = cls.members.filter { $0.kind == .field }
+                let instance = fieldInit(fields.filter { !$0.isStatic }, "<instance_members_initializer>")
+                let statics = fieldInit(fields.filter(\.isStatic), "<static_initializer>")
+                if instance != nil || statics != nil {
+                    classFieldInits[classIndex] = ClassFieldInits(instance: instance, static: statics)
+                }
+            }
 
             func walkExpr(_ expr: Expression, _ cur: Scope) {
                 switch expr {
@@ -3574,8 +4161,19 @@ public enum CodemodeLanguage {
                         isAsync: fn.isAsync,
                         isGenerator: fn.isGenerator,
                         parentScope: cur,
-                        parentFnIndex: fnIndex
+                        parentFnIndex: fnIndex,
+                        extraFlags: fn.kind == .method ? CodeFlags.METHOD : 0
                     )
+                case .classExpr(let cls):
+                    visitClass(cls, cur)
+                case .superMember(let prop, let loc):
+                    superUses.append((fnIndex, loc))
+                    if case .computed(let ce, _) = prop { walkExpr(ce, cur) }
+                case .superCall(let args, _, _):
+                    for a in args {
+                        if case .expr(let e) = a { walkExpr(e, cur) }
+                        else if case .spread(let e, _) = a { walkExpr(e, cur) }
+                    }
                 case .array(let els, _):
                     for el in els {
                         if case .expr(let e) = el { walkExpr(e, cur) }
@@ -3588,6 +4186,21 @@ public enum CodemodeLanguage {
                             if case .computed(let ce, _) = k { walkExpr(ce, cur) }
                             walkExpr(v, cur)
                         case .spread(let e, _): walkExpr(e, cur)
+                        case .accessor(_, let k, let fn, _):
+                            // Object literal methods and accessors have the object as their home, for `super`.
+                            if case .computed(let ce, _) = k { walkExpr(ce, cur) }
+                            visitFunction(
+                                name: fn.name ?? "",
+                                params: fn.params,
+                                body: fn.body,
+                                isProgram: false,
+                                isArrow: false,
+                                isAsync: false,
+                                isGenerator: false,
+                                parentScope: cur,
+                                parentFnIndex: fnIndex,
+                                extraFlags: CodeFlags.METHOD
+                            )
                         }
                     }
                 case .templateLiteral(_, let es, _): for e in es { walkExpr(e, cur) }
@@ -3609,7 +4222,11 @@ public enum CodemodeLanguage {
                     walkExpr(l, cur); walkExpr(r, cur)
                 case .conditional(let t, let c, let a, _):
                     walkExpr(t, cur); walkExpr(c, cur); walkExpr(a, cur)
-                case .assignment(_, _, let r, _):
+                case .assignment(_, let left, let r, _):
+                    if case .superMember(let prop, let loc) = left {
+                        superUses.append((fnIndex, loc))
+                        if case .computed(let ce, _) = prop { walkExpr(ce, cur) }
+                    }
                     walkExpr(r, cur)
                 case .sequence(let es, _):
                     for e in es { walkExpr(e, cur) }
@@ -3647,6 +4264,15 @@ public enum CodemodeLanguage {
                             parentScope: cur,
                             parentFnIndex: fnIndex
                         )
+                    case .classDecl(let cls):
+                        if let className = cls.name {
+                            if cur === scope {
+                                addDecl(className, kind: .let, mutable: true)
+                            } else {
+                                cur.insert(Decl(name: className, kind: .let, fnIndex: fnIndex, mutable: true))
+                            }
+                        }
+                        visitClass(cls, cur)
                     case .block(let inner, _):
                         walkStmts(inner, Scope(parent: cur))
                     case .expression(let e, _), .throwStmt(let e, _):
@@ -3731,6 +4357,7 @@ public enum CodemodeLanguage {
                 allDecls: [],
                 localNames: []
             ))
+            if let fieldMembers { fieldInitMembers[fnIndex] = fieldMembers }
 
             switch body {
             case .block(let stmts): walkStmts(stmts, scope)
@@ -3746,8 +4373,10 @@ public enum CodemodeLanguage {
                 params: params,
                 bodyScope: scope,
                 allDecls: decls,
-                localNames: names
+                localNames: names,
+                newTargetDecl: decls.first { $0.kind == .newTarget }
             )
+            return fnIndex
         }
 
         visitFunction(
@@ -3761,11 +4390,45 @@ public enum CodemodeLanguage {
             parentScope: nil,
             parentFnIndex: -1
         )
-        return ScopeAnalysis(functions: functions, globalsReferenced: globalsSet.sorted())
+
+        // `super` reads the home object of the method it is in, through arrows.
+        var superRefs: [SuperRef] = []
+        for use in superUses {
+            var owner = functions[use.fnIndex]
+            while (owner.flags & CodeFlags.ARROW) != 0, owner.parentIndex >= 0 { owner = functions[owner.parentIndex] }
+            guard (owner.flags & CodeFlags.METHOD) != 0 else { continue }
+            if owner.homeDecl == nil {
+                let home = Decl(name: "%home", kind: .home, fnIndex: owner.index, mutable: false, slot: owner.localNames.count)
+                owner.bodyScope.insert(home)
+                functions[owner.index] = FunctionInfo(
+                    index: owner.index,
+                    parentIndex: owner.parentIndex,
+                    name: owner.name,
+                    flags: owner.flags,
+                    length: owner.length,
+                    params: owner.params,
+                    bodyScope: owner.bodyScope,
+                    allDecls: owner.allDecls + [home],
+                    localNames: owner.localNames + [home.name],
+                    homeDecl: home,
+                    newTargetDecl: owner.newTargetDecl
+                )
+            }
+            superRefs.append(SuperRef(ownerIndex: owner.index, location: use.location))
+        }
+        return ScopeAnalysis(
+            functions: functions,
+            globalsReferenced: globalsSet.sorted(),
+            superRefs: superRefs,
+            classConstructors: classConstructors,
+            classFieldInits: classFieldInits,
+            fieldInitMembers: fieldInitMembers,
+            fieldKeys: fieldKeys
+        )
     }
 
-    // parity: psychoscript/src/compiler/compile.ts#COMPILER_VERSION [status=implemented hash=c27d5f5f8206]
-    public static let COMPILER_VERSION: Int = 1
+    // parity: psychoscript/src/compiler/compile.ts#COMPILER_VERSION [status=implemented hash=8ef83148df0d]
+    public static let COMPILER_VERSION: Int = 3
 
     // parity: psychoscript/src/compiler/compile.ts#CompileOptions [status=implemented hash=77e0db95ca3e]
     public struct CompileOptions: Equatable, Sendable {
@@ -3914,6 +4577,18 @@ public enum CodemodeLanguage {
         }
     }
 
+    // parity: psychoscript/src/runtime/signals.ts#Prefetch [status=adapted hash=08c1d410b667]
+    /// A built-in met program getters it cannot call (see `withReads`): `reads` (receiver, key, receiver, key, …) are
+    /// read in program code, then the built-in runs again from the start, and its reads of them get those values.
+    /// Upstream returns it to the VM; here `withReads` carries it out through the evaluator.
+    public struct Prefetch: Sendable {
+        public let reads: [Value]
+
+        public init(reads: [Value]) {
+            self.reads = reads
+        }
+    }
+
     // parity: psychoscript/src/runtime/signals.ts#MAX_CALL_DEPTH [status=implemented hash=101eadd2b440]
     public static let MAX_CALL_DEPTH: Int = 10_000
 
@@ -3987,7 +4662,7 @@ public enum CodemodeLanguage {
         public init() {}
     }
 
-    // parity: psychoscript/src/runtime/table.ts#deleted [status=implemented hash=20fb9493d06a]
+    // parity: psychoscript/src/runtime/table.ts#deleted [status=implemented hash=4fd98185703e]
     public static let deleted = DeletedSentinel()
 
     // parity: psychoscript/src/runtime/table.ts#TableCursor [status=implemented hash=3f26d3d2e8d8]
@@ -4244,7 +4919,10 @@ public enum CodemodeLanguage {
             guard case .object(let obj) = current, !skip(current) else { continue }
             let id = ObjectIdentifier(obj)
             if !seen.insert(id).inserted { continue }
+            // A structural check, so it never runs program code: program accessors are left out.
+            let hasAccessors = obj.hasProgramAccessors
             for key in ownKeys(obj) {
+                if hasAccessors, let slot = own(obj, .string(key)), isProgramAccessor(slot) { continue }
                 stack.append(getOwn(obj, key))
             }
         }
@@ -4261,16 +4939,23 @@ public enum CodemodeLanguage {
         findInValue(value, match: isOpaque, skip: { isRuntimeReference($0) && !isOpaque($0) })
     }
 
-    // parity: psychoscript/src/runtime/references.ts#rejectCircularInsertion [status=implemented hash=ed06903d1915]
+    // parity: psychoscript/src/runtime/references.ts#rejectCircularInsertion [status=implemented hash=d7ccda8f43c8]
     public static func rejectCircularInsertion(_ container: Obj, _ value: Value, label: String) throws {
-        let matched = findInValue(
+        if hasCircularReference(container, value) { throw circularValue(label) }
+    }
+
+    // parity: psychoscript/src/runtime/references.ts#hasCircularReference [status=implemented hash=807701fca078]
+    public static func hasCircularReference(_ container: Obj, _ value: Value) -> Bool {
+        findInValue(
             value,
             match: { if case .object(let o) = $0 { return o === container } else { return false } },
             skip: isRuntimeReference
         )
-        if matched {
-            throw invalidData("\(label) contains a circular value.")
-        }
+    }
+
+    // parity: psychoscript/src/runtime/references.ts#circularValue [status=implemented hash=7ff49c7f4bd8]
+    public static func circularValue(_ label: String) -> PendingThrow {
+        invalidData("\(label) contains a circular value.")
     }
 
     // parity: psychoscript/src/runtime/references.ts#describeValue [status=implemented hash=63563bdb6e3a]
@@ -4397,12 +5082,704 @@ public enum CodemodeLanguage {
         public func changed() -> [Obj] { orderedValues.filter { !CodemodeLanguage.unchanged($0) } }
     }
 
-    // MARK: - Prelude & Internal Prelude (src/language/prelude/*, internal-prelude.ts)
+    // MARK: - Prelude (prelude/source.ts, bytecode.ts, helpers.ts, prelude.ts; the internal prelude is in CodemodeInternalPrelude.swift)
 
-    // parity: psychoscript/src/prelude/source.ts#code [status=adapted hash=4564f3791d24]
-    public static let preludeSourceCode: String = """
-    // Code Mode built-in JavaScript prelude helpers
-    """
+    /// The prelude's source as upstream ships it: psychoscript JavaScript, only top-level function declarations, with
+    /// `$` names for the privileged helpers. The Swift stdlib implements these built-ins natively (writing elements of
+    /// arrays it makes directly, as `$ArraySet` does, and visiting keys with their enumerability checked as they are
+    /// read, as `objectEntries`/`objectAssign` do); the source is compiled for its code table.
+    // parity: psychoscript/src/prelude/source.ts#code [status=adapted hash=f93c67ca9f39]
+    public static let preludeSourceCode: String = #"""
+function arrayFromIterable(items, mapper, thisArg) {
+  const result = []
+  let index = 0
+  for (const item of items) {
+    $ArraySet(result, index, mapper === undefined ? item : $Call(mapper, thisArg, item, index))
+    index++
+  }
+  return result
+}
+
+// Array.from over an array-like with a mapper: every index is read, holes included.
+function arrayFromLike(source, length, mapper, thisArg) {
+  const result = new Array(length)
+  let index = 0
+  while (index < length) {
+    $ArraySet(result, index, $Call(mapper, thisArg, source[index], index))
+    index++
+  }
+  return result
+}
+
+// The callback methods Array and Uint8Array share. They fix the iteration length when they start and read elements
+// live; they skip holes, but the find methods visit them as undefined. map and filter return the receiver's kind of
+// collection.
+function Array$prototype$map(callback, thisArg = undefined) {
+  return mapItems($Receiver(this, "Array", "Array.prototype.map"), callback, thisArg, "Array.map")
+}
+function Uint8Array$prototype$map(callback, thisArg = undefined) {
+  const bytes = $Receiver(this, "Uint8Array", "Uint8Array.prototype.map")
+  return $DerivedBytes(mapItems(bytes, callback, thisArg, "Uint8Array.map"), bytes)
+}
+function mapItems(array, callback, thisArg, label) {
+  $Callback(callback, label)
+  const length = array.length
+  const result = new Array(length)
+  let index = 0
+  while (index < length) {
+    if (index in array) $ArraySet(result, index, $Call(callback, thisArg, array[index], index, array))
+    index++
+  }
+  return result
+}
+
+function Array$prototype$filter(callback, thisArg = undefined) {
+  return filterItems($Receiver(this, "Array", "Array.prototype.filter"), callback, thisArg, "Array.filter")
+}
+function Uint8Array$prototype$filter(callback, thisArg = undefined) {
+  const bytes = $Receiver(this, "Uint8Array", "Uint8Array.prototype.filter")
+  return $DerivedBytes(filterItems(bytes, callback, thisArg, "Uint8Array.filter"), bytes)
+}
+function filterItems(array, callback, thisArg, label) {
+  $Callback(callback, label)
+  const length = array.length
+  const result = []
+  let count = 0
+  let index = 0
+  let item
+  while (index < length) {
+    if (index in array) {
+      item = array[index]
+      if ($Call(callback, thisArg, item, index, array)) result[count++] = item
+    }
+    index++
+  }
+  return result
+}
+
+function Array$prototype$forEach(callback, thisArg = undefined) {
+  forEachItem($Receiver(this, "Array", "Array.prototype.forEach"), callback, thisArg, "Array.forEach")
+}
+function Uint8Array$prototype$forEach(callback, thisArg = undefined) {
+  forEachItem($Receiver(this, "Uint8Array", "Uint8Array.prototype.forEach"), callback, thisArg, "Uint8Array.forEach")
+}
+function forEachItem(array, callback, thisArg, label) {
+  $Callback(callback, label)
+  const length = array.length
+  let index = 0
+  while (index < length) {
+    if (index in array) $Call(callback, thisArg, array[index], index, array)
+    index++
+  }
+}
+
+function Array$prototype$some(callback, thisArg = undefined) {
+  return testItems($Receiver(this, "Array", "Array.prototype.some"), callback, thisArg, "Array.some", false)
+}
+function Uint8Array$prototype$some(callback, thisArg = undefined) {
+  return testItems($Receiver(this, "Uint8Array", "Uint8Array.prototype.some"), callback, thisArg, "Uint8Array.some", false)
+}
+function Array$prototype$every(callback, thisArg = undefined) {
+  return testItems($Receiver(this, "Array", "Array.prototype.every"), callback, thisArg, "Array.every", true)
+}
+function Uint8Array$prototype$every(callback, thisArg = undefined) {
+  return testItems($Receiver(this, "Uint8Array", "Uint8Array.prototype.every"), callback, thisArg, "Uint8Array.every", true)
+}
+// some stops at the first truthy result, every at the first falsy one.
+function testItems(array, callback, thisArg, label, every) {
+  $Callback(callback, label)
+  const length = array.length
+  let index = 0
+  while (index < length) {
+    if (index in array && !$Call(callback, thisArg, array[index], index, array) === every) return !every
+    index++
+  }
+  return every
+}
+
+function Array$prototype$find(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Array", "Array.prototype.find"), callback, thisArg, "Array.find", false, false)
+}
+function Uint8Array$prototype$find(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Uint8Array", "Uint8Array.prototype.find"), callback, thisArg, "Uint8Array.find", false, false)
+}
+function Array$prototype$findIndex(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Array", "Array.prototype.findIndex"), callback, thisArg, "Array.findIndex", false, true)
+}
+function Uint8Array$prototype$findIndex(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Uint8Array", "Uint8Array.prototype.findIndex"), callback, thisArg, "Uint8Array.findIndex", false, true)
+}
+function Array$prototype$findLast(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Array", "Array.prototype.findLast"), callback, thisArg, "Array.findLast", true, false)
+}
+function Uint8Array$prototype$findLast(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Uint8Array", "Uint8Array.prototype.findLast"), callback, thisArg, "Uint8Array.findLast", true, false)
+}
+function Array$prototype$findLastIndex(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Array", "Array.prototype.findLastIndex"), callback, thisArg, "Array.findLastIndex", true, true)
+}
+function Uint8Array$prototype$findLastIndex(callback, thisArg = undefined) {
+  return findItem($Receiver(this, "Uint8Array", "Uint8Array.prototype.findLastIndex"), callback, thisArg, "Uint8Array.findLastIndex", true, true)
+}
+function findItem(array, callback, thisArg, label, last, wantIndex) {
+  $Callback(callback, label)
+  const length = array.length
+  const step = last ? -1 : 1
+  let index = last ? length - 1 : 0
+  let item
+  while (index >= 0 && index < length) {
+    item = array[index]
+    if ($Call(callback, thisArg, item, index, array)) return wantIndex ? index : item
+    index += step
+  }
+  return wantIndex ? -1 : undefined
+}
+
+// reduce and reduceRight take an initial value where the others take a thisArg.
+function Array$prototype$reduce(callback, ...initial) {
+  return reduceItems($Receiver(this, "Array", "Array.prototype.reduce"), callback, initial, "Array.reduce", false)
+}
+function Uint8Array$prototype$reduce(callback, ...initial) {
+  return reduceItems($Receiver(this, "Uint8Array", "Uint8Array.prototype.reduce"), callback, initial, "Uint8Array.reduce", false)
+}
+function Array$prototype$reduceRight(callback, ...initial) {
+  return reduceItems($Receiver(this, "Array", "Array.prototype.reduceRight"), callback, initial, "Array.reduceRight", true)
+}
+function Uint8Array$prototype$reduceRight(callback, ...initial) {
+  return reduceItems($Receiver(this, "Uint8Array", "Uint8Array.prototype.reduceRight"), callback, initial, "Uint8Array.reduceRight", true)
+}
+function reduceItems(array, callback, initial, label, right) {
+  $Callback(callback, label)
+  const length = array.length
+  const step = right ? -1 : 1
+  let index = right ? length - 1 : 0
+  let accumulator
+  if (initial.length > 0) accumulator = initial[0]
+  else {
+    while (index >= 0 && index < length && !(index in array)) index += step
+    if (index < 0 || index >= length) $Throw("TypeError", label + " of an empty array with no initial value.")
+    accumulator = array[index]
+    index += step
+  }
+  while (index >= 0 && index < length) {
+    if (index in array) accumulator = $Call(callback, undefined, accumulator, array[index], index, array)
+    index += step
+  }
+  return accumulator
+}
+
+// forEach semantics: a returned array's holes are skipped, as flattening does.
+function Array$prototype$flatMap(callback, thisArg = undefined) {
+  const array = $Receiver(this, "Array", "Array.prototype.flatMap")
+  $Callback(callback, "Array.flatMap")
+  const length = array.length
+  const result = []
+  let count = 0
+  let index = 0
+  let inner
+  let at
+  while (index < length) {
+    if (index in array) {
+      inner = $Call(callback, thisArg, array[index], index, array)
+      if ($IsArray(inner)) {
+        at = 0
+        while (at < inner.length) {
+          if (at in inner) result[count++] = inner[at]
+          at++
+        }
+      } else result[count++] = inner
+    }
+    index++
+  }
+  return result
+}
+
+// A sort with a comparator (see sortArray): a stable top-down merge sort that compares in the same order as the
+// recursive one, running the merges (low, middle, high) the native planned in post-order over one working copy.
+// Holes and undefined values sort last without being compared.
+function sortWith(target, into, holes, comparator, work, undefs, merges) {
+  const merged = []
+  let merge = 0
+  let middle
+  let high
+  let left
+  let right
+  let count
+  let order
+  while (merge < merges.length) {
+    left = merges[merge]
+    middle = merges[merge + 1]
+    high = merges[merge + 2]
+    right = middle
+    count = 0
+    while (left < middle && right < high) {
+      order = +$Call(comparator, undefined, work[left], work[right])
+      // A NaN result counts as equal, which keeps the order stable.
+      if (order <= 0 || order !== order) {
+        $ArraySet(merged, count, work[left])
+        left++
+      } else {
+        $ArraySet(merged, count, work[right])
+        right++
+      }
+      count++
+    }
+    $MergeRest(work, merged, count, left, middle, right, high, merges[merge])
+    merge += 3
+  }
+  return $Sorted(target, into, holes, work, undefs)
+}
+
+// The default sort over more values than one native sort may take at once: native steps of bounded size (see
+// $SortStep), so the run can pause between them like any loop.
+function sortDefault(target, into, holes, values, undefs) {
+  const state = $SortState(values)
+  while ($SortStep(state)) {}
+  return $Sorted(target, into, holes, $SortResult(state, values), undefs)
+}
+
+function Array$prototype$toLocaleString() {
+  const array = $Receiver(this, "Array", "Array.prototype.toLocaleString")
+  let result = ""
+  let index = 0
+  let item
+  while (index < array.length) {
+    if (index > 0) result += ","
+    item = array[index]
+    if (item !== null && item !== undefined) result += String(item.toLocaleString())
+    index++
+  }
+  return result
+}
+// new Map, Set, WeakMap, and WeakSet from an iterable.
+function fillCollection(target, items, kind) {
+  const pairs = kind === "Map" || kind === "WeakMap"
+  for (const item of items) {
+    if (!pairs) $Table("add", target, item)
+    else if (!$IsObject(item)) $Throw("TypeError", "new " + kind + "(...) expects [key, value] pairs as entry objects.")
+    else $Table("add", target, item[0], item[1])
+  }
+  return target
+}
+
+function Map$groupBy(items, callback) {
+  return groupBy(items, callback, "Map")
+}
+function Object$groupBy(items, callback) {
+  return groupBy(items, callback, "Object")
+}
+// Object.groupBy's groups have a null prototype, so group names never collide with inherited methods.
+function groupBy(items, callback, kind) {
+  if (items === null || items === undefined) $Throw("TypeError", kind + ".groupBy expects an iterable collection.")
+  $Callback(callback, kind + ".groupBy")
+  const groups = $Table("groups", kind)
+  let index = 0
+  let key
+  for (const item of items) {
+    key = callback(item, index++)
+    if (kind === "Object") key = String($Table("groupKey", key))
+    $Table("group", groups, key, item)
+  }
+  return groups
+}
+
+// getOrInsertComputed when the key is missing: the callback's result wins over anything it inserted itself.
+function insertComputed(target, key, callback) {
+  const value = callback(key)
+  $Table("add", target, key, value)
+  return value
+}
+
+function Map$prototype$forEach(callback, thisArg = undefined) {
+  collectionForEach($Receiver(this, "Map", "Map.prototype.forEach"), callback, thisArg, "Map.forEach")
+}
+function Set$prototype$forEach(callback, thisArg = undefined) {
+  collectionForEach($Receiver(this, "Set", "Set.prototype.forEach"), callback, thisArg, "Set.forEach")
+}
+// Visits entries live, as in JS.
+function collectionForEach(target, callback, thisArg, label) {
+  $Callback(callback, label)
+  for (const entry of $Table("entries", target)) $Call(callback, thisArg, entry[1], entry[0], target)
+}
+
+function Set$prototype$union(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.union"), other, "union")
+}
+function Set$prototype$intersection(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.intersection"), other, "intersection")
+}
+function Set$prototype$difference(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.difference"), other, "difference")
+}
+function Set$prototype$symmetricDifference(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.symmetricDifference"), other, "symmetricDifference")
+}
+function Set$prototype$isSubsetOf(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.isSubsetOf"), other, "isSubsetOf")
+}
+function Set$prototype$isSupersetOf(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.isSupersetOf"), other, "isSupersetOf")
+}
+function Set$prototype$isDisjointFrom(other) {
+  return setMethod($Receiver(this, "Set", "Set.prototype.isDisjointFrom"), other, "isDisjointFrom")
+}
+// A Set method over the other set's size, has, and keys (GetSetRecord): it either asks the other set whether it has
+// each of this set's values, or takes all of the other set's values, whichever is smaller.
+function setMethod(target, other, name) {
+  if (!$IsObject(other)) $Throw("TypeError", "Set." + name + " expects a Set-like object.")
+  const size = +other.size
+  if (size !== size) $Throw("TypeError", "Set." + name + " received a Set-like object with an invalid size.")
+  if (size < 0) $Throw("RangeError", "Set." + name + " received a Set-like object with a negative size.")
+  const has = other.has
+  const keys = other.keys
+  if (!$IsCallable(has) || !$IsCallable(keys)) $Throw("TypeError", "Set." + name + " expects callable 'has' and 'keys' methods.")
+  const own = $Table("size", target)
+  if (name === "isSubsetOf" && own > size) return false
+  if (name === "isSupersetOf" && own < size) return false
+  const result = name === "intersection" ? new Set() : name === "union" || name === "difference" || name === "symmetricDifference" ? $Table("copy", target) : undefined
+  const asks = name === "isSubsetOf" || ((name === "intersection" || name === "difference" || name === "isDisjointFrom") && own <= size)
+  let found
+  if (asks) {
+    for (const item of $Table("values", name === "difference" ? result : target)) {
+      found = !!$Call(has, other, item)
+      if (name === "intersection") {
+        if (found) $Table("add", result, item)
+      } else if (name === "difference") {
+        if (found) $Table("delete", result, item)
+      } else if (found === (name === "isDisjointFrom")) return false
+    }
+    return result === undefined ? true : result
+  }
+  const iterator = $Call(keys, other)
+  if (!$IsObject(iterator)) $Throw("TypeError", "Set." + name + " expects 'keys' to return an iterator object.")
+  for (const item of $Direct(iterator, true)) {
+    found = $Table("has", target, item)
+    if (name === "union") $Table("add", result, item)
+    else if (name === "intersection") {
+      if (found) $Table("add", result, item)
+    } else if (name === "difference") $Table("delete", result, item)
+    else if (name === "symmetricDifference") $Table(found ? "delete" : "add", result, item)
+    else if (found === (name === "isDisjointFrom")) return false
+  }
+  return result === undefined ? true : result
+}
+function Object$fromEntries(entries) {
+  const result = {}
+  for (const entry of entries) {
+    if (!$IsObject(entry, true)) $Throw("TypeError", "Object.fromEntries expects [key, value] entry objects.")
+    $Define(result, String(entry[0]), entry[1], true)
+  }
+  return result
+}
+
+function Math$sumPrecise(items) {
+  const numbers = []
+  for (const item of items) {
+    if (typeof item !== "number") $Throw("TypeError", "Math.sumPrecise expects an iterable of numbers.")
+    $ArraySet(numbers, numbers.length, item)
+  }
+  return $SumPrecise(numbers)
+}
+
+// new AggregateError: the error is made (message and cause) before its errors are read.
+function aggregateError(error, errors) {
+  const list = []
+  for (const item of errors) $ArraySet(list, list.length, item)
+  return $Define(error, "errors", list, false)
+}
+
+// A Uint8Array's bytes from an iterable: a new one with prototype into, or set into the Uint8Array into at
+// offset. As in TypedArray.from, a mapper sees the original values, after the source is consumed in full.
+function collectBytes(source, name, mapper, thisArg, into, offset) {
+  if (!$IsIterable(source)) $Throw("TypeError", name + " expects a Uint8Array, an array, or an iterable of numbers, received " + $Describe(source) + ".")
+  const values = []
+  for (const item of source) $ArraySet(values, values.length, item)
+  let index = 0
+  if (mapper !== undefined) {
+    while (index < values.length) {
+      values[index] = $Call(mapper, thisArg, values[index], index)
+      index++
+    }
+  }
+  return $Bytes(values, into, offset)
+}
+
+// An arguments object's [Symbol.iterator], as Array.prototype.values reads it: the length and each index, live.
+function* argumentsValues() {
+  let index = 0
+  while (index < this.length) {
+    yield this[index]
+    index++
+  }
+}
+
+// Object.entries and Object.values over an object with program getters: each key's enumerability is checked as it is
+// visited, so a getter that deletes or hides a later key is seen.
+function objectEntries(source, values) {
+  const keys = $OwnKeys(source, true, undefined)
+  const result = []
+  let index = 0
+  while (index < keys.length) {
+    const key = keys[index]
+    if ($IsEnumerableOwn(source, key)) $ArraySet(result, result.length, values ? source[key] : [key, source[key]])
+    index++
+  }
+  return result
+}
+
+// Object.assign when a source has program getters or the target's chain has program setters: Get from each source,
+// then Set on the target, key by key.
+function objectAssign(target, sources) {
+  let at = 0
+  while (at < sources.length) {
+    const source = sources[at]
+    const keys = $OwnKeys(source, false, undefined)
+    let index = 0
+    while (index < keys.length) {
+      const key = keys[index]
+      if ($IsEnumerableOwn(source, key)) target[key] = source[key]
+      index++
+    }
+    at++
+  }
+  return target
+}
+
+// Headers and URLSearchParams from iterable [name, value] pairs, read in full as strings before any is checked; from a
+// record of names to values when init is not iterable.
+function readPairs(init, label, kind, proto) {
+  if (!$IsIterable(init)) return $Pairs(kind, proto, init, label)
+  const pairs = []
+  let strings
+  for (const pair of init) {
+    if (!$IsIterable(pair)) $Throw("TypeError", label + " expects iterable [name, value] pairs.")
+    strings = []
+    for (const item of pair) $ArraySet(strings, strings.length, String(item))
+    $ArraySet(pairs, pairs.length, strings)
+  }
+  return $Pairs(kind, proto, pairs, label)
+}
+
+// Headers and URLSearchParams forEach: the callback sees each pair as listed when it started.
+function pairsForEach(target, pairs, callback, thisArg) {
+  let index = 0
+  while (index < pairs.length) {
+    $Call(callback, thisArg, pairs[index][1], pairs[index][0], target)
+    index++
+  }
+}
+// Iterator helpers are prelude generators, made with %IteratorHelper% as their prototype. Each is primed to its first
+// yield, so a return() before the first next() still closes the source, from its finally.
+function Iterator$from(value) {
+  if ($IsObject(value) && $Inherits(value, Iterator.prototype)) return value
+  return prime(wrapHelper(value, flattenable(value, true, "Iterator.from")))
+}
+function* wrapHelper(source, iterator) {
+  let started = false
+  try {
+    yield
+    started = true
+    for (const item of iterator) yield item
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function Iterator$prototype$map(mapper) {
+  const iterator = $Direct(this, false)
+  $Callback(mapper, "Iterator.prototype.map")
+  return prime(mapHelper(this, iterator, mapper))
+}
+function* mapHelper(source, iterator, mapper) {
+  let started = false
+  try {
+    yield
+    started = true
+    let counter = 0
+    for (const item of iterator) yield mapper(item, counter++)
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function Iterator$prototype$filter(predicate) {
+  const iterator = $Direct(this, false)
+  $Callback(predicate, "Iterator.prototype.filter")
+  return prime(filterHelper(this, iterator, predicate))
+}
+function* filterHelper(source, iterator, predicate) {
+  let started = false
+  try {
+    yield
+    started = true
+    let counter = 0
+    for (const item of iterator) if (predicate(item, counter++)) yield item
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function Iterator$prototype$take(limit) {
+  const iterator = $Direct(this, false)
+  return prime(takeHelper(this, iterator, count(limit, "take")))
+}
+function* takeHelper(source, iterator, remaining) {
+  let started = false
+  try {
+    yield
+    started = true
+    if (remaining === 0) return closeIterator(source)
+    for (const item of iterator) {
+      remaining--
+      yield item
+      if (remaining === 0) break
+    }
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function Iterator$prototype$drop(limit) {
+  const iterator = $Direct(this, false)
+  return prime(dropHelper(this, iterator, count(limit, "drop")))
+}
+function* dropHelper(source, iterator, remaining) {
+  let started = false
+  try {
+    yield
+    started = true
+    for (const item of iterator) {
+      if (remaining > 0) remaining--
+      else yield item
+    }
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function Iterator$prototype$flatMap(mapper) {
+  const iterator = $Direct(this, false)
+  $Callback(mapper, "Iterator.prototype.flatMap")
+  return prime(flatMapHelper(this, iterator, mapper))
+}
+function* flatMapHelper(source, iterator, mapper) {
+  let started = false
+  try {
+    yield
+    started = true
+    let counter = 0
+    for (const item of iterator) {
+      for (const inner of flattenable(mapper(item, counter++), false, "Iterator.prototype.flatMap")) yield inner
+    }
+  } finally {
+    if (!started) closeIterator(source)
+  }
+}
+
+function prime(helper) {
+  helper.next()
+  return helper
+}
+
+// A take or drop count: a number that is not NaN or negative.
+function count(limit, name) {
+  const number = +limit
+  const integer = number === Infinity || number === -Infinity ? number : number - (number % 1)
+  if (number !== number || integer < 0) $Throw("RangeError", "Iterator.prototype." + name + " expects a non-negative count, received " + number + ".")
+  return integer
+}
+
+// GetIteratorFlattenable: an iterable by its [Symbol.iterator], otherwise the object itself as an iterator.
+function flattenable(value, strings, name) {
+  if (typeof value === "string" ? !strings : !$IsObject(value)) $Throw("TypeError", name + " expects an iterable or iterator, received " + $Describe(value) + ".")
+  const method = value[Symbol.iterator]
+  return $Direct(method === undefined || method === null ? value : $Call(method, value), false)
+}
+
+function closeIterator(iterator) {
+  const method = iterator.return
+  if (method !== undefined && method !== null && !$IsObject($Call(method, iterator))) $Throw("TypeError", "Iterator return() must return an object.")
+}
+
+function Iterator$prototype$toArray() {
+  const result = []
+  for (const item of $Direct(this, false)) $ArraySet(result, result.length, item)
+  return result
+}
+
+function Iterator$prototype$reduce(callback, ...initial) {
+  const iterator = $Direct(this, false)
+  $Callback(callback, "Iterator.prototype.reduce")
+  let accumulator = initial[0]
+  let started = initial.length > 0
+  let index = 0
+  for (const item of iterator) {
+    if (started) accumulator = callback(accumulator, item, index)
+    else accumulator = item
+    started = true
+    index++
+  }
+  if (!started) $Throw("TypeError", "Iterator.prototype.reduce of an empty iterator with no initial value.")
+  return accumulator
+}
+
+function Iterator$prototype$forEach(callback) {
+  iteratorTest(this, callback, "forEach")
+}
+function Iterator$prototype$some(callback) {
+  return iteratorTest(this, callback, "some")
+}
+function Iterator$prototype$every(callback) {
+  return iteratorTest(this, callback, "every")
+}
+function Iterator$prototype$find(callback) {
+  return iteratorTest(this, callback, "find")
+}
+// Calls the callback with each value and its index until its result decides; leaving early closes the iterator.
+function iteratorTest(self, callback, name) {
+  const iterator = $Direct(self, false)
+  $Callback(callback, "Iterator.prototype." + name)
+  let index = 0
+  let result
+  for (const item of iterator) {
+    result = callback(item, index++)
+    if (name === "some" && result) return true
+    if (name === "every" && !result) return false
+    if (name === "find" && result) return item
+  }
+  return name === "every" ? true : name === "some" ? false : undefined
+}
+
+// JSON.parse's reviver: children are revived first, each replacing (or, when the reviver gives undefined, removing)
+// its property; then the reviver sees the value itself.
+function revive(holder, key, reviver) {
+  const value = holder[key]
+  if ($IsObject(value)) {
+    const names = $Keys(value)
+    let index = 0
+    let revived
+    while (index < names.length) {
+      revived = revive(value, names[index], reviver)
+      if (revived === undefined) delete value[names[index]]
+      else value[names[index]] = revived
+      index++
+    }
+  }
+  return $Call(reviver, holder, key, value)
+}
+
+// String replace with a callback, once the matches are found: each is the text before it and the callback's
+// arguments; the text after the last one follows.
+function replaceWith(matches, rest, callback) {
+  let result = ""
+  let index = 0
+  while (index < matches.length) {
+    result += matches[index][0] + String(callback(...matches[index][1]))
+    index++
+  }
+  return result + rest
+}
+"""#
 
     // parity: psychoscript/src/prelude/bytecode.ts#SavedCodes [status=implemented hash=35954d4a7ac3]
     public struct SavedCodes: Equatable, Sendable, Codable {
@@ -4437,18 +5814,30 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/prelude/helpers.ts#helpers [status=adapted hash=bb972f38545b]
+    /// The privileged `$` helpers the prelude calls, by name, each with the native that does its work (the stdlib's
+    /// Swift implementation of the same step).
+    // parity: psychoscript/src/prelude/helpers.ts#helpers [status=adapted hash=fdc7b249c0f2]
     public static func helpers() -> [String: String] {
-        [
+        let names = [
+            "$Throw", "$Callback", "$Call", "$Receiver", "$IsObject", "$IsIterable", "$Describe", "$Inherits", "$Keys",
+            "$OwnKeys", "$IsEnumerableOwn", "$Define", "$ArraySet", "$SumPrecise", "$Bytes", "$DerivedBytes", "$Pairs",
+            "$IsCallable", "$Direct", "$Sorted", "$MergeRest", "$SortState", "$SortStep", "$SortResult", "$Table",
+        ]
+        var map: [String: String] = [
             "toPrimitive": "internal:toPrimitive",
             "aggregateError": "internal:aggregateError",
         ]
+        for name in names { map[name] = "internal:\(name)" }
+        return map
     }
 
     // parity: psychoscript/src/prelude/prelude.ts#compiledPrelude [status=implemented hash=67de943408d8]
     public static func compiledPrelude() -> [Code] {
-        builtinCodes(id: "<prelude>", sourceCode: preludeSourceCode)
+        compiledPreludeCodes
     }
+
+    /// Parsed and compiled once per process.
+    private static let compiledPreludeCodes: [Code] = builtinCodes(id: "<prelude>", sourceCode: preludeSourceCode)
 
     // parity: psychoscript/src/prelude/prelude.ts#Prelude [status=implemented hash=f03d030aedd9]
     public final class Prelude: Sendable {
@@ -4466,55 +5855,4 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/internal-prelude.ts#VmIntrinsic [status=implemented hash=dc73ea7afa48]
-    public final class VmIntrinsic: Sendable {
-        public let name: String
-        public let invoke: @Sendable ([Value]) throws -> Value
-
-        public init(name: String, invoke: @escaping @Sendable ([Value]) throws -> Value) {
-            self.name = name
-            self.invoke = invoke
-        }
-    }
-
-    // parity: psychoscript/src/internal-prelude.ts#INTERNAL_SOURCE [status=adapted hash=bd689653a7c6]
-    public static let INTERNAL_SOURCE: String = "// Code Mode internal VM prelude"
-
-    // parity: psychoscript/src/internal-prelude.ts#getInternalPrelude [status=implemented hash=305e479371fd]
-    public static func getInternalPrelude() -> [Code] {
-        builtinCodes(id: "<internal>", sourceCode: INTERNAL_SOURCE)
-    }
-
-    // parity: psychoscript/src/internal-prelude.ts#internalCode [status=implemented hash=192f49efa4ad]
-    public static func internalCode(_ name: String) -> Code? {
-        getInternalPrelude().first { $0.name == name }
-    }
-
-    // parity: psychoscript/src/internal-prelude.ts#registerVmIntrinsics [status=implemented hash=65955908b6ea]
-    public static func registerVmIntrinsics(_ registry: inout [String: VmIntrinsic]) {
-        registry["isArray"] = VmIntrinsic(name: "isArray") { args in
-            if case .object(let obj) = args.first { return .bool(obj is Arr) }
-            return .bool(false)
-        }
-        registry["typeof"] = VmIntrinsic(name: "typeof") { args in
-            .string(typeofValue(args.first ?? .undefined))
-        }
-    }
-
-    // parity: psychoscript/src/internal-prelude.ts#tryFastBoundaryOrJson [status=implemented hash=767bebe0ab2d]
-    public static func tryFastBoundaryOrJson(_ value: Value) -> JSONValue? {
-        switch value {
-        case .null: return .null
-        case .bool(let b): return .bool(b)
-        case .string(let s): return .string(s)
-        case .number(let n):
-            guard n.isFinite else { return .null }
-            if n == Double(Int64(n)) && n >= -9_007_199_254_740_991 && n <= 9_007_199_254_740_991 && !(n == 0 && n.sign == .minus) {
-                return .int(Int64(n))
-            }
-            return .double(n)
-        default:
-            return nil
-        }
-    }
 }
