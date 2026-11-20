@@ -1,4 +1,24 @@
+import path from "node:path"
+
 export type PortTier = "tier1-foundation" | "tier2-engine" | "tier3-surfaces" | "tier4-extensions"
+
+/**
+ * A tracked package that lives in its own upstream repository instead of
+ * `anomalyco/opencode/packages/<name>`. It is pinned by its own lock file and
+ * checked out under `upstream/<dir>` by `scripts/sync-upstream.sh`.
+ */
+export interface ExternalRepoSpec {
+  /** Checkout directory relative to the repository root (gitignored). */
+  readonly dir: string
+  /** Lock file relative to the repository root. */
+  readonly lockFile: string
+  /**
+   * The opencode package.json whose `dependencies[<npmName>]` decides which
+   * version of this repo upstream actually ships. The audit fails when the
+   * pinned tag drifts from that version.
+   */
+  readonly consumer: { readonly upstreamPackage: string; readonly npmName: string }
+}
 
 export interface PackageSpec {
   readonly upstreamPackage: string
@@ -6,6 +26,19 @@ export interface PackageSpec {
   readonly tier: PortTier
   readonly language: "ts" | "rs"
   readonly description: string
+  readonly external?: ExternalRepoSpec
+}
+
+/** Absolute root of a tracked package checkout (the directory that holds `src/` and `package.json`). */
+export function packageRoot(rootDir: string, pkg: PackageSpec): string {
+  return pkg.external
+    ? path.join(rootDir, pkg.external.dir)
+    : path.join(rootDir, "upstream/opencode/packages", pkg.upstreamPackage)
+}
+
+export function packageRootByName(rootDir: string, name: string): string {
+  const spec = TRACKED_PACKAGES.find((p) => p.upstreamPackage === name)
+  return spec ? packageRoot(rootDir, spec) : path.join(rootDir, "upstream/opencode/packages", name)
 }
 
 export const TRACKED_PACKAGES: readonly PackageSpec[] = [
@@ -141,6 +174,21 @@ export const TRACKED_PACKAGES: readonly PackageSpec[] = [
     tier: "tier4-extensions",
     language: "ts",
     description: "Sandboxed scripting runtime for tool composition",
+  },
+  {
+    // Upstream extracted Code Mode's language (compiler, VM, runtime, stdlib,
+    // snapshots, Effect driver) out of packages/codemode/src/language into the
+    // standalone `psychoscript` npm package. @opencode/codemode depends on it.
+    upstreamPackage: "psychoscript",
+    swiftTarget: "OpenCodeCore",
+    tier: "tier4-extensions",
+    language: "ts",
+    description: "Code Mode language: compiler, VM, runtime, stdlib, snapshots (anomalyco/psychoscript)",
+    external: {
+      dir: "upstream/psychoscript",
+      lockFile: "upstream.psychoscript.lock.json",
+      consumer: { upstreamPackage: "codemode", npmName: "psychoscript" },
+    },
   },
   {
     upstreamPackage: "http-recorder",

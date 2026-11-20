@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anomalyco/opencode.git",
   "branch": "dev",
-  "commit": "3aaac7731360a7be32cc69b65c95add4080f04a9",
-  "commitDate": "2026-11-18T18:56:14Z",
-  "commitSubject": "fix(core): reload config only when a config input changes (#62158)",
+  "commit": "85951cb08614dfe6443905552cae49d59d2d6615",
+  "commitDate": "2026-11-20T18:07:55+05:30",
+  "commitSubject": "fix(session-ui): show subagent status as a colored bar and word in the New timeline (#65164)",
   "license": "MIT"
 }

@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-20T03:27:54.151Z",
+  "generatedAt": "2026-11-20T13:26:04.095Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opentui.git",
     "branch": "main",
-    "commit": "79eb7fccd1713f3040621c01161e088f8a68edf7",
-    "commitDate": "2026-11-18T14:10:12+01:00",
-    "commitSubject": "native: keep the Windows static library's CRT copies private (#2157)"
+    "commit": "2738bc4b836e9db8bab1df8a7f1d5a5583ee51f1",
+    "commitDate": "2026-11-20T13:55:41+01:00",
+    "commitSubject": "solid: drop babel-plugin-module-resolver (#2182)"
   },
   "summary": {
     "totalPackages": 5,
     "totalFiles": 292,
-    "totalSymbols": 7223,
-    "totalFunctions": 4617,
+    "totalSymbols": 7225,
+    "totalFunctions": 4618,
     "byPackage": {
       "core": {
         "files": 125,
-        "symbols": 3829,
-        "functions": 2145,
-        "lines": 66569
+        "symbols": 3831,
+        "functions": 2146,
+        "lines": 66613
       },
       "keymap": {
         "files": 66,
@@ -28280,6 +28280,18 @@
       "bodyHash": "e6be02c1c836"
     },
     {
+      "id": "core/src/renderables/Markdown.ts#MarkdownTaskMarkers",
+      "package": "core",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier1-primitives",
+      "file": "src/renderables/Markdown.ts",
+      "symbol": "MarkdownTaskMarkers",
+      "kind": "interface",
+      "line": 83,
+      "signature": "export interface MarkdownTaskMarkers {",
+      "bodyHash": "8aed4165d6a9"
+    },
+    {
       "id": "core/src/renderables/Markdown.ts#MarkdownOptions",
       "package": "core",
       "swiftTarget": "OpenTUICore",
@@ -28287,9 +28299,9 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownOptions",
       "kind": "interface",
-      "line": 82,
+      "line": 88,
       "signature": "export interface MarkdownOptions extends RenderableOptions<MarkdownRenderable> {",
-      "bodyHash": "89468533e0af"
+      "bodyHash": "43030af279c9"
     },
     {
       "id": "core/src/renderables/Markdown.ts#MarkdownInlineSpan",
@@ -28299,7 +28311,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownInlineSpan",
       "kind": "interface",
-      "line": 126,
+      "line": 137,
       "signature": "export interface MarkdownInlineSpan {",
       "bodyHash": "c7a9e2f0d40d"
     },
@@ -28311,7 +28323,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownInlineContext",
       "kind": "interface",
-      "line": 142,
+      "line": 153,
       "signature": "export interface MarkdownInlineContext {",
       "bodyHash": "d4910e16d3b2"
     },
@@ -28323,7 +28335,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownInlineHook",
       "kind": "type",
-      "line": 151,
+      "line": 162,
       "signature": "export type MarkdownInlineHook = (spans: MarkdownInlineSpan[], context: MarkdownInlineContext) => MarkdownInlineSpan[]",
       "bodyHash": "c7cac927d39a"
     },
@@ -28335,7 +28347,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "RenderNodeContext",
       "kind": "interface",
-      "line": 153,
+      "line": 164,
       "signature": "export interface RenderNodeContext {",
       "bodyHash": "bd72f9a27153"
     },
@@ -28347,7 +28359,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownBlockKind",
       "kind": "type",
-      "line": 162,
+      "line": 173,
       "signature": "export type MarkdownBlockKind =",
       "bodyHash": "387074e8c778"
     },
@@ -28359,7 +28371,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownBlock",
       "kind": "interface",
-      "line": 176,
+      "line": 187,
       "signature": "export interface MarkdownBlock {",
       "bodyHash": "25c42383fc10"
     },
@@ -28371,7 +28383,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownCodeBlock",
       "kind": "interface",
-      "line": 200,
+      "line": 211,
       "signature": "export interface MarkdownCodeBlock extends MarkdownBlock {",
       "bodyHash": "20b060228b72"
     },
@@ -28383,7 +28395,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownCodeBlockRenderer",
       "kind": "type",
-      "line": 208,
+      "line": 219,
       "signature": "export type MarkdownCodeBlockRenderer = (",
       "bodyHash": "8d3bf77c2b72"
     },
@@ -28395,7 +28407,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownCodeBlockRendererMap",
       "kind": "type",
-      "line": 213,
+      "line": 224,
       "signature": "export type MarkdownCodeBlockRendererMap =",
       "bodyHash": "24a1ea3dac4a"
     },
@@ -28407,7 +28419,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "createMarkdownCodeBlockRenderer",
       "kind": "function",
-      "line": 221,
+      "line": 232,
       "signature": "export function createMarkdownCodeBlockRenderer(",
       "bodyHash": "76e5d9be3286"
     },
@@ -28419,9 +28431,9 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable",
       "kind": "class",
-      "line": 355,
+      "line": 366,
       "signature": "export class MarkdownRenderable extends Renderable {",
-      "bodyHash": "64663ead6a3e"
+      "bodyHash": "d461833341ef"
     },
     {
       "id": "core/src/renderables/Markdown.ts#MarkdownRenderable.content",
@@ -28431,7 +28443,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.content",
       "kind": "method",
-      "line": 446,
+      "line": 460,
       "signature": "get content(): string {",
       "bodyHash": "d3f8c7b5d2bc"
     },
@@ -28443,7 +28455,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.syntaxStyle",
       "kind": "method",
-      "line": 456,
+      "line": 470,
       "signature": "get syntaxStyle(): SyntaxStyle {",
       "bodyHash": "8bbbc920cf40"
     },
@@ -28455,7 +28467,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.treeSitterClient",
       "kind": "method",
-      "line": 471,
+      "line": 485,
       "signature": "get treeSitterClient(): TreeSitterClient | undefined {",
       "bodyHash": "92ef7f9b83d2"
     },
@@ -28467,7 +28479,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.fg",
       "kind": "method",
-      "line": 483,
+      "line": 497,
       "signature": "get fg(): RGBA | undefined {",
       "bodyHash": "2bfb97aefe3c"
     },
@@ -28479,7 +28491,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.bg",
       "kind": "method",
-      "line": 495,
+      "line": 509,
       "signature": "get bg(): RGBA | undefined {",
       "bodyHash": "668f5b6dcdd7"
     },
@@ -28491,7 +28503,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.conceal",
       "kind": "method",
-      "line": 507,
+      "line": 521,
       "signature": "get conceal(): boolean {",
       "bodyHash": "2bc204954212"
     },
@@ -28503,9 +28515,21 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.concealCode",
       "kind": "method",
-      "line": 521,
+      "line": 535,
       "signature": "get concealCode(): boolean {",
       "bodyHash": "ae0ad9c65604"
+    },
+    {
+      "id": "core/src/renderables/Markdown.ts#MarkdownRenderable.taskMarkers",
+      "package": "core",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier1-primitives",
+      "file": "src/renderables/Markdown.ts",
+      "symbol": "MarkdownRenderable.taskMarkers",
+      "kind": "method",
+      "line": 546,
+      "signature": "get taskMarkers(): MarkdownTaskMarkers {",
+      "bodyHash": "165e9598bfdc"
     },
     {
       "id": "core/src/renderables/Markdown.ts#MarkdownRenderable.streaming",
@@ -28515,7 +28539,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.streaming",
       "kind": "method",
-      "line": 532,
+      "line": 559,
       "signature": "get streaming(): boolean {",
       "bodyHash": "a6ce28dc913c"
     },
@@ -28527,7 +28551,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.tableOptions",
       "kind": "method",
-      "line": 551,
+      "line": 578,
       "signature": "get tableOptions(): MarkdownTableOptions | undefined {",
       "bodyHash": "0edbdb0d3e35"
     },
@@ -28539,7 +28563,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.renderBlock",
       "kind": "method",
-      "line": 561,
+      "line": 588,
       "signature": "get renderBlock(): MarkdownOptions[\"renderBlock\"] | undefined {",
       "bodyHash": "e0a7e6088dae"
     },
@@ -28551,7 +28575,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.inlineHook",
       "kind": "method",
-      "line": 572,
+      "line": 599,
       "signature": "get inlineHook(): MarkdownInlineHook | undefined {",
       "bodyHash": "12f008f9b396"
     },
@@ -28563,7 +28587,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.inlineHookFilter",
       "kind": "method",
-      "line": 585,
+      "line": 612,
       "signature": "get inlineHookFilter(): readonly string[] | undefined {",
       "bodyHash": "f3cda2f1e39f"
     },
@@ -28575,7 +28599,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.extensions",
       "kind": "method",
-      "line": 595,
+      "line": 622,
       "signature": "get extensions(): readonly \"math\"[] {",
       "bodyHash": "ddbe0f6f093a"
     },
@@ -28587,7 +28611,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.blocks",
       "kind": "method",
-      "line": 606,
+      "line": 633,
       "signature": "get blocks(): readonly { kind: MarkdownBlockKind; renderable: Renderable | undefined }[] {",
       "bodyHash": "0fcf77d1c392"
     },
@@ -28599,7 +28623,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.committedBlockCount",
       "kind": "method",
-      "line": 615,
+      "line": 642,
       "signature": "get committedBlockCount(): number {",
       "bodyHash": "67060c4bdeca"
     },
@@ -28611,7 +28635,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.rerunInlineHook",
       "kind": "method",
-      "line": 624,
+      "line": 651,
       "signature": "public rerunInlineHook(select: (source: string) => boolean): void {",
       "bodyHash": "014b88ff1a00"
     },
@@ -28623,7 +28647,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.targetAt",
       "kind": "method",
-      "line": 644,
+      "line": 671,
       "signature": "public targetAt(x: number, y: number): string | undefined {",
       "bodyHash": "6748a37b702b"
     },
@@ -28635,7 +28659,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.clearCache",
       "kind": "method",
-      "line": 655,
+      "line": 682,
       "signature": "public clearCache(): void {",
       "bodyHash": "5adcb765cec7"
     },
@@ -28647,7 +28671,7 @@
       "file": "src/renderables/Markdown.ts",
       "symbol": "MarkdownRenderable.refreshStyles",
       "kind": "method",
-      "line": 659,
+      "line": 686,
       "signature": "public refreshStyles(): void {",
       "bodyHash": "f4fa94f30d11"
     },
@@ -31623,7 +31647,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaAction",
       "kind": "type",
-      "line": 31,
+      "line": 33,
       "signature": "export type TextareaAction =",
       "bodyHash": "e8b66015f437"
     },
@@ -31635,7 +31659,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "KeyBinding",
       "kind": "type",
-      "line": 69,
+      "line": 71,
       "signature": "export type KeyBinding = BaseKeyBinding<TextareaAction>",
       "bodyHash": "8ecb31fb2a5b"
     },
@@ -31647,7 +31671,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaKeyAliasMap",
       "kind": "type",
-      "line": 70,
+      "line": 72,
       "signature": "export type TextareaKeyAliasMap = Record<string, string>",
       "bodyHash": "66292753ff6e"
     },
@@ -31659,7 +31683,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "defaultTextareaKeyBindings",
       "kind": "const",
-      "line": 72,
+      "line": 74,
       "signature": "export const defaultTextareaKeyBindings: KeyBinding[] = [",
       "bodyHash": "004bf28b9c7c"
     },
@@ -31671,7 +31695,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "SubmitEvent",
       "kind": "interface",
-      "line": 145,
+      "line": 147,
       "signature": "export interface SubmitEvent {}",
       "bodyHash": "8e231e9507f4"
     },
@@ -31683,7 +31707,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaOptions",
       "kind": "interface",
-      "line": 147,
+      "line": 149,
       "signature": "export interface TextareaOptions extends EditBufferOptions {",
       "bodyHash": "a8f70ed61878"
     },
@@ -31695,9 +31719,9 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable",
       "kind": "class",
-      "line": 160,
+      "line": 162,
       "signature": "export class TextareaRenderable extends EditBufferRenderable {",
-      "bodyHash": "956c7c20251d"
+      "bodyHash": "475141805ce0"
     },
     {
       "id": "core/src/renderables/Textarea.ts#TextareaRenderable.handlePaste",
@@ -31707,9 +31731,9 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.handlePaste",
       "kind": "method",
-      "line": 285,
+      "line": 287,
       "signature": "public handlePaste(event: PasteEvent): void {",
-      "bodyHash": "6f4e2c2f52c7"
+      "bodyHash": "25ff3a024113"
     },
     {
       "id": "core/src/renderables/Textarea.ts#TextareaRenderable.handleKeyPress",
@@ -31719,7 +31743,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.handleKeyPress",
       "kind": "method",
-      "line": 289,
+      "line": 291,
       "signature": "public handleKeyPress(key: KeyEvent): boolean {",
       "bodyHash": "7dd80b865a28"
     },
@@ -31731,7 +31755,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.focus",
       "kind": "method",
-      "line": 325,
+      "line": 327,
       "signature": "public focus(): void {",
       "bodyHash": "d35860e5d769"
     },
@@ -31743,7 +31767,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.blur",
       "kind": "method",
-      "line": 330,
+      "line": 332,
       "signature": "public blur(): void {",
       "bodyHash": "66125d685019"
     },
@@ -31755,7 +31779,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.placeholder",
       "kind": "method",
-      "line": 335,
+      "line": 337,
       "signature": "get placeholder(): StyledText | string | null {",
       "bodyHash": "3efc07e4d2cc"
     },
@@ -31767,7 +31791,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.placeholderColor",
       "kind": "method",
-      "line": 350,
+      "line": 352,
       "signature": "get placeholderColor(): RGBA {",
       "bodyHash": "0f1d57d0d8c8"
     },
@@ -31779,7 +31803,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.backgroundColor",
       "kind": "method",
-      "line": 363,
+      "line": 365,
       "signature": "override get backgroundColor(): RGBA {",
       "bodyHash": "8423d86a4d5d"
     },
@@ -31791,7 +31815,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.textColor",
       "kind": "method",
-      "line": 372,
+      "line": 374,
       "signature": "override get textColor(): RGBA {",
       "bodyHash": "6b053d0ee316"
     },
@@ -31803,7 +31827,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.focusedBackgroundColor",
       "kind": "method",
-      "line": 381,
+      "line": 383,
       "signature": "set focusedBackgroundColor(value: ColorInput) {",
       "bodyHash": "3b27c2943b71"
     },
@@ -31815,7 +31839,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.focusedTextColor",
       "kind": "method",
-      "line": 386,
+      "line": 388,
       "signature": "set focusedTextColor(value: ColorInput) {",
       "bodyHash": "ec1903f1f072"
     },
@@ -31827,7 +31851,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.initialValue",
       "kind": "method",
-      "line": 391,
+      "line": 393,
       "signature": "set initialValue(value: string) {",
       "bodyHash": "46b017ffc244"
     },
@@ -31839,7 +31863,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.submit",
       "kind": "method",
-      "line": 400,
+      "line": 402,
       "signature": "public submit(): boolean {",
       "bodyHash": "e4616c6ffa73"
     },
@@ -31851,7 +31875,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.onSubmit",
       "kind": "method",
-      "line": 407,
+      "line": 409,
       "signature": "public set onSubmit(handler: ((event: SubmitEvent) => void) | undefined) {",
       "bodyHash": "8ae37a31e429"
     },
@@ -31863,7 +31887,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.keyBindings",
       "kind": "method",
-      "line": 415,
+      "line": 417,
       "signature": "public set keyBindings(bindings: KeyBinding[] | null | undefined) {",
       "bodyHash": "8a9df5d74ce7"
     },
@@ -31875,7 +31899,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.keyAliasMap",
       "kind": "method",
-      "line": 421,
+      "line": 423,
       "signature": "public set keyAliasMap(aliases: TextareaKeyAliasMap) {",
       "bodyHash": "50e70f41a823"
     },
@@ -31887,7 +31911,7 @@
       "file": "src/renderables/Textarea.ts",
       "symbol": "TextareaRenderable.extmarks",
       "kind": "method",
-      "line": 428,
+      "line": 430,
       "signature": "public get extmarks(): ExtmarksController {",
       "bodyHash": "66b09bf53393"
     },
@@ -33005,7 +33029,7 @@
       "kind": "class",
       "line": 1092,
       "signature": "export class CliRenderer extends EventEmitter implements RenderContext {",
-      "bodyHash": "81cb2c8321ec"
+      "bodyHash": "1e8ace8854c7"
     },
     {
       "id": "core/src/renderer.ts#CliRenderer.lastSceneTimeMs",
@@ -34061,7 +34085,7 @@
       "kind": "method",
       "line": 4885,
       "signature": "public resume(): Promise<void> {",
-      "bodyHash": "bee23b37f593"
+      "bodyHash": "5bef600c34d8"
     },
     {
       "id": "core/src/renderer.ts#CliRenderer.stop",
@@ -34071,7 +34095,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.stop",
       "kind": "method",
-      "line": 4974,
+      "line": 4989,
       "signature": "public stop(): void {",
       "bodyHash": "5fea38374d73"
     },
@@ -34083,7 +34107,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.destroy",
       "kind": "method",
-      "line": 4991,
+      "line": 5006,
       "signature": "public destroy(): void {",
       "bodyHash": "071c4c2ff365"
     },
@@ -34095,7 +34119,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.intermediateRender",
       "kind": "method",
-      "line": 5476,
+      "line": 5491,
       "signature": "public intermediateRender(): void {",
       "bodyHash": "8a8067a3f647"
     },
@@ -34107,7 +34131,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.getNativeStats",
       "kind": "method",
-      "line": 5642,
+      "line": 5657,
       "signature": "public getNativeStats(): NativeRenderStats {",
       "bodyHash": "066c89436789"
     },
@@ -34119,7 +34143,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.getStats",
       "kind": "method",
-      "line": 5646,
+      "line": 5661,
       "signature": "public getStats(): CliRendererStats {",
       "bodyHash": "12e9dfd08cab"
     },
@@ -34131,7 +34155,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.resetStats",
       "kind": "method",
-      "line": 5666,
+      "line": 5681,
       "signature": "public resetStats(): void {",
       "bodyHash": "87f448a8eeba"
     },
@@ -34143,7 +34167,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.setGatherStats",
       "kind": "method",
-      "line": 5671,
+      "line": 5686,
       "signature": "public setGatherStats(enabled: boolean): void {",
       "bodyHash": "5f7c0e69c19c"
     },
@@ -34155,7 +34179,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.getSelection",
       "kind": "method",
-      "line": 5678,
+      "line": 5693,
       "signature": "public getSelection(): Selection | null {",
       "bodyHash": "fe09fa2252a1"
     },
@@ -34167,7 +34191,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.hasSelection",
       "kind": "method",
-      "line": 5682,
+      "line": 5697,
       "signature": "public get hasSelection(): boolean {",
       "bodyHash": "0702f7e8fda1"
     },
@@ -34179,7 +34203,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.getSelectionContainer",
       "kind": "method",
-      "line": 5686,
+      "line": 5701,
       "signature": "public getSelectionContainer(): Renderable | null {",
       "bodyHash": "9735ff8408ae"
     },
@@ -34191,7 +34215,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.clearSelection",
       "kind": "method",
-      "line": 5690,
+      "line": 5705,
       "signature": "public clearSelection(): void {",
       "bodyHash": "7c6bc83f3cf8"
     },
@@ -34203,7 +34227,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.startSelection",
       "kind": "method",
-      "line": 5711,
+      "line": 5726,
       "signature": "public startSelection(renderable: Renderable, x: number, y: number, behavior: SelectionBehavior = \"cell\"): void {",
       "bodyHash": "60cd569bfd97"
     },
@@ -34215,7 +34239,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.updateSelection",
       "kind": "method",
-      "line": 5735,
+      "line": 5750,
       "signature": "public updateSelection(",
       "bodyHash": "a95ac9d857b7"
     },
@@ -34227,7 +34251,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.requestSelectionUpdate",
       "kind": "method",
-      "line": 5773,
+      "line": 5788,
       "signature": "public requestSelectionUpdate(): void {",
       "bodyHash": "f1f5a852ea6a"
     },
@@ -34239,7 +34263,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.paletteDetectionStatus",
       "kind": "method",
-      "line": 5854,
+      "line": 5869,
       "signature": "public get paletteDetectionStatus(): \"idle\" | \"detecting\" | \"cached\" {",
       "bodyHash": "8f7e5ef7cde7"
     },
@@ -34251,7 +34275,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.clearPaletteCache",
       "kind": "method",
-      "line": 6050,
+      "line": 6065,
       "signature": "public clearPaletteCache(): void {",
       "bodyHash": "90e5eb53eaa2"
     },
@@ -34263,7 +34287,7 @@
       "file": "src/renderer.ts",
       "symbol": "CliRenderer.getPalette",
       "kind": "method",
-      "line": 6061,
+      "line": 6076,
       "signature": "public async getPalette(options?: GetPaletteOptions): Promise<TerminalColors> {",
       "bodyHash": "0df0b66643d8"
     },
@@ -71261,7 +71285,7 @@
       "kind": "zig_const",
       "line": 469,
       "signature": "pub const Doc = struct {",
-      "bodyHash": "074807db94fc"
+      "bodyHash": "7e79a4df90d7"
     },
     {
       "id": "native/src/markdown.zig#Doc.init",

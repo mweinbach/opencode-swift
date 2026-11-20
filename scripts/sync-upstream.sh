@@ -56,6 +56,7 @@ if [[ "${UPDATE_LATEST}" -eq 1 ]]; then
     ' "${LOCK_FILE}" "${NEW_COMMIT}" "${NEW_DATE}" "${NEW_SUBJECT}"
   fi
   echo "Updated upstream.lock.json to ${NEW_COMMIT} (${NEW_SUBJECT})"
+  "${ROOT_DIR}/scripts/sync-psychoscript.sh" --update
   exit 0
 fi
 
@@ -67,3 +68,4 @@ if [[ "${CURRENT}" != "${COMMIT}" ]]; then
 fi
 
 echo "Upstream checkout ready at $(git -C "${TARGET_DIR}" rev-parse HEAD)"
+"${ROOT_DIR}/scripts/sync-psychoscript.sh"

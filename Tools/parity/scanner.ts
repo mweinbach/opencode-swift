@@ -1,6 +1,6 @@
 import path from "path"
 import fs from "fs"
-import { TRACKED_PACKAGES, OUT_OF_SCOPE_WEB_PACKAGES, type PortTier } from "./config.ts"
+import { TRACKED_PACKAGES, OUT_OF_SCOPE_WEB_PACKAGES, packageRoot, type PortTier } from "./config.ts"
 
 export type SymbolKind =
   | "function"
@@ -43,6 +43,14 @@ export interface UpstreamManifest {
     readonly commit: string
     readonly commitDate: string
     readonly commitSubject: string
+    /** Tracked packages that live in their own pinned upstream repositories. */
+    readonly external?: ReadonlyArray<{
+      readonly package: string
+      readonly repository: string
+      readonly tag?: string
+      readonly commit: string
+      readonly commitDate: string
+    }>
   }
   readonly summary: {
     readonly totalPackages: number
@@ -2323,8 +2331,22 @@ export async function runScan(): Promise<UpstreamManifest> {
   const compilerExportFailures: Array<{ file: string; missed: string[] }> = []
   let totalFiles = 0
 
+  const external: Array<{ package: string; repository: string; tag?: string; commit: string; commitDate: string }> = []
   for (const pkg of TRACKED_PACKAGES) {
-    const pkgRoot = path.join(UPSTREAM_DIR, "packages", pkg.upstreamPackage)
+    const pkgRoot = packageRoot(ROOT_DIR, pkg)
+    if (pkg.external) {
+      if (!fs.existsSync(path.join(pkgRoot, "src"))) {
+        throw new Error(`Missing ${pkg.upstreamPackage} checkout at ${pkgRoot}. Run ./scripts/parity.sh sync first.`)
+      }
+      const extLock = await Bun.file(path.join(ROOT_DIR, pkg.external.lockFile)).json()
+      external.push({
+        package: pkg.upstreamPackage,
+        repository: extLock.repository,
+        tag: extLock.tag,
+        commit: extLock.commit,
+        commitDate: extLock.commitDate,
+      })
+    }
     const srcRoot = path.join(pkgRoot, "src")
     const files = walkSourceFiles(srcRoot, pkg.language)
     let pkgSymbols = 0
@@ -2385,6 +2407,7 @@ export async function runScan(): Promise<UpstreamManifest> {
       commit: lock.commit,
       commitDate: lock.commitDate,
       commitSubject: lock.commitSubject,
+      external,
     },
     summary: {
       totalPackages: TRACKED_PACKAGES.length,

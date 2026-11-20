@@ -18,10 +18,10 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#DiagnosticKind [status=implemented hash=8d4b9f3a4764]
+    // parity: psychoscript/src/runtime/model.ts#DiagnosticKind [status=implemented hash=8d4b9f3a4764]
     public typealias DiagnosticKind = String
 
-    // parity: codemode/src/language/runtime/model.ts#Diagnostic [status=implemented hash=ce9d5f62e0d8]
+    // parity: psychoscript/src/runtime/model.ts#Diagnostic [status=implemented hash=ce9d5f62e0d8]
     public struct Diagnostic: Error, Equatable, Hashable, Sendable, Codable {
         public let kind: DiagnosticKind
         public let message: String
@@ -41,7 +41,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#Binding [status=implemented hash=14e5129a1cc1]
+    // parity: psychoscript/src/runtime/model.ts#Binding [status=implemented hash=14e5129a1cc1]
     public struct Binding: Sendable {
         public let value: Value
 
@@ -50,7 +50,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#GeneratorRequestKind [status=implemented hash=c7547eb98348]
+    // parity: psychoscript/src/runtime/model.ts#GeneratorRequestKind [status=implemented hash=c7547eb98348]
     public enum GeneratorRequestKind: String, Equatable, Hashable, Sendable, Codable {
         case next
         case `return`
@@ -65,13 +65,13 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=f13f874b0229]
+    // parity: psychoscript/src/runtime/model.ts#AsyncIteratorSymbol [status=implemented hash=f13f874b0229]
     public static let AsyncIteratorSymbol = RuntimeSymbol("Symbol.asyncIterator")
 
-    // parity: codemode/src/language/runtime/model.ts#IteratorSymbol [status=implemented hash=a59775398783]
+    // parity: psychoscript/src/runtime/model.ts#IteratorSymbol [status=implemented hash=a59775398783]
     public static let IteratorSymbol = RuntimeSymbol("Symbol.iterator")
 
-    // parity: codemode/src/language/runtime/model.ts#Throw [status=implemented hash=13d2a2781ff8]
+    // parity: psychoscript/src/runtime/model.ts#Throw [status=implemented hash=13d2a2781ff8]
     public final class Throw: Error, Sendable {
         public let value: Value
 
@@ -80,7 +80,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#PendingThrow [status=implemented hash=b3f9b298c43c]
+    // parity: psychoscript/src/runtime/model.ts#PendingThrow [status=implemented hash=b3f9b298c43c]
     public final class PendingThrow: Error, Sendable {
         private struct Mutable: Sendable {
             var node: AstNode?
@@ -118,7 +118,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#HostFailure [status=implemented hash=73eee3dc8620]
+    // parity: psychoscript/src/runtime/model.ts#HostFailure [status=implemented hash=73eee3dc8620]
     public final class HostFailure: Error, Sendable, CustomStringConvertible {
         public let kind: DiagnosticKind
         public let message: String
@@ -133,7 +133,7 @@ public enum CodemodeLanguage {
         public var description: String { message }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#Lost [status=implemented hash=4dc2e63f5c6f]
+    // parity: psychoscript/src/runtime/model.ts#Lost [status=implemented hash=4dc2e63f5c6f]
     public final class Lost: Sendable {
         public let description: String
 
@@ -142,7 +142,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#lostError [status=implemented hash=b339b422c6d2]
+    // parity: psychoscript/src/runtime/model.ts#lostError [status=implemented hash=b339b422c6d2]
     @inline(never) public static func lostError(_ description: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(
             type: .typeError,
@@ -151,46 +151,46 @@ public enum CodemodeLanguage {
         )
     }
 
-    // parity: codemode/src/language/runtime/model.ts#typeError [status=implemented hash=d2e201e3d02b]
+    // parity: psychoscript/src/runtime/model.ts#typeError [status=implemented hash=d2e201e3d02b]
     @inline(never) public static func typeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .typeError, message: message, node: node)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#invalidData [status=implemented hash=f2a0ed07a30c]
+    // parity: psychoscript/src/runtime/model.ts#invalidData [status=implemented hash=f2a0ed07a30c]
     @inline(never) public static func invalidData(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .typeError, message: message, node: node, kind: "InvalidDataValue")
     }
 
-    // parity: codemode/src/language/runtime/model.ts#rangeError [status=implemented hash=557f53331587]
+    // parity: psychoscript/src/runtime/model.ts#rangeError [status=implemented hash=557f53331587]
     @inline(never) public static func rangeError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .rangeError, message: message, node: node)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#referenceError [status=implemented hash=c336ed0b8e72]
+    // parity: psychoscript/src/runtime/model.ts#referenceError [status=implemented hash=c336ed0b8e72]
     @inline(never) public static func referenceError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .referenceError, message: message, node: node)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#syntaxError [status=implemented hash=b78d25883bc2]
+    // parity: psychoscript/src/runtime/model.ts#syntaxError [status=implemented hash=b78d25883bc2]
     @inline(never) public static func syntaxError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .syntaxError, message: message, node: node)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#uriError [status=implemented hash=151671bdf6db]
+    // parity: psychoscript/src/runtime/model.ts#uriError [status=implemented hash=151671bdf6db]
     @inline(never) public static func uriError(_ message: String, node: AstNode? = nil) -> PendingThrow {
         PendingThrow(type: .uriError, message: message, node: node)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=2936dd03bd3a]
+    // parity: psychoscript/src/runtime/model.ts#supportedSyntaxMessage [status=implemented hash=2936dd03bd3a]
     public static let supportedSyntaxMessage: String =
         "This is a restricted JavaScript-like language. Supported: plain and async functions, data literals, destructuring, standard control flow, await and Promise, and built-ins such as Array, Object, Math, JSON, Date, RegExp, Map, Set, and URL. Unsupported: classes, getters/setters, BigInt, and custom Symbols. Use plain functions and data objects instead."
 
-    // parity: codemode/src/language/runtime/model.ts#sourceLocation [status=implemented hash=f075447b8fab]
+    // parity: psychoscript/src/runtime/model.ts#sourceLocation [status=implemented hash=f075447b8fab]
     public static func sourceLocation(_ node: AstNode) -> SourceLocation {
         node.location ?? SourceLocation(line: 1, column: 1)
     }
 
-    // parity: codemode/src/language/runtime/model.ts#formatLocation [status=implemented hash=f753edfea735]
+    // parity: psychoscript/src/runtime/model.ts#formatLocation [status=implemented hash=f753edfea735]
     public static func formatLocation(_ location: SourceLocation?) -> String {
         guard let location else { return "" }
         return " (line \(location.line), col \(location.column))"
@@ -198,26 +198,26 @@ public enum CodemodeLanguage {
 
     // MARK: - Limits (src/language/runtime/limits.ts)
 
-    // parity: codemode/src/language/runtime/limits.ts#MAX_STRING_LENGTH [status=implemented hash=75e2a193370c]
+    // parity: psychoscript/src/runtime/limits.ts#MAX_STRING_LENGTH [status=implemented hash=75e2a193370c]
     public static let MAX_STRING_LENGTH: Int = 1 << 24
 
-    // parity: codemode/src/language/runtime/limits.ts#MAX_ARRAY_LENGTH [status=implemented hash=2ef30070e0cf]
+    // parity: psychoscript/src/runtime/limits.ts#MAX_ARRAY_LENGTH [status=implemented hash=2ef30070e0cf]
     public static let MAX_ARRAY_LENGTH: Int = 10_000_000
 
-    // parity: codemode/src/language/runtime/limits.ts#MAX_PENDING_PROMISES [status=implemented hash=8dbd45e9f119]
+    // parity: psychoscript/src/runtime/limits.ts#MAX_PENDING_PROMISES [status=implemented hash=8dbd45e9f119]
     public static let MAX_PENDING_PROMISES: Int = 10_000
 
-    // parity: codemode/src/language/runtime/limits.ts#MAX_VALUE_DEPTH [status=implemented hash=42e72293b65d]
+    // parity: psychoscript/src/runtime/limits.ts#MAX_VALUE_DEPTH [status=implemented hash=42e72293b65d]
     public static let MAX_VALUE_DEPTH: Int = 32
 
-    // parity: codemode/src/language/runtime/limits.ts#checkStringLength [status=implemented hash=1f97f0f68e95]
+    // parity: psychoscript/src/runtime/limits.ts#checkStringLength [status=implemented hash=1f97f0f68e95]
     public static func checkStringLength(_ length: Int) throws {
         if length > MAX_STRING_LENGTH {
             throw rangeError("Invalid string length")
         }
     }
 
-    // parity: codemode/src/language/runtime/limits.ts#checkArrayLength [status=implemented hash=6e3b76ef0c40]
+    // parity: psychoscript/src/runtime/limits.ts#checkArrayLength [status=implemented hash=6e3b76ef0c40]
     public static func checkArrayLength(_ length: Int) throws {
         if length > MAX_ARRAY_LENGTH {
             throw rangeError("Invalid array length")
@@ -576,7 +576,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/model.ts#AstNode [status=implemented hash=f6125e68a75d]
+    // parity: psychoscript/src/runtime/model.ts#AstNode [status=implemented hash=f6125e68a75d]
     public struct AstNode: Equatable, Sendable {
         public let type: String
         public let location: SourceLocation?
@@ -598,7 +598,7 @@ public enum CodemodeLanguage {
 
     // MARK: - Source Tracking (src/language/runtime/source.ts)
 
-    // parity: codemode/src/language/runtime/source.ts#NodeId [status=implemented hash=23d4eba051b8]
+    // parity: psychoscript/src/runtime/source.ts#NodeId [status=implemented hash=23d4eba051b8]
     public struct NodeId: Equatable, Hashable, Sendable, Codable {
         public let source: String
         public let index: Int
@@ -609,17 +609,17 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/source.ts#Source [status=implemented hash=f4d6418edda2]
+    // parity: psychoscript/src/runtime/source.ts#Source [status=implemented hash=f4d6418edda2]
     public final class Source: Sendable {
         public let id: String
         public let code: String
         private let storedProgram: ProgramAST
         private let storedNodes: [AstNode]
 
-        // parity: codemode/src/language/runtime/source.ts#Source.program [status=implemented hash=f8e23bf26c60]
+        // parity: psychoscript/src/runtime/source.ts#Source.program [status=implemented hash=f8e23bf26c60]
         public var program: ProgramAST { storedProgram }
 
-        // parity: codemode/src/language/runtime/source.ts#Source.nodes [status=implemented hash=6b00ceea4e28]
+        // parity: psychoscript/src/runtime/source.ts#Source.nodes [status=implemented hash=6b00ceea4e28]
         public var nodes: [AstNode] { storedNodes }
 
         public init(id: String, code: String, program: ProgramAST) {
@@ -629,7 +629,7 @@ public enum CodemodeLanguage {
             self.storedNodes = Self.collectNodes(program: program, sourceId: id)
         }
 
-        // parity: codemode/src/language/runtime/source.ts#Source.node [status=implemented hash=0ddf33fcbec0]
+        // parity: psychoscript/src/runtime/source.ts#Source.node [status=implemented hash=0ddf33fcbec0]
         public func node(_ id: NodeId) -> AstNode? {
             guard id.source == self.id, id.index >= 0, id.index < storedNodes.count else { return nil }
             return storedNodes[id.index]
@@ -775,19 +775,19 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/source.ts#nodeId [status=implemented hash=5918d8900c6a]
+    // parity: psychoscript/src/runtime/source.ts#nodeId [status=implemented hash=5918d8900c6a]
     public static func nodeId(_ node: AstNode) -> NodeId? {
         guard let sourceId = node.sourceId, node.nodeIndex >= 0 else { return nil }
         return NodeId(source: sourceId, index: node.nodeIndex)
     }
 
-    // parity: codemode/src/language/runtime/source.ts#sourceOf [status=adapted hash=2763eaf838d2]
+    // parity: psychoscript/src/runtime/source.ts#sourceOf [status=adapted hash=2763eaf838d2]
     public static func sourceOf(_ node: AstNode, in sources: [String: Source] = [:]) -> Source? {
         guard let sourceId = node.sourceId else { return nil }
         return sources[sourceId]
     }
 
-    // parity: codemode/src/language/runtime/source.ts#inPrelude [status=implemented hash=899255e9cba7]
+    // parity: psychoscript/src/runtime/source.ts#inPrelude [status=implemented hash=899255e9cba7]
     public static func inPrelude(_ node: AstNode) -> Bool {
         node.location == nil
     }
@@ -2536,10 +2536,10 @@ public enum CodemodeLanguage {
         public init() {}
     }
 
-    // parity: codemode/src/language/opcodes.ts#HOLE [status=implemented hash=51463278ee59]
+    // parity: psychoscript/src/opcodes.ts#HOLE [status=implemented hash=51463278ee59]
     public static let HOLE = HoleSentinel()
 
-    // parity: codemode/src/language/opcodes.ts#Cell [status=implemented hash=1485a4ccf5f0]
+    // parity: psychoscript/src/opcodes.ts#Cell [status=implemented hash=1485a4ccf5f0]
     public final class Cell: Sendable {
         private let storage: Mutex<Value>
 
@@ -2553,10 +2553,10 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/opcodes.ts#EMPTY_CELLS [status=implemented hash=198ce9174ac9]
+    // parity: psychoscript/src/opcodes.ts#EMPTY_CELLS [status=implemented hash=198ce9174ac9]
     public static let EMPTY_CELLS: [Cell] = []
 
-    // parity: codemode/src/language/opcodes.ts#NotYetImplemented [status=implemented hash=36b067cb5b7f]
+    // parity: psychoscript/src/opcodes.ts#NotYetImplemented [status=implemented hash=36b067cb5b7f]
     public final class NotYetImplemented: Error, Sendable, CustomStringConvertible {
         public let feature: String
 
@@ -2567,10 +2567,10 @@ public enum CodemodeLanguage {
         public var description: String { "Not yet implemented in VM: \(feature)" }
     }
 
-    // parity: codemode/src/language/opcodes.ts#OpCode [status=implemented hash=5c1abc58d768]
+    // parity: psychoscript/src/opcodes.ts#OpCode [status=implemented hash=5c1abc58d768]
     public typealias OpCode = Int32
 
-    // parity: codemode/src/language/opcodes.ts#Op [status=implemented hash=564456809cbf]
+    // parity: psychoscript/src/opcodes.ts#Op [status=implemented hash=564456809cbf]
     public enum Op {
         public static let PUSH_UNDEF: OpCode = 0
         public static let PUSH_NULL: OpCode = 1
@@ -2662,7 +2662,7 @@ public enum CodemodeLanguage {
         public static let END_PROGRAM: OpCode = 87
     }
 
-    // parity: codemode/src/language/opcodes.ts#OpNames [status=implemented hash=9cf37ccf2611]
+    // parity: psychoscript/src/opcodes.ts#OpNames [status=implemented hash=9cf37ccf2611]
     public static let OpNames: [String] = [
         "PUSH_UNDEF", "PUSH_NULL", "PUSH_BOOL", "PUSH_INT", "PUSH_CONST",
         "POP", "POPN", "DUP", "PICK", "ROT",
@@ -2684,7 +2684,7 @@ public enum CodemodeLanguage {
         "YSTAR", "YSTAR_RESULT", "END_PROGRAM",
     ]
 
-    // parity: codemode/src/language/opcodes.ts#BinOp [status=implemented hash=658848825af8]
+    // parity: psychoscript/src/opcodes.ts#BinOp [status=implemented hash=658848825af8]
     public enum BinOp {
         public static let DIV: Int32 = 0
         public static let MOD: Int32 = 1
@@ -2699,10 +2699,10 @@ public enum CodemodeLanguage {
         public static let NE: Int32 = 10
     }
 
-    // parity: codemode/src/language/opcodes.ts#BinOpSymbols [status=implemented hash=14f46cb71c1f]
+    // parity: psychoscript/src/opcodes.ts#BinOpSymbols [status=implemented hash=14f46cb71c1f]
     public static let BinOpSymbols: [String] = ["/", "%", "**", "&", "|", "^", "<<", ">>", ">>>", "==", "!="]
 
-    // parity: codemode/src/language/opcodes.ts#UnaryOp [status=implemented hash=1d24a4cb2539]
+    // parity: psychoscript/src/opcodes.ts#UnaryOp [status=implemented hash=1d24a4cb2539]
     public enum UnaryOp {
         public static let NEG: Int32 = 0
         public static let PLUS: Int32 = 1
@@ -2711,10 +2711,10 @@ public enum CodemodeLanguage {
         public static let VOID: Int32 = 4
     }
 
-    // parity: codemode/src/language/opcodes.ts#UnaryOpSymbols [status=implemented hash=de626f06a1aa]
+    // parity: psychoscript/src/opcodes.ts#UnaryOpSymbols [status=implemented hash=de626f06a1aa]
     public static let UnaryOpSymbols: [String] = ["-", "+", "~", "typeof", "void"]
 
-    // parity: codemode/src/language/opcodes.ts#CondKind [status=implemented hash=9c2fe7b1f7c7]
+    // parity: psychoscript/src/opcodes.ts#CondKind [status=implemented hash=9c2fe7b1f7c7]
     public enum CondKind {
         public static let TRUTHY_KEEP: Int32 = 0
         public static let FALSY_KEEP: Int32 = 1
@@ -2724,14 +2724,14 @@ public enum CodemodeLanguage {
         public static let NULLISH_METHOD: Int32 = 5
     }
 
-    // parity: codemode/src/language/opcodes.ts#PutKind [status=implemented hash=2f4d2dcc427b]
+    // parity: psychoscript/src/opcodes.ts#PutKind [status=implemented hash=2f4d2dcc427b]
     public enum PutKind {
         public static let ASSIGN: Int32 = 0
         public static let INIT: Int32 = 1
         public static let CONST: Int32 = 2
     }
 
-    // parity: codemode/src/language/opcodes.ts#CheckBaseKind [status=implemented hash=9b2d4503c30c]
+    // parity: psychoscript/src/opcodes.ts#CheckBaseKind [status=implemented hash=9b2d4503c30c]
     public enum CheckBaseKind {
         public static let READ: Int32 = 0
         public static let WRITE_PROP: Int32 = 1
@@ -2739,7 +2739,7 @@ public enum CodemodeLanguage {
         public static let DESTRUCTURE: Int32 = 3
     }
 
-    // parity: codemode/src/language/opcodes.ts#IterContext [status=implemented hash=14c7967d510f]
+    // parity: psychoscript/src/opcodes.ts#IterContext [status=implemented hash=14c7967d510f]
     public enum IterContext {
         public static let FOR_OF: Int32 = 0
         public static let DESTRUCTURE: Int32 = 1
@@ -2750,7 +2750,7 @@ public enum CodemodeLanguage {
         public static let CHECK_OBJECT: Int32 = 6
     }
 
-    // parity: codemode/src/language/opcodes.ts#ImportKind [status=implemented hash=2567db403bce]
+    // parity: psychoscript/src/opcodes.ts#ImportKind [status=implemented hash=2567db403bce]
     public enum ImportKind {
         public static let DEFAULT: Int32 = 0
         public static let NAMESPACE: Int32 = 1
@@ -2759,7 +2759,7 @@ public enum CodemodeLanguage {
         public static let DYNAMIC: Int32 = 4
     }
 
-    // parity: codemode/src/language/opcodes.ts#CodeFlags [status=implemented hash=254080510291]
+    // parity: psychoscript/src/opcodes.ts#CodeFlags [status=implemented hash=254080510291]
     public enum CodeFlags {
         public static let ARROW: Int = 1 << 0
         public static let ASYNC: Int = 1 << 1
@@ -2772,7 +2772,7 @@ public enum CodemodeLanguage {
         public static let NEEDS_ARGS: Int = 1 << 9
     }
 
-    // parity: codemode/src/language/opcodes.ts#TemplateSite [status=implemented hash=e7f1125778b0]
+    // parity: psychoscript/src/opcodes.ts#TemplateSite [status=implemented hash=e7f1125778b0]
     public struct TemplateSite: Equatable, Hashable, Sendable, Codable {
         public let cooked: [String?]
         public let raw: [String]
@@ -2785,7 +2785,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/opcodes.ts#RegExpSite [status=implemented hash=564ba90034b3]
+    // parity: psychoscript/src/opcodes.ts#RegExpSite [status=implemented hash=564ba90034b3]
     public struct RegExpSite: Equatable, Hashable, Sendable, Codable {
         public let pattern: String
         public let flags: String
@@ -2796,7 +2796,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/opcodes.ts#ErrorSite [status=implemented hash=d8e9677f5447]
+    // parity: psychoscript/src/opcodes.ts#ErrorSite [status=implemented hash=d8e9677f5447]
     public struct ErrorSite: Equatable, Hashable, Sendable, Codable {
         public let type: ErrorType
         public let message: String
@@ -2811,7 +2811,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/opcodes.ts#ImportSite [status=implemented hash=9355255f1ef3]
+    // parity: psychoscript/src/opcodes.ts#ImportSite [status=implemented hash=9355255f1ef3]
     public struct ImportSite: Equatable, Hashable, Sendable, Codable {
         public let specifier: String
         public let imported: String?
@@ -2822,7 +2822,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/opcodes.ts#ConstValue [status=implemented hash=7004b01e3cd7]
+    // parity: psychoscript/src/opcodes.ts#ConstValue [status=implemented hash=7004b01e3cd7]
     public enum ConstValue: Equatable, Hashable, Sendable, Codable {
         case string(String)
         case number(Double)
@@ -2832,7 +2832,7 @@ public enum CodemodeLanguage {
         case importSite(ImportSite)
     }
 
-    // parity: codemode/src/language/opcodes.ts#packWord [status=implemented hash=b98b53cd31f9]
+    // parity: psychoscript/src/opcodes.ts#packWord [status=implemented hash=b98b53cd31f9]
     public static func packWord(_ op: OpCode, _ a: Int32 = 0, _ bx: Int32 = 0) throws -> Int32 {
         guard (op & 0xFF) == op, (a & 0xFF) == a, (bx & 0xFFFF) == bx else {
             throw rangeError("Instruction operand out of single-word range: op=\(op) a=\(a) bx=\(bx)")
@@ -2853,7 +2853,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/code.ts#Label [status=implemented hash=33b46a97a34c]
+    // parity: psychoscript/src/code.ts#Label [status=implemented hash=33b46a97a34c]
     public struct Label: Equatable, Sendable {
         public var pc: Int
         public var patches: [Int]
@@ -2866,7 +2866,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/code.ts#Code [status=implemented hash=6e5476af5885]
+    // parity: psychoscript/src/code.ts#Code [status=implemented hash=6e5476af5885]
     public final class Code: Sendable {
         public let source: SourceRef
         public let index: Int
@@ -2927,7 +2927,7 @@ public enum CodemodeLanguage {
             self.sourceObj = sourceObj
         }
 
-        // parity: codemode/src/language/code.ts#Code.nodeIndexAt [status=implemented hash=344825e16d88]
+        // parity: psychoscript/src/code.ts#Code.nodeIndexAt [status=implemented hash=344825e16d88]
         public func nodeIndexAt(_ pc: Int) -> Int {
             let count = sites.count >> 1
             if count == 0 { return -1 }
@@ -2947,14 +2947,14 @@ public enum CodemodeLanguage {
             return best
         }
 
-        // parity: codemode/src/language/code.ts#Code.siteAt [status=implemented hash=e284696db5cf]
+        // parity: psychoscript/src/code.ts#Code.siteAt [status=implemented hash=e284696db5cf]
         public func siteAt(_ pc: Int) -> AstNode? {
             let idx = nodeIndexAt(pc)
             guard idx >= 0, let nodes = sourceObj?.nodes, idx < nodes.count else { return nil }
             return nodes[idx]
         }
 
-        // parity: codemode/src/language/code.ts#Code.withSource [status=implemented hash=57a886457613]
+        // parity: psychoscript/src/code.ts#Code.withSource [status=implemented hash=57a886457613]
         public func withSource(_ sourceObj: Source) -> Code {
             Code(
                 source: source,
@@ -2979,7 +2979,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/code.ts#CodeJson [status=implemented hash=512244bb74f7]
+    // parity: psychoscript/src/code.ts#CodeJson [status=implemented hash=512244bb74f7]
     public struct CodeJson: Equatable, Sendable, Codable {
         public let source: SourceRef
         public let index: Int
@@ -3000,7 +3000,7 @@ public enum CodemodeLanguage {
         public let upvalNames: [String]
     }
 
-    // parity: codemode/src/language/code.ts#codeToJson [status=implemented hash=bb346a73fb0c]
+    // parity: psychoscript/src/code.ts#codeToJson [status=implemented hash=bb346a73fb0c]
     public static func codeToJson(_ code: Code) -> CodeJson {
         CodeJson(
             source: code.source,
@@ -3023,7 +3023,7 @@ public enum CodemodeLanguage {
         )
     }
 
-    // parity: codemode/src/language/code.ts#codeFromJson [status=implemented hash=efe0a72be173]
+    // parity: psychoscript/src/code.ts#codeFromJson [status=implemented hash=efe0a72be173]
     public static func codeFromJson(_ data: CodeJson, sourceObj: Source) -> Code {
         Code(
             source: data.source,
@@ -3047,7 +3047,7 @@ public enum CodemodeLanguage {
         )
     }
 
-    // parity: codemode/src/language/code.ts#CodeSizeOverflow [status=implemented hash=9e1e5528fd13]
+    // parity: psychoscript/src/code.ts#CodeSizeOverflow [status=implemented hash=9e1e5528fd13]
     public final class CodeSizeOverflow: Error, Sendable, CustomStringConvertible {
         public let message: String
 
@@ -3058,7 +3058,7 @@ public enum CodemodeLanguage {
         public var description: String { message }
     }
 
-    // parity: codemode/src/language/code.ts#CodeBuilder [status=implemented hash=02b61e5d8310]
+    // parity: psychoscript/src/code.ts#CodeBuilder [status=implemented hash=02b61e5d8310]
     public final class CodeBuilder: Sendable {
         private struct State: Sendable {
             var words: [Int32] = []
@@ -3114,12 +3114,12 @@ public enum CodemodeLanguage {
             self.state = Mutex(State(flags: flags, locals: locals))
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.pc [status=implemented hash=e0470568ca97]
+        // parity: psychoscript/src/code.ts#CodeBuilder.pc [status=implemented hash=e0470568ca97]
         public var pc: Int {
             state.withLock { $0.words.count }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.adjustDepth [status=implemented hash=7fa0637432fe]
+        // parity: psychoscript/src/code.ts#CodeBuilder.adjustDepth [status=implemented hash=7fa0637432fe]
         public func adjustDepth(_ delta: Int) {
             state.withLock { s in
                 if s.depth < 0 { return }
@@ -3128,7 +3128,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.setDepth [status=implemented hash=79e9c28719e9]
+        // parity: psychoscript/src/code.ts#CodeBuilder.setDepth [status=implemented hash=79e9c28719e9]
         public func setDepth(_ depth: Int) {
             state.withLock { s in
                 s.depth = depth
@@ -3136,12 +3136,12 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.unreachable [status=implemented hash=2395e07d6869]
+        // parity: psychoscript/src/code.ts#CodeBuilder.unreachable [status=implemented hash=2395e07d6869]
         public func unreachable() {
             state.withLock { $0.depth = -1 }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.constant [status=implemented hash=554a260e76fd]
+        // parity: psychoscript/src/code.ts#CodeBuilder.constant [status=implemented hash=554a260e76fd]
         public func constant(_ value: ConstValue) -> Int {
             state.withLock { s in
                 switch value {
@@ -3208,7 +3208,7 @@ public enum CodemodeLanguage {
             return emittedPc
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.emit [status=implemented hash=5c6bfb2bd79d]
+        // parity: psychoscript/src/code.ts#CodeBuilder.emit [status=implemented hash=5c6bfb2bd79d]
         @discardableResult
         public func emit(_ op: OpCode, a: Int32 = 0, bx: Int32 = 0, nodeIndex: Int = -1, stackDelta: Int = 0) throws -> Int {
             try state.withLock { s in
@@ -3220,7 +3220,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.emitNumber [status=implemented hash=e748b2ea3481]
+        // parity: psychoscript/src/code.ts#CodeBuilder.emitNumber [status=implemented hash=e748b2ea3481]
         public func emitNumber(_ value: Double, nodeIndex: Int = -1) throws {
             let isNegZero = value == 0 && value.sign == .minus
             let forceExtra = state.withLock { $0.forceExtra }
@@ -3233,18 +3233,18 @@ public enum CodemodeLanguage {
             try emit(Op.PUSH_CONST, a: 0, bx: Int32(k), nodeIndex: nodeIndex, stackDelta: 1)
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.emitString [status=implemented hash=60cf4472f289]
+        // parity: psychoscript/src/code.ts#CodeBuilder.emitString [status=implemented hash=60cf4472f289]
         public func emitString(_ value: String, nodeIndex: Int = -1) throws {
             let k = constant(.string(value))
             try emit(Op.PUSH_CONST, a: 0, bx: Int32(k), nodeIndex: nodeIndex, stackDelta: 1)
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.newLabel [status=implemented hash=a91cbd8fdc92]
+        // parity: psychoscript/src/code.ts#CodeBuilder.newLabel [status=implemented hash=a91cbd8fdc92]
         public func newLabel(depth: Int? = nil) -> Label {
             Label(pc: -1, patches: [], depth: depth)
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.mark [status=implemented hash=e53bac945b16]
+        // parity: psychoscript/src/code.ts#CodeBuilder.mark [status=implemented hash=e53bac945b16]
         public func mark(_ label: inout Label) throws {
             try state.withLock { s in
                 let target = s.words.count
@@ -3271,7 +3271,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.emitJump [status=implemented hash=6a47273cb977]
+        // parity: psychoscript/src/code.ts#CodeBuilder.emitJump [status=implemented hash=6a47273cb977]
         public func emitJump(
             _ op: OpCode,
             a: Int = 0,
@@ -3306,7 +3306,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.addHandler [status=implemented hash=d6c8c036040e]
+        // parity: psychoscript/src/code.ts#CodeBuilder.addHandler [status=implemented hash=d6c8c036040e]
         public func addHandler(start: Int, end: Int, target: Int, depth: Int) {
             guard start < end, target >= 0 else { return }
             state.withLock { s in
@@ -3314,7 +3314,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.reserveFinally [status=implemented hash=1a29d03d9c34]
+        // parity: psychoscript/src/code.ts#CodeBuilder.reserveFinally [status=implemented hash=1a29d03d9c34]
         public func reserveFinally() -> Int {
             state.withLock { s in
                 let level = s.finallyLevelOffsets.count
@@ -3323,7 +3323,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.setFinally [status=implemented hash=f4e15a96829c]
+        // parity: psychoscript/src/code.ts#CodeBuilder.setFinally [status=implemented hash=f4e15a96829c]
         public func setFinally(level: Int, tagSlot: Int, valSlot: Int, entryDepth: Int, targets: [Int]) throws {
             try state.withLock { s in
                 guard level >= 0, level < s.finallyLevelOffsets.count else {
@@ -3340,7 +3340,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/code.ts#CodeBuilder.finish [status=implemented hash=875080499824]
+        // parity: psychoscript/src/code.ts#CodeBuilder.finish [status=implemented hash=875080499824]
         public func finish() -> Code {
             state.withLock { s in
                 Code(
@@ -3371,7 +3371,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/code.ts#hashOf [status=implemented hash=b718dc281f87]
+    // parity: psychoscript/src/code.ts#hashOf [status=implemented hash=b718dc281f87]
     public static func hashOf(_ codes: [Code]) -> String {
         var acc = ""
         for c in codes {
@@ -3386,7 +3386,7 @@ public enum CodemodeLanguage {
         case `var`, `let`, `const`, function, param, `catch`, `import`, `self`, this, arguments
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#Decl [status=implemented hash=e572b054f662]
+    // parity: psychoscript/src/compiler/scope.ts#Decl [status=implemented hash=e572b054f662]
     public struct Decl: Equatable, Hashable, Sendable {
         public let name: String
         public let kind: DeclKind
@@ -3415,7 +3415,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#Scope [status=implemented hash=93e9e7ddf08d]
+    // parity: psychoscript/src/compiler/scope.ts#Scope [status=implemented hash=93e9e7ddf08d]
     public final class Scope: Sendable {
         private struct State: Sendable {
             var decls: [String: Decl] = [:]
@@ -3442,7 +3442,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#FunctionInfo [status=implemented hash=07a7a57a342e]
+    // parity: psychoscript/src/compiler/scope.ts#FunctionInfo [status=implemented hash=07a7a57a342e]
     public struct FunctionInfo: Sendable {
         public let index: Int
         public let parentIndex: Int
@@ -3477,14 +3477,14 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#ResolvedRef [status=implemented hash=1d39cfd0c2ff]
+    // parity: psychoscript/src/compiler/scope.ts#ResolvedRef [status=implemented hash=1d39cfd0c2ff]
     public enum ResolvedRef: Equatable, Sendable {
         case local(Decl)
         case upval(upvalIndex: Int, decl: Decl)
         case global(name: String)
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#ScopeAnalysis [status=implemented hash=54496b96c6ec]
+    // parity: psychoscript/src/compiler/scope.ts#ScopeAnalysis [status=implemented hash=54496b96c6ec]
     public struct ScopeAnalysis: Sendable {
         public let functions: [FunctionInfo]
         public let globalsReferenced: [String]
@@ -3518,7 +3518,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/scope.ts#analyzeScopes [status=implemented hash=31dcea3b40aa]
+    // parity: psychoscript/src/compiler/scope.ts#analyzeScopes [status=implemented hash=31dcea3b40aa]
     public static func analyzeScopes(_ source: Source, internal isInternal: Bool = false) -> ScopeAnalysis {
         var functions: [FunctionInfo] = []
         var globalsSet: Set<String> = []
@@ -3764,10 +3764,10 @@ public enum CodemodeLanguage {
         return ScopeAnalysis(functions: functions, globalsReferenced: globalsSet.sorted())
     }
 
-    // parity: codemode/src/language/compiler/compile.ts#COMPILER_VERSION [status=implemented hash=c27d5f5f8206]
+    // parity: psychoscript/src/compiler/compile.ts#COMPILER_VERSION [status=implemented hash=c27d5f5f8206]
     public static let COMPILER_VERSION: Int = 1
 
-    // parity: codemode/src/language/compiler/compile.ts#CompileOptions [status=implemented hash=77e0db95ca3e]
+    // parity: psychoscript/src/compiler/compile.ts#CompileOptions [status=implemented hash=77e0db95ca3e]
     public struct CompileOptions: Equatable, Sendable {
         public let isInternal: Bool
 
@@ -3776,7 +3776,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/compiler/compile.ts#compileSource [status=adapted hash=962946c12371]
+    // parity: psychoscript/src/compiler/compile.ts#compileSource [status=adapted hash=962946c12371]
     public static func compileSource(_ source: Source, options: CompileOptions = CompileOptions()) -> [Code] {
         let analysis = analyzeScopes(source, internal: options.isInternal)
         let ref = SourceRef(id: source.id, hash: snapshotHash(source.code))
@@ -3799,7 +3799,7 @@ public enum CodemodeLanguage {
 
     // MARK: - Signals (src/language/runtime/signals.ts)
 
-    // parity: codemode/src/language/runtime/signals.ts#Completion [status=implemented hash=d093dc453cd1]
+    // parity: psychoscript/src/runtime/signals.ts#Completion [status=implemented hash=d093dc453cd1]
     public enum Completion: Sendable {
         case ok(Value)
         case error(Error)
@@ -3810,17 +3810,17 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#normal [status=implemented hash=24ad11f9c1ee]
+    // parity: psychoscript/src/runtime/signals.ts#normal [status=implemented hash=24ad11f9c1ee]
     public static func normal(_ value: Value) -> Completion {
         .ok(value)
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#abrupt [status=implemented hash=daa652f750ea]
+    // parity: psychoscript/src/runtime/signals.ts#abrupt [status=implemented hash=daa652f750ea]
     public static func abrupt(_ error: Error) -> Completion {
         .error(error)
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#PushKind [status=implemented hash=44259b0a6f09]
+    // parity: psychoscript/src/runtime/signals.ts#PushKind [status=implemented hash=44259b0a6f09]
     public enum PushKind: String, Equatable, Hashable, Sendable, Codable {
         case jsonStringify = "JSON.stringify"
         case asyncFromSyncIterator = "AsyncFromSyncIterator"
@@ -3829,7 +3829,7 @@ public enum CodemodeLanguage {
         case promiseCombinator = "Promise combinator"
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Push [status=implemented hash=4b2612e25636]
+    // parity: psychoscript/src/runtime/signals.ts#Push [status=implemented hash=4b2612e25636]
     public final class Push: Sendable {
         public let kind: PushKind
         public let slots: [Value]
@@ -3840,7 +3840,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#GeneratorRequest [status=implemented hash=995119cae41e]
+    // parity: psychoscript/src/runtime/signals.ts#GeneratorRequest [status=implemented hash=995119cae41e]
     public struct GeneratorRequest: Sendable {
         public let kind: GeneratorRequestKind
         public let value: Value
@@ -3851,7 +3851,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Resume [status=implemented hash=71ba5324e151]
+    // parity: psychoscript/src/runtime/signals.ts#Resume [status=implemented hash=71ba5324e151]
     public final class Resume: Sendable {
         public let generator: GeneratorObj
         public let request: GeneratorRequest
@@ -3862,20 +3862,20 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Hint [status=implemented hash=6505557e259b]
+    // parity: psychoscript/src/runtime/signals.ts#Hint [status=implemented hash=6505557e259b]
     public enum Hint: String, Equatable, Hashable, Sendable, Codable {
         case number
         case string
         case `default`
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Hints [status=implemented hash=3612382eede5]
+    // parity: psychoscript/src/runtime/signals.ts#Hints [status=implemented hash=3612382eede5]
     public enum Hints: Equatable, Sendable {
         case single(Hint)
         case list([Hint])
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Convert [status=implemented hash=be597ea06f3a]
+    // parity: psychoscript/src/runtime/signals.ts#Convert [status=implemented hash=be597ea06f3a]
     public final class Convert: Sendable {
         public let hints: Hints
         public let values: [Value]
@@ -3890,7 +3890,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Interruption [status=implemented hash=5b7c98e8f2a2]
+    // parity: psychoscript/src/runtime/signals.ts#Interruption [status=implemented hash=5b7c98e8f2a2]
     public final class Interruption: Error, Sendable {
         public let reason: String
 
@@ -3899,7 +3899,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#Invoke [status=implemented hash=f574d101ab7b]
+    // parity: psychoscript/src/runtime/signals.ts#Invoke [status=implemented hash=f574d101ab7b]
     public final class Invoke: Sendable {
         public let callable: Value
         public let thisValue: Value
@@ -3914,7 +3914,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/signals.ts#MAX_CALL_DEPTH [status=implemented hash=101eadd2b440]
+    // parity: psychoscript/src/runtime/signals.ts#MAX_CALL_DEPTH [status=implemented hash=101eadd2b440]
     public static let MAX_CALL_DEPTH: Int = 10_000
 
     // MARK: - Modules (src/language/runtime/modules.ts)
@@ -3925,12 +3925,12 @@ public enum CodemodeLanguage {
             .map(String.init)
     )
 
-    // parity: codemode/src/language/runtime/modules.ts#moduleName [status=implemented hash=a7e83675977d]
+    // parity: psychoscript/src/runtime/modules.ts#moduleName [status=implemented hash=a7e83675977d]
     public static func moduleName(_ specifier: String) -> String {
         specifier.hasPrefix("node:") ? String(specifier.dropFirst(5)) : specifier
     }
 
-    // parity: codemode/src/language/runtime/modules.ts#isRuntimeModule [status=implemented hash=1cd61c4c7edd]
+    // parity: psychoscript/src/runtime/modules.ts#isRuntimeModule [status=implemented hash=1cd61c4c7edd]
     public static func isRuntimeModule(_ specifier: String) -> Bool {
         if specifier.hasPrefix("node:") || specifier == "bun" || specifier.hasPrefix("bun:") {
             return true
@@ -3939,7 +3939,7 @@ public enum CodemodeLanguage {
         return nodeCoreModules.contains(head)
     }
 
-    // parity: codemode/src/language/runtime/modules.ts#resolveModule [status=implemented hash=bdfc6475869d]
+    // parity: psychoscript/src/runtime/modules.ts#resolveModule [status=implemented hash=bdfc6475869d]
     public static func resolveModule(
         _ specifier: String,
         global: (String) -> Value,
@@ -3987,10 +3987,10 @@ public enum CodemodeLanguage {
         public init() {}
     }
 
-    // parity: codemode/src/language/runtime/table.ts#deleted [status=implemented hash=20fb9493d06a]
+    // parity: psychoscript/src/runtime/table.ts#deleted [status=implemented hash=20fb9493d06a]
     public static let deleted = DeletedSentinel()
 
-    // parity: codemode/src/language/runtime/table.ts#TableCursor [status=implemented hash=3f26d3d2e8d8]
+    // parity: psychoscript/src/runtime/table.ts#TableCursor [status=implemented hash=3f26d3d2e8d8]
     public final class TableCursor: Sendable {
         private struct State: Sendable {
             var index: Int
@@ -4014,7 +4014,7 @@ public enum CodemodeLanguage {
     }
 
     /// Insertion-ordered hash table with SameValueZero keys for JS `Map` and `Set`.
-    // parity: codemode/src/language/runtime/table.ts#OrderedTable [status=implemented hash=4e1c810ef089]
+    // parity: psychoscript/src/runtime/table.ts#OrderedTable [status=implemented hash=4e1c810ef089]
     public final class OrderedTable: Sendable {
         private enum Entry: Sendable {
             case live(key: Value, value: Value)
@@ -4033,18 +4033,18 @@ public enum CodemodeLanguage {
 
         public init() {}
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.size [status=implemented hash=abef89851de1]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.size [status=implemented hash=abef89851de1]
         public var size: Int {
             state.withLock { $0.keyIndex.count }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.has [status=implemented hash=04808716ce43]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.has [status=implemented hash=04808716ce43]
         public func has(_ key: Value) -> Bool {
             let k = SameValueZeroKey(key)
             return state.withLock { $0.keyIndex[k] != nil }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.get [status=implemented hash=551651e498b4]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.get [status=implemented hash=551651e498b4]
         public func get(_ key: Value) -> Value {
             let k = SameValueZeroKey(key)
             return state.withLock { s in
@@ -4053,7 +4053,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.set [status=implemented hash=aed8fd42d5dd]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.set [status=implemented hash=aed8fd42d5dd]
         public func set(_ key: Value, _ value: Value) {
             let normalizedKey: Value = if case .number(let n) = key, n == 0 { .number(0) } else { key }
             let k = SameValueZeroKey(normalizedKey)
@@ -4067,7 +4067,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.add [status=implemented hash=79e0fb8c9603]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.add [status=implemented hash=79e0fb8c9603]
         public func add(_ key: Value) {
             if !has(key) { set(key, .undefined) }
         }
@@ -4086,7 +4086,7 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.clear [status=implemented hash=545c4123e6dd]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.clear [status=implemented hash=545c4123e6dd]
         public func clear() {
             state.withLock { s in
                 s.entries.removeAll(keepingCapacity: false)
@@ -4098,12 +4098,12 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.cursor [status=implemented hash=0f5fc2e15b83]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.cursor [status=implemented hash=0f5fc2e15b83]
         public func cursor() -> TableCursor {
             track(TableCursor(index: 0, done: false))
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.track [status=implemented hash=f013c2b6971b]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.track [status=implemented hash=f013c2b6971b]
         @discardableResult
         public func track(_ cursor: TableCursor) -> TableCursor {
             state.withLock { s in
@@ -4116,7 +4116,7 @@ public enum CodemodeLanguage {
             return cursor
         }
 
-        // parity: codemode/src/language/runtime/table.ts#OrderedTable.advance [status=implemented hash=4eaec371c00a]
+        // parity: psychoscript/src/runtime/table.ts#OrderedTable.advance [status=implemented hash=4eaec371c00a]
         public func advance(_ cursor: TableCursor) -> Int {
             if cursor.done { return -1 }
             return state.withLock { s in
@@ -4223,7 +4223,7 @@ public enum CodemodeLanguage {
 
     // MARK: - References Inspection (src/language/runtime/references.ts)
 
-    // parity: codemode/src/language/runtime/references.ts#isOpaque [status=implemented hash=9046153cd3da]
+    // parity: psychoscript/src/runtime/references.ts#isOpaque [status=implemented hash=9046153cd3da]
     public static func isOpaque(_ value: Value) -> Bool {
         switch value {
         case .hostNamespace: return true
@@ -4251,17 +4251,17 @@ public enum CodemodeLanguage {
         return false
     }
 
-    // parity: codemode/src/language/runtime/references.ts#containsRuntimeReference [status=implemented hash=7528d98c2e22]
+    // parity: psychoscript/src/runtime/references.ts#containsRuntimeReference [status=implemented hash=7528d98c2e22]
     public static func containsRuntimeReference(_ value: Value) -> Bool {
         findInValue(value, match: isRuntimeReference, skip: { _ in false })
     }
 
-    // parity: codemode/src/language/runtime/references.ts#containsOpaqueReference [status=implemented hash=27677ea416e9]
+    // parity: psychoscript/src/runtime/references.ts#containsOpaqueReference [status=implemented hash=27677ea416e9]
     public static func containsOpaqueReference(_ value: Value) -> Bool {
         findInValue(value, match: isOpaque, skip: { isRuntimeReference($0) && !isOpaque($0) })
     }
 
-    // parity: codemode/src/language/runtime/references.ts#rejectCircularInsertion [status=implemented hash=ed06903d1915]
+    // parity: psychoscript/src/runtime/references.ts#rejectCircularInsertion [status=implemented hash=ed06903d1915]
     public static func rejectCircularInsertion(_ container: Obj, _ value: Value, label: String) throws {
         let matched = findInValue(
             value,
@@ -4273,7 +4273,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/references.ts#describeValue [status=implemented hash=63563bdb6e3a]
+    // parity: psychoscript/src/runtime/references.ts#describeValue [status=implemented hash=63563bdb6e3a]
     public static func describeValue(_ value: Value) -> String {
         switch value {
         case .null: return "null"
@@ -4287,7 +4287,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/references.ts#typeofValue [status=implemented hash=6c0e157abf69]
+    // parity: psychoscript/src/runtime/references.ts#typeofValue [status=implemented hash=6c0e157abf69]
     public static func typeofValue(_ value: Value) -> String {
         switch value {
         case .undefined: return "undefined"
@@ -4303,7 +4303,7 @@ public enum CodemodeLanguage {
 
     // MARK: - Intrinsic Names (src/language/runtime/intrinsic-names.ts)
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#Roots [status=implemented hash=f676632bc1ea]
+    // parity: psychoscript/src/runtime/intrinsic-names.ts#Roots [status=implemented hash=f676632bc1ea]
     public struct Roots: Sendable {
         public let globals: [(String, Value)]
         public let builtins: Builtins
@@ -4316,24 +4316,24 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#member [status=implemented hash=4c2cf21afd22]
+    // parity: psychoscript/src/runtime/intrinsic-names.ts#member [status=implemented hash=4c2cf21afd22]
     public static func member(_ base: String, _ key: String) -> String {
         "\(base).\(key)"
     }
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#unchanged [status=implemented hash=b7be906fffc4]
+    // parity: psychoscript/src/runtime/intrinsic-names.ts#unchanged [status=implemented hash=b7be906fffc4]
     public static func unchanged(_ value: Obj) -> Bool {
         value.intrinsic > 0 && type(of: value) == Obj.self || value.intrinsic > 0 && (value is Arr || value is Native || value is Fn)
     }
 
     private static let cachedStaticNames = Mutex<[String]>([])
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#staticNames [status=implemented hash=e872cbf316d5]
+    // parity: psychoscript/src/runtime/intrinsic-names.ts#staticNames [status=implemented hash=e872cbf316d5]
     public static func staticNames() -> [String] {
         cachedStaticNames.withLock { $0 }
     }
 
-    // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames [status=implemented hash=7c80d701b4a8]
+    // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames [status=implemented hash=7c80d701b4a8]
     public final class IntrinsicNames: Sendable {
         private let byName: [String: Obj]
         private let byId: [ObjectIdentifier: String]
@@ -4378,33 +4378,33 @@ public enum CodemodeLanguage {
             }
         }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.values [status=implemented hash=2cd16b96586f]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.values [status=implemented hash=2cd16b96586f]
         public var values: [Obj] { orderedValues }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.nameOf [status=implemented hash=f493d7c263ea]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.nameOf [status=implemented hash=f493d7c263ea]
         public func nameOf(_ value: Obj) -> String? { byId[ObjectIdentifier(value)] }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.valueOf [status=implemented hash=ef3c97e74236]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.valueOf [status=implemented hash=ef3c97e74236]
         public func valueOf(_ name: String) -> Obj? { byName[name] }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.all [status=implemented hash=ee4528ee2d26]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.all [status=implemented hash=ee4528ee2d26]
         public func all() -> [String] { orderedNames }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.hosts [status=implemented hash=bb983fed8080]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.hosts [status=implemented hash=bb983fed8080]
         public func hosts() -> [String] { hostNamesList }
 
-        // parity: codemode/src/language/runtime/intrinsic-names.ts#IntrinsicNames.changed [status=implemented hash=dbb048db447c]
+        // parity: psychoscript/src/runtime/intrinsic-names.ts#IntrinsicNames.changed [status=implemented hash=dbb048db447c]
         public func changed() -> [Obj] { orderedValues.filter { !CodemodeLanguage.unchanged($0) } }
     }
 
     // MARK: - Prelude & Internal Prelude (src/language/prelude/*, internal-prelude.ts)
 
-    // parity: codemode/src/language/prelude/source.ts#code [status=adapted hash=4564f3791d24]
+    // parity: psychoscript/src/prelude/source.ts#code [status=adapted hash=4564f3791d24]
     public static let preludeSourceCode: String = """
     // Code Mode built-in JavaScript prelude helpers
     """
 
-    // parity: codemode/src/language/prelude/bytecode.ts#SavedCodes [status=implemented hash=35954d4a7ac3]
+    // parity: psychoscript/src/prelude/bytecode.ts#SavedCodes [status=implemented hash=35954d4a7ac3]
     public struct SavedCodes: Equatable, Sendable, Codable {
         public let version: Int
         public let sourceHash: String
@@ -4417,7 +4417,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/prelude/bytecode.ts#saveCodes [status=implemented hash=795e32c362b7]
+    // parity: psychoscript/src/prelude/bytecode.ts#saveCodes [status=implemented hash=795e32c362b7]
     public static func saveCodes(_ codes: [Code], sourceCode: String) -> SavedCodes {
         SavedCodes(
             version: COMPILER_VERSION,
@@ -4426,7 +4426,7 @@ public enum CodemodeLanguage {
         )
     }
 
-    // parity: codemode/src/language/prelude/bytecode.ts#builtinCodes [status=implemented hash=c52504770860]
+    // parity: psychoscript/src/prelude/bytecode.ts#builtinCodes [status=implemented hash=c52504770860]
     public static func builtinCodes(id: String, sourceCode: String) -> [Code] {
         let parsed = parseProgram(sourceCode)
         switch parsed {
@@ -4437,7 +4437,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/prelude/helpers.ts#helpers [status=adapted hash=bb972f38545b]
+    // parity: psychoscript/src/prelude/helpers.ts#helpers [status=adapted hash=bb972f38545b]
     public static func helpers() -> [String: String] {
         [
             "toPrimitive": "internal:toPrimitive",
@@ -4445,12 +4445,12 @@ public enum CodemodeLanguage {
         ]
     }
 
-    // parity: codemode/src/language/prelude/prelude.ts#compiledPrelude [status=implemented hash=67de943408d8]
+    // parity: psychoscript/src/prelude/prelude.ts#compiledPrelude [status=implemented hash=67de943408d8]
     public static func compiledPrelude() -> [Code] {
         builtinCodes(id: "<prelude>", sourceCode: preludeSourceCode)
     }
 
-    // parity: codemode/src/language/prelude/prelude.ts#Prelude [status=implemented hash=f03d030aedd9]
+    // parity: psychoscript/src/prelude/prelude.ts#Prelude [status=implemented hash=f03d030aedd9]
     public final class Prelude: Sendable {
         public let codes: [Code]
         private let functions: [String: Callable]
@@ -4460,13 +4460,13 @@ public enum CodemodeLanguage {
             self.functions = functions
         }
 
-        // parity: codemode/src/language/prelude/prelude.ts#Prelude.fn [status=implemented hash=3b62689aafb9]
+        // parity: psychoscript/src/prelude/prelude.ts#Prelude.fn [status=implemented hash=3b62689aafb9]
         public func fn(_ name: String) -> Callable? {
             functions[name]
         }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#VmIntrinsic [status=implemented hash=dc73ea7afa48]
+    // parity: psychoscript/src/internal-prelude.ts#VmIntrinsic [status=implemented hash=dc73ea7afa48]
     public final class VmIntrinsic: Sendable {
         public let name: String
         public let invoke: @Sendable ([Value]) throws -> Value
@@ -4477,20 +4477,20 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#INTERNAL_SOURCE [status=adapted hash=bd689653a7c6]
+    // parity: psychoscript/src/internal-prelude.ts#INTERNAL_SOURCE [status=adapted hash=bd689653a7c6]
     public static let INTERNAL_SOURCE: String = "// Code Mode internal VM prelude"
 
-    // parity: codemode/src/language/internal-prelude.ts#getInternalPrelude [status=implemented hash=305e479371fd]
+    // parity: psychoscript/src/internal-prelude.ts#getInternalPrelude [status=implemented hash=305e479371fd]
     public static func getInternalPrelude() -> [Code] {
         builtinCodes(id: "<internal>", sourceCode: INTERNAL_SOURCE)
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#internalCode [status=implemented hash=192f49efa4ad]
+    // parity: psychoscript/src/internal-prelude.ts#internalCode [status=implemented hash=192f49efa4ad]
     public static func internalCode(_ name: String) -> Code? {
         getInternalPrelude().first { $0.name == name }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#registerVmIntrinsics [status=implemented hash=65955908b6ea]
+    // parity: psychoscript/src/internal-prelude.ts#registerVmIntrinsics [status=implemented hash=65955908b6ea]
     public static func registerVmIntrinsics(_ registry: inout [String: VmIntrinsic]) {
         registry["isArray"] = VmIntrinsic(name: "isArray") { args in
             if case .object(let obj) = args.first { return .bool(obj is Arr) }
@@ -4501,7 +4501,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: codemode/src/language/internal-prelude.ts#tryFastBoundaryOrJson [status=implemented hash=767bebe0ab2d]
+    // parity: psychoscript/src/internal-prelude.ts#tryFastBoundaryOrJson [status=implemented hash=767bebe0ab2d]
     public static func tryFastBoundaryOrJson(_ value: Value) -> JSONValue? {
         switch value {
         case .null: return .null

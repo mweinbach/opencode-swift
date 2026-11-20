@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/anomalyco/psychoscript.git",
+  "consumer": "anomalyco/opencode packages/codemode/package.json dependencies.psychoscript",
+  "version": "0.1.2",
+  "tag": "v0.1.2",
+  "commit": "77cafc0de453ad17cc4cc99e1ea7d6e2b8b4fdd4",
+  "commitDate": "2026-11-19T19:20:37-05:00",
+  "commitSubject": "fix: give errors a stack (#8)",
+  "license": "MIT"
+}

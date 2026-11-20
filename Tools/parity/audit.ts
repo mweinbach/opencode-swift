@@ -7,6 +7,8 @@ import {
   OUT_OF_SCOPE_WEB_PACKAGES,
   SWIFT_TARGET_PURITY,
   TRACKED_PACKAGES,
+  packageRoot,
+  packageRootByName,
 } from "./config.ts"
 import {
   isFunctionLikeKind,
@@ -764,7 +766,7 @@ function checkCompilerExportCompleteness(manifest: UpstreamManifest): CompilerEx
   const errors: CompilerExportError[] = []
   for (const pkg of TRACKED_PACKAGES) {
     if (pkg.language !== "ts") continue
-    const pkgRoot = path.join(UPSTREAM_PACKAGES_DIR, pkg.upstreamPackage)
+    const pkgRoot = packageRoot(ROOT_DIR, pkg)
     const srcRoot = path.join(pkgRoot, "src")
     const files = walkSourceFiles(srcRoot, "ts")
     for (const absPath of files) {
@@ -783,6 +785,59 @@ function checkCompilerExportCompleteness(manifest: UpstreamManifest): CompilerEx
     }
   }
 
+  return errors
+}
+
+// ============================================================================
+// Gate 9b: External Upstream Pin Gate
+// A tracked package that lives in its own repository (e.g. psychoscript) must be
+// pinned to exactly the version the opencode consumer package depends on, and
+// its checkout must match the lock file.
+// ============================================================================
+
+interface ExternalPinError {
+  readonly package: string
+  readonly rule: string
+}
+
+function checkExternalUpstreamPins(manifest: UpstreamManifest): ExternalPinError[] {
+  const errors: ExternalPinError[] = []
+  for (const pkg of TRACKED_PACKAGES) {
+    const ext = pkg.external
+    if (!ext) continue
+    const lockPath = path.join(ROOT_DIR, ext.lockFile)
+    if (!fs.existsSync(lockPath)) {
+      errors.push({ package: pkg.upstreamPackage, rule: `Missing lock file ${ext.lockFile}` })
+      continue
+    }
+    const lock = JSON.parse(fs.readFileSync(lockPath, "utf8")) as { commit?: string; tag?: string; version?: string }
+    const consumerJson = path.join(UPSTREAM_PACKAGES_DIR, ext.consumer.upstreamPackage, "package.json")
+    if (fs.existsSync(consumerJson)) {
+      const parsed = JSON.parse(fs.readFileSync(consumerJson, "utf8")) as {
+        dependencies?: Record<string, string>
+        devDependencies?: Record<string, string>
+      }
+      const wanted = parsed.dependencies?.[ext.consumer.npmName] ?? parsed.devDependencies?.[ext.consumer.npmName]
+      if (!wanted) {
+        errors.push({
+          package: pkg.upstreamPackage,
+          rule: `packages/${ext.consumer.upstreamPackage}/package.json no longer depends on '${ext.consumer.npmName}' — re-evaluate tracking`,
+        })
+      } else if (wanted.replace(/^[~^=v]/, "") !== (lock.version ?? "")) {
+        errors.push({
+          package: pkg.upstreamPackage,
+          rule: `Pinned ${ext.lockFile} version=${lock.version ?? "<none>"} but upstream ${ext.consumer.upstreamPackage} depends on ${ext.consumer.npmName}@${wanted} — run ./scripts/parity.sh sync --update`,
+        })
+      }
+    }
+    const recorded = manifest.upstream.external?.find((e) => e.package === pkg.upstreamPackage)
+    if (!recorded || recorded.commit !== lock.commit) {
+      errors.push({
+        package: pkg.upstreamPackage,
+        rule: `parity/upstream-manifest.json was scanned at ${recorded?.commit?.slice(0, 12) ?? "<none>"} but ${ext.lockFile} pins ${lock.commit?.slice(0, 12)} — run ./scripts/parity.sh scan`,
+      })
+    }
+  }
   return errors
 }
 
@@ -812,7 +867,7 @@ function checkWorkspaceDependencyGraph(): WorkspaceDepError[] {
 
   const errors: WorkspaceDepError[] = []
   for (const pkg of TRACKED_PACKAGES) {
-    const pkgJsonPath = path.join(UPSTREAM_PACKAGES_DIR, pkg.upstreamPackage, "package.json")
+    const pkgJsonPath = path.join(packageRoot(ROOT_DIR, pkg), "package.json")
     if (!fs.existsSync(pkgJsonPath)) continue
     const parsed = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
       dependencies?: Record<string, string>
@@ -1191,7 +1246,7 @@ function checkSwiftImplementationSubstance(
     if (!fs.existsSync(UPSTREAM_PACKAGES_DIR)) {
       return sym.signature.trim().endsWith("{}")
     }
-    const absPath = path.join(UPSTREAM_PACKAGES_DIR, sym.package, sym.file)
+    const absPath = path.join(packageRootByName(ROOT_DIR, sym.package), sym.file)
     let src = upstreamFileCache.get(absPath)
     if (src === undefined) {
       if (!fs.existsSync(absPath)) return false
@@ -1449,6 +1504,7 @@ const dependencyLawViolations = checkPackageDependencyLaws()
 const testImportViolations = checkTestImports()
 const compilerExportErrors = checkCompilerExportCompleteness(manifest)
 const workspaceDepErrors = checkWorkspaceDependencyGraph()
+const externalPinErrors = checkExternalUpstreamPins(manifest)
 const substanceErrors = checkSwiftImplementationSubstance(annotations, symbolMap, swiftFileContents)
 
 const dangling: SwiftParityAnnotation[] = []
@@ -1645,6 +1701,7 @@ const report = {
     purityViolations: purityViolations.length,
     compilerExportErrors: compilerExportErrors.length,
     workspaceDepErrors: workspaceDepErrors.length,
+    externalPinErrors: externalPinErrors.length,
     substanceErrors: substanceErrors.length,
     unmappedSymbols: totals.unmappedSymbols,
     stubSymbols: totals.stubSymbols,
@@ -1663,6 +1720,7 @@ const report = {
   purityViolations,
   compilerExportErrors,
   workspaceDepErrors,
+  externalPinErrors,
   substanceErrors,
   unmappedSymbolsList,
   packages: packageAudits,
@@ -1678,6 +1736,10 @@ const mdLines: string[] = [
   "# swift-opencode Parity Dashboard",
   "",
   `> Auto-generated by \`./scripts/parity.sh audit\` against \`anomalyco/opencode\` commit \`${manifest.upstream.commit.slice(0, 12)}\` (\`${manifest.upstream.branch}\`, ${manifest.upstream.commitDate}).`,
+  ...(manifest.upstream.external ?? []).map(
+    (e) =>
+      `> External upstream \`${e.package}\` pinned at ${e.tag ? `\`${e.tag}\` / ` : ""}commit \`${e.commit.slice(0, 12)}\` (${e.commitDate}) from ${e.repository}.`,
+  ),
   "",
   "## Summary",
   "",
@@ -1694,6 +1756,7 @@ const mdLines: string[] = [
   `| Dangling parity annotations | ${dangling.length} |`,
   `| Duplicate parity annotations | ${duplicates.length} |`,
   `| Unpinned parity annotations (missing hash) | ${unpinned.length} |`,
+  `| External upstream pin errors | ${externalPinErrors.length} |`,
   `| Invalid parity status annotations | ${invalidStatuses.length} |`,
   `| Orphan parity annotations | ${orphans.length} |`,
   `| Untracked upstream packages | ${untrackedUpstreamPackages.length} |`,
@@ -1774,6 +1837,7 @@ console.log(`Stub hygiene errs: ${stubHygieneViolations.length}`)
 console.log(`Purity errors:     ${purityViolations.length}`)
 console.log(`Compiler exports:  ${compilerExportErrors.length}`)
 console.log(`Workspace deps:    ${workspaceDepErrors.length}`)
+console.log(`External pins:     ${externalPinErrors.length} errors${(manifest.upstream.external ?? []).map((e) => ` · ${e.package}@${e.tag ?? e.commit.slice(0, 12)}`).join("")}`)
 console.log(`Substance errors:  ${substanceErrors.length}`)
 if (!noWrite) {
   console.log("Wrote parity/report.json and PARITY.md")
@@ -1861,6 +1925,10 @@ if (workspaceDepErrors.length > 0) {
     console.error(`  packages/${e.package} [${e.dependencyField}] -> ${e.dependencyName}: ${e.rule}`)
   }
 }
+if (externalPinErrors.length > 0) {
+  console.error("\nExternal upstream pin errors (Gate 9b):")
+  for (const e of externalPinErrors) console.error(`  ${e.package}: ${e.rule}`)
+}
 if (substanceErrors.length > 0) {
   console.error("\nSwift implementation substance errors (Gate 11):")
   for (const e of substanceErrors) {
@@ -1908,6 +1976,7 @@ if (
   purityViolations.length > 0 ||
   compilerExportErrors.length > 0 ||
   workspaceDepErrors.length > 0 ||
+  externalPinErrors.length > 0 ||
   substanceErrors.length > 0 ||
   ((failOnDrift || strictMode) && drifted.length > 0) ||
   strictFailures.length > 0
