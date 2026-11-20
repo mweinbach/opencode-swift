@@ -1199,13 +1199,33 @@ public enum CoreLocation {
             ) async -> [LocationSchema.Ref] {
                 let now = clock()
                 let activeRefs = Set(locations.keys())
-                let expired: [LocationSchema.Ref] = entries.withLock { map in
+                let candidates: [Entry] = entries.withLock { map in
                     for ref in activeRefs where map[ref] == nil {
                         map[ref] = Entry(ref: ref, touchedAtMs: now)
                     }
                     map = map.filter { activeRefs.contains($0.key) }
-                    return map.values.compactMap { entry in
-                        (entry.touchedAtMs + timeToLiveMs <= now) ? entry.ref : nil
+                    return Array(map.values)
+                }
+                var expired: [LocationSchema.Ref] = []
+                for entry in candidates {
+                    var ttl: Int64? = timeToLiveMs
+                    if let services = locations.cached(entry.ref),
+                       let config = services.get(CoreConfig.Service.serviceKey, as: (any CoreConfig.Interface).self)
+                    {
+                        let configEntries = await config.entries()
+                        if let configured = configEntries.last(where: { $0.isDocument && $0.info?.experimental?.locationIdleTimeout != nil })?.info?.experimental?.locationIdleTimeout {
+                            switch configured {
+                            case .disabled:
+                                ttl = nil
+                            case .duration(let str):
+                                if let ms = AutomationSchema.durationMillis(str) {
+                                    ttl = Int64(ms)
+                                }
+                            }
+                        }
+                    }
+                    if let ttl, entry.touchedAtMs + ttl <= now {
+                        expired.append(entry.ref)
                     }
                 }
                 var evicted: [LocationSchema.Ref] = []
@@ -1309,6 +1329,7 @@ public enum CoreLocation {
             CoreSkill.SkillInstructions.node,
             CoreInstruction.Reference.ReferenceInstructions.node,
             CoreVcs.Vcs.node,
+            CoreFilesystem.LocationWatcher.node,
             CoreWorktree.Strategies.node,
         ])
 
@@ -2549,19 +2570,56 @@ public enum CoreVcs {
         // parity: core/src/vcs.ts#Service [status=implemented hash=df7d49ccd2a1]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Vcs"
+
+            private actor SerialGate {
+                private var locked = false
+                private var waiters: [CheckedContinuation<Void, Never>] = []
+
+                func acquire() async {
+                    if !locked {
+                        locked = true
+                        return
+                    }
+                    await withCheckedContinuation { continuation in
+                        waiters.append(continuation)
+                    }
+                }
+
+                func release() {
+                    if !waiters.isEmpty {
+                        let next = waiters.removeFirst()
+                        next.resume()
+                    } else {
+                        locked = false
+                    }
+                }
+            }
+
             private let projectDirectory: SchemaPrimitive.AbsolutePath
             private let detectedVcsType: String?
+            private let vcs: CoreProject.Schema.Vcs?
+            private let location: OpenCodeLocation?
+            private let bus: (any CoreBus.Interface)?
             private let fileSystem: any OpenCodeFileSystem
             private let state: CoreState.Store<Data, Editor>
             private let cachedInfo = Mutex(VcsSchema.Info(provider: nil, branch: VcsSchema.Branch()))
+            private let refreshGate = SerialGate()
+            private let closedFlag = Mutex(false)
+            private let watchTaskBox = Mutex<Task<Void, Never>?>(nil)
 
             public init(
                 projectDirectory: SchemaPrimitive.AbsolutePath = SchemaPrimitive.AbsolutePath(rawValue: "/"),
                 detectedVcsType: String? = nil,
+                vcs: CoreProject.Schema.Vcs? = nil,
+                location: OpenCodeLocation? = nil,
+                bus: (any CoreBus.Interface)? = nil,
                 fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
             ) {
                 self.projectDirectory = projectDirectory
-                self.detectedVcsType = detectedVcsType
+                self.detectedVcsType = detectedVcsType ?? vcs?.type.rawValue
+                self.vcs = vcs
+                self.location = location
+                self.bus = bus
                 self.fileSystem = fileSystem
                 self.state = CoreState.create(CoreState.Options(
                     name: "vcs",
@@ -2569,6 +2627,73 @@ public enum CoreVcs {
                     makeEditor: { Editor(data: $0) },
                     commitEditor: { $0.data }
                 ))
+
+                if let vcs, let bus {
+                    // Subscribe synchronously before spawning the consumer task so no metadata event is missed.
+                    let stream = bus.subscribe(types: [FileSystemSchema.Event.changed.type], location: location)
+                    let rawStore = vcs.store.rawValue
+                    let vcsType = vcs.type.rawValue
+                    let task = Task { [weak self] in
+                        let resolvedStore: String
+                        if let fs = self?.fileSystem, let real = try? await fs.realPath(at: rawStore) {
+                            resolvedStore = real
+                        } else {
+                            resolvedStore = rawStore
+                        }
+                        let isBranchMetadata: @Sendable (String) -> Bool
+                        if vcsType == "git" {
+                            isBranchMetadata = { file in
+                                CoreConfigDiscovery.basename(file) == "HEAD" && (
+                                    FSPathUtil.contains(parent: resolvedStore, child: file)
+                                        || FSPathUtil.contains(parent: rawStore, child: file)
+                                )
+                            }
+                        } else {
+                            let canonicalBranch = CoreConfigDiscovery.joinPath(resolvedStore, "branch")
+                            let rawBranch = CoreConfigDiscovery.joinPath(rawStore, "branch")
+                            isBranchMetadata = { file in
+                                let resolved = CoreConfigDiscovery.resolvePath(base: "/", relative: file)
+                                return resolved == canonicalBranch || resolved == rawBranch
+                            }
+                        }
+                        for await event in stream {
+                            if Task.isCancelled { break }
+                            guard let self, !self.closedFlag.withLock({ $0 }) else { break }
+                            guard case .object(let obj) = event.data,
+                                  case .string(let file) = obj["file"],
+                                  isBranchMetadata(file)
+                            else { continue }
+                            await self.refresh()
+                        }
+                    }
+                    let cancelNow = closedFlag.withLock { closed -> Bool in
+                        if closed { return true }
+                        watchTaskBox.withLock { $0 = task }
+                        return false
+                    }
+                    if cancelNow { task.cancel() }
+                }
+            }
+
+            deinit {
+                closedFlag.withLock { $0 = true }
+                watchTaskBox.withLock { task in
+                    task?.cancel()
+                    task = nil
+                }
+            }
+
+            /// Stops the `filesystem.changed` branch-metadata subscription and prevents further updates.
+            public func close() async {
+                let task = closedFlag.withLock { closed -> Task<Void, Never>? in
+                    closed = true
+                    return watchTaskBox.withLock { t in
+                        let prev = t
+                        t = nil
+                        return prev
+                    }
+                }
+                task?.cancel()
             }
 
             public var directory: SchemaPrimitive.AbsolutePath { projectDirectory }
@@ -2592,12 +2717,51 @@ public enum CoreVcs {
             }
 
             public func refresh() async {
-                guard let provider = selectedProvider() else {
-                    cachedInfo.withLock { $0 = VcsSchema.Info(provider: nil, branch: VcsSchema.Branch()) }
-                    return
+                guard !closedFlag.withLock({ $0 }) else { return }
+                await refreshGate.acquire()
+                let changed: Bool
+                if closedFlag.withLock({ $0 }) {
+                    changed = false
+                } else if let provider = selectedProvider() {
+                    let fetched: VcsSchema.Info
+                    if let result = try? await provider.info() {
+                        fetched = VcsSchema.Info(provider: provider.id, branch: result.branch)
+                    } else {
+                        fetched = VcsSchema.Info(provider: provider.id, branch: VcsSchema.Branch())
+                    }
+                    changed = cachedInfo.withLock { current in
+                        guard !closedFlag.withLock({ $0 }) else { return false }
+                        let diff = current.branch.current != fetched.branch.current
+                        current = fetched
+                        return diff
+                    }
+                } else {
+                    let empty = VcsSchema.Info(provider: nil, branch: VcsSchema.Branch())
+                    changed = cachedInfo.withLock { current in
+                        guard !closedFlag.withLock({ $0 }) else { return false }
+                        let diff = current.branch.current != empty.branch.current
+                        current = empty
+                        return diff
+                    }
                 }
-                if let fetched = try? await provider.info() {
-                    cachedInfo.withLock { $0 = VcsSchema.Info(provider: provider.id, branch: fetched.branch) }
+                await refreshGate.release()
+
+                guard changed, !closedFlag.withLock({ $0 }), let bus else { return }
+                // Re-announce the latest branch if publication was overtaken by nested listener updates.
+                while !closedFlag.withLock({ $0 }) {
+                    let branch = cachedInfo.withLock { $0.branch.current }
+                    let payload = VcsEventSchema.BranchUpdatedData(branch: branch)
+                    let encoded = (try? CoreBusJSON.encodeToJSONValue(payload)) ?? (
+                        branch.map { .object(["branch": .string($0)]) } ?? .object([:])
+                    )
+                    _ = try? await bus.publishRaw(
+                        definition: VcsEventSchema.BranchUpdated.descriptor,
+                        data: encoded,
+                        options: CoreBus.PublishOptions(location: location)
+                    )
+                    if branch == cachedInfo.withLock({ $0.branch.current }) {
+                        return
+                    }
                 }
             }
 
@@ -2677,17 +2841,27 @@ public enum CoreVcs {
         // parity: core/src/vcs.ts#node [status=implemented hash=abc8df045023]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
-            LayerNode.ExecutableLayer { deps, _ in
+            LayerNode.ExecutableLayer { deps, scope in
                 let loc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
+                let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
                 let fs = deps.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) ?? LocalFileSystem.shared
+                let route = loc.map {
+                    OpenCodeLocation(directory: $0.info.directory.rawValue, workspaceID: $0.info.workspaceID)
+                }
                 let svc = Service(
                     projectDirectory: loc?.info.project.directory ?? SchemaPrimitive.AbsolutePath(rawValue: "/"),
                     detectedVcsType: loc?.vcs?.type.rawValue,
+                    vcs: loc?.vcs,
+                    location: route,
+                    bus: bus,
                     fileSystem: fs
                 )
+                scope.addFinalizer {
+                    await svc.close()
+                }
                 return LayerNode.Output([Service.serviceKey: svc])
             },
-            [LayerNodePlatform.filesystem, CoreLocation.Location.node]
+            [LayerNodePlatform.filesystem, CoreLocation.Location.node, CoreBus.node]
         )
     }
 }

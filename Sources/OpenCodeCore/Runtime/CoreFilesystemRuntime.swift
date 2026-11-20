@@ -2073,7 +2073,7 @@ public enum CoreFilesystem {
                     )
                     filter = { event in
                         let normEvent = normalizeWatchPath(event.path)
-                        guard normEvent != resolvedPath,
+                        guard (normEvent != resolvedPath || event.kind == .deleted),
                               FSPathUtil.contains(parent: resolvedPath, child: normEvent),
                               !ignoreMatcher.isIgnored(normEvent)
                         else { return nil }
@@ -2349,6 +2349,7 @@ public enum CoreFilesystem {
                 var transforms: [UInt64: @Sendable (Editor) -> Void] = [:]
                 var transformOrder: [UInt64] = []
                 var listeners: [UInt64: @Sendable ([String]) async -> Void] = [:]
+                var listenerOrder: [UInt64] = []
                 var cachedIgnore: [String] = []
                 var nextID: UInt64 = 1
             }
@@ -2379,16 +2380,17 @@ public enum CoreFilesystem {
             }
 
             public func reload() async {
-                let (ignoreList, listeners): ([String], [@Sendable ([String]) async -> Void]) = state.withLock { s in
+                let listeners: [@Sendable ([String]) async -> Void] = state.withLock { s in
                     let editor = Editor()
                     for id in s.transformOrder {
                         s.transforms[id]?(editor)
                     }
                     s.cachedIgnore = editor.list()
-                    return (s.cachedIgnore, Array(s.listeners.values))
+                    return s.listenerOrder.compactMap { s.listeners[$0] }
                 }
+                // Read per listener: a reentrant transform inside an earlier listener must reach later ones.
                 for listener in listeners {
-                    await listener(ignoreList)
+                    await listener(current())
                 }
             }
 
@@ -2397,11 +2399,13 @@ public enum CoreFilesystem {
                     let id = s.nextID
                     s.nextID &+= 1
                     s.listeners[id] = listener
+                    s.listenerOrder.append(id)
                     return id
                 }
                 return Registration { [weak self] in
                     self?.state.withLock { s in
                         _ = s.listeners.removeValue(forKey: id)
+                        s.listenerOrder.removeAll { $0 == id }
                     }
                 }
             }
@@ -2410,7 +2414,9 @@ public enum CoreFilesystem {
         // parity: core/src/filesystem/location-watcher-policy.ts#node [status=adapted hash=0c79ea0a2c77]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
-            LayerNode.ExecutableLayer.succeed(key: Service.serviceKey, value: Service() as any Interface),
+            LayerNode.ExecutableLayer { _, _ in
+                LayerNode.Output([Service.serviceKey: Service() as any Interface])
+            },
             []
         )
     }
@@ -2418,40 +2424,369 @@ public enum CoreFilesystem {
     // MARK: - LocationWatcher (`core/src/filesystem/location-watcher.ts`)
 
     public enum LocationWatcher {
-        // parity: core/src/filesystem/location-watcher.ts#Interface [status=adapted hash=9f70dc435258]
+        // parity: core/src/filesystem/location-watcher.ts#Interface [status=implemented hash=9f70dc435258]
         public protocol Interface: Sendable {}
 
-        // parity: core/src/filesystem/location-watcher.ts#Service [status=adapted hash=c475860cfeda]
+        // parity: core/src/filesystem/location-watcher.ts#Service [status=implemented hash=c475860cfeda]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/LocationWatcher"
 
-            private let policy: any LocationWatcherPolicy.Interface
+            public struct Target: Equatable, Hashable, Sendable {
+                public let path: String
+                public let aliases: [String]
+
+                public init(path: String, aliases: [String]) {
+                    self.path = path
+                    self.aliases = aliases
+                }
+            }
+
+            private struct ActiveWatch: Sendable {
+                let path: String
+                let task: Task<Void, Never>
+            }
+
+            private struct State: Sendable {
+                var cachedTarget: Target?? = nil
+                var active: ActiveWatch?
+                var startupTask: Task<Void, Never>?
+                var policyReg: LocationWatcherPolicy.Registration?
+                var started: Bool = false
+                var stopped: Bool = false
+                var ready: Bool = false
+                var readyWaiters: [CheckedContinuation<Void, Never>] = []
+            }
+
+            private actor SerialGate {
+                private var locked = false
+                private var waiters: [CheckedContinuation<Void, Never>] = []
+
+                func acquire() async {
+                    if !locked {
+                        locked = true
+                        return
+                    }
+                    await withCheckedContinuation { continuation in
+                        waiters.append(continuation)
+                    }
+                }
+
+                func release() {
+                    if !waiters.isEmpty {
+                        let next = waiters.removeFirst()
+                        next.resume()
+                    } else {
+                        locked = false
+                    }
+                }
+            }
+
+            private static let fileChangedDef = EventSchema.EphemeralDefinition<FileSystemSchema.Event.ChangedPayload>(
+                type: FileSystemSchema.Event.changed.type
+            ).descriptor
+
+            private let location: (any CoreLocation.Location.Interface)?
             private let watcher: any Watcher.Interface
+            private let bus: (any CoreBus.Interface)?
+            private let fs: FSUtil.Service
+            private let git: (any CoreVcs.Git.Interface)?
+            private let policy: any LocationWatcherPolicy.Interface
+            private let plugin: (any CorePlugin.ServiceInterface)?
+            private let state = Mutex(State())
+            private let lock = SerialGate()
 
             public init(
+                location: (any CoreLocation.Location.Interface)? = nil,
+                watcher: any Watcher.Interface = Watcher.Test(),
+                bus: (any CoreBus.Interface)? = nil,
+                fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+                git: (any CoreVcs.Git.Interface)? = nil,
                 policy: any LocationWatcherPolicy.Interface = LocationWatcherPolicy.Service(),
-                watcher: any Watcher.Interface = Watcher.Test()
+                plugin: (any CorePlugin.ServiceInterface)? = nil
             ) {
-                self.policy = policy
+                self.location = location
                 self.watcher = watcher
+                self.bus = bus
+                self.fs = FSUtil.Service(fileSystem: fileSystem)
+                self.git = git
+                self.policy = policy
+                self.plugin = plugin
+            }
+
+            deinit {
+                let (startup, policyReg, activeTask, waiters): (
+                    Task<Void, Never>?,
+                    LocationWatcherPolicy.Registration?,
+                    Task<Void, Never>?,
+                    [CheckedContinuation<Void, Never>]
+                ) = state.withLock { s in
+                    s.stopped = true
+                    s.ready = true
+                    let st = s.startupTask
+                    s.startupTask = nil
+                    let reg = s.policyReg
+                    s.policyReg = nil
+                    let act = s.active?.task
+                    s.active = nil
+                    let w = s.readyWaiters
+                    s.readyWaiters.removeAll()
+                    return (st, reg, act, w)
+                }
+                startup?.cancel()
+                policyReg?.dispose()
+                activeTask?.cancel()
+                for waiter in waiters { waiter.resume() }
             }
 
             public func isIgnored(_ path: String) -> Bool {
                 policy.current().contains(path)
             }
+
+            /// Currently watched VCS metadata file path, or `nil` when inactive/ignored/outside VCS.
+            public var activePath: String? {
+                state.withLock { $0.active?.path }
+            }
+
+            /// Starts policy observation and forks asynchronous reconciliation after plugin activation.
+            /// Never blocks server handlers or Location boot.
+            public func start() {
+                let shouldStart = state.withLock { s -> Bool in
+                    guard !s.started && !s.stopped else { return false }
+                    s.started = true
+                    return true
+                }
+                guard shouldStart else { return }
+
+                let reg = policy.observe { [weak self] _ in
+                    await self?.reconcile()
+                }
+                let startup = Task { [weak self] in
+                    guard let self else { return }
+                    if let plugin = self.plugin {
+                        await plugin.awaitActivation()
+                    }
+                    if !Task.isCancelled {
+                        await self.reconcile()
+                    }
+                    self.markReady()
+                }
+                let cancelNow: (LocationWatcherPolicy.Registration, Task<Void, Never>)? = state.withLock { s in
+                    if s.stopped {
+                        return (reg, startup)
+                    }
+                    s.policyReg = reg
+                    s.startupTask = startup
+                    return nil
+                }
+                if let (r, t) = cancelNow {
+                    r.dispose()
+                    t.cancel()
+                    markReady()
+                }
+            }
+
+            /// Waits until the initial post-activation `reconcile()` completes (or `close()` is called).
+            public func awaitReady() async {
+                let already = state.withLock { $0.ready || $0.stopped }
+                if already { return }
+                await withCheckedContinuation { continuation in
+                    let done = state.withLock { s -> Bool in
+                        if s.ready || s.stopped { return true }
+                        s.readyWaiters.append(continuation)
+                        return false
+                    }
+                    if done { continuation.resume() }
+                }
+            }
+
+            /// Reconciles the watched VCS metadata path against the current `LocationWatcherPolicy`.
+            public func reconcile() async {
+                await lock.acquire()
+                await reconcileLocked()
+                await lock.release()
+            }
+
+            /// Stops all policy observations, startup tasks, and active VCS file watches for this Location.
+            public func close() async {
+                let (startup, policyReg): (Task<Void, Never>?, LocationWatcherPolicy.Registration?) = state.withLock { s in
+                    s.stopped = true
+                    let st = s.startupTask
+                    s.startupTask = nil
+                    let reg = s.policyReg
+                    s.policyReg = nil
+                    return (st, reg)
+                }
+                startup?.cancel()
+                policyReg?.dispose()
+
+                await lock.acquire()
+                let activeTask: Task<Void, Never>? = state.withLock { s in
+                    s.stopped = true
+                    let act = s.active?.task
+                    s.active = nil
+                    return act
+                }
+                activeTask?.cancel()
+                await lock.release()
+                markReady()
+            }
+
+            private func markReady() {
+                let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
+                    s.ready = true
+                    let list = s.readyWaiters
+                    s.readyWaiters.removeAll()
+                    return list
+                }
+                for waiter in waiters { waiter.resume() }
+            }
+
+            private func resolveTargetLocked() async -> Target? {
+                if let cached = state.withLock({ $0.cachedTarget }) {
+                    return cached
+                }
+                let resolved = await computeTarget()
+                state.withLock { $0.cachedTarget = .some(resolved) }
+                return resolved
+            }
+
+            private func computeTarget() async -> Target? {
+                guard let location, let vcs = location.vcs else { return nil }
+                if vcs.type.rawValue == "git" {
+                    let discovered = await git?.discover(location.info.directory)?.gitDirectory.rawValue
+                    let resolved: String
+                    if let discovered {
+                        resolved = discovered
+                    } else {
+                        resolved = await resolveGitStorePath(vcs.store.rawValue)
+                    }
+                    let canonical = (try? await fs.fileSystem.realPath(at: resolved)) ?? resolved
+                    let aliases: [String] = [".git", canonical, resolved]
+                    return Target(path: CoreConfigDiscovery.joinPath(canonical, "HEAD"), aliases: aliases)
+                }
+                if vcs.type.rawValue == "hg" {
+                    let store = vcs.store.rawValue
+                    let canonical = (try? await fs.fileSystem.realPath(at: store)) ?? store
+                    return Target(path: CoreConfigDiscovery.joinPath(canonical, "branch"), aliases: [".hg", canonical])
+                }
+                return nil
+            }
+
+            /// Resolves a `.git` gitdir pointer file (linked worktree / submodule) when `git.discover` is unavailable.
+            private func resolveGitStorePath(_ store: String) async -> String {
+                if let stat = try? await fs.fileSystem.stat(at: store),
+                   stat.type == .file,
+                   let bytes = try? await fs.fileSystem.readFile(at: store)
+                {
+                    let text = String(decoding: bytes, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let prefix = "gitdir:"
+                    if text.lowercased().hasPrefix(prefix) {
+                        let rawTarget = text.dropFirst(prefix.count).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !rawTarget.isEmpty {
+                            let parent = CoreConfigDiscovery.dirname(store)
+                            return CoreConfigDiscovery.resolvePath(base: parent, relative: rawTarget)
+                        }
+                    }
+                }
+                return store
+            }
+
+            private func reconcileLocked() async {
+                guard !state.withLock({ $0.stopped }) else { return }
+                let resolved = await resolveTargetLocked()
+                guard !state.withLock({ $0.stopped }) else { return }
+
+                let ignore = policy.current()
+                let next: String?
+                if let resolved, !resolved.aliases.contains(where: { ignore.contains($0) }) {
+                    next = resolved.path
+                } else {
+                    next = nil
+                }
+
+                let currentPath = state.withLock { $0.active?.path }
+                if currentPath == next { return }
+
+                let previousTask = state.withLock { s -> Task<Void, Never>? in
+                    let prev = s.active?.task
+                    s.active = nil
+                    return prev
+                }
+                previousTask?.cancel()
+
+                guard let next else { return }
+                let updates = await watcher.subscribe(.file(path: next), onReady: nil)
+                if state.withLock({ $0.stopped }) || Task.isCancelled {
+                    return
+                }
+
+                let task = Task { [weak self] in
+                    for await update in updates {
+                        if Task.isCancelled { break }
+                        await self?.publish(update)
+                    }
+                }
+
+                let cancelIfStopped: Task<Void, Never>? = state.withLock { s in
+                    if s.stopped { return task }
+                    s.active = ActiveWatch(path: next, task: task)
+                    return nil
+                }
+                cancelIfStopped?.cancel()
+            }
+
+            private func publish(_ update: Watcher.Update) async {
+                guard let bus, !state.withLock({ $0.stopped }) else { return }
+                let eventKind: FileSystemSchema.Event.ChangeKind = switch update.type {
+                case .create: .add
+                case .update: .change
+                case .delete: .unlink
+                }
+                let payload = FileSystemSchema.Event.ChangedPayload(file: update.path, event: eventKind)
+                let encoded = (try? CoreBusJSON.encodeToJSONValue(payload)) ?? .object([
+                    "file": .string(update.path),
+                    "event": .string(eventKind.rawValue),
+                ])
+                let route = location.map {
+                    OpenCodeLocation(directory: $0.info.directory.rawValue, workspaceID: $0.info.workspaceID)
+                }
+                _ = try? await bus.publishRaw(
+                    definition: Self.fileChangedDef,
+                    data: encoded,
+                    options: CoreBus.PublishOptions(location: route)
+                )
+            }
         }
 
-        // parity: core/src/filesystem/location-watcher.ts#node [status=adapted hash=af216e7260b3]
+        // parity: core/src/filesystem/location-watcher.ts#node [status=implemented hash=af216e7260b3]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(
             Service.serviceKey,
-            LayerNode.ExecutableLayer { deps, _ in
-                let policy = deps.get(LocationWatcherPolicy.Service.serviceKey, as: (any LocationWatcherPolicy.Interface).self)
-                    ?? LocationWatcherPolicy.Service()
+            LayerNode.ExecutableLayer { deps, scope in
+                let location = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
                 let watcher = deps.get(Watcher.Service.serviceKey, as: (any Watcher.Interface).self)
                     ?? Watcher.Test()
-                return LayerNode.Output([Service.serviceKey: Service(policy: policy, watcher: watcher) as any Interface])
+                let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
+                let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
+                let git = deps.get(CoreVcs.Git.Service.serviceKey, as: (any CoreVcs.Git.Interface).self)
+                let policy = deps.get(LocationWatcherPolicy.Service.serviceKey, as: (any LocationWatcherPolicy.Interface).self)
+                    ?? LocationWatcherPolicy.Service()
+                let plugin = deps.get(CorePlugin.Service.serviceKey, as: (any CorePlugin.ServiceInterface).self)
+                let service = Service(
+                    location: location,
+                    watcher: watcher,
+                    bus: bus,
+                    fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared,
+                    git: git,
+                    policy: policy,
+                    plugin: plugin
+                )
+                service.start()
+                scope.addFinalizer {
+                    await service.close()
+                }
+                return LayerNode.Output([Service.serviceKey: service as any Interface])
             },
-            [Watcher.node, LocationWatcherPolicy.node]
+            [Watcher.node, FSUtil.node, CoreLocation.Location.node, CoreVcs.Git.node, CoreBus.node, LocationWatcherPolicy.node]
         )
     }
 

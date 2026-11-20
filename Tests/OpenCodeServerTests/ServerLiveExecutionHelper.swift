@@ -153,6 +153,7 @@ enum LiveExecutionFixture {
         claude: Bool = false,
         filewatcher: Bool? = nil,
         customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+        configDebounce: Duration = CoreConfig.Service.defaultDebounce,
         instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
         instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
         httpTransport: (any HTTPTransport)? = nil
@@ -207,6 +208,7 @@ enum LiveExecutionFixture {
                 globalOverrides: globalOverrides,
                 defaultDirectory: rootDir,
                 customWatcher: customWatcher,
+                configDebounce: configDebounce,
                 instructionDebounce: instructionDebounce,
                 instructionURLTimeout: instructionURLTimeout
             )
@@ -241,6 +243,7 @@ enum LiveExecutionFixture {
         env: [String: String] = ["ANTHROPIC_API_KEY": "sk-ant-live-secret"],
         configContent: String? = nil,
         responses: [LiveExecutionMockTransport.ScriptedResponse] = [],
+        configDebounce: Duration = CoreConfig.Service.defaultDebounce,
         instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce
     ) async throws -> RealDiskInstructionHarness {
         let baseTmp = FileManager.default.temporaryDirectory.path
@@ -311,6 +314,7 @@ enum LiveExecutionFixture {
                 ),
                 globalOverrides: globalOverrides,
                 defaultDirectory: locationDir,
+                configDebounce: configDebounce,
                 instructionDebounce: instructionDebounce
             )
         )
@@ -400,6 +404,202 @@ enum LiveExecutionFixture {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return matched.withLock { $0 }
+    }
+
+    /// Subscribes to `config.updated` BEFORE invoking `action`, waits up to `timeoutMs` for the first event,
+    /// and optionally collects any extra events during `settleMs` to verify debouncing/coalescing.
+    static func triggerAndCollectConfigUpdates(
+        bus: CoreBus.Service,
+        location: OpenCodeLocation? = nil,
+        timeoutMs: Int = 3_000,
+        settleMs: Int = 150,
+        action: @Sendable () async throws -> Void
+    ) async throws -> [CoreBus.AnyEvent] {
+        let stream = bus.subscribe(types: [ConfigSchema.Event.updated.type], location: location)
+        let events = Mutex<[CoreBus.AnyEvent]>([])
+        let listener = Task {
+            for await env in stream {
+                events.withLock { $0.append(env) }
+            }
+        }
+        defer { listener.cancel() }
+        await Task.yield()
+        try await action()
+        let deadline = Flock.currentEpochMs() + Int64(timeoutMs)
+        while Flock.currentEpochMs() < deadline {
+            if !events.withLock({ $0.isEmpty }) { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        if settleMs > 0 {
+            try? await Task.sleep(for: .milliseconds(settleMs))
+        }
+        return events.withLock { $0 }
+    }
+
+    /// Subscribes to `vcs.branch.updated` BEFORE invoking `action`, and waits for the first branch update
+    /// payload (or returns `nil` on timeout).
+    static func triggerAndWaitForBranchUpdate(
+        bus: CoreBus.Service,
+        location: OpenCodeLocation? = nil,
+        timeoutMs: Int = 3_000,
+        action: @Sendable () async throws -> Void
+    ) async throws -> VcsEventSchema.BranchUpdatedData? {
+        let stream = bus.subscribe(types: [VcsEventSchema.BranchUpdated.type], location: location)
+        let received = Mutex<VcsEventSchema.BranchUpdatedData?>(nil)
+        let listener = Task {
+            for await env in stream {
+                if case .object(let obj) = env.data {
+                    let branch: String?
+                    if case .string(let b) = obj["branch"] {
+                        branch = b
+                    } else {
+                        branch = nil
+                    }
+                    received.withLock { $0 = VcsEventSchema.BranchUpdatedData(branch: branch) }
+                    break
+                }
+            }
+        }
+        defer { listener.cancel() }
+        await Task.yield()
+        try await action()
+        let deadline = Flock.currentEpochMs() + Int64(timeoutMs)
+        while Flock.currentEpochMs() < deadline {
+            if let hit = received.withLock({ $0 }) { return hit }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return received.withLock { $0 }
+    }
+
+    /// Runs a real `git` command in `directory` using the host spawner.
+    static func runGit(in directory: String, args: [String]) async throws {
+        let spawner = CrossSpawnSpawner.HostProcessSpawner.shared
+        let gitExe = CoreSubsystems.Util.GitExecutable.gitExecutable()
+        let out = try await spawner.run(ProcessSpec(
+            executable: gitExe,
+            arguments: args,
+            workingDirectory: directory,
+            environment: [
+                "GIT_AUTHOR_NAME": "OpenCode Test",
+                "GIT_AUTHOR_EMAIL": "test@opencode.local",
+                "GIT_COMMITTER_NAME": "OpenCode Test",
+                "GIT_COMMITTER_EMAIL": "test@opencode.local",
+            ]
+        ))
+        guard out.exitCode == 0 else {
+            let err = String(decoding: out.stderr, as: UTF8.self)
+            throw PlatformError.ioFailure("git \(args.joined(separator: " ")) failed: \(err)")
+        }
+    }
+
+    /// Creates a real on-disk Git repository (with an initial commit on `branchName`) plus a live server
+    /// harness backed by `LocalFileSystem.shared` and `NativeFileWatcher` for end-to-end config + VCS tests.
+    static func makeRealDiskGitConfigHarness(
+        branchName: String = "main",
+        env: [String: String] = ["ANTHROPIC_API_KEY": "sk-ant-live-secret"],
+        responses: [LiveExecutionMockTransport.ScriptedResponse] = [],
+        configDebounce: Duration = .milliseconds(50),
+        instructionDebounce: Duration = .milliseconds(50)
+    ) async throws -> RealDiskInstructionHarness {
+        let baseTmp = FileManager.default.temporaryDirectory.path
+        let rawRoot = "\(baseTmp)/opencode-cfg-vcs-disk-\(OpenCodeUtil.uuid())"
+        try await LocalFileSystem.shared.makeDirectory(at: rawRoot, recursive: true)
+        let rootTempDir = (try? await LocalFileSystem.shared.realPath(at: rawRoot)) ?? rawRoot
+
+        let configDir = "\(rootTempDir)/config"
+        let homeDir = "\(rootTempDir)/home"
+        let projectDir = "\(homeDir)/repo"
+        let locationDir = projectDir
+
+        for dir in [
+            configDir,
+            "\(rootTempDir)/data",
+            "\(rootTempDir)/cache",
+            "\(rootTempDir)/state",
+            "\(rootTempDir)/tmp",
+            "\(rootTempDir)/bin",
+            "\(rootTempDir)/log",
+            "\(rootTempDir)/repos",
+            projectDir,
+        ] {
+            try await LocalFileSystem.shared.makeDirectory(at: dir, recursive: true)
+        }
+
+        try await runGit(in: projectDir, args: ["init", "-b", branchName])
+        try await LocalFileSystem.shared.writeFile(
+            Array("hello repo\n".utf8),
+            to: "\(projectDir)/README.md",
+            createDirectories: true
+        )
+        try await runGit(in: projectDir, args: ["add", "README.md"])
+        try await runGit(in: projectDir, args: ["commit", "-m", "initial commit"])
+
+        let globalOverrides = Global.Overrides(
+            home: homeDir,
+            data: "\(rootTempDir)/data",
+            cache: "\(rootTempDir)/cache",
+            config: configDir,
+            state: "\(rootTempDir)/state",
+            tmp: "\(rootTempDir)/tmp",
+            bin: "\(rootTempDir)/bin",
+            log: "\(rootTempDir)/log",
+            repos: "\(rootTempDir)/repos"
+        )
+
+        let options = ServerOptions(
+            app: ServerOptions.AppOptions(name: "opencode", version: "2.0.0-disk-cfg-vcs-test", channel: "local"),
+            events: ServerOptions.EventsOptions(persist: true),
+            models: CoreModel.ModelsDev.Options(fetch: false),
+            config: ServerOptions.ConfigOptions(
+                directory: configDir,
+                project: true,
+                claude: true
+            ),
+            instructions: ServerOptions.InstructionsOptions(claude: true)
+        )
+
+        let mockTransport = LiveExecutionMockTransport(responses: responses)
+        let handle = try await ServerFetch.make(
+            options: options,
+            boot: ServerFetch.BootOptions(
+                fileSystem: LocalFileSystem.shared,
+                httpTransport: mockTransport,
+                environment: DictionaryEnvironment(
+                    variables: env,
+                    homeDirectory: homeDir,
+                    temporaryDirectory: "\(rootTempDir)/tmp"
+                ),
+                globalOverrides: globalOverrides,
+                defaultDirectory: locationDir,
+                configDebounce: configDebounce,
+                instructionDebounce: instructionDebounce
+            )
+        )
+
+        let client = OpenCodeClient(options: ClientOptions(
+            baseUrl: "http://127.0.0.1:4096",
+            transport: handle.transport
+        ))
+        let harness = LiveExecutionHarness(
+            handle: handle,
+            client: client,
+            fileSystem: LocalFileSystem.shared,
+            mockTransport: mockTransport,
+            rootDir: locationDir
+        )
+        let cleanup: @Sendable () async -> Void = {
+            await harness.close()
+            try? await LocalFileSystem.shared.remove(at: rootTempDir)
+        }
+        return RealDiskInstructionHarness(
+            harness: harness,
+            rootTempDir: rootTempDir,
+            configDir: configDir,
+            homeDir: homeDir,
+            projectDir: projectDir,
+            locationDir: locationDir,
+            cleanup: cleanup
+        )
     }
 
     static func utf8(_ bytes: [UInt8]) -> String {

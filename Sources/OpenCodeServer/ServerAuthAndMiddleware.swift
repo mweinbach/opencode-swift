@@ -1133,6 +1133,7 @@ public func createRoutes(
     customPluginUpdate: (any CorePlugin.Update.Interface)? = nil,
     customWellKnown: (any CoreIntegration.WellKnown.Interface)? = nil,
     customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+    configDebounce: Duration = CoreConfig.Service.defaultDebounce,
     instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
     instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
     workerdProfile: Bool = false,
@@ -1154,6 +1155,7 @@ public func createRoutes(
         customPluginUpdate: customPluginUpdate,
         customWellKnown: customWellKnown,
         customWatcher: customWatcher,
+        configDebounce: configDebounce,
         instructionDebounce: instructionDebounce,
         instructionURLTimeout: instructionURLTimeout,
         workerdProfile: workerdProfile,
@@ -1174,6 +1176,7 @@ public func createEmbeddedRoutes(
     defaultDirectory: String? = nil,
     databaseClient: (any SQLiteDatabase)? = nil,
     customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+    configDebounce: Duration = CoreConfig.Service.defaultDebounce,
     instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
     instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
     onLocationBoot: ServerAppRuntime.LocationCustomizer? = nil
@@ -1206,6 +1209,7 @@ public func createEmbeddedRoutes(
         defaultDirectory: defaultDirectory,
         databaseClient: databaseClient,
         customWatcher: customWatcher,
+        configDebounce: configDebounce,
         instructionDebounce: instructionDebounce,
         instructionURLTimeout: instructionURLTimeout,
         onLocationBoot: onLocationBoot
@@ -1225,6 +1229,7 @@ public enum ServerFetch {
         public let defaultDirectory: String?
         public let databaseClient: (any SQLiteDatabase)?
         public let customWatcher: (any CoreFilesystem.Watcher.Interface)?
+        public let configDebounce: Duration
         public let instructionDebounce: Duration
         public let instructionURLTimeout: Duration
         public let workerdProfile: Bool
@@ -1239,6 +1244,7 @@ public enum ServerFetch {
             defaultDirectory: String? = nil,
             databaseClient: (any SQLiteDatabase)? = nil,
             customWatcher: (any CoreFilesystem.Watcher.Interface)? = nil,
+            configDebounce: Duration = CoreConfig.Service.defaultDebounce,
             instructionDebounce: Duration = CoreConfigPlugin.Instruction.Loader.defaultDebounce,
             instructionURLTimeout: Duration = CoreConfigPlugin.Instruction.Loader.defaultURLFetchTimeout,
             workerdProfile: Bool = false,
@@ -1252,6 +1258,7 @@ public enum ServerFetch {
             self.defaultDirectory = defaultDirectory
             self.databaseClient = databaseClient
             self.customWatcher = customWatcher
+            self.configDebounce = configDebounce
             self.instructionDebounce = instructionDebounce
             self.instructionURLTimeout = instructionURLTimeout
             self.workerdProfile = workerdProfile
@@ -1295,6 +1302,7 @@ public enum ServerFetch {
             defaultDirectory: boot.defaultDirectory,
             databaseClient: boot.databaseClient,
             customWatcher: boot.customWatcher,
+            configDebounce: boot.configDebounce,
             instructionDebounce: boot.instructionDebounce,
             instructionURLTimeout: boot.instructionURLTimeout,
             workerdProfile: boot.workerdProfile,
