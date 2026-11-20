@@ -414,9 +414,17 @@ struct CodemodeClassesTests {
     // MARK: - Core Code Mode
 
     @Test("Code Mode instructions tell the model execute is gone when it is removed")
-    func instructionsRemoved() {
+    func instructionsRemoved() async throws {
         let list = CoreCodemode.Instructions.make()
-        #expect(list.renderRemoved() == "The `execute` tool is no longer available. Permitted tools are now available as direct tool calls.")
+        let source = try #require(list.first)
+        #expect(list.count == 1)
+        #expect(source.key.rawValue == "core/codemode")
+        guard case .removed = await source.read() else {
+            Issue.record("Without a catalog the Code Mode source must read as removed")
+            return
+        }
+        let previous: JSONValue = .object(["total": .int(0), "namespaces": .array([])])
+        #expect(source.removed(previous) == "The `execute` tool is no longer available. Permitted tools are now available as direct tool calls.")
     }
 
     @Test("Catalog pins and describes tools by their codemode settings; nested calls run with codemode: true")

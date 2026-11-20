@@ -543,7 +543,7 @@ struct SessionDatabaseTests {
         #expect(tooLarge)
 
         // First prepare records initial instruction baseline without emitting an update system message.
-        let sources1 = try entrySvc.load(sid)
+        let sources1 = await CoreSessionInstructionState.read(try entrySvc.load(sid))
         try await CoreSessionInstructionState.prepare(db: harness.db, bus: harness.bus, sources: sources1, sessionID: sid)
         let initialRendered = try CoreSessionInstructionState.initial(db: harness.db, sessionID: sid, sources: sources1)
         #expect(initialRendered.count == 1)
@@ -551,7 +551,7 @@ struct SessionDatabaseTests {
 
         // Updating an entry emits a durable system update message on the next prepare.
         try entrySvc.put(sessionID: sid, key: "project-rules", value: .string("Use Swift Testing only"))
-        let sources2 = try entrySvc.load(sid)
+        let sources2 = await CoreSessionInstructionState.read(try entrySvc.load(sid))
         try await CoreSessionInstructionState.prepare(db: harness.db, bus: harness.bus, sources: sources2, sessionID: sid)
         let msgs = try harness.store.messages(CoreSessionStore.MessagesInput(sessionID: sid, order: .asc))
         #expect(msgs.contains { if case .system = $0 { return true }; return false })

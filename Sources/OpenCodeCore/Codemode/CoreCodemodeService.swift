@@ -477,44 +477,27 @@ public enum CoreCodemode {
             return delta.count < replacement.count ? delta : replacement
         }
 
-        public struct ListDescriptor: Sendable {
-            public let key: String
-            public let summary: Catalog.Summary?
-            public let renderInitial: @Sendable (Catalog.Summary) -> String
-            public let renderChanged: @Sendable (Catalog.Summary, Catalog.Summary) -> String?
-            public let renderRemoved: @Sendable () -> String
-
-            public init(
-                key: String,
-                summary: Catalog.Summary?,
-                renderInitial: @escaping @Sendable (Catalog.Summary) -> String,
-                renderChanged: @escaping @Sendable (Catalog.Summary, Catalog.Summary) -> String?,
-                renderRemoved: @escaping @Sendable () -> String
-            ) {
-                self.key = key
-                self.summary = summary
-                self.renderInitial = renderInitial
-                self.renderChanged = renderChanged
-                self.renderRemoved = renderRemoved
-            }
-        }
-
-        // parity: core/src/codemode/instructions.ts#make [status=adapted hash=bccc95c0eaac]
-        public static func make(_ inventory: Catalog.Inventory? = nil) -> ListDescriptor {
-            let summary = inventory.map { Catalog.summarize($0) }
+        /// The `core/codemode` instruction source: the Code Mode catalog when `execute` is offered, removed otherwise.
+        // parity: core/src/codemode/instructions.ts#make [status=implemented hash=bccc95c0eaac]
+        public static func make(_ inventory: Catalog.Inventory? = nil) -> CoreInstruction.Instructions.List {
+            let catalog: CoreInstruction.Instructions.Observation<Catalog.Summary> =
+                inventory.map { .value(Catalog.summarize($0)) } ?? .removed
+            // Rendered once, against the inventory that produced `current`, and stored with the update.
             let lookupFn: @Sendable (String) -> Catalog.Listing?
             if let inventory {
                 lookupFn = Catalog.lookup(inventory)
             } else {
                 lookupFn = { _ in nil }
             }
-            return ListDescriptor(
-                key: "core/codemode",
-                summary: summary,
-                renderInitial: render,
-                renderChanged: { prev, curr in update(previous: prev, current: curr, lookup: lookupFn) },
-                renderRemoved: { "The `execute` tool is no longer available. Permitted tools are now available as direct tool calls." }
-            )
+            return CoreInstruction.Instructions.make(CoreInstruction.Instructions.Source.Definition<Catalog.Summary>(
+                key: CoreInstruction.Instructions.Key(rawValue: "core/codemode")!,
+                read: { catalog },
+                renderInitial: { render($0) },
+                renderChanged: { previous, current in update(previous: previous, current: current, lookup: lookupFn) },
+                renderRemoved: { _ in
+                    "The `execute` tool is no longer available. Permitted tools are now available as direct tool calls."
+                }
+            ))
         }
     }
 
