@@ -49,6 +49,7 @@ d.update(version=version, tag=tag, commit=commit, commitDate=date, commitSubject
 open(path, "w").write(json.dumps(d, indent=2) + "\n")
 EOF
   echo "Updated upstream.psychoscript.lock.json to ${TAG} (${NEW_COMMIT})"
+  if command -v bun >/dev/null 2>&1; then (cd "${TARGET_DIR}" && bun install --frozen-lockfile --silent); fi
   exit 0
 fi
 
@@ -56,5 +57,12 @@ if [[ "$(git -C "${TARGET_DIR}" rev-parse HEAD)" != "${COMMIT}" ]]; then
   echo "Syncing psychoscript checkout to pinned commit ${COMMIT}..."
   git -C "${TARGET_DIR}" fetch --quiet origin "${COMMIT}" || git -C "${TARGET_DIR}" fetch --quiet --tags origin
   git -C "${TARGET_DIR}" checkout --quiet -f "${COMMIT}"
+fi
+# The differential oracle (Tools/parity/psychoscript-oracle.ts) runs the real psychoscript source with its
+# real dependencies (effect, acorn), so install them at the pinned lockfile.
+if command -v bun >/dev/null 2>&1; then
+  (cd "${TARGET_DIR}" && bun install --frozen-lockfile --silent)
+else
+  echo "warning: bun not found; psychoscript differential vectors need 'bun install' in ${TARGET_DIR}" >&2
 fi
 echo "psychoscript checkout ready at $(git -C "${TARGET_DIR}" rev-parse HEAD)"
