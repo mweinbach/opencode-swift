@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anomalyco/opentui.git",
   "branch": "main",
-  "commit": "2738bc4b836e9db8bab1df8a7f1d5a5583ee51f1",
-  "commitDate": "2026-11-20T13:55:41+01:00",
-  "commitSubject": "solid: drop babel-plugin-module-resolver (#2182)",
+  "commit": "79c1159c2711af90dbf9ba1b0e04223a6afc4b7e",
+  "commitDate": "2026-11-21T06:44:09+01:00",
+  "commitSubject": "rust, native: align scroll follow and zero-width edits with Core (#2185)",
   "license": "MIT"
 }

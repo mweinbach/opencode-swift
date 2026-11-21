@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anomalyco/opencode.git",
   "branch": "dev",
-  "commit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "commitDate": "2026-11-20T18:07:55+05:30",
-  "commitSubject": "fix(session-ui): show subagent status as a colored bar and word in the New timeline (#65164)",
+  "commit": "375f654e6dc62a3224ca3663fa335d8b57584797",
+  "commitDate": "2026-11-21T12:35:23-06:00",
+  "commitSubject": "fix(desktop): close the oldest Windows toast when the cap evicts it (#65421)",
   "license": "MIT"
 }

@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-20T19:20:14.811Z",
+  "generatedAt": "2026-11-21T18:41:25.002Z",
   "upstream": {
     "repository": "https://github.com/anomalyco/opentui.git",
     "branch": "main",
-    "commit": "2738bc4b836e9db8bab1df8a7f1d5a5583ee51f1",
-    "commitDate": "2026-11-20T13:55:41+01:00",
-    "commitSubject": "solid: drop babel-plugin-module-resolver (#2182)"
+    "commit": "79c1159c2711af90dbf9ba1b0e04223a6afc4b7e",
+    "commitDate": "2026-11-21T06:44:09+01:00",
+    "commitSubject": "rust, native: align scroll follow and zero-width edits with Core (#2185)"
   },
   "summary": {
     "totalPackages": 5,
     "totalFiles": 292,
-    "totalSymbols": 7225,
-    "totalFunctions": 4618,
+    "totalSymbols": 7227,
+    "totalFunctions": 4620,
     "byPackage": {
       "core": {
         "files": 125,
-        "symbols": 3831,
-        "functions": 2146,
-        "lines": 66613
+        "symbols": 3833,
+        "functions": 2148,
+        "lines": 66620
       },
       "keymap": {
         "files": 66,
@@ -30,7 +30,7 @@
         "files": 80,
         "symbols": 2864,
         "functions": 2210,
-        "lines": 78145
+        "lines": 78141
       },
       "qrcode": {
         "files": 8,
@@ -1395,7 +1395,7 @@
       "file": "src/Renderable.ts",
       "symbol": "LayoutEvents",
       "kind": "enum",
-      "line": 108,
+      "line": 111,
       "signature": "export enum LayoutEvents {",
       "bodyHash": "da8a4990d7b5"
     },
@@ -1407,7 +1407,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RenderableEvents",
       "kind": "enum",
-      "line": 113,
+      "line": 116,
       "signature": "export enum RenderableEvents {",
       "bodyHash": "45ab0e17c593"
     },
@@ -1419,7 +1419,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Position",
       "kind": "interface",
-      "line": 119,
+      "line": 122,
       "signature": "export interface Position {",
       "bodyHash": "c2102507c15e"
     },
@@ -1431,7 +1431,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderableOptions",
       "kind": "interface",
-      "line": 129,
+      "line": 132,
       "signature": "export interface BaseRenderableOptions {",
       "bodyHash": "18548dae09d6"
     },
@@ -1443,9 +1443,9 @@
       "file": "src/Renderable.ts",
       "symbol": "LayoutOptions",
       "kind": "interface",
-      "line": 133,
+      "line": 136,
       "signature": "export interface LayoutOptions extends BaseRenderableOptions {",
-      "bodyHash": "adedc96073b9"
+      "bodyHash": "1358469f3b88"
     },
     {
       "id": "core/src/Renderable.ts#RenderableOptions",
@@ -1455,7 +1455,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RenderableOptions",
       "kind": "interface",
-      "line": 173,
+      "line": 178,
       "signature": "export interface RenderableOptions<T extends BaseRenderable = BaseRenderable> extends Partial<LayoutOptions> {",
       "bodyHash": "c7716d789bb9"
     },
@@ -1467,7 +1467,7 @@
       "file": "src/Renderable.ts",
       "symbol": "NativeRenderableIntegration",
       "kind": "interface",
-      "line": 214,
+      "line": 219,
       "signature": "export interface NativeRenderableIntegration {",
       "bodyHash": "fb1eb00a5c1c"
     },
@@ -1479,7 +1479,7 @@
       "file": "src/Renderable.ts",
       "symbol": "isRenderable",
       "kind": "function",
-      "line": 238,
+      "line": 243,
       "signature": "export function isRenderable(obj: any): obj is Renderable {",
       "bodyHash": "b507d7c73b8c"
     },
@@ -1491,7 +1491,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable",
       "kind": "class",
-      "line": 242,
+      "line": 247,
       "signature": "export abstract class BaseRenderable extends EventEmitter {",
       "bodyHash": "d3bc9bb76c4f"
     },
@@ -1503,7 +1503,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.add",
       "kind": "method",
-      "line": 258,
+      "line": 263,
       "signature": "public abstract add(obj: unknown, index?: number): number",
       "bodyHash": "ee82ab482c01"
     },
@@ -1515,7 +1515,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.remove",
       "kind": "method",
-      "line": 259,
+      "line": 264,
       "signature": "public abstract remove(child: BaseRenderable): void",
       "bodyHash": "0f7c8a2cab40"
     },
@@ -1527,7 +1527,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.insertBefore",
       "kind": "method",
-      "line": 260,
+      "line": 265,
       "signature": "public abstract insertBefore(obj: unknown, anchor: unknown): void",
       "bodyHash": "70763eba7369"
     },
@@ -1539,7 +1539,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.getChildren",
       "kind": "method",
-      "line": 261,
+      "line": 266,
       "signature": "public abstract getChildren(): BaseRenderable[]",
       "bodyHash": "c200a538f8b3"
     },
@@ -1551,7 +1551,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.getChildrenCount",
       "kind": "method",
-      "line": 262,
+      "line": 267,
       "signature": "public abstract getChildrenCount(): number",
       "bodyHash": "69315b187469"
     },
@@ -1563,7 +1563,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.getRenderable",
       "kind": "method",
-      "line": 263,
+      "line": 268,
       "signature": "public abstract getRenderable(id: string): BaseRenderable | undefined",
       "bodyHash": "d2f3d0dc930b"
     },
@@ -1575,7 +1575,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.requestRender",
       "kind": "method",
-      "line": 264,
+      "line": 269,
       "signature": "public abstract requestRender(): void",
       "bodyHash": "fb8e0191faa0"
     },
@@ -1587,7 +1587,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.findDescendantById",
       "kind": "method",
-      "line": 265,
+      "line": 270,
       "signature": "public abstract findDescendantById(id: string): BaseRenderable | undefined",
       "bodyHash": "31264de3b072"
     },
@@ -1599,7 +1599,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.id",
       "kind": "method",
-      "line": 267,
+      "line": 272,
       "signature": "public get id(): string {",
       "bodyHash": "9ab61aac742a"
     },
@@ -1611,7 +1611,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.isDirty",
       "kind": "method",
-      "line": 275,
+      "line": 280,
       "signature": "public get isDirty(): boolean {",
       "bodyHash": "c38e6d777262"
     },
@@ -1623,7 +1623,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.destroy",
       "kind": "method",
-      "line": 287,
+      "line": 292,
       "signature": "public destroy(): void {",
       "bodyHash": "7d17e161de2d"
     },
@@ -1635,7 +1635,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.destroyRecursively",
       "kind": "method",
-      "line": 292,
+      "line": 297,
       "signature": "public destroyRecursively(): void {",
       "bodyHash": "f144330a36b3"
     },
@@ -1647,7 +1647,7 @@
       "file": "src/Renderable.ts",
       "symbol": "BaseRenderable.visible",
       "kind": "method",
-      "line": 297,
+      "line": 302,
       "signature": "public get visible(): boolean {",
       "bodyHash": "8ce94ba955be"
     },
@@ -1659,9 +1659,9 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable",
       "kind": "class",
-      "line": 306,
+      "line": 311,
       "signature": "export abstract class Renderable extends BaseRenderable {",
-      "bodyHash": "f81cec58be12"
+      "bodyHash": "2d7cde06f4c9"
     },
     {
       "id": "core/src/Renderable.ts#Renderable.onLifecyclePass",
@@ -1671,7 +1671,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onLifecyclePass",
       "kind": "method",
-      "line": 390,
+      "line": 395,
       "signature": "public get onLifecyclePass(): (() => void) | null {",
       "bodyHash": "7a51335a7a60"
     },
@@ -1683,7 +1683,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.renderBefore",
       "kind": "method",
-      "line": 396,
+      "line": 401,
       "signature": "public get renderBefore(): PaintHook | undefined {",
       "bodyHash": "a7699b43f941"
     },
@@ -1695,7 +1695,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.renderAfter",
       "kind": "method",
-      "line": 402,
+      "line": 407,
       "signature": "public get renderAfter(): PaintHook | undefined {",
       "bodyHash": "e1b692cbfdba"
     },
@@ -1707,7 +1707,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.focusable",
       "kind": "method",
-      "line": 521,
+      "line": 526,
       "signature": "public get focusable(): boolean {",
       "bodyHash": "d09f419ab98a"
     },
@@ -1719,7 +1719,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.ctx",
       "kind": "method",
-      "line": 536,
+      "line": 541,
       "signature": "public get ctx(): RenderContext {",
       "bodyHash": "8f0ec387c020"
     },
@@ -1731,7 +1731,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.visible",
       "kind": "method",
-      "line": 540,
+      "line": 545,
       "signature": "public get visible(): boolean {",
       "bodyHash": "8ce94ba955be"
     },
@@ -1743,7 +1743,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.primaryAxis",
       "kind": "method",
-      "line": 544,
+      "line": 549,
       "signature": "public get primaryAxis(): \"row\" | \"column\" {",
       "bodyHash": "1c95f466cc84"
     },
@@ -1755,7 +1755,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.opacity",
       "kind": "method",
-      "line": 576,
+      "line": 581,
       "signature": "public get opacity(): number {",
       "bodyHash": "668c85371681"
     },
@@ -1767,7 +1767,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.hasSelection",
       "kind": "method",
-      "line": 589,
+      "line": 594,
       "signature": "public hasSelection(): boolean {",
       "bodyHash": "dac414dd607c"
     },
@@ -1779,7 +1779,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onSelectionChanged",
       "kind": "method",
-      "line": 593,
+      "line": 598,
       "signature": "public onSelectionChanged(selection: Selection | null): boolean {",
       "bodyHash": "63f6ae56cd36"
     },
@@ -1791,7 +1791,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getSelectedText",
       "kind": "method",
-      "line": 599,
+      "line": 604,
       "signature": "public getSelectedText(): string {",
       "bodyHash": "15b082581bbd"
     },
@@ -1803,7 +1803,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.shouldStartSelection",
       "kind": "method",
-      "line": 603,
+      "line": 608,
       "signature": "public shouldStartSelection(x: number, y: number): boolean {",
       "bodyHash": "ca3c1a26cf04"
     },
@@ -1815,7 +1815,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.focus",
       "kind": "method",
-      "line": 607,
+      "line": 612,
       "signature": "public focus(): void {",
       "bodyHash": "0fc69e5015e7"
     },
@@ -1827,7 +1827,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.blur",
       "kind": "method",
-      "line": 652,
+      "line": 657,
       "signature": "public blur(): void {",
       "bodyHash": "d2ae60ee33d2"
     },
@@ -1839,7 +1839,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.focused",
       "kind": "method",
-      "line": 671,
+      "line": 676,
       "signature": "public get focused(): boolean {",
       "bodyHash": "83d9432de0a2"
     },
@@ -1851,7 +1851,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.hasFocusedDescendant",
       "kind": "method",
-      "line": 675,
+      "line": 680,
       "signature": "public get hasFocusedDescendant(): boolean {",
       "bodyHash": "e40c9d29047b"
     },
@@ -1863,7 +1863,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.live",
       "kind": "method",
-      "line": 682,
+      "line": 687,
       "signature": "public get live(): boolean {",
       "bodyHash": "f908b6838caf"
     },
@@ -1875,7 +1875,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.liveCount",
       "kind": "method",
-      "line": 686,
+      "line": 691,
       "signature": "public get liveCount(): number {",
       "bodyHash": "02919e76cecc"
     },
@@ -1887,7 +1887,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.animationFps",
       "kind": "method",
-      "line": 709,
+      "line": 714,
       "signature": "public get animationFps(): number | undefined {",
       "bodyHash": "8b04b3311cbf"
     },
@@ -1899,7 +1899,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.findDescendantById",
       "kind": "method",
-      "line": 747,
+      "line": 752,
       "signature": "public findDescendantById(id: string): Renderable | undefined {",
       "bodyHash": "51b0bb58275c"
     },
@@ -1911,7 +1911,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.requestRender",
       "kind": "method",
-      "line": 758,
+      "line": 763,
       "signature": "public requestRender() {",
       "bodyHash": "bd8821f36d53"
     },
@@ -1923,7 +1923,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.translateX",
       "kind": "method",
-      "line": 783,
+      "line": 788,
       "signature": "public get translateX(): number {",
       "bodyHash": "f1430b7b2ad7"
     },
@@ -1935,7 +1935,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.translateY",
       "kind": "method",
-      "line": 796,
+      "line": 801,
       "signature": "public get translateY(): number {",
       "bodyHash": "72053c925bbe"
     },
@@ -1947,7 +1947,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.screenX",
       "kind": "method",
-      "line": 808,
+      "line": 813,
       "signature": "public get screenX(): number {",
       "bodyHash": "96d80e45737c"
     },
@@ -1959,7 +1959,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.screenY",
       "kind": "method",
-      "line": 812,
+      "line": 817,
       "signature": "public get screenY(): number {",
       "bodyHash": "90e69f7ffd8d"
     },
@@ -1971,7 +1971,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.x",
       "kind": "method",
-      "line": 844,
+      "line": 849,
       "signature": "public get x(): number {",
       "bodyHash": "b5c7edfe38fb"
     },
@@ -1983,7 +1983,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.top",
       "kind": "method",
-      "line": 857,
+      "line": 862,
       "signature": "public get top(): number | \"auto\" | `${number}%` | undefined {",
       "bodyHash": "d856240b900d"
     },
@@ -1995,7 +1995,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.right",
       "kind": "method",
-      "line": 867,
+      "line": 872,
       "signature": "public get right(): number | \"auto\" | `${number}%` | undefined {",
       "bodyHash": "e7522f5c2456"
     },
@@ -2007,7 +2007,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.bottom",
       "kind": "method",
-      "line": 877,
+      "line": 882,
       "signature": "public get bottom(): number | \"auto\" | `${number}%` | undefined {",
       "bodyHash": "18be360a0802"
     },
@@ -2019,7 +2019,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.left",
       "kind": "method",
-      "line": 887,
+      "line": 892,
       "signature": "public get left(): number | \"auto\" | `${number}%` | undefined {",
       "bodyHash": "631712bb274c"
     },
@@ -2031,7 +2031,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.y",
       "kind": "method",
-      "line": 897,
+      "line": 902,
       "signature": "public get y(): number {",
       "bodyHash": "daeb3268185b"
     },
@@ -2043,7 +2043,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.width",
       "kind": "method",
-      "line": 910,
+      "line": 915,
       "signature": "public get width(): number {",
       "bodyHash": "558166fb0a8e"
     },
@@ -2055,7 +2055,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.height",
       "kind": "method",
-      "line": 923,
+      "line": 928,
       "signature": "public get height(): number {",
       "bodyHash": "1624042e3c7d"
     },
@@ -2067,7 +2067,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.zIndex",
       "kind": "method",
-      "line": 977,
+      "line": 982,
       "signature": "public get zIndex(): number {",
       "bodyHash": "60991adae798"
     },
@@ -2079,7 +2079,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getChildrenSortedByPrimaryAxis",
       "kind": "method",
-      "line": 990,
+      "line": 995,
       "signature": "public getChildrenSortedByPrimaryAxis(): Renderable[] {",
       "bodyHash": "897794224d1f"
     },
@@ -2091,7 +2091,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.isFreed",
       "kind": "method",
-      "line": 1019,
+      "line": 1024,
       "signature": "isFreed(): boolean {",
       "bodyHash": "5fe22d39c36f"
     },
@@ -2103,7 +2103,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.assertMutable",
       "kind": "method",
-      "line": 1023,
+      "line": 1028,
       "signature": "assertMutable(): void {",
       "bodyHash": "0397286ed8d6"
     },
@@ -2115,7 +2115,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.runMutation",
       "kind": "method",
-      "line": 1029,
+      "line": 1034,
       "signature": "runMutation<T>(operation: () => T): T {",
       "bodyHash": "97ea2b5c37c2"
     },
@@ -2127,7 +2127,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getFlexDirection",
       "kind": "method",
-      "line": 1070,
+      "line": 1075,
       "signature": "getFlexDirection(): FlexDirection {",
       "bodyHash": "53d9103a6862"
     },
@@ -2139,7 +2139,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getMargin",
       "kind": "method",
-      "line": 1142,
+      "line": 1147,
       "signature": "getMargin(edge: Edge): Value {",
       "bodyHash": "1932af44c800"
     },
@@ -2151,7 +2151,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getWidth",
       "kind": "method",
-      "line": 1154,
+      "line": 1159,
       "signature": "getWidth(): Value {",
       "bodyHash": "1aeed5dae52d"
     },
@@ -2163,7 +2163,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getFlexWrap",
       "kind": "method",
-      "line": 1159,
+      "line": 1164,
       "signature": "getFlexWrap(): Wrap {",
       "bodyHash": "71687ca3791f"
     },
@@ -2175,7 +2175,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getAlignItems",
       "kind": "method",
-      "line": 1163,
+      "line": 1168,
       "signature": "getAlignItems(): Align {",
       "bodyHash": "406811d38406"
     },
@@ -2187,7 +2187,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getAlignContent",
       "kind": "method",
-      "line": 1167,
+      "line": 1172,
       "signature": "getAlignContent(): Align {",
       "bodyHash": "db9a5d821356"
     },
@@ -2199,9 +2199,21 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getAspectRatio",
       "kind": "method",
-      "line": 1171,
+      "line": 1176,
       "signature": "getAspectRatio(): number {",
       "bodyHash": "264e10314059"
+    },
+    {
+      "id": "core/src/Renderable.ts#Renderable.getBoxSizing",
+      "package": "core",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier1-primitives",
+      "file": "src/Renderable.ts",
+      "symbol": "Renderable.getBoxSizing",
+      "kind": "method",
+      "line": 1180,
+      "signature": "getBoxSizing(): BoxSizing {",
+      "bodyHash": "4319aff4cf36"
     },
     {
       "id": "core/src/Renderable.ts#Renderable.getJustifyContent",
@@ -2211,7 +2223,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getJustifyContent",
       "kind": "method",
-      "line": 1175,
+      "line": 1184,
       "signature": "getJustifyContent(): Justify {",
       "bodyHash": "77159ea3ac4c"
     },
@@ -2223,7 +2235,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getAlignSelf",
       "kind": "method",
-      "line": 1179,
+      "line": 1188,
       "signature": "getAlignSelf(): Align {",
       "bodyHash": "008d75d5a737"
     },
@@ -2235,7 +2247,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getPositionType",
       "kind": "method",
-      "line": 1183,
+      "line": 1192,
       "signature": "getPositionType(): PositionType {",
       "bodyHash": "e3c38b59129b"
     },
@@ -2247,7 +2259,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getFlexGrow",
       "kind": "method",
-      "line": 1187,
+      "line": 1196,
       "signature": "getFlexGrow(): number {",
       "bodyHash": "a1b8a1823815"
     },
@@ -2259,7 +2271,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getFlexShrink",
       "kind": "method",
-      "line": 1191,
+      "line": 1200,
       "signature": "getFlexShrink(): number {",
       "bodyHash": "5c752b1ca27a"
     },
@@ -2271,7 +2283,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getFlexBasis",
       "kind": "method",
-      "line": 1195,
+      "line": 1204,
       "signature": "getFlexBasis(): Value {",
       "bodyHash": "66864e7205df"
     },
@@ -2283,7 +2295,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getHeight",
       "kind": "method",
-      "line": 1199,
+      "line": 1208,
       "signature": "getHeight(): Value {",
       "bodyHash": "45f9dec4dd9e"
     },
@@ -2295,7 +2307,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getMinWidth",
       "kind": "method",
-      "line": 1203,
+      "line": 1212,
       "signature": "getMinWidth(): Value {",
       "bodyHash": "4f9e354f9b7e"
     },
@@ -2307,7 +2319,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getMinHeight",
       "kind": "method",
-      "line": 1207,
+      "line": 1216,
       "signature": "getMinHeight(): Value {",
       "bodyHash": "6db2bf58564e"
     },
@@ -2319,7 +2331,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getMaxWidth",
       "kind": "method",
-      "line": 1211,
+      "line": 1220,
       "signature": "getMaxWidth(): Value {",
       "bodyHash": "c284210db727"
     },
@@ -2331,7 +2343,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getMaxHeight",
       "kind": "method",
-      "line": 1215,
+      "line": 1224,
       "signature": "getMaxHeight(): Value {",
       "bodyHash": "d6f7b3df4e7b"
     },
@@ -2343,7 +2355,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getPadding",
       "kind": "method",
-      "line": 1219,
+      "line": 1228,
       "signature": "getPadding(edge: Edge): Value {",
       "bodyHash": "01cf419aef7e"
     },
@@ -2355,7 +2367,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getGap",
       "kind": "method",
-      "line": 1223,
+      "line": 1232,
       "signature": "getGap(gutter: Gutter): Value {",
       "bodyHash": "9ae671fea45e"
     },
@@ -2367,7 +2379,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getComputedLayout",
       "kind": "method",
-      "line": 1227,
+      "line": 1236,
       "signature": "getComputedLayout(): Layout {",
       "bodyHash": "c1d413e735fc"
     },
@@ -2379,7 +2391,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.position",
       "kind": "method",
-      "line": 1378,
+      "line": 1388,
       "signature": "set position(positionType: PositionTypeString | null | undefined) {",
       "bodyHash": "cc78995f7b3d"
     },
@@ -2391,7 +2403,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.overflow",
       "kind": "method",
-      "line": 1389,
+      "line": 1399,
       "signature": "get overflow(): OverflowString {",
       "bodyHash": "12a05048d539"
     },
@@ -2403,7 +2415,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.setPosition",
       "kind": "method",
-      "line": 1404,
+      "line": 1414,
       "signature": "public setPosition(position: Position): void {",
       "bodyHash": "7b08e4a26984"
     },
@@ -2415,7 +2427,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.flexGrow",
       "kind": "method",
-      "line": 1429,
+      "line": 1439,
       "signature": "public set flexGrow(grow: number | null | undefined) {",
       "bodyHash": "21f2df9d5014"
     },
@@ -2427,7 +2439,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.flexShrink",
       "kind": "method",
-      "line": 1438,
+      "line": 1448,
       "signature": "public set flexShrink(shrink: number | null | undefined) {",
       "bodyHash": "c8d3b101a36f"
     },
@@ -2439,7 +2451,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.flexDirection",
       "kind": "method",
-      "line": 1447,
+      "line": 1457,
       "signature": "public set flexDirection(direction: FlexDirectionString | null | undefined) {",
       "bodyHash": "22480fc7d726"
     },
@@ -2451,7 +2463,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.flexWrap",
       "kind": "method",
-      "line": 1452,
+      "line": 1462,
       "signature": "public set flexWrap(wrap: WrapString | null | undefined) {",
       "bodyHash": "c7f348dca52e"
     },
@@ -2463,7 +2475,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.layoutMode",
       "kind": "method",
-      "line": 1457,
+      "line": 1467,
       "signature": "public set layoutMode(mode: LayoutModeString | null | undefined) {",
       "bodyHash": "64cac496feea"
     },
@@ -2475,7 +2487,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.alignItems",
       "kind": "method",
-      "line": 1462,
+      "line": 1472,
       "signature": "public set alignItems(alignItems: AlignString | null | undefined) {",
       "bodyHash": "b9f730c4284e"
     },
@@ -2487,7 +2499,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.alignContent",
       "kind": "method",
-      "line": 1467,
+      "line": 1477,
       "signature": "public set alignContent(alignContent: AlignString | null | undefined) {",
       "bodyHash": "7e9e7e11599e"
     },
@@ -2499,9 +2511,21 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.aspectRatio",
       "kind": "method",
-      "line": 1472,
+      "line": 1482,
       "signature": "public set aspectRatio(aspectRatio: number | null | undefined) {",
       "bodyHash": "46c5b74836eb"
+    },
+    {
+      "id": "core/src/Renderable.ts#Renderable.boxSizing",
+      "package": "core",
+      "swiftTarget": "OpenTUICore",
+      "tier": "tier1-primitives",
+      "file": "src/Renderable.ts",
+      "symbol": "Renderable.boxSizing",
+      "kind": "method",
+      "line": 1487,
+      "signature": "public set boxSizing(boxSizing: BoxSizingString | null | undefined) {",
+      "bodyHash": "3a79a79392e1"
     },
     {
       "id": "core/src/Renderable.ts#Renderable.justifyContent",
@@ -2511,7 +2535,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.justifyContent",
       "kind": "method",
-      "line": 1477,
+      "line": 1492,
       "signature": "public set justifyContent(justifyContent: JustifyString | null | undefined) {",
       "bodyHash": "f81e72294458"
     },
@@ -2523,7 +2547,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.alignSelf",
       "kind": "method",
-      "line": 1482,
+      "line": 1497,
       "signature": "public set alignSelf(alignSelf: AlignString | null | undefined) {",
       "bodyHash": "39be59c6b2c3"
     },
@@ -2535,9 +2559,9 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.flexBasis",
       "kind": "method",
-      "line": 1487,
-      "signature": "public set flexBasis(basis: number | \"auto\" | null | undefined) {",
-      "bodyHash": "f51fdb6ab59e"
+      "line": 1502,
+      "signature": "public set flexBasis(basis: number | \"auto\" | `${number}%` | null | undefined) {",
+      "bodyHash": "ce248f49e2f4"
     },
     {
       "id": "core/src/Renderable.ts#Renderable.minWidth",
@@ -2547,7 +2571,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.minWidth",
       "kind": "method",
-      "line": 1491,
+      "line": 1506,
       "signature": "public set minWidth(minWidth: number | `${number}%` | null | undefined) {",
       "bodyHash": "bda625be9d8c"
     },
@@ -2559,7 +2583,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.maxWidth",
       "kind": "method",
-      "line": 1495,
+      "line": 1510,
       "signature": "public set maxWidth(maxWidth: number | `${number}%` | null | undefined) {",
       "bodyHash": "1871d191fd56"
     },
@@ -2571,7 +2595,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.minHeight",
       "kind": "method",
-      "line": 1499,
+      "line": 1514,
       "signature": "public set minHeight(minHeight: number | `${number}%` | null | undefined) {",
       "bodyHash": "23b4a05ba311"
     },
@@ -2583,7 +2607,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.maxHeight",
       "kind": "method",
-      "line": 1503,
+      "line": 1518,
       "signature": "public set maxHeight(maxHeight: number | `${number}%` | null | undefined) {",
       "bodyHash": "934cd424409b"
     },
@@ -2595,7 +2619,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.margin",
       "kind": "method",
-      "line": 1507,
+      "line": 1522,
       "signature": "public set margin(margin: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "75cd8b577d24"
     },
@@ -2607,7 +2631,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginX",
       "kind": "method",
-      "line": 1511,
+      "line": 1526,
       "signature": "public set marginX(marginX: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "36c417feffba"
     },
@@ -2619,7 +2643,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginY",
       "kind": "method",
-      "line": 1515,
+      "line": 1530,
       "signature": "public set marginY(marginY: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "baeca5d0bdd9"
     },
@@ -2631,7 +2655,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginTop",
       "kind": "method",
-      "line": 1519,
+      "line": 1534,
       "signature": "public set marginTop(margin: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "ae22dd057377"
     },
@@ -2643,7 +2667,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginRight",
       "kind": "method",
-      "line": 1527,
+      "line": 1542,
       "signature": "public set marginRight(margin: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "dc8427ee5178"
     },
@@ -2655,7 +2679,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginBottom",
       "kind": "method",
-      "line": 1531,
+      "line": 1546,
       "signature": "public set marginBottom(margin: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "b45d74b6d582"
     },
@@ -2667,7 +2691,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.marginLeft",
       "kind": "method",
-      "line": 1535,
+      "line": 1550,
       "signature": "public set marginLeft(margin: number | \"auto\" | `${number}%` | null | undefined) {",
       "bodyHash": "170d03aac53d"
     },
@@ -2679,7 +2703,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.padding",
       "kind": "method",
-      "line": 1539,
+      "line": 1554,
       "signature": "public set padding(padding: number | `${number}%` | null | undefined) {",
       "bodyHash": "bf1e3439e810"
     },
@@ -2691,7 +2715,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingX",
       "kind": "method",
-      "line": 1543,
+      "line": 1558,
       "signature": "public set paddingX(paddingX: number | `${number}%` | null | undefined) {",
       "bodyHash": "2e29a0d7d5ab"
     },
@@ -2703,7 +2727,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingY",
       "kind": "method",
-      "line": 1547,
+      "line": 1562,
       "signature": "public set paddingY(paddingY: number | `${number}%` | null | undefined) {",
       "bodyHash": "c726fcffd03f"
     },
@@ -2715,7 +2739,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingTop",
       "kind": "method",
-      "line": 1551,
+      "line": 1566,
       "signature": "public set paddingTop(padding: number | `${number}%` | null | undefined) {",
       "bodyHash": "2c308e11afa4"
     },
@@ -2727,7 +2751,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingRight",
       "kind": "method",
-      "line": 1555,
+      "line": 1570,
       "signature": "public set paddingRight(padding: number | `${number}%` | null | undefined) {",
       "bodyHash": "40a98e3742be"
     },
@@ -2739,7 +2763,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingBottom",
       "kind": "method",
-      "line": 1559,
+      "line": 1574,
       "signature": "public set paddingBottom(padding: number | `${number}%` | null | undefined) {",
       "bodyHash": "12a0f355ecd4"
     },
@@ -2751,7 +2775,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.paddingLeft",
       "kind": "method",
-      "line": 1563,
+      "line": 1578,
       "signature": "public set paddingLeft(padding: number | `${number}%` | null | undefined) {",
       "bodyHash": "a7ac197f6824"
     },
@@ -2763,7 +2787,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.setMeasureProvider",
       "kind": "method",
-      "line": 1579,
+      "line": 1594,
       "signature": "public setMeasureProvider(provider: MeasureFunction | null): void {",
       "bodyHash": "d46280bdaa46"
     },
@@ -2775,7 +2799,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.invalidateIntrinsicSize",
       "kind": "method",
-      "line": 1588,
+      "line": 1603,
       "signature": "public invalidateIntrinsicSize(): void {",
       "bodyHash": "7aaeaad7f986"
     },
@@ -2787,7 +2811,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getLayout",
       "kind": "method",
-      "line": 1595,
+      "line": 1610,
       "signature": "public getLayout(): Readonly<Layout> {",
       "bodyHash": "321968b639fe"
     },
@@ -2799,7 +2823,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.add",
       "kind": "method",
-      "line": 1716,
+      "line": 1731,
       "signature": "public add(obj: Renderable, index?: number): number {",
       "bodyHash": "041800eb0d08"
     },
@@ -2811,7 +2835,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.insertBefore",
       "kind": "method",
-      "line": 1751,
+      "line": 1766,
       "signature": "insertBefore(obj: Renderable, anchor?: Renderable): number {",
       "bodyHash": "394d8c8732c8"
     },
@@ -2823,7 +2847,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getRenderable",
       "kind": "method",
-      "line": 1810,
+      "line": 1825,
       "signature": "public getRenderable(id: string): Renderable | undefined {",
       "bodyHash": "92ecd34f967c"
     },
@@ -2835,7 +2859,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.remove",
       "kind": "method",
-      "line": 1814,
+      "line": 1829,
       "signature": "public remove(child: BaseRenderable): void {",
       "bodyHash": "9fdc71330c0d"
     },
@@ -2847,7 +2871,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getChildren",
       "kind": "method",
-      "line": 1852,
+      "line": 1867,
       "signature": "public getChildren(): Renderable[] {",
       "bodyHash": "c79ea5ac6062"
     },
@@ -2859,7 +2883,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.getChildrenCount",
       "kind": "method",
-      "line": 1856,
+      "line": 1871,
       "signature": "public getChildrenCount(): number {",
       "bodyHash": "46bbf595312a"
     },
@@ -2871,7 +2895,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.refreshHooks",
       "kind": "method",
-      "line": 1931,
+      "line": 1946,
       "signature": "public refreshHooks(): void {",
       "bodyHash": "35ad8fce31c4"
     },
@@ -2883,7 +2907,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.isDestroyed",
       "kind": "method",
-      "line": 2118,
+      "line": 2133,
       "signature": "public get isDestroyed(): boolean {",
       "bodyHash": "13eff164cad8"
     },
@@ -2895,7 +2919,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.destroy",
       "kind": "method",
-      "line": 2122,
+      "line": 2137,
       "signature": "public destroy(): void {",
       "bodyHash": "51737426b589"
     },
@@ -2907,7 +2931,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.destroyRecursively",
       "kind": "method",
-      "line": 2164,
+      "line": 2179,
       "signature": "public destroyRecursively(): void {",
       "bodyHash": "c344bd597320"
     },
@@ -2919,7 +2943,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.processMouseEvent",
       "kind": "method",
-      "line": 2286,
+      "line": 2301,
       "signature": "public processMouseEvent(event: MouseEvent): void {",
       "bodyHash": "f7d192f655fa"
     },
@@ -2931,7 +2955,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.on",
       "kind": "method",
-      "line": 2308,
+      "line": 2323,
       "signature": "public on(event: string | symbol, listener: (...args: any[]) => void): this {",
       "bodyHash": "e4f420a3c452"
     },
@@ -2943,7 +2967,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.addListener",
       "kind": "method",
-      "line": 2312,
+      "line": 2327,
       "signature": "public addListener(event: string | symbol, listener: (...args: any[]) => void): this {",
       "bodyHash": "58b07d25f276"
     },
@@ -2955,7 +2979,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.prependListener",
       "kind": "method",
-      "line": 2316,
+      "line": 2331,
       "signature": "public prependListener(event: string | symbol, listener: (...args: any[]) => void): this {",
       "bodyHash": "b8f5a22a8050"
     },
@@ -2967,7 +2991,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.off",
       "kind": "method",
-      "line": 2320,
+      "line": 2335,
       "signature": "public off(event: string | symbol, listener: (...args: any[]) => void): this {",
       "bodyHash": "699fe3ec2c29"
     },
@@ -2979,7 +3003,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.removeListener",
       "kind": "method",
-      "line": 2324,
+      "line": 2339,
       "signature": "public removeListener(event: string | symbol, listener: (...args: any[]) => void): this {",
       "bodyHash": "c1d306efad8f"
     },
@@ -2991,7 +3015,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.removeAllListeners",
       "kind": "method",
-      "line": 2328,
+      "line": 2343,
       "signature": "public removeAllListeners(event?: string | symbol): this {",
       "bodyHash": "ff8c14b63db5"
     },
@@ -3003,7 +3027,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouse",
       "kind": "method",
-      "line": 2405,
+      "line": 2420,
       "signature": "public set onMouse(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "8e176adfb731"
     },
@@ -3015,7 +3039,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseDown",
       "kind": "method",
-      "line": 2410,
+      "line": 2425,
       "signature": "public set onMouseDown(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "a2f27893fc9e"
     },
@@ -3027,7 +3051,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseUp",
       "kind": "method",
-      "line": 2415,
+      "line": 2430,
       "signature": "public set onMouseUp(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "45c3c636f12c"
     },
@@ -3039,7 +3063,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseMove",
       "kind": "method",
-      "line": 2420,
+      "line": 2435,
       "signature": "public set onMouseMove(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "bbcb2906536b"
     },
@@ -3051,7 +3075,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseDrag",
       "kind": "method",
-      "line": 2425,
+      "line": 2440,
       "signature": "public set onMouseDrag(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "616757cda803"
     },
@@ -3063,7 +3087,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseDragEnd",
       "kind": "method",
-      "line": 2430,
+      "line": 2445,
       "signature": "public set onMouseDragEnd(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "33533b6aa566"
     },
@@ -3075,7 +3099,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseDrop",
       "kind": "method",
-      "line": 2435,
+      "line": 2450,
       "signature": "public set onMouseDrop(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "721fcf80e5ca"
     },
@@ -3087,7 +3111,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseOver",
       "kind": "method",
-      "line": 2440,
+      "line": 2455,
       "signature": "public set onMouseOver(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "cb9552f7466f"
     },
@@ -3099,7 +3123,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseOut",
       "kind": "method",
-      "line": 2445,
+      "line": 2460,
       "signature": "public set onMouseOut(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "a63ac722c6be"
     },
@@ -3111,7 +3135,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onMouseScroll",
       "kind": "method",
-      "line": 2450,
+      "line": 2465,
       "signature": "public set onMouseScroll(handler: ((event: MouseEvent) => void) | undefined) {",
       "bodyHash": "564371939a20"
     },
@@ -3123,7 +3147,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onPaste",
       "kind": "method",
-      "line": 2455,
+      "line": 2470,
       "signature": "public set onPaste(handler: ((event: PasteEvent) => void) | undefined) {",
       "bodyHash": "1a903e533f52"
     },
@@ -3135,7 +3159,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onKeyDown",
       "kind": "method",
-      "line": 2462,
+      "line": 2477,
       "signature": "public set onKeyDown(handler: ((key: KeyEvent) => void) | undefined) {",
       "bodyHash": "2aba194f153e"
     },
@@ -3147,7 +3171,7 @@
       "file": "src/Renderable.ts",
       "symbol": "Renderable.onSizeChange",
       "kind": "method",
-      "line": 2470,
+      "line": 2485,
       "signature": "public set onSizeChange(handler: (() => void) | undefined) {",
       "bodyHash": "a885baa603c3"
     },
@@ -3159,7 +3183,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RootRenderable",
       "kind": "class",
-      "line": 2498,
+      "line": 2513,
       "signature": "export class RootRenderable extends Renderable {",
       "bodyHash": "f012f5a6cbe1"
     },
@@ -3171,7 +3195,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RootRenderable.currentRenderable",
       "kind": "method",
-      "line": 2522,
+      "line": 2537,
       "signature": "public get currentRenderable(): Renderable | undefined {",
       "bodyHash": "f211ba688875"
     },
@@ -3183,7 +3207,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RootRenderable.takeCurrentRenderable",
       "kind": "method",
-      "line": 2531,
+      "line": 2546,
       "signature": "public takeCurrentRenderable(): Renderable | undefined {",
       "bodyHash": "010b055621ab"
     },
@@ -3195,7 +3219,7 @@
       "file": "src/Renderable.ts",
       "symbol": "RootRenderable.resize",
       "kind": "method",
-      "line": 2551,
+      "line": 2566,
       "signature": "public resize(width: number, height: number): void {",
       "bodyHash": "ce39a4f1e1f2"
     },
@@ -10120,8 +10144,8 @@
       "symbol": "isFlexBasisType",
       "kind": "function",
       "line": 65,
-      "signature": "export function isFlexBasisType(value: any): value is number | \"auto\" | undefined {",
-      "bodyHash": "11b469616a88"
+      "signature": "export function isFlexBasisType(value: any): value is number | \"auto\" | `${number}%` | undefined {",
+      "bodyHash": "a7d430d45fa2"
     },
     {
       "id": "core/src/lib/renderable.validations.ts#isSizeType",
@@ -10131,7 +10155,7 @@
       "file": "src/lib/renderable.validations.ts",
       "symbol": "isSizeType",
       "kind": "function",
-      "line": 75,
+      "line": 74,
       "signature": "export function isSizeType(value: any): value is number | `${number}%` | undefined {",
       "bodyHash": "9f3a2886d4f3"
     },
@@ -12376,8 +12400,8 @@
       "symbol": "parseBoxSizing",
       "kind": "function",
       "line": 83,
-      "signature": "export function parseBoxSizing(value: string): BoxSizing {",
-      "bodyHash": "1c00885a654f"
+      "signature": "export function parseBoxSizing(value: string | null | undefined): BoxSizing {",
+      "bodyHash": "9746003d0aba"
     },
     {
       "id": "core/src/lib/yoga.options.ts#parseDimension",
@@ -12387,7 +12411,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseDimension",
       "kind": "function",
-      "line": 97,
+      "line": 87,
       "signature": "export function parseDimension(value: string): Dimension {",
       "bodyHash": "f3f38617dae0"
     },
@@ -12399,7 +12423,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseDirection",
       "kind": "function",
-      "line": 111,
+      "line": 101,
       "signature": "export function parseDirection(value: string): Direction {",
       "bodyHash": "63681e06c923"
     },
@@ -12411,7 +12435,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseDisplay",
       "kind": "function",
-      "line": 127,
+      "line": 117,
       "signature": "export function parseDisplay(value: string): Display {",
       "bodyHash": "258cecf74094"
     },
@@ -12423,7 +12447,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseEdge",
       "kind": "function",
-      "line": 143,
+      "line": 133,
       "signature": "export function parseEdge(value: string): Edge {",
       "bodyHash": "bb4759fe8c9f"
     },
@@ -12435,7 +12459,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseFlexDirection",
       "kind": "function",
-      "line": 171,
+      "line": 161,
       "signature": "export function parseFlexDirection(value: string | null | undefined): FlexDirection {",
       "bodyHash": "8eeacf100cb5"
     },
@@ -12447,7 +12471,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseGutter",
       "kind": "function",
-      "line": 189,
+      "line": 179,
       "signature": "export function parseGutter(value: string): Gutter {",
       "bodyHash": "669ed8402079"
     },
@@ -12459,7 +12483,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseJustify",
       "kind": "function",
-      "line": 205,
+      "line": 195,
       "signature": "export function parseJustify(value: string | null | undefined): Justify {",
       "bodyHash": "143ee65f1f0a"
     },
@@ -12471,7 +12495,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseLayoutMode",
       "kind": "function",
-      "line": 227,
+      "line": 217,
       "signature": "export function parseLayoutMode(value: string | null | undefined): number {",
       "bodyHash": "28c46d95f81b"
     },
@@ -12483,7 +12507,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseLogLevel",
       "kind": "function",
-      "line": 231,
+      "line": 221,
       "signature": "export function parseLogLevel(value: string): LogLevel {",
       "bodyHash": "952a1422d65d"
     },
@@ -12495,7 +12519,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseMeasureMode",
       "kind": "function",
-      "line": 253,
+      "line": 243,
       "signature": "export function parseMeasureMode(value: string): MeasureMode {",
       "bodyHash": "649b7fe9c00a"
     },
@@ -12507,7 +12531,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseOverflow",
       "kind": "function",
-      "line": 269,
+      "line": 259,
       "signature": "export function parseOverflow(value: string | null | undefined): Overflow {",
       "bodyHash": "841fdcc51c7d"
     },
@@ -12519,7 +12543,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parsePositionType",
       "kind": "function",
-      "line": 285,
+      "line": 275,
       "signature": "export function parsePositionType(value: string | null | undefined): PositionType {",
       "bodyHash": "030baf94e6ca"
     },
@@ -12531,7 +12555,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseUnit",
       "kind": "function",
-      "line": 301,
+      "line": 291,
       "signature": "export function parseUnit(value: string): Unit {",
       "bodyHash": "f0d3b13d6fed"
     },
@@ -12543,7 +12567,7 @@
       "file": "src/lib/yoga.options.ts",
       "symbol": "parseWrap",
       "kind": "function",
-      "line": 319,
+      "line": 309,
       "signature": "export function parseWrap(value: string | null | undefined): Wrap {",
       "bodyHash": "7869df5a8b5d"
     },
@@ -29295,7 +29319,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "SceneStyleNode",
       "kind": "type",
-      "line": 37,
+      "line": 38,
       "signature": "export type SceneStyleNode = { _getSceneHandle(owner: NativeScene): SceneNodeHandle }",
       "bodyHash": "a691c9c34670"
     },
@@ -29307,7 +29331,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxWrapper",
       "kind": "class",
-      "line": 155,
+      "line": 156,
       "signature": "export class ScrollBoxWrapper extends ScrollBoxFilledPart {",
       "bodyHash": "06bf45b3f263"
     },
@@ -29319,7 +29343,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxViewport",
       "kind": "class",
-      "line": 170,
+      "line": 171,
       "signature": "export class ScrollBoxViewport extends ScrollBoxSizedPart {",
       "bodyHash": "68eb434fc089"
     },
@@ -29331,7 +29355,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent",
       "kind": "class",
-      "line": 282,
+      "line": 284,
       "signature": "export class ScrollBoxContent extends ScrollBoxSizedPart {",
       "bodyHash": "571403b6c751"
     },
@@ -29343,7 +29367,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.viewportCulling",
       "kind": "method",
-      "line": 325,
+      "line": 327,
       "signature": "get viewportCulling(): boolean {",
       "bodyHash": "760276bb195c"
     },
@@ -29355,7 +29379,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.add",
       "kind": "method",
-      "line": 333,
+      "line": 335,
       "signature": "add(obj: Renderable, index?: number): number {",
       "bodyHash": "e980314f30cd"
     },
@@ -29367,7 +29391,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.insertBefore",
       "kind": "method",
-      "line": 337,
+      "line": 339,
       "signature": "insertBefore(obj: Renderable, anchor?: Renderable): number {",
       "bodyHash": "6e42e3224710"
     },
@@ -29379,7 +29403,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.remove",
       "kind": "method",
-      "line": 341,
+      "line": 343,
       "signature": "remove(child: BaseRenderable): void {",
       "bodyHash": "96e1f77abca2"
     },
@@ -29391,7 +29415,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.getChildren",
       "kind": "method",
-      "line": 345,
+      "line": 347,
       "signature": "getChildren(): Renderable[] {",
       "bodyHash": "eac065179d1d"
     },
@@ -29403,7 +29427,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.getChildrenCount",
       "kind": "method",
-      "line": 349,
+      "line": 351,
       "signature": "getChildrenCount(): number {",
       "bodyHash": "8a184ac21fd0"
     },
@@ -29415,7 +29439,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.getRenderable",
       "kind": "method",
-      "line": 353,
+      "line": 355,
       "signature": "getRenderable(id: string): Renderable | undefined {",
       "bodyHash": "eb8abe925434"
     },
@@ -29427,7 +29451,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxContent.findDescendantById",
       "kind": "method",
-      "line": 357,
+      "line": 359,
       "signature": "findDescendantById(id: string): Renderable | undefined {",
       "bodyHash": "5680c1504b56"
     },
@@ -29439,7 +29463,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar",
       "kind": "class",
-      "line": 368,
+      "line": 370,
       "signature": "export class ScrollBoxBar extends ScrollBoxPart {",
       "bodyHash": "89f6bdb072e3"
     },
@@ -29451,7 +29475,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.visible",
       "kind": "method",
-      "line": 457,
+      "line": 459,
       "signature": "get visible(): boolean {",
       "bodyHash": "90608f4f75da"
     },
@@ -29463,7 +29487,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.resetVisibilityControl",
       "kind": "method",
-      "line": 466,
+      "line": 468,
       "signature": "resetVisibilityControl(): void {",
       "bodyHash": "8117974c4df9"
     },
@@ -29475,7 +29499,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.onChange",
       "kind": "method",
-      "line": 470,
+      "line": 472,
       "signature": "get onChange(): ((position: number) => void) | undefined {",
       "bodyHash": "1e96291a3c97"
     },
@@ -29487,7 +29511,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.showArrows",
       "kind": "method",
-      "line": 479,
+      "line": 481,
       "signature": "get showArrows(): boolean {",
       "bodyHash": "4f3478549f53"
     },
@@ -29499,7 +29523,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.arrowOptions",
       "kind": "method",
-      "line": 487,
+      "line": 489,
       "signature": "set arrowOptions(options: Omit<ArrowOptions, \"direction\"> | null | undefined) {",
       "bodyHash": "92b50fe9e233"
     },
@@ -29511,7 +29535,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.trackOptions",
       "kind": "method",
-      "line": 492,
+      "line": 494,
       "signature": "set trackOptions(options: { foregroundColor?: ColorInput; backgroundColor?: ColorInput } | null | undefined) {",
       "bodyHash": "7763a8d0b9fb"
     },
@@ -29523,7 +29547,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.width",
       "kind": "method",
-      "line": 503,
+      "line": 505,
       "signature": "override get width(): number {",
       "bodyHash": "181640690890"
     },
@@ -29535,7 +29559,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.height",
       "kind": "method",
-      "line": 511,
+      "line": 513,
       "signature": "override get height(): number {",
       "bodyHash": "7486a4bfab9e"
     },
@@ -29547,7 +29571,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.paddingLeft",
       "kind": "method",
-      "line": 519,
+      "line": 521,
       "signature": "set paddingLeft(value: number | null | undefined) {",
       "bodyHash": "28f74b304819"
     },
@@ -29559,7 +29583,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.paddingTop",
       "kind": "method",
-      "line": 523,
+      "line": 525,
       "signature": "set paddingTop(value: number | null | undefined) {",
       "bodyHash": "fc50bcfd2176"
     },
@@ -29571,7 +29595,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.position",
       "kind": "method",
-      "line": 528,
+      "line": 530,
       "signature": "set position(value: \"absolute\" | \"relative\" | null | undefined) {",
       "bodyHash": "3792e09e44c8"
     },
@@ -29583,7 +29607,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.scrollSize",
       "kind": "method",
-      "line": 538,
+      "line": 540,
       "signature": "get scrollSize(): number {",
       "bodyHash": "78bec26891d5"
     },
@@ -29595,7 +29619,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.viewportSize",
       "kind": "method",
-      "line": 543,
+      "line": 545,
       "signature": "get viewportSize(): number {",
       "bodyHash": "6f333628cfb3"
     },
@@ -29607,7 +29631,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.scrollPosition",
       "kind": "method",
-      "line": 548,
+      "line": 550,
       "signature": "get scrollPosition(): number {",
       "bodyHash": "917fd82b859a"
     },
@@ -29619,7 +29643,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.scrollBy",
       "kind": "method",
-      "line": 557,
+      "line": 559,
       "signature": "scrollBy(delta: number, unit: ScrollUnit = \"absolute\"): void {",
       "bodyHash": "d8601f0d20fe"
     },
@@ -29631,7 +29655,7 @@
       "file": "src/renderables/ScrollBoxParts.ts",
       "symbol": "ScrollBoxBar.handleKeyPress",
       "kind": "method",
-      "line": 561,
+      "line": 563,
       "signature": "handleKeyPress(key: KeyEvent): boolean {",
       "bodyHash": "92db633f4861"
     },
@@ -64709,7 +64733,7 @@
       "kind": "zig_const",
       "line": 205,
       "signature": "pub const EditBuffer = struct {",
-      "bodyHash": "734a0c2b566f"
+      "bodyHash": "6ebf3e04b64c"
     },
     {
       "id": "native/src/edit-buffer.zig#EditBuffer.init",
@@ -64851,7 +64875,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.insertText",
       "kind": "zig_fn",
-      "line": 493,
+      "line": 489,
       "signature": "pub fn insertText(self: *EditBuffer, bytes: []const u8) !void {",
       "bodyHash": "e74a28334931"
     },
@@ -64863,7 +64887,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.deleteRange",
       "kind": "zig_fn",
-      "line": 526,
+      "line": 522,
       "signature": "pub fn deleteRange(self: *EditBuffer, start_cursor: Cursor, end_cursor: Cursor) !void {",
       "bodyHash": "8806ee0f58d5"
     },
@@ -64875,7 +64899,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.replaceRange",
       "kind": "zig_fn",
-      "line": 561,
+      "line": 557,
       "signature": "pub fn replaceRange(",
       "bodyHash": "e000f601bda2"
     },
@@ -64887,7 +64911,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.backspace",
       "kind": "zig_fn",
-      "line": 727,
+      "line": 723,
       "signature": "pub fn backspace(self: *EditBuffer) !void {",
       "bodyHash": "8926c26841bc"
     },
@@ -64899,7 +64923,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.deleteForward",
       "kind": "zig_fn",
-      "line": 748,
+      "line": 744,
       "signature": "pub fn deleteForward(self: *EditBuffer) !void {",
       "bodyHash": "63f07e6716f3"
     },
@@ -64911,7 +64935,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.moveLeft",
       "kind": "zig_fn",
-      "line": 769,
+      "line": 765,
       "signature": "pub fn moveLeft(self: *EditBuffer) void {",
       "bodyHash": "b5de5d5f546d"
     },
@@ -64923,7 +64947,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getPrevCharBoundary",
       "kind": "zig_fn",
-      "line": 775,
+      "line": 771,
       "signature": "pub fn getPrevCharBoundary(self: *EditBuffer) Cursor {",
       "bodyHash": "4cb9e46a8952"
     },
@@ -64935,7 +64959,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.moveRight",
       "kind": "zig_fn",
-      "line": 788,
+      "line": 784,
       "signature": "pub fn moveRight(self: *EditBuffer) void {",
       "bodyHash": "e300840b4c30"
     },
@@ -64947,7 +64971,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.moveUp",
       "kind": "zig_fn",
-      "line": 807,
+      "line": 803,
       "signature": "pub fn moveUp(self: *EditBuffer) void {",
       "bodyHash": "233988897c84"
     },
@@ -64959,7 +64983,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.moveDown",
       "kind": "zig_fn",
-      "line": 812,
+      "line": 808,
       "signature": "pub fn moveDown(self: *EditBuffer) void {",
       "bodyHash": "6d96e89872d4"
     },
@@ -64971,7 +64995,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.snapColumn",
       "kind": "zig_fn",
-      "line": 828,
+      "line": 824,
       "signature": "pub fn snapColumn(self: *EditBuffer, row: u32, col: u32) u32 {",
       "bodyHash": "87c7171de984"
     },
@@ -64983,7 +65007,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.unsnappedColumn",
       "kind": "zig_fn",
-      "line": 836,
+      "line": 832,
       "signature": "pub fn unsnappedColumn(self: *EditBuffer) u32 {",
       "bodyHash": "d25e04c25f2e"
     },
@@ -64995,7 +65019,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.setText",
       "kind": "zig_fn",
-      "line": 842,
+      "line": 838,
       "signature": "pub fn setText(self: *EditBuffer, text: []const u8) !void {",
       "bodyHash": "f3b63f9d14e3"
     },
@@ -65007,7 +65031,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.setTextOwned",
       "kind": "zig_fn",
-      "line": 847,
+      "line": 843,
       "signature": "pub fn setTextOwned(self: *EditBuffer, text: []const u8, preferred_id: ?u8) !u8 {",
       "bodyHash": "377d12c1407c"
     },
@@ -65019,7 +65043,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.replaceText",
       "kind": "zig_fn",
-      "line": 862,
+      "line": 858,
       "signature": "pub fn replaceText(self: *EditBuffer, text: []const u8) !void {",
       "bodyHash": "22ea7e1d6b28"
     },
@@ -65031,7 +65055,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getText",
       "kind": "zig_fn",
-      "line": 880,
+      "line": 876,
       "signature": "pub fn getText(self: *EditBuffer, out_buffer: []u8) usize {",
       "bodyHash": "968020b6d43e"
     },
@@ -65043,7 +65067,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.deleteLine",
       "kind": "zig_fn",
-      "line": 884,
+      "line": 880,
       "signature": "pub fn deleteLine(self: *EditBuffer) !void {",
       "bodyHash": "a937bc18689b"
     },
@@ -65055,7 +65079,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.gotoLine",
       "kind": "zig_fn",
-      "line": 912,
+      "line": 908,
       "signature": "pub fn gotoLine(self: *EditBuffer, line: u32) !void {",
       "bodyHash": "321b5f1bbc53"
     },
@@ -65067,7 +65091,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getCursorPosition",
       "kind": "zig_fn",
-      "line": 924,
+      "line": 920,
       "signature": "pub fn getCursorPosition(self: *const EditBuffer) struct { line: u32, visual_col: u32, offset: u32 } {",
       "bodyHash": "2c8a878ccc2e"
     },
@@ -65079,7 +65103,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.debugLogRope",
       "kind": "zig_fn",
-      "line": 934,
+      "line": 930,
       "signature": "pub fn debugLogRope(self: *const EditBuffer) void {",
       "bodyHash": "73f25f295ff2"
     },
@@ -65091,7 +65115,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.undo",
       "kind": "zig_fn",
-      "line": 950,
+      "line": 946,
       "signature": "pub fn undo(self: *EditBuffer) ![]const u8 {",
       "bodyHash": "2f9665dab15a"
     },
@@ -65103,7 +65127,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.redo",
       "kind": "zig_fn",
-      "line": 956,
+      "line": 952,
       "signature": "pub fn redo(self: *EditBuffer) ![]const u8 {",
       "bodyHash": "64199150a6c9"
     },
@@ -65115,7 +65139,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.canUndo",
       "kind": "zig_fn",
-      "line": 1001,
+      "line": 997,
       "signature": "pub fn canUndo(self: *const EditBuffer) bool {",
       "bodyHash": "54bb4c76ac71"
     },
@@ -65127,7 +65151,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.canRedo",
       "kind": "zig_fn",
-      "line": 1006,
+      "line": 1002,
       "signature": "pub fn canRedo(self: *const EditBuffer) bool {",
       "bodyHash": "346350815e01"
     },
@@ -65139,7 +65163,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.clearHistory",
       "kind": "zig_fn",
-      "line": 1011,
+      "line": 1007,
       "signature": "pub fn clearHistory(self: *EditBuffer) void {",
       "bodyHash": "cc3b04a92ffe"
     },
@@ -65151,7 +65175,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.clear",
       "kind": "zig_fn",
-      "line": 1015,
+      "line": 1011,
       "signature": "pub fn clear(self: *EditBuffer) !void {",
       "bodyHash": "fe3c5a3f5d24"
     },
@@ -65163,7 +65187,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.addMark",
       "kind": "zig_fn",
-      "line": 1035,
+      "line": 1031,
       "signature": "pub fn addMark(self: *EditBuffer, options: MarkOptions) !u32 {",
       "bodyHash": "46348ba53c76"
     },
@@ -65175,7 +65199,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.removeMark",
       "kind": "zig_fn",
-      "line": 1056,
+      "line": 1052,
       "signature": "pub fn removeMark(self: *EditBuffer, id: u32) !bool {",
       "bodyHash": "c512a3b99d48"
     },
@@ -65187,7 +65211,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.clearMarks",
       "kind": "zig_fn",
-      "line": 1063,
+      "line": 1059,
       "signature": "pub fn clearMarks(self: *EditBuffer) void {",
       "bodyHash": "b3430cbcd34d"
     },
@@ -65199,7 +65223,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.markOffsets",
       "kind": "zig_fn",
-      "line": 1077,
+      "line": 1073,
       "signature": "pub fn markOffsets(self: *const EditBuffer, mark: edit_marks.Mark) struct { start: u32, end: u32 } {",
       "bodyHash": "7cd3749c98a7"
     },
@@ -65211,7 +65235,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.keepOutside",
       "kind": "zig_fn",
-      "line": 1136,
+      "line": 1132,
       "signature": "pub fn keepOutside(self: *EditBuffer, toward: Toward) !void {",
       "bodyHash": "8c2db2340b42"
     },
@@ -65223,7 +65247,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.moveAtomic",
       "kind": "zig_fn",
-      "line": 1153,
+      "line": 1149,
       "signature": "pub fn moveAtomic(self: *EditBuffer, right: bool) !void {",
       "bodyHash": "8c9b45569eec"
     },
@@ -65235,7 +65259,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.setCursorByOffsetAtomic",
       "kind": "zig_fn",
-      "line": 1163,
+      "line": 1159,
       "signature": "pub fn setCursorByOffsetAtomic(self: *EditBuffer, offset: u32) !void {",
       "bodyHash": "8181d6741555"
     },
@@ -65247,7 +65271,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.leaveAtomic",
       "kind": "zig_fn",
-      "line": 1172,
+      "line": 1168,
       "signature": "pub fn leaveAtomic(self: *EditBuffer, from: u32, down: bool) !void {",
       "bodyHash": "0b7e121b9d2b"
     },
@@ -65259,7 +65283,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.deleteAtomic",
       "kind": "zig_fn",
-      "line": 1185,
+      "line": 1181,
       "signature": "pub fn deleteAtomic(self: *EditBuffer, forward_delete: bool) !void {",
       "bodyHash": "4e4030e526cc"
     },
@@ -65271,7 +65295,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getNextWordBoundary",
       "kind": "zig_fn",
-      "line": 1198,
+      "line": 1194,
       "signature": "pub fn getNextWordBoundary(self: *EditBuffer) Cursor {",
       "bodyHash": "e419c22e5b5a"
     },
@@ -65283,7 +65307,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getPrevWordBoundary",
       "kind": "zig_fn",
-      "line": 1285,
+      "line": 1281,
       "signature": "pub fn getPrevWordBoundary(self: *EditBuffer) Cursor {",
       "bodyHash": "30b4827cd557"
     },
@@ -65295,7 +65319,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getEOL",
       "kind": "zig_fn",
-      "line": 1338,
+      "line": 1334,
       "signature": "pub fn getEOL(self: *EditBuffer) Cursor {",
       "bodyHash": "b1bf5b48345a"
     },
@@ -65307,7 +65331,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getTextRange",
       "kind": "zig_fn",
-      "line": 1355,
+      "line": 1351,
       "signature": "pub fn getTextRange(self: *EditBuffer, start_offset: u32, end_offset: u32, out_buffer: []u8) !usize {",
       "bodyHash": "9038bccd8647"
     },
@@ -65319,7 +65343,7 @@
       "file": "src/edit-buffer.zig",
       "symbol": "EditBuffer.getTextRangeByCoords",
       "kind": "zig_fn",
-      "line": 1362,
+      "line": 1358,
       "signature": "pub fn getTextRangeByCoords(self: *EditBuffer, start_row: u32, start_col: u32, end_row: u32, end_col: u32, out_buffer: []u8) usize {",
       "bodyHash": "cc70aa7d4c3c"
     },
@@ -74045,7 +74069,7 @@
       "kind": "zig_fn",
       "line": 16,
       "signature": "pub fn Rope(comptime T: type) type {",
-      "bodyHash": "305d40c38294"
+      "bodyHash": "6990c64f2482"
     },
     {
       "id": "native/src/rope.zig#Rope.Metrics.add",
@@ -74273,7 +74297,7 @@
       "kind": "zig_fn",
       "line": 363,
       "signature": "pub fn split_at_weight(",
-      "bodyHash": "e072acf3c081"
+      "bodyHash": "d4d9519af8a7"
     },
     {
       "id": "native/src/rope.zig#Rope.init",
@@ -74283,7 +74307,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.init",
       "kind": "zig_fn",
-      "line": 440,
+      "line": 441,
       "signature": "pub fn init(allocator: Allocator) error{OutOfMemory}!Self {",
       "bodyHash": "0bad28d89959"
     },
@@ -74295,7 +74319,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.initWithConfig",
       "kind": "zig_fn",
-      "line": 444,
+      "line": 445,
       "signature": "pub fn initWithConfig(allocator: Allocator, config: Config) error{OutOfMemory}!Self {",
       "bodyHash": "b3f8a0edcf07"
     },
@@ -74307,7 +74331,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.from_item",
       "kind": "zig_fn",
-      "line": 465,
+      "line": 466,
       "signature": "pub fn from_item(allocator: Allocator, data: T) !Self {",
       "bodyHash": "a8a56ff8a3e0"
     },
@@ -74319,7 +74343,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.from_itemWithConfig",
       "kind": "zig_fn",
-      "line": 469,
+      "line": 470,
       "signature": "pub fn from_itemWithConfig(allocator: Allocator, data: T, config: Config) !Self {",
       "bodyHash": "506f104d5f20"
     },
@@ -74331,7 +74355,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.from_slice",
       "kind": "zig_fn",
-      "line": 487,
+      "line": 488,
       "signature": "pub fn from_slice(allocator: Allocator, items: []const T) !Self {",
       "bodyHash": "afd061da6278"
     },
@@ -74343,7 +74367,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.from_sliceWithConfig",
       "kind": "zig_fn",
-      "line": 491,
+      "line": 492,
       "signature": "pub fn from_sliceWithConfig(allocator: Allocator, items: []const T, config: Config) !Self {",
       "bodyHash": "03d99e698c15"
     },
@@ -74355,7 +74379,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.count",
       "kind": "zig_fn",
-      "line": 536,
+      "line": 537,
       "signature": "pub fn count(self: *const Self) u32 {",
       "bodyHash": "24484ebd9d3a"
     },
@@ -74367,7 +74391,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.get",
       "kind": "zig_fn",
-      "line": 540,
+      "line": 541,
       "signature": "pub fn get(self: *const Self, index: u32) ?*const T {",
       "bodyHash": "9ae398aa712e"
     },
@@ -74379,7 +74403,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.walk",
       "kind": "zig_fn",
-      "line": 544,
+      "line": 545,
       "signature": "pub fn walk(self: *const Self, ctx: *anyopaque, f: Node.WalkerFn) !void {",
       "bodyHash": "a3750560ba0f"
     },
@@ -74391,7 +74415,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.metricsGeneration",
       "kind": "zig_fn",
-      "line": 550,
+      "line": 551,
       "signature": "pub fn metricsGeneration(self: *const Self) u64 {",
       "bodyHash": "4ad71a602404"
     },
@@ -74403,7 +74427,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.setMetricsGeneration",
       "kind": "zig_fn",
-      "line": 554,
+      "line": 555,
       "signature": "pub fn setMetricsGeneration(self: *Self, generation: u64) void {",
       "bodyHash": "cbed7c3976c6"
     },
@@ -74415,7 +74439,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.remeasure",
       "kind": "zig_fn",
-      "line": 565,
+      "line": 566,
       "signature": "pub fn remeasure(self: *Self) void {",
       "bodyHash": "3bdc630e0adb"
     },
@@ -74427,7 +74451,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.walk_from",
       "kind": "zig_fn",
-      "line": 608,
+      "line": 609,
       "signature": "pub fn walk_from(self: *const Self, start_index: u32, ctx: *anyopaque, f: Node.WalkerFn) !void {",
       "bodyHash": "5012eaefa1e1"
     },
@@ -74439,7 +74463,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.rebalance",
       "kind": "zig_fn",
-      "line": 642,
+      "line": 643,
       "signature": "pub fn rebalance(self: *Self, tmp_allocator: Allocator) !void {",
       "bodyHash": "ca2c808d7809"
     },
@@ -74451,7 +74475,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.insert",
       "kind": "zig_fn",
-      "line": 646,
+      "line": 647,
       "signature": "pub fn insert(self: *Self, index: u32, data: T) !void {",
       "bodyHash": "40cb5fcae3c6"
     },
@@ -74463,7 +74487,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.delete",
       "kind": "zig_fn",
-      "line": 650,
+      "line": 651,
       "signature": "pub fn delete(self: *Self, index: u32) !void {",
       "bodyHash": "37f057b9a312"
     },
@@ -74475,7 +74499,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.replace",
       "kind": "zig_fn",
-      "line": 654,
+      "line": 655,
       "signature": "pub fn replace(self: *Self, index: u32, data: T) !void {",
       "bodyHash": "268c7b285b0d"
     },
@@ -74487,7 +74511,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.append",
       "kind": "zig_fn",
-      "line": 661,
+      "line": 662,
       "signature": "pub fn append(self: *Self, data: T) !void {",
       "bodyHash": "8f7ab610ceaa"
     },
@@ -74499,7 +74523,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.prepend",
       "kind": "zig_fn",
-      "line": 665,
+      "line": 666,
       "signature": "pub fn prepend(self: *Self, data: T) !void {",
       "bodyHash": "c8bef5f72d55"
     },
@@ -74511,7 +74535,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.concat",
       "kind": "zig_fn",
-      "line": 669,
+      "line": 670,
       "signature": "pub fn concat(self: *Self, other: *const Self) !void {",
       "bodyHash": "af1e502b157a"
     },
@@ -74523,7 +74547,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.split",
       "kind": "zig_fn",
-      "line": 673,
+      "line": 674,
       "signature": "pub fn split(self: *Self, index: u32) !Self {",
       "bodyHash": "3bac9afe3105"
     },
@@ -74535,7 +74559,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.slice",
       "kind": "zig_fn",
-      "line": 687,
+      "line": 688,
       "signature": "pub fn slice(self: *const Self, start: u32, end: u32, allocator: Allocator) ![]T {",
       "bodyHash": "46e6b49da4d2"
     },
@@ -74547,7 +74571,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.delete_range",
       "kind": "zig_fn",
-      "line": 723,
+      "line": 724,
       "signature": "pub fn delete_range(self: *Self, start: u32, end: u32) !void {",
       "bodyHash": "807b7db91c05"
     },
@@ -74559,7 +74583,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.insert_slice",
       "kind": "zig_fn",
-      "line": 733,
+      "line": 734,
       "signature": "pub fn insert_slice(self: *Self, index: u32, items: []const T) !void {",
       "bodyHash": "19cbb242e7f5"
     },
@@ -74571,7 +74595,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.to_array",
       "kind": "zig_fn",
-      "line": 745,
+      "line": 746,
       "signature": "pub fn to_array(self: *const Self, allocator: Allocator) ![]T {",
       "bodyHash": "4242003a5381"
     },
@@ -74583,7 +74607,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.toText",
       "kind": "zig_fn",
-      "line": 768,
+      "line": 769,
       "signature": "pub fn toText(self: *const Self, allocator: Allocator) ![]u8 {",
       "bodyHash": "ffb396248a9a"
     },
@@ -74595,7 +74619,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.totalWeight",
       "kind": "zig_fn",
-      "line": 827,
+      "line": 828,
       "signature": "pub fn totalWeight(self: *const Self) u32 {",
       "bodyHash": "8546001e6608"
     },
@@ -74607,7 +74631,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.splitByWeight",
       "kind": "zig_fn",
-      "line": 831,
+      "line": 832,
       "signature": "pub fn splitByWeight(self: *Self, weight: u32, split_leaf_fn: *const Node.LeafSplitFn) !Self {",
       "bodyHash": "bac72ddec25d"
     },
@@ -74619,7 +74643,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.replaceRangeByWeight",
       "kind": "zig_fn",
-      "line": 963,
+      "line": 964,
       "signature": "pub fn replaceRangeByWeight(self: *Self, start: u32, end: u32, start_bias: Node.Bias, end_bias: Node.Bias, items: []const T, split_leaf_fn: ",
       "bodyHash": "922c62c83f71"
     },
@@ -74631,7 +74655,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.insertSliceByWeight",
       "kind": "zig_fn",
-      "line": 977,
+      "line": 978,
       "signature": "pub fn insertSliceByWeight(self: *Self, weight: u32, bias: Node.Bias, items: []const T, split_leaf_fn: *const Node.LeafSplitFn) !JoinSpan {",
       "bodyHash": "6082082fb9a1"
     },
@@ -74643,7 +74667,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.findByWeight",
       "kind": "zig_fn",
-      "line": 993,
+      "line": 994,
       "signature": "pub fn findByWeight(self: *const Self, weight: u32) ?WeightFindResult {",
       "bodyHash": "08a808fd04a7"
     },
@@ -74655,7 +74679,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.seekCount",
       "kind": "zig_fn",
-      "line": 1017,
+      "line": 1018,
       "signature": "pub fn seekCount(self: *const Self, comptime counted: fn (*const Metrics) u32, n: u32) ?Position {",
       "bodyHash": "bd7f9932e41b"
     },
@@ -74667,7 +74691,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.seekCountSum",
       "kind": "zig_fn",
-      "line": 1039,
+      "line": 1040,
       "signature": "pub fn seekCountSum(self: *const Self, comptime counted: fn (*const Metrics) u32, comptime summed: fn (*const Metrics) u32, n: u32) ?struct ",
       "bodyHash": "a2f603fd0950"
     },
@@ -74679,7 +74703,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.seekKey",
       "kind": "zig_fn",
-      "line": 1065,
+      "line": 1066,
       "signature": "pub fn seekKey(self: *const Self, comptime key: fn (*const Metrics) u32, target: u32) ?KeyFindResult {",
       "bodyHash": "f94df45abf18"
     },
@@ -74691,7 +74715,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.countThrough",
       "kind": "zig_fn",
-      "line": 1087,
+      "line": 1088,
       "signature": "pub fn countThrough(self: *const Self, comptime key: fn (*const Metrics) u32, comptime counted: fn (*const Metrics) u32, target: u32) u32 {",
       "bodyHash": "96d48acfee8d"
     },
@@ -74703,7 +74727,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.sharedLeaves",
       "kind": "zig_fn",
-      "line": 1112,
+      "line": 1113,
       "signature": "pub fn sharedLeaves(self: *const Self, other: *const Node, comptime side: Side, limit: u32) ?u32 {",
       "bodyHash": "4c91240d7249"
     },
@@ -74715,7 +74739,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.store_undo",
       "kind": "zig_fn",
-      "line": 1146,
+      "line": 1147,
       "signature": "pub fn store_undo(self: *Self, meta: []const u8) !void {",
       "bodyHash": "2b23c2bf62ef"
     },
@@ -74727,7 +74751,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.undo",
       "kind": "zig_fn",
-      "line": 1218,
+      "line": 1219,
       "signature": "pub fn undo(self: *Self, meta: []const u8) ![]const u8 {",
       "bodyHash": "2c8be2f2fc1f"
     },
@@ -74739,7 +74763,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.redo",
       "kind": "zig_fn",
-      "line": 1233,
+      "line": 1234,
       "signature": "pub fn redo(self: *Self) ![]const u8 {",
       "bodyHash": "2cd9c50bcd6b"
     },
@@ -74751,7 +74775,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.can_undo",
       "kind": "zig_fn",
-      "line": 1248,
+      "line": 1249,
       "signature": "pub fn can_undo(self: *const Self) bool {",
       "bodyHash": "300e6f209f4f"
     },
@@ -74763,7 +74787,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.can_redo",
       "kind": "zig_fn",
-      "line": 1252,
+      "line": 1253,
       "signature": "pub fn can_redo(self: *const Self) bool {",
       "bodyHash": "bf7406f36b37"
     },
@@ -74775,7 +74799,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.hasHistory",
       "kind": "zig_fn",
-      "line": 1257,
+      "line": 1258,
       "signature": "pub fn hasHistory(self: *const Self) bool {",
       "bodyHash": "1a09e5864cff"
     },
@@ -74787,7 +74811,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.clear_history",
       "kind": "zig_fn",
-      "line": 1261,
+      "line": 1262,
       "signature": "pub fn clear_history(self: *Self) void {",
       "bodyHash": "dbefec210717"
     },
@@ -74799,7 +74823,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.clear",
       "kind": "zig_fn",
-      "line": 1268,
+      "line": 1269,
       "signature": "pub fn clear(self: *Self) !void {",
       "bodyHash": "0e577d4cabf0"
     },
@@ -74811,7 +74835,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.clearWithUndo",
       "kind": "zig_fn",
-      "line": 1272,
+      "line": 1273,
       "signature": "pub fn clearWithUndo(self: *Self, meta: ?[]const u8) !void {",
       "bodyHash": "e464c75ee283"
     },
@@ -74823,7 +74847,7 @@
       "file": "src/rope.zig",
       "symbol": "Rope.setSegments",
       "kind": "zig_fn",
-      "line": 1283,
+      "line": 1284,
       "signature": "pub fn setSegments(self: *Self, items: []const T) !void {",
       "bodyHash": "0df1072587e2"
     },
@@ -80885,7 +80909,7 @@
       "kind": "zig_const",
       "line": 120,
       "signature": "pub const UnifiedTextBuffer = struct {",
-      "bodyHash": "7bb0298c5fe1"
+      "bodyHash": "1ca10fe52d65"
     },
     {
       "id": "native/src/text-buffer.zig#UnifiedTextBuffer.defaults",
@@ -81917,7 +81941,7 @@
       "kind": "zig_fn",
       "line": 1974,
       "signature": "pub fn byteAtCell(self: *const Self, weight: u32, comptime whole_grapheme: bool) u32 {",
-      "bodyHash": "096160338e01"
+      "bodyHash": "1b42fa5f10ba"
     },
     {
       "id": "native/src/text-buffer.zig#UnifiedTextBuffer.convertUtf16",
@@ -81927,7 +81951,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.convertUtf16",
       "kind": "zig_fn",
-      "line": 1988,
+      "line": 1987,
       "signature": "pub fn convertUtf16(self: *const Self, index: u32, comptime to_byte: bool) u32 {",
       "bodyHash": "756ec870dd2b"
     },
@@ -81939,7 +81963,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.weightAtByte",
       "kind": "zig_fn",
-      "line": 2029,
+      "line": 2028,
       "signature": "pub fn weightAtByte(self: *const Self, byte: u32, round_down: bool) u32 {",
       "bodyHash": "659971fe587b"
     },
@@ -81951,7 +81975,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.byteAtOffset",
       "kind": "zig_fn",
-      "line": 2052,
+      "line": 2051,
       "signature": "pub fn byteAtOffset(self: *const Self, offset: u32) u32 {",
       "bodyHash": "897ce2fe09ef"
     },
@@ -81963,7 +81987,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.lineStartByte",
       "kind": "zig_fn",
-      "line": 2058,
+      "line": 2057,
       "signature": "pub fn lineStartByte(self: *const Self, row: u32) u32 {",
       "bodyHash": "789f8e20b895"
     },
@@ -81975,7 +81999,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.addHighlightByCoords",
       "kind": "zig_fn",
-      "line": 2068,
+      "line": 2067,
       "signature": "pub fn addHighlightByCoords(",
       "bodyHash": "8a860bf3f7d6"
     },
@@ -81987,7 +82011,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.addHighlightByCharRange",
       "kind": "zig_fn",
-      "line": 2085,
+      "line": 2084,
       "signature": "pub fn addHighlightByCharRange(",
       "bodyHash": "66f78f8e65ff"
     },
@@ -81999,7 +82023,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.removeHighlightsByRef",
       "kind": "zig_fn",
-      "line": 2158,
+      "line": 2157,
       "signature": "pub fn removeHighlightsByRef(self: *Self, hl_ref: u16) void {",
       "bodyHash": "08f51bf01b49"
     },
@@ -82011,7 +82035,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.removeHighlightsByRefChecked",
       "kind": "zig_fn",
-      "line": 2163,
+      "line": 2162,
       "signature": "pub fn removeHighlightsByRefChecked(self: *Self, hl_ref: u16) TextBufferError!void {",
       "bodyHash": "21a9f6f2ef7d"
     },
@@ -82023,7 +82047,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.clearLineHighlights",
       "kind": "zig_fn",
-      "line": 2184,
+      "line": 2183,
       "signature": "pub fn clearLineHighlights(self: *Self, line_idx: usize) void {",
       "bodyHash": "1eb0344021f3"
     },
@@ -82035,7 +82059,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.clearAllHighlights",
       "kind": "zig_fn",
-      "line": 2197,
+      "line": 2196,
       "signature": "pub fn clearAllHighlights(self: *Self) void {",
       "bodyHash": "3b7d5be75d61"
     },
@@ -82047,7 +82071,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.getLineHighlightsSlice",
       "kind": "zig_fn",
-      "line": 2207,
+      "line": 2206,
       "signature": "pub fn getLineHighlightsSlice(self: *const Self, line_idx: usize) []const Highlight {",
       "bodyHash": "53f0ea029695"
     },
@@ -82059,7 +82083,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.getHighlightCount",
       "kind": "zig_fn",
-      "line": 2215,
+      "line": 2214,
       "signature": "pub fn getHighlightCount(self: *const Self) u32 {",
       "bodyHash": "9f5588006c1f"
     },
@@ -82071,7 +82095,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.loadFile",
       "kind": "zig_fn",
-      "line": 2225,
+      "line": 2224,
       "signature": "pub fn loadFile(self: *Self, path: []const u8) TextBufferError!void {",
       "bodyHash": "3cce169f0bc7"
     },
@@ -82083,7 +82107,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.getTabWidth",
       "kind": "zig_fn",
-      "line": 2257,
+      "line": 2256,
       "signature": "pub fn getTabWidth(self: *const Self) u8 {",
       "bodyHash": "093abcae5736"
     },
@@ -82095,7 +82119,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.setTabWidth",
       "kind": "zig_fn",
-      "line": 2264,
+      "line": 2263,
       "signature": "pub fn setTabWidth(self: *Self, width: u8) void {",
       "bodyHash": "97d7e4f22355"
     },
@@ -82107,7 +82131,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.setWidthMethod",
       "kind": "zig_fn",
-      "line": 2276,
+      "line": 2275,
       "signature": "pub fn setWidthMethod(self: *Self, method: utf8.WidthMethod) void {",
       "bodyHash": "89648def2182"
     },
@@ -82119,7 +82143,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.byteAtOffsetUnder",
       "kind": "zig_fn",
-      "line": 2381,
+      "line": 2380,
       "signature": "pub fn byteAtOffsetUnder(self: *const Self, offset: u32, method: utf8.WidthMethod) u32 {",
       "bodyHash": "d6d83314a961"
     },
@@ -82131,7 +82155,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.effectiveTabWidth",
       "kind": "zig_fn",
-      "line": 2419,
+      "line": 2418,
       "signature": "pub fn effectiveTabWidth(width: u8) u8 {",
       "bodyHash": "e105e030e8c0"
     },
@@ -82143,7 +82167,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.checkTabWidth",
       "kind": "zig_fn",
-      "line": 2426,
+      "line": 2425,
       "signature": "pub fn checkTabWidth(self: *const Self, width: u8) error{TextLimit}!void {",
       "bodyHash": "cc855508081b"
     },
@@ -82155,7 +82179,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.debugLogRope",
       "kind": "zig_fn",
-      "line": 2474,
+      "line": 2473,
       "signature": "pub fn debugLogRope(self: *const Self) void {",
       "bodyHash": "ae43b26e936e"
     },
@@ -82167,7 +82191,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.getTextRange",
       "kind": "zig_fn",
-      "line": 2500,
+      "line": 2499,
       "signature": "pub fn getTextRange(self: *const Self, start_offset: u32, end_offset: u32, out_buffer: []u8) usize {",
       "bodyHash": "96beb9393e06"
     },
@@ -82179,7 +82203,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.copyTextRange",
       "kind": "zig_fn",
-      "line": 2522,
+      "line": 2521,
       "signature": "pub fn copyTextRange(self: *const Self, start_offset: u32, end_offset: u32, out: []u8) !u32 {",
       "bodyHash": "1d6e30a93ac0"
     },
@@ -82191,7 +82215,7 @@
       "file": "src/text-buffer.zig",
       "symbol": "UnifiedTextBuffer.getTextRangeByCoords",
       "kind": "zig_fn",
-      "line": 2545,
+      "line": 2544,
       "signature": "pub fn getTextRangeByCoords(self: *Self, start_row: u32, start_col: u32, end_row: u32, end_col: u32, out_buffer: []u8) usize {",
       "bodyHash": "d69a4bebefe1"
     },
