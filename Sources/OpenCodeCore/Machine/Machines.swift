@@ -25,7 +25,7 @@ public enum Machines {
         }
     }
 
-    // parity: core/src/machine/machines.ts#Info [status=implemented hash=7a3e376ab6b6]
+    // parity: core/src/machine/machines.ts#Info [status=implemented hash=911359c62b5e]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let id: String
         public let online: Bool
@@ -34,13 +34,22 @@ public enum Machines {
         /// Last reported by the worker's hello, while it is online.
         public let os: String?
         public let arch: String?
+        public let connection: MachineDriver.ConnectionInfo?
 
-        public init(id: String, online: Bool, paired: Bool, os: String? = nil, arch: String? = nil) {
+        public init(
+            id: String,
+            online: Bool,
+            paired: Bool,
+            os: String? = nil,
+            arch: String? = nil,
+            connection: MachineDriver.ConnectionInfo? = nil
+        ) {
             self.id = id
             self.online = online
             self.paired = paired
             self.os = os
             self.arch = arch
+            self.connection = connection
         }
     }
 
@@ -127,19 +136,22 @@ public enum Machines {
         }
     }
 
-    // parity: core/src/machine/machines.ts#Interface [status=implemented hash=de60e37ad880]
+    // parity: core/src/machine/machines.ts#Interface [status=implemented hash=17f12ada768e]
     public protocol Interface: Sendable {
         /// Makes the machine known for good, returning its validated ID. Throws `InvalidName` or `AlreadyExists`.
         func add(_ name: String) async throws -> String
-        /// Forgets the machine and ends it, failing what waits on it as `NotFound` and its processes at once.
-        func remove(_ id: String) async throws
+        /// Forgets the machine and ends it, failing what waits on it as `NotFound` and its processes at once. False
+        /// when there was no such machine.
+        @discardableResult
+        func remove(_ id: String) async throws -> Bool
         func list() async -> [Info]
         /// The machine's environment, connected or not: calls on an offline machine fail with `NotSent`.
         func get(_ id: String) async throws -> any CoreLocation.Environment.Interface
         /// The home directory in the hello of the machine's connection, throwing `NotSent` while it is offline.
         func home(_ id: String) async throws -> String
-        /// Serves one worker's connection, routed by the name in its hello, until it is lost or replaced.
-        func connect(_ connection: MachineDriver.Connection) async throws
+        /// Serves one worker's connection as the machine `id` until it is lost or replaced. `id` is the one the link's
+        /// handshake proved, never one the worker named.
+        func connect(_ id: String, _ connection: MachineDriver.Connection) async throws
         /// Prints one join string for this machine, good once and for five minutes. A second invite replaces the first.
         func invite(_ id: String, options: InviteOptions) async throws -> String
         /// Pairs the machine holding the secret's join string with `key` and returns its id. The secret is spent either way.
@@ -219,9 +231,10 @@ public enum Machines {
             return id
         }
 
-        public func remove(_ id: String) async throws {
-            try await locks.withLock(id) { () throws -> Void in
-                guard self.state.withLock({ $0.instances[id] }) != nil else { return }
+        @discardableResult
+        public func remove(_ id: String) async throws -> Bool {
+            try await locks.withLock(id) { () throws -> Bool in
+                guard self.state.withLock({ $0.instances[id] }) != nil else { return false }
                 _ = try self.db.execute("DELETE FROM machine WHERE id = ?", parameters: [.text(id)])
                 let machine = self.state.withLock { s -> (any MachineDriver.Interface)? in
                     s.invitations.removeValue(forKey: id)
@@ -229,16 +242,28 @@ public enum Machines {
                     return s.instances.removeValue(forKey: id)
                 }
                 machine?.close(NotFound(machine: id))
+                return true
             }
         }
 
         public func list() async -> [Info] {
-            state.withLock { s in
+            let entries: [(id: String, machine: any MachineDriver.Interface, paired: Bool)] = state.withLock { s in
                 s.instances.sorted { $0.key < $1.key }.map { id, machine in
-                    let paired = s.keys[id] != nil
-                    guard let hello = machine.hello() else { return Info(id: id, online: false, paired: paired) }
-                    return Info(id: id, online: true, paired: paired, os: hello.os, arch: hello.arch)
+                    (id: id, machine: machine, paired: s.keys[id] != nil)
                 }
+            }
+            return entries.map { entry in
+                let hello = entry.machine.hello()
+                let connection = entry.machine.describe()
+                guard let hello else { return Info(id: entry.id, online: false, paired: entry.paired) }
+                return Info(
+                    id: entry.id,
+                    online: true,
+                    paired: entry.paired,
+                    os: hello.os,
+                    arch: hello.arch,
+                    connection: connection
+                )
             }
         }
 
@@ -253,8 +278,7 @@ public enum Machines {
             return hello.home
         }
 
-        public func connect(_ connection: MachineDriver.Connection) async throws {
-            let id = connection.hello.name
+        public func connect(_ id: String, _ connection: MachineDriver.Connection) async throws {
             guard let machine = state.withLock({ $0.instances[id] }) else { throw NotFound(machine: id) }
             await machine.connect(connection)
         }

@@ -1253,8 +1253,9 @@ public final class ServerWebSocketCarrier: MachineLink.Carrier, Sendable {
                 case .binary(let bytes):
                     self.enqueue(bytes)
                 case .text:
-                    // Binary frames only; ignore unexpected text frames.
-                    continue
+                    // Binary frames only; a text frame ends the carrier like a closed socket.
+                    self.markClosed()
+                    return
                 case .close:
                     self.markClosed()
                     return
@@ -1304,6 +1305,10 @@ public final class ServerWebSocketCarrier: MachineLink.Carrier, Sendable {
         }
     }
 
+    public var describe: (@Sendable () -> MachineDriver.ConnectionInfo)? {
+        { MachineDriver.ConnectionInfo(kind: .websocket) }
+    }
+
     public func send(_ message: [UInt8]) async {
         try? await socket.send(.binary(message))
     }
@@ -1342,10 +1347,10 @@ public final class ServerWebSocketCarrier: MachineLink.Carrier, Sendable {
     }
 }
 
-/// Bridges a WebSocket connection into `MachineLink` + encrypted `MachineWire` + `Machines.Service.connect`.
+/// Bridges a WebSocket connection into `MachineLink.serve` + framed `MachineWire` + `Machines.Service.connect`.
 public enum ServerMachineLink {
-    /// Home side: authenticates the worker via `MachineLink.accept`, reads its encrypted `MachineWire.Hello`,
-    /// verifies the machine name matches the authenticated identity, and serves the connection through `machines`.
+    /// Home side: authenticates the worker via `MachineLink.serve`, validates its framed `MachineWire.Hello`,
+    /// and serves the connection under the handshake-proven machine ID through `machines`.
     public static func serve(
         socket: any ServerWebSocketConnection,
         identity: any MachineIdentity.Interface,
@@ -1354,74 +1359,17 @@ public enum ServerMachineLink {
         let carrier = ServerWebSocketCarrier(socket: socket)
         defer { carrier.stop() }
 
-        let established: MachineLink.Established
+        let served: MachineLink.Served
         do {
-            established = try await MachineLink.accept(carrier, identity: identity, machines: machines)
+            served = try await MachineLink.serve(carrier, identity: identity, machines: machines)
         } catch {
             await socket.close(code: 1008, reason: "")
             return
         }
+        defer { served.close() }
 
-        let hello: MachineWire.Hello
-        do {
-            let firstFrame = try await carrier.receive()
-            let plain = try established.receive.decrypt(firstFrame)
-            let decoded = try JSONDecoder().decode(MachineWire.FromWorker.self, from: Data(plain))
-            guard case .hello(let receivedHello) = decoded, receivedHello.name == established.machine else {
-                await socket.close(code: 1008, reason: "")
-                return
-            }
-            hello = receivedHello
-        } catch {
-            await socket.close(code: 1008, reason: "")
-            return
-        }
-
-        let (outbox, outboxCont) = AsyncStream<MachineWire.ToWorker>.makeStream()
-        let (inbound, inboundCont) = AsyncStream<MachineWire.FromWorker>.makeStream()
-
-        // Serialize outbound encryption and socket writes so Noise transport nonces stay strictly in order.
-        let writer = Task {
-            let encoder = JSONEncoder()
-            for await message in outbox {
-                if Task.isCancelled { break }
-                guard let plain = try? encoder.encode(message),
-                      let cipher = try? established.send.encrypt(Array(plain))
-                else {
-                    break
-                }
-                do {
-                    try await socket.send(.binary(cipher))
-                } catch {
-                    break
-                }
-            }
-        }
-
-        let reader = Task {
-            let decoder = JSONDecoder()
-            defer { inboundCont.finish() }
-            while !Task.isCancelled {
-                guard let frame = try? await carrier.receive(),
-                      let plain = try? established.receive.decrypt(frame),
-                      let decoded = try? decoder.decode(MachineWire.FromWorker.self, from: Data(plain))
-                else {
-                    break
-                }
-                inboundCont.yield(decoded)
-            }
-        }
-
-        let connection = MachineDriver.Connection(
-            hello: hello,
-            send: { message in outboxCont.yield(message) },
-            messages: inbound
-        )
-        try? await machines.connect(connection)
-        outboxCont.finish()
-        reader.cancel()
-        writer.cancel()
-        await socket.close(code: 1000, reason: "")
+        try? await machines.connect(served.machine, served.connection)
+        await socket.close(code: 1008, reason: "")
     }
 }
 

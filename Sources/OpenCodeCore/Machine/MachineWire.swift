@@ -44,6 +44,18 @@ public enum MachineWire {
         case SIGTERM, SIGKILL, SIGINT
     }
 
+    /// Output stream tag carried on every `output` message.
+    public enum OutputStream: String, Equatable, Hashable, Sendable, Codable {
+        case stdout
+        case stderr
+    }
+
+    /// Outcome of a worker `stdin` acknowledgment.
+    public enum StdinOutcome: Equatable, Hashable, Sendable {
+        case ok
+        case failed(String)
+    }
+
     public struct FileInfo: Equatable, Hashable, Sendable, Codable {
         public let type: FileType
         public let size: Double
@@ -85,10 +97,10 @@ public enum MachineWire {
     }
 
     enum Keys: String, CodingKey {
-        case type, id, pid, request, message, offset, data, bytes, code, signal, req, ok, result, error
-        case name, os, arch, home, instance, processes, state
-        case argv, cwd, env, from, to, call, path, range
-        case kind, actual, info, length
+        case type, id, pid, request, message, offset, stream, data, bytes, code, signal, req, ok, result, error
+        case `protocol`, os, arch, home, instance, processes, state
+        case argv, cwd, env, stdin, from, to, call, path, range
+        case kind, actual, info, length, name
     }
 
     static func literal(_ container: KeyedDecodingContainer<Keys>, _ key: Keys, _ expected: String) throws {
@@ -147,10 +159,15 @@ public enum MachineWire {
         }
     }
 
-    /// The first message of every connection, reconnects included.
-    // parity: core/src/machine/wire.ts#Hello [status=implemented hash=9c49bccc31ba]
+    /// The first message of every connection, reconnects included. It names no machine: which machine sent it is the
+    /// link's to prove, never the worker's to say.
+    // parity: core/src/machine/wire.ts#Hello [status=implemented hash=e449e5cd967f]
     public struct Hello: Equatable, Hashable, Sendable, Codable {
-        public let name: String
+        /// The version of the messages after the handshake: a home that does not know a worker's version ends the
+        /// connection.
+        public static let protocolVersion = 2
+
+        public let `protocol`: Int
         public let os: String
         public let arch: String
         /// The worker's home directory, an absolute POSIX path: where `~` in a path on this machine starts.
@@ -159,8 +176,15 @@ public enum MachineWire {
         public let instance: Instance
         public let processes: [HelloProcess]
 
-        public init(name: String, os: String, arch: String, home: String, instance: Instance, processes: [HelloProcess] = []) {
-            self.name = name
+        public init(
+            protocol version: Int = MachineWire.Hello.protocolVersion,
+            os: String,
+            arch: String,
+            home: String,
+            instance: Instance,
+            processes: [HelloProcess] = []
+        ) {
+            self.`protocol` = version
             self.os = os
             self.arch = arch
             self.home = home
@@ -171,7 +195,15 @@ public enum MachineWire {
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: Keys.self)
             try MachineWire.literal(c, .type, "hello")
-            name = try c.decode(String.self, forKey: .name)
+            let version = try c.decode(Int.self, forKey: .protocol)
+            guard version == Self.protocolVersion else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .protocol,
+                    in: c,
+                    debugDescription: "Expected protocol \(Self.protocolVersion)"
+                )
+            }
+            self.`protocol` = version
             os = try c.decode(String.self, forKey: .os)
             arch = try c.decode(String.self, forKey: .arch)
             home = try c.decode(String.self, forKey: .home)
@@ -185,7 +217,7 @@ public enum MachineWire {
         public func encode(to encoder: any Encoder) throws {
             var c = encoder.container(keyedBy: Keys.self)
             try c.encode("hello", forKey: .type)
-            try c.encode(name, forKey: .name)
+            try c.encode(self.`protocol`, forKey: .protocol)
             try c.encode(os, forKey: .os)
             try c.encode(arch, forKey: .arch)
             try c.encode(home, forKey: .home)
@@ -267,14 +299,15 @@ public enum MachineWire {
         }
     }
 
-    // parity: core/src/machine/wire.ts#FromWorker [status=implemented hash=b769d2ba17eb]
+    // parity: core/src/machine/wire.ts#FromWorker [status=implemented hash=553787302ba0]
     public enum FromWorker: Equatable, Hashable, Sendable, Codable {
         case hello(Hello)
         case started(id: ProcessID, pid: Int)
         /// A start, attach or kill that could not be done.
         case failed(id: ProcessID, request: FailedRequest, message: String)
         /// `offset` is the position of the first byte of `data` in the process's merged stdout and stderr.
-        case output(id: ProcessID, offset: Int, data: [UInt8])
+        case output(id: ProcessID, offset: Int, stream: OutputStream, data: [UInt8])
+        case stdin(id: ProcessID, req: Int, outcome: StdinOutcome)
         case exit(Exit)
         case fs(FileReply)
 
@@ -296,11 +329,23 @@ public enum MachineWire {
                 self = .output(
                     id: try c.decode(ProcessID.self, forKey: .id),
                     offset: try c.decode(Int.self, forKey: .offset),
+                    stream: try c.decode(OutputStream.self, forKey: .stream),
                     data: try c.decode(Bytes.self, forKey: .data).value
                 )
+            case "stdin":
+                let id = try c.decode(ProcessID.self, forKey: .id)
+                let req = try c.decode(Int.self, forKey: .req)
+                if try c.decode(Bool.self, forKey: .ok) {
+                    self = .stdin(id: id, req: req, outcome: .ok)
+                } else {
+                    self = .stdin(id: id, req: req, outcome: .failed(try c.decode(String.self, forKey: .message)))
+                }
             case "exit":
                 let id = try c.decode(ProcessID.self, forKey: .id)
                 let bytes = try c.decode(Int.self, forKey: .bytes)
+                guard c.contains(.code) else {
+                    throw DecodingError.keyNotFound(Keys.code, .init(codingPath: c.codingPath, debugDescription: "Missing code"))
+                }
                 if try c.decodeNil(forKey: .code) {
                     self = .exit(Exit(id: id, bytes: bytes, signal: try c.decode(String.self, forKey: .signal)))
                 } else {
@@ -320,6 +365,9 @@ public enum MachineWire {
 
         /// The members of the result union, tried in upstream's order.
         private static func decodeResult(_ c: KeyedDecodingContainer<Keys>) throws -> FileResult {
+            guard c.contains(.result) else {
+                throw DecodingError.keyNotFound(Keys.result, .init(codingPath: c.codingPath, debugDescription: "Missing result"))
+            }
             if try c.decodeNil(forKey: .result) { return .none }
             if let info = try? c.decode(FileInfo.self, forKey: .result) { return .info(info) }
             if let entries = try? c.decode([DirEntry].self, forKey: .result) { return .list(entries) }
@@ -344,11 +392,23 @@ public enum MachineWire {
                 try c.encode(id, forKey: .id)
                 try c.encode(request, forKey: .request)
                 try c.encode(message, forKey: .message)
-            case .output(let id, let offset, let data):
+            case .output(let id, let offset, let stream, let data):
                 try c.encode("output", forKey: .type)
                 try c.encode(id, forKey: .id)
                 try c.encode(offset, forKey: .offset)
+                try c.encode(stream, forKey: .stream)
                 try c.encode(Bytes(data), forKey: .data)
+            case .stdin(let id, let req, let outcome):
+                try c.encode("stdin", forKey: .type)
+                try c.encode(id, forKey: .id)
+                try c.encode(req, forKey: .req)
+                switch outcome {
+                case .ok:
+                    try c.encode(true, forKey: .ok)
+                case .failed(let message):
+                    try c.encode(false, forKey: .ok)
+                    try c.encode(message, forKey: .message)
+                }
             case .exit(let exit):
                 try c.encode("exit", forKey: .type)
                 try c.encode(exit.id, forKey: .id)
@@ -478,10 +538,12 @@ public enum MachineWire {
 
     // MARK: - ToWorker
 
-    // parity: core/src/machine/wire.ts#ToWorker [status=implemented hash=ccc51aea8c7e]
+    // parity: core/src/machine/wire.ts#ToWorker [status=implemented hash=e4949c6b69c5]
     public enum ToWorker: Equatable, Hashable, Sendable, Codable {
         /// Starts the process and attaches to its output from byte 0. `env` is set over the worker's own environment.
-        case start(id: ProcessID, argv: [String], cwd: String, env: [String: String])
+        case start(id: ProcessID, argv: [String], cwd: String, env: [String: String], stdin: Bool)
+        /// Acknowledged after writing to the OS pipe. `nil` closes it; never replayed.
+        case stdin(id: ProcessID, req: Int, data: [UInt8]?)
         /// Sends output from byte `from` on, then the exit once every byte is sent. Replaces an earlier attach.
         case attach(id: ProcessID, from: Int)
         case kill(id: ProcessID, signal: Signal)
@@ -498,8 +560,19 @@ public enum MachineWire {
                     id: try c.decode(ProcessID.self, forKey: .id),
                     argv: try c.decode([String].self, forKey: .argv),
                     cwd: try c.decode(String.self, forKey: .cwd),
-                    env: try c.decode([String: String].self, forKey: .env)
+                    env: try c.decode([String: String].self, forKey: .env),
+                    stdin: try c.decode(Bool.self, forKey: .stdin)
                 )
+            case "stdin":
+                let id = try c.decode(ProcessID.self, forKey: .id)
+                let req = try c.decode(Int.self, forKey: .req)
+                guard c.contains(.data) else {
+                    throw DecodingError.keyNotFound(Keys.data, .init(codingPath: c.codingPath, debugDescription: "Missing data"))
+                }
+                let data: [UInt8]? = try c.decodeNil(forKey: .data)
+                    ? nil
+                    : try c.decode(Bytes.self, forKey: .data).value
+                self = .stdin(id: id, req: req, data: data)
             case "attach":
                 self = .attach(id: try c.decode(ProcessID.self, forKey: .id), from: try c.decode(Int.self, forKey: .from))
             case "kill":
@@ -520,12 +593,22 @@ public enum MachineWire {
             }
             var c = encoder.container(keyedBy: Keys.self)
             switch self {
-            case .start(let id, let argv, let cwd, let env):
+            case .start(let id, let argv, let cwd, let env, let stdin):
                 try c.encode("start", forKey: .type)
                 try c.encode(id, forKey: .id)
                 try c.encode(argv, forKey: .argv)
                 try c.encode(cwd, forKey: .cwd)
                 try c.encode(env, forKey: .env)
+                try c.encode(stdin, forKey: .stdin)
+            case .stdin(let id, let req, let data):
+                try c.encode("stdin", forKey: .type)
+                try c.encode(id, forKey: .id)
+                try c.encode(req, forKey: .req)
+                if let data {
+                    try c.encode(Bytes(data), forKey: .data)
+                } else {
+                    try c.encodeNil(forKey: .data)
+                }
             case .attach(let id, let from):
                 try c.encode("attach", forKey: .type)
                 try c.encode(id, forKey: .id)
@@ -541,5 +624,147 @@ public enum MachineWire {
                 break
             }
         }
+    }
+
+    // MARK: - Canonical Wire JSON Encoding (matches upstream Schema.encodeSync field order without escaping slashes)
+
+    private static func jsonNumber(_ value: Double) -> String {
+        if value.isFinite, value.rounded() == value, abs(value) <= 9_007_199_254_740_991 {
+            return String(Int64(value))
+        }
+        return String(value)
+    }
+
+    private static func jsonFileInfo(_ info: FileInfo) -> String {
+        "{\"type\":\(MachineJoin.jsonString(info.type.rawValue)),\"size\":\(jsonNumber(info.size)),\"mtimeMs\":\(jsonNumber(info.mtimeMs))}"
+    }
+
+    private static func jsonHelloProcess(_ proc: HelloProcess) -> String {
+        var fields = [
+            "\"id\":\(MachineJoin.jsonString(proc.id.rawValue))",
+            "\"pid\":\(proc.pid)",
+            "\"state\":\(MachineJoin.jsonString(proc.state.rawValue))",
+            "\"bytes\":\(proc.bytes)",
+        ]
+        if case .some(let inner) = proc.code {
+            fields.append("\"code\":\(inner.map(String.init) ?? "null")")
+        }
+        if let signal = proc.signal {
+            fields.append("\"signal\":\(MachineJoin.jsonString(signal))")
+        }
+        return "{" + fields.joined(separator: ",") + "}"
+    }
+
+    public static func encodeJSONString(_ hello: Hello) -> String {
+        let procs = hello.processes.map(jsonHelloProcess).joined(separator: ",")
+        return "{\"type\":\"hello\",\"protocol\":\(hello.`protocol`),\"os\":\(MachineJoin.jsonString(hello.os)),\"arch\":\(MachineJoin.jsonString(hello.arch)),\"home\":\(MachineJoin.jsonString(hello.home)),\"instance\":\(MachineJoin.jsonString(hello.instance.rawValue)),\"processes\":[\(procs)]}"
+    }
+
+    public static func encodeJSONString(_ message: FromWorker) -> String {
+        switch message {
+        case .hello(let hello):
+            return encodeJSONString(hello)
+        case .started(let id, let pid):
+            return "{\"type\":\"started\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"pid\":\(pid)}"
+        case .failed(let id, let request, let text):
+            return "{\"type\":\"failed\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"request\":\(MachineJoin.jsonString(request.rawValue)),\"message\":\(MachineJoin.jsonString(text))}"
+        case .output(let id, let offset, let stream, let data):
+            return "{\"type\":\"output\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"offset\":\(offset),\"stream\":\(MachineJoin.jsonString(stream.rawValue)),\"data\":\(MachineJoin.jsonString(MachineCrypto.base64Encode(data)))}"
+        case .stdin(let id, let req, let outcome):
+            switch outcome {
+            case .ok:
+                return "{\"type\":\"stdin\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"req\":\(req),\"ok\":true}"
+            case .failed(let text):
+                return "{\"type\":\"stdin\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"req\":\(req),\"ok\":false,\"message\":\(MachineJoin.jsonString(text))}"
+            }
+        case .exit(let exit):
+            if let code = exit.code {
+                return "{\"type\":\"exit\",\"id\":\(MachineJoin.jsonString(exit.id.rawValue)),\"bytes\":\(exit.bytes),\"code\":\(code)}"
+            }
+            return "{\"type\":\"exit\",\"id\":\(MachineJoin.jsonString(exit.id.rawValue)),\"bytes\":\(exit.bytes),\"code\":null,\"signal\":\(MachineJoin.jsonString(exit.signal ?? ""))}"
+        case .fs(let reply):
+            switch reply.outcome {
+            case .success(let result):
+                let encodedResult: String
+                switch result {
+                case .none:
+                    encodedResult = "null"
+                case .info(let info):
+                    encodedResult = jsonFileInfo(info)
+                case .list(let entries):
+                    encodedResult = "[" + entries.map {
+                        "{\"name\":\(MachineJoin.jsonString($0.name)),\"type\":\(MachineJoin.jsonString($0.type.rawValue))}"
+                    }.joined(separator: ",") + "]"
+                case .read(let read):
+                    encodedResult = "{\"info\":\(jsonFileInfo(read.info)),\"bytes\":\(MachineJoin.jsonString(MachineCrypto.base64Encode(read.bytes)))}"
+                }
+                return "{\"type\":\"fs\",\"req\":\(reply.req),\"ok\":true,\"result\":\(encodedResult)}"
+            case .failure(let error):
+                var fields = [
+                    "\"kind\":\(MachineJoin.jsonString(error.kind.rawValue))",
+                    "\"message\":\(MachineJoin.jsonString(error.message))",
+                ]
+                if let actual = error.actual {
+                    fields.append("\"actual\":\(MachineJoin.jsonString(actual.rawValue))")
+                }
+                return "{\"type\":\"fs\",\"req\":\(reply.req),\"ok\":false,\"error\":{\(fields.joined(separator: ","))}}"
+            }
+        }
+    }
+
+    public static func encodeJSONString(_ message: ToWorker) -> String {
+        switch message {
+        case .start(let id, let argv, let cwd, let env, let stdin):
+            let argvJSON = "[" + argv.map(MachineJoin.jsonString).joined(separator: ",") + "]"
+            let envJSON = "{" + env.keys.sorted().map { key in
+                "\(MachineJoin.jsonString(key)):\(MachineJoin.jsonString(env[key] ?? ""))"
+            }.joined(separator: ",") + "}"
+            return "{\"type\":\"start\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"argv\":\(argvJSON),\"cwd\":\(MachineJoin.jsonString(cwd)),\"env\":\(envJSON),\"stdin\":\(stdin ? "true" : "false")}"
+        case .stdin(let id, let req, let data):
+            let dataJSON = data.map { MachineJoin.jsonString(MachineCrypto.base64Encode($0)) } ?? "null"
+            return "{\"type\":\"stdin\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"req\":\(req),\"data\":\(dataJSON)}"
+        case .attach(let id, let from):
+            return "{\"type\":\"attach\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"from\":\(from)}"
+        case .kill(let id, let signal):
+            return "{\"type\":\"kill\",\"id\":\(MachineJoin.jsonString(id.rawValue)),\"signal\":\(MachineJoin.jsonString(signal.rawValue))}"
+        case .release(let id):
+            return "{\"type\":\"release\",\"id\":\(MachineJoin.jsonString(id.rawValue))}"
+        case .fs(let fileCall):
+            switch fileCall.call {
+            case .stat(let path):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"stat\",\"path\":\(MachineJoin.jsonString(path))}"
+            case .list(let path):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"list\",\"path\":\(MachineJoin.jsonString(path))}"
+            case .remove(let path):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"remove\",\"path\":\(MachineJoin.jsonString(path))}"
+            case .mkdir(let path):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"mkdir\",\"path\":\(MachineJoin.jsonString(path))}"
+            case .read(let path, let range):
+                var fields = [
+                    "\"type\":\"fs\"",
+                    "\"req\":\(fileCall.req)",
+                    "\"call\":\"read\"",
+                    "\"path\":\(MachineJoin.jsonString(path))",
+                ]
+                if let range {
+                    fields.append("\"range\":{\"offset\":\(range.offset),\"length\":\(range.length)}")
+                }
+                return "{" + fields.joined(separator: ",") + "}"
+            case .write(let path, let bytes):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"write\",\"path\":\(MachineJoin.jsonString(path)),\"bytes\":\(MachineJoin.jsonString(MachineCrypto.base64Encode(bytes)))}"
+            case .append(let path, let bytes):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"append\",\"path\":\(MachineJoin.jsonString(path)),\"bytes\":\(MachineJoin.jsonString(MachineCrypto.base64Encode(bytes)))}"
+            case .move(let from, let to):
+                return "{\"type\":\"fs\",\"req\":\(fileCall.req),\"call\":\"move\",\"from\":\(MachineJoin.jsonString(from)),\"to\":\(MachineJoin.jsonString(to))}"
+            }
+        }
+    }
+
+    public static func encodeJSON(_ message: FromWorker) -> [UInt8] {
+        Array(encodeJSONString(message).utf8)
+    }
+
+    public static func encodeJSON(_ message: ToWorker) -> [UInt8] {
+        Array(encodeJSONString(message).utf8)
     }
 }

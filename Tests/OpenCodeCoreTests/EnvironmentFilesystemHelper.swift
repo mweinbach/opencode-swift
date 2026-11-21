@@ -17,7 +17,8 @@ enum EnvironmentFilesystemHelper {
         let homes: [CoreLocation.Environment.ID: String]
 
         func add(_ name: String) async throws -> String { name }
-        func remove(_ id: String) async throws {}
+        @discardableResult
+        func remove(_ id: String) async throws -> Bool { false }
         func list() async -> [Machines.Info] {
             environments.keys.sorted().map { Machines.Info(id: $0.rawValue, online: homes[$0] != nil, paired: true) }
         }
@@ -32,7 +33,7 @@ enum EnvironmentFilesystemHelper {
             return home
         }
 
-        func connect(_ connection: MachineDriver.Connection) async throws {}
+        func connect(_ id: String, _ connection: MachineDriver.Connection) async throws {}
         func invite(_ id: String, options: Machines.InviteOptions) async throws -> String { "" }
         func join(secret: [UInt8], key: [UInt8]) async throws -> String { throw Machines.InvalidJoin() }
         func identify(_ key: [UInt8]) async throws -> String { throw Machines.UnknownKey() }

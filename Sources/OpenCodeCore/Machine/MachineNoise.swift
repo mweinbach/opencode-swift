@@ -73,7 +73,7 @@ public enum MachineNoise {
     }
 
     /// Section 5.3: an XX HandshakeState for one side, or `badKey` when a key in `options` is not 32 bytes.
-    // parity: core/src/machine/noise.ts#handshake [status=implemented hash=e2587efca2b9]
+    // parity: core/src/machine/noise.ts#handshake [status=implemented hash=82ab407997c7]
     public static func handshake(_ options: Options) throws(Failure) -> Handshake {
         let keys = options.ephemeral.map { [options.static, $0] } ?? [options.static]
         guard keys.allSatisfy({ $0.publicKey.count == dhLength && $0.privateKey.count == dhLength }) else {
@@ -256,7 +256,8 @@ public enum MachineNoise {
         }
     }
 
-    /// The two ciphers `split` returns, one per direction.
+    /// The two CipherStates of section 5.2's Split: one for the messages this side sends, one for those it receives.
+    // parity: core/src/machine/noise.ts#Transport [status=implemented hash=6c3216dbae3b]
     public struct Transport: Sendable {
         public let send: Sender
         /// Any message but the next one fails: transport messages arrive in order or not at all.
@@ -270,6 +271,10 @@ public enum MachineNoise {
         public func encrypt(_ plaintext: [UInt8]) throws(Failure) -> [UInt8] {
             try cipher.withLock { (c: inout CipherState) throws(Failure) -> [UInt8] in try c.encrypt(ad: [], plaintext) }
         }
+
+        public func rekey() {
+            cipher.withLock { $0.rekey() }
+        }
     }
 
     public final class Receiver: Sendable {
@@ -279,6 +284,10 @@ public enum MachineNoise {
         public func decrypt(_ ciphertext: [UInt8]) throws(Failure) -> [UInt8] {
             try cipher.withLock { (c: inout CipherState) throws(Failure) -> [UInt8] in try c.decrypt(ad: [], ciphertext) }
         }
+
+        public func rekey() {
+            cipher.withLock { $0.rekey() }
+        }
     }
 
     // MARK: - CipherState
@@ -286,7 +295,7 @@ public enum MachineNoise {
     /// Section 5.1. Unlike the spec, which keeps n after a failed DECRYPT so a caller may skip the message, any failure
     /// ends the CipherState: on an ordered link a forged or lost message ends the link.
     struct CipherState: Sendable {
-        let key: [UInt8]?
+        var key: [UInt8]?
         var n: UInt64 = 0
         var failed = false
 
@@ -319,6 +328,19 @@ public enum MachineNoise {
                 return try advance(.failure(.badMessage))
             }
             return try advance(.success(plaintext))
+        }
+
+        /// Section 5.1 Rekey() with section 4.2's default REKEY: k becomes the first 32 bytes of
+        /// ENCRYPT(k, maxnonce, zerolen, zeros[32]). n is kept.
+        mutating func rekey() {
+            guard let key else { return }
+            let sealed = MachineCrypto.aes256GCMSeal(
+                key: key,
+                nonce: MachineNoise.nonce(MachineNoise.maxNonce),
+                aad: [],
+                plaintext: [UInt8](repeating: 0, count: 32)
+            )
+            self.key = Array(sealed.prefix(32))
         }
     }
 
