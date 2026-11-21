@@ -475,16 +475,16 @@ enum LiveExecutionFixture {
     static func runGit(in directory: String, args: [String]) async throws {
         let spawner = CrossSpawnSpawner.HostProcessSpawner.shared
         let gitExe = CoreSubsystems.Util.GitExecutable.gitExecutable()
+        var gitEnv = ProcessInfo.processInfo.environment
+        gitEnv["GIT_AUTHOR_NAME"] = "OpenCode Test"
+        gitEnv["GIT_AUTHOR_EMAIL"] = "test@opencode.local"
+        gitEnv["GIT_COMMITTER_NAME"] = "OpenCode Test"
+        gitEnv["GIT_COMMITTER_EMAIL"] = "test@opencode.local"
         let out = try await spawner.run(ProcessSpec(
             executable: gitExe,
             arguments: args,
             workingDirectory: directory,
-            environment: [
-                "GIT_AUTHOR_NAME": "OpenCode Test",
-                "GIT_AUTHOR_EMAIL": "test@opencode.local",
-                "GIT_COMMITTER_NAME": "OpenCode Test",
-                "GIT_COMMITTER_EMAIL": "test@opencode.local",
-            ]
+            environment: gitEnv
         ))
         guard out.exitCode == 0 else {
             let err = String(decoding: out.stderr, as: UTF8.self)

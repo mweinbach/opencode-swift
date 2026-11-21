@@ -923,7 +923,7 @@ public let DebugHandler = ServerHandlerGroup(
             groupIdentifier: "server.debug"
         ) { ctx in
             let directory = ctx.request.query("directory")
-            if let directory, !directory.hasPrefix("/") {
+            if let directory, !isAbsoluteAutomationDirectory(directory) {
                 throw InvalidRequestError(message: "directory must be an absolute path", field: "directory")
             }
             do {

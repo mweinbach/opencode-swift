@@ -43,17 +43,6 @@ jobs:
         with:
           swift-version: swift-6.2.4-release
           swift-build: 6.2.4-RELEASE
-      - name: Restore Windows SwiftPM build cache
-        if: matrix.os == 'windows-2022'
-        id: win-cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .build
-            Packages/OpenTUI/.build
-          key: windows-swift-6.2.4-build-${{ hashFiles('Package.swift', 'Packages/OpenTUI/Package.swift', 'Packages/OpenTunnel/Package.swift', 'Sources/**/*.swift', 'Tests/**/*.swift', 'Packages/OpenTUI/Sources/**/*.swift', 'Packages/OpenTUI/Tests/**/*.swift') }}
-          restore-keys: |
-            windows-swift-6.2.4-build-
       - name: Ensure modern sqlite3.dll on PATH (Windows)
         if: matrix.os == 'windows-2022'
         shell: pwsh
@@ -84,8 +73,7 @@ jobs:
         run: ./scripts/test.sh .
       - name: Build swift-opencode tests (Windows)
         if: matrix.os == 'windows-2022'
-        id: build-win
-        run: swift build --build-tests
+        run: swift build --build-tests -Xlinker /STACK:8388608
       - name: Test swift-opencode (Swift Testing, Windows)
         if: matrix.os == 'windows-2022'
         shell: pwsh
@@ -97,14 +85,24 @@ jobs:
             Write-Host "::error::swift test exited with code $code"
             $exe = ".build\debug\swift-opencodePackageTests.xctest"
             if (Test-Path $exe) {
-              foreach ($probe in @("liveEmbeddedSDKWorkflow", "SQLite", "NativeFileWatcher", "WindowsNamedPipe", "OpenCodePlatformTests", "OpenCodeUtilTests")) {
+              $swiftRoot = Join-Path $env:LOCALAPPDATA "Programs\Swift"
+              if (Test-Path $swiftRoot) {
+                $dllDirs = Get-ChildItem -Path $swiftRoot -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
+                  Select-Object -ExpandProperty DirectoryName -Unique
+                if ($dllDirs) {
+                  $env:PATH = (($dllDirs -join ";") + ";" + $env:PATH)
+                }
+              }
+              foreach ($probe in @("nativeSQLiteDatabaseComprehensive", "inMemorySQLiteFallback", "liveEmbeddedSDKWorkflow", "eventTriggerMatchingAndNonMatchingBusEvent")) {
                 Write-Host "=== Direct .xctest probe: $probe ==="
                 $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel", "--filter", $probe -NoNewWindow -Wait -PassThru
                 Write-Host ("probe $probe exit code: {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
               }
-              Write-Host "=== Probing all non-OpenCodeApp tests ==="
-              swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel --skip "OpenCodeApp"
-              Write-Host "non-OpenCodeApp exit code: $LASTEXITCODE"
+              foreach ($target in @("OpenCodeUtilTests", "OpenCodeSchemaTests", "OpenCodeProtocolTests", "OpenCodeParityTests", "OpenCodePlatformTests", "OpenCodeRecorderTests", "OpenCodeGUIPluginsTests", "OpenCodeSimulationTests", "OpenCodeTUITests", "OpenCodeServerTests", "OpenCodeCoreTests", "OpenCodeAppTests")) {
+                Write-Host "=== Target probe: $target ==="
+                swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel --filter $target
+                Write-Host "target $target exit code: $LASTEXITCODE"
+              }
             }
             exit $code
           }
@@ -116,30 +114,23 @@ jobs:
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
-          swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel
+          swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel -Xlinker /STACK:8388608
           $code = $LASTEXITCODE
           if ($code -ne 0) {
             Write-Host "::error::OpenTUI swift test exited with code $code"
-            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue |
-              Select-Object -First 5 |
-              Format-List TimeCreated, ProviderName, Id, Message
             exit $code
           }
       - name: Build opencode CLI
+        if: matrix.os != 'windows-2022'
         run: swift build --product opencode
-      - name: Save Windows SwiftPM build cache
-        if: always() && matrix.os == 'windows-2022' && steps.build-win.outcome == 'success' && steps.win-cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .build
-            Packages/OpenTUI/.build
-          key: ${{ steps.win-cache-restore.outputs.cache-primary-key }}
+      - name: Build opencode CLI (Windows)
+        if: matrix.os == 'windows-2022'
+        run: swift build --product opencode -Xlinker /STACK:8388608
 
   upstream-parity-audit:
     name: Live Upstream Parity & Drift Check
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode with Swift 6.2 on macOS
