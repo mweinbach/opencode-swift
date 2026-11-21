@@ -43,10 +43,34 @@ jobs:
         with:
           swift-version: swift-6.2.4-release
           swift-build: 6.2.4-RELEASE
-      - name: Ensure modern sqlite3.dll on PATH (Windows)
+      - name: Configure Swift runtime & SQLite on PATH (Windows)
         if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
+          # Prepend Swift's runtime/testing/toolchain DLL dirs ahead of runner system directories
+          # (e.g., PostgreSQL, Perl, MSYS2, Git) so Swift's own runtime DLLs are never shadowed.
+          $swiftRoot = Join-Path $env:LOCALAPPDATA "Programs\Swift"
+          if (Test-Path $swiftRoot) {
+            $dllDirs = @(
+              Get-ChildItem -Path $swiftRoot -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty DirectoryName -Unique |
+                Where-Object { $_ -notlike "*\bin32*" -and $_ -notlike "*\arm64*" } |
+                Sort-Object {
+                  if ($_ -like "*\Runtimes\*") { 0 }
+                  elseif ($_ -like "*\Platforms\*") { 1 }
+                  elseif ($_ -like "*\Toolchains\*") { 2 }
+                  else { 3 }
+                }, { $_ }
+            )
+            Write-Host "Prepending $($dllDirs.Count) Swift DLL directory(ies) to GITHUB_PATH"
+            [Array]::Reverse($dllDirs)
+            foreach ($dir in $dllDirs) {
+              $dir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            }
+          }
+
+          # Copy only sqlite3.dll (modern 3.51+ with RETURNING support) into an isolated directory
+          # so Python's OpenSSL/libffi DLLs are not placed on PATH.
           $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python\*\x64\DLLs\sqlite3.dll" -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending |
             Select-Object -First 1
@@ -79,43 +103,13 @@ jobs:
         run: swift build --build-tests -Xlinker /STACK:8388608
       - name: Test swift-opencode (Swift Testing, Windows)
         if: matrix.os == 'windows-2022'
-        shell: pwsh
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel
-          $code = $LASTEXITCODE
-          if ($code -ne 0) {
-            Write-Host "::error::swift test exited with code $code"
-            $exe = ".build\debug\swift-opencodePackageTests.xctest"
-            if (Test-Path $exe) {
-              $swiftRoot = Join-Path $env:LOCALAPPDATA "Programs\Swift"
-              if (Test-Path $swiftRoot) {
-                $dllDirs = Get-ChildItem -Path $swiftRoot -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
-                  Select-Object -ExpandProperty DirectoryName -Unique
-                if ($dllDirs) {
-                  $env:PATH = (($dllDirs -join ";") + ";" + $env:PATH)
-                }
-              }
-              Write-Host "=== Direct unfiltered .xctest probe ==="
-              $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel" -NoNewWindow -Wait -PassThru
-              Write-Host ("unfiltered .xctest exit code: {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
-            }
-            exit $code
-          }
+        run: swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel
       - name: Test Packages/OpenTUI (Swift Testing)
         if: matrix.os != 'windows-2022'
         run: ./scripts/test.sh Packages/OpenTUI
       - name: Test Packages/OpenTUI (Swift Testing, Windows)
         if: matrix.os == 'windows-2022'
-        shell: pwsh
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel -Xlinker /STACK:8388608
-          $code = $LASTEXITCODE
-          if ($code -ne 0) {
-            Write-Host "::error::OpenTUI swift test exited with code $code"
-            exit $code
-          }
+        run: swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel -Xlinker /STACK:8388608
       - name: Build opencode CLI
         if: matrix.os != 'windows-2022'
         run: swift build --product opencode

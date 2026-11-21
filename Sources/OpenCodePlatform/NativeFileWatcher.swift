@@ -1873,6 +1873,8 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
 
     private struct LifecycleState {
         var started: Bool = false
+        var armed: Bool = false
+        var armError: DWORD = 0
         var stopRequested: Bool = false
         var readerExited: Bool = false
         var stopEvent: HANDLE?
@@ -1962,6 +1964,8 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
 
         cond.lock()
         lifecycle.started = true
+        lifecycle.armed = false
+        lifecycle.armError = 0
         lifecycle.stopRequested = false
         lifecycle.readerExited = false
         lifecycle.stopEvent = stopEv
@@ -1972,6 +1976,25 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
             if let ev = HANDLE(bitPattern: stopEvBits) {
                 self.runEventLoop(stopEvent: ev)
             }
+        }
+
+        // Wait until the reader thread has issued its initial ReadDirectoryChangesW call
+        // (or exited) so file mutations performed immediately after start() returns are
+        // guaranteed to be observed by the kernel directory watch buffer.
+        cond.lock()
+        while !lifecycle.armed && !lifecycle.readerExited {
+            cond.wait()
+        }
+        let startupError = lifecycle.armError
+        let exitedEarly = lifecycle.readerExited && !lifecycle.armed
+        cond.unlock()
+
+        if exitedEarly {
+            stop()
+            throw NativeFileWatcherError.osFailure(
+                "ReadDirectoryChangesW failed for '\(requestedRoot)'",
+                errno: Int32(bitPattern: startupError)
+            )
         }
     }
 
@@ -2053,6 +2076,7 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
         }
 
         var flushDeadlineMs: UInt64?
+        var didSignalArmed = false
 
         while !isStopRequested() {
             if !ioPending {
@@ -2073,10 +2097,23 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
                 if !issued {
                     let err = GetLastError()
                     if err != DWORD(ERROR_IO_PENDING) {
+                        if !didSignalArmed {
+                            cond.lock()
+                            lifecycle.armError = err
+                            cond.broadcast()
+                            cond.unlock()
+                        }
                         break
                     }
                 }
                 ioPending = true
+                if !didSignalArmed {
+                    didSignalArmed = true
+                    cond.lock()
+                    lifecycle.armed = true
+                    cond.broadcast()
+                    cond.unlock()
+                }
             }
 
             let waitTimeout: DWORD
