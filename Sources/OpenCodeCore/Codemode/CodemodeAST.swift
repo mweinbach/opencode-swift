@@ -4612,7 +4612,7 @@ public enum CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/signals.ts#Interruption [status=implemented hash=5b7c98e8f2a2]
+    // parity: psychoscript/src/runtime/signals.ts#Interruption [status=implemented hash=7784203328d8]
     public final class Interruption: Error, Sendable {
         public let reason: String
 

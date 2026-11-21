@@ -232,8 +232,16 @@ extension CodemodeLanguage {
             w?.resume()
         }
 
-        /// Waits until some host work completes, or until `deadlineMs` (epoch milliseconds) passes.
-        public func waitForDelivery(deadlineMs: Double?) async {
+        /// Waits until some host work completes, or until `deadlineMs` (epoch milliseconds) passes, or `abortSignal` aborts.
+        public func waitForDelivery(deadlineMs: Double?, abortSignal: AbortSignal? = nil) async {
+            if abortSignal?.aborted == true { return }
+            let abortListenerId = abortSignal?.onAbort { [weak self] in
+                self?.wakeUp()
+            } ?? 0
+            defer {
+                if abortListenerId != 0 { abortSignal?.removeEventListener(abortListenerId) }
+            }
+            if abortSignal?.aborted == true { return }
             guard let deadlineMs else { return await waitForDelivery() }
             let remaining = max(0, deadlineMs - CodemodeLanguage.currentEpochMs())
             let sleeper = Task { [weak self] in
@@ -469,7 +477,9 @@ extension CodemodeLanguage.Evaluator {
         }
         switch await fiber.park(.awaiting) {
         case .outcome(.fulfilled(let v)): return v
-        case .outcome(.rejected(let r)): throw L.Throw(r)
+        case .outcome(.rejected(let r)):
+            if let raw = promise.rawRejection { throw raw }
+            throw L.Throw(r)
         case .returning(let v): throw L.ControlSignal.returnValue(v)
         case .abort: throw L.Interruption("aborted")
         }
@@ -488,11 +498,13 @@ extension CodemodeLanguage.Evaluator {
                 return v
             case .rejected(let r):
                 promise.isObserved = true
+                if let raw = promise.rawRejection { throw raw }
                 throw L.Throw(r)
             case .pending:
                 break
             }
             if scheduler.isTornDown { throw L.Interruption("aborted") }
+            try checkAborted()
             try checkDeadline()
             if let job = scheduler.dequeue() {
                 await job()
@@ -503,7 +515,7 @@ extension CodemodeLanguage.Evaluator {
                 continue
             }
             if scheduler.hasRunningHostWork {
-                await scheduler.waitForDelivery(deadlineMs: deadlineMs)
+                await scheduler.waitForDelivery(deadlineMs: deadlineMs, abortSignal: abortSignal)
                 continue
             }
             throw stuckError()
@@ -535,6 +547,7 @@ extension CodemodeLanguage.Evaluator {
         }
         do {
             while outcome.result == nil {
+                try checkAborted()
                 try checkDeadline()
                 if let job = scheduler.dequeue() {
                     await job()
@@ -545,7 +558,7 @@ extension CodemodeLanguage.Evaluator {
                     continue
                 }
                 if scheduler.hasRunningHostWork {
-                    await scheduler.waitForDelivery(deadlineMs: deadlineMs)
+                    await scheduler.waitForDelivery(deadlineMs: deadlineMs, abortSignal: abortSignal)
                     continue
                 }
                 throw stuckError()
@@ -580,9 +593,10 @@ extension CodemodeLanguage.Evaluator {
             do {
                 let result = try await body()
                 resolvePromise(promise, with: result)
-            } catch is L.Interruption {
+            } catch let intr as L.Interruption {
+                promise.reject(.undefined, rawError: intr)
             } catch {
-                promise.reject(L.materialize(builtins, error))
+                promise.reject(L.materialize(builtins, error), rawError: (error is L.HostFailure || error is L.PendingThrow) ? error : nil)
             }
         }
         return promise
