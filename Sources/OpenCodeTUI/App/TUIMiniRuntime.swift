@@ -1591,7 +1591,8 @@ public enum TUIMini {
             switch commit.phase {
             case .start: return .text(content: "$ \(shellCmd)")
             case .progress:
-                let body = stripAnsiSequences(raw).trimmingCharacters(in: CharacterSet(charactersIn: "\n"))
+                let stripped = stripAnsiSequences(raw)
+                let body = String(stripped.drop(while: { $0 == "\n" }).reversed().drop(while: { $0 == "\n" }).reversed())
                 guard !body.isEmpty else { return nil }
                 return .text(content: shellCmd.isEmpty ? body : "\n\(body)")
             case .final:

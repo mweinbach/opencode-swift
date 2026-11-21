@@ -61,7 +61,7 @@ enum TextEngineConformanceLoader {
             .deletingLastPathComponent() // Packages
             .deletingLastPathComponent() // repo root
 
-        let conformanceURL = repoRoot
+        let upstreamURL = repoRoot
             .appendingPathComponent("upstream")
             .appendingPathComponent("opentui")
             .appendingPathComponent("packages")
@@ -69,6 +69,13 @@ enum TextEngineConformanceLoader {
             .appendingPathComponent("src")
             .appendingPathComponent("renderables")
             .appendingPathComponent("input-max-length.conformance.json")
+
+        let conformanceURL = FileManager.default.fileExists(atPath: upstreamURL.path)
+            ? upstreamURL
+            : URL(fileURLWithPath: filePath)
+                .deletingLastPathComponent()
+                .appendingPathComponent("Fixtures")
+                .appendingPathComponent("input-max-length.conformance.json")
 
         let data = try Data(contentsOf: conformanceURL)
         let decoded = try JSONDecoder().decode(RawInputMaxLengthFile.self, from: data)

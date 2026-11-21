@@ -749,16 +749,31 @@ struct CoreSubsystemsTests {
         let nowMs = AtomicBox<Int64>(1_000)
         let cache = CoreKV.SharedCache.Service(clock: { nowMs.get() }, retryDelayMs: 1)
         let loadCalls = AtomicCounter()
-        async let v1 = cache.get(CoreKV.SharedCache.Input(key: "k1", intervalMs: 500) {
-            loadCalls.increment()
-            try await Task.sleep(for: .milliseconds(25))
-            return "fresh-1"
-        })
-        async let v2 = cache.get(CoreKV.SharedCache.Input(key: "k1", intervalMs: 500) {
-            loadCalls.increment()
-            return "fresh-2"
-        })
-        let (r1, r2) = try await (v1, v2)
+        let loadStarted = AtomicBox<Bool>(false)
+        let releaseFirstLoad = AtomicBox<Bool>(false)
+        let v1Task = Task {
+            try await cache.get(CoreKV.SharedCache.Input(key: "k1", intervalMs: 500) {
+                loadCalls.increment()
+                loadStarted.set(true)
+                while !releaseFirstLoad.get() {
+                    try await Task.sleep(for: .milliseconds(2))
+                }
+                return "fresh-1"
+            })
+        }
+        while !loadStarted.get() {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let v2Task = Task {
+            try await cache.get(CoreKV.SharedCache.Input(key: "k1", intervalMs: 500) {
+                loadCalls.increment()
+                return "fresh-2"
+            })
+        }
+        try await Task.sleep(for: .milliseconds(10))
+        releaseFirstLoad.set(true)
+        let r1 = try await v1Task.value
+        let r2 = try await v2Task.value
         #expect(r1 == "fresh-1")
         #expect(r2 == "fresh-1")
         #expect(loadCalls.value == 1)

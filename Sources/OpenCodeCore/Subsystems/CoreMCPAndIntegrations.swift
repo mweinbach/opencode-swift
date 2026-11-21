@@ -510,6 +510,11 @@ public enum CoreMCP {
 
                     do {
                         try process.run()
+                        #if !canImport(Darwin)
+                        try? stdinPipe.fileHandleForReading.close()
+                        try? stdoutPipe.fileHandleForWriting.close()
+                        try? stderrPipe.fileHandleForWriting.close()
+                        #endif
                     } catch {
                         state.withLock { $0.phase = "closed" }
                         try? stdinPipe.fileHandleForWriting.close()

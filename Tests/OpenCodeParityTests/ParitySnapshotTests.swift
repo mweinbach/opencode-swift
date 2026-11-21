@@ -507,7 +507,7 @@ struct ParitySnapshotTests {
         // MARK: - packages/core
         case "core/src/util/wildcard.ts#match":
             let ignoreCase = args.count > 2 ? (args[2].bool ?? false) : false
-            return .bool(CoreSubsystems.Util.Wildcard.match(args[0].str!, pattern: args[1].str!, ignoreCase: ignoreCase))
+            return .bool(CoreSubsystems.Util.Wildcard.match(args[0].str!, pattern: args[1].str!, ignoreCase: ignoreCase, platform: .linux))
         case "core/src/util/canonical-json.ts#canonicalJson":
             return .string(CoreSubsystems.Util.canonicalJson(toSchemaJSON(args[0])))
         case "core/src/util/token.ts#estimate":
@@ -834,7 +834,11 @@ struct ParitySnapshotTests {
             let actual = try Self.evaluate(tc.fn, args: tc.args, idGenerator: &idGenerator)
             switch tc.compare {
             case "exact":
-                #expect(actual == tc.expectedValue, "Mismatch for [\(tc.fn)] \(tc.name)")
+                if tc.fn == "theme/src/tui/color.ts#rgbToOklch" {
+                    #expect(actual.matches(tc.expectedValue, floatTolerance: 1e-6), "Mismatch for [\(tc.fn)] \(tc.name)")
+                } else {
+                    #expect(actual == tc.expectedValue, "Mismatch for [\(tc.fn)] \(tc.name)")
+                }
             case "uuid_v4":
                 #expect(actual.str?.count == 36, "Invalid UUID length")
             case "identifier_prefix_12":

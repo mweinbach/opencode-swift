@@ -432,10 +432,10 @@ struct TUIAttentionAudioTests {
         // Dispatch synchronously — must return immediately even while spawner is blocked!
         let handle = TUIAttention.playSound(.permission, volume: 0.5, player: player)
         let expectedPath = TUIAttention.permissionSoundPath
-        #expect(handle.outcome == .played(executable: "/usr/bin/afplay", arguments: ["-v", "0.5", expectedPath]))
+        try #require(handle.outcome == .played(executable: "/usr/bin/afplay", arguments: ["-v", "0.5", expectedPath]))
 
         // Wait until background Task enters mock spawner, then verify it has NOT completed yet.
-        await gatedSpawner.waitUntilStarted(count: 1)
+        try #require(await gatedSpawner.waitUntilStarted(count: 1))
         #expect(gatedSpawner.startedCount == 1)
         #expect(gatedSpawner.completedCount == 0)
         #expect(gatedSpawner.specs == [ProcessSpec(executable: "/usr/bin/afplay", arguments: ["-v", "0.5", expectedPath])])
@@ -456,11 +456,11 @@ struct TUIAttentionAudioTests {
             executableLookup: { $0 == "ffplay" ? "/usr/bin/ffplay" : nil }
         )
         let handle2 = TUIAttention.playSound(.subagentDone, volume: 1.0, player: cancelPlayer)
-        #expect(handle2.outcome == .played(
+        try #require(handle2.outcome == .played(
             executable: "/usr/bin/ffplay",
             arguments: ["-nodisp", "-autoexit", "-loglevel", "quiet", TUIAttention.subagentDoneSoundPath]
         ))
-        await cancelSpawner.waitUntilStarted(count: 1)
+        try #require(await cancelSpawner.waitUntilStarted(count: 1))
         cancelPlayer.cancelAll()
         _ = await handle2.waitForCompletion()
         #expect(cancelSpawner.cancelledCount == 1)
@@ -495,7 +495,7 @@ struct TUIAttentionAudioTests {
     // MARK: - 6. Focus Suppression & End-to-End createTuiAttention Wiring
 
     @Test("TUIAttention.createTuiAttention enforces focus suppression, mute, sound-kind routing, and non-blocking playback")
-    func createTuiAttentionFocusMuteAndSoundRouting() async {
+    func createTuiAttentionFocusMuteAndSoundRouting() async throws {
         let renderer = TUIAttentionAudioTestHelper.MockAttentionRenderer()
         let spawner = TUIAttentionAudioTestHelper.MockProcessSpawner(blockExecution: true)
         let player = TUIAttentionAudio.Player(
@@ -550,12 +550,12 @@ struct TUIAttentionAudioTests {
             message: "Approve shell command",
             sound: .configured(name: .permission, volume: 0.6, when: .blurred)
         ))
-        #expect(rBlurred.ok)
-        #expect(rBlurred.sound)
+        try #require(rBlurred.ok)
+        try #require(rBlurred.sound)
         #expect(rBlurred.skipped == nil)
 
         // notify() returned immediately while spawner is still blocked!
-        await spawner.waitUntilStarted(count: 1)
+        try #require(await spawner.waitUntilStarted(count: 1))
         #expect(spawner.completedCount == 0)
         #expect(spawner.specs.last == ProcessSpec(
             executable: "/usr/bin/afplay",

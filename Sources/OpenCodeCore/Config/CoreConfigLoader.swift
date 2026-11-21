@@ -1765,18 +1765,38 @@ public enum CoreConfigDiscovery {
         )
     }
 
+    private static func isWindowsDrivePath(_ path: String) -> Bool {
+        let chars = Array(path)
+        return chars.count >= 2 && chars[0].isASCII && chars[0].isLetter && chars[1] == ":"
+    }
+
     internal static func joinPath(_ a: String, _ b: String) -> String {
-        if a == "/" { return "/\(b)" }
-        if a.hasSuffix("/") { return a + b }
-        return "\(a)/\(b)"
+        let lhs = a.replacing("\\", with: "/")
+        let rhs = b.replacing("\\", with: "/")
+        if lhs == "/" { return "/\(rhs)" }
+        if lhs.hasSuffix("/") { return lhs + rhs }
+        return "\(lhs)/\(rhs)"
     }
 
     internal static func dirname(_ path: String) -> String {
         var p = path.replacing("\\", with: "/")
-        while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+        while p.count > 1 && p.hasSuffix("/") {
+            if p.count == 3 && isWindowsDrivePath(p) { break }
+            p.removeLast()
+        }
+        if p.count == 3 && isWindowsDrivePath(p) && p.hasSuffix("/") {
+            return p
+        }
+        if p.count == 2 && isWindowsDrivePath(p) {
+            return "\(p)/"
+        }
         guard let slash = p.lastIndex(of: "/") else { return "." }
         if slash == p.startIndex { return "/" }
-        return String(p[..<slash])
+        let prefix = String(p[..<slash])
+        if prefix.count == 2 && isWindowsDrivePath(prefix) {
+            return "\(prefix)/"
+        }
+        return prefix
     }
 
     internal static func basename(_ path: String) -> String {
@@ -1788,15 +1808,27 @@ public enum CoreConfigDiscovery {
 
     internal static func resolvePath(base: String, relative: String) -> String {
         let cleanRel = relative.replacing("\\", with: "/")
-        let combined = cleanRel.hasPrefix("/") ? cleanRel : joinPath(base.replacing("\\", with: "/"), cleanRel)
+        let combined = (cleanRel.hasPrefix("/") || isWindowsDrivePath(cleanRel))
+            ? cleanRel
+            : joinPath(base.replacing("\\", with: "/"), cleanRel)
+        var drivePrefix: String? = nil
+        var body = combined
+        if isWindowsDrivePath(combined) {
+            let idx = combined.index(combined.startIndex, offsetBy: 2)
+            drivePrefix = String(combined[..<idx])
+            body = String(combined[idx...])
+        }
         var parts: [String] = []
-        for seg in combined.split(separator: "/") {
+        for seg in body.split(separator: "/") {
             if seg.isEmpty || seg == "." { continue }
             if seg == ".." {
                 if !parts.isEmpty { parts.removeLast() }
             } else {
                 parts.append(String(seg))
             }
+        }
+        if let drivePrefix {
+            return parts.isEmpty ? "\(drivePrefix)/" : "\(drivePrefix)/\(parts.joined(separator: "/"))"
         }
         return "/" + parts.joined(separator: "/")
     }
@@ -2513,10 +2545,13 @@ public enum CoreConfig {
                 environment: environment,
                 log: log
             )
-            state.withLock { s in
+            let stillOpen: Bool = state.withLock { s in
+                guard !s.closed else { return false }
                 s.isInput = next.isInput
                 s.reloadCount += 1
+                return true
             }
+            guard stillOpen else { return }
             await reconcileWatchesLocked(discovered)
 
             let changed: Bool = state.withLock { s in

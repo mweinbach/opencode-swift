@@ -338,7 +338,8 @@ struct TUIPlatformAndModelTests {
             app: TUIContext.TuiApp(name: "opencode", version: "2.0.0", channel: "dev"),
             server: TUIApp.ServerEndpointConfig(baseUrl: "http://127.0.0.1:4096"),
             args: TUIContext.Args(sessionID: "ses_123"),
-            config: cfgService
+            config: cfgService,
+            interactive: false
         ))
         #expect(result.resolvedConfig.mouse == false)
         #expect(result.initialRoute == .session(TUIContext.SessionRoute(sessionID: "ses_123")))

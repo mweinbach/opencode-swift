@@ -103,7 +103,7 @@ public final class ClipboardSyncMutex: @unchecked Sendable {
         #if os(macOS) || ((os(Linux) || os(FreeBSD)) && (canImport(Glibc) || canImport(Musl))) || (os(Android) && canImport(Android))
         return pthread_mutex_trylock(rawMutex) == 0
         #elseif os(Windows)
-        return TryEnterCriticalSection(rawCS) != 0
+        return TryEnterCriticalSection(rawCS)
         #else
         return lockedFlag.withLock { isLocked in
             if isLocked { return false }
@@ -888,8 +888,8 @@ public enum PosixClipboardIO {
                         cPath,
                         &actions,
                         nil,
-                        argvBuf.baseAddress,
-                        envpBuf.baseAddress
+                        argvBuf.baseAddress!,
+                        envpBuf.baseAddress!
                     )
                 }
             }

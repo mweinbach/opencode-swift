@@ -272,8 +272,11 @@ enum CLIFullParityFixtures {
         let pureIsigOff = (rawCopy.c_lflag & tcflag_t(ISIG)) == 0
 
         // 2. Real POSIX PTY pair for live tcgetattr/tcsetattr + defer restore + readPOSIXPassword
-        let masterFD = posix_openpt(O_RDWR | O_NOCTTY)
-        guard masterFD >= 0 else {
+        let masterFD: Int32
+        let slaveFD: Int32
+        #if canImport(Darwin)
+        let openedMaster = posix_openpt(O_RDWR | O_NOCTTY)
+        guard openedMaster >= 0 else {
             return POSIXTermiosCheckResult(
                 supported: false,
                 hadEchoBefore: true,
@@ -290,42 +293,69 @@ enum CLIFullParityFixtures {
                 echoRestoredAfterCancel: false
             )
         }
+        guard grantpt(openedMaster) == 0, unlockpt(openedMaster) == 0, let slaveNamePtr = ptsname(openedMaster) else {
+            _ = close(openedMaster)
+            return POSIXTermiosCheckResult(
+                supported: false,
+                hadEchoBefore: true,
+                echoDisabledInside: pureEchoOff,
+                canonicalDisabledInside: pureCanonOff,
+                isigDisabledInside: pureIsigOff,
+                restoredAfterNormalReturn: false,
+                restoredAfterThrow: false,
+                maskedPasswordResult: "",
+                maskedPasswordStderr: "",
+                echoRestoredAfterPassword: false,
+                cancelledOnCtrlC: false,
+                cancelledStderrHasNewline: false,
+                echoRestoredAfterCancel: false
+            )
+        }
+        let openedSlave = open(slaveNamePtr, O_RDWR | O_NOCTTY)
+        guard openedSlave >= 0 else {
+            _ = close(openedMaster)
+            return POSIXTermiosCheckResult(
+                supported: false,
+                hadEchoBefore: true,
+                echoDisabledInside: pureEchoOff,
+                canonicalDisabledInside: pureCanonOff,
+                isigDisabledInside: pureIsigOff,
+                restoredAfterNormalReturn: false,
+                restoredAfterThrow: false,
+                maskedPasswordResult: "",
+                maskedPasswordStderr: "",
+                echoRestoredAfterPassword: false,
+                cancelledOnCtrlC: false,
+                cancelledStderrHasNewline: false,
+                echoRestoredAfterCancel: false
+            )
+        }
+        masterFD = openedMaster
+        slaveFD = openedSlave
+        #else
+        var openedMaster: Int32 = -1
+        var openedSlave: Int32 = -1
+        guard openpty(&openedMaster, &openedSlave, nil, nil, nil) == 0 else {
+            return POSIXTermiosCheckResult(
+                supported: false,
+                hadEchoBefore: true,
+                echoDisabledInside: pureEchoOff,
+                canonicalDisabledInside: pureCanonOff,
+                isigDisabledInside: pureIsigOff,
+                restoredAfterNormalReturn: false,
+                restoredAfterThrow: false,
+                maskedPasswordResult: "",
+                maskedPasswordStderr: "",
+                echoRestoredAfterPassword: false,
+                cancelledOnCtrlC: false,
+                cancelledStderrHasNewline: false,
+                echoRestoredAfterCancel: false
+            )
+        }
+        masterFD = openedMaster
+        slaveFD = openedSlave
+        #endif
         defer { close(masterFD) }
-        guard grantpt(masterFD) == 0, unlockpt(masterFD) == 0, let slaveNamePtr = ptsname(masterFD) else {
-            return POSIXTermiosCheckResult(
-                supported: false,
-                hadEchoBefore: true,
-                echoDisabledInside: pureEchoOff,
-                canonicalDisabledInside: pureCanonOff,
-                isigDisabledInside: pureIsigOff,
-                restoredAfterNormalReturn: false,
-                restoredAfterThrow: false,
-                maskedPasswordResult: "",
-                maskedPasswordStderr: "",
-                echoRestoredAfterPassword: false,
-                cancelledOnCtrlC: false,
-                cancelledStderrHasNewline: false,
-                echoRestoredAfterCancel: false
-            )
-        }
-        let slaveFD = open(slaveNamePtr, O_RDWR | O_NOCTTY)
-        guard slaveFD >= 0 else {
-            return POSIXTermiosCheckResult(
-                supported: false,
-                hadEchoBefore: true,
-                echoDisabledInside: pureEchoOff,
-                canonicalDisabledInside: pureCanonOff,
-                isigDisabledInside: pureIsigOff,
-                restoredAfterNormalReturn: false,
-                restoredAfterThrow: false,
-                maskedPasswordResult: "",
-                maskedPasswordStderr: "",
-                echoRestoredAfterPassword: false,
-                cancelledOnCtrlC: false,
-                cancelledStderrHasNewline: false,
-                echoRestoredAfterCancel: false
-            )
-        }
         defer { close(slaveFD) }
 
         var initialTerm = termios()

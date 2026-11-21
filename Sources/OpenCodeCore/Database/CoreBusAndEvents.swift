@@ -1169,8 +1169,20 @@ public enum CoreBus {
                     continue
                 }
                 if let targetLoc = sub.location {
+                    let canonTarget = CoreLocation.ServiceMap.canonical(LocationSchema.Ref(
+                        directory: SchemaPrimitive.AbsolutePath(rawValue: targetLoc.directory),
+                        workspaceID: targetLoc.workspaceID
+                    ))
                     let matches: (OpenCodeLocation) -> Bool = { ref in
-                        ref.directory == targetLoc.directory && ref.workspaceID == targetLoc.workspaceID
+                        if ref.directory == targetLoc.directory && ref.workspaceID == targetLoc.workspaceID {
+                            return true
+                        }
+                        guard ref.workspaceID == targetLoc.workspaceID else { return false }
+                        let canonRef = CoreLocation.ServiceMap.canonical(LocationSchema.Ref(
+                            directory: SchemaPrimitive.AbsolutePath(rawValue: ref.directory),
+                            workspaceID: ref.workspaceID
+                        ))
+                        return canonRef.directory == canonTarget.directory
                     }
                     if let routes {
                         if !routes.contains(where: matches) { continue }

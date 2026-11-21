@@ -489,6 +489,7 @@ struct TUIRenderablesAndMiniMethodsTests {
     @Test("RunScrollbackStream, RunFooter, and Mini shared re-exports work end-to-end")
     func miniScrollbackFooterAndReexports() async {
         let tr = createTestRenderer(width: 80, height: 24)
+        defer { tr.destroy() }
         let sb = TUIMini.RunScrollbackStream(renderer: tr.renderer)
         sb.setMono(true)
         sb.setTheme(TUIMini.RUN_THEME_FALLBACK)

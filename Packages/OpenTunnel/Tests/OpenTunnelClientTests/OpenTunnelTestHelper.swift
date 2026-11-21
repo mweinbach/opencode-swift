@@ -232,9 +232,13 @@ final class MockOpenTunnelTransport: OpenTunnelTransport, Sendable {
 
 #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
 final class LoopbackTestTCPServer: Sendable {
+    private final class StopFlag: Sendable {
+        let value = Mutex(false)
+    }
+
     let port: Int
     private let listenFD: Mutex<Int32?>
-    private let acceptTask: Mutex<Task<Void, Never>?> = Mutex(nil)
+    private let stopFlag = StopFlag()
 
     init(handler: @escaping @Sendable (Int32) -> Void) throws {
         #if canImport(Darwin)
@@ -285,11 +289,13 @@ final class LoopbackTestTCPServer: Sendable {
         self.port = Int(UInt16(bigEndian: boundAddr.sin_port))
         self.listenFD = Mutex(fd)
 
-        let task = Task.detached {
-            while !Task.isCancelled {
+        let stopFlag = self.stopFlag
+        Thread.detachNewThread {
+            while !stopFlag.value.withLock({ $0 }) {
                 var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
                 let ready = poll(&pfd, 1, 50)
                 if ready <= 0 { continue }
+                if (pfd.revents & Int16(POLLNVAL)) != 0 { break }
                 var clientAddr = sockaddr_in()
                 var clientLen = socklen_t(MemoryLayout<sockaddr_in>.size)
                 let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
@@ -302,23 +308,17 @@ final class LoopbackTestTCPServer: Sendable {
                     var one: Int32 = 1
                     _ = setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
                     #endif
-                    Task.detached {
+                    Thread.detachNewThread {
                         handler(clientFD)
                         Self.closeFD(clientFD)
                     }
                 }
             }
         }
-        self.acceptTask.withLock { $0 = task }
     }
 
     func stop() {
-        let task = acceptTask.withLock { t -> Task<Void, Never>? in
-            let prev = t
-            t = nil
-            return prev
-        }
-        task?.cancel()
+        stopFlag.value.withLock { $0 = true }
         if let fd = listenFD.withLock({ f -> Int32? in
             let prev = f
             f = nil

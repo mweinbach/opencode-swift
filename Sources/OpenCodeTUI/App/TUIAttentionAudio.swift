@@ -486,8 +486,21 @@ public enum TUIAttentionAudio {
         let isWindows = os == .windows
         return { candidate in
             guard !candidate.isEmpty else { return nil }
+            let isExistingExecutable: (String) -> Bool = { path in
+                #if canImport(Foundation)
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else {
+                    return false
+                }
+                #else
+                guard FileManager.default.fileExists(atPath: path) else {
+                    return false
+                }
+                #endif
+                return FileManager.default.isExecutableFile(atPath: path)
+            }
             if candidate.contains("/") || candidate.contains("\\") {
-                return FileManager.default.isExecutableFile(atPath: candidate) ? candidate : nil
+                return isExistingExecutable(candidate) ? candidate : nil
             }
             let names: [String]
             if isWindows && !candidate.lowercased().hasSuffix(".exe") {
@@ -500,7 +513,7 @@ public enum TUIAttentionAudio {
                 let prefix = dir.hasSuffix("/") || dir.hasSuffix("\\") ? dir : "\(dir)\(sep)"
                 for name in names {
                     let full = "\(prefix)\(name)"
-                    if FileManager.default.isExecutableFile(atPath: full) {
+                    if isExistingExecutable(full) {
                         return full
                     }
                 }

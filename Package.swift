@@ -61,7 +61,8 @@ let package = Package(
         // MARK: - Cross-Platform OS Abstraction Layer
         .target(
             name: "OpenCodePlatform",
-            dependencies: ["OpenCodeUtil"]
+            dependencies: ["OpenCodeUtil"],
+            linkerSettings: [.linkedLibrary("Ws2_32", .when(platforms: [.windows]))]
         ),
 
         // MARK: - Tier 2: Client, AI Providers & Core Agent Runtime
@@ -86,7 +87,8 @@ let package = Package(
         // MARK: - Tier 3: Server, SDK, TUI & CLI Surfaces
         .target(
             name: "OpenCodeServer",
-            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeProtocol", "OpenCodeCore", "OpenCodePlatform"]
+            dependencies: ["OpenCodeUtil", "OpenCodeSchema", "OpenCodeProtocol", "OpenCodeCore", "OpenCodePlatform"],
+            linkerSettings: [.linkedLibrary("Ws2_32", .when(platforms: [.windows]))]
         ),
         .target(
             name: "OpenCodeSDK",
@@ -234,7 +236,8 @@ let package = Package(
         ),
         .testTarget(
             name: "OpenCodeCoreTests",
-            dependencies: ["OpenCodeCore", "OpenCodeAI", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"]
+            dependencies: ["OpenCodeCore", "OpenCodeAI", "OpenCodeSchema", "OpenCodePlatform", "OpenCodeUtil"],
+            linkerSettings: [.linkedLibrary("Ws2_32", .when(platforms: [.windows]))]
         ),
         .testTarget(
             name: "OpenCodeServerTests",
@@ -277,7 +280,8 @@ let package = Package(
                 "OpenCodeUtil",
                 .product(name: "OpenTUICore", package: "OpenTUI"),
                 .product(name: "OpenTUIRenderables", package: "OpenTUI"),
-            ]
+            ],
+            linkerSettings: [.linkedLibrary("Ws2_32", .when(platforms: [.windows]))]
         ),
         .testTarget(
             name: "OpenCodeGUIPluginsTests",

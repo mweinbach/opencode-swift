@@ -1,7 +1,7 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+#if canImport(Foundation)
 import Foundation
+#elseif canImport(FoundationEssentials)
+import FoundationEssentials
 #endif
 import Synchronization
 import OpenCodeAI
@@ -406,6 +406,16 @@ public enum CoreSubsystems {
             guard !cmd.isEmpty else { return nil }
             let checkExec: (String) -> Bool = isExecutable ?? { path in
                 #if !os(WASI)
+                #if canImport(Foundation)
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else {
+                    return false
+                }
+                #else
+                guard FileManager.default.fileExists(atPath: path) else {
+                    return false
+                }
+                #endif
                 return FileManager.default.isExecutableFile(atPath: path)
                 #else
                 return false

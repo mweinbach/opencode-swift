@@ -3,6 +3,12 @@ import Foundation
 #endif
 #if canImport(SQLite3)
 import SQLite3
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif os(Windows)
+import WinSDK
 #endif
 import Synchronization
 
@@ -397,6 +403,11 @@ public enum SQLiteDatabaseFactory {
     ) throws -> any SQLiteDatabase {
         #if canImport(SQLite3)
         return try NativeSQLiteDatabase(path: path, options: options)
+        #elseif canImport(Glibc) || canImport(Musl) || os(Windows)
+        if SQLite3Runtime.isAvailable {
+            return try NativeSQLiteDatabase(path: path, options: options)
+        }
+        return try InMemorySQLiteFallback(path: path, options: options)
         #else
         return try InMemorySQLiteFallback(path: path, options: options)
         #endif
@@ -406,12 +417,29 @@ public enum SQLiteDatabaseFactory {
 // MARK: - Cross-Platform Reentrant Lock
 
 private final class ReentrantDatabaseLock: @unchecked Sendable {
-    #if !os(WASI)
+    #if os(Windows)
+    private let cs: UnsafeMutablePointer<CRITICAL_SECTION>
+
+    init() {
+        cs = UnsafeMutablePointer<CRITICAL_SECTION>.allocate(capacity: 1)
+        cs.initialize(to: CRITICAL_SECTION())
+        InitializeCriticalSection(cs)
+    }
+
+    deinit {
+        DeleteCriticalSection(cs)
+        cs.deinitialize(count: 1)
+        cs.deallocate()
+    }
+    #elseif !os(WASI)
     private let lock = NSRecursiveLock()
     #endif
 
     func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        #if !os(WASI)
+        #if os(Windows)
+        EnterCriticalSection(cs)
+        defer { LeaveCriticalSection(cs) }
+        #elseif !os(WASI)
         lock.lock()
         defer { lock.unlock() }
         #endif
@@ -433,8 +461,149 @@ private func validateSavepointName(_ name: String) throws {
 
 // MARK: - Native C SQLite3 Engine
 
-#if canImport(SQLite3)
+#if canImport(SQLite3) || canImport(Glibc) || canImport(Musl) || os(Windows)
+
+#if !canImport(SQLite3)
+private enum SQLite3Runtime {
+    typealias DestructorFn = @convention(c) (UnsafeMutableRawPointer?) -> Void
+
+    struct Symbols: Sendable {
+        let openV2: @convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<OpaquePointer?>?, Int32, UnsafePointer<CChar>?) -> Int32
+        let closeV2: @convention(c) (OpaquePointer?) -> Int32
+        let errmsg: @convention(c) (OpaquePointer?) -> UnsafePointer<CChar>?
+        let busyTimeout: @convention(c) (OpaquePointer?, Int32) -> Int32
+        let prepareV2: @convention(c) (OpaquePointer?, UnsafePointer<CChar>?, Int32, UnsafeMutablePointer<OpaquePointer?>?, UnsafeMutablePointer<UnsafePointer<CChar>?>?) -> Int32
+        let finalize: @convention(c) (OpaquePointer?) -> Int32
+        let step: @convention(c) (OpaquePointer?) -> Int32
+        let changes: @convention(c) (OpaquePointer?) -> Int32
+        let lastInsertRowid: @convention(c) (OpaquePointer?) -> Int64
+        let columnCount: @convention(c) (OpaquePointer?) -> Int32
+        let columnName: @convention(c) (OpaquePointer?, Int32) -> UnsafePointer<CChar>?
+        let columnType: @convention(c) (OpaquePointer?, Int32) -> Int32
+        let columnInt64: @convention(c) (OpaquePointer?, Int32) -> Int64
+        let columnDouble: @convention(c) (OpaquePointer?, Int32) -> Double
+        let columnBytes: @convention(c) (OpaquePointer?, Int32) -> Int32
+        let columnText: @convention(c) (OpaquePointer?, Int32) -> UnsafePointer<UInt8>?
+        let columnBlob: @convention(c) (OpaquePointer?, Int32) -> UnsafeRawPointer?
+        let bindParameterCount: @convention(c) (OpaquePointer?) -> Int32
+        let bindNull: @convention(c) (OpaquePointer?, Int32) -> Int32
+        let bindInt64: @convention(c) (OpaquePointer?, Int32, Int64) -> Int32
+        let bindDouble: @convention(c) (OpaquePointer?, Int32, Double) -> Int32
+        let bindText: @convention(c) (OpaquePointer?, Int32, UnsafePointer<CChar>?, Int32, DestructorFn?) -> Int32
+        let bindBlob: @convention(c) (OpaquePointer?, Int32, UnsafeRawPointer?, Int32, DestructorFn?) -> Int32
+        let bindZeroblob: @convention(c) (OpaquePointer?, Int32, Int32) -> Int32
+    }
+
+    static let SQLITE_OK: Int32 = 0
+    static let SQLITE_CONSTRAINT: Int32 = 19
+    static let SQLITE_ROW: Int32 = 100
+    static let SQLITE_DONE: Int32 = 101
+    static let SQLITE_OPEN_READONLY: Int32 = 0x0000_0001
+    static let SQLITE_OPEN_READWRITE: Int32 = 0x0000_0002
+    static let SQLITE_OPEN_CREATE: Int32 = 0x0000_0004
+    static let SQLITE_OPEN_FULLMUTEX: Int32 = 0x0001_0000
+    static let SQLITE_INTEGER: Int32 = 1
+    static let SQLITE_FLOAT: Int32 = 2
+    static let SQLITE_TEXT: Int32 = 3
+    static let SQLITE_BLOB: Int32 = 4
+    static let SQLITE_NULL: Int32 = 5
+
+    static let transientDestructor: DestructorFn? = unsafeBitCast(Int(-1), to: DestructorFn?.self)
+    static let symbols: Symbols? = loadSymbols()
+    static var isAvailable: Bool { symbols != nil }
+
+    private static func loadSymbols() -> Symbols? {
+        #if canImport(Glibc) || canImport(Musl)
+        let candidates = ["libsqlite3.so.0", "libsqlite3.so"]
+        var handle: UnsafeMutableRawPointer?
+        for name in candidates {
+            if let loaded = dlopen(name, RTLD_LAZY | RTLD_LOCAL) {
+                handle = loaded
+                break
+            }
+        }
+        guard let lib = handle else { return nil }
+        func resolve<T>(_ name: String, as type: T.Type) -> T? {
+            guard let ptr = dlsym(lib, name) else { return nil }
+            return unsafeBitCast(ptr, to: type)
+        }
+        #elseif os(Windows)
+        let candidates = ["sqlite3.dll", "winsqlite3.dll"]
+        var module: HMODULE?
+        for name in candidates {
+            let wide = Array(name.utf16) + [0]
+            if let loaded = wide.withUnsafeBufferPointer({ LoadLibraryW($0.baseAddress) }) {
+                module = loaded
+                break
+            }
+        }
+        guard let lib = module else { return nil }
+        func resolve<T>(_ name: String, as type: T.Type) -> T? {
+            guard let ptr = GetProcAddress(lib, name) else { return nil }
+            return unsafeBitCast(ptr, to: type)
+        }
+        #endif
+
+        guard
+            let openV2 = resolve("sqlite3_open_v2", as: (@convention(c) (UnsafePointer<CChar>?, UnsafeMutablePointer<OpaquePointer?>?, Int32, UnsafePointer<CChar>?) -> Int32).self),
+            let closeV2 = resolve("sqlite3_close_v2", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let errmsg = resolve("sqlite3_errmsg", as: (@convention(c) (OpaquePointer?) -> UnsafePointer<CChar>?).self),
+            let busyTimeout = resolve("sqlite3_busy_timeout", as: (@convention(c) (OpaquePointer?, Int32) -> Int32).self),
+            let prepareV2 = resolve("sqlite3_prepare_v2", as: (@convention(c) (OpaquePointer?, UnsafePointer<CChar>?, Int32, UnsafeMutablePointer<OpaquePointer?>?, UnsafeMutablePointer<UnsafePointer<CChar>?>?) -> Int32).self),
+            let finalize = resolve("sqlite3_finalize", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let step = resolve("sqlite3_step", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let changes = resolve("sqlite3_changes", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let lastInsertRowid = resolve("sqlite3_last_insert_rowid", as: (@convention(c) (OpaquePointer?) -> Int64).self),
+            let columnCount = resolve("sqlite3_column_count", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let columnName = resolve("sqlite3_column_name", as: (@convention(c) (OpaquePointer?, Int32) -> UnsafePointer<CChar>?).self),
+            let columnType = resolve("sqlite3_column_type", as: (@convention(c) (OpaquePointer?, Int32) -> Int32).self),
+            let columnInt64 = resolve("sqlite3_column_int64", as: (@convention(c) (OpaquePointer?, Int32) -> Int64).self),
+            let columnDouble = resolve("sqlite3_column_double", as: (@convention(c) (OpaquePointer?, Int32) -> Double).self),
+            let columnBytes = resolve("sqlite3_column_bytes", as: (@convention(c) (OpaquePointer?, Int32) -> Int32).self),
+            let columnText = resolve("sqlite3_column_text", as: (@convention(c) (OpaquePointer?, Int32) -> UnsafePointer<UInt8>?).self),
+            let columnBlob = resolve("sqlite3_column_blob", as: (@convention(c) (OpaquePointer?, Int32) -> UnsafeRawPointer?).self),
+            let bindParameterCount = resolve("sqlite3_bind_parameter_count", as: (@convention(c) (OpaquePointer?) -> Int32).self),
+            let bindNull = resolve("sqlite3_bind_null", as: (@convention(c) (OpaquePointer?, Int32) -> Int32).self),
+            let bindInt64 = resolve("sqlite3_bind_int64", as: (@convention(c) (OpaquePointer?, Int32, Int64) -> Int32).self),
+            let bindDouble = resolve("sqlite3_bind_double", as: (@convention(c) (OpaquePointer?, Int32, Double) -> Int32).self),
+            let bindText = resolve("sqlite3_bind_text", as: (@convention(c) (OpaquePointer?, Int32, UnsafePointer<CChar>?, Int32, DestructorFn?) -> Int32).self),
+            let bindBlob = resolve("sqlite3_bind_blob", as: (@convention(c) (OpaquePointer?, Int32, UnsafeRawPointer?, Int32, DestructorFn?) -> Int32).self),
+            let bindZeroblob = resolve("sqlite3_bind_zeroblob", as: (@convention(c) (OpaquePointer?, Int32, Int32) -> Int32).self)
+        else {
+            return nil
+        }
+
+        return Symbols(
+            openV2: openV2,
+            closeV2: closeV2,
+            errmsg: errmsg,
+            busyTimeout: busyTimeout,
+            prepareV2: prepareV2,
+            finalize: finalize,
+            step: step,
+            changes: changes,
+            lastInsertRowid: lastInsertRowid,
+            columnCount: columnCount,
+            columnName: columnName,
+            columnType: columnType,
+            columnInt64: columnInt64,
+            columnDouble: columnDouble,
+            columnBytes: columnBytes,
+            columnText: columnText,
+            columnBlob: columnBlob,
+            bindParameterCount: bindParameterCount,
+            bindNull: bindNull,
+            bindInt64: bindInt64,
+            bindDouble: bindDouble,
+            bindText: bindText,
+            bindBlob: bindBlob,
+            bindZeroblob: bindZeroblob
+        )
+    }
+}
+#else
 private let sqliteTransientDestructor = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+#endif
 
 /// Real C SQLite3 database engine with WAL mode, foreign keys, busy timeout,
 /// prepared statement bindings (null/int64/double/text/blob), nested transactions,
@@ -446,11 +615,15 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
     private let lock = ReentrantDatabaseLock()
     private var db: OpaquePointer?
     private var transactionDepth: Int = 0
+    #if !canImport(SQLite3)
+    private let api: SQLite3Runtime.Symbols
+    #endif
 
     public init(path: String = ":memory:", options: SQLiteOpenOptions = SQLiteOpenOptions()) throws {
         self.path = path
         self.options = options
 
+        #if canImport(SQLite3)
         var flags: Int32 = SQLITE_OPEN_FULLMUTEX
         if options.readOnly {
             flags |= SQLITE_OPEN_READONLY
@@ -470,11 +643,43 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
             }
             throw SQLiteError.openFailed(path: path, code: rc, message: message)
         }
+        #else
+        guard let api = SQLite3Runtime.symbols else {
+            throw SQLiteError.openFailed(path: path, code: -1, message: "Native SQLite3 shared library not available")
+        }
+        self.api = api
+
+        var flags: Int32 = SQLite3Runtime.SQLITE_OPEN_FULLMUTEX
+        if options.readOnly {
+            flags |= SQLite3Runtime.SQLITE_OPEN_READONLY
+        } else {
+            flags |= SQLite3Runtime.SQLITE_OPEN_READWRITE
+            if options.createIfMissing {
+                flags |= SQLite3Runtime.SQLITE_OPEN_CREATE
+            }
+        }
+
+        var rawHandle: OpaquePointer?
+        let rc = path.withCString { cPath in
+            api.openV2(cPath, &rawHandle, flags, nil)
+        }
+        guard rc == SQLite3Runtime.SQLITE_OK, let handle = rawHandle else {
+            let message = rawHandle.flatMap { api.errmsg($0).map { String(cString: $0) } } ?? "sqlite3_open_v2 failed"
+            if let rawHandle {
+                _ = api.closeV2(rawHandle)
+            }
+            throw SQLiteError.openFailed(path: path, code: rc, message: message)
+        }
+        #endif
 
         self.db = handle
 
         do {
+            #if canImport(SQLite3)
             sqlite3_busy_timeout(handle, options.busyTimeoutMs)
+            #else
+            _ = api.busyTimeout(handle, options.busyTimeoutMs)
+            #endif
             _ = try execute("PRAGMA foreign_keys = \(options.foreignKeys ? "ON" : "OFF")")
             if !options.readOnly {
                 if path != ":memory:" && !path.isEmpty {
@@ -483,7 +688,11 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
                 _ = try execute("PRAGMA synchronous = \(options.synchronous)")
             }
         } catch {
+            #if canImport(SQLite3)
             sqlite3_close_v2(handle)
+            #else
+            _ = api.closeV2(handle)
+            #endif
             self.db = nil
             throw error
         }
@@ -491,7 +700,11 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
 
     deinit {
         if let handle = db {
+            #if canImport(SQLite3)
             sqlite3_close_v2(handle)
+            #else
+            _ = api.closeV2(handle)
+            #endif
             db = nil
         }
     }
@@ -499,9 +712,15 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
     public func close() throws {
         try lock.withLock {
             guard let handle = db else { return }
+            #if canImport(SQLite3)
             let rc = sqlite3_close_v2(handle)
+            let ok = SQLITE_OK
+            #else
+            let rc = api.closeV2(handle)
+            let ok = SQLite3Runtime.SQLITE_OK
+            #endif
             db = nil
-            if rc != SQLITE_OK {
+            if rc != ok {
                 throw SQLiteError.executionFailed(
                     sql: "CLOSE",
                     code: rc,
@@ -521,23 +740,38 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
         try lock.withLock {
             let handle = try requireOpenHandle()
             let stmt = try prepare(handle: handle, sql: sql)
-            defer { sqlite3_finalize(stmt) }
+            defer { finalizeStatement(stmt) }
             try bind(parameters: parameters, to: stmt, handle: handle)
 
+            #if canImport(SQLite3)
+            let doneCode = SQLITE_DONE
+            let rowCode = SQLITE_ROW
+            #else
+            let doneCode = SQLite3Runtime.SQLITE_DONE
+            let rowCode = SQLite3Runtime.SQLITE_ROW
+            #endif
+
             while true {
-                let rc = sqlite3_step(stmt)
-                if rc == SQLITE_DONE {
+                let rc = stepStatement(stmt)
+                if rc == doneCode {
                     break
-                } else if rc == SQLITE_ROW {
+                } else if rc == rowCode {
                     continue
                 } else {
                     throw mapStepError(code: rc, sql: sql, handle: handle)
                 }
             }
+            #if canImport(SQLite3)
             return SQLiteExecuteResult(
                 rowsAffected: Int(sqlite3_changes(handle)),
                 lastInsertRowID: sqlite3_last_insert_rowid(handle)
             )
+            #else
+            return SQLiteExecuteResult(
+                rowsAffected: Int(api.changes(handle)),
+                lastInsertRowID: api.lastInsertRowid(handle)
+            )
+            #endif
         }
     }
 
@@ -546,6 +780,15 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
             let handle = try requireOpenHandle()
             let utf8 = Array(sql.utf8)
             var offset = 0
+            #if canImport(SQLite3)
+            let okCode = SQLITE_OK
+            let doneCode = SQLITE_DONE
+            let rowCode = SQLITE_ROW
+            #else
+            let okCode = SQLite3Runtime.SQLITE_OK
+            let doneCode = SQLite3Runtime.SQLITE_DONE
+            let rowCode = SQLite3Runtime.SQLITE_ROW
+            #endif
             try utf8.withUnsafeBufferPointer { buffer in
                 guard let base = buffer.baseAddress else { return }
                 while offset < utf8.count {
@@ -553,18 +796,22 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
                     var tail: UnsafePointer<CChar>?
                     let remaining = Int32(utf8.count - offset)
                     let startPtr = UnsafeRawPointer(base.advanced(by: offset)).assumingMemoryBound(to: CChar.self)
+                    #if canImport(SQLite3)
                     let prepRC = sqlite3_prepare_v2(handle, startPtr, remaining, &stmt, &tail)
-                    if prepRC != SQLITE_OK {
+                    #else
+                    let prepRC = api.prepareV2(handle, startPtr, remaining, &stmt, &tail)
+                    #endif
+                    if prepRC != okCode {
                         let msg = lastErrorMessage(handle)
                         throw SQLiteError.prepareFailed(sql: sql, code: prepRC, message: msg)
                     }
                     if let stmt {
-                        defer { sqlite3_finalize(stmt) }
+                        defer { finalizeStatement(stmt) }
                         while true {
-                            let stepRC = sqlite3_step(stmt)
-                            if stepRC == SQLITE_DONE {
+                            let stepRC = stepStatement(stmt)
+                            if stepRC == doneCode {
                                 break
-                            } else if stepRC == SQLITE_ROW {
+                            } else if stepRC == rowCode {
                                 continue
                             } else {
                                 throw mapStepError(code: stepRC, sql: sql, handle: handle)
@@ -591,15 +838,34 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
         try lock.withLock {
             let handle = try requireOpenHandle()
             let stmt = try prepare(handle: handle, sql: sql)
-            defer { sqlite3_finalize(stmt) }
+            defer { finalizeStatement(stmt) }
             try bind(parameters: parameters, to: stmt, handle: handle)
 
+            #if canImport(SQLite3)
             let columnCount = Int(sqlite3_column_count(stmt))
+            let rowCode = SQLITE_ROW
+            let doneCode = SQLITE_DONE
+            #else
+            let columnCount = Int(api.columnCount(stmt))
+            let rowCode = SQLite3Runtime.SQLITE_ROW
+            let doneCode = SQLite3Runtime.SQLITE_DONE
+            #endif
             var columns: [String] = []
             columns.reserveCapacity(columnCount)
             for idx in 0..<columnCount {
-                if let cName = sqlite3_column_name(stmt, Int32(idx)) {
-                    columns.append(String(cString: cName))
+                #if canImport(SQLite3)
+                let cName = sqlite3_column_name(stmt, Int32(idx))
+                #else
+                let cName = api.columnName(stmt, Int32(idx))
+                #endif
+                if let cName {
+                    var name = String(cString: cName)
+                    // SQLite 3.51+ preserves backtick delimiters in `RETURNING `col`` column names
+                    // when no explicit `AS` alias is given; strip matching outer backticks.
+                    if name.count >= 2 && name.first == "`" && name.last == "`" {
+                        name = String(name.dropFirst().dropLast())
+                    }
+                    columns.append(name)
                 } else {
                     columns.append("col\(idx)")
                 }
@@ -607,15 +873,15 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
 
             var rows: [SQLiteRow] = []
             while true {
-                let rc = sqlite3_step(stmt)
-                if rc == SQLITE_ROW {
+                let rc = stepStatement(stmt)
+                if rc == rowCode {
                     var values: [SQLiteValue] = []
                     values.reserveCapacity(columnCount)
                     for idx in 0..<columnCount {
                         values.append(readColumn(stmt: stmt, index: Int32(idx)))
                     }
                     rows.append(SQLiteRow(columns: columns, values: values))
-                } else if rc == SQLITE_DONE {
+                } else if rc == doneCode {
                     break
                 } else {
                     throw mapStepError(code: rc, sql: sql, handle: handle)
@@ -681,17 +947,47 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
         return handle
     }
 
+    private func finalizeStatement(_ stmt: OpaquePointer) {
+        #if canImport(SQLite3)
+        sqlite3_finalize(stmt)
+        #else
+        _ = api.finalize(stmt)
+        #endif
+    }
+
+    private func stepStatement(_ stmt: OpaquePointer) -> Int32 {
+        #if canImport(SQLite3)
+        sqlite3_step(stmt)
+        #else
+        api.step(stmt)
+        #endif
+    }
+
     private func prepare(handle: OpaquePointer, sql: String) throws -> OpaquePointer {
         var stmt: OpaquePointer?
+        #if canImport(SQLite3)
         let rc = sqlite3_prepare_v2(handle, sql, -1, &stmt, nil)
-        guard rc == SQLITE_OK, let prepared = stmt else {
+        let okCode = SQLITE_OK
+        #else
+        let rc = sql.withCString { cSql in
+            api.prepareV2(handle, cSql, -1, &stmt, nil)
+        }
+        let okCode = SQLite3Runtime.SQLITE_OK
+        #endif
+        guard rc == okCode, let prepared = stmt else {
             throw SQLiteError.prepareFailed(sql: sql, code: rc, message: lastErrorMessage(handle))
         }
         return prepared
     }
 
     private func bind(parameters: [SQLiteValue], to stmt: OpaquePointer, handle: OpaquePointer) throws {
+        #if canImport(SQLite3)
         let expected = Int(sqlite3_bind_parameter_count(stmt))
+        let okCode = SQLITE_OK
+        #else
+        let expected = Int(api.bindParameterCount(stmt))
+        let okCode = SQLite3Runtime.SQLITE_OK
+        #endif
         guard parameters.count == expected else {
             throw SQLiteError.invalidParameter(
                 "Expected \(expected) SQL parameter(s), got \(parameters.count)"
@@ -702,54 +998,120 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
             let rc: Int32
             switch value {
             case .null:
+                #if canImport(SQLite3)
                 rc = sqlite3_bind_null(stmt, idx)
+                #else
+                rc = api.bindNull(stmt, idx)
+                #endif
             case .integer(let v):
+                #if canImport(SQLite3)
                 rc = sqlite3_bind_int64(stmt, idx, v)
+                #else
+                rc = api.bindInt64(stmt, idx, v)
+                #endif
             case .real(let v):
+                #if canImport(SQLite3)
                 rc = sqlite3_bind_double(stmt, idx, v)
+                #else
+                rc = api.bindDouble(stmt, idx, v)
+                #endif
             case .text(let s):
                 let utf8 = Array(s.utf8)
                 if utf8.isEmpty {
+                    #if canImport(SQLite3)
                     rc = sqlite3_bind_text(stmt, idx, "", 0, sqliteTransientDestructor)
+                    #else
+                    var nul: CChar = 0
+                    rc = withUnsafePointer(to: &nul) { ptr in
+                        api.bindText(stmt, idx, ptr, 0, SQLite3Runtime.transientDestructor)
+                    }
+                    #endif
                 } else {
                     rc = utf8.withUnsafeBufferPointer { buf in
                         let ptr = UnsafeRawPointer(buf.baseAddress!).assumingMemoryBound(to: CChar.self)
+                        #if canImport(SQLite3)
                         return sqlite3_bind_text(stmt, idx, ptr, Int32(buf.count), sqliteTransientDestructor)
+                        #else
+                        return api.bindText(stmt, idx, ptr, Int32(buf.count), SQLite3Runtime.transientDestructor)
+                        #endif
                     }
                 }
             case .blob(let bytes):
                 if bytes.isEmpty {
+                    #if canImport(SQLite3)
                     rc = sqlite3_bind_zeroblob(stmt, idx, 0)
+                    #else
+                    rc = api.bindZeroblob(stmt, idx, 0)
+                    #endif
                 } else {
                     rc = bytes.withUnsafeBytes { buf in
-                        sqlite3_bind_blob(stmt, idx, buf.baseAddress, Int32(bytes.count), sqliteTransientDestructor)
+                        #if canImport(SQLite3)
+                        return sqlite3_bind_blob(stmt, idx, buf.baseAddress, Int32(bytes.count), sqliteTransientDestructor)
+                        #else
+                        return api.bindBlob(stmt, idx, buf.baseAddress, Int32(bytes.count), SQLite3Runtime.transientDestructor)
+                        #endif
                     }
                 }
             }
-            if rc != SQLITE_OK {
+            if rc != okCode {
                 throw SQLiteError.bindFailed(index: idx, code: rc, message: lastErrorMessage(handle))
             }
         }
     }
 
     private func readColumn(stmt: OpaquePointer, index: Int32) -> SQLiteValue {
-        switch sqlite3_column_type(stmt, index) {
-        case SQLITE_NULL:
+        #if canImport(SQLite3)
+        let colType = sqlite3_column_type(stmt, index)
+        let nullType = SQLITE_NULL
+        let intType = SQLITE_INTEGER
+        let floatType = SQLITE_FLOAT
+        let textType = SQLITE_TEXT
+        let blobType = SQLITE_BLOB
+        #else
+        let colType = api.columnType(stmt, index)
+        let nullType = SQLite3Runtime.SQLITE_NULL
+        let intType = SQLite3Runtime.SQLITE_INTEGER
+        let floatType = SQLite3Runtime.SQLITE_FLOAT
+        let textType = SQLite3Runtime.SQLITE_TEXT
+        let blobType = SQLite3Runtime.SQLITE_BLOB
+        #endif
+        switch colType {
+        case nullType:
             return .null
-        case SQLITE_INTEGER:
+        case intType:
+            #if canImport(SQLite3)
             return .integer(sqlite3_column_int64(stmt, index))
-        case SQLITE_FLOAT:
+            #else
+            return .integer(api.columnInt64(stmt, index))
+            #endif
+        case floatType:
+            #if canImport(SQLite3)
             return .real(sqlite3_column_double(stmt, index))
-        case SQLITE_TEXT:
+            #else
+            return .real(api.columnDouble(stmt, index))
+            #endif
+        case textType:
+            #if canImport(SQLite3)
             let byteCount = Int(sqlite3_column_bytes(stmt, index))
-            guard byteCount > 0, let raw = sqlite3_column_text(stmt, index) else {
+            let raw = sqlite3_column_text(stmt, index)
+            #else
+            let byteCount = Int(api.columnBytes(stmt, index))
+            let raw = api.columnText(stmt, index)
+            #endif
+            guard byteCount > 0, let raw else {
                 return .text("")
             }
             let bytes = Array(UnsafeBufferPointer(start: raw, count: byteCount))
             return .text(String(decoding: bytes, as: UTF8.self))
-        case SQLITE_BLOB:
+        case blobType:
+            #if canImport(SQLite3)
             let byteCount = Int(sqlite3_column_bytes(stmt, index))
-            guard byteCount > 0, let raw = sqlite3_column_blob(stmt, index) else {
+            let raw = sqlite3_column_blob(stmt, index)
+            #else
+            let byteCount = Int(api.columnBytes(stmt, index))
+            let raw = api.columnBlob(stmt, index)
+            #endif
+            guard byteCount > 0, let raw else {
                 return .blob([])
             }
             let ptr = raw.assumingMemoryBound(to: UInt8.self)
@@ -761,14 +1123,23 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
 
     private func mapStepError(code: Int32, sql: String, handle: OpaquePointer) -> SQLiteError {
         let message = lastErrorMessage(handle)
-        if code == SQLITE_CONSTRAINT || (code & 0xFF) == SQLITE_CONSTRAINT {
+        #if canImport(SQLite3)
+        let constraintCode = SQLITE_CONSTRAINT
+        #else
+        let constraintCode = SQLite3Runtime.SQLITE_CONSTRAINT
+        #endif
+        if code == constraintCode || (code & 0xFF) == constraintCode {
             return .constraintViolation(code: code, message: message)
         }
         return .stepFailed(sql: sql, code: code, message: message)
     }
 
     private func lastErrorMessage(_ handle: OpaquePointer) -> String {
-        sqlite3_errmsg(handle).map { String(cString: $0) } ?? "SQLite error"
+        #if canImport(SQLite3)
+        return sqlite3_errmsg(handle).map { String(cString: $0) } ?? "SQLite error"
+        #else
+        return api.errmsg(handle).map { String(cString: $0) } ?? "SQLite error"
+        #endif
     }
 }
 #endif

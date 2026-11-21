@@ -54,8 +54,11 @@ enum SessionDatabaseHelper {
     }
 
     static func makeTempDBPath(prefix: String = "opencode-core-test") -> String {
-        let base = ProcessInfo.processInfo.environment["TMPDIR"] ?? "/tmp"
-        let trimmed = base.hasSuffix("/") ? String(base.dropLast()) : base
+        let base = FileManager.default.temporaryDirectory.path
+        var trimmed = base
+        while trimmed.count > 1 && (trimmed.hasSuffix("/") || trimmed.hasSuffix("\\")) {
+            trimmed.removeLast()
+        }
         return "\(trimmed)/\(prefix)-\(Identifier.ascending()).sqlite"
     }
 

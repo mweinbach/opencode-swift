@@ -88,8 +88,19 @@ enum RenderableConformanceLoader {
             .appendingPathComponent("renderables")
     }
 
+    private static func resolveConformanceFile(named filename: String, relativeTo filePath: String) -> URL {
+        let upstream = upstreamRenderablesDir(relativeTo: filePath).appendingPathComponent(filename)
+        if FileManager.default.fileExists(atPath: upstream.path) {
+            return upstream
+        }
+        return URL(fileURLWithPath: filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures")
+            .appendingPathComponent(filename)
+    }
+
     static func loadDiffConformance(relativeTo filePath: String = #filePath) throws -> [DiffConformanceRow] {
-        let url = upstreamRenderablesDir(relativeTo: filePath).appendingPathComponent("diff.conformance.json")
+        let url = resolveConformanceFile(named: "diff.conformance.json", relativeTo: filePath)
         let data = try Data(contentsOf: url)
         let decoded = try JSONDecoder().decode(RawRowsFile.self, from: data)
 
@@ -165,7 +176,7 @@ enum RenderableConformanceLoader {
     }
 
     static func loadMarkdownConformance(relativeTo filePath: String = #filePath) throws -> [MarkdownConformanceRow] {
-        let url = upstreamRenderablesDir(relativeTo: filePath).appendingPathComponent("markdown.conformance.json")
+        let url = resolveConformanceFile(named: "markdown.conformance.json", relativeTo: filePath)
         let data = try Data(contentsOf: url)
         let decoded = try JSONDecoder().decode(RawRowsFile.self, from: data)
 

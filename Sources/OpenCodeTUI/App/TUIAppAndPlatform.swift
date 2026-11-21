@@ -1,7 +1,7 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+#if canImport(Foundation)
 import Foundation
+#elseif canImport(FoundationEssentials)
+import FoundationEssentials
 #endif
 import Synchronization
 import OpenCodeClient
@@ -1538,6 +1538,7 @@ public enum TUIApp {
         public let environment: [String: String]
         public let terminalHandoff: (@Sendable () async -> TerminalHandoff?)?
         public let log: TUIContext.LogSink?
+        public let interactive: Bool?
 
         public init(
             app: TUIContext.TuiApp,
@@ -1547,7 +1548,8 @@ public enum TUIApp {
             updater: TUIContext.UpdateSource? = nil,
             environment: [String: String] = [:],
             terminalHandoff: (@Sendable () async -> TerminalHandoff?)? = nil,
-            log: TUIContext.LogSink? = nil
+            log: TUIContext.LogSink? = nil,
+            interactive: Bool? = nil
         ) {
             self.app = app
             self.server = server
@@ -1557,6 +1559,7 @@ public enum TUIApp {
             self.environment = environment
             self.terminalHandoff = terminalHandoff
             self.log = log
+            self.interactive = interactive
         }
     }
 
@@ -1604,7 +1607,7 @@ public enum TUIApp {
             handoff.complete()
         }
         log(.info, "TUI initialized", ["channel": .string(input.app.channel), "version": .string(input.app.version)])
-        if PlatformTerminalBackend().isInteractiveTerminal {
+        if input.interactive ?? PlatformTerminalBackend().isInteractiveTerminal {
             return try await TUIInteractiveLoop.runInteractive(
                 input: input,
                 resolved: resolved,

@@ -69,7 +69,8 @@ let package = Package(
         // MARK: - Test Suites
         .testTarget(
             name: "OpenTUICoreTests",
-            dependencies: ["OpenTUICore", "OpenTUILayout", "OpenTUIRenderables", "OpenTUITerminal", "OpenTUIView"]
+            dependencies: ["OpenTUICore", "OpenTUILayout", "OpenTUIRenderables", "OpenTUITerminal", "OpenTUIView"],
+            exclude: ["Fixtures"]
         ),
         .testTarget(
             name: "OpenTUIKeymapTests",

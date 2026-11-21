@@ -3685,7 +3685,7 @@ public enum AIGeneration {
     }
 
     private static func timeoutError(id: String, timeoutMs: Double) -> AISchema.AIError {
-        let clamped = max(0, Int(ceil(timeoutMs)))
+        let clamped = max(0, Int(timeoutMs.rounded(.up)))
         return AISchema.AIError(reason: .timeout(AISchema.TimeoutError(
             message: "Generation \(id) did not finish within \(clamped)ms",
             timeoutMs: clamped
@@ -7441,7 +7441,7 @@ public enum AIExperimental {
             return .websocket(
                 url: "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained",
                 token: name,
-                expiresAt: floor(expiresAt / 1000.0)
+                expiresAt: (expiresAt / 1000.0).rounded(.down)
             )
 
         default:

@@ -207,22 +207,42 @@ public enum FSUtil {
             }
         }
 
+        private static func isWindowsDrivePath(_ path: String) -> Bool {
+            let chars = Array(path)
+            return chars.count >= 2 && chars[0].isASCII && chars[0].isLetter && chars[1] == ":"
+        }
+
         private static func joinPath(_ base: String, _ child: String) -> String {
-            if base == "/" { return "/\(child)" }
-            if base.hasSuffix("/") { return base + child }
-            return "\(base)/\(child)"
+            let b = base.replacing("\\", with: "/")
+            let c = child.replacing("\\", with: "/")
+            if b == "/" { return "/\(c)" }
+            if b.hasSuffix("/") { return b + c }
+            return "\(b)/\(c)"
         }
 
         private static func dirname(_ path: String) -> String {
-            var p = path
-            while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
+            var p = path.replacing("\\", with: "/")
+            while p.count > 1 && p.hasSuffix("/") {
+                if p.count == 3 && isWindowsDrivePath(p) { break }
+                p.removeLast()
+            }
+            if p.count == 3 && isWindowsDrivePath(p) && p.hasSuffix("/") {
+                return p
+            }
+            if p.count == 2 && isWindowsDrivePath(p) {
+                return "\(p)/"
+            }
             guard let slash = p.lastIndex(of: "/") else { return "." }
             if slash == p.startIndex { return "/" }
-            return String(p[..<slash])
+            let prefix = String(p[..<slash])
+            if prefix.count == 2 && isWindowsDrivePath(prefix) {
+                return "\(prefix)/"
+            }
+            return prefix
         }
 
         private static func resolveAbsolute(_ p: String) -> String {
-            if p.hasPrefix("/") { return p }
+            if p.hasPrefix("/") || isWindowsDrivePath(p) { return p }
             #if os(WASI)
             return "/" + p
             #else
@@ -260,7 +280,8 @@ public enum FSUtil {
     // parity: util/src/fs-util.ts#FSUtil.normalizePath [status=implemented hash=eb634425e254]
     public static func normalizePath(_ p: String) -> String {
         #if os(Windows)
-        return resolve(p)
+        let win = FSPathUtil.windowsPath(p)
+        return URL(fileURLWithPath: win).standardizedFileURL.path
         #else
         return p
         #endif

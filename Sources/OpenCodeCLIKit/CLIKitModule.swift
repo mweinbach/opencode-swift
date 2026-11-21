@@ -371,6 +371,9 @@ public struct HostServiceProcessLauncher: ServiceProcessLauncher, Sendable {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = stderrPipe
         try process.run()
+        #if !canImport(Darwin)
+        try? stderrPipe.fileHandleForWriting.close()
+        #endif
         return HostServiceChildProcessHandle(process: process, stderrPipe: stderrPipe)
         #else
         throw PlatformError.unsupportedOnPlatform(Platform.current, operation: "HostServiceProcessLauncher.spawn")

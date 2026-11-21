@@ -278,12 +278,16 @@ struct OpenCodeServerEventFeedTests {
         defer { Task { await harness.close() } }
 
         let stream = harness.client.event.subscribe()
+        let (connectedStream, connectedCont) = AsyncStream<Void>.makeStream()
         let collectorTask = Task {
-            try await ServerTestFixture.collectEvents(from: stream, count: 2, timeoutMs: 5_000)
+            try await ServerTestFixture.collectEvents(from: stream, count: 2, timeoutMs: 10_000) {
+                connectedCont.yield(())
+                connectedCont.finish()
+            }
         }
 
-        // Yield briefly so subscription attaches, then create a session through OpenCodeClient
-        try await Task.sleep(for: .milliseconds(30))
+        // Wait deterministically for the initial server.connected frame so CoreBus subscription is active
+        for await _ in connectedStream { break }
         let created = try await harness.client.session.create(SessionCreateInput(title: "SSE Live Session"))
 
         let events = try await collectorTask.value
@@ -1019,12 +1023,16 @@ struct OpenCodeServerPOSIXTCPTests {
         defer { sseTransport.invalidateAndCancel() }
         let sseClient = ServerTestFixture.makeTCPClient(baseUrl: baseUrl, password: "tcp-secret-password", transport: sseTransport)
         let sseStream = sseClient.event.subscribe()
+        let (sseConnectedStream, sseConnectedCont) = AsyncStream<Void>.makeStream()
         let sseTask = Task {
-            try await ServerTestFixture.collectEvents(from: sseStream, count: 2, timeoutMs: 8_000)
+            try await ServerTestFixture.collectEvents(from: sseStream, count: 2, timeoutMs: 10_000) {
+                sseConnectedCont.yield(())
+                sseConnectedCont.finish()
+            }
         }
 
-        // Wait briefly for SSE handshake, then trigger a live session rename event
-        try await Task.sleep(for: .milliseconds(100))
+        // Wait deterministically for the SSE handshake frame, then trigger a live session rename event
+        for await _ in sseConnectedStream { break }
         try await client.session.update(SessionUpdateInput(sessionID: created.id.rawValue, title: "Renamed Over TCP"))
 
         let liveEvents = try await sseTask.value

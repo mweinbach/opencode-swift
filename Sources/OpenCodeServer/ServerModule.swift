@@ -565,7 +565,7 @@ public enum ServerHostInfo {
         while let current = cursor {
             defer { cursor = current.pointee.ifa_next }
             let flags = Int32(current.pointee.ifa_flags)
-            guard (flags & IFF_UP) != 0, (flags & IFF_LOOPBACK) == 0 else { continue }
+            guard (flags & Int32(IFF_UP)) != 0, (flags & Int32(IFF_LOOPBACK)) == 0 else { continue }
             guard let sa = current.pointee.ifa_addr else { continue }
             let family = Int32(sa.pointee.sa_family)
             let wantFamily = ipv6 ? AF_INET6 : AF_INET
@@ -1141,8 +1141,16 @@ public final class ServerAppRuntime: Sendable {
         self.locationActivity = locationActivity
         self.instance = instance
         self.serverInfo = serverInfo
-        let trimmedCacheDir = global.cache.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let defaultCachePath = "\(trimmedCacheDir.isEmpty ? "" : "/\(trimmedCacheDir)")/models.json"
+        let normalizedCacheDir = global.cache.replacing("\\", with: "/")
+        let trimmedCacheDir = String(normalizedCacheDir.reversed().drop(while: { $0 == "/" }).reversed())
+        let defaultCachePath: String
+        if trimmedCacheDir.isEmpty {
+            defaultCachePath = "/models.json"
+        } else if trimmedCacheDir.hasPrefix("/") || isServerWindowsDrivePath(trimmedCacheDir) {
+            defaultCachePath = "\(trimmedCacheDir)/models.json"
+        } else {
+            defaultCachePath = "/\(trimmedCacheDir)/models.json"
+        }
         let effectiveModelsOpts = modelsDevOptions ?? options.models ?? CoreModel.ModelsDev.Options(
             file: nil,
             fetch: allowLiveNetwork
@@ -2369,25 +2377,40 @@ private final class LateBoundLocationMap: Sendable {
     }
 }
 
-/// Pure-Swift path resolver matching `path.resolve(base, relative)` for POSIX paths.
+private func isServerWindowsDrivePath(_ path: String) -> Bool {
+    let chars = Array(path)
+    return chars.count >= 2 && chars[0].isASCII && chars[0].isLetter && chars[1] == ":"
+}
+
+/// Pure-Swift path resolver matching `path.resolve(base, relative)` for POSIX and Windows paths.
 internal func serverResolvePath(base: String, relative: String) -> String {
     let cleanRel = relative.replacing("\\", with: "/")
     let combined: String
-    if cleanRel.hasPrefix("/") {
+    if cleanRel.hasPrefix("/") || isServerWindowsDrivePath(cleanRel) {
         combined = cleanRel
     } else {
         let cleanBase = base.replacing("\\", with: "/")
         let trimmedBase = cleanBase.hasSuffix("/") ? String(cleanBase.dropLast()) : cleanBase
         combined = "\(trimmedBase)/\(cleanRel)"
     }
+    var drivePrefix: String? = nil
+    var body = combined
+    if isServerWindowsDrivePath(combined) {
+        let idx = combined.index(combined.startIndex, offsetBy: 2)
+        drivePrefix = String(combined[..<idx])
+        body = String(combined[idx...])
+    }
     var parts: [String] = []
-    for seg in combined.split(separator: "/") {
+    for seg in body.split(separator: "/") {
         if seg.isEmpty || seg == "." { continue }
         if seg == ".." {
             if !parts.isEmpty { parts.removeLast() }
         } else {
             parts.append(String(seg))
         }
+    }
+    if let drivePrefix {
+        return parts.isEmpty ? "\(drivePrefix)/" : "\(drivePrefix)/\(parts.joined(separator: "/"))"
     }
     return "/" + parts.joined(separator: "/")
 }

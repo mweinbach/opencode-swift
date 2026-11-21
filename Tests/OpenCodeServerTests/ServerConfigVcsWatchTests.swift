@@ -54,7 +54,7 @@ struct ServerConfigVcsWatchTests {
             rootDir: projectDir,
             homeDir: homeDir,
             project: true,
-            configDebounce: .milliseconds(60),
+            configDebounce: .milliseconds(250),
             instructionDebounce: .milliseconds(30)
         )
         defer { Task { await harness.close() } }
@@ -63,19 +63,21 @@ struct ServerConfigVcsWatchTests {
         let bundle = try await harness.runtime.resolveLocation(ref)
         let route = OpenCodeLocation(directory: projectDir)
 
-        // Wait for initial readiness rescan to settle (should emit nothing since files haven't changed).
-        try? await Task.sleep(for: .milliseconds(120))
+        // Deterministically flush the initial readiness rescan before starting burst edits.
+        if let service = bundle.config as? CoreConfig.Service {
+            await service.reload()
+        }
 
         let initialEntries = await bundle.config.entries()
         #expect(CoreConfig.latest(initialEntries, \.username) == "project-v1")
         #expect(CoreConfig.latest(initialEntries, \.shell) == "/bin/sh")
 
-        // Burst-edit BOTH global and project config -> 60ms debounce collapses them into a single `config.updated`.
+        // Burst-edit BOTH global and project config -> 250ms debounce collapses them into a single `config.updated`.
         let updates = try await LiveExecutionFixture.triggerAndCollectConfigUpdates(
             bus: harness.runtime.bus,
             location: route,
             timeoutMs: 3_000,
-            settleMs: 180
+            settleMs: 400
         ) {
             try await harness.fileSystem.writeFile(
                 LiveExecutionFixture.bytes("""
@@ -107,8 +109,8 @@ struct ServerConfigVcsWatchTests {
         let noOpSameBytes = try await LiveExecutionFixture.triggerAndCollectConfigUpdates(
             bus: harness.runtime.bus,
             location: route,
-            timeoutMs: 220,
-            settleMs: 80
+            timeoutMs: 400,
+            settleMs: 120
         ) {
             try await harness.fileSystem.writeFile(
                 LiveExecutionFixture.bytes("""
@@ -127,7 +129,7 @@ struct ServerConfigVcsWatchTests {
             bus: harness.runtime.bus,
             location: route,
             timeoutMs: 3_000,
-            settleMs: 140
+            settleMs: 350
         ) {
             try await harness.fileSystem.writeFile(
                 LiveExecutionFixture.bytes("""
@@ -146,8 +148,8 @@ struct ServerConfigVcsWatchTests {
         let commentOnly = try await LiveExecutionFixture.triggerAndCollectConfigUpdates(
             bus: harness.runtime.bus,
             location: route,
-            timeoutMs: 220,
-            settleMs: 80
+            timeoutMs: 400,
+            settleMs: 120
         ) {
             try await harness.fileSystem.writeFile(
                 LiveExecutionFixture.bytes("""

@@ -69,7 +69,7 @@ enum StdinConformanceLoader {
             .deletingLastPathComponent() // Packages
             .deletingLastPathComponent() // repo root
 
-        let conformanceURL = repoRoot
+        let upstreamURL = repoRoot
             .appendingPathComponent("upstream")
             .appendingPathComponent("opentui")
             .appendingPathComponent("packages")
@@ -77,6 +77,13 @@ enum StdinConformanceLoader {
             .appendingPathComponent("src")
             .appendingPathComponent("lib")
             .appendingPathComponent("stdin-parser.conformance.json")
+
+        let conformanceURL = FileManager.default.fileExists(atPath: upstreamURL.path)
+            ? upstreamURL
+            : URL(fileURLWithPath: filePath)
+                .deletingLastPathComponent()
+                .appendingPathComponent("Fixtures")
+                .appendingPathComponent("stdin-parser.conformance.json")
 
         let data = try Data(contentsOf: conformanceURL)
         let decoded = try JSONDecoder().decode(RawConformanceFile.self, from: data)

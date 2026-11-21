@@ -498,7 +498,14 @@ public struct LocalFileSystem: OpenCodeFileSystem, Sendable {
             case .typeSymbolicLink: entryType = .symlink
             default: entryType = .other
             }
-            let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+            let size: Int64
+            if let numeric = attrs[.size] as? any BinaryInteger {
+                size = Int64(clamping: numeric)
+            } else if let int64 = attrs[.size] as? Int64 {
+                size = int64
+            } else {
+                size = 0
+            }
             let modDate = attrs[.modificationDate] as? Date
             let modMs = modDate.map { Int64(($0.timeIntervalSince1970 * 1_000.0).rounded()) } ?? 0
             return FileStat(type: entryType, size: size, modifiedAtMs: modMs)
@@ -625,13 +632,34 @@ public struct LocalFileSystem: OpenCodeFileSystem, Sendable {
 
     private static func mapError(_ error: any Error, path: String) -> PlatformError {
         let desc = String(describing: error)
-        if desc.contains("No such file") || desc.contains("NSFileReadNoSuchFileError") || desc.contains("ENOENT") {
+        if desc.contains("No such file")
+            || desc.contains("NSFileReadNoSuchFileError")
+            || desc.contains("ENOENT")
+            || desc.contains("doesn't exist")
+            || desc.contains("doesn\u{2019}t exist")
+            || desc.contains("Code=260")
+            || desc.contains("Code=4 ")
+            || desc.contains("Win32Error(code: 2)")
+            || desc.contains("Win32Error(code: 3)")
+        {
             return .notFound(path)
         }
-        if desc.contains("File exists") || desc.contains("NSFileWriteFileExistsError") || desc.contains("EEXIST") {
+        if desc.contains("File exists")
+            || desc.contains("NSFileWriteFileExistsError")
+            || desc.contains("EEXIST")
+            || desc.contains("Code=516")
+            || desc.contains("Win32Error(code: 80)")
+            || desc.contains("Win32Error(code: 183)")
+        {
             return .alreadyExists(path)
         }
-        if desc.contains("Permission denied") || desc.contains("EPERM") || desc.contains("EACCES") {
+        if desc.contains("Permission denied")
+            || desc.contains("EPERM")
+            || desc.contains("EACCES")
+            || desc.contains("Code=257")
+            || desc.contains("Code=513")
+            || desc.contains("Win32Error(code: 5)")
+        {
             return .permissionDenied(path, code: desc.contains("EPERM") ? "EPERM" : "EACCES")
         }
         return .ioFailure(desc)

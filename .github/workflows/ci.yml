@@ -2,13 +2,15 @@ name: CI & Cross-Platform Parity
 
 on:
   push:
-    branches: [main]
+    branches: [main, "ci/**"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   swift-testing-matrix:
     name: Swift Testing (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -24,23 +26,159 @@ jobs:
     container: ${{ matrix.container }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Swift on Windows
+      - name: Select Xcode with Swift 6.2 on macOS
+        if: matrix.os == 'macos-15'
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_APP}" ]]; then
+            echo "::error::No Xcode 26.x (Swift 6.2) found in /Applications"
+            ls -la /Applications
+            exit 1
+          fi
+          sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+          swift --version
+      - name: Install Swift 6.2 on Windows
         if: matrix.os == 'windows-2022'
-        uses: swift-actions/setup-swift@v2
+        uses: compnerd/gha-setup-swift@main
         with:
-          swift-version: "6.2"
+          swift-version: swift-6.2.4-release
+          swift-build: 6.2.4-RELEASE
+      - name: Ensure modern sqlite3.dll on PATH (Windows)
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          # Copy only sqlite3.dll (modern 3.51+ with RETURNING support) into an isolated directory
+          # so Python's OpenSSL/libffi DLLs are not placed on PATH.
+          $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python\*\x64\DLLs\sqlite3.dll" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python" -Filter "sqlite3.dll" -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like "*\x64\DLLs\sqlite3.dll" } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+          }
+          if ($dll) {
+            Write-Host "Using SQLite DLL: $($dll.FullName)"
+            $pyExe = Join-Path (Split-Path $dll.DirectoryName -Parent) "python.exe"
+            if (Test-Path $pyExe) {
+              & $pyExe -c "import sqlite3; print('SQLite version:', sqlite3.sqlite_version)"
+            }
+            $sqliteBin = Join-Path $env:RUNNER_TEMP "sqlite3-bin"
+            New-Item -ItemType Directory -Path $sqliteBin -Force | Out-Null
+            Copy-Item -Path $dll.FullName -Destination (Join-Path $sqliteBin "sqlite3.dll") -Force
+            $sqliteBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            Write-Host "No hostedtoolcache Python x64 sqlite3.dll found; relying on system sqlite3/winsqlite3"
+          }
+      - name: Verify Swift version
+        run: swift --version
       - name: Test swift-opencode (Swift Testing)
-        run: swift test --disable-xctest --enable-swift-testing
+        if: matrix.os != 'windows-2022'
+        run: ./scripts/test.sh .
+      - name: Build swift-opencode tests (Windows)
+        if: matrix.os == 'windows-2022'
+        run: swift build --build-tests -Xlinker /STACK:8388608
+      - name: Test swift-opencode (Swift Testing, Windows)
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          # Invoke the compiled Swift Testing binary directly on Windows to avoid a SwiftPM 6.2.4
+          # `swift-test.exe` wrapper abort while running the exact Swift Testing 6.2.4 harness.
+          $binDir = (swift build --show-bin-path -Xlinker /STACK:8388608 | Select-Object -Last 1).Trim()
+          $exe = Join-Path $binDir "swift-opencodePackageTests.xctest"
+          if (-not (Test-Path $exe)) {
+            $exe = ".build\debug\swift-opencodePackageTests.xctest"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Host "::error::Test binary not found at $exe"
+            exit 1
+          }
+          $swiftRoot = Join-Path $env:LOCALAPPDATA "Programs\Swift"
+          if (Test-Path $swiftRoot) {
+            $dllDirs = @(
+              Get-ChildItem -Path $swiftRoot -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty DirectoryName -Unique |
+                Where-Object { $_ -notlike "*\bin32*" -and $_ -notlike "*\arm64*" } |
+                Sort-Object {
+                  if ($_ -like "*\Runtimes\*") { 0 }
+                  elseif ($_ -like "*\Platforms\*") { 1 }
+                  elseif ($_ -like "*\Toolchains\*") { 2 }
+                  else { 3 }
+                }, { $_ }
+            )
+            if ($dllDirs.Count -gt 0) {
+              $env:PATH = (($dllDirs -join ";") + ";" + $env:PATH)
+            }
+          }
+          $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel" -NoNewWindow -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            Write-Host ("::error::swift-opencodePackageTests.xctest exited with code {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
+            exit $proc.ExitCode
+          }
       - name: Test Packages/OpenTUI (Swift Testing)
-        run: swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing
+        if: matrix.os != 'windows-2022'
+        run: ./scripts/test.sh Packages/OpenTUI
+      - name: Test Packages/OpenTUI (Swift Testing, Windows)
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          swift build --package-path Packages/OpenTUI --build-tests -Xlinker /STACK:8388608
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $binDir = (swift build --package-path Packages/OpenTUI --show-bin-path -Xlinker /STACK:8388608 | Select-Object -Last 1).Trim()
+          $exe = Join-Path $binDir "OpenTUIPackageTests.xctest"
+          if (-not (Test-Path $exe)) {
+            $exe = "Packages\OpenTUI\.build\debug\OpenTUIPackageTests.xctest"
+          }
+          if (-not (Test-Path $exe)) {
+            Write-Host "::error::OpenTUI test binary not found at $exe"
+            exit 1
+          }
+          $swiftRoot = Join-Path $env:LOCALAPPDATA "Programs\Swift"
+          if (Test-Path $swiftRoot) {
+            $dllDirs = @(
+              Get-ChildItem -Path $swiftRoot -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -ExpandProperty DirectoryName -Unique |
+                Where-Object { $_ -notlike "*\bin32*" -and $_ -notlike "*\arm64*" } |
+                Sort-Object {
+                  if ($_ -like "*\Runtimes\*") { 0 }
+                  elseif ($_ -like "*\Platforms\*") { 1 }
+                  elseif ($_ -like "*\Toolchains\*") { 2 }
+                  else { 3 }
+                }, { $_ }
+            )
+            if ($dllDirs.Count -gt 0) {
+              $env:PATH = (($dllDirs -join ";") + ";" + $env:PATH)
+            }
+          }
+          $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel" -NoNewWindow -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            Write-Host ("::error::OpenTUIPackageTests.xctest exited with code {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
+            exit $proc.ExitCode
+          }
       - name: Build opencode CLI
+        if: matrix.os != 'windows-2022'
         run: swift build --product opencode
+      - name: Build opencode CLI (Windows)
+        if: matrix.os == 'windows-2022'
+        run: swift build --product opencode -Xlinker /STACK:8388608
 
   upstream-parity-audit:
     name: Live Upstream Parity & Drift Check
     runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6.2 on macOS
+        run: |
+          XCODE_APP="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${XCODE_APP}" ]]; then
+            echo "::error::No Xcode 26.x (Swift 6.2) found in /Applications"
+            ls -la /Applications
+            exit 1
+          fi
+          sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+          swift --version
       - uses: oven-sh/setup-bun@v2
       - name: Sync pinned upstream commits
         run: ./scripts/parity.sh sync

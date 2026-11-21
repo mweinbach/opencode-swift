@@ -777,8 +777,8 @@ struct OpenTUIParityRunnerMain {
         encoder.outputFormatting = [.sortedKeys]
 
         while let line = readLine(strippingNewline: true) {
-            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-            guard let data = line.data(using: .utf8) else { continue }
+            if line.allSatisfy(\.isWhitespace) { continue }
+            let data = Data(line.utf8)
             do {
                 let req = try decoder.decode(ParityRequest.self, from: data)
                 do {
@@ -798,7 +798,7 @@ struct OpenTUIParityRunnerMain {
                 }
             }
             #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(CRT)
-            fflush(stdout)
+            fflush(nil)
             #endif
         }
     }

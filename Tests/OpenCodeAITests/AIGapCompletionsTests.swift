@@ -456,7 +456,11 @@ struct AIProtocolAndRuntimeGapCompletionsTests {
         #expect(throws: ProcessDaemon.DaemonError.self) {
             _ = try ProcessDaemon.TerminalClient.startNonUnix("/tmp/nonunix")
         }
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
         #expect(ProcessDaemon.MuslCompat.statx(path: "/") == 0)
+        #else
+        #expect(ProcessDaemon.MuslCompat.statx(path: "/") == -1)
+        #endif
         #expect(ProcessDaemon.MuslCompat.statx(path: "/opencode-pty-definitely-missing-path") == -1)
     }
 }

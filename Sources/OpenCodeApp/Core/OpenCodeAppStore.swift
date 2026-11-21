@@ -420,12 +420,28 @@ public final class OpenCodeAppStore {
                 return filename
             }
             if isAbsolutePath(filename) {
+                #if os(Windows)
+                return filename
+                #else
                 return URL(fileURLWithPath: filename).standardizedFileURL.path
+                #endif
             }
+            #if os(Windows)
+            var base = dataDir
+            while base.count > 1 && (base.hasSuffix("/") || base.hasSuffix("\\")) {
+                base.removeLast()
+            }
+            var rel = filename
+            while rel.hasPrefix("/") || rel.hasPrefix("\\") {
+                rel.removeFirst()
+            }
+            return "\(base)/\(rel)"
+            #else
             return URL(fileURLWithPath: dataDir, isDirectory: true)
                 .appendingPathComponent(filename)
                 .standardizedFileURL
                 .path
+            #endif
         }
 
         if let explicit = environment.variable("OPENCODE_DB")?.trimmingCharacters(in: .whitespacesAndNewlines),

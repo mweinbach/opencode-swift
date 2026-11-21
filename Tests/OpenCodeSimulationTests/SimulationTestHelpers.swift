@@ -9,6 +9,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(WinSDK)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodePlatform
@@ -196,12 +198,22 @@ final class SimTestInMemorySocket: Sendable {
 
 /// Real RFC 6455 loopback TCP WebSocket client for testing `POSIXHTTPServer`-backed control servers.
 final class SimTestTCPWebSocket: Sendable {
-    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-    private let fd: Int32
+    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
+    #if canImport(WinSDK)
+    private typealias NativeSocket = SOCKET
+    private static let winsockReady: Bool = {
+        var data = WSADATA()
+        return WSAStartup(WORD(0x0202), &data) == 0
+    }()
+    #else
+    private typealias NativeSocket = Int32
+    #endif
+
+    private let fd: NativeSocket
     private let buffer = Mutex<[UInt8]>([])
     private let closed = Mutex(false)
 
-    private init(fd: Int32, initialBuffer: [UInt8]) {
+    private init(fd: NativeSocket, initialBuffer: [UInt8]) {
         self.fd = fd
         self.buffer.withLock { $0 = initialBuffer }
     }
@@ -221,6 +233,13 @@ final class SimTestTCPWebSocket: Sendable {
         }
         let host = String(authority[..<colon])
 
+        #if canImport(WinSDK)
+        _ = winsockReady
+        let fd = WinSDK.socket(AF_INET, SOCK_STREAM, 0)
+        guard fd != INVALID_SOCKET else {
+            throw SimulationControlServer.ControlError("socket() failed with WSA error \(WSAGetLastError())")
+        }
+        #else
         #if canImport(Darwin)
         let sockType = SOCK_STREAM
         #else
@@ -230,12 +249,17 @@ final class SimTestTCPWebSocket: Sendable {
         guard fd >= 0 else {
             throw SimulationControlServer.ControlError("socket() failed with errno \(errno)")
         }
+        #endif
 
         var addr = sockaddr_in()
         #if canImport(Darwin)
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         #endif
+        #if canImport(WinSDK)
+        addr.sin_family = ADDRESS_FAMILY(AF_INET)
+        #else
         addr.sin_family = sa_family_t(AF_INET)
+        #endif
         addr.sin_port = UInt16(port).bigEndian
         let pton = host.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
         guard pton == 1 else {
@@ -244,11 +268,19 @@ final class SimTestTCPWebSocket: Sendable {
         }
         let connected = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
+                #if canImport(WinSDK)
+                WinSDK.connect(fd, saPtr, Int32(MemoryLayout<sockaddr_in>.size))
+                #else
                 DarwinOrPosixConnect(fd, saPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                #endif
             }
         }
         guard connected == 0 else {
+            #if canImport(WinSDK)
+            let err = WSAGetLastError()
+            #else
             let err = errno
+            #endif
             closeFD(fd)
             throw SimulationControlServer.ControlError("connect(\(host):\(port)) failed with errno \(err)")
         }
@@ -427,9 +459,22 @@ final class SimTestTCPWebSocket: Sendable {
         return true
     }
 
-    private static func readSome(fd: Int32, timeoutMs: Int) async throws -> [UInt8] {
+    private static func readSome(fd: NativeSocket, timeoutMs: Int) async throws -> [UInt8] {
         let deadline = Flock.currentEpochMs() + Int64(timeoutMs)
         while Flock.currentEpochMs() < deadline {
+            #if canImport(WinSDK)
+            var pfd = WSAPOLLFD(fd: fd, events: Int16(POLLRDNORM), revents: 0)
+            let ready = WSAPoll(&pfd, ULONG(1), Int32(0))
+            if ready < 0 {
+                if WSAGetLastError() == WSAEINTR { continue }
+                return []
+            }
+            if ready == 0 {
+                try await Task.sleep(for: .milliseconds(2))
+                continue
+            }
+            if (pfd.revents & Int16(POLLERR | POLLNVAL)) != 0 { return [] }
+            #else
             var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
             let ready = poll(&pfd, 1, 0)
             if ready < 0 {
@@ -441,10 +486,15 @@ final class SimTestTCPWebSocket: Sendable {
                 continue
             }
             if (pfd.revents & Int16(POLLERR | POLLNVAL)) != 0 { return [] }
+            #endif
             var buf = [UInt8](repeating: 0, count: 8192)
             let n = buf.withUnsafeMutableBytes { raw -> Int in
                 guard let base = raw.baseAddress else { return -1 }
+                #if canImport(WinSDK)
+                return Int(WinSDK.recv(fd, base.assumingMemoryBound(to: CChar.self), 8192, 0))
+                #else
                 return recv(fd, base, 8192, 0)
+                #endif
             }
             if n <= 0 { return [] }
             return Array(buf.prefix(n))
@@ -452,15 +502,24 @@ final class SimTestTCPWebSocket: Sendable {
         throw SimulationControlServer.ControlError("Timed out reading from test WebSocket")
     }
 
-    private static func writeAll(fd: Int32, bytes: [UInt8]) throws -> Bool {
+    private static func writeAll(fd: NativeSocket, bytes: [UInt8]) throws -> Bool {
         var offset = 0
         while offset < bytes.count {
             let n = bytes.withUnsafeBytes { raw -> Int in
                 guard let base = raw.baseAddress else { return -1 }
+                #if canImport(WinSDK)
+                let count = Int32(min(bytes.count - offset, Int(Int32.max)))
+                return Int(WinSDK.send(fd, base.advanced(by: offset).assumingMemoryBound(to: CChar.self), count, 0))
+                #else
                 return send(fd, base.advanced(by: offset), bytes.count - offset, 0)
+                #endif
             }
             if n <= 0 {
+                #if canImport(WinSDK)
+                if WSAGetLastError() == WSAEINTR { continue }
+                #else
                 if errno == EINTR { continue }
+                #endif
                 return false
             }
             offset += n
@@ -468,6 +527,7 @@ final class SimTestTCPWebSocket: Sendable {
         return true
     }
 
+    #if !canImport(WinSDK)
     private static func DarwinOrPosixConnect(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ len: socklen_t) -> Int32 {
         #if canImport(Darwin)
         return Darwin.connect(fd, addr, len)
@@ -477,8 +537,9 @@ final class SimTestTCPWebSocket: Sendable {
         return Musl.connect(fd, addr, len)
         #endif
     }
+    #endif
 
-    private static func closeFD(_ fd: Int32) {
+    private static func closeFD(_ fd: NativeSocket) {
         #if canImport(Darwin)
         _ = Darwin.shutdown(fd, SHUT_RDWR)
         _ = Darwin.close(fd)
@@ -488,8 +549,40 @@ final class SimTestTCPWebSocket: Sendable {
         #elseif canImport(Musl)
         _ = Musl.shutdown(fd, Int32(SHUT_RDWR))
         _ = Musl.close(fd)
+        #elseif canImport(WinSDK)
+        _ = WinSDK.shutdown(fd, SD_BOTH)
+        _ = WinSDK.closesocket(fd)
         #endif
     }
+    #else
+    private init() {}
+
+    static func connect(url: String) async throws -> SimTestTCPWebSocket {
+        _ = url
+        throw SimulationControlServer.ControlError("SimTestTCPWebSocket unsupported on this platform")
+    }
+
+    func sendText(_ text: String) throws {
+        _ = text
+        throw SimulationControlServer.ControlError("SimTestTCPWebSocket unsupported on this platform")
+    }
+
+    func sendJSON(_ value: JSONValue) throws {
+        _ = value
+        throw SimulationControlServer.ControlError("SimTestTCPWebSocket unsupported on this platform")
+    }
+
+    func readFrame(timeoutMs: Int = 5_000) async throws -> ServerWebSocketFrame? {
+        _ = timeoutMs
+        throw SimulationControlServer.ControlError("SimTestTCPWebSocket unsupported on this platform")
+    }
+
+    func readJSON(timeoutMs: Int = 5_000) async throws -> JSONValue {
+        _ = timeoutMs
+        throw SimulationControlServer.ControlError("SimTestTCPWebSocket unsupported on this platform")
+    }
+
+    func close() {}
     #endif
 }
 

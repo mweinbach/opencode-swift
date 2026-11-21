@@ -9,6 +9,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(WinSDK)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodePlatform
@@ -390,21 +392,27 @@ public enum ServerTransportError: Error, Equatable, Sendable, CustomStringConver
 
 // MARK: - Cross-Platform HTTP/1.1 + SSE + WebSocket Loopback TCP Server
 
-/// Cross-platform POSIX HTTP/1.1 + SSE + WebSocket TCP server.
-/// Uses BSD/POSIX sockets behind `#if canImport(Darwin) || canImport(Glibc) || canImport(Musl)`.
-/// On platforms without POSIX sockets (e.g. WASI), `start(...)` throws `ServerTransportError.unsupportedPlatform`.
+/// Cross-platform HTTP/1.1 + SSE + WebSocket TCP server.
+/// Uses BSD/POSIX sockets on Darwin/Linux and Winsock2 on Windows.
+/// On platforms without native TCP sockets (e.g. WASI), `start(...)` throws `ServerTransportError.unsupportedPlatform`.
 public final class POSIXHTTPServer: Sendable {
+    #if canImport(WinSDK)
+    internal typealias NativeSocket = SOCKET
+    #elseif canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+    internal typealias NativeSocket = Int32
+    #endif
+
     public let address: ServerSocketAddress
     private let handlerBox: Mutex<ServerHTTPHandler>
     private let stopped = Mutex(false)
-    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-    private let listenFD: Int32
-    private let activeFDs = Mutex<Set<Int32>>([])
+    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
+    private let listenFD: NativeSocket
+    private let activeFDs = Mutex<Set<NativeSocket>>([])
     private let acceptTask = Mutex<Task<Void, Never>?>(nil)
     #endif
 
-    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-    private init(address: ServerSocketAddress, listenFD: Int32, handler: @escaping ServerHTTPHandler) {
+    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
+    private init(address: ServerSocketAddress, listenFD: NativeSocket, handler: @escaping ServerHTTPHandler) {
         self.address = address
         self.listenFD = listenFD
         self.handlerBox = Mutex(handler)
@@ -428,7 +436,7 @@ public final class POSIXHTTPServer: Sendable {
         port: Int? = nil,
         handler: @escaping ServerHTTPHandler
     ) throws -> POSIXHTTPServer {
-        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
         if let explicitPort = port {
             return try bindAndStart(hostname: hostname, port: explicitPort, handler: handler)
         }
@@ -458,29 +466,20 @@ public final class POSIXHTTPServer: Sendable {
             return false
         }
         guard !alreadyStopped else { return }
-        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
         acceptTask.withLock { task in
             task?.cancel()
             task = nil
         }
-        #if canImport(Darwin)
-        _ = Darwin.shutdown(listenFD, SHUT_RDWR)
-        _ = Darwin.close(listenFD)
-        #elseif canImport(Glibc)
-        _ = Glibc.shutdown(listenFD, Int32(SHUT_RDWR))
-        _ = Glibc.close(listenFD)
-        #elseif canImport(Musl)
-        _ = Musl.shutdown(listenFD, Int32(SHUT_RDWR))
-        _ = Musl.close(listenFD)
-        #endif
+        Self.closeFD(listenFD)
         closeAllConnections()
         #endif
     }
 
     /// Closes all currently active client connections (matching Node's `server.closeAllConnections()`).
     public func closeAllConnections() {
-        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
-        let fds = activeFDs.withLock { set -> [Int32] in
+        #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
+        let fds = activeFDs.withLock { set -> [NativeSocket] in
             let list = Array(set)
             set.removeAll()
             return list
@@ -495,41 +494,128 @@ public final class POSIXHTTPServer: Sendable {
         stop()
     }
 
-    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+    #if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
+    #if canImport(WinSDK)
+    private static let winsockReady: Bool = {
+        var data = WSADATA()
+        return WSAStartup(WORD(0x0202), &data) == 0
+    }()
+    #endif
+
+    private static func ensureSocketsInitialized() {
+        #if canImport(WinSDK)
+        _ = winsockReady
+        #endif
+    }
+
+    private static func setNonBlocking(_ fd: NativeSocket) {
+        #if canImport(WinSDK)
+        var nonBlocking: u_long = 1
+        _ = ioctlsocket(fd, Int32(bitPattern: 0x8004_667E), &nonBlocking)
+        #else
+        let flags = fcntl(fd, F_GETFL, 0)
+        if flags >= 0 {
+            _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+        }
+        #endif
+    }
+
+    private enum PollStatus {
+        case ready
+        case timeout
+        case interrupted
+        case error
+    }
+
+    private static func pollReadable(_ fd: NativeSocket) -> PollStatus {
+        #if canImport(WinSDK)
+        var pfd = WSAPOLLFD(fd: fd, events: Int16(POLLRDNORM), revents: 0)
+        let ready = WSAPoll(&pfd, ULONG(1), Int32(0))
+        if ready < 0 {
+            return WSAGetLastError() == WSAEINTR ? .interrupted : .error
+        }
+        if ready == 0 { return .timeout }
+        if (pfd.revents & Int16(POLLERR | POLLNVAL)) != 0 { return .error }
+        return .ready
+        #else
+        var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        let ready = poll(&pfd, 1, 0)
+        if ready < 0 {
+            return errno == EINTR ? .interrupted : .error
+        }
+        if ready == 0 { return .timeout }
+        if (pfd.revents & Int16(POLLERR | POLLNVAL)) != 0 { return .error }
+        return .ready
+        #endif
+    }
+
+    private static func pollWritable(_ fd: NativeSocket) -> PollStatus {
+        #if canImport(WinSDK)
+        var pfd = WSAPOLLFD(fd: fd, events: Int16(POLLWRNORM), revents: 0)
+        let ready = WSAPoll(&pfd, ULONG(1), Int32(0))
+        if ready < 0 {
+            return WSAGetLastError() == WSAEINTR ? .interrupted : .error
+        }
+        if (pfd.revents & Int16(POLLERR | POLLHUP | POLLNVAL)) != 0 { return .error }
+        return ready == 0 ? .timeout : .ready
+        #else
+        var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        let ready = poll(&pfd, 1, 0)
+        if ready < 0 {
+            return errno == EINTR ? .interrupted : .error
+        }
+        if (pfd.revents & Int16(POLLERR | POLLHUP | POLLNVAL)) != 0 { return .error }
+        return ready == 0 ? .timeout : .ready
+        #endif
+    }
+
     private static func bindAndStart(
         hostname: String,
         port: Int,
         handler: @escaping ServerHTTPHandler
     ) throws -> POSIXHTTPServer {
+        ensureSocketsInitialized()
         let normalizedHost = hostname == "localhost" ? "127.0.0.1" : hostname
         let strippedHost = normalizedHost.hasPrefix("[") && normalizedHost.hasSuffix("]")
             ? String(normalizedHost.dropFirst().dropLast())
             : normalizedHost
         let isIPv6 = strippedHost.contains(":")
 
+        let family = isIPv6 ? AF_INET6 : AF_INET
+        #if canImport(WinSDK)
+        let fd = WinSDK.socket(family, SOCK_STREAM, 0)
+        guard fd != INVALID_SOCKET else {
+            throw ServerTransportError.socketFailed(errno: WSAGetLastError())
+        }
+        #else
         #if canImport(Darwin)
         let sockType = SOCK_STREAM
         #else
         let sockType = Int32(SOCK_STREAM.rawValue)
         #endif
-        let family = isIPv6 ? AF_INET6 : AF_INET
         let fd = socket(family, sockType, 0)
         guard fd >= 0 else {
             throw ServerTransportError.socketFailed(errno: errno)
         }
+        #endif
 
         var reuse: Int32 = 1
+        #if canImport(WinSDK)
+        _ = withUnsafePointer(to: &reuse) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<Int32>.size) { cPtr in
+                WinSDK.setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, cPtr, Int32(MemoryLayout<Int32>.size))
+            }
+        }
+        #else
         _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+        #endif
         #if canImport(Darwin)
         var noSigPipe: Int32 = 1
         _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
         #endif
 
         // Make listening socket non-blocking so accept loop responds cleanly to stop().
-        let flags = fcntl(fd, F_GETFL, 0)
-        if flags >= 0 {
-            _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
-        }
+        setNonBlocking(fd)
 
         let bindResult: Int32
         if isIPv6 {
@@ -537,16 +623,28 @@ public final class POSIXHTTPServer: Sendable {
             #if canImport(Darwin)
             addr6.sin6_len = UInt8(MemoryLayout<sockaddr_in6>.size)
             #endif
+            #if canImport(WinSDK)
+            addr6.sin6_family = ADDRESS_FAMILY(AF_INET6)
+            #else
             addr6.sin6_family = sa_family_t(AF_INET6)
+            #endif
             addr6.sin6_port = UInt16(port).bigEndian
             let pton = strippedHost.withCString { inet_pton(AF_INET6, $0, &addr6.sin6_addr) }
             if pton != 1 {
                 closeFD(fd)
+                #if canImport(WinSDK)
+                throw ServerTransportError.bindFailed(host: hostname, port: port, errno: WSAEINVAL)
+                #else
                 throw ServerTransportError.bindFailed(host: hostname, port: port, errno: EINVAL)
+                #endif
             }
             bindResult = withUnsafePointer(to: &addr6) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
+                    #if canImport(WinSDK)
+                    WinSDK.bind(fd, saPtr, Int32(MemoryLayout<sockaddr_in6>.size))
+                    #else
                     bind(fd, saPtr, socklen_t(MemoryLayout<sockaddr_in6>.size))
+                    #endif
                 }
             }
         } else {
@@ -554,31 +652,55 @@ public final class POSIXHTTPServer: Sendable {
             #if canImport(Darwin)
             addr4.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
             #endif
+            #if canImport(WinSDK)
+            addr4.sin_family = ADDRESS_FAMILY(AF_INET)
+            #else
             addr4.sin_family = sa_family_t(AF_INET)
+            #endif
             addr4.sin_port = UInt16(port).bigEndian
             let pton = strippedHost.withCString { inet_pton(AF_INET, $0, &addr4.sin_addr) }
             if pton != 1 {
                 closeFD(fd)
+                #if canImport(WinSDK)
+                throw ServerTransportError.bindFailed(host: hostname, port: port, errno: WSAEINVAL)
+                #else
                 throw ServerTransportError.bindFailed(host: hostname, port: port, errno: EINVAL)
+                #endif
             }
             bindResult = withUnsafePointer(to: &addr4) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
+                    #if canImport(WinSDK)
+                    WinSDK.bind(fd, saPtr, Int32(MemoryLayout<sockaddr_in>.size))
+                    #else
                     bind(fd, saPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    #endif
                 }
             }
         }
 
         if bindResult != 0 {
+            #if canImport(WinSDK)
+            let err = WSAGetLastError()
+            closeFD(fd)
+            if err == WSAEADDRINUSE {
+                throw ServerTransportError.addressInUse(host: hostname, port: port)
+            }
+            #else
             let err = errno
             closeFD(fd)
             if err == EADDRINUSE {
                 throw ServerTransportError.addressInUse(host: hostname, port: port)
             }
+            #endif
             throw ServerTransportError.bindFailed(host: hostname, port: port, errno: err)
         }
 
         if listen(fd, 128) != 0 {
+            #if canImport(WinSDK)
+            let err = WSAGetLastError()
+            #else
             let err = errno
+            #endif
             closeFD(fd)
             throw ServerTransportError.bindFailed(host: hostname, port: port, errno: err)
         }
@@ -590,24 +712,33 @@ public final class POSIXHTTPServer: Sendable {
     }
 
     private static func queryBoundAddress(
-        fd: Int32,
+        fd: NativeSocket,
         isIPv6: Bool,
         fallbackHost: String,
         fallbackPort: Int
     ) -> ServerSocketAddress {
         if isIPv6 {
             var addr = sockaddr_in6()
+            #if canImport(WinSDK)
+            var len = Int32(MemoryLayout<sockaddr_in6>.size)
+            #else
             var len = socklen_t(MemoryLayout<sockaddr_in6>.size)
+            #endif
             let res = withUnsafeMutablePointer(to: &addr) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
                     getsockname(fd, saPtr, &len)
                 }
             }
             if res == 0 {
-                var buf = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                var buf = [CChar](repeating: 0, count: 128)
                 var sin6Addr = addr.sin6_addr
                 let hostStr: String
-                if inet_ntop(AF_INET6, &sin6Addr, &buf, socklen_t(buf.count)) != nil {
+                #if canImport(WinSDK)
+                let ok = inet_ntop(AF_INET6, &sin6Addr, &buf, buf.count) != nil
+                #else
+                let ok = inet_ntop(AF_INET6, &sin6Addr, &buf, socklen_t(buf.count)) != nil
+                #endif
+                if ok {
                     let bytes = buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
                     hostStr = String(decoding: bytes, as: UTF8.self)
                 } else {
@@ -618,17 +749,26 @@ public final class POSIXHTTPServer: Sendable {
             return ServerSocketAddress(host: fallbackHost, port: fallbackPort, isIPv6: true)
         } else {
             var addr = sockaddr_in()
+            #if canImport(WinSDK)
+            var len = Int32(MemoryLayout<sockaddr_in>.size)
+            #else
             var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+            #endif
             let res = withUnsafeMutablePointer(to: &addr) { ptr in
                 ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
                     getsockname(fd, saPtr, &len)
                 }
             }
             if res == 0 {
-                var buf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                var buf = [CChar](repeating: 0, count: 64)
                 var sinAddr = addr.sin_addr
                 let hostStr: String
-                if inet_ntop(AF_INET, &sinAddr, &buf, socklen_t(buf.count)) != nil {
+                #if canImport(WinSDK)
+                let ok = inet_ntop(AF_INET, &sinAddr, &buf, buf.count) != nil
+                #else
+                let ok = inet_ntop(AF_INET, &sinAddr, &buf, socklen_t(buf.count)) != nil
+                #endif
+                if ok {
                     let bytes = buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
                     hostStr = String(decoding: bytes, as: UTF8.self)
                 } else {
@@ -643,19 +783,36 @@ public final class POSIXHTTPServer: Sendable {
     private func startAcceptLoop() {
         let task = Task.detached(priority: .userInitiated) { [weak self] in
             while let self, !Task.isCancelled, !self.stopped.withLock({ $0 }) {
-                var pfd = pollfd(fd: self.listenFD, events: Int16(POLLIN), revents: 0)
-                let ready = poll(&pfd, 1, 0)
-                if ready < 0 {
-                    if errno == EINTR { continue }
-                    break
-                }
-                if ready == 0 {
+                switch Self.pollReadable(self.listenFD) {
+                case .interrupted:
+                    continue
+                case .timeout:
                     try? await Task.sleep(for: .milliseconds(2))
                     continue
+                case .error:
+                    break
+                case .ready:
+                    break
                 }
-                if (pfd.revents & Int16(POLLNVAL | POLLERR)) != 0 { break }
+                if self.stopped.withLock({ $0 }) { break }
 
                 var storage = sockaddr_storage()
+                #if canImport(WinSDK)
+                var addrLen = Int32(MemoryLayout<sockaddr_storage>.size)
+                let clientFD = withUnsafeMutablePointer(to: &storage) { ptr in
+                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
+                        WinSDK.accept(self.listenFD, saPtr, &addrLen)
+                    }
+                }
+                if clientFD == INVALID_SOCKET {
+                    let err = WSAGetLastError()
+                    if err == WSAEWOULDBLOCK || err == WSAEINTR {
+                        try? await Task.sleep(for: .milliseconds(2))
+                        continue
+                    }
+                    break
+                }
+                #else
                 var addrLen = socklen_t(MemoryLayout<sockaddr_storage>.size)
                 let clientFD = withUnsafeMutablePointer(to: &storage) { ptr in
                     ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
@@ -669,15 +826,13 @@ public final class POSIXHTTPServer: Sendable {
                     }
                     break
                 }
+                #endif
 
                 #if canImport(Darwin)
                 var noSigPipe: Int32 = 1
                 _ = setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
                 #endif
-                let cflags = fcntl(clientFD, F_GETFL, 0)
-                if cflags >= 0 {
-                    _ = fcntl(clientFD, F_SETFL, cflags | O_NONBLOCK)
-                }
+                Self.setNonBlocking(clientFD)
 
                 self.activeFDs.withLock { _ = $0.insert(clientFD) }
                 Task.detached { [weak self] in
@@ -688,7 +843,7 @@ public final class POSIXHTTPServer: Sendable {
         acceptTask.withLock { $0 = task }
     }
 
-    private func serveConnection(_ fd: Int32) async {
+    private func serveConnection(_ fd: NativeSocket) async {
         defer {
             let shouldClose = activeFDs.withLock { $0.remove(fd) != nil }
             if shouldClose {
@@ -739,7 +894,7 @@ public final class POSIXHTTPServer: Sendable {
         }
 
         await writeHTTPResponse(fd: fd, method: request.method, response: response)
-        // Perform graceful TCP half-close (FIN) before close(fd) so macOS/Linux URLSession
+        // Perform graceful TCP half-close (FIN) before close(fd) so macOS/Linux/Windows URLSession
         // never sees a premature TCP RST (-1005 NSURLErrorNetworkConnectionLost) while reading.
         #if canImport(Darwin)
         _ = Darwin.shutdown(fd, SHUT_WR)
@@ -747,6 +902,8 @@ public final class POSIXHTTPServer: Sendable {
         _ = Glibc.shutdown(fd, Int32(SHUT_WR))
         #elseif canImport(Musl)
         _ = Musl.shutdown(fd, Int32(SHUT_WR))
+        #elseif canImport(WinSDK)
+        _ = WinSDK.shutdown(fd, SD_SEND)
         #endif
         _ = await Self.readChunk(fd: fd, maxBytes: 1024, timeoutMs: 25)
     }
@@ -758,7 +915,7 @@ public final class POSIXHTTPServer: Sendable {
         let body: [UInt8]
     }
 
-    private func readHTTPRequest(fd: Int32, buffer: inout [UInt8]) async -> ParsedRawHTTP? {
+    private func readHTTPRequest(fd: NativeSocket, buffer: inout [UInt8]) async -> ParsedRawHTTP? {
         let maxHeaderBytes = 64 * 1024
         var headerEndIndex: Int? = nil
 
@@ -832,7 +989,7 @@ public final class POSIXHTTPServer: Sendable {
         return ParsedRawHTTP(method: method, target: target, headers: headers, body: body)
     }
 
-    private func readChunkedBody(fd: Int32, buffer: inout [UInt8]) async -> [UInt8]? {
+    private func readChunkedBody(fd: NativeSocket, buffer: inout [UInt8]) async -> [UInt8]? {
         var out: [UInt8] = []
         while true {
             var lineEnd: Int? = nil
@@ -875,7 +1032,7 @@ public final class POSIXHTTPServer: Sendable {
         }
     }
 
-    private func writeHTTPResponse(fd: Int32, method: String, response: ServerHTTPResponse) async {
+    private func writeHTTPResponse(fd: NativeSocket, method: String, response: ServerHTTPResponse) async {
         let reason = Self.reasonPhrase(for: response.statusCode)
         var headLines: [String] = ["HTTP/1.1 \(response.statusCode) \(reason)"]
         var normalizedHeaders = response.headers
@@ -974,31 +1131,44 @@ public final class POSIXHTTPServer: Sendable {
         return nil
     }
 
-    fileprivate static func readChunk(fd: Int32, maxBytes: Int, timeoutMs: Int) async -> [UInt8]? {
+    fileprivate static func readChunk(fd: NativeSocket, maxBytes: Int, timeoutMs: Int) async -> [UInt8]? {
         let deadlineMs = Flock.currentEpochMs() + Int64(timeoutMs)
         while Flock.currentEpochMs() < deadlineMs {
             if Task.isCancelled { return nil }
-            var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-            let ready = poll(&pfd, 1, 0)
-            if ready < 0 {
-                if errno == EINTR { continue }
-                return nil
-            }
-            if ready == 0 {
+            switch pollReadable(fd) {
+            case .interrupted:
+                continue
+            case .timeout:
                 try? await Task.sleep(for: .milliseconds(2))
                 continue
+            case .error:
+                return nil
+            case .ready:
+                break
             }
-            if (pfd.revents & Int16(POLLERR | POLLNVAL)) != 0 { return nil }
             var buf = [UInt8](repeating: 0, count: maxBytes)
             let n = buf.withUnsafeMutableBytes { raw -> Int in
                 guard let base = raw.baseAddress else { return -1 }
+                #if canImport(WinSDK)
+                let count = Int32(min(maxBytes, Int(Int32.max)))
+                return Int(WinSDK.recv(fd, base.assumingMemoryBound(to: CChar.self), count, 0))
+                #else
                 return recv(fd, base, maxBytes, 0)
+                #endif
             }
             if n < 0 {
+                #if canImport(WinSDK)
+                let err = WSAGetLastError()
+                if err == WSAEINTR || err == WSAEWOULDBLOCK {
+                    try? await Task.sleep(for: .milliseconds(2))
+                    continue
+                }
+                #else
                 if errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK {
                     try? await Task.sleep(for: .milliseconds(2))
                     continue
                 }
+                #endif
                 return nil
             }
             if n == 0 { return [] }
@@ -1007,10 +1177,10 @@ public final class POSIXHTTPServer: Sendable {
         return nil
     }
 
-    fileprivate static func writeAll(fd: Int32, bytes: [UInt8]) async -> Bool {
+    fileprivate static func writeAll(fd: NativeSocket, bytes: [UInt8]) async -> Bool {
         guard !bytes.isEmpty else { return true }
         var written = 0
-        #if canImport(Darwin)
+        #if canImport(Darwin) || canImport(WinSDK)
         let flags: Int32 = 0
         #else
         let flags: Int32 = Int32(MSG_NOSIGNAL)
@@ -1019,29 +1189,41 @@ public final class POSIXHTTPServer: Sendable {
             if Task.isCancelled { return false }
             let n = bytes.withUnsafeBytes { raw -> Int in
                 guard let base = raw.baseAddress else { return -1 }
+                #if canImport(WinSDK)
+                let count = Int32(min(bytes.count - written, Int(Int32.max)))
+                return Int(WinSDK.send(fd, base.advanced(by: written).assumingMemoryBound(to: CChar.self), count, flags))
+                #else
                 return send(fd, base.advanced(by: written), bytes.count - written, flags)
+                #endif
             }
             if n > 0 {
                 written += n
                 continue
             }
             if n == 0 { return false }
-            let err = errno
-            if err == EINTR { continue }
-            if err == EAGAIN || err == EWOULDBLOCK {
-                var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
-                let ready = poll(&pfd, 1, 0)
-                if ready < 0 && errno != EINTR { return false }
-                if (pfd.revents & Int16(POLLERR | POLLHUP | POLLNVAL)) != 0 { return false }
+            #if canImport(WinSDK)
+            let err = WSAGetLastError()
+            if err == WSAEINTR { continue }
+            if err == WSAEWOULDBLOCK {
+                if case .error = pollWritable(fd) { return false }
                 try? await Task.sleep(for: .milliseconds(2))
                 continue
             }
+            #else
+            let err = errno
+            if err == EINTR { continue }
+            if err == EAGAIN || err == EWOULDBLOCK {
+                if case .error = pollWritable(fd) { return false }
+                try? await Task.sleep(for: .milliseconds(2))
+                continue
+            }
+            #endif
             return false
         }
         return true
     }
 
-    fileprivate static func closeFD(_ fd: Int32) {
+    fileprivate static func closeFD(_ fd: NativeSocket) {
         #if canImport(Darwin)
         _ = Darwin.shutdown(fd, SHUT_RDWR)
         _ = Darwin.close(fd)
@@ -1051,6 +1233,9 @@ public final class POSIXHTTPServer: Sendable {
         #elseif canImport(Musl)
         _ = Musl.shutdown(fd, Int32(SHUT_RDWR))
         _ = Musl.close(fd)
+        #elseif canImport(WinSDK)
+        _ = WinSDK.shutdown(fd, SD_BOTH)
+        _ = WinSDK.closesocket(fd)
         #endif
     }
 
@@ -1083,14 +1268,14 @@ public final class POSIXHTTPServer: Sendable {
     #endif
 }
 
-// MARK: - RFC 6455 POSIX WebSocket Connection
+// MARK: - RFC 6455 POSIX / Winsock2 WebSocket Connection
 
-#if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+#if canImport(Darwin) || canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
 internal final class POSIXWebSocketConnection: ServerWebSocketConnection, Sendable {
     private static let guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
     let incoming: AsyncStream<ServerWebSocketFrame>
-    private let fd: Int32
+    private let fd: POSIXHTTPServer.NativeSocket
     private let closed = Mutex(false)
 
     static func computeAcceptKey(for clientKey: String) -> String {
@@ -1098,7 +1283,7 @@ internal final class POSIXWebSocketConnection: ServerWebSocketConnection, Sendab
         return bytesToBase64(digest)
     }
 
-    init(fd: Int32, initialBuffer: [UInt8]) {
+    init(fd: POSIXHTTPServer.NativeSocket, initialBuffer: [UInt8]) {
         self.fd = fd
         let (stream, continuation) = AsyncStream<ServerWebSocketFrame>.makeStream()
         self.incoming = stream
@@ -1170,7 +1355,7 @@ internal final class POSIXWebSocketConnection: ServerWebSocketConnection, Sendab
         let payload: [UInt8]
     }
 
-    private static func ensureBytes(fd: Int32, buffer: inout [UInt8], count: Int) async -> Bool {
+    private static func ensureBytes(fd: POSIXHTTPServer.NativeSocket, buffer: inout [UInt8], count: Int) async -> Bool {
         while buffer.count < count {
             guard let chunk = await POSIXHTTPServer.readChunk(fd: fd, maxBytes: 8192, timeoutMs: 30_000),
                   !chunk.isEmpty else {
@@ -1181,7 +1366,7 @@ internal final class POSIXWebSocketConnection: ServerWebSocketConnection, Sendab
         return true
     }
 
-    private static func readFrame(fd: Int32, buffer: inout [UInt8]) async -> RawFrame? {
+    private static func readFrame(fd: POSIXHTTPServer.NativeSocket, buffer: inout [UInt8]) async -> RawFrame? {
         guard await ensureBytes(fd: fd, buffer: &buffer, count: 2) else { return nil }
         let b0 = buffer[0]
         let b1 = buffer[1]
@@ -1220,7 +1405,7 @@ internal final class POSIXWebSocketConnection: ServerWebSocketConnection, Sendab
         return RawFrame(opcode: opcode, payload: payload)
     }
 
-    private static func writeRawFrame(fd: Int32, opcode: UInt8, payload: [UInt8]) async -> Bool {
+    private static func writeRawFrame(fd: POSIXHTTPServer.NativeSocket, opcode: UInt8, payload: [UInt8]) async -> Bool {
         var frame: [UInt8] = [0x80 | (opcode & 0x0F)]
         if payload.count < 126 {
             frame.append(UInt8(payload.count))

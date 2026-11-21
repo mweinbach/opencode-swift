@@ -9,7 +9,10 @@ import OpenCodeUtil
 struct LiveModelsDevTests {
     // MARK: - 1. Real Upstream 9MB Snapshot Decoding & Filtering
 
-    @Test("Decodes real upstream 9MB v2 snapshot.txt preserving API order, costs, limits, modes, and variants")
+    @Test(
+        "Decodes real upstream 9MB v2 snapshot.txt preserving API order, costs, limits, modes, and variants",
+        .enabled(if: LiveModelsDevHelper.hasRealUpstreamSnapshot())
+    )
     func decodesRealUpstreamSnapshotCatalog() throws {
         let text = try LiveModelsDevHelper.loadRealUpstreamSnapshotText()
         #expect(text.utf8.count > 1_000_000)

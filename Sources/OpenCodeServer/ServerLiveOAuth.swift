@@ -635,7 +635,6 @@ public final class ServerLiveOAuthManager: Sendable {
         let (srvToStop, callback): (POSIXHTTPServer?, (@Sendable (IntegrationID) async -> Void)?) = state.withLock { s in
             var srv: POSIXHTTPServer? = nil
             if var entry = s.attempts[key] {
-                entry.status = .complete(time: entry.time)
                 entry.settled = true
                 entry.pollTask = nil
                 srv = entry.callbackServer
@@ -649,6 +648,13 @@ public final class ServerLiveOAuthManager: Sendable {
             await callback(integrationID)
         }
         await emitCatalogUpdated()
+
+        state.withLock { s in
+            if var entry = s.attempts[key] {
+                entry.status = .complete(time: entry.time)
+                s.attempts[key] = entry
+            }
+        }
 
         if let srv = srvToStop {
             if deferServerStop {

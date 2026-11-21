@@ -1214,9 +1214,9 @@ public enum CoreSessionModelRequest {
     ) -> Int {
         let requested = min(limit.output > 0 ? limit.output : outputTokenFallback, outputTokenMax)
         guard let inputTokens, limit.context > 0 else { return requested }
-        let room = Int(floor(Double(limit.context) * (1.0 - headroom)))
+        let room = Int((Double(limit.context) * (1.0 - headroom)).rounded(.down))
             - inputTokens.measured
-            - Int(ceil(Double(inputTokens.estimated) * (1.0 + estimateError)))
+            - Int((Double(inputTokens.estimated) * (1.0 + estimateError)).rounded(.up))
         return min(requested, max(outputTokenMin, room))
     }
 

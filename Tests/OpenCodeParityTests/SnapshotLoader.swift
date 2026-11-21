@@ -54,6 +54,36 @@ enum SnapshotJSON: Equatable, Decodable {
     }
     var arr: [SnapshotJSON]? { if case .array(let a) = self { return a }; return nil }
     var obj: [String: SnapshotJSON]? { if case .object(let o) = self { return o }; return nil }
+
+    /// Compares two snapshot values while permitting minor cross-platform `libm` ULP variance
+    /// (`pow`/`cbrt`/`atan2`) on floating-point leaves.
+    func matches(_ other: SnapshotJSON, floatTolerance: Double) -> Bool {
+        switch (self, other) {
+        case (.null, .null):
+            return true
+        case let (.bool(a), .bool(b)):
+            return a == b
+        case let (.int(a), .int(b)):
+            return a == b
+        case let (.string(a), .string(b)):
+            return a == b
+        case let (.double(a), .double(b)):
+            if a == b { return true }
+            let scale = max(1.0, max(abs(a), abs(b)))
+            return abs(a - b) <= floatTolerance * scale
+        case let (.array(a), .array(b)):
+            guard a.count == b.count else { return false }
+            return zip(a, b).allSatisfy { $0.matches($1, floatTolerance: floatTolerance) }
+        case let (.object(a), .object(b)):
+            guard a.count == b.count else { return false }
+            for (k, v) in a {
+                guard let bv = b[k], v.matches(bv, floatTolerance: floatTolerance) else { return false }
+            }
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 struct SnapshotCase: Decodable {

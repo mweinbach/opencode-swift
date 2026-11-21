@@ -1,7 +1,7 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+#if canImport(Foundation)
 import Foundation
+#elseif canImport(FoundationEssentials)
+import FoundationEssentials
 #endif
 import Synchronization
 import OpenCodeCore
@@ -11,12 +11,10 @@ import OpenCodeUtil
 
 /// Non-Testing fixtures for `EnvironmentFilesystemParityTests` (keeps Foundation out of the `import Testing` file).
 enum EnvironmentFilesystemHelper {
-    typealias Environment = CoreLocation.Environment
-
     /// A machine registry over in-memory environments.
     struct StubMachines: Machines.Interface {
-        let environments: [Environment.ID: any Environment.Interface]
-        let homes: [Environment.ID: String]
+        let environments: [CoreLocation.Environment.ID: any CoreLocation.Environment.Interface]
+        let homes: [CoreLocation.Environment.ID: String]
 
         func add(_ name: String) async throws -> String { name }
         func remove(_ id: String) async throws {}
@@ -24,13 +22,13 @@ enum EnvironmentFilesystemHelper {
             environments.keys.sorted().map { Machines.Info(id: $0.rawValue, online: homes[$0] != nil, paired: true) }
         }
 
-        func get(_ id: String) async throws -> any Environment.Interface {
-            guard let environment = environments[Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
+        func get(_ id: String) async throws -> any CoreLocation.Environment.Interface {
+            guard let environment = environments[CoreLocation.Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
             return environment
         }
 
         func home(_ id: String) async throws -> String {
-            guard let home = homes[Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
+            guard let home = homes[CoreLocation.Environment.ID.make(id)] else { throw Machines.NotFound(machine: id) }
             return home
         }
 
@@ -64,23 +62,27 @@ enum EnvironmentFilesystemHelper {
         var recorded: [ProcessSpec] { specs.withLock { $0 } }
     }
 
-    static func memoryEnvironment(_ id: Environment.ID, files: [String: String] = [:], spawner: any ProcessSpawner = Environment.unavailableSpawner) async throws -> any Environment.Interface {
-        let driver = Environment.makeMemoryDriver()
+    static func memoryEnvironment(
+        _ id: CoreLocation.Environment.ID,
+        files: [String: String] = [:],
+        spawner: any ProcessSpawner = CoreLocation.Environment.unavailableSpawner
+    ) async throws -> any CoreLocation.Environment.Interface {
+        let driver = CoreLocation.Environment.makeMemoryDriver()
         for (path, text) in files {
             if let slash = path.lastIndex(of: "/"), slash != path.startIndex {
                 try await driver.mkdir(String(path[..<slash]))
             }
             try await driver.write(path, bytes: Array(text.utf8))
         }
-        return Environment.Service(id: id, files: driver, spawner: spawner)
+        return CoreLocation.Environment.Service(id: id, files: driver, spawner: spawner)
     }
 
-    static func encodeID(_ id: Environment.ID) throws -> String {
+    static func encodeID(_ id: CoreLocation.Environment.ID) throws -> String {
         String(decoding: try JSONEncoder().encode(id), as: UTF8.self)
     }
 
-    static func decodeID(_ json: String) throws -> Environment.ID {
-        try JSONDecoder().decode(Environment.ID.self, from: Data(json.utf8))
+    static func decodeID(_ json: String) throws -> CoreLocation.Environment.ID {
+        try JSONDecoder().decode(CoreLocation.Environment.ID.self, from: Data(json.utf8))
     }
 
     static func roundTripTarget(_ target: CoreFilesystem.FileAccess.Target) throws -> (json: String, decoded: CoreFilesystem.FileAccess.Target) {

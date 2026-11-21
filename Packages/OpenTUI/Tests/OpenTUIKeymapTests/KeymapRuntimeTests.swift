@@ -1,9 +1,17 @@
+import Synchronization
 import Testing
 import OpenTUIKeymap
 
-private final class Box<T: Sendable>: @unchecked Sendable {
-    var value: T
-    init(_ value: T) { self.value = value }
+private final class Box<T: Sendable>: Sendable {
+    private let storage: Mutex<T>
+    init(_ value: T) { self.storage = Mutex(value) }
+    var value: T {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
+    func withValue<R>(_ body: (inout T) -> R) -> R {
+        storage.withLock { body(&$0) }
+    }
 }
 
 private enum RuntimeTestError: Error, Sendable, KeymapDescribedError {
@@ -675,7 +683,9 @@ struct KeymapRuntimeDispatchTests {
         // Case 2: Press "j" and wait past timeout -> deferred flushes and runs "move.down"
         keymap.handleKeyPress(BasicKeymapEvent(name: "j"))
         #expect(keymap.hasPendingSequence())
-        try await Task.sleep(for: .milliseconds(60))
+        for _ in 0..<200 where keymap.hasPendingSequence() || ran.value.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(!keymap.hasPendingSequence())
         #expect(ran.value == ["exit.insert", "move.down"])
 

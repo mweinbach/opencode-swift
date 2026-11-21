@@ -153,6 +153,18 @@ enum LiveModelsDevHelper {
         return headers.first(where: { $0.key.lowercased() == lower })?.value
     }
 
+    static func hasRealUpstreamSnapshot() -> Bool {
+        var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        for _ in 0..<8 {
+            let candidate = dir.appendingPathComponent("upstream/opencode/packages/core/src/models-dev/snapshot.txt")
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return true
+            }
+            dir.deleteLastPathComponent()
+        }
+        return false
+    }
+
     static func loadRealUpstreamSnapshotText() throws -> String {
         var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         for _ in 0..<8 {

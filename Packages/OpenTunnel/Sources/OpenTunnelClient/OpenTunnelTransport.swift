@@ -515,12 +515,14 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
     private final class SocketHandle: Sendable {
         let fd: Mutex<Int32?>
         let writeLock = Mutex(())
+        let stopped = Mutex(false)
 
         init(fd: Int32) {
             self.fd = Mutex(fd)
         }
 
         func closeIfOpen() {
+            stopped.withLock { $0 = true }
             if let activeFD = fd.withLock({ f -> Int32? in
                 let prev = f
                 f = nil
@@ -542,13 +544,18 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
 
     public let incoming: AsyncThrowingStream<[UInt8], any Error>
     private let handle: SocketHandle
-    private let readTaskBox: Mutex<Task<Void, Never>?> = Mutex(nil)
 
     static func connect(host: String, port: Int) async throws -> POSIXLocalTCPStream {
-        try await Task.detached {
-            let fd = try openConnectedSocket(host: host, port: port)
-            return POSIXLocalTCPStream(fd: fd)
-        }.value
+        try await withCheckedThrowingContinuation { continuation in
+            Thread.detachNewThread {
+                do {
+                    let fd = try openConnectedSocket(host: host, port: port)
+                    continuation.resume(returning: POSIXLocalTCPStream(fd: fd))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private init(fd: Int32) {
@@ -559,9 +566,9 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
         let continuation = contStorage!
         self.incoming = stream
 
-        let reader = Task.detached {
+        Thread.detachNewThread {
             var buffer = [UInt8](repeating: 0, count: OpenTunnelBridgeProtocol.maxDataPayloadSize)
-            while !Task.isCancelled {
+            while !handle.stopped.withLock({ $0 }) {
                 guard let activeFD = handle.fd.withLock({ $0 }) else {
                     continuation.finish()
                     return
@@ -573,7 +580,7 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
                 }
                 if ready < 0 {
                     if errno == EINTR { continue }
-                    if handle.fd.withLock({ $0 }) == nil {
+                    if handle.stopped.withLock({ $0 }) || handle.fd.withLock({ $0 }) == nil {
                         continuation.finish()
                     } else {
                         continuation.finish(throwing: OpenTunnelClientError.transient("Local target poll failed (errno \(errno))"))
@@ -596,7 +603,7 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
                 } else if errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK {
                     continue
                 } else {
-                    if handle.fd.withLock({ $0 }) == nil {
+                    if handle.stopped.withLock({ $0 }) || handle.fd.withLock({ $0 }) == nil {
                         continuation.finish()
                     } else {
                         continuation.finish(throwing: OpenTunnelClientError.transient("Local target read failed (errno \(errno))"))
@@ -606,39 +613,45 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
             }
             continuation.finish()
         }
-        self.readTaskBox.withLock { $0 = reader }
     }
 
     func write(_ bytes: [UInt8]) async throws {
         guard !bytes.isEmpty else { return }
         let handle = self.handle
-        try await Task.detached {
-            try handle.writeLock.withLock { _ in
-                guard let activeFD = handle.fd.withLock({ $0 }) else {
-                    throw OpenTunnelClientError.transient("Local target connection is closed")
-                }
-                var sent = 0
-                while sent < bytes.count {
-                    let n: Int = bytes.withUnsafeBytes { raw in
-                        guard let base = raw.baseAddress else { return 0 }
-                        #if canImport(Darwin)
-                        return Int(Darwin.send(activeFD, base.advanced(by: sent), bytes.count - sent, 0))
-                        #elseif canImport(Glibc)
-                        return Int(Glibc.send(activeFD, base.advanced(by: sent), bytes.count - sent, Int32(MSG_NOSIGNAL)))
-                        #elseif canImport(Musl)
-                        return Int(Musl.send(activeFD, base.advanced(by: sent), bytes.count - sent, Int32(MSG_NOSIGNAL)))
-                        #endif
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            Thread.detachNewThread {
+                do {
+                    try handle.writeLock.withLock { _ in
+                        guard let activeFD = handle.fd.withLock({ $0 }) else {
+                            throw OpenTunnelClientError.transient("Local target connection is closed")
+                        }
+                        var sent = 0
+                        while sent < bytes.count {
+                            let n: Int = bytes.withUnsafeBytes { raw in
+                                guard let base = raw.baseAddress else { return 0 }
+                                #if canImport(Darwin)
+                                return Int(Darwin.send(activeFD, base.advanced(by: sent), bytes.count - sent, 0))
+                                #elseif canImport(Glibc)
+                                return Int(Glibc.send(activeFD, base.advanced(by: sent), bytes.count - sent, Int32(MSG_NOSIGNAL)))
+                                #elseif canImport(Musl)
+                                return Int(Musl.send(activeFD, base.advanced(by: sent), bytes.count - sent, Int32(MSG_NOSIGNAL)))
+                                #endif
+                            }
+                            if n > 0 {
+                                sent += n
+                            } else if n < 0 && errno == EINTR {
+                                continue
+                            } else {
+                                throw OpenTunnelClientError.transient("Local target write failed (errno \(errno))")
+                            }
+                        }
                     }
-                    if n > 0 {
-                        sent += n
-                    } else if n < 0 && errno == EINTR {
-                        continue
-                    } else {
-                        throw OpenTunnelClientError.transient("Local target write failed (errno \(errno))")
-                    }
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
-        }.value
+        }
     }
 
     func finishWriting() async {
@@ -653,22 +666,10 @@ internal final class POSIXLocalTCPStream: OpenTunnelByteStream, Sendable {
     }
 
     func close() async {
-        let reader = readTaskBox.withLock { t -> Task<Void, Never>? in
-            let prev = t
-            t = nil
-            return prev
-        }
-        reader?.cancel()
         handle.closeIfOpen()
     }
 
     deinit {
-        let reader = readTaskBox.withLock { t -> Task<Void, Never>? in
-            let prev = t
-            t = nil
-            return prev
-        }
-        reader?.cancel()
         handle.closeIfOpen()
     }
 

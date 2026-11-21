@@ -1,11 +1,16 @@
+import Synchronization
 import Testing
 import OpenTUIKeymap
 
 // MARK: - Test Support Helpers (Pure Swift, Zero Foundation)
 
-private final class ValueBox<T: Sendable>: @unchecked Sendable {
-    var value: T
-    init(_ value: T) { self.value = value }
+private final class ValueBox<T: Sendable>: Sendable {
+    private let storage: Mutex<T>
+    init(_ value: T) { self.storage = Mutex(value) }
+    var value: T {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
 }
 
 private enum TestFailure: Error, Sendable, KeymapDescribedError {

@@ -1254,9 +1254,9 @@ extension ProcessDaemon {
             // parity: process-daemon/src/transport/windows.rs#Cancellation [status=implemented hash=099c8548a8b7]
             public final class Cancellation: ConnectionCancellation, Sendable {
                 #if os(Windows)
-                private let pipe: WindowsPipe
+                private let pipe: WindowsNamedPipeHandle
 
-                internal init(pipe: WindowsPipe) {
+                internal init(pipe: WindowsNamedPipeHandle) {
                     self.pipe = pipe
                 }
                 #else
@@ -1290,7 +1290,7 @@ extension ProcessDaemon {
                 private let cancellation: Cancellation
                 private let state = MonitorState()
 
-                internal init(pipe: WindowsPipe, cancellation: Cancellation) {
+                internal init(pipe: WindowsNamedPipeHandle, cancellation: Cancellation) {
                     self.cancellation = cancellation
                     let shared = self.state
                     Thread.detachNewThread {
@@ -1362,10 +1362,10 @@ extension ProcessDaemon {
             // parity: process-daemon/src/transport/windows.rs#Connection [status=implemented hash=84dbd09c584c]
             public final class Connection: StreamConnection, @unchecked Sendable {
                 #if os(Windows)
-                private let pipeState: Mutex<WindowsPipe?>
+                private let pipeState: Mutex<WindowsNamedPipeHandle?>
                 private let timeouts = Mutex<(readMs: UInt64?, writeMs: UInt64?)>((nil, nil))
 
-                internal init(pipe: WindowsPipe) {
+                internal init(pipe: WindowsNamedPipeHandle) {
                     self.pipeState = Mutex(pipe)
                 }
 
@@ -1373,7 +1373,7 @@ extension ProcessDaemon {
                     closeConnection()
                 }
 
-                private func requirePipe() throws -> WindowsPipe {
+                private func requirePipe() throws -> WindowsNamedPipeHandle {
                     guard let pipe = pipeState.withLock({ $0 }) else {
                         throw DaemonError("named pipe connection is closed")
                     }
@@ -1381,7 +1381,7 @@ extension ProcessDaemon {
                 }
 
                 internal static func readChunk(
-                    pipe: WindowsPipe,
+                    pipe: WindowsNamedPipeHandle,
                     maxCount: Int,
                     timeoutMs: UInt64?
                 ) throws -> [UInt8] {
@@ -1413,7 +1413,7 @@ extension ProcessDaemon {
                 }
 
                 private static func writeChunk(
-                    pipe: WindowsPipe,
+                    pipe: WindowsNamedPipeHandle,
                     bytes: [UInt8],
                     offset: Int,
                     count: Int,
@@ -1488,7 +1488,7 @@ extension ProcessDaemon {
                             }
                         }
                     )
-                    return Connection(pipe: try WindowsPipe(handle: handle))
+                    return Connection(pipe: try WindowsNamedPipeHandle(handle: handle))
                     #else
                     _ = wideEndpoint
                     let conn = try InMemoryHub.shared.connect(endpoint: endpoint)
@@ -1705,7 +1705,10 @@ extension ProcessDaemon {
                 public func accept() throws -> Connection? {
                     #if os(Windows)
                     return try state.withLock { s -> Connection? in
-                        if s.stopped || !(try s.pending.ready()) {
+                        if s.stopped {
+                            return nil
+                        }
+                        guard try s.pending.ready() else {
                             return nil
                         }
                         // Create the next instance BEFORE handing off the connected one so the

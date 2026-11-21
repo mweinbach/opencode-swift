@@ -965,7 +965,7 @@ extension TUIInteractiveClient {
         let slug = title.lowercased().map { ch -> Character in
             ch.isLetter || ch.isNumber ? ch : "-"
         }
-        let cleanSlug = String(slug).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let cleanSlug = String(slug.drop(while: { $0 == "-" }).reversed().drop(while: { $0 == "-" }).reversed())
         let filename = "opencode-\(cleanSlug.isEmpty ? "session" : String(cleanSlug.prefix(32))).md"
         let targetPath = "\(dir)/\(filename)"
         Task { [weak self] in

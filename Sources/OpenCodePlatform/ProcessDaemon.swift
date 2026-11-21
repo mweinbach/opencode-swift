@@ -1518,6 +1518,8 @@ extension ProcessDaemon {
             case .native:
                 #if os(Windows)
                 return try spawnNativeWindowsPipe(id: id, order: order, request: request)
+                #elseif os(Linux) && (canImport(Glibc) || canImport(Musl))
+                return try spawnNativeLinuxPipe(id: id, order: order, request: request)
                 #elseif os(macOS) || os(Linux)
                 return try spawnNativePipe(id: id, order: order, request: request)
                 #else
@@ -1534,27 +1536,40 @@ extension ProcessDaemon {
             terminal: Ghostty.Terminal,
             replayCapacity: Int
         ) throws -> SessionActor {
-            let masterFD = posix_openpt(O_RDWR | O_NOCTTY)
-            guard masterFD >= 0 else {
+            let masterFD: Int32
+            let slaveFD: Int32
+            var ws = winsize(ws_row: request.rows, ws_col: request.cols, ws_xpixel: 0, ws_ypixel: 0)
+            #if canImport(Darwin)
+            let openedMaster = posix_openpt(O_RDWR | O_NOCTTY)
+            guard openedMaster >= 0 else {
                 throw DaemonError("posix_openpt failed with errno \(errno)")
             }
-            guard grantpt(masterFD) == 0, unlockpt(masterFD) == 0, let slaveNamePtr = ptsname(masterFD) else {
+            guard grantpt(openedMaster) == 0, unlockpt(openedMaster) == 0, let slaveNamePtr = ptsname(openedMaster) else {
                 let err = errno
-                _ = close(masterFD)
+                _ = close(openedMaster)
                 throw DaemonError("failed to initialize PTY slave: errno \(err)")
             }
             let slavePath = String(cString: slaveNamePtr)
-            let slaveFD = open(slavePath, O_RDWR | O_NOCTTY)
-            guard slaveFD >= 0 else {
+            let openedSlave = open(slavePath, O_RDWR | O_NOCTTY)
+            guard openedSlave >= 0 else {
                 let err = errno
-                _ = close(masterFD)
+                _ = close(openedMaster)
                 throw DaemonError("open(\(slavePath)) failed with errno \(err)")
             }
+            masterFD = openedMaster
+            slaveFD = openedSlave
+            _ = ioctl(masterFD, UInt(TIOCSWINSZ), &ws)
+            #else
+            var openedMaster: Int32 = -1
+            var openedSlave: Int32 = -1
+            guard openpty(&openedMaster, &openedSlave, nil, nil, &ws) == 0 else {
+                throw DaemonError("openpty failed with errno \(errno)")
+            }
+            masterFD = openedMaster
+            slaveFD = openedSlave
+            #endif
             _ = fcntl(masterFD, F_SETFD, FD_CLOEXEC)
             _ = fcntl(slaveFD, F_SETFD, FD_CLOEXEC)
-
-            var ws = winsize(ws_row: request.rows, ws_col: request.cols, ws_xpixel: 0, ws_ypixel: 0)
-            _ = ioctl(masterFD, UInt(TIOCSWINSZ), &ws)
 
             let process = Foundation.Process()
             if request.program.contains("/") {
@@ -1575,6 +1590,27 @@ extension ProcessDaemon {
             process.standardInput = slaveHandle
             process.standardOutput = slaveHandle
             process.standardError = slaveHandle
+
+            #if !canImport(Darwin)
+            struct LinuxPtyExitBridge: @unchecked Sendable {
+                var exited: (Int32, Foundation.Process.TerminationReason)? = nil
+                var deliver: (@Sendable (Int32, Foundation.Process.TerminationReason) -> Void)? = nil
+            }
+            let linuxExitBridge = Mutex(LinuxPtyExitBridge())
+            process.terminationHandler = { proc in
+                let status = proc.terminationStatus
+                let reason = proc.terminationReason
+                let deliver = linuxExitBridge.withLock { state -> (@Sendable (Int32, Foundation.Process.TerminationReason) -> Void)? in
+                    if let fn = state.deliver {
+                        state.deliver = nil
+                        return fn
+                    }
+                    state.exited = (status, reason)
+                    return nil
+                }
+                deliver?(status, reason)
+            }
+            #endif
 
             do {
                 try process.run()
@@ -1693,6 +1729,7 @@ extension ProcessDaemon {
 
             // Child exit waiter thread: keep slaveFD open until child finishes so Darwin XNU does not
             // tear down the PTY output queue before the reader thread drains it.
+            #if canImport(Darwin)
             Thread.detachNewThread {
                 process.waitUntilExit()
                 // Brief yield so reader thread drains any already-written bytes before slave EOF
@@ -1704,6 +1741,30 @@ extension ProcessDaemon {
                     actor.emitChildExit(exitCode: UInt32(bitPattern: process.terminationStatus))
                 }
             }
+            #else
+            let deliverExit: @Sendable (Int32, Foundation.Process.TerminationReason) -> Void = { status, reason in
+                Thread.detachNewThread {
+                    Thread.sleep(forTimeInterval: 0.01)
+                    closeSlaveOnce()
+                    if reason == .uncaughtSignal {
+                        actor.emitChildExit(exitCode: nil, signal: posixSignalName(status))
+                    } else {
+                        actor.emitChildExit(exitCode: UInt32(bitPattern: status))
+                    }
+                }
+            }
+            let alreadyExited = linuxExitBridge.withLock { state -> (Int32, Foundation.Process.TerminationReason)? in
+                if let exited = state.exited {
+                    state.exited = nil
+                    return exited
+                }
+                state.deliver = deliverExit
+                return nil
+            }
+            if let (status, reason) = alreadyExited {
+                deliverExit(status, reason)
+            }
+            #endif
 
             return actor
         }
@@ -2109,7 +2170,305 @@ extension ProcessDaemon {
         }
         #endif
 
-        #if os(macOS) || os(Linux)
+        #if os(Linux) && (canImport(Glibc) || canImport(Musl))
+        /// Native Linux pipe spawn mirroring `upstream/packages/process-daemon/src/service/pipe/unix.rs`:
+        /// spawns the child in its own process group (`POSIX_SPAWN_SETPGROUP`, pgid = child pid) so
+        /// `signal`/`kill` reach descendant processes (e.g. `sleep` under `/bin/sh -c`), and polls
+        /// output alongside cancel/exit wake pipes with a `DRAIN_AFTER_EXIT` deadline.
+        private static func spawnNativeLinuxPipe(
+            id: TerminalId,
+            order: UInt64,
+            request: CreatePipe
+        ) throws -> SessionActor {
+            let outputHandle = try openPipeOutputFile(at: request.outputPath)
+
+            func makeCloexecPipe() throws -> (read: Int32, write: Int32) {
+                var fds: [Int32] = [-1, -1]
+                guard pipe(&fds) == 0 else {
+                    throw DaemonError("pipe() failed with errno \(errno)")
+                }
+                _ = fcntl(fds[0], F_SETFD, FD_CLOEXEC)
+                _ = fcntl(fds[1], F_SETFD, FD_CLOEXEC)
+                return (fds[0], fds[1])
+            }
+
+            let outPipe: (read: Int32, write: Int32)
+            let cancelPipe: (read: Int32, write: Int32)
+            let exitedPipe: (read: Int32, write: Int32)
+            do {
+                outPipe = try makeCloexecPipe()
+                cancelPipe = try makeCloexecPipe()
+                exitedPipe = try makeCloexecPipe()
+            } catch {
+                try? outputHandle.close()
+                throw error
+            }
+
+            let devNullFD = open("/dev/null", O_RDONLY | O_CLOEXEC)
+            guard devNullFD >= 0 else {
+                let err = errno
+                _ = close(outPipe.read); _ = close(outPipe.write)
+                _ = close(cancelPipe.read); _ = close(cancelPipe.write)
+                _ = close(exitedPipe.read); _ = close(exitedPipe.write)
+                try? outputHandle.close()
+                throw DaemonError("open(/dev/null) failed with errno \(err)")
+            }
+
+            var fileActions = posix_spawn_file_actions_t()
+            posix_spawn_file_actions_init(&fileActions)
+            posix_spawn_file_actions_adddup2(&fileActions, devNullFD, STDIN_FILENO)
+            posix_spawn_file_actions_adddup2(&fileActions, outPipe.write, STDOUT_FILENO)
+            posix_spawn_file_actions_adddup2(&fileActions, outPipe.write, STDERR_FILENO)
+            #if canImport(Glibc)
+            if !request.cwd.isEmpty {
+                _ = request.cwd.withCString { posix_spawn_file_actions_addchdir_np(&fileActions, $0) }
+            }
+            #endif
+
+            var spawnAttr = posix_spawnattr_t()
+            posix_spawnattr_init(&spawnAttr)
+            var emptySigMask = sigset_t()
+            sigemptyset(&emptySigMask)
+            posix_spawnattr_setsigmask(&spawnAttr, &emptySigMask)
+            var defaultSigSet = sigset_t()
+            sigemptyset(&defaultSigSet)
+            for sig in [SIGCHLD, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM, SIGPIPE] {
+                sigaddset(&defaultSigSet, sig)
+            }
+            posix_spawnattr_setsigdefault(&spawnAttr, &defaultSigSet)
+            posix_spawnattr_setflags(
+                &spawnAttr,
+                Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF)
+            )
+            posix_spawnattr_setpgroup(&spawnAttr, 0)
+
+            let execPath: String
+            let argvStrings: [String]
+            if request.program.contains("/") {
+                execPath = request.program
+                argvStrings = [request.program] + request.args
+            } else {
+                execPath = "/usr/bin/env"
+                argvStrings = ["/usr/bin/env", request.program] + request.args
+            }
+            let envStrings = request.env.map { "\($0.key)=\($0.value)" }
+
+            var argvPtrs: [UnsafeMutablePointer<CChar>?] = argvStrings.map { strdup($0) }
+            argvPtrs.append(nil)
+            var envpPtrs: [UnsafeMutablePointer<CChar>?] = envStrings.map { strdup($0) }
+            envpPtrs.append(nil)
+
+            var spawnedPid: pid_t = 0
+            let spawnRc: Int32 = execPath.withCString { cPath in
+                argvPtrs.withUnsafeMutableBufferPointer { argvBuf in
+                    envpPtrs.withUnsafeMutableBufferPointer { envpBuf in
+                        posix_spawn(&spawnedPid, cPath, &fileActions, &spawnAttr, argvBuf.baseAddress!, envpBuf.baseAddress!)
+                    }
+                }
+            }
+
+            posix_spawn_file_actions_destroy(&fileActions)
+            posix_spawnattr_destroy(&spawnAttr)
+            for ptr in argvPtrs { if let ptr { free(ptr) } }
+            for ptr in envpPtrs { if let ptr { free(ptr) } }
+            _ = close(devNullFD)
+            _ = close(outPipe.write)
+
+            guard spawnRc == 0, spawnedPid > 0 else {
+                _ = close(outPipe.read)
+                _ = close(cancelPipe.read); _ = close(cancelPipe.write)
+                _ = close(exitedPipe.read); _ = close(exitedPipe.write)
+                try? outputHandle.close()
+                throw DaemonError("failed to spawn \(request.program): errno \(spawnRc)")
+            }
+
+            let childPidRaw = spawnedPid
+            let childPid = UInt32(childPidRaw)
+            let info = ProcessInfo(
+                id: id,
+                mode: .pipe,
+                pid: childPid,
+                command: [request.program] + request.args,
+                cwd: request.cwd,
+                groupId: request.groupId,
+                lifecycle: .running,
+                outputHead: 0,
+                outputTail: 0,
+                startedAt: currentUnixMs(),
+                exitedAt: nil,
+                pty: nil,
+                pipe: PipeInfo(
+                    outputPath: request.outputPath,
+                    outputLines: 0,
+                    outputError: nil,
+                    metadata: request.metadata
+                )
+            )
+            let actor = SessionActor(
+                id: id,
+                order: order,
+                info: info,
+                terminal: nil,
+                replayCapacity: 0
+            )
+            actor.pipeOutputHandle = outputHandle
+
+            let exited = Mutex<Bool>(false)
+            let recordedSignal = Mutex<String?>(nil)
+            let cancelWriteBox = Mutex<Int32>(cancelPipe.write)
+            let exitedWriteBox = Mutex<Int32>(exitedPipe.write)
+
+            let closeCancelWriteOnce: @Sendable () -> Void = {
+                let fd = cancelWriteBox.withLock { cur -> Int32 in
+                    let old = cur
+                    cur = -1
+                    return old
+                }
+                if fd >= 0 { _ = close(fd) }
+            }
+            let closeExitedWriteOnce: @Sendable () -> Void = {
+                let fd = exitedWriteBox.withLock { cur -> Int32 in
+                    let old = cur
+                    cur = -1
+                    return old
+                }
+                if fd >= 0 { _ = close(fd) }
+            }
+
+            let pipeProc = UnixPipe.Process(
+                pid: childPid,
+                signalFn: { sig in
+                    guard !exited.withLock({ $0 }) else { return }
+                    recordedSignal.withLock { if $0 == nil { $0 = sig.rawValue } }
+                    let cSig: Int32 = switch sig {
+                    case .term: SIGTERM
+                    case .int: SIGINT
+                    case .kill: SIGKILL
+                    }
+                    _ = killpg(childPidRaw, cSig)
+                    _ = DarwinOrPosixKill.send(childPidRaw, cSig)
+                },
+                killFn: {
+                    if !exited.withLock({ $0 }) {
+                        _ = killpg(childPidRaw, SIGKILL)
+                        _ = DarwinOrPosixKill.send(childPidRaw, SIGKILL)
+                    }
+                    closeCancelWriteOnce()
+                },
+                reapFn: {}
+            )
+            actor.pipeProcess = pipeProc
+            actor.killHandler = {
+                pipeProc.kill()
+            }
+
+            let outReadFD = outPipe.read
+            let cancelReadFD = cancelPipe.read
+            let exitedReadFD = exitedPipe.read
+
+            Thread.detachNewThread {
+                defer {
+                    _ = close(outReadFD)
+                    _ = close(cancelReadFD)
+                    _ = close(exitedReadFD)
+                }
+                var buf = [UInt8](repeating: 0, count: 8192)
+                var deadlineMs: UInt64? = nil
+                var writersClosed = false
+                let drainAfterExitMs: UInt64 = 1_000
+
+                while true {
+                    let timeoutMs: Int32
+                    if let deadline = deadlineMs, !writersClosed {
+                        let now = currentUnixMs()
+                        if now >= deadline {
+                            var check = pollfd(fd: outReadFD, events: Int16(POLLIN), revents: 0)
+                            let hungUp = poll(&check, 1, 0) > 0 && (check.revents & Int16(POLLHUP)) != 0
+                            if !hungUp {
+                                actor.emitReaderEof()
+                                return
+                            }
+                            writersClosed = true
+                            timeoutMs = -1
+                        } else {
+                            timeoutMs = Int32(min(deadline - now, UInt64(Int32.max)))
+                        }
+                    } else {
+                        timeoutMs = -1
+                    }
+
+                    var fds = [
+                        pollfd(fd: outReadFD, events: Int16(POLLIN), revents: 0),
+                        pollfd(fd: cancelReadFD, events: Int16(POLLIN), revents: 0),
+                        pollfd(fd: exitedReadFD, events: Int16(POLLIN), revents: 0),
+                    ]
+                    let nfds: nfds_t = deadlineMs == nil ? 3 : 2
+                    let ready = poll(&fds, nfds, timeoutMs)
+                    if ready < 0 {
+                        if errno == EINTR { continue }
+                        actor.emitReaderFailed("poll failed with errno \(errno)")
+                        return
+                    }
+                    if ready == 0 {
+                        continue
+                    }
+
+                    let mask = Int16(POLLIN | POLLHUP | POLLERR | POLLNVAL)
+                    if (fds[1].revents & mask) != 0 {
+                        actor.emitReaderEof()
+                        return
+                    }
+                    if nfds == 3 && (fds[2].revents & mask) != 0 {
+                        deadlineMs = currentUnixMs() + drainAfterExitMs
+                    }
+                    if (fds[0].revents & Int16(POLLHUP)) != 0 {
+                        writersClosed = true
+                    }
+                    if (fds[0].revents & mask) != 0 {
+                        let n = buf.withUnsafeMutableBytes { ptr in
+                            DarwinOrPosixIO.read(outReadFD, ptr.baseAddress!, ptr.count)
+                        }
+                        if n > 0 {
+                            actor.emitOutput(Array(buf[0..<n]))
+                        } else if n == 0 {
+                            actor.emitReaderEof()
+                            return
+                        } else if errno != EINTR {
+                            actor.emitReaderFailed("read failed with errno \(errno)")
+                            return
+                        }
+                    }
+                }
+            }
+
+            Thread.detachNewThread {
+                var status: Int32 = 0
+                while true {
+                    let waited = waitpid(childPidRaw, &status, 0)
+                    if waited < 0 && errno == EINTR { continue }
+                    break
+                }
+                exited.withLock { $0 = true }
+                closeExitedWriteOnce()
+
+                let termSig = status & 0x7F
+                let isSignaled = termSig != 0 && termSig != 0x7F
+                let exitCode = (status >> 8) & 0xFF
+                if isSignaled {
+                    let sigName = recordedSignal.withLock { $0 } ?? posixSignalName(termSig)
+                    actor.emitChildExit(exitCode: nil, signal: sigName)
+                } else if let sigName = recordedSignal.withLock({ $0 }) {
+                    actor.emitChildExit(exitCode: nil, signal: sigName)
+                } else {
+                    actor.emitChildExit(exitCode: UInt32(exitCode))
+                }
+            }
+
+            return actor
+        }
+        #endif
+
+        #if os(macOS) || (os(Linux) && !(canImport(Glibc) || canImport(Musl)))
         private static func spawnNativePipe(
             id: TerminalId,
             order: UInt64,
@@ -2241,7 +2600,7 @@ extension ProcessDaemon {
         }
         #endif
 
-        #if os(macOS) || os(Linux)
+        #if !os(WASI)
         private static func openPipeOutputFile(at path: String) throws -> FileHandle {
             #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
             let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o666)
@@ -2251,7 +2610,7 @@ extension ProcessDaemon {
             return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
             #else
             let url = URL(fileURLWithPath: path)
-            FileManager.default.createFile(atPath: path, contents: Data())
+            _ = FileManager.default.createFile(atPath: path, contents: Data())
             return try FileHandle(forWritingTo: url)
             #endif
         }
@@ -3110,12 +3469,29 @@ extension ProcessDaemon {
 // MARK: - Internal Session Synchronization & POSIX Signal Helpers
 
 private final class ReentrantSessionLock: @unchecked Sendable {
-    #if !os(WASI)
+    #if os(Windows)
+    private let cs: UnsafeMutablePointer<CRITICAL_SECTION>
+
+    init() {
+        cs = UnsafeMutablePointer<CRITICAL_SECTION>.allocate(capacity: 1)
+        cs.initialize(to: CRITICAL_SECTION())
+        InitializeCriticalSection(cs)
+    }
+
+    deinit {
+        DeleteCriticalSection(cs)
+        cs.deinitialize(count: 1)
+        cs.deallocate()
+    }
+    #elseif !os(WASI)
     private let lock = NSRecursiveLock()
     #endif
 
     func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        #if !os(WASI)
+        #if os(Windows)
+        EnterCriticalSection(cs)
+        defer { LeaveCriticalSection(cs) }
+        #elseif !os(WASI)
         lock.lock()
         defer { lock.unlock() }
         #endif

@@ -589,6 +589,11 @@ struct NativeSubsystemsIOTests {
         let store = MemoryKittyFileStore()
         let transport = NativeKittyTransport.Transport(fileStore: store, mode: .file)
 
+        #if os(Windows)
+        #expect(throws: NativeKittyTransport.LeaseError.unsupported) {
+            _ = try transport.startProbe(firstId: 10, directory: "/tmp")
+        }
+        #else
         let probeSeq = try transport.startProbe(firstId: 10, directory: "/tmp")
         #expect(transport.fileState == .probing)
         #expect(transport.queryId == 10)
@@ -642,6 +647,7 @@ struct NativeSubsystemsIOTests {
         transport.expire(nowNs: 1_000_000_000 + NativeKittyTransport.timeoutNs)
         #expect(transport.fileState == .timeout)
         #expect(transport.pendingCount() == 0)
+        #endif
     }
 
     // MARK: - 10. NativeStdoutWriter (src/stdout-writer.zig)
