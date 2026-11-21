@@ -62,7 +62,10 @@ jobs:
             if (Test-Path $pyExe) {
               & $pyExe -c "import sqlite3; print('SQLite version:', sqlite3.sqlite_version)"
             }
-            $dll.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            $sqliteBin = Join-Path $env:RUNNER_TEMP "sqlite3-bin"
+            New-Item -ItemType Directory -Path $sqliteBin -Force | Out-Null
+            Copy-Item -Path $dll.FullName -Destination (Join-Path $sqliteBin "sqlite3.dll") -Force
+            $sqliteBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           } else {
             Write-Host "No hostedtoolcache Python x64 sqlite3.dll found; relying on system sqlite3/winsqlite3"
           }
@@ -93,16 +96,9 @@ jobs:
                   $env:PATH = (($dllDirs -join ";") + ";" + $env:PATH)
                 }
               }
-              foreach ($probe in @("nativeSQLiteDatabaseComprehensive", "inMemorySQLiteFallback", "liveEmbeddedSDKWorkflow", "eventTriggerMatchingAndNonMatchingBusEvent")) {
-                Write-Host "=== Direct .xctest probe: $probe ==="
-                $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel", "--filter", $probe -NoNewWindow -Wait -PassThru
-                Write-Host ("probe $probe exit code: {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
-              }
-              foreach ($target in @("OpenCodeUtilTests", "OpenCodeSchemaTests", "OpenCodeProtocolTests", "OpenCodeParityTests", "OpenCodePlatformTests", "OpenCodeRecorderTests", "OpenCodeGUIPluginsTests", "OpenCodeSimulationTests", "OpenCodeTUITests", "OpenCodeServerTests", "OpenCodeCoreTests", "OpenCodeAppTests")) {
-                Write-Host "=== Target probe: $target ==="
-                swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel --filter $target
-                Write-Host "target $target exit code: $LASTEXITCODE"
-              }
+              Write-Host "=== Direct unfiltered .xctest probe ==="
+              $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel" -NoNewWindow -Wait -PassThru
+              Write-Host ("unfiltered .xctest exit code: {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
             }
             exit $code
           }

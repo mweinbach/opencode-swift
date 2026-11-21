@@ -859,7 +859,13 @@ public final class NativeSQLiteDatabase: SQLiteDatabase, @unchecked Sendable {
                 let cName = api.columnName(stmt, Int32(idx))
                 #endif
                 if let cName {
-                    columns.append(String(cString: cName))
+                    var name = String(cString: cName)
+                    // SQLite 3.51+ preserves backtick delimiters in `RETURNING `col`` column names
+                    // when no explicit `AS` alias is given; strip matching outer backticks.
+                    if name.count >= 2 && name.first == "`" && name.last == "`" {
+                        name = String(name.dropFirst().dropLast())
+                    }
+                    columns.append(name)
                 } else {
                     columns.append("col\(idx)")
                 }

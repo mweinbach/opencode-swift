@@ -17,7 +17,11 @@ enum OpenCodeAppTestHelper {
         let base = FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        #if os(Windows)
+        return dir.path.replacing("/", with: "\\")
+        #else
         return dir.path
+        #endif
     }
 
     static func removeDirectory(_ path: String) {

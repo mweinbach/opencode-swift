@@ -525,7 +525,7 @@ public enum CoreSessionInbox {
             INSERT INTO `session_inbox` (`id`, `session_id`, `type`, `payload`, `delivery`, `enqueued_seq`, `time_created`)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (`id`) DO NOTHING
-            RETURNING `id`
+            RETURNING `id` AS id
             """,
             parameters: [
                 .text(id.rawValue),
@@ -586,7 +586,7 @@ public enum CoreSessionInbox {
             """
             DELETE FROM `session_inbox`
             WHERE `id` = ? AND `session_id` = ? AND (`delivery` = 'queue' OR `delivery` = 'steer')
-            RETURNING `id`
+            RETURNING `id` AS id
             """,
             parameters: [.text(id.rawValue), .text(sessionID.rawValue)]
         )
@@ -608,7 +608,7 @@ public enum CoreSessionInbox {
             """
             UPDATE `session_inbox` SET `delivery` = ?
             WHERE `id` = ? AND `session_id` = ? AND `delivery` = ?
-            RETURNING `id`
+            RETURNING `id` AS id
             """,
             parameters: [
                 .text(delivery.rawValue),

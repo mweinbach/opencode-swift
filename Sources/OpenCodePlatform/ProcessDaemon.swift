@@ -3469,12 +3469,29 @@ extension ProcessDaemon {
 // MARK: - Internal Session Synchronization & POSIX Signal Helpers
 
 private final class ReentrantSessionLock: @unchecked Sendable {
-    #if !os(WASI)
+    #if os(Windows)
+    private let cs: UnsafeMutablePointer<CRITICAL_SECTION>
+
+    init() {
+        cs = UnsafeMutablePointer<CRITICAL_SECTION>.allocate(capacity: 1)
+        cs.initialize(to: CRITICAL_SECTION())
+        InitializeCriticalSection(cs)
+    }
+
+    deinit {
+        DeleteCriticalSection(cs)
+        cs.deinitialize(count: 1)
+        cs.deallocate()
+    }
+    #elseif !os(WASI)
     private let lock = NSRecursiveLock()
     #endif
 
     func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        #if !os(WASI)
+        #if os(Windows)
+        EnterCriticalSection(cs)
+        defer { LeaveCriticalSection(cs) }
+        #elseif !os(WASI)
         lock.lock()
         defer { lock.unlock() }
         #endif

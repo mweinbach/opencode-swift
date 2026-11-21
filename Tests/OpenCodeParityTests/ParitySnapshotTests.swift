@@ -507,7 +507,7 @@ struct ParitySnapshotTests {
         // MARK: - packages/core
         case "core/src/util/wildcard.ts#match":
             let ignoreCase = args.count > 2 ? (args[2].bool ?? false) : false
-            return .bool(CoreSubsystems.Util.Wildcard.match(args[0].str!, pattern: args[1].str!, ignoreCase: ignoreCase))
+            return .bool(CoreSubsystems.Util.Wildcard.match(args[0].str!, pattern: args[1].str!, ignoreCase: ignoreCase, platform: .linux))
         case "core/src/util/canonical-json.ts#canonicalJson":
             return .string(CoreSubsystems.Util.canonicalJson(toSchemaJSON(args[0])))
         case "core/src/util/token.ts#estimate":

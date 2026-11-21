@@ -1048,7 +1048,7 @@ public enum CoreSessionBlob {
         parameters: [SQLiteValue]
     ) throws {
         let deleted = try db.query(
-            "DELETE FROM `blob_ref` WHERE \(whereClause) RETURNING `hash`",
+            "DELETE FROM `blob_ref` WHERE \(whereClause) RETURNING `hash` AS hash",
             parameters: parameters
         )
         let hashes = Array(Set(deleted.compactMap { $0.string("hash") }))
@@ -1888,7 +1888,7 @@ public enum CoreSessionStore {
                 UPDATE `session_v2`
                 SET `resume_attempts` = `resume_attempts` + 1, `time_updated` = `time_updated`
                 WHERE `id` = ?
-                RETURNING `resume_attempts`
+                RETURNING `resume_attempts` AS resume_attempts
                 """,
                 parameters: [.text(sessionID.rawValue)]
             )
@@ -2528,7 +2528,7 @@ public enum CoreSessionProjector {
                   `time_created`, `time_updated`
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (`id`) DO NOTHING
-                RETURNING `id`
+                RETURNING `id` AS id
                 """,
                 parameters: [
                     .text(env.data.sessionID.rawValue),
@@ -3084,7 +3084,7 @@ public enum CoreSessionProjector {
               `time_created`, `time_updated`
             ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, ?, ?)
             ON CONFLICT (`id`) DO NOTHING
-            RETURNING `id`
+            RETURNING `id` AS id
             """,
             parameters: [
                 .text(event.data.sessionID.rawValue),
@@ -3451,7 +3451,7 @@ public enum CoreSessionProjector {
                 UPDATE `session_message`
                 SET `type` = ?, `time_created` = ?, `time_updated` = ?, `data` = ?
                 WHERE `id` = ? AND `session_id` = ?
-                RETURNING `seq`
+                RETURNING `seq` AS seq
                 """,
                 parameters: [
                     .text(message.messageType.rawValue),

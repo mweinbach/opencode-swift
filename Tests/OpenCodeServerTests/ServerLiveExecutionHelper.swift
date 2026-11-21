@@ -626,16 +626,16 @@ enum LiveExecutionFixture {
 
         @Sendable
         func git(_ args: [String]) async throws {
+            var gitEnv = ProcessInfo.processInfo.environment
+            gitEnv["GIT_AUTHOR_NAME"] = "OpenCode Test"
+            gitEnv["GIT_AUTHOR_EMAIL"] = "test@opencode.local"
+            gitEnv["GIT_COMMITTER_NAME"] = "OpenCode Test"
+            gitEnv["GIT_COMMITTER_EMAIL"] = "test@opencode.local"
             let out = try await spawner.run(ProcessSpec(
                 executable: gitExe,
                 arguments: args,
                 workingDirectory: repoDir,
-                environment: [
-                    "GIT_AUTHOR_NAME": "OpenCode Test",
-                    "GIT_AUTHOR_EMAIL": "test@opencode.local",
-                    "GIT_COMMITTER_NAME": "OpenCode Test",
-                    "GIT_COMMITTER_EMAIL": "test@opencode.local",
-                ]
+                environment: gitEnv
             ))
             guard out.exitCode == 0 else {
                 let err = String(decoding: out.stderr, as: UTF8.self)

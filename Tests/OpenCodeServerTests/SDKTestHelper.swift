@@ -90,13 +90,21 @@ enum SDKTestHelper {
         let base = FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("\(prefix)-\(OpenCodeUtil.uuid())", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        #if os(Windows)
+        return dir.path.replacing("/", with: "\\")
+        #else
         return dir.path
+        #endif
     }
 
     static func makeSubdirectory(_ parent: String, name: String) throws -> String {
         let url = URL(fileURLWithPath: parent, isDirectory: true).appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        #if os(Windows)
+        return url.path.replacing("/", with: "\\")
+        #else
         return url.path
+        #endif
     }
 
     static func removeDirectory(_ path: String) {

@@ -451,6 +451,7 @@ struct SimulationFrontendTests {
         let dir = try SimTestFS.makeTempDir(prefix: "sim-drive-")
         defer { SimTestFS.remove(dir) }
         let timelinePath = "\(dir)/drive-timeline.jsonl"
+        let escapedTimelinePath = timelinePath.replacing("\\", with: "\\\\")
         let manifestJSON = """
         {
           "endpoints": {
@@ -458,7 +459,7 @@ struct SimulationFrontendTests {
             "backend": "ws://127.0.0.1:43150"
           },
           "viewport": { "cols": 90, "rows": 30 },
-          "recording": { "timeline": "\(timelinePath)" }
+          "recording": { "timeline": "\(escapedTimelinePath)" }
         }
         """
         let fs = InMemoryFileSystem(initialFiles: ["/drive/e2e.json": Array(manifestJSON.utf8)])

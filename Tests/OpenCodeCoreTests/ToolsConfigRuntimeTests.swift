@@ -1290,13 +1290,15 @@ struct CoreRuntimeTests {
         #expect(found.contains(where: { $0.path.rawValue == "Sources/Router.swift" }))
 
         // Persistent pipe process CRUD via ProcessDaemon.TerminalService
+        let pipeTmpDir = try ToolsConfigRuntimeHelper.makeTempDirectory(prefix: "opencode-pipe")
+        defer { ToolsConfigRuntimeHelper.removeTempDirectory(pipeTmpDir) }
         let persistent = CorePty.Persistent.Service(backend: .simulated(onWrite: nil))
         let pipe = try await persistent.createPipe(CorePty.Persistent.CreatePipeInput(
             program: "/bin/sh",
             args: ["-c", "echo piped"],
             cwd: "/repo",
             groupID: "grp_pipe_1",
-            outputPath: "/tmp/pipe.out",
+            outputPath: "\(pipeTmpDir)/pipe.out",
             metadata: ["kind": .string("test")]
         ))
         #expect(pipe.groupID == "grp_pipe_1")

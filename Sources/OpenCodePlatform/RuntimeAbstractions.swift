@@ -632,13 +632,34 @@ public struct LocalFileSystem: OpenCodeFileSystem, Sendable {
 
     private static func mapError(_ error: any Error, path: String) -> PlatformError {
         let desc = String(describing: error)
-        if desc.contains("No such file") || desc.contains("NSFileReadNoSuchFileError") || desc.contains("ENOENT") {
+        if desc.contains("No such file")
+            || desc.contains("NSFileReadNoSuchFileError")
+            || desc.contains("ENOENT")
+            || desc.contains("doesn't exist")
+            || desc.contains("doesn\u{2019}t exist")
+            || desc.contains("Code=260")
+            || desc.contains("Code=4 ")
+            || desc.contains("Win32Error(code: 2)")
+            || desc.contains("Win32Error(code: 3)")
+        {
             return .notFound(path)
         }
-        if desc.contains("File exists") || desc.contains("NSFileWriteFileExistsError") || desc.contains("EEXIST") {
+        if desc.contains("File exists")
+            || desc.contains("NSFileWriteFileExistsError")
+            || desc.contains("EEXIST")
+            || desc.contains("Code=516")
+            || desc.contains("Win32Error(code: 80)")
+            || desc.contains("Win32Error(code: 183)")
+        {
             return .alreadyExists(path)
         }
-        if desc.contains("Permission denied") || desc.contains("EPERM") || desc.contains("EACCES") {
+        if desc.contains("Permission denied")
+            || desc.contains("EPERM")
+            || desc.contains("EACCES")
+            || desc.contains("Code=257")
+            || desc.contains("Code=513")
+            || desc.contains("Win32Error(code: 5)")
+        {
             return .permissionDenied(path, code: desc.contains("EPERM") ? "EPERM" : "EACCES")
         }
         return .ioFailure(desc)

@@ -3819,10 +3819,17 @@ public enum TUIPluginHost {
         if spec.hasPrefix("file://") {
             return URL(string: spec)
         }
-        if spec.hasPrefix("./") || spec.hasPrefix("../") || spec.hasPrefix("/") {
-            return spec.hasPrefix("/")
-                ? URL(fileURLWithPath: spec).standardized
-                : URL(fileURLWithPath: directory).appendingPathComponent(spec).standardized
+        let isWindowsAbs: Bool = {
+            if spec.hasPrefix("\\\\") { return true }
+            let chars = Array(spec)
+            guard chars.count >= 3 else { return false }
+            return chars[0].isLetter && chars[1] == ":" && (chars[2] == "/" || chars[2] == "\\")
+        }()
+        if spec.hasPrefix("/") || isWindowsAbs {
+            return URL(fileURLWithPath: spec).standardized
+        }
+        if spec.hasPrefix("./") || spec.hasPrefix("../") || spec.hasPrefix(".\\") || spec.hasPrefix("..\\") {
+            return URL(fileURLWithPath: directory).appendingPathComponent(spec).standardized
         }
         return nil
     }
