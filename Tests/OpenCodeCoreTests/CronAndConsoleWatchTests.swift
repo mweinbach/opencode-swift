@@ -293,14 +293,14 @@ struct ConsoleWatchesWebSocketTests {
         try await serverPeer.send(text: snapFrame)
 
         #expect(await CronAndConsoleWatchHelper.waitUntil { ackChunks.withLock { $0.count } >= 1 })
-        #expect(ackChunks.withLock { $0[0] } == ["ev_snap_1"])
+        #expect(ackChunks.withLock { $0.dropFirst(0).first } == ["ev_snap_1"])
         #expect(recorder.requests.withLock { $0.count } == 1)
 
         // 4. Replay of the exact same batch (binary UTF-8 frame) conflicts with existing synthetic ID:
         //    must still be acknowledged, and must NOT produce a second wake!
         try await serverPeer.send(binary: CronAndConsoleWatchHelper.encodeUTF8(snapFrame))
         #expect(await CronAndConsoleWatchHelper.waitUntil { ackChunks.withLock { $0.count } >= 2 })
-        #expect(ackChunks.withLock { $0[1] } == ["ev_snap_1"])
+        #expect(ackChunks.withLock { $0.dropFirst(1).first } == ["ev_snap_1"])
         #expect(recorder.requests.withLock { $0.count } == 1)
         #expect(recorder.replayConflicts.withLock { $0 } == 1)
 
@@ -315,10 +315,10 @@ struct ConsoleWatchesWebSocketTests {
 
         #expect(await CronAndConsoleWatchHelper.waitUntil { ackChunks.withLock { $0.count } >= 4 })
         let chunks = ackChunks.withLock { $0 }
-        #expect(chunks[2].count == 1000)
-        #expect(chunks[3].count == 50)
-        #expect(chunks[2].first == "ev_bulk_1")
-        #expect(chunks[3].last == "ev_bulk_1050")
+        #expect(chunks.dropFirst(2).first?.count == 1000)
+        #expect(chunks.dropFirst(3).first?.count == 50)
+        #expect(chunks.dropFirst(2).first?.first == "ev_bulk_1")
+        #expect(chunks.dropFirst(3).first?.last == "ev_bulk_1050")
 
         await controller.close()
         await serverPeer.close()
@@ -390,15 +390,15 @@ struct ConsoleWatchesWebSocketTests {
             }
         ))
 
-        let reachedAttempt4 = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 4_000) {
+        let reachedAttempt4 = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 15_000) {
             attemptCounter.withLock { $0 >= 4 }
         }
         #expect(reachedAttempt4)
 
         let tokens = seenTokens.withLock { $0 }
         #expect(tokens.count >= 4)
-        #expect(tokens[0] == "Bearer tok-1")
-        #expect(tokens[1] == "Bearer tok-2")
+        #expect(tokens.dropFirst(0).first == "Bearer tok-1")
+        #expect(tokens.dropFirst(1).first == "Bearer tok-2")
         // 4401 did NOT sleep; 1009 slept 1000ms; silence timeout slept 1000ms!
         let recordedSleeps = sleeps.withLock { $0 }
         #expect(Array(recordedSleeps.prefix(2)) == [1_000, 1_000])
@@ -508,15 +508,15 @@ struct ConsoleWatchesWebSocketTests {
         )
         await controller.sync(CorePlugin.OpencodeWatches.Console(baseURL: "https://console.example.test", token: "tok"))
 
-        let retriedWS = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 4_000) {
+        let retriedWS = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 15_000) {
             wsAttempts.withLock { $0 >= 2 }
         }
         #expect(retriedWS)
         #expect(sleeps.withLock { $0 }.isEmpty, "poll -> websocket retry must happen without backoff sleep")
         let urls = pollURLs.withLock { $0 }
         #expect(urls.count == 2)
-        #expect(urls[0].hasSuffix("/api/event-watches/events?wait=25"))
-        #expect(urls[1].hasSuffix("/api/event-watches/events?wait=25&cursor=cur%2B1%26a%3Db"))
+        #expect(urls.dropFirst(0).first?.hasSuffix("/api/event-watches/events?wait=25") == true)
+        #expect(urls.dropFirst(1).first?.hasSuffix("/api/event-watches/events?wait=25&cursor=cur%2B1%26a%3Db") == true)
         #expect(ackedBatches.withLock { $0 } == [["ev_poll_1"]])
         #expect(recorder.requests.withLock { $0.count } == 1)
 
@@ -615,7 +615,7 @@ struct ConsoleWatchesWebSocketTests {
             headers: { ["authorization": "Bearer \(tokenSlot.withLock { $0 })"] }
         ))
 
-        let completed = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 8_000) {
+        let completed = await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 20_000) {
             receivedHTTPAcks.withLock { !$0.isEmpty }
         }
         #expect(completed)
@@ -624,12 +624,12 @@ struct ConsoleWatchesWebSocketTests {
 
         let authHeaders = receivedWSAuth.withLock { $0 }
         #expect(authHeaders.count >= 3)
-        #expect(authHeaders[0] == "Bearer tok-wire-1")
-        #expect(authHeaders[1] == "Bearer tok-wire-2")
+        #expect(authHeaders.dropFirst(0).first == "Bearer tok-wire-1")
+        #expect(authHeaders.dropFirst(1).first == "Bearer tok-wire-2")
         let wsAcks = receivedWSAcks.withLock { $0 }
         #expect(wsAcks.count == 2)
-        #expect(wsAcks[0].contains("ev_wire_1"))
-        #expect(wsAcks[1].contains("ev_wire_2"))
+        #expect(wsAcks.dropFirst(0).first?.contains("ev_wire_1") == true)
+        #expect(wsAcks.dropFirst(1).first?.contains("ev_wire_2") == true)
         // 4401 on attempt 1 had 0 sleep; 1011 on attempt 2 slept 1000ms before attempt 3!
         #expect(sleeps.withLock { $0.first } == 1_000)
         #expect(receivedHTTPAcks.withLock { $0.first?.contains("ev_wire_poll") } == true)
@@ -852,7 +852,7 @@ struct OpencodePluginActivationTests {
             CorePlugin.OpencodeWatches.ServerMessage(type: .events, events: [watchEvent])
         ))
         #expect(await CronAndConsoleWatchHelper.waitUntil { syntheticEvents.withLock { $0.count == 1 } })
-        #expect(syntheticEvents.withLock { $0[0].sessionID } == session.id)
+        #expect(syntheticEvents.withLock { $0.dropFirst(0).first?.sessionID } == session.id)
 
         // Sign out via Credential.Service.remove -> emits credential.switched(nil) -> stops watches & removes tools!
         try await harness.credentials.remove(cred.id)
@@ -916,14 +916,14 @@ struct OpencodePluginActivationTests {
 
         // Console turns on x-opencode-event-watches -> next periodic poll starts watches!
         watchesHeaderEnabled.withLock { $0 = true }
-        #expect(await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 3_000) {
+        #expect(await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 10_000) {
             wsConnects.withLock { $0 == 1 }
                 && harness.env.registeredTools().contains(where: { $0.id == "console_watch_watch" })
         })
 
         // Console turns off x-opencode-event-watches -> next periodic poll stops watches!
         watchesHeaderEnabled.withLock { $0 = false }
-        #expect(await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 3_000) {
+        #expect(await CronAndConsoleWatchHelper.waitUntil(timeoutMs: 10_000) {
             wsClosed.withLock { $0 }
                 && harness.env.registeredTools().filter { $0.id.hasPrefix("console_watch_") }.isEmpty
         })

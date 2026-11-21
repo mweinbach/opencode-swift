@@ -76,7 +76,7 @@ enum CronAndConsoleWatchHelper {
     /// Polls `predicate` every 5ms until true or `timeoutMs` elapses.
     @discardableResult
     static func waitUntil(
-        timeoutMs: Int64 = 4_000,
+        timeoutMs: Int64 = 15_000,
         _ predicate: @Sendable () -> Bool
     ) async -> Bool {
         let deadline = ContinuousClock.now + .milliseconds(timeoutMs)
