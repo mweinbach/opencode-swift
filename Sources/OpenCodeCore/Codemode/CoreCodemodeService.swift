@@ -911,9 +911,58 @@ public enum CoreCodemode {
         }
 
         private static func resolveInDir(_ input: String, directory: String) -> String {
-            if input.hasPrefix("/") { return input }
-            let cleanBase = directory.hasSuffix("/") ? String(directory.dropLast()) : directory
-            return "\(cleanBase)/\(input)"
+            let raw: String
+            if input.hasPrefix("/") {
+                raw = input
+            } else {
+                let cleanBase = directory.hasSuffix("/") ? String(directory.dropLast()) : directory
+                raw = "\(cleanBase)/\(input)"
+            }
+            return normalizePosix(raw)
+        }
+
+        private static func normalizePosix(_ raw: String) -> String {
+            if raw.isEmpty { return "/" }
+            let isAbs = raw.hasPrefix("/")
+            var stack: [String] = []
+            for part in raw.split(separator: "/") {
+                if part == "." || part.isEmpty { continue }
+                if part == ".." {
+                    if !stack.isEmpty && stack.last != ".." { stack.removeLast() }
+                    else if !isAbs { stack.append("..") }
+                } else {
+                    stack.append(String(part))
+                }
+            }
+            let joined = stack.joined(separator: "/")
+            if isAbs { return "/" + joined }
+            return joined.isEmpty ? "." : joined
+        }
+
+        private static func resourcePath(for absPath: String, directory: String) -> String {
+            let normAbs = normalizePosix(absPath)
+            let normDir = normalizePosix(directory)
+            let prefix = normDir == "/" ? "/" : normDir + "/"
+            if normAbs.hasPrefix(prefix) {
+                return String(normAbs.dropFirst(prefix.count))
+            }
+            return normAbs
+        }
+
+        private static func strictUTF8String(_ bytes: [UInt8]) -> String? {
+            var decoder = UTF8()
+            var iterator = bytes.makeIterator()
+            var scalars = String.UnicodeScalarView()
+            while true {
+                switch decoder.decode(&iterator) {
+                case .scalarValue(let scalar):
+                    scalars.append(scalar)
+                case .emptyInput:
+                    return String(scalars)
+                case .error:
+                    return nil
+                }
+            }
         }
 
         private static func mimeFor(_ name: String) -> String {
@@ -934,10 +983,291 @@ public enum CoreCodemode {
             }
         }
 
+        private struct FileHandle: Sendable {
+            let name: String
+            let absPath: String
+            let resource: String
+            let range: (offset: Int, length: Int)?
+        }
+
         public static func makeExtension(services: Services, execution: Execution.Service) -> CodemodeEngine.Extension.Definition {
+            // A BunFile crosses the host boundary as a shallow copy, while its Native functions keep identity:
+            // keying by the `bytes` method identifies a BunFile passed to `Bun.write` (matching upstream `handles`).
+            let handles = Mutex<[ObjectIdentifier: FileHandle]>([:])
+
+            @Sendable func handleOf(_ value: CodemodeLanguage.Value?) -> FileHandle? {
+                guard case .object(let obj) = value,
+                      case .object(let bytesFn) = CodemodeLanguage.get(obj, "bytes")
+                else {
+                    return nil
+                }
+                return handles.withLock { $0[ObjectIdentifier(bytesFn)] }
+            }
+
+            @Sendable func defineEnumerableMethod(
+                _ builtins: CodemodeLanguage.Builtins,
+                _ target: CodemodeLanguage.Obj,
+                _ name: String,
+                _ length: Int,
+                _ call: @escaping CodemodeLanguage.NativeCall
+            ) -> CodemodeLanguage.Native {
+                let fn = CodemodeLanguage.nativeFn(builtins, name: name, length: length, call: call)
+                CodemodeLanguage.define(target, CodemodeLanguage.JSString(name), .object(fn))
+                return fn
+            }
+
+            @Sendable func readBytes(_ handle: FileHandle) async throws -> [UInt8] {
+                let data = try await services.fileSystem.readFile(at: handle.absPath)
+                guard let range = handle.range else { return data }
+                let start = max(0, min(range.offset, data.count))
+                let end = max(start, min(start + max(0, range.length), data.count))
+                return Array(data[start..<end])
+            }
+
+            @Sendable func putBytes(
+                absPath: String,
+                resource: String,
+                bytes: [UInt8],
+                diff: Bool,
+                append: Bool
+            ) async throws -> Int {
+                let existed = await services.fileSystem.exists(at: absPath)
+                let status: Diffs.Status = existed ? .modified : .added
+                let after = diff ? strictUTF8String(bytes) : nil
+                let before: String?
+                if after == nil || append || !existed {
+                    before = ""
+                } else if let existingBytes = try? await services.fileSystem.readFile(at: absPath) {
+                    before = strictUTF8String(existingBytes)
+                } else {
+                    before = nil
+                }
+                let preview: FileDiffSchema.Info? = if let after, let before {
+                    CoreTool.fileDiff(file: resource, before: before, after: after, status: status)
+                } else {
+                    nil
+                }
+                var metadata: [String: JSONValue] = [:]
+                if let preview,
+                   let encoded = try? JSONEncoder().encode([preview]),
+                   let jsonVal = try? JSONDecoder().decode(JSONValue.self, from: encoded)
+                {
+                    metadata["files"] = jsonVal
+                }
+                try await services.permission.assertAllowed(PermissionRequest(
+                    action: "edit",
+                    resources: [absPath],
+                    metadata: metadata,
+                    sessionID: execution.context.sessionID,
+                    agent: execution.context.agent,
+                    messageID: execution.context.messageID,
+                    callID: execution.context.id
+                ))
+                if append && existed {
+                    let existing = (try? await services.fileSystem.readFile(at: absPath)) ?? []
+                    try await services.fileSystem.writeFile(existing + bytes, to: absPath, createDirectories: true)
+                } else {
+                    try await services.fileSystem.writeFile(bytes, to: absPath, createDirectories: true)
+                }
+                if append {
+                    await Diffs.appended(resource: resource, status: status, text: after)
+                } else {
+                    await Diffs.written(resource: resource, status: status, preview: preview)
+                }
+                return bytes.count
+            }
+
+            @Sendable func extractBytes(from dataArg: CodemodeLanguage.Value) async throws -> (bytes: [UInt8], fromHandle: Bool) {
+                if let src = handleOf(dataArg) {
+                    return (try await readBytes(src), true)
+                }
+                switch dataArg {
+                case .string(let s): return (s.utf8BytesReplacingSurrogates(), false)
+                case .number(let n): return (Array(CodemodeLanguage.formatJSNumber(n).utf8), false)
+                case .bool(let b): return (Array((b ? "true" : "false").utf8), false)
+                case .object(let b as CodemodeLanguage.Bytes): return (b.data, false)
+                default:
+                    throw CodemodeLanguage.typeError("Bun.write expects a string, a Uint8Array, a BunFile, or a Response as the data to write.")
+                }
+            }
+
+            @Sendable func makeWriterObject(
+                handle: FileHandle,
+                highWaterMark: Int?,
+                builtins: CodemodeLanguage.Builtins
+            ) -> CodemodeLanguage.Value {
+                final class SinkState: Sendable {
+                    struct Mutable: Sendable {
+                        var chunks: [[UInt8]] = []
+                        var buffered: Int = 0
+                        var started: Bool = false
+                    }
+                    let box = Mutex(Mutable())
+                }
+                let sink = SinkState()
+
+                @Sendable func flush() async throws -> Int {
+                    let payload: (bytes: [UInt8], append: Bool)? = sink.box.withLock { s in
+                        guard !s.chunks.isEmpty else { return nil }
+                        var combined: [UInt8] = []
+                        combined.reserveCapacity(s.buffered)
+                        for c in s.chunks { combined.append(contentsOf: c) }
+                        return (combined, s.started)
+                    }
+                    guard let payload else { return 0 }
+                    let written = try await putBytes(
+                        absPath: handle.absPath,
+                        resource: handle.resource,
+                        bytes: payload.bytes,
+                        diff: true,
+                        append: payload.append
+                    )
+                    sink.box.withLock { s in
+                        s.started = true
+                        s.chunks.removeAll()
+                        s.buffered = 0
+                    }
+                    return written
+                }
+
+                let writerObj = CodemodeLanguage.Obj(proto: builtins.Object)
+                _ = defineEnumerableMethod(builtins, writerObj, "write", 1) { _, wArgs, _, _ in
+                    let chunkArg = wArgs.first ?? .undefined
+                    let bytes: [UInt8]
+                    switch chunkArg {
+                    case .string(let s): bytes = s.utf8BytesReplacingSurrogates()
+                    case .object(let b as CodemodeLanguage.Bytes): bytes = b.data
+                    default:
+                        throw CodemodeLanguage.typeError("A file writer takes a string or a Uint8Array.")
+                    }
+                    let shouldFlush = sink.box.withLock { s -> Bool in
+                        s.chunks.append(bytes)
+                        s.buffered += bytes.count
+                        if let hwm = highWaterMark {
+                            return s.buffered >= hwm
+                        }
+                        return false
+                    }
+                    if shouldFlush {
+                        _ = try await flush()
+                    }
+                    return .number(Double(bytes.count))
+                }
+                let flushFn = defineEnumerableMethod(builtins, writerObj, "flush", 0) { _, _, _, _ in
+                    let count = try await flush()
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.number(Double(count)))))
+                }
+                CodemodeLanguage.define(writerObj, "end", .object(flushFn))
+                return .object(writerObj)
+            }
+
+            @Sendable func makeFileObject(
+                handle: FileHandle,
+                type: String,
+                size: Int64,
+                lastModified: Int64,
+                builtins: CodemodeLanguage.Builtins
+            ) -> CodemodeLanguage.Value {
+                let obj = CodemodeLanguage.Obj(proto: builtins.Object)
+                CodemodeLanguage.define(obj, "name", .string(CodemodeLanguage.JSString(handle.name)))
+                CodemodeLanguage.define(obj, "type", .string(CodemodeLanguage.JSString(type)))
+                CodemodeLanguage.define(obj, "size", .number(Double(size)))
+                CodemodeLanguage.define(obj, "lastModified", .number(Double(lastModified)))
+
+                @Sendable func removeFile() async throws -> CodemodeLanguage.Value {
+                    try await services.permission.assertAllowed(PermissionRequest(
+                        action: "edit",
+                        resources: [handle.absPath],
+                        sessionID: execution.context.sessionID,
+                        agent: execution.context.agent,
+                        messageID: execution.context.messageID,
+                        callID: execution.context.id
+                    ))
+                    try await services.fileSystem.remove(at: handle.absPath)
+                    await Diffs.record(Diffs.File(file: handle.resource, status: .deleted))
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.undefined)))
+                }
+
+                _ = defineEnumerableMethod(builtins, obj, "text", 0) { _, _, _, _ in
+                    let data = try await readBytes(handle)
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.string(CodemodeLanguage.JSString(String(decoding: data, as: UTF8.self))))))
+                }
+                let bytesFn = defineEnumerableMethod(builtins, obj, "bytes", 0) { _, _, _, _ in
+                    let data = try await readBytes(handle)
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(CodemodeLanguage.finishBytes(builtins, data)))))
+                }
+                handles.withLock { $0[ObjectIdentifier(bytesFn)] = handle }
+                _ = defineEnumerableMethod(builtins, obj, "arrayBuffer", 0) { _, _, _, _ in
+                    let data = try await readBytes(handle)
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(CodemodeLanguage.finishBytes(builtins, data)))))
+                }
+                _ = defineEnumerableMethod(builtins, obj, "json", 0) { _, _, _, _ in
+                    let data = try await readBytes(handle)
+                    let str = String(decoding: data, as: UTF8.self)
+                    guard let parsed = PureJSON.parse(str) else {
+                        throw CodemodeLanguage.syntaxError("Invalid JSON in \(handle.name)")
+                    }
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(CodemodeLanguage.pureJsonToValue(builtins, parsed))))
+                }
+                _ = defineEnumerableMethod(builtins, obj, "exists", 0) { _, _, _, _ in
+                    let ex = await services.fileSystem.exists(at: handle.absPath)
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.bool(ex))))
+                }
+                _ = defineEnumerableMethod(builtins, obj, "slice", 2) { _, sArgs, _, _ in
+                    func clampIndex(_ val: CodemodeLanguage.Value?, fallback: Int64) -> Int64 {
+                        guard case .number(let n) = val, n.isFinite else { return fallback }
+                        let i = Int64(n)
+                        return i < 0 ? max(size + i, 0) : min(i, size)
+                    }
+                    let start = clampIndex(sArgs.first, fallback: 0)
+                    let end = clampIndex(sArgs.count > 1 ? sArgs[1] : nil, fallback: size)
+                    let len = max(end - start, 0)
+                    let newType = sArgs.compactMap { v -> String? in
+                        if case .string(let s) = v { return s.toHostString() }
+                        return nil
+                    }.first ?? type
+                    let baseOffset = handle.range?.offset ?? 0
+                    let sliced = FileHandle(
+                        name: handle.name,
+                        absPath: handle.absPath,
+                        resource: handle.resource,
+                        range: (offset: baseOffset + Int(start), length: Int(len))
+                    )
+                    return makeFileObject(handle: sliced, type: newType, size: len, lastModified: lastModified, builtins: builtins)
+                }
+                _ = defineEnumerableMethod(builtins, obj, "write", 1) { _, wArgs, _, _ in
+                    let dataArg = wArgs.first ?? .undefined
+                    let extracted = try await extractBytes(from: dataArg)
+                    let count = try await putBytes(
+                        absPath: handle.absPath,
+                        resource: handle.resource,
+                        bytes: extracted.bytes,
+                        diff: !extracted.fromHandle,
+                        append: false
+                    )
+                    return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.number(Double(count)))))
+                }
+                let unlinkFn = defineEnumerableMethod(builtins, obj, "delete", 0) { _, _, _, _ in
+                    try await removeFile()
+                }
+                CodemodeLanguage.define(obj, "unlink", .object(unlinkFn))
+                _ = defineEnumerableMethod(builtins, obj, "writer", 1) { _, wArgs, _, _ in
+                    var hwm: Int? = nil
+                    if case .object(let opts) = wArgs.first,
+                       case .number(let n) = CodemodeLanguage.get(opts, "highWaterMark"),
+                       n.isFinite
+                    {
+                        hwm = Int(n)
+                    }
+                    return makeWriterObject(handle: handle, highWaterMark: hwm, builtins: builtins)
+                }
+                return .object(obj)
+            }
+
             let fileFn = CodemodeEngine.Extension.MarkedFunction { args, builtins in
                 let name = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                 let absPath = resolveInDir(name, directory: services.directory)
+                let resource = resourcePath(for: absPath, directory: services.directory)
                 try await services.permission.assertAllowed(PermissionRequest(
                     action: "read",
                     resources: [absPath],
@@ -947,76 +1277,46 @@ public enum CoreCodemode {
                     callID: execution.context.id
                 ))
                 let stat = try? await services.fileSystem.stat(at: absPath)
-                let handle = CodemodeLanguage.Obj(proto: builtins.Object)
-                CodemodeLanguage.define(handle, "name", .string(CodemodeLanguage.JSString(name)))
-                CodemodeLanguage.define(handle, "type", .string(CodemodeLanguage.JSString(mimeFor(name))))
-                CodemodeLanguage.define(handle, "size", .number(Double(stat?.size ?? 0)))
-                CodemodeLanguage.define(handle, "lastModified", .number(Double(stat?.modifiedAtMs ?? 0)))
-                CodemodeLanguage.methods(builtins, handle, [
-                    CodemodeLanguage.Method("text", 0) { _, _, _, _ in
-                        let data = try await services.fileSystem.readFile(at: absPath)
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.string(CodemodeLanguage.JSString(String(decoding: data, as: UTF8.self))))))
-                    },
-                    CodemodeLanguage.Method("bytes", 0) { _, _, _, _ in
-                        let data = try await services.fileSystem.readFile(at: absPath)
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.object(CodemodeLanguage.finishBytes(builtins, data)))))
-                    },
-                    CodemodeLanguage.Method("json", 0) { _, _, _, _ in
-                        let data = try await services.fileSystem.readFile(at: absPath)
-                        let str = String(decoding: data, as: UTF8.self)
-                        guard let parsed = PureJSON.parse(str) else {
-                            throw CodemodeLanguage.syntaxError("Invalid JSON in \(name)")
-                        }
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(CodemodeLanguage.pureJsonToValue(builtins, parsed))))
-                    },
-                    CodemodeLanguage.Method("exists", 0) { _, _, _, _ in
-                        let ex = await services.fileSystem.exists(at: absPath)
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.bool(ex))))
-                    },
-                    CodemodeLanguage.Method("delete", 0) { _, _, _, _ in
-                        try await services.permission.assertAllowed(PermissionRequest(
-                            action: "edit",
-                            resources: [absPath],
-                            sessionID: execution.context.sessionID,
-                            agent: execution.context.agent,
-                            messageID: execution.context.messageID,
-                            callID: execution.context.id
-                        ))
-                        try await services.fileSystem.remove(at: absPath)
-                        return .object(CodemodeLanguage.PromiseObj(proto: builtins.Promise, status: .fulfilled(.undefined)))
-                    },
-                ])
-                return .object(handle)
+                let customType: String?
+                if args.count > 1, case .object(let opts) = args[1], case .string(let t) = CodemodeLanguage.get(opts, "type") {
+                    customType = t.toHostString()
+                } else {
+                    customType = nil
+                }
+                let handle = FileHandle(name: name, absPath: absPath, resource: resource, range: nil)
+                return makeFileObject(
+                    handle: handle,
+                    type: customType ?? mimeFor(name),
+                    size: stat?.size ?? 0,
+                    lastModified: stat?.modifiedAtMs ?? 0,
+                    builtins: builtins
+                )
             }
 
             let writeFn = CodemodeEngine.Extension.async { args, _ in
-                let destName: String
-                if case .object(let obj) = args.first, case .string(let n) = CodemodeLanguage.get(obj, "name") {
-                    destName = n.toHostString()
+                let destAbs: String
+                let destResource: String
+                if let h = handleOf(args.first) {
+                    destAbs = h.absPath
+                    destResource = h.resource
+                } else if case .object(let obj) = args.first, case .string(let n) = CodemodeLanguage.get(obj, "name") {
+                    destAbs = resolveInDir(n.toHostString(), directory: services.directory)
+                    destResource = resourcePath(for: destAbs, directory: services.directory)
                 } else {
-                    destName = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
+                    let destName = args.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
+                    destAbs = resolveInDir(destName, directory: services.directory)
+                    destResource = resourcePath(for: destAbs, directory: services.directory)
                 }
-                let absPath = resolveInDir(destName, directory: services.directory)
-                try await services.permission.assertAllowed(PermissionRequest(
-                    action: "edit",
-                    resources: [absPath],
-                    sessionID: execution.context.sessionID,
-                    agent: execution.context.agent,
-                    messageID: execution.context.messageID,
-                    callID: execution.context.id
-                ))
                 let dataArg = args.count > 1 ? args[1] : .undefined
-                let bytes: [UInt8]
-                switch dataArg {
-                case .string(let s): bytes = s.utf8BytesReplacingSurrogates()
-                case .number(let n): bytes = Array(CodemodeLanguage.formatJSNumber(n).utf8)
-                case .bool(let b): bytes = Array((b ? "true" : "false").utf8)
-                case .object(let b as CodemodeLanguage.Bytes): bytes = b.data
-                default:
-                    throw CodemodeLanguage.typeError("Bun.write expects a string, a Uint8Array, a BunFile, or a Response as the data to write.")
-                }
-                try await services.fileSystem.writeFile(bytes, to: absPath, createDirectories: true)
-                return .number(Double(bytes.count))
+                let extracted = try await extractBytes(from: dataArg)
+                let count = try await putBytes(
+                    absPath: destAbs,
+                    resource: destResource,
+                    bytes: extracted.bytes,
+                    diff: !extracted.fromHandle,
+                    append: false
+                )
+                return .number(Double(count))
             }
 
             let globCtor = CodemodeEngine.Extension.constructible { args, builtins in
@@ -1025,37 +1325,45 @@ public enum CoreCodemode {
                 }
                 let pattern = patternJS.toHostString()
                 let globObj = CodemodeLanguage.Obj(proto: builtins.Object)
+                @Sendable func runScan(_ sArgs: [CodemodeLanguage.Value]) async throws -> CodemodeLanguage.Value {
+                    var cwd = services.directory
+                    var dot = false
+                    if let opt = sArgs.first {
+                        if case .string(let c) = opt { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
+                        else if case .object(let o) = opt {
+                            if case .string(let c) = CodemodeLanguage.get(o, "cwd") { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
+                            dot = CodemodeLanguage.get(o, "dot").isTruthy
+                        }
+                    }
+                    let resource = resourcePath(for: cwd, directory: services.directory)
+                    try await services.permission.assertAllowed(PermissionRequest(
+                        action: "read",
+                        resources: [resource],
+                        metadata: ["root": .string(cwd)],
+                        sessionID: execution.context.sessionID,
+                        agent: execution.context.agent,
+                        messageID: execution.context.messageID,
+                        callID: execution.context.id
+                    ))
+                    var matched: [CodemodeLanguage.Value] = []
+                    let entries = (try? await services.fileSystem.readDirectory(at: cwd)) ?? []
+                    for name in entries.sorted() {
+                        if Glob.match(pattern, filepath: name, dot: dot) {
+                            matched.append(.string(CodemodeLanguage.JSString(name)))
+                        }
+                    }
+                    return .object(CodemodeLanguage.Arr(proto: builtins.Array, items: matched))
+                }
                 CodemodeLanguage.methods(builtins, globObj, [
                     CodemodeLanguage.Method("match", 1) { _, mArgs, _, _ in
                         let target = mArgs.first.map { CodemodeLanguage.coerceToString($0).toHostString() } ?? ""
                         return .bool(Glob.match(pattern, filepath: target, dot: true))
                     },
                     CodemodeLanguage.Method("scan", 1) { _, sArgs, _, _ in
-                        var cwd = services.directory
-                        var dot = false
-                        if let opt = sArgs.first {
-                            if case .string(let c) = opt { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
-                            else if case .object(let o) = opt {
-                                if case .string(let c) = CodemodeLanguage.get(o, "cwd") { cwd = resolveInDir(c.toHostString(), directory: services.directory) }
-                                dot = CodemodeLanguage.get(o, "dot").isTruthy
-                            }
-                        }
-                        try await services.permission.assertAllowed(PermissionRequest(
-                            action: "glob",
-                            resources: [pattern],
-                            sessionID: execution.context.sessionID,
-                            agent: execution.context.agent,
-                            messageID: execution.context.messageID,
-                            callID: execution.context.id
-                        ))
-                        var matched: [CodemodeLanguage.Value] = []
-                        let entries = (try? await services.fileSystem.readDirectory(at: cwd)) ?? []
-                        for name in entries.sorted() {
-                            if Glob.match(pattern, filepath: name, dot: dot) {
-                                matched.append(.string(CodemodeLanguage.JSString(name)))
-                            }
-                        }
-                        return .object(CodemodeLanguage.Arr(proto: builtins.Array, items: matched))
+                        try await runScan(sArgs)
+                    },
+                    CodemodeLanguage.Method("scanSync", 1) { _, sArgs, _, _ in
+                        try await runScan(sArgs)
                     },
                 ])
                 return .object(globObj)
@@ -1170,7 +1478,46 @@ public enum CoreCodemode {
         /// How long a Code Mode script blocks its tool call before it moves to the background (upstream `BLOCK_TIMEOUT`).
         public static let blockTimeoutMs: Int = 2 * 60 * 1000
 
-        public typealias RunFn = @Sendable (ToolSchema.Context, @escaping @Sendable (ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>) async throws -> ToolSchema.Result<JSONValue>
+        /// The execute call's own `timeout` and `background` inputs, which only exist with `full_codemode`.
+        // parity: core/src/codemode/job.ts#Options [status=implemented hash=d761aecb5440]
+        public struct Options: Equatable, Hashable, Sendable, Codable {
+            public let timeout: Int?
+            public let background: Bool?
+
+            public init(timeout: Int? = nil, background: Bool? = nil) {
+                self.timeout = timeout
+                self.background = background
+            }
+        }
+
+        public typealias ExecuteFn = @Sendable (ToolSchema.Context) async throws -> ToolSchema.Result<JSONValue>
+
+        /// Callable wrapper around a Code Mode job runner supporting both 2-argument and 3-argument (`options`) invocations.
+        public struct Runner: Sendable {
+            private let body: @Sendable (ToolSchema.Context, Options?, @escaping ExecuteFn) async throws -> ToolSchema.Result<JSONValue>
+
+            public init(_ body: @escaping @Sendable (ToolSchema.Context, Options?, @escaping ExecuteFn) async throws -> ToolSchema.Result<JSONValue>) {
+                self.body = body
+            }
+
+            public func callAsFunction(
+                _ context: ToolSchema.Context,
+                options: Options? = nil,
+                _ execute: @escaping ExecuteFn
+            ) async throws -> ToolSchema.Result<JSONValue> {
+                try await body(context, options, execute)
+            }
+
+            public func callAsFunction(
+                _ context: ToolSchema.Context,
+                _ execute: @escaping ExecuteFn,
+                options: Options?
+            ) async throws -> ToolSchema.Result<JSONValue> {
+                try await body(context, options, execute)
+            }
+        }
+
+        public typealias RunFn = Runner
 
         // parity: core/src/codemode/job.ts#Current [status=adapted hash=6a45e9ab22b0]
         public enum Current {
@@ -1226,15 +1573,16 @@ public enum CoreCodemode {
             }
         }
 
-        /// With `full_codemode`, a script runs as a job: its tool call blocks for up to `blockTimeoutMs`, then moves to the
-        /// background (the call returns at once) and its result arrives later as a session notice.
-        // parity: core/src/codemode/job.ts#make [status=adapted hash=e5bdf2c79179]
+        /// With `full_codemode`, a script runs as a job: its tool call blocks for up to `options.timeout ?? blockTimeoutMs`
+        /// (or detaches immediately when `options.background == true`), then moves to the background and its result
+        /// arrives later as a session notice.
+        // parity: core/src/codemode/job.ts#make [status=adapted hash=8bc39a4583ed]
         public static func make(
             fullCodemode: Bool,
             blockTimeoutMs: Int = Job.blockTimeoutMs,
             onBackgroundNotice: (@Sendable (Notice) async -> Void)? = nil
         ) -> RunFn {
-            { context, execute in
+            Runner { context, options, execute in
                 if !fullCodemode {
                     return try await execute(context)
                 }
@@ -1262,19 +1610,25 @@ public enum CoreCodemode {
                         outcome.finish(.failure(error))
                     }
                 }
-                let settled = await withTaskCancellationHandler {
-                    await withTaskGroup(of: Settled.self) { group -> Settled in
-                        group.addTask { .finished(await outcome.wait()) }
-                        group.addTask {
-                            try? await Task.sleep(for: .milliseconds(blockTimeoutMs))
-                            return .timedOut
+                let settled: Settled
+                if options?.background == true {
+                    settled = .timedOut
+                } else {
+                    let effectiveTimeoutMs = options?.timeout ?? blockTimeoutMs
+                    settled = await withTaskCancellationHandler {
+                        await withTaskGroup(of: Settled.self) { group -> Settled in
+                            group.addTask { .finished(await outcome.wait()) }
+                            group.addTask {
+                                try? await Task.sleep(for: .milliseconds(effectiveTimeoutMs))
+                                return .timedOut
+                            }
+                            let first = await group.next() ?? .timedOut
+                            group.cancelAll()
+                            return first
                         }
-                        let first = await group.next() ?? .timedOut
-                        group.cancelAll()
-                        return first
+                    } onCancel: {
+                        job.cancel()
                     }
-                } onCancel: {
-                    job.cancel()
                 }
                 if case .finished(let result) = settled {
                     return try result.get()
@@ -1414,6 +1768,23 @@ public enum CoreCodemode {
             }
         }
 
+        /// An inventory tool and its registry ID, by registry ID or by the path a program calls it at (`opencode.session.search`).
+        // parity: core/src/codemode/tool.ts#find [status=implemented hash=a90bb96f0993]
+        public static func find(
+            _ inventory: Inventory,
+            name: String
+        ) -> (id: String, registration: ToolRegistration)? {
+            if let registration = inventory.tools[name] {
+                return (id: name, registration: registration)
+            }
+            for id in inventory.tools.keys.sorted() {
+                if let registration = inventory.tools[id], qualifiedName(registration) == name {
+                    return (id: id, registration: registration)
+                }
+            }
+            return nil
+        }
+
         // parity: core/src/codemode/tool.ts#qualifiedName [status=implemented hash=a66f0a654727]
         public static func qualifiedName(_ registration: ToolRegistration) -> String {
             let normalized = registration.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1421,8 +1792,80 @@ public enum CoreCodemode {
             return "\(ns).\(normalized)"
         }
 
+        /// Mirrors the shell tool's `timeout` and `background`; only with `full_codemode`, where every script runs as a job.
+        // parity: core/src/codemode/tool.ts#FullInput [status=implemented hash=07653a476369]
+        public struct FullInput: Equatable, Hashable, Sendable, Codable {
+            public let code: String
+            public let timeout: Int?
+            public let background: Bool?
+
+            public init(code: String, timeout: Int? = nil, background: Bool? = nil) throws {
+                if let timeout, timeout <= 0 {
+                    throw DecodingError.dataCorrupted(
+                        DecodingError.Context(
+                            codingPath: [CodingKeys.timeout],
+                            debugDescription: "timeout must be a positive integer."
+                        )
+                    )
+                }
+                self.code = code
+                self.timeout = timeout
+                self.background = background
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let code = try container.decode(String.self, forKey: .code)
+                let timeout = try container.decodeIfPresent(Int.self, forKey: .timeout)
+                if let timeout, timeout <= 0 {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .timeout,
+                        in: container,
+                        debugDescription: "timeout must be a positive integer."
+                    )
+                }
+                let background = try container.decodeIfPresent(Bool.self, forKey: .background)
+                self.code = code
+                self.timeout = timeout
+                self.background = background
+            }
+
+            public static let jsonSchema: CodemodeEngine.Tool.JsonSchema = [
+                "type": .string("object"),
+                "properties": .object([
+                    "code": .object(["type": .string("string")]),
+                    "timeout": .object([
+                        "type": .string("integer"),
+                        "minimum": .int(1),
+                        "description": .string(
+                            "Optional time in milliseconds to wait for the script before moving it to the background (default \(2 * 60 * 1_000)). The script keeps running in the background after that; it is never stopped. With `background: true` the call returns immediately instead."
+                        ),
+                    ]),
+                    "background": .object([
+                        "type": .string("boolean"),
+                        "description": .string(
+                            "Run the script in the background and return immediately with its job ID (useful for long-running work). You will be notified when it completes. DO NOT poll for completion."
+                        ),
+                    ]),
+                ]),
+                "required": .array([.string("code")]),
+            ]
+
+            enum CodingKeys: String, CodingKey {
+                case code
+                case timeout
+                case background
+            }
+        }
+
+        private static let codeOnlySchema: CodemodeEngine.Tool.JsonSchema = [
+            "type": .string("object"),
+            "properties": .object(["code": .object(["type": .string("string")])]),
+            "required": .array([.string("code")]),
+        ]
+
         private static func description(full: Bool) -> String {
-            [
+            var lines = [
                 "Run JavaScript in a confined Code Mode runtime to script tool calls and HTTP requests and compose their results.",
                 "Write plain JavaScript and send it exactly as written: no code fence, and no JSON or other wrapper around it.",
                 full
@@ -1432,7 +1875,13 @@ public enum CoreCodemode {
                 #"Call tools through `tools` using only exact paths and signatures from the catalog. Do not infer or normalize tool names; preserve bracket notation such as `tools.<namespace>["tool-name"](input)`."#,
                 "Prefer an explicit `return`; if omitted, the final top-level expression becomes the result.",
                 "Await every call whose completion matters; pending calls are interrupted when execution ends. Run independent calls concurrently with `Promise.allSettled`.",
-            ].joined(separator: "\n")
+            ]
+            if full {
+                lines.append(
+                    "Scripts still running after their timeout move to the background and keep running. Background scripts return a job ID immediately, and you will be notified when they complete; do not poll for them."
+                )
+            }
+            return lines.joined(separator: "\n")
         }
 
         private static func resultValue(_ executed: ToolSchema.Result<JSONValue>) -> JSONValue {
@@ -1562,7 +2011,7 @@ public enum CoreCodemode {
             return Catalog.Inventory(tools: render(root))
         }
 
-        // parity: core/src/codemode/tool.ts#create [status=adapted hash=1ee5996bd6f5]
+        // parity: core/src/codemode/tool.ts#create [status=adapted hash=2efb4c831501]
         public static func create(
             inventory: Inventory,
             transport: any HTTPTransport,
@@ -1572,11 +2021,7 @@ public enum CoreCodemode {
         ) -> ToolSchema.Info<CodemodeEngine.Input, ExecuteOutput> {
             ToolSchema.Info<CodemodeEngine.Input, ExecuteOutput>(
                 name: "execute",
-                input: .jsonSchema([
-                    "type": .string("object"),
-                    "properties": .object(["code": .object(["type": .string("string")])]),
-                    "required": .array([.string("code")]),
-                ]),
+                input: .jsonSchema(services != nil ? FullInput.jsonSchema : codeOnlySchema),
                 freeform: .text,
                 description: description(full: services != nil),
                 execute: { input, context in
@@ -1584,6 +2029,26 @@ public enum CoreCodemode {
                     let rowIndexByKey = Mutex<[String: Int]>([:])
                     let collectedFiles = Mutex<[(Int, [ExecuteFile])]>([])
                     let callCounter = Mutex<Int>(0)
+                    let diffsHolder = Mutex<Diffs.Collector?>(nil)
+
+                    @Sendable func publishProgress() async {
+                        let snapshot = callRows.withLock { $0 }
+                        let changed = diffsHolder.withLock { $0 }?.files() ?? []
+                        var update: ToolSchema.Metadata = [
+                            "toolCalls": .array(snapshot.map(encodeExecuteCall)),
+                        ]
+                        if !changed.isEmpty {
+                            update["files"] = .array(changed.map { $0.toJSONValue() })
+                        }
+                        await context.progress(update)
+                    }
+
+                    // The files the program changes, shown under the call as it runs and when it ends in the foreground.
+                    // A failed or stopped one keeps them too, since they really changed.
+                    let diffs = Diffs.make {
+                        await publishProgress()
+                    }
+                    diffsHolder.withLock { $0 = diffs }
 
                     @Sendable func displayInput(_ val: JSONValue) -> [String: JSONValue]? {
                         switch val {
@@ -1611,8 +2076,7 @@ public enum CoreCodemode {
                                 return i
                             }
                             rowIndexByKey.withLock { $0[call.key] = idx }
-                            let snapshot = callRows.withLock { $0 }
-                            await context.progress(["toolCalls": .array(snapshot.map(encodeExecuteCall))])
+                            await publishProgress()
                         },
                         toolAfter: { call, res in
                             if let idx = rowIndexByKey.withLock({ $0[call.key] }) {
@@ -1621,8 +2085,7 @@ public enum CoreCodemode {
                                     let status = if case .success = res { "completed" } else { "error" }
                                     list[idx] = ExecuteCall(tool: prev.tool, status: status, input: prev.input)
                                 }
-                                let snapshot = callRows.withLock { $0 }
-                                await context.progress(["toolCalls": .array(snapshot.map(encodeExecuteCall))])
+                                await publishProgress()
                             }
                         },
                         extensionBefore: { call in
@@ -1636,22 +2099,28 @@ public enum CoreCodemode {
                             }
                             if let entry {
                                 callRows.withLock { $0.append(entry) }
+                                await publishProgress()
                             }
                         },
                         extensionAfter: { call, res in
                             if call.name == "fetch" || call.extension == "bun" {
-                                callRows.withLock { list in
+                                let updated = callRows.withLock { list -> Bool in
                                     if let idx = list.lastIndex(where: { $0.status == "running" && ($0.tool == call.name || ($0.tool == "Bun" && call.extension == "bun")) }) {
                                         let prev = list[idx]
                                         let status = if case .success = res { "completed" } else { "error" }
                                         list[idx] = ExecuteCall(tool: prev.tool, status: status, input: prev.input)
+                                        return true
                                     }
+                                    return false
+                                }
+                                if updated {
+                                    await publishProgress()
                                 }
                             }
                         }
                     )
 
-                    let toolsTree = buildToolsTree(inventory) { _, reg, toolInput in
+                    let toolsTree = buildToolsTree(inventory) { name, reg, toolInput in
                         let seq = callCounter.withLock { c -> Int in let cur = c; c += 1; return cur }
                         let nestedID = ToolSchema.CallID(rawValue: "call_\(Identifier.ascending())")
                         let nestedCtx = ToolSchema.Context(
@@ -1664,8 +2133,12 @@ public enum CoreCodemode {
                             // The tool runs inside Code Mode, so its `codemode` overrides apply.
                             codemode: true
                         )
+                        // The name the program called, so a namespaced tool that happens to be named edit or write records nothing.
+                        let diffToolName = reg.options?.namespace == nil ? name : qualifiedName(reg)
                         do {
-                            let executed = try await reg.execute(toolInput, nestedCtx)
+                            let executed = try await Diffs.around(diffs, tool: diffToolName, input: toolInput) { () async throws(ToolSchema.ToolError) in
+                                try await reg.execute(toolInput, nestedCtx)
+                            }
                             let files = outputFiles(executed)
                             if !files.isEmpty {
                                 collectedFiles.withLock { $0.append((seq, files)) }
@@ -1678,17 +2151,18 @@ public enum CoreCodemode {
                         }
                     }
 
-                    let result: CodemodeEngine.ExecutionResult
-                    do {
-                        let rt = try CodemodeEngine.make(CodemodeEngine.Options(
-                            tools: toolsTree,
-                            hooks: hooks,
-                            extensions: extensions,
-                            limits: limits
-                        ))
-                        result = await rt.execute(input.code, nil, nil)
-                    } catch {
-                        result = .failure(CodemodeEngine.Failure(error: CodemodeLanguage.normalizeError(error)))
+                    let result: CodemodeEngine.ExecutionResult = await Diffs.Service.$current.withValue(diffs) {
+                        do {
+                            let rt = try CodemodeEngine.make(CodemodeEngine.Options(
+                                tools: toolsTree,
+                                hooks: hooks,
+                                extensions: extensions,
+                                limits: limits
+                            ))
+                            return await rt.execute(input.code, nil, nil)
+                        } catch {
+                            return .failure(CodemodeEngine.Failure(error: CodemodeLanguage.normalizeError(error)))
+                        }
                     }
 
                     let finalCalls = callRows.withLock { $0 }
@@ -1710,8 +2184,10 @@ public enum CoreCodemode {
                             name: f.name
                         )))
                     }
+                    let changed = diffs.files()
                     var metadata: ToolSchema.Metadata = ["toolCalls": .array(finalCalls.map(encodeExecuteCall))]
                     if !result.ok { metadata["error"] = .bool(true) }
+                    if !changed.isEmpty { metadata["files"] = .array(changed.map { $0.toJSONValue() }) }
                     return ToolSchema.Result(output: outputStruct, content: .parts(contentParts), metadata: metadata)
                 }
             )
@@ -1726,21 +2202,42 @@ public enum CoreCodemode {
             return .object(dict)
         }
 
-        // parity: core/src/codemode/tool.ts#check [status=implemented hash=332d31757798]
+        /// Runs one program over `inventory` with no model step, binding `bindings` as outer globals.
+        // parity: core/src/codemode/tool.ts#check [status=implemented hash=f563fa4e7014]
         public static func check(
             inventory: Inventory,
             code: String,
             bindings: [String: CodemodeEngine.DataValue] = [:],
             limits: CodemodeEngine.ExecutionLimits = CodemodeEngine.ExecutionLimits(),
+            context: ToolSchema.Context? = nil,
+            permission: PermissionHook = .allowAll,
+            services: Services? = nil,
+            transport: (any HTTPTransport)? = nil,
             executeTool: @escaping @Sendable (String, ToolRegistration, JSONValue) async throws -> ToolSchema.Result<JSONValue>
         ) async throws -> CodemodeEngine.ExecutionResult {
             let toolsTree = buildToolsTree(inventory) { name, reg, input in
                 let res = try await executeTool(name, reg, input)
                 return resultValue(res)
             }
+            let effectiveContext = context ?? ToolSchema.Context(
+                sessionID: SessionID.create(),
+                agent: AgentSchema.ID(rawValue: "build"),
+                messageID: "msg_check",
+                id: ToolSchema.CallID(rawValue: "call_check"),
+                progress: { _ in }
+            )
+            let execSvc = Execution.Service(context: effectiveContext, permission: permission, transport: transport)
+            var extensions: [CodemodeEngine.Extension.Definition] = [
+                transport.map { Fetch.makeExtension(transport: $0, execution: execSvc) } ?? Fetch.extension,
+            ]
+            if let services {
+                extensions.append(Path.makeExtension(directory: services.location.directory))
+                extensions.append(Bun.makeExtension(services: services.bun, execution: execSvc))
+            }
             let rt = try CodemodeEngine.make(CodemodeEngine.Options(
                 tools: toolsTree,
                 hooks: CodemodeEngine.ToolRuntime.Hooks(),
+                extensions: extensions,
                 limits: limits
             ))
             return await rt.execute(code, bindings, nil)

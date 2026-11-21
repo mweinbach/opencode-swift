@@ -87,6 +87,27 @@ enum CodemodeTestHelper {
         try? await Task.sleep(for: .milliseconds(ms))
     }
 
+    static func decodeFullInput(json: String) throws -> CoreCodemode.Tool.FullInput {
+        try JSONDecoder().decode(CoreCodemode.Tool.FullInput.self, from: Data(json.utf8))
+    }
+
+    static func encodeFileDiffs(_ diffs: [FileDiffSchema.Info]) -> JSONValue {
+        guard let data = try? JSONEncoder().encode(diffs),
+              let value = try? JSONDecoder().decode(JSONValue.self, from: data)
+        else {
+            return .array([])
+        }
+        return value
+    }
+
+    static func withTempDir<T>(_ body: (String) async throws -> T) async throws -> T {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swift-opencode-codemode-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        return try await body(dir.path)
+    }
+
     static func makeSampleOpenAPISpec() -> CodemodeEngine.OpenAPI.Document {
         [
             "openapi": .string("3.1.0"),
