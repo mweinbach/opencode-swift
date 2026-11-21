@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Debug builds run the pure-Swift machine-link crypto slowly; give handshakes room under parallel load.
+export OPENCODE_MACHINE_LINK_DEADLINE_MS="${OPENCODE_MACHINE_LINK_DEADLINE_MS:-60000}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIR="${1:-${ROOT_DIR}}"

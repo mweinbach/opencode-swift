@@ -36,7 +36,15 @@ public enum MachineLink {
     static let first = key
     static let second = key + key + tag + (key + signature) + tag
     static let third = key + tag + (key + signature + 1 + key) + tag
-    public static let deadline: Duration = .seconds(10)
+    /// Ten seconds, as upstream. `OPENCODE_MACHINE_LINK_DEADLINE_MS` overrides it for test harnesses only: their debug
+    /// builds run the pure-Swift X25519/Ed25519 handshake many times slower than release, and under a full parallel
+    /// test run that can exceed ten seconds without anything being wrong.
+    public static let deadline: Duration = {
+        if let raw = ProcessInfo.processInfo.environment["OPENCODE_MACHINE_LINK_DEADLINE_MS"], let ms = Int(raw), ms > 0 {
+            return .milliseconds(ms)
+        }
+        return .seconds(10)
+    }()
     /// Each direction rekeys after this many transport messages: 2^20 frames of at most 64 KiB is 64 GiB per AES-GCM key.
     public static let rekeyInterval = 1 << 20
 
