@@ -126,6 +126,7 @@ struct SchemaDomainTests {
         #expect(ConfigFlagSchema.Key(rawValue: "machines") == .machines)
         #expect(ConfigFlagSchema.Key(rawValue: "home_memory") == .homeMemory)
         #expect(ConfigFlagSchema.Key(rawValue: "project_overlay") == .projectOverlay)
+        #expect(ConfigFlagSchema.Key(rawValue: "automations") == nil)
         #expect(ConfigFlagSchema.registry[.fullCodemode] == "Enable the full Code Mode work in progress.")
         for key in ConfigFlagSchema.Key.allCases {
             #expect(ConfigFlagSchema.registry[key] != nil)
@@ -220,7 +221,7 @@ struct SchemaDomainTests {
               "settings": { "timeout": 900000, "chunkTimeout": false, "customFlag": true }
             }
           },
-          "automations": true,
+          "automations": false,
           "experimental": {
             "all_flags": true,
             "project_overlay": true,
@@ -245,7 +246,7 @@ struct SchemaDomainTests {
         #expect(decoded.providers?["console-anthropic"]?.settings?.timeout == .milliseconds(900_000))
         #expect(decoded.providers?["console-anthropic"]?.settings?.chunkTimeout == .disabled)
         #expect(decoded.providers?["console-anthropic"]?.settings?.extra["customFlag"] == .bool(true))
-        #expect(decoded.automations == true)
+        #expect(decoded.automations == false)
         #expect(decoded.experimental?.flagValue(for: .projectOverlay) == true)
         #expect(decoded.experimental?.locationIdleTimeout == .disabled)
 

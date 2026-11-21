@@ -515,11 +515,11 @@ public struct ProtocolURLComponents: Equatable, Hashable, Sendable {
 public enum ProtocolCatalog {
     public static let apiVersion = "1"
 
-    /// Canonical list of all 38 upstream protocol groups in `packages/protocol/src/groups/`.
+    /// Canonical list of all 39 upstream protocol groups in `packages/protocol/src/groups/`.
     public static let upstreamGroups: [String] = [
         "agent", "artifact", "automation", "blob", "command", "config",
         "credential", "debug", "event", "experimental", "form", "fs",
-        "generate", "integration", "job", "location", "mcp", "media",
+        "generate", "integration", "job", "location", "machine", "mcp", "media",
         "message", "migration", "model", "permission", "persistent-pty",
         "plugin", "project", "provider", "pty", "reference", "rpc",
         "server", "session", "shell", "skill", "usage", "vcs",

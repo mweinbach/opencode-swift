@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  # Debug-build machine-link handshakes (pure-Swift crypto) need more than 10s on small runners.
+  OPENCODE_MACHINE_LINK_DEADLINE_MS: "60000"
+
 jobs:
   swift-testing-matrix:
     name: Swift Testing (${{ matrix.name }})

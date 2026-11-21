@@ -80,6 +80,75 @@ struct MachineLinkTests {
         #expect(toHex(byHome[1]) == "5c5416b97a5b04e8647ccb9652aa85d48f282d")
     }
 
+    /// Reproduces the full upstream `test/fixture/link-v1-transcript.json` across `MachineLink.serve` and
+    /// `MachineLink.connect`: handshake (messages 1-3), welcome, framed hello, framed to_worker, and framed to_home.
+    @Test("reproduces the full pinned v1 transcript including framed hello and messages")
+    func fullPinnedTranscript() async throws {
+        let (machines, identity, _) = try MachineTestHelper.machines(seed: hex("0101010101010101010101010101010101010101010101010101010101010101"))
+        let id = try await machines.add("gpu")
+        let worker = MachineIdentity.fromSeed(hex("0202020202020202020202020202020202020202020202020202020202020202"))
+        let printed = secret(of: try await machines.invite(id, options: .init(reach: [])))
+        let first = await connect(machines: machines, identity: identity, dial: .init(home: printed.home, identity: worker, secret: printed.secret))
+        #expect((try? first.worker.get())?.machine == "gpu")
+
+        let (homePipe, workerPipe) = MachineTestHelper.Pipe.pair()
+        let homeFixed = MachineLink.Fixed(
+            static: try MachineNoise.keyPair(hex("0303030303030303030303030303030303030303030303030303030303030303")),
+            ephemeral: try MachineNoise.keyPair(hex("0404040404040404040404040404040404040404040404040404040404040404"))
+        )
+        let workerOptions = MachineLink.DialOptions(
+            home: printed.home,
+            identity: worker,
+            secret: hex("0707070707070707070707070707070707070707070707070707070707070707"),
+            fixed: .init(
+                static: try MachineNoise.keyPair(hex("0505050505050505050505050505050505050505050505050505050505050505")),
+                ephemeral: try MachineNoise.keyPair(hex("0606060606060606060606060606060606060606060606060606060606060606"))
+            )
+        )
+
+        let helloJSON = #"{"type":"hello","protocol":2,"os":"linux","arch":"x64","home":"/home/worker","instance":"transcript","processes":[]}"#
+        let toWorkerJSON = #"{"type":"fs","req":1,"call":"read","path":"/etc/hostname"}"#
+        let toHomeJSON = #"{"type":"fs","req":1,"ok":true,"result":{"info":{"type":"file","size":4,"mtimeMs":0},"bytes":"Z3B1Cg=="}}"#
+        let hello = try MachineTestHelper.decode(MachineWire.FromWorker.self, helloJSON)
+        let toWorker = try MachineTestHelper.decode(MachineWire.ToWorker.self, toWorkerJSON)
+        let toHome = try MachineTestHelper.decode(MachineWire.FromWorker.self, toHomeJSON)
+        #expect(MachineWire.encodeJSONString(hello) == helloJSON)
+        #expect(MachineWire.encodeJSONString(toWorker) == toWorkerJSON)
+        #expect(MachineWire.encodeJSONString(toHome) == toHomeJSON)
+
+        let serving = Task {
+            try await MachineLink.serve(homePipe, identity: identity, machines: machines, fixed: homeFixed)
+        }
+        let dialed = try await MachineLink.connect(workerPipe, options: workerOptions)
+        defer { dialed.close() }
+        dialed.send(hello)
+        let link = try await serving.value
+        defer { link.close() }
+
+        link.connection.send(toWorker)
+        var workerIter = dialed.messages.makeAsyncIterator()
+        let gotDown = await workerIter.next()
+        #expect(gotDown == toWorker)
+
+        dialed.send(toHome)
+        var homeIter = link.connection.messages.makeAsyncIterator()
+        let gotUp = await homeIter.next()
+        #expect(gotUp == toHome)
+        #expect(dialed.machine == "gpu")
+        #expect(link.machine == "gpu")
+
+        let byWorker = workerPipe.sent
+        let byHome = homePipe.sent
+        #expect(byWorker.count == 4 && byHome.count == 3)
+        #expect(toHex(byWorker[0]) == "f5b2d6e60f9477e310c2982daaa6c9136c108a1777c5947e448fa37d68174557")
+        #expect(toHex(byHome[0]) == "ac01b2209e86354fb853237b5de0f4fab13c7fcbf433a61c019369617fecf10be70eb76cfd9879d19130c915124227827839e15f751a77083ebdbd809653c73f4682aa4bfb60a61a0a1b9cd8f978690799527bad0121199677bc5605fd1ae9b2b0f74fdd71a6c22a14a13010cc2c141a39f16a91e6c64e6caf541265ac450816c5e83f7f5623f786811b431a1c3abe4ec44dd5e625437aef884383d8c0693c6a8cb5462b5eb0be0d9d82d23bf11af8bc87aba22e7eeb96fda0348230b340662f")
+        #expect(toHex(byWorker[1]) == "e30068bb3017141fc5433629ef2ca8f3d582a5d2814f134dfcb7d97afc19eb203ab96c6172a9c8008cd3156205860a72a3765bbe37068d3799bd6544c4db5198bcc7a0a68dad9ad06c2ce3795267b4bcefe7756b73acbd4d7bdceb453972942b477a555f7f26a204a8a137558e49f291b47c6e119ae5042f203826233f37f2a673fee0debe7112bae5dd51064f4df7168d0b8e17af9caf0265026752d6e7484f45d93b389310f5caa296f27926bbf95794fa3035d794a8b91e3d2799633053936e")
+        #expect(toHex(byHome[1]) == "5c5416b97a5b04e8647ccb9652aa85d48f282d")
+        #expect(toHex(byWorker[2]) == "418fff8cadb3813307babf5860d62cf55f727bbd0c97f0205afbf9d6ca9bf9edc9944a9ac1351964038fbd7956241f6dca05e988945a9487fb087aef99d24467af9092759876caff7b932221bdc904a6c073f14838468cf02e1182611ee1c27a99435f3711b862067c9e325629205ca716f4db1fee9d09fdec76607d6d84b8c54446616be2")
+        #expect(toHex(byHome[2]) == "45775e469e105cccd34ed889a340db0ec210749da70d287dd9b18ed72ebc09baf9919a5a363d7a85425c982306ee4364e7c0a395e60b4143151bc014aecfcd57424f6fcfa664e4ad74bde4")
+        #expect(toHex(byWorker[3]) == "1aeecaade10ee45fd1128024095863c238189468741eee9767eab1f0a4db9213ed2495de1e570671633d73a5673f53f9ead9a43b77bc66d61046bc7f5dcb511df681296d961d6a5b6046fd735b2ea36170dc32ef6d9d38a7156f8283a552ce661e0e26d7a32b7a522dd44eb78613fc4750a716f56ba71501808c")
+    }
+
     @Test("pairs with a join secret, reconnects without one, and both sides share working ciphers")
     func pairAndReconnect() async throws {
         let (machines, identity, _) = try MachineTestHelper.machines()
@@ -145,7 +214,9 @@ struct MachinesServiceTests {
         }
         #expect(await machines.list().map(\.id) == ["a-box", "gpu"])
         #expect(try db.query("SELECT id FROM machine ORDER BY id", parameters: []).compactMap { $0.string("id") } == ["a-box", "gpu"])
-        try await machines.remove("gpu")
+        #expect(try await machines.remove("gpu") == true)
+        #expect(try await machines.remove("gpu") == false)
+        #expect(try await machines.remove("never-existed") == false)
         #expect(await machines.list().map(\.id) == ["a-box"])
         await #expect(throws: Machines.NotFound(machine: "gpu")) { try await machines.get("gpu") }
         #expect(Machines.InvalidName(name: "x").message.hasPrefix("\"x\" is not a machine name."))

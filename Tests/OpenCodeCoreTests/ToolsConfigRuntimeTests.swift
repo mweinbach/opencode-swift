@@ -844,15 +844,16 @@ struct CoreConfigFlagPolicyTests {
             info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(allFlags: true, mediaBlob: false))
         ))
         let doc2 = CoreConfigEntry.document(ConfigSchema.Document(
-            info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(projectOverlay: false))
+            info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(machines: false))
         ))
 
-        // 1. Release channel: all_flags turns on non-optInOnly flags, latest experimental doc overrides project_overlay, optInOnly stays off
+        // 1. Release channel: all_flags turns on non-optInOnly flags, latest experimental doc overrides machines, optInOnly stays off
         let r1 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [doc1, doc2], channel: "release", overrides: nil))
         #expect(r1[.artifacts] == CoreFlag.State(enabled: true, source: .config))
-        #expect(r1[.projectOverlay] == CoreFlag.State(enabled: false, source: .config))
+        #expect(r1[.machines] == CoreFlag.State(enabled: false, source: .config))
         #expect(r1[.todo] == CoreFlag.State(enabled: false, source: .default))
         #expect(r1[.sqliteFts] == CoreFlag.State(enabled: true, source: .config))
+        #expect(r1[.projectOverlay] == CoreFlag.State(enabled: true, source: .config))
         #expect(r1[.fullCodemode] == CoreFlag.State(enabled: true, source: .config))
 
         // 2. OPENCODE_FLAGS=all,-media_blob,todo overrides everything; optInOnly requires explicit key

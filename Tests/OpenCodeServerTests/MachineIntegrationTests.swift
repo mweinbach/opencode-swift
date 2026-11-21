@@ -14,20 +14,29 @@ struct MachineIntegrationTests {
 
     // MARK: 1. Worker joins through server Noise link endpoint and hello is served
 
-    @Test("Worker joins through /api/machine/link using Noise XX, hello is served, and reconnect works")
+    @Test("Worker joins through /api/experimental/machine/link using Noise XX, hello is served, and reconnect works")
     func workerJoinsThroughServerNoiseLink() async throws {
         let fs = InMemoryFileSystem(initialFiles: ["/workspace/README.md": Helper.utf8Bytes("ok\n")])
+        let env = DictionaryEnvironment(variables: ["OPENCODE_FLAGS": "machines"])
         let runtime = try await ServerAppRuntime.make(
             options: ServerOptions(password: "top-secret-password"),
             fileSystem: fs,
+            environment: env,
             defaultDirectory: "/workspace"
         )
         let router = ServerRouter(runtime: runtime)
         defer { Task { await runtime.close() } }
 
-        // Endpoint is exempt from HTTP password auth because Noise XX + join secret / paired key authenticates it.
-        let nonUpgrade = await router.handle(ServerHTTPRequest(method: "GET", url: MACHINE_LINK_PATH))
-        #expect(nonUpgrade.statusCode == 426)
+        // Only a WebSocket upgrade is exempt from server password; plain GET requires auth (401),
+        // and authenticated plain GET answers 404 like an unknown route.
+        let unauthPlain = await router.handle(ServerHTTPRequest(method: "GET", url: MACHINE_LINK_PATH))
+        #expect(unauthPlain.statusCode == 401)
+        let authPlain = await router.handle(ServerHTTPRequest(
+            method: "GET",
+            url: MACHINE_LINK_PATH,
+            headers: ["authorization": "Bearer top-secret-password"]
+        ))
+        #expect(authPlain.statusCode == 404)
 
         // Add machine and generate a one-time join string.
         let id = try await runtime.machines.add("gpu")
@@ -62,6 +71,7 @@ struct MachineIntegrationTests {
         #expect(gpuInfo.paired == true)
         #expect(gpuInfo.os == "linux")
         #expect(gpuInfo.arch == "arm64")
+        #expect(gpuInfo.connection == MachineDriver.ConnectionInfo(kind: .websocket))
         #expect(try await runtime.machines.home("gpu") == "/home/gpu")
 
         // The machine's environment reports its own ID (not "local").
@@ -329,12 +339,13 @@ struct MachineIntegrationTests {
         let nonAbsErr = try #require(await #expect(throws: ToolSchema.ToolError.self) {
             _ = try await execTool("read", ["path": .string("gpu:~other/x")])
         })
-        #expect(nonAbsErr.message == "A gpu path must be absolute or start with ~/, as in gpu:/work/file.")
+        let expectedNotAbs = "Machine paths are absolute or start with ~/: write gpu:/… or gpu:~/… (for a local folder with that name, start with ./)"
+        #expect(nonAbsErr.message == expectedNotAbs)
         #expect(
             CoreSessionErrorMapping.toSessionError(nonAbsErr)
                 == SessionErrorSchema.Error(
                     type: "tool.execution",
-                    message: "A gpu path must be absolute or start with ~/, as in gpu:/work/file."
+                    message: expectedNotAbs
                 )
         )
 
@@ -400,12 +411,12 @@ struct MachineIntegrationTests {
         }
         #expect(started)
 
-        // Verify /api/machine/link is exempt from password auth at the ServerProcess HTTP dispatch layer too.
+        // Verify non-upgrade /api/experimental/machine/link requires password auth (401) at ServerProcess dispatch layer.
         let linkCheck = try await server.transport.send(HTTPRequest(
             method: "GET",
             url: "\(server.address.urlString)\(MACHINE_LINK_PATH)"
         ))
-        #expect(linkCheck.head.statusCode == 426)
+        #expect(linkCheck.head.statusCode == 401)
 
         // Create a real session so Automation.run can deliver the due prompt to it.
         let targetSession = try await server.router.runtime.session.create(CoreSession.CreateInput(
@@ -506,12 +517,18 @@ struct MachineIntegrationTests {
         #expect(located.environment.id == CoreLocation.Environment.ID.make(parsed.machine))
         #expect(located.absolute.rawValue == "/work/a.txt")
 
-        // Non-machine strings rejected by MachinePath.parse resolve locally.
-        for nonMachine in ["C:/Windows/win.ini", "local:/etc/hosts", "https://example.com/a", "gpu:relative", "Gpu:/work", "gpu://host/share"] {
+        // Non-machine strings rejected by MachinePath.parse resolve locally (unknown machine prefixes stay local).
+        for nonMachine in ["C:/Windows/win.ini", "local:/etc/hosts", "https://example.com/a", "other:relative", "Gpu:/work", "gpu://host/share"] {
             #expect(MachinePath.parse(nonMachine) == nil)
             let localPlace = try await access.locate(nonMachine, base: nil as CoreFilesystem.FileAccess.Place?)
             #expect(localPlace.environment.id == CoreLocation.Environment.localID)
         }
+
+        // Relative path prefixed with a known machine fails with MachinePath.NotAbsolute rather than resolving locally.
+        let relMachine = await #expect(throws: CoreLocation.Environment.Files.Failed.self) {
+            _ = try await access.locate("gpu:relative", base: nil as CoreFilesystem.FileAccess.Place?)
+        }
+        #expect(relMachine?.cause as? MachinePath.NotAbsolute == MachinePath.NotAbsolute(machine: "gpu"))
 
         // Invalid ~other path wraps MachinePath.NotAbsolute (the single error type from MachineJoinPathSQL.swift).
         let notAbs = await #expect(throws: CoreLocation.Environment.Files.Failed.self) {

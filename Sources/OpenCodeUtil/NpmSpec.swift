@@ -54,6 +54,140 @@ public enum NpmSpec {
         case git(name: String?, slug: String, mutable: Bool)
     }
 
+    /// Result of classifying whether a package specifier automatically follows newer versions
+    /// (`packages/util/src/npm.ts#parse` + `follows`).
+    public enum FollowsClassification: Equatable, Hashable, Sendable {
+        /// Always follows: explicit `name@latest`, registry semver range, or Git `#semver:` range.
+        case always
+        /// Never follows: bare name, pinned version, non-`latest` dist-tag, bare Git repo, Git commit hash, or invalid spec.
+        case never
+        /// Named Git ref that follows only if the remote lists it as a branch (not a tag).
+        case gitRef(repoURL: String, ref: String)
+    }
+
+    /// Classifies whether `pkg` should follow newer versions automatically, matching `util/src/npm.ts`.
+    public static func classifyFollows(_ pkg: String) -> FollowsClassification {
+        let trimmed = pkg.trimmingASCIIWhitespace()
+        guard !trimmed.isEmpty, trimmed == pkg else { return .never }
+        if pkg.hasPrefix("file:") || pkg.hasPrefix("./") || pkg.hasPrefix("../") || pkg.hasPrefix("/") || pkg.hasPrefix("~/") {
+            return .never
+        }
+        let (optName, rawSpec) = splitNameAndSpec(pkg)
+        if let name = optName, let spec = rawSpec {
+            if spec.hasPrefix("file:") || spec.hasPrefix("npm:") || isTarballSpec(spec) {
+                return .never
+            }
+            if isGitSpec(spec) {
+                return classifyGitFollows(spec)
+            }
+            guard isValidPackageName(name) else { return .never }
+            if spec.isEmpty {
+                // `pkg@` has raw !== name and npm parses empty spec as range `*`.
+                return .always
+            }
+            guard isValidRegistrySpec(spec) else { return .never }
+            if isExactSemver(spec) {
+                return .never
+            }
+            if spec == "latest" || isSemverRange(spec) {
+                return .always
+            }
+            return .never
+        }
+        if isGitSpec(pkg) {
+            return classifyGitFollows(pkg)
+        }
+        // Bare package name (`raw === name`) or tarball/invalid never follows.
+        return .never
+    }
+
+    private static func classifyGitFollows(_ spec: String) -> FollowsClassification {
+        guard let committish = extractGitCommittish(spec) else {
+            return .never
+        }
+        if committish.hasPrefix("semver:") {
+            let range = String(committish.dropFirst("semver:".count))
+            return range.isEmpty ? .never : .always
+        }
+        if isCommitHash(committish) {
+            return .never
+        }
+        return .gitRef(repoURL: normalizedGitRepoURL(spec), ref: committish)
+    }
+
+    private static func normalizedGitRepoURL(_ spec: String) -> String {
+        let base: String
+        if let idx = spec.firstIndex(of: "#") {
+            base = String(spec[..<idx])
+        } else {
+            base = spec
+        }
+        if base.hasPrefix("git+") {
+            return String(base.dropFirst(4))
+        }
+        if base.hasPrefix("github:") {
+            return "https://github.com/\(base.dropFirst("github:".count)).git"
+        }
+        if base.hasPrefix("gitlab:") {
+            return "https://gitlab.com/\(base.dropFirst("gitlab:".count)).git"
+        }
+        if base.hasPrefix("bitbucket:") {
+            return "https://bitbucket.org/\(base.dropFirst("bitbucket:".count)).git"
+        }
+        if !base.contains("://") && !base.hasPrefix("git@") && !base.hasPrefix("gist:") {
+            let parts = base.split(separator: "/", omittingEmptySubsequences: false)
+            if parts.count == 2 && !parts[0].isEmpty && !parts[1].isEmpty {
+                return "https://github.com/\(base).git"
+            }
+        }
+        return base
+    }
+
+    private static func isSemverRange(_ spec: String) -> Bool {
+        let s = spec.trimmingASCIIWhitespace()
+        if s.isEmpty { return true }
+        if s == "*" || s == "x" || s == "X" { return true }
+        if s.contains("||") || s.contains(" - ") { return true }
+        let parts = s.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        if parts.count > 1 {
+            return parts.allSatisfy { isSemverComparator(String($0)) }
+        }
+        return isSemverComparator(s)
+    }
+
+    private static func isSemverComparator(_ raw: String) -> Bool {
+        var s = raw
+        var hadOperator = false
+        for prefix in [">=", "<=", ">", "<", "^", "~", "="] {
+            if s.hasPrefix(prefix) {
+                s = String(s.dropFirst(prefix.count))
+                hadOperator = true
+                break
+            }
+        }
+        if s.hasPrefix("v") || s.hasPrefix("V") {
+            s.removeFirst()
+        }
+        if s.isEmpty { return false }
+        if s == "*" || s == "x" || s == "X" { return true }
+        // Split off prerelease/build suffix
+        let core = s.split(separator: "-", maxSplits: 1).first?.split(separator: "+", maxSplits: 1).first ?? Substring()
+        let segs = core.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(segs.count) else { return false }
+        var hasWildcard = false
+        for seg in segs {
+            if seg == "x" || seg == "X" || seg == "*" {
+                hasWildcard = true
+                continue
+            }
+            if seg.isEmpty || !seg.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }) {
+                return false
+            }
+        }
+        // Partial versions like `1` or `1.2`, wildcards like `1.x`, or operator-prefixed comparators are ranges.
+        return hadOperator || hasWildcard || segs.count < 3
+    }
+
     private static let windowsIllegalChars: Set<UInt16> = [
         0x3C, // '<'
         0x3E, // '>'

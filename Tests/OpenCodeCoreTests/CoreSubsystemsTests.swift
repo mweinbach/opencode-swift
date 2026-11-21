@@ -1030,14 +1030,14 @@ struct CoreSubsystemsTests {
         let projectID = ProjectID(rawValue: "proj_1")
         let sessionID = SessionID.create()
 
-        // Forbidden tool rejected
+        // Forbidden tool rejected (shell is now permitted in Code Mode automations; automation.create stays forbidden)
         await #expect(throws: CoreAutomation.InvalidError.self) {
             _ = try await svc.create(
                 AutomationSchema.CreateInput(
                     sessionID: sessionID,
                     name: "Bad Code",
                     trigger: .every(.init(every: "60 seconds")),
-                    action: .code(.init(code: "await tools.shell({ cmd: 'rm -rf /' })"))
+                    action: .code(.init(code: "await tools.automation.create({ name: 'loop' })"))
                 ),
                 projectID: projectID,
                 directory: "/repo"

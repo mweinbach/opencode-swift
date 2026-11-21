@@ -1718,6 +1718,8 @@ public enum ConfigSchema {
         public let enterprise: Enterprise?
         public let username: String?
         public let timezone: String?
+        /// Run prompts, shell commands or Code Mode actions on a timer, on a cron schedule, or on push events from
+        /// connected MCP servers. Defaults to true; set false to disable. MCP events still require experimental.mcp_events.
         public let automations: Bool?
         public let permissions: PermissionSchema.Ruleset?
         public let policies: [ConfigPolicySchema.Info]?

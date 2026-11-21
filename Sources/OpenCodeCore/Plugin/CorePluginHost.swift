@@ -3772,7 +3772,7 @@ public enum CorePlugin {
             public func autoUpdate(
                 checked: [(target: String, available: Bool)],
                 updates: any Update.Interface,
-                follows: @escaping @Sendable (String) async throws -> Bool = { NpmPlatform.staticFollows($0).follows }
+                follows: @escaping @Sendable (String) async throws -> Bool = { NpmSpec.classifyFollows($0) == .always }
             ) async {
                 let due = checked.filter { $0.available && attempted[$0.target] != cycle }
                 for entry in due { attempted[entry.target] = cycle }

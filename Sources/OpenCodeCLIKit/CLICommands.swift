@@ -60,6 +60,15 @@ public enum CLICommands {
         CLIFramework.Flag.boolean("dangerously-skip-permissions", default: false, hidden: true),
     ]
 
+    private static let loginFlags: [CLIFramework.Flag.Definition] = [
+        CLIFramework.Flag.string("method", optional: true, description: "Authentication method ID"),
+        CLIFramework.Flag.repeatedString("answer", maxCount: 100, description: "Provider form answer (key=value; repeat for multiple fields)"),
+    ]
+
+    private static let loginArguments: [CLIFramework.Flag.ArgumentDefinition] = [
+        CLIFramework.Flag.ArgumentDefinition(name: "target", description: "Integration ID, name, or well-known provider URL", optional: true),
+    ]
+
     /// Complete OpenCode CLI command tree (`opencode` root + all subcommands & aliases).
     // parity: cli/src/commands/commands.ts#Commands [status=implemented hash=bd73bbf54992]
     public static let Commands: CLIFramework.Spec.CommandNode = CLIFramework.Spec.make(
@@ -155,13 +164,8 @@ public enum CLICommands {
                         )),
                         CLIFramework.Spec.make("login", options: CLIFramework.Spec.Options(
                             description: "connect an integration",
-                            flags: [
-                                CLIFramework.Flag.string("method", optional: true, description: "Authentication method ID"),
-                                CLIFramework.Flag.repeatedString("answer", maxCount: 100, description: "Provider form answer (key=value; repeat for multiple fields)"),
-                            ],
-                            arguments: [
-                                CLIFramework.Flag.ArgumentDefinition(name: "target", description: "Integration ID, name, or well-known provider URL", optional: true),
-                            ]
+                            flags: loginFlags,
+                            arguments: loginArguments
                         )),
                         CLIFramework.Spec.make("logout", options: CLIFramework.Spec.Options(
                             description: "log out of a saved account",
@@ -190,6 +194,13 @@ public enum CLICommands {
                             ]
                         )),
                     ]
+                )),
+                CLIFramework.Spec.make("login", options: CLIFramework.Spec.Options(
+                    description: "Connect an integration (alias for auth login)",
+                    hidden: true,
+                    flags: loginFlags,
+                    arguments: loginArguments,
+                    globalFlags: serverFlags
                 )),
                 CLIFramework.Spec.make("mcp", options: CLIFramework.Spec.Options(
                     description: "Manage MCP (Model Context Protocol) servers",
@@ -393,6 +404,31 @@ public enum CLICommands {
                     ]
                 )),
                 CLIFramework.Spec.make("reload", options: CLIFramework.Spec.Options(description: "Reload configuration", globalFlags: serverFlags)),
+                CLIFramework.Spec.make("machine", options: CLIFramework.Spec.Options(
+                    description: "Manage remote machines",
+                    globalFlags: serverFlags,
+                    commands: [
+                        CLIFramework.Spec.make("add", options: CLIFramework.Spec.Options(
+                            description: "Add a machine and print a one-time join string",
+                            flags: [
+                                CLIFramework.Flag.string("url", optional: true, description: "Use an external HTTP(S) server URL in the join string"),
+                                CLIFramework.Flag.boolean("replace", default: false, description: "Replace the key of an already-paired machine"),
+                            ],
+                            arguments: [
+                                CLIFramework.Flag.ArgumentDefinition(name: "name", description: "Name of the machine"),
+                            ]
+                        )),
+                        CLIFramework.Spec.make("list", options: CLIFramework.Spec.Options(
+                            description: "List machines"
+                        )),
+                        CLIFramework.Spec.make("remove", options: CLIFramework.Spec.Options(
+                            description: "Remove a machine",
+                            arguments: [
+                                CLIFramework.Flag.ArgumentDefinition(name: "name", description: "Name of the machine"),
+                            ]
+                        )),
+                    ]
+                )),
                 CLIFramework.Spec.make("pair", options: CLIFramework.Spec.Options(
                     description: "Print one-time links to connect a browser or app",
                     flags: [
@@ -2070,22 +2106,7 @@ public enum CLICommands {
             if remoteFlag && urlFlag != nil {
                 throw CLIError("--remote cannot be combined with --url")
             }
-            let validatedURL: String? = try urlFlag.map { raw in
-                guard let comps = URLComponents(string: raw),
-                      let scheme = comps.scheme?.lowercased(),
-                      (scheme == "http" || scheme == "https"),
-                      comps.host != nil,
-                      comps.user == nil,
-                      comps.password == nil,
-                      comps.query == nil,
-                      comps.fragment == nil
-                else {
-                    throw CLIError("Expected an HTTP(S) server URL without credentials, query parameters, or a fragment")
-                }
-                var trimmed = raw
-                while trimmed.hasSuffix("/") { trimmed.removeLast() }
-                return trimmed
-            }
+            let validatedURL: String? = try urlFlag.map(CLIServiceURLs.parseServerURL)
 
             if remoteFlag && config.remote == nil {
                 let allowed = try await remoteConsent(config: config, yes: input.bool("yes"), context: context)
@@ -2108,10 +2129,8 @@ public enum CLICommands {
                 let maxWait: Duration = (context.environment is DictionaryEnvironment) ? .zero : .seconds(180)
                 let tunnel = try await remoteURL(client: client, context: context, maxWait: maxWait)
                 urls = [tunnel]
-            } else if let validatedURL {
-                urls = [validatedURL]
             } else {
-                urls = try await client.server.info().urls
+                urls = try await CLIServiceURLs.serverURLs(client: client, url: validatedURL)
             }
 
             let pairing = try await client.server.pair()
@@ -2120,8 +2139,9 @@ public enum CLICommands {
                 return "\(trimmed)/auth/connect/\(pairing.code)"
             }
             let remoteURLs = urls.filter { candidate in
-                guard let host = URLComponents(string: candidate)?.host else { return false }
-                return !isLoopback(host)
+                guard let comps = URLComponents(string: candidate),
+                      let host = CLIServiceURLs.whatwgHostname(from: comps) else { return false }
+                return !CLIServiceURLs.isLoopback(host)
             }
 
             let minutes = Int((Double(pairing.expiresIn) / 60.0).rounded())
@@ -2203,10 +2223,6 @@ public enum CLICommands {
                 }
                 try await Task.sleep(for: pollInterval)
             }
-        }
-
-        private static func isLoopback(_ host: String) -> Bool {
-            host == "localhost" || host.hasSuffix(".localhost") || host.hasPrefix("127.") || host == "::1" || host == "[::1]"
         }
     }
 
@@ -3438,10 +3454,24 @@ public enum CLICommands {
 
     // MARK: Top-Level Commands (`default`, `serve`, `run`, `mini`, `acp`, `models`, `reload`, `upgrade`, `uninstall`)
 
-    // parity: cli/src/commands/handlers/default.ts#default [status=implemented hash=0b93b03d0980]
+    // parity: cli/src/commands/handlers/default.ts#default [status=implemented hash=b6a3a16de543]
     public static func runDefault(_ input: CLIFramework.Runtime.Input, context: CLIContext) async throws {
-        if let dir = input.arg("directory") {
-            context.cwd = CLIPath.resolve(context.cwd, dir)
+        if let requestedDirectory = input.arg("directory") {
+            let resolvedDir = CLIPath.resolve(context.cwd, requestedDirectory)
+            let isDirectory: Bool
+            if let info = try? await context.fileSystem.stat(at: resolvedDir) {
+                isDirectory = info.type == .directory
+            } else {
+                isDirectory = false
+            }
+            // `opencode login` reads as a mistyped command more often than a directory, so answer with help, not ENOENT.
+            if !isDirectory {
+                throw CLIFramework.Runtime.ShowHelpError(
+                    commandPath: [Commands.name],
+                    errors: ["No directory or command named \"\(requestedDirectory)\""]
+                )
+            }
+            context.cwd = resolvedDir
         }
         let preflight = CLIServices.UpdatePreflight.makeHandle(context: context)
         let server: CLIServices.ServerConnection.Resolved
@@ -3925,6 +3955,7 @@ public enum CLICommands {
                         "import": .sync(Auth.runImport),
                         "switch": .sync(Auth.runSwitch),
                     ]),
+                    "login": .sync(Auth.runLogin),
                     "debug": .branch(selfHandler: nil, children: [
                         "agents": .sync(Debug.runAgents),
                         "config": .sync(Debug.runConfig),
@@ -3948,6 +3979,11 @@ public enum CLICommands {
                     "stats": .sync(Stats.run),
                     "mini": .sync(runMini),
                     "run": .sync(runCommand),
+                    "machine": .branch(selfHandler: nil, children: [
+                        "add": .sync(CLIMachine.runAdd),
+                        "list": .sync(CLIMachine.runList),
+                        "remove": .sync(CLIMachine.runRemove),
+                    ]),
                     "pair": .sync(Pair.run),
                     "reload": .sync(runReload),
                     "session": .branch(selfHandler: nil, children: [

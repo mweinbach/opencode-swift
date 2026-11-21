@@ -503,6 +503,66 @@ struct ParitySnapshotTests {
             return AIProtocolUtils.ProviderShared.promptCacheKey(req).map { .string($0) } ?? .null
         case "ai/src/provider-error.ts#isContextOverflow":
             return .bool(AIErrorClassifier.isContextOverflow(args[0].str!))
+        case "ai/src/protocols/shared.ts#flattenToolRequest":
+            let o = args[0].obj!
+            func decodeTool(_ v: SnapshotJSON) -> AIProtocolUtils.ToolEntry {
+                let to = v.obj!
+                let name = to["name"]!.str!
+                if to["type"]?.str == "namespace" {
+                    return .namespace(name: name, description: nil, tools: (to["tools"]?.arr ?? []).map(decodeTool))
+                }
+                return .tool(AIProtocolUtils.ToolDefinition(name: name, description: "", inputSchema: [:]))
+            }
+            let tools = o["tools"]!.arr!.map(decodeTool)
+            let messages: [AIProtocolUtils.Message] = o["messages"]!.arr!.map { mv in
+                let mo = mv.obj!
+                let role: AIProtocolUtils.MessageRole = mo["role"]!.str! == "tool" ? .tool : .assistant
+                let parts: [AIProtocolUtils.ContentPart] = mo["parts"]!.arr!.map { pv in
+                    let po = pv.obj!
+                    let pid = po["id"]!.str!
+                    let pname = po["name"]!.str!
+                    let ns = po["namespace"]?.str
+                    if po["type"]?.str == "tool-result" {
+                        return .toolResult(AIProtocolUtils.ToolResultPart(id: pid, name: pname, namespace: ns, result: .text("ok")))
+                    }
+                    return .toolCall(AIProtocolUtils.ToolCallPart(id: pid, name: pname, namespace: ns, input: .object([:])))
+                }
+                return AIProtocolUtils.Message(role: role, content: parts)
+            }
+            let req = AIProtocolUtils.LLMRequest(
+                model: AIProtocolUtils.ModelDescriptor(id: "gpt-5", provider: "openai"),
+                messages: messages,
+                tools: tools
+            )
+            let flattened = AIProtocolUtils.ProviderShared.flattenToolRequest(req)
+            return .object([
+                "tools": .array(flattened.tools.map { .string($0.name) }),
+                "messages": .array(flattened.request.messages.map { m in
+                    .object([
+                        "role": .string(m.role.rawValue),
+                        "parts": .array(m.content.compactMap { part -> SnapshotJSON? in
+                            switch part {
+                            case .toolCall(let c):
+                                return .object([
+                                    "type": .string("tool-call"),
+                                    "id": .string(c.id),
+                                    "name": .string(c.name),
+                                    "namespace": c.namespace.map { .string($0) } ?? .null,
+                                ])
+                            case .toolResult(let r):
+                                return .object([
+                                    "type": .string("tool-result"),
+                                    "id": .string(r.id),
+                                    "name": .string(r.name),
+                                    "namespace": r.namespace.map { .string($0) } ?? .null,
+                                ])
+                            default:
+                                return nil
+                            }
+                        }),
+                    ])
+                }),
+            ])
 
         // MARK: - packages/core
         case "core/src/util/wildcard.ts#match":
@@ -626,6 +686,12 @@ struct ParitySnapshotTests {
             return .bool(hasPersistentPtyConnectTicketURL(args[0].str!))
         case "protocol/src/groups/mcp.ts#hasMcpClientTicketURL":
             return .bool(hasMcpClientTicketURL(args[0].str!))
+        case "protocol/src/groups/machine.ts#isWebSocketUpgrade":
+            let o = args[0].obj!
+            return .bool(isWebSocketUpgrade(method: o["method"]!.str!, headers: decodeStringMap(o["headers"]!)))
+        case "protocol/src/groups/machine.ts#isMachineLinkUpgrade":
+            let o = args[0].obj!
+            return .bool(isMachineLinkUpgrade(method: o["method"]!.str!, url: o["url"]!.str!, headers: decodeStringMap(o["headers"]!)))
 
         // MARK: - packages/cli
         case "cli/src/database-path.ts#databasePath":
@@ -651,6 +717,10 @@ struct ParitySnapshotTests {
             return CLIServices.ServiceConfig.legacyFilename(channel: args[0].str!).map { .string($0) } ?? .null
         case "cli/src/services/service-config.ts#versionBelongsToChannel":
             return .bool(CLIServices.ServiceConfig.versionBelongsToChannel(args[0].str, channel: args[1].str!, installedVersion: args[2].str!))
+        case "cli/src/services/service-urls.ts#parseServerURL":
+            return .string(try CLIServiceURLs.parseServerURL(args[0].str!))
+        case "cli/src/services/service-urls.ts#isLoopback":
+            return .bool(CLIServiceURLs.isLoopback(args[0].str!))
         case "cli/src/node/target.ts#nodeTarget":
             let t = try CLIUtil.Node.nodeTarget(platform: args[0].str!, arch: args[1].str!)
             return .object([

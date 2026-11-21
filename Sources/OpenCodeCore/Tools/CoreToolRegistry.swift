@@ -631,16 +631,6 @@ public enum CoreTool {
                 codeModeCatalog: codemode?.catalog,
                 codeModeExpression: codeModeExpression
             ) { call in
-                let tool: RegisteredTool
-                if call.name == "execute", let executeTool {
-                    tool = executeTool
-                } else if let found = direct[call.name] {
-                    tool = found
-                } else {
-                    throw AISchema.ToolFailure(
-                        message: "No tool named \"\(call.name)\" is currently available. Please use a tool from the available tool list."
-                    )
-                }
                 let context = ToolSchema.Context(
                     sessionID: call.sessionID,
                     agent: call.agent,
@@ -649,8 +639,51 @@ public enum CoreTool {
                     progress: call.progress ?? { _ in },
                     cancel: call.cancel
                 )
+                if call.name == "execute", let executeTool {
+                    let run: @Sendable (ToolSchema.Context) async throws -> NormalizedResult = { ctx in
+                        try await Runtime.execute(executeTool, input: call.input, context: ctx)
+                    }
+                    if let jobRun = CoreCodemode.Job.Current.run {
+                        let jobOptions = full ? Self.executeOptions(call.input) : nil
+                        let result = try await jobRun(context, options: jobOptions) { ctx in
+                            let normalized = try await run(ctx)
+                            return ToolSchema.Result(
+                                output: normalized.output,
+                                content: .parts(normalized.content),
+                                metadata: normalized.metadata
+                            )
+                        }
+                        return NormalizedResult(
+                            output: result.output,
+                            content: Runtime.normalizeContent(result.content, output: result.output),
+                            metadata: result.metadata
+                        )
+                    }
+                    return try await run(context)
+                }
+                guard let tool = direct[call.name] else {
+                    throw AISchema.ToolFailure(
+                        message: "No tool named \"\(call.name)\" is currently available. Please use a tool from the available tool list."
+                    )
+                }
                 return try await Runtime.execute(tool, input: call.input, context: context)
             }
+        }
+
+        /// Extracts `timeout` and `background` options from an `execute` tool call input when `full_codemode` is enabled.
+        private static func executeOptions(_ input: JSONValue) -> CoreCodemode.Job.Options? {
+            guard case .object(let obj) = input else { return nil }
+            let timeout: Int?
+            switch obj["timeout"] {
+            case .int(let n) where n > 0:
+                timeout = Int(n)
+            case .double(let d) where d.isFinite && d.rounded() == d && d > 0:
+                timeout = Int(d)
+            default:
+                timeout = nil
+            }
+            let background: Bool? = obj["background"] == .bool(true) ? true : nil
+            return CoreCodemode.Job.Options(timeout: timeout, background: background)
         }
 
         /// Builds the Code Mode `execute` tool over the tools placed inside Code Mode. Each inner call runs through
@@ -699,6 +732,7 @@ public enum CoreTool {
             } else {
                 inputSchema = ["type": .string("object")]
             }
+            let isFull = services != nil
             let tool = RegisteredTool(
                 id: info.name,
                 name: info.name,
@@ -707,8 +741,14 @@ public enum CoreTool {
                 outputSchema: ["type": .string("object")],
                 freeform: info.freeform
             ) { rawInput, context in
-                let input = try decodeToolJSON(CodemodeEngine.Input.self, from: rawInput, toolName: info.name)
-                let result = try await info.execute(input, context)
+                let codeInput: CodemodeEngine.Input
+                if isFull {
+                    let fullInput = try decodeToolJSON(CoreCodemode.Tool.FullInput.self, from: rawInput, toolName: info.name)
+                    codeInput = CodemodeEngine.Input(code: fullInput.code)
+                } else {
+                    codeInput = try decodeToolJSON(CodemodeEngine.Input.self, from: rawInput, toolName: info.name)
+                }
+                let result = try await info.execute(codeInput, context)
                 return ToolSchema.Result(
                     output: result.output.map { encodeToolJSON($0) },
                     content: result.content,
@@ -723,8 +763,13 @@ public enum CoreTool {
                 return CheckResult(ok: false, error: "Code Mode is disabled for this agent", availableTools: [])
             }
             let visible: [String] = state.withLock { s in
-                Self.resolveCodeModeTools(registered: s.tools, paths: input.tools)
-                    .values
+                var matched: [String: RegisteredTool] = Self.resolveCodeModeTools(registered: s.tools, paths: input.tools)
+                for path in input.tools where matched[path] == nil {
+                    if let tool = s.tools[path], Runtime.defaultCodeMode(tool.options) {
+                        matched[path] = tool
+                    }
+                }
+                return matched.values
                     .compactMap { tool -> String? in
                         let action = tool.options?.permission ?? tool.id
                         if Self.whollyDisabled(action: action, rules: input.permissions) { return nil }

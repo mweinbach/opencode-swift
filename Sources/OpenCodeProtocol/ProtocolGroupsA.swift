@@ -212,7 +212,7 @@ public let ArtifactEndpoints: [EndpointDescriptor] = [
 // MARK: - 3. automation.ts
 
 private let automationExperimentalNote =
-    "Experimental: needs experimental.automations in the config of the automation's directory and may change without compatibility guarantees."
+    "Experimental: may change without compatibility guarantees. Set automations to false in the directory's config to disable access."
 private let automationItemErrors: [ProtocolErrorRef] = [
     ProtocolErrorRef(AutomationNotFoundError.self),
     ProtocolErrorRef(ForbiddenError.self),
@@ -251,7 +251,7 @@ public struct AutomationListQuery: Equatable, Hashable, Sendable, Codable {
 }
 
 /// Lives in the `server.experimental` group (see `ExperimentalGroup`).
-// parity: protocol/src/groups/automation.ts#AutomationEndpoints [status=implemented hash=84dc5ea0bd86]
+// parity: protocol/src/groups/automation.ts#AutomationEndpoints [status=implemented hash=dd22fda6678c]
 public let AutomationEndpoints: [EndpointDescriptor] = [
     EndpointDescriptor(
         group: "server.experimental",
@@ -261,7 +261,7 @@ public let AutomationEndpoints: [EndpointDescriptor] = [
         experimental: true,
         openAPIIdentifier: "experimental.automation.create",
         summary: "Create automation",
-        description: "Create an automation that sends a prompt or runs a Code Mode program at a time, every interval, or on a cron. Creating an MCP event watch requires the automation_create tool in a local session; a session ID over HTTP is not a watch authorization. \(automationExperimentalNote)",
+        description: "Create an automation that sends a prompt, runs a Code Mode program, or runs a shell command at a time, every interval, or on a cron. Creating an MCP event watch requires the automation_create tool in a local session; a session ID over HTTP is not a watch authorization. \(automationExperimentalNote)",
         payloadType: "Automation.CreatePayload",
         successType: "{ data: Automation.Info }",
         errors: [
@@ -790,13 +790,14 @@ public let EventGroup: EndpointGroupDescriptor = makeEventGroup(definitions: Ope
 // MARK: - 10. experimental.ts
 
 /// `server.experimental`: routes under `/api/experimental`, without compatibility guarantees.
-// parity: protocol/src/groups/experimental.ts#ExperimentalGroup [status=implemented hash=8ccf1cbcb6ce]
+// parity: protocol/src/groups/experimental.ts#ExperimentalGroup [status=implemented hash=0895f8b55d32]
 public let ExperimentalGroup: EndpointGroupDescriptor = PersistentPtyGroup
     .adding(MediaGetEndpoint)
     .adding(BlobGetEndpoint)
     .adding(AutomationEndpoints)
     .adding(ArtifactEndpoints)
     .adding(JobEndpoints)
+    .adding(MachineEndpoints)
 
 // MARK: - 11. form.ts
 

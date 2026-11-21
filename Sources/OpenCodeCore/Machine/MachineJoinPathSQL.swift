@@ -13,24 +13,33 @@ public enum MachineJoin {
     static let keyBytes = 32
     static let maxSafeInteger: Int64 = 9_007_199_254_740_991
 
-    /// A way to reach the home, as the worker's transport understands it.
-    // parity: core/src/machine/join.ts#Reach [status=implemented hash=b553c0804a0e]
+    /// A way to reach the home, as the worker's transport understands it. `iroh` dials the join string's `home` key.
+    // parity: core/src/machine/join.ts#Reach [status=implemented hash=81188397234a]
     public enum Reach: Equatable, Hashable, Sendable {
         case url(String)
+        case iroh
 
         static func decode(_ value: JSONValue) -> Reach? {
             guard case .object(let fields) = value,
-                  fields["type"] == .string("url"),
-                  case .string(let url)? = fields["url"]
+                  case .string(let type)? = fields["type"]
             else {
                 return nil
             }
-            return .url(url)
+            switch type {
+            case "url":
+                guard case .string(let url)? = fields["url"] else { return nil }
+                return .url(url)
+            case "iroh":
+                return .iroh
+            default:
+                return nil
+            }
         }
 
         func json() -> String {
             switch self {
             case .url(let url): return "{\"type\":\"url\",\"url\":\(MachineJoin.jsonString(url))}"
+            case .iroh: return "{\"type\":\"iroh\"}"
             }
         }
     }
@@ -141,7 +150,7 @@ public enum MachinePath {
         }
     }
 
-    // parity: core/src/machine/path.ts#NotAbsolute [status=implemented hash=75d3204117ca]
+    // parity: core/src/machine/path.ts#NotAbsolute [status=implemented hash=ce1d1a5ddeb9]
     public struct NotAbsolute: Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Machine.NotAbsolute"
         public let machine: String
@@ -150,9 +159,9 @@ public enum MachinePath {
             self.machine = machine
         }
 
-        // parity: core/src/machine/path.ts#NotAbsolute.message [status=implemented hash=f629307ff2b5]
+        // parity: core/src/machine/path.ts#NotAbsolute.message [status=implemented hash=5d4291ae78ac]
         public var message: String {
-            "A \(machine) path must be absolute or start with ~/, as in \(machine):/work/file."
+            "Machine paths are absolute or start with ~/: write \(machine):/… or \(machine):~/… (for a local folder with that name, start with ./)"
         }
 
         public var description: String { message }

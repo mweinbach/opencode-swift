@@ -2834,6 +2834,7 @@ public enum AutomationSchema {
         }
     }
 
+    /// Code Mode JavaScript run on each trigger with no model (32 KB output cap).
     // parity: schema/src/automation.ts#CodeActionInput [status=implemented hash=1a3dcbb0068e]
     public struct CodeActionInput: Equatable, Hashable, Sendable, Codable {
         public let code: String
@@ -2879,6 +2880,7 @@ public enum AutomationSchema {
         }
     }
 
+    /// Fixed shell command run on each trigger without a model.
     // parity: schema/src/automation.ts#ShellActionInput [status=implemented hash=195fd4ec264e]
     public struct ShellActionInput: Equatable, Hashable, Sendable, Codable {
         public let command: String
@@ -2944,6 +2946,7 @@ public enum AutomationSchema {
         }
     }
 
+    /// Automation request payload: prompt, Code Mode, or shell command action with schedule trigger.
     // parity: schema/src/automation.ts#Request [status=implemented hash=d6ccf5c43bfb]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let name: String

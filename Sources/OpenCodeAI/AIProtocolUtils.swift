@@ -1682,52 +1682,76 @@ public enum AIProtocolUtils {
             return deduplicated
         }
 
-        // parity: ai/src/protocols/shared.ts#flattenToolRequest [status=implemented hash=e6dee10c5693]
+        private static func flattenToolName(_ name: String, namespace: String?, declared: Set<String>) -> String {
+            let flat = namespace == nil ? name : "\(namespace!)_\(name)"
+            // Models sometimes call names no tool declares, such as a Code Mode path like `a.b.c`. Several providers
+            // (OpenAI Chat Completions, Bedrock Converse) reject those characters when the call is replayed, so replace
+            // them. A declared name is kept as is, so a provider that accepts it sees calls under the tool's own name.
+            if declared.contains(flat) {
+                return flat
+            }
+            var out: [UInt8] = []
+            out.reserveCapacity(flat.utf16.count)
+            for unit in flat.utf16 {
+                let isAllowed = (unit >= 0x61 && unit <= 0x7A) // a-z
+                    || (unit >= 0x41 && unit <= 0x5A) // A-Z
+                    || (unit >= 0x30 && unit <= 0x39) // 0-9
+                    || unit == 0x5F // _
+                    || unit == 0x2D // -
+                out.append(isAllowed ? UInt8(unit) : 0x5F)
+            }
+            return out.isEmpty ? "_" : String(decoding: out, as: UTF8.self)
+        }
+
+        // parity: ai/src/protocols/shared.ts#flattenToolRequest [status=implemented hash=14166cc226b3]
         public static func flattenToolRequest(_ request: LLMRequest) -> (tools: [ToolDefinition], request: LLMRequest) {
+            let tools = flattenTools(request.tools)
+            let declared = Set(tools.map(\.name))
+
+            func flattenPart(_ part: ContentPart) -> ContentPart {
+                switch part {
+                case .toolCall(let call):
+                    let name = flattenToolName(call.name, namespace: call.namespace, declared: declared)
+                    if name == call.name && call.namespace == nil { return part }
+                    return .toolCall(ToolCallPart(
+                        id: call.id,
+                        name: name,
+                        namespace: nil,
+                        input: call.input,
+                        providerExecuted: call.providerExecuted,
+                        providerMetadata: call.providerMetadata
+                    ))
+                case .toolResult(let res):
+                    let name = flattenToolName(res.name, namespace: res.namespace, declared: declared)
+                    if name == res.name && res.namespace == nil { return part }
+                    return .toolResult(ToolResultPart(
+                        id: res.id,
+                        name: name,
+                        namespace: nil,
+                        result: res.result,
+                        providerExecuted: res.providerExecuted,
+                        cache: res.cache,
+                        providerMetadata: res.providerMetadata
+                    ))
+                default:
+                    return part
+                }
+            }
+
             let messages = request.messages.map { message -> Message in
                 switch message.role {
                 case .assistant:
                     let content = message.content.map { part -> ContentPart in
                         switch part {
-                        case .toolCall(let call) where call.namespace != nil:
-                            return .toolCall(ToolCallPart(
-                                id: call.id,
-                                name: "\(call.namespace!)_\(call.name)",
-                                namespace: nil,
-                                input: call.input,
-                                providerExecuted: call.providerExecuted,
-                                providerMetadata: call.providerMetadata
-                            ))
-                        case .toolResult(let res) where res.namespace != nil:
-                            return .toolResult(ToolResultPart(
-                                id: res.id,
-                                name: "\(res.namespace!)_\(res.name)",
-                                namespace: nil,
-                                result: res.result,
-                                providerExecuted: res.providerExecuted,
-                                cache: res.cache,
-                                providerMetadata: res.providerMetadata
-                            ))
+                        case .toolCall, .toolResult:
+                            return flattenPart(part)
                         default:
                             return part
                         }
                     }
                     return Message(role: .assistant, content: content, providerMetadata: message.providerMetadata)
                 case .tool:
-                    let content = message.content.map { part -> ContentPart in
-                        if case .toolResult(let res) = part, let ns = res.namespace {
-                            return .toolResult(ToolResultPart(
-                                id: res.id,
-                                name: "\(ns)_\(res.name)",
-                                namespace: nil,
-                                result: res.result,
-                                providerExecuted: res.providerExecuted,
-                                cache: res.cache,
-                                providerMetadata: res.providerMetadata
-                            ))
-                        }
-                        return part
-                    }
+                    let content = message.content.map(flattenPart)
                     return Message(role: .tool, content: content, providerMetadata: message.providerMetadata)
                 case .system, .user:
                     return message
@@ -1735,7 +1759,7 @@ public enum AIProtocolUtils {
             }
             var updated = request
             updated.messages = messages
-            return (tools: flattenTools(request.tools), request: updated)
+            return (tools: tools, request: updated)
         }
 
         // parity: ai/src/protocols/shared.ts#matchToolChoice [status=implemented hash=f1f9d811f098]

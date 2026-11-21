@@ -7,19 +7,19 @@ struct ProtocolContractTests {
 
     // MARK: - Catalog & API Composition
 
-    @Test("ProtocolCatalog enumerates all 38 upstream groups")
+    @Test("ProtocolCatalog enumerates all 39 upstream groups")
     func catalogHasAllGroups() {
-        #expect(ProtocolCatalog.upstreamGroups.count == 38)
-        #expect(Set(ProtocolCatalog.upstreamGroups).count == 38)
+        #expect(ProtocolCatalog.upstreamGroups.count == 39)
+        #expect(Set(ProtocolCatalog.upstreamGroups).count == 39)
     }
 
-    @Test("ClientApi composes all 32 API groups and all 174 upstream endpoints")
+    @Test("ClientApi composes all 32 API groups and all 178 upstream endpoints")
     func clientApiComposition() {
         #expect(ClientApi.identifier == "server")
         #expect(ClientApi.title == "opencode HttpApi")
         #expect(ClientApi.version == "0.0.1")
         #expect(ClientApi.groups.count == 32)
-        #expect(ClientApi.endpoints.count == 174)
+        #expect(ClientApi.endpoints.count == 178)
         #expect(groupNames.count == 32)
 
         let composedGroupIDs = Set(ClientApi.groups.map(\.identifier))
@@ -119,8 +119,8 @@ struct ProtocolContractTests {
     func clientMetadataSets() {
         let allNames = Set(ClientApi.endpoints.map(\.name))
         #expect(deprecatedClientPaths.count == 26)
-        #expect(promiseOmitEndpoints.count == 4)
-        #expect(effectOmitEndpoints.count == 9)
+        #expect(promiseOmitEndpoints.count == 5)
+        #expect(effectOmitEndpoints.count == 10)
 
         for name in promiseOmitEndpoints {
             #expect(allNames.contains(name), "promiseOmitEndpoints contains unknown endpoint '\(name)'")
@@ -144,7 +144,7 @@ struct ProtocolContractTests {
             sessionLocationMiddleware: customSession
         )
         #expect(api.groups.count == 32)
-        #expect(api.endpoints.count == 174)
+        #expect(api.endpoints.count == 178)
 
         let formList = try #require(api.endpoint(openAPIIdentifier: "session.form.list"))
         #expect(formList.middlewares.contains(customForm))
@@ -199,12 +199,13 @@ struct ProtocolContractTests {
             (.videoNotFound(VideoNotFoundError(videoID: "vid_1", message: "missing")), "VideoNotFoundError", 404),
             (.blobNotFound(BlobNotFoundError(blobID: "blb_1", message: "missing")), "BlobNotFoundError", 404),
             (.artifactNotFound(ArtifactNotFoundError(artifactID: "art_1", message: "missing")), "ArtifactNotFoundError", 404),
+            (.machineNotFound(MachineNotFoundError(machine: "gpu", message: "missing")), "MachineNotFoundError", 404),
             (.vcsInitNotSupported(VcsInitNotSupportedError(providerID: "svn", message: "no init")), "VcsInitNotSupportedError", 501),
             (.worktree(WorktreeError(message: "dirty worktree", forceRequired: true)), "WorktreeError", 400),
         ]
 
-        #expect(ProtocolErrorEnvelope.allCoreErrorRefs.count == 40)
-        #expect(samples.count == 42)
+        #expect(ProtocolErrorEnvelope.allCoreErrorRefs.count == 41)
+        #expect(samples.count == 43)
 
         for (envelope, expectedTag, expectedStatus) in samples {
             #expect(envelope.tag == expectedTag)

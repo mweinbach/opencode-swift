@@ -1014,6 +1014,14 @@ public func isArtifactNotFoundError(_ error: any Error) -> Bool {
     return false
 }
 
+// parity: client/src/promise/generated/types.ts#isMachineNotFoundError [status=implemented hash=a4658225387d]
+public func isMachineNotFoundError(_ error: any Error) -> Bool {
+    if error is OpenCodeProtocol.MachineNotFoundError { return true }
+    if let envelope = error as? ProtocolErrorEnvelope, case .machineNotFound = envelope { return true }
+    if let declared = error as? DeclaredAPIError, declared.tag == OpenCodeProtocol.MachineNotFoundError.tag { return true }
+    return false
+}
+
 // parity: client/src/promise/generated/types.ts#isShellNotFoundError [status=implemented hash=2208cb1d0c13]
 public func isShellNotFoundError(_ error: any Error) -> Bool {
     if error is OpenCodeProtocol.ShellNotFoundError { return true }
@@ -2779,6 +2787,28 @@ public enum PromiseInputTypes {
         }
     }
 
+    public struct ExperimentalMachineAddInput: Equatable, Hashable, Sendable {
+        public let name: String
+        public let reach: [OpenCodeProtocol.MachineReach]
+        public let replace: Bool?
+        public init(
+            name: String,
+            reach: [OpenCodeProtocol.MachineReach],
+            replace: Bool? = nil
+        ) {
+            self.name = name
+            self.reach = reach
+            self.replace = replace
+        }
+    }
+
+    public struct ExperimentalMachineRemoveInput: Equatable, Hashable, Sendable {
+        public let name: String
+        public init(name: String) {
+            self.name = name
+        }
+    }
+
     public struct ShellListInput: Equatable, Hashable, Sendable {
         public let location: LocationQuery.LocationField?
         public init(location: LocationQuery.LocationField? = nil) {
@@ -3389,7 +3419,8 @@ public typealias ExperimentalMediaGetInput = PromiseInputTypes.ExperimentalMedia
 // parity: client/src/promise/generated/types.ts#ExperimentalBlobGetInput [status=implemented hash=d73ea0a78f2f]
 public typealias ExperimentalBlobGetInput = PromiseInputTypes.ExperimentalBlobGetInput
 
-// parity: client/src/promise/generated/types.ts#ExperimentalAutomationCreateInput [status=implemented hash=ebfab6abbbe8]
+/// Supports prompt, code, and shell automation actions (`{ type: "shell", command }`).
+// parity: client/src/promise/generated/types.ts#ExperimentalAutomationCreateInput [status=implemented hash=e026d7533005]
 public typealias ExperimentalAutomationCreateInput = PromiseInputTypes.ExperimentalAutomationCreateInput
 
 // parity: client/src/promise/generated/types.ts#ExperimentalAutomationListInput [status=implemented hash=051616756ab8]
@@ -3434,6 +3465,12 @@ public typealias ExperimentalJobListInput = PromiseInputTypes.ExperimentalJobLis
 
 // parity: client/src/promise/generated/types.ts#ExperimentalJobCancelInput [status=implemented hash=0cfccab209ce]
 public typealias ExperimentalJobCancelInput = PromiseInputTypes.ExperimentalJobCancelInput
+
+// parity: client/src/promise/generated/types.ts#ExperimentalMachineAddInput [status=implemented hash=ac8a28465c1a]
+public typealias ExperimentalMachineAddInput = PromiseInputTypes.ExperimentalMachineAddInput
+
+// parity: client/src/promise/generated/types.ts#ExperimentalMachineRemoveInput [status=implemented hash=d276e36f3e45]
+public typealias ExperimentalMachineRemoveInput = PromiseInputTypes.ExperimentalMachineRemoveInput
 
 // parity: client/src/promise/generated/types.ts#ShellListInput [status=implemented hash=0f4202e34c0b]
 public typealias ShellListInput = PromiseInputTypes.ShellListInput
@@ -3866,6 +3903,12 @@ public typealias ExperimentalArtifactsViewOutput = [UInt8]
 public typealias ExperimentalJobListOutput = [JobSchema.Info]
 // parity: client/src/promise/generated/types.ts#ExperimentalJobCancelOutput [status=implemented hash=3ca7b13e8938]
 public typealias ExperimentalJobCancelOutput = ClientEmptyResponse
+// parity: client/src/promise/generated/types.ts#ExperimentalMachineListOutput [status=implemented hash=e69b8cc996c3]
+public typealias ExperimentalMachineListOutput = [OpenCodeProtocol.MachineInfo]
+// parity: client/src/promise/generated/types.ts#ExperimentalMachineAddOutput [status=implemented hash=23cac557e10f]
+public typealias ExperimentalMachineAddOutput = OpenCodeProtocol.MachineInvite
+// parity: client/src/promise/generated/types.ts#ExperimentalMachineRemoveOutput [status=implemented hash=4ebab59ae2a7]
+public typealias ExperimentalMachineRemoveOutput = ClientEmptyResponse
 // parity: client/src/promise/generated/types.ts#ShellListOutput [status=implemented hash=9f02098b2780]
 public typealias ShellListOutput = LocationSchema.ResponseEnvelope<[ShellSchema.Info]>
 // parity: client/src/promise/generated/types.ts#ShellCreateOutput [status=implemented hash=4b12e27a5e68]
@@ -4221,6 +4264,8 @@ public enum PromiseWire {
     public typealias AutomationTriggerEvent = AutomationSchema.Event
     // parity: client/src/promise/generated/types.ts#AutomationActionCode [status=implemented hash=dc48fc1a3c7d]
     public typealias AutomationActionCode = AutomationSchema.CodeAction
+    // parity: client/src/promise/generated/types.ts#AutomationActionShell [status=implemented hash=2a1b33706628]
+    public typealias AutomationActionShell = AutomationSchema.ShellAction
     // parity: client/src/promise/generated/types.ts#AutomationStatus [status=implemented hash=1a68960c2428]
     public typealias AutomationStatus = AutomationSchema.Status
     // parity: client/src/promise/generated/types.ts#AutomationOutcome [status=implemented hash=b41e9e85b18d]
@@ -4231,6 +4276,10 @@ public enum PromiseWire {
     public typealias ArtifactID = ArtifactSchema.ID
     // parity: client/src/promise/generated/types.ts#ArtifactTime [status=implemented hash=9fd565f341cf]
     public typealias ArtifactTime = ArtifactSchema.Time
+    // parity: client/src/promise/generated/types.ts#MachineInfo [status=implemented hash=95f751730113]
+    public typealias MachineInfo = OpenCodeProtocol.MachineInfo
+    // parity: client/src/promise/generated/types.ts#MachineReach [status=implemented hash=b51c5256d1be]
+    public typealias MachineReach = OpenCodeProtocol.MachineReach
     // parity: client/src/promise/generated/types.ts#JobStatus [status=implemented hash=ddf307e523eb]
     public typealias JobStatus = JobSchema.Status
     // parity: client/src/promise/generated/types.ts#JobTime [status=implemented hash=a1beeaefb7fe]
@@ -4435,6 +4484,8 @@ public enum PromiseWire {
     public typealias ArtifactProvider = ArtifactSchema.Provider
     // parity: client/src/promise/generated/types.ts#ArtifactInfo [status=implemented hash=349cb08eb23e]
     public typealias ArtifactInfo = ArtifactSchema.Info
+    // parity: client/src/promise/generated/types.ts#MachineInvite [status=implemented hash=984fdbc3b14a]
+    public typealias MachineInvite = OpenCodeProtocol.MachineInvite
     // parity: client/src/promise/generated/types.ts#JobShell [status=implemented hash=f1d40513c5d9]
     public typealias JobShell = JobSchema.Shell
     // parity: client/src/promise/generated/types.ts#JobSubagent [status=implemented hash=c24ab3c02999]
@@ -4746,9 +4797,9 @@ public enum PromiseWire {
     public typealias SessionCreated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#SessionPermissions [status=implemented hash=dbb835113dd0]
     public typealias SessionPermissions = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=7ed658f0ef74]
+    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=428a3e8c0fe8]
     public typealias ConfigEntry = ConfigSchema.Entry
-    // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=d3beed292bfa]
+    // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=a3caf979f09d]
     public typealias AutomationAction = AutomationSchema.Action
     // parity: client/src/promise/generated/types.ts#UsageLimitsInfo [status=implemented hash=a771873d4830]
     public typealias UsageLimitsInfo = UsageLimitsSchema.Info
@@ -4896,6 +4947,8 @@ public enum PromiseWire {
     public typealias AutomationNotFoundError = OpenCodeProtocol.AutomationNotFoundError
     // parity: client/src/promise/generated/types.ts#ArtifactNotFoundError [status=implemented hash=7346dcc5a6ea]
     public typealias ArtifactNotFoundError = OpenCodeProtocol.ArtifactNotFoundError
+    // parity: client/src/promise/generated/types.ts#MachineNotFoundError [status=implemented hash=57edd940ca09]
+    public typealias MachineNotFoundError = OpenCodeProtocol.MachineNotFoundError
     // parity: client/src/promise/generated/types.ts#ShellNotFoundError [status=implemented hash=2bd61f44e3c5]
     public typealias ShellNotFoundError = OpenCodeProtocol.ShellNotFoundError
     // parity: client/src/promise/generated/types.ts#WorktreeError [status=implemented hash=420e5177c94a]
@@ -5514,6 +5567,46 @@ public struct ExperimentalJobClientAPI: Sendable {
     }
 }
 
+public struct ExperimentalMachineClientAPI: Sendable {
+    private let executor: ClientHTTPExecutor
+    public init(executor: ClientHTTPExecutor) {
+        self.executor = executor
+    }
+    public func list(options: RequestOptions? = nil) async throws -> ExperimentalMachineListOutput {
+        let descriptor = ClientRequestDescriptor(
+            method: "GET",
+            path: "/api/experimental/machine",
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403]
+        )
+        return try await executor.requestData(descriptor, requestOptions: options)
+    }
+    public func add(_ input: ExperimentalMachineAddInput, options: RequestOptions? = nil) async throws -> ExperimentalMachineAddOutput {
+        let descriptor = ClientRequestDescriptor(
+            method: "POST",
+            path: "/api/experimental/machine",
+            body: encodeBodyFields([
+                ("name", encodeJSON(input.name)),
+                ("reach", encodeJSON(input.reach)),
+                ("replace", encodeOptionalJSON(input.replace)),
+            ]),
+            successStatus: 200,
+            declaredStatuses: [400, 401, 403, 404, 409]
+        )
+        return try await executor.requestData(descriptor, requestOptions: options)
+    }
+    public func remove(_ input: ExperimentalMachineRemoveInput, options: RequestOptions? = nil) async throws {
+        let descriptor = ClientRequestDescriptor(
+            method: "DELETE",
+            path: "/api/experimental/machine/\(ClientURLBuilder.encodeURIComponent(input.name))",
+            successStatus: 204,
+            declaredStatuses: [400, 401, 403, 404],
+            empty: true
+        )
+        try await executor.requestEmpty(descriptor, requestOptions: options)
+    }
+}
+
 public struct ExperimentalMigrationV1ClientAPI: Sendable {
     private let executor: ClientHTTPExecutor
     public init(executor: ClientHTTPExecutor) {
@@ -5570,6 +5663,7 @@ public struct ExperimentalClientAPI: Sendable {
     public let automation: ExperimentalAutomationClientAPI
     public let artifacts: ExperimentalArtifactsClientAPI
     public let job: ExperimentalJobClientAPI
+    public let machine: ExperimentalMachineClientAPI
     public let migration: ExperimentalMigrationClientAPI
     public let usage: ExperimentalUsageClientAPI
     public let config: ExperimentalConfigClientAPI
@@ -5587,6 +5681,7 @@ public struct ExperimentalClientAPI: Sendable {
         self.automation = ExperimentalAutomationClientAPI(executor: executor)
         self.artifacts = ExperimentalArtifactsClientAPI(executor: executor)
         self.job = ExperimentalJobClientAPI(executor: executor)
+        self.machine = ExperimentalMachineClientAPI(executor: executor)
         self.migration = ExperimentalMigrationClientAPI(executor: executor)
         self.usage = ExperimentalUsageClientAPI(executor: executor)
         self.config = ExperimentalConfigClientAPI(executor: executor)
@@ -6231,7 +6326,7 @@ public struct GeneratedOpenCodeClient: Sendable {
 
 public enum GeneratedOpenCode {
     /// Constructs a raw generated Promise client backed by `OpenCodePlatform.HTTPTransport`.
-    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=9f5e4e395b3e]
+    // parity: client/src/promise/generated/client.ts#make [status=implemented hash=358b2e825902]
     public static func make(_ options: ClientOptions) -> GeneratedOpenCodeClient {
         GeneratedOpenCodeClient(options: options)
     }

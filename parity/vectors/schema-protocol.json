@@ -81,5 +81,27 @@
       { "name": "missing ticket rejected", "args": ["ws://localhost:4096/api/experimental/client-mcp?name=github"] },
       { "name": "trailing slash rejected", "args": ["ws://localhost:4096/api/experimental/client-mcp/?ticket=t1"] }
     ]
+  },
+  {
+    "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+    "cases": [
+      { "name": "valid GET websocket upgrade", "args": [{ "method": "GET", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] },
+      { "name": "mixed-case header values and multi-token connection", "args": [{ "method": "GET", "headers": { "upgrade": "WebSocket", "connection": "keep-alive, Upgrade" } }] },
+      { "name": "POST rejected", "args": [{ "method": "POST", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] },
+      { "name": "missing connection rejected", "args": [{ "method": "GET", "headers": { "upgrade": "websocket" } }] },
+      { "name": "missing upgrade rejected", "args": [{ "method": "GET", "headers": { "connection": "Upgrade" } }] },
+      { "name": "non-websocket upgrade rejected", "args": [{ "method": "GET", "headers": { "upgrade": "h2c", "connection": "Upgrade" } }] }
+    ]
+  },
+  {
+    "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+    "cases": [
+      { "name": "exact machine link path with websocket upgrade", "args": [{ "method": "GET", "url": "/api/experimental/machine/link", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] },
+      { "name": "machine link path with query string", "args": [{ "method": "GET", "url": "/api/experimental/machine/link?v=1", "headers": { "upgrade": "WebSocket", "connection": "keep-alive, upgrade" } }] },
+      { "name": "dot segment traversal not normalized", "args": [{ "method": "GET", "url": "/api/experimental/x/../machine/link", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] },
+      { "name": "leading double slash rejected", "args": [{ "method": "GET", "url": "//host/api/experimental/machine/link", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] },
+      { "name": "non-upgrade request on link path rejected", "args": [{ "method": "GET", "url": "/api/experimental/machine/link", "headers": {} }] },
+      { "name": "other machine route rejected", "args": [{ "method": "GET", "url": "/api/experimental/machine", "headers": { "upgrade": "websocket", "connection": "Upgrade" } }] }
+    ]
   }
 ]

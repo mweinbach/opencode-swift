@@ -36,6 +36,11 @@ enum CoreSync2Helpers {
         return String(decoding: data, as: UTF8.self)
     }
 
+    private static func toJSONValue<T: Encodable>(_ value: T) throws -> JSONValue {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
     static func parseURL(_ raw: String) -> URL? {
         URL(string: raw)
     }
@@ -44,11 +49,13 @@ enum CoreSync2Helpers {
         Global.Interface(
             home: "\(root)/home",
             data: "\(root)/data",
-            bin: "\(root)/bin",
-            log: "\(root)/log",
             cache: "\(root)/cache",
             config: "\(root)/global",
-            state: "\(root)/state"
+            state: "\(root)/state",
+            tmp: "\(root)/tmp",
+            bin: "\(root)/bin",
+            log: "\(root)/log",
+            repos: "\(root)/repos"
         )
     }
 
@@ -96,17 +103,17 @@ enum CoreSync2Helpers {
         message: SessionMessageSchema.Info,
         created: Int64
     ) throws {
-        guard case .object(var dict) = try CoreBusJSON.encodeToJSONValue(message) else { return }
+        guard case .object(var dict) = try toJSONValue(message) else { return }
         dict.removeValue(forKey: "id")
         dict.removeValue(forKey: "type")
 
         var parts: [SessionMessageSchema.AssistantContent] = []
         if case .assistant(let a) = message, !a.content.isEmpty {
             parts = a.content
-            dict["content"] = .array([])
+            dict["content"] = JSONValue.array([])
         }
 
-        let jsonStr = try CoreBusJSON.encodeJSONValue(.object(dict))
+        let jsonStr = try encodeToJSONString(JSONValue.object(dict))
         _ = try db.execute(
             """
             INSERT INTO `session_message` (`id`, `session_id`, `type`, `seq`, `time_created`, `time_updated`, `data`)
@@ -123,8 +130,8 @@ enum CoreSync2Helpers {
             ]
         )
         for (ordinal, part) in parts.enumerated() {
-            let pDict = try CoreSessionHistory.encodePart(part)
-            let pJSON = try CoreBusJSON.encodeJSONValue(.object(pDict))
+            guard case .object(let pDict) = try toJSONValue(part) else { continue }
+            let pJSON = try encodeToJSONString(JSONValue.object(pDict))
             let callID: SQLiteValue = if case .tool(let t) = part { .text(t.id) } else { .null }
             _ = try db.execute(
                 """
@@ -220,22 +227,22 @@ final class Sync2RecordingPermission: CorePermission.Interface, Sendable {
     func ask(_ input: CorePermission.AssertInput) async throws -> CorePermission.AskResult {
         recordedBox.withLock { $0.append(input) }
         if shouldDecline {
-            throw CorePermission.DeclinedError(id: PermissionSchema.ID.create(), message: "denied by test")
+            throw CorePermission.DeclinedError()
         }
-        return .once
+        return CorePermission.AskResult(id: PermissionSchema.ID.create(), effect: .allow)
     }
 
     func assert(_ input: CorePermission.AssertInput) async throws {
         recordedBox.withLock { $0.append(input) }
         if shouldDecline {
-            throw CorePermission.DeclinedError(id: PermissionSchema.ID.create(), message: "denied by test")
+            throw CorePermission.DeclinedError()
         }
     }
 
     func assertNotDenied(_ input: CorePermission.AssertInput) async throws {
         recordedBox.withLock { $0.append(input) }
         if shouldDecline {
-            throw CorePermission.DeclinedError(id: PermissionSchema.ID.create(), message: "denied by test")
+            throw CorePermission.DeclinedError()
         }
     }
 
@@ -262,7 +269,8 @@ final class Sync2StubMachines: Machines.Interface, Sendable {
     }
 
     func add(_ name: String) async throws -> String { name }
-    func remove(_ id: String) async throws { _ = id }
+    @discardableResult
+    func remove(_ id: String) async throws -> Bool { _ = id; return false }
     func list() async -> [Machines.Info] { items }
     func get(_ id: String) async throws -> any CoreLocation.Environment.Interface {
         throw Machines.NotFound(machine: id)
@@ -270,7 +278,7 @@ final class Sync2StubMachines: Machines.Interface, Sendable {
     func home(_ id: String) async throws -> String {
         throw Machines.NotFound(machine: id)
     }
-    func connect(_ connection: MachineDriver.Connection) async throws { _ = connection }
+    func connect(_ id: String, _ connection: MachineDriver.Connection) async throws { _ = (id, connection) }
     func invite(_ id: String, options: Machines.InviteOptions) async throws -> String {
         _ = (id, options)
         return "join"

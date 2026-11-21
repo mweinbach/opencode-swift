@@ -665,6 +665,7 @@ public enum ServerErrorResponse {
         case .videoNotFound(let e): return encodeProtocolError(e)
         case .blobNotFound(let e): return encodeProtocolError(e)
         case .artifactNotFound(let e): return encodeProtocolError(e)
+        case .machineNotFound(let e): return encodeProtocolError(e)
         case .vcsInitNotSupported(let e): return encodeProtocolError(e)
         case .worktree(let e): return encodeProtocolError(e)
         }

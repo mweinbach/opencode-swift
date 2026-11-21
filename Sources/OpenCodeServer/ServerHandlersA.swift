@@ -469,7 +469,7 @@ private func checkAutomationEnabled(runtime: ServerAppRuntime, directory: String
     do {
         let loc = try await runtime.resolveLocation(ref)
         let entries = await loc.config.entries()
-        return CoreConfig.latest(entries, \.automations) ?? true
+        return entries.compactMap { $0.info?.automations }.last ?? true
     } catch is LocationNotFoundError {
         return true
     } catch {

@@ -12,12 +12,12 @@ struct CoreSync2Tests {
     @Test("SessionSearchIndex folds extra letters and classifies FTS query errors")
     func sessionSearchIndexFoldingAndErrors() {
         #expect(SessionSearchIndex.foldText("Straße") == "Strasse")
-        #expect(SessionSearchIndex.foldText("Đơn đ") == "Don d")
-        #expect(SessionSearchIndex.foldText("Łódź Øresund Æon Œuvre") == "Lódz Oresund AEon OEuvre")
+        #expect(SessionSearchIndex.foldText("Đơn đ") == "Dơn d")
+        #expect(SessionSearchIndex.foldText("Łódź Øresund Æon Œuvre") == "Lódź Oresund AEon OEuvre")
 
         #expect(SessionSearchIndex.isQueryError(SQLiteError.unsupportedSQL("fts5: syntax error")))
-        #expect(SessionSearchIndex.isQueryError(SQLiteError.stepFailed(code: 1, message: "no such column: foo")))
-        #expect(!SessionSearchIndex.isQueryError(SQLiteError.stepFailed(code: 5, message: "database is locked")))
+        #expect(SessionSearchIndex.isQueryError(SQLiteError.stepFailed(sql: "SELECT 1", code: 1, message: "no such column: foo")))
+        #expect(!SessionSearchIndex.isQueryError(SQLiteError.stepFailed(sql: "SELECT 1", code: 5, message: "database is locked")))
     }
 
     @Test("SessionSearch lists with pagination, directory prefix isolation, and subagent filtering")
@@ -85,8 +85,8 @@ struct CoreSync2Tests {
             let msgID = SessionMessageSchema.ID.create()
             let userMsg = SessionMessageSchema.Info.user(SessionMessageSchema.User(
                 id: msgID,
-                text: "Invoice batch \(i): running hóa đơn export for customer \(i)",
-                time: SessionMessageSchema.User.Time(created: Int64(1_000 + i * 10))
+                time: SessionMessageSchema.TimeCreated(created: Int64(1_000 + i * 10)),
+                text: "Invoice batch \(i): running hóa đơn export for customer \(i)"
             ))
             try CoreSync2Helpers.seedMessage(db: db, sessionID: s1, seq: Int64(i), message: userMsg, created: Int64(1_000 + i * 10))
         }
@@ -152,23 +152,22 @@ struct CoreSync2Tests {
             db: db,
             sessionID: sid,
             seq: 1,
-            message: .user(SessionMessageSchema.User(id: m1, text: "First question", time: .init(created: 100))),
+            message: .user(SessionMessageSchema.User(id: m1, time: .init(created: 100), text: "First question")),
             created: 100
         )
         try CoreSync2Helpers.seedMessage(
             db: db,
             sessionID: sid,
             seq: 2,
-            message: .system(SessionMessageSchema.System(id: mSys, text: "System note", time: .init(created: 150))),
+            message: .system(SessionMessageSchema.System(id: mSys, time: .init(created: 150), text: "System note")),
             created: 150
         )
         let toolPart = SessionMessageSchema.AssistantTool(
             id: "call-1",
             name: "read",
-            state: .completed(SessionMessageSchema.ToolState.Completed(
-                input: .object(["filePath": .string("/work/read/README.md")]),
-                output: .string("README body content"),
-                content: [.text(ToolSchema.TextContent(text: "README body content"))]
+            state: .completed(SessionMessageSchema.ToolStateCompleted(
+                input: ["filePath": .string("/work/read/README.md")],
+                content: [.text("README body content")]
             )),
             time: SessionMessageSchema.AssistantTool.Time(created: 200, completed: 210)
         )
@@ -193,7 +192,7 @@ struct CoreSync2Tests {
             db: db,
             sessionID: sid,
             seq: 4,
-            message: .user(SessionMessageSchema.User(id: m3, text: "Thanks!", time: .init(created: 300))),
+            message: .user(SessionMessageSchema.User(id: m3, time: .init(created: 300), text: "Thanks!")),
             created: 300
         )
 
@@ -204,8 +203,7 @@ struct CoreSync2Tests {
         #expect(compact.messages.map(\.messageID) == [m1, m2, m3])
         let assistantCompact = try #require(compact.messages.first { $0.messageID == m2 })
         if case .summary(let line) = assistantCompact.calls?.first {
-            #expect(line.contains("read"))
-            #expect(line.contains("completed"))
+            #expect(line == #"read({"filePath":"/work/read/README.md"})"#)
         } else {
             Issue.record("Expected compact summary call entry")
         }
@@ -356,9 +354,19 @@ struct CoreSync2Tests {
 
     @Test("FileAccess.always scopes remote machines and rejects relative known-machine paths")
     func fileAccessAlwaysAndRelativeMachineRejection() async throws {
-        #expect(CoreFilesystem.FileAccess.always(CoreLocation.Environment.localID) == "*")
+        let localTarget = CoreFilesystem.FileAccess.Target(
+            absolute: SchemaPrimitive.AbsolutePath(rawValue: "/workspace/repo/a.txt"),
+            resource: "a.txt",
+            machine: nil
+        )
         let gpuID = CoreLocation.Environment.ID(rawValue: "gpu")
-        #expect(CoreFilesystem.FileAccess.always(gpuID) == "gpu:*")
+        let remoteTarget = CoreFilesystem.FileAccess.Target(
+            absolute: SchemaPrimitive.AbsolutePath(rawValue: "/work/train.py"),
+            resource: "gpu:/work/train.py",
+            machine: gpuID
+        )
+        #expect(CoreFilesystem.FileAccess.always(localTarget) == "*")
+        #expect(CoreFilesystem.FileAccess.always(remoteTarget) == "gpu:*")
 
         let machines = Sync2StubMachines(items: [Machines.Info(id: "gpu", online: true, paired: true)])
         let flags = CoreFlag.Service(
@@ -512,7 +520,7 @@ struct CoreSync2Tests {
             AutomationSchema.CreateInput(
                 sessionID: ownerID,
                 name: "say-hello",
-                trigger: .every(AutomationSchema.Every(every: "1m")),
+                trigger: .every(AutomationSchema.Every(every: "1 minute")),
                 action: .shell(AutomationSchema.ShellActionInput(command: "echo hello-shell-automation"))
             ),
             projectID: projectID,
@@ -521,57 +529,62 @@ struct CoreSync2Tests {
         )
         #expect(created.status == .active)
 
-        // Advance clock past due time and tick!
-        nowBox.modify { $0 += 120_000 }
+        // Advance clock to due time and tick!
+        nowBox.modify { $0 += 60_000 }
         try await enabledService.tick()
 
         var finalInfo = try await enabledService.get(created.id)
         for _ in 0..<60 {
-            if finalInfo.lastOutcome != nil { break }
+            if finalInfo.lastOutput != nil { break }
             try await Task.sleep(for: .milliseconds(50))
             finalInfo = try await enabledService.get(created.id)
         }
         #expect(finalInfo.runCount.rawValue == 1)
-        #expect(finalInfo.lastOutcome == .succeeded)
+        #expect(finalInfo.lastOutcome == .fired)
         #expect(finalInfo.lastOutput?.contains("hello-shell-automation") == true)
     }
 
-    @Test("CoreAutomation.Code.scan tracks fetch, Bun read/write, slice forwarding, and updated forbiddenTools")
+    @Test("CoreAutomation.Code.scan tracks fetch, Bun read/write, slice forwarding, and tool paths")
     func automationCodeScannerCapabilities() throws {
-        #expect(!CoreAutomation.Code.forbiddenTools.contains("shell"))
-        #expect(CoreAutomation.Code.forbiddenTools.contains("automation.create"))
-
-        // Read-only Bun.file().slice().text()
+        // Read-only Bun.file().slice().text() requires read + external_directory (not edit)
         let readScan = try CoreAutomation.Code.scan("""
         const f = Bun.file("/tmp/data.txt");
         return await f.slice(0, 10).text();
-        """)
-        #expect(readScan.usesBun)
-        #expect(readScan.usesBunRead)
-        #expect(!readScan.usesBunWrite)
-        #expect(!readScan.usesFetch)
+        """).get()
+        #expect(readScan.actions.contains("read"))
+        #expect(readScan.actions.contains("external_directory"))
+        #expect(!readScan.actions.contains("edit"))
+        #expect(!readScan.actions.contains("webfetch"))
 
-        // Write via Bun.write(...)
+        // Write via Bun.write(...) requires edit + external_directory (not read)
         let writeScan = try CoreAutomation.Code.scan("""
         await Bun.write("/tmp/out.txt", "hi");
-        """)
-        #expect(writeScan.usesBun)
-        #expect(writeScan.usesBunWrite)
+        """).get()
+        #expect(!writeScan.actions.contains("read"))
+        #expect(writeScan.actions.contains("edit"))
+        #expect(writeScan.actions.contains("external_directory"))
 
-        // fetch usage
+        // fetch usage requires webfetch
         let fetchScan = try CoreAutomation.Code.scan("""
         const res = await fetch("https://example.com");
         return await res.text();
-        """)
-        #expect(fetchScan.usesFetch)
+        """).get()
+        #expect(fetchScan.actions.contains("webfetch"))
 
-        // import "bun" treated conservatively as both read + write
+        // import "bun" treated conservatively as read + edit + external_directory
         let importScan = try CoreAutomation.Code.scan("""
         import { file } from "bun";
         return file;
-        """)
-        #expect(importScan.usesBun)
-        #expect(importScan.usesBunWrite)
+        """).get()
+        #expect(importScan.actions.contains("read"))
+        #expect(importScan.actions.contains("edit"))
+        #expect(importScan.actions.contains("external_directory"))
+
+        // Static tools.* path extraction
+        let toolScan = try CoreAutomation.Code.scan("""
+        return await tools.shell({ command: "echo hi" });
+        """).get()
+        #expect(toolScan.tools == ["shell"])
     }
 
     @Test("AutomationTools.Plugin gates on automationsEnabled and registers automation namespace")
@@ -660,15 +673,15 @@ struct CoreSync2Tests {
         let projectID = ProjectID(rawValue: "proj-overlay-1")
         let overlayDir = "\(globalPaths.config)/project/\(projectID.rawValue)"
 
-        try CoreSync2Helpers.writeText(#"{"model":"global/m1","small_model":"global/s1"}"#, to: "\(globalPaths.config)/opencode.json")
+        try CoreSync2Helpers.writeText(#"{"model":"global/m1","default_agent":"global-agent"}"#, to: "\(globalPaths.config)/opencode.json")
         try CoreSync2Helpers.writeText(#"{"model":"overlay/m2"}"#, to: "\(overlayDir)/opencode.json")
-        try CoreSync2Helpers.writeText(#"{"small_model":"project/s2"}"#, to: "\(projectDir)/opencode.json")
+        try CoreSync2Helpers.writeText(#"{"default_agent":"project-agent"}"#, to: "\(projectDir)/opencode.json")
 
         let overlayCandidate = await CoreConfigDiscovery.overlay(projectID: projectID, global: globalPaths)
-        #expect(overlayCandidate?.path == overlayDir)
+        #expect(overlayCandidate?.path.rawValue == overlayDir)
 
-        // Channel `local` enables `project_overlay` by default: overlay overrides global `model`, project overrides `small_model`.
-        let loadedSvc = CoreConfig.Service(
+        // Channel `local` enables `project_overlay` by default: overlay overrides global `model`, project overrides `default_agent`.
+        let loadedSvc = await CoreConfig.Service(
             directory: projectDir,
             projectID: projectID,
             channel: "local",
@@ -676,10 +689,10 @@ struct CoreSync2Tests {
         )
         let loadedEntries = await loadedSvc.entries()
         #expect(CoreConfig.latest(loadedEntries, \.model)?.providerID.rawValue == "overlay")
-        #expect(CoreConfig.latest(loadedEntries, \.smallModel)?.providerID.rawValue == "project")
+        #expect(CoreConfig.latest(loadedEntries, \.defaultAgent) == "project-agent")
 
         // When `project_overlay: false` is set via env override, overlay is skipped so `model` stays `"global/m1"`.
-        let skippedSvc = CoreConfig.Service(
+        let skippedSvc = await CoreConfig.Service(
             directory: projectDir,
             projectID: projectID,
             channel: "local",
@@ -688,7 +701,7 @@ struct CoreSync2Tests {
         )
         let skippedEntries = await skippedSvc.entries()
         #expect(CoreConfig.latest(skippedEntries, \.model)?.providerID.rawValue == "global")
-        #expect(CoreConfig.latest(skippedEntries, \.smallModel)?.providerID.rawValue == "project")
+        #expect(CoreConfig.latest(skippedEntries, \.defaultAgent) == "project-agent")
     }
 
     // MARK: - 5. Tool Registry CodeMode Rewrite, Machine Tool, MCP Client, & Plugins
@@ -697,7 +710,7 @@ struct CoreSync2Tests {
     func sessionStepCodeModeToolCallRewrite() {
         let events: [AISchema.LLMEvent] = [
             .toolInputStart(AISchema.ToolInputStart(id: "tc-1", name: "opencode_session_search")),
-            .toolInputDelta(AISchema.ToolInputDelta(id: "tc-1", delta: #"{"query":"hello"}"#)),
+            .toolInputDelta(AISchema.ToolInputDelta(id: "tc-1", name: "opencode_session_search", text: #"{"query":"hello"}"#)),
             .toolInputEnd(AISchema.ToolInputEnd(id: "tc-1", name: "opencode_session_search")),
             .toolCall(AISchema.ToolCall(id: "tc-1", name: "opencode_session_search", input: .object(["query": .string("hello")]))),
             .toolCall(AISchema.ToolCall(id: "tc-2", name: "read", input: .object(["filePath": .string("/a.txt")]))),
@@ -824,7 +837,7 @@ struct CoreSync2Tests {
                 let count = attempts.increment()
                 if count == 1 {
                     // Simulate hanging modern auto probe until probe timeout fires.
-                    try await Task.sleep(for: .milliseconds(300))
+                    try await Task.sleep(for: .milliseconds(500))
                 }
                 return try CoreSync2Helpers.makeJSONResponse(body: .object([
                     "jsonrpc": .string("2.0"),
@@ -841,7 +854,7 @@ struct CoreSync2Tests {
             server: "legacy-srv",
             config: .remote(McpSchema.RemoteConfig(
                 url: "http://127.0.0.1:9999/rpc",
-                timeout: McpSchema.TimeoutConfig(startup: SchemaPrimitive.PositiveInt(rawValue: 1_000)),
+                timeout: McpSchema.TimeoutConfig(startup: SchemaPrimitive.PositiveInt(rawValue: 10_000)),
                 wireProtocol: .auto
             )),
             http: slowProbeHTTP,
@@ -853,16 +866,20 @@ struct CoreSync2Tests {
         #expect(seenRequestedVersions.get() == [CoreMCP.Client.latestProtocolVersion, CoreMCP.Client.legacyProtocolVersion])
     }
 
-    @Test("NpmPlatform.staticFollows, OpencodeWatches.shellTarget, HomeMemoryPlugin, and PluginGui updates")
+    @Test("NpmSpec.classifyFollows, OpencodeWatches.shellTarget, HomeMemoryPlugin, and PluginGui updates")
     func pluginAndNpmFollowsParity() {
-        // NpmPlatform.staticFollows
-        #expect(NpmPlatform.staticFollows("foo@latest") == (true, nil))
-        #expect(NpmPlatform.staticFollows("foo@^1.2.0") == (true, nil))
-        #expect(NpmPlatform.staticFollows("foo") == (false, nil))
-        #expect(NpmPlatform.staticFollows("foo@1.2.3") == (false, nil))
-        #expect(NpmPlatform.staticFollows("foo@next") == (false, nil))
-        #expect(NpmPlatform.staticFollows("github:org/repo#semver:^1.0.0") == (true, nil))
-        #expect(NpmPlatform.staticFollows("github:org/repo#main") == (false, "main"))
+        // NpmSpec.classifyFollows
+        #expect(NpmSpec.classifyFollows("foo@latest") == .always)
+        #expect(NpmSpec.classifyFollows("foo@^1.2.0") == .always)
+        #expect(NpmSpec.classifyFollows("foo") == .never)
+        #expect(NpmSpec.classifyFollows("foo@1.2.3") == .never)
+        #expect(NpmSpec.classifyFollows("foo@next") == .never)
+        #expect(NpmSpec.classifyFollows("github:org/repo#semver:^1.0.0") == .always)
+        if case .gitRef(_, let ref) = NpmSpec.classifyFollows("github:org/repo#main") {
+            #expect(ref == "main")
+        } else {
+            Issue.record("Expected gitRef for github:org/repo#main")
+        }
 
         // OpencodeWatches.shellTarget accepts nullable exitCode (nil -> no target, 0 -> detects PR target)
         let nilExit = CorePlugin.OpencodeWatches.shellTarget(

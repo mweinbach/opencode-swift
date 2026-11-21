@@ -231,7 +231,7 @@ public enum NativeZigRope: Sendable {
         case outOfMemory
     }
 
-    // parity: native/src/rope.zig#Rope [status=adapted hash=305d40c38294]
+    // parity: native/src/rope.zig#Rope [status=adapted hash=6990c64f2482]
     public struct Rope<Element: Sendable>: Sendable {
         public static var maxImbalance: Int { 7 }
 
@@ -561,25 +561,36 @@ public enum NativeZigRope: Sendable {
                 return newBranch(left: left, right: right)
             }
 
-            // parity: native/src/rope.zig#Rope.Node.split_at_weight [status=implemented hash=e072acf3c081]
+            // parity: native/src/rope.zig#Rope.Node.split_at_weight [status=implemented hash=d4d9519af8a7]
             public static func splitAtWeight(
                 _ node: Node,
                 targetWeight: UInt32,
                 bias: Bias?,
                 emptyLeaf: Node,
                 splitLeafFn: LeafSplitFn,
-                weightOf: (Element) -> UInt32 = { _ in 1 }
+                weightOf: (Element) -> UInt32 = { _ in 1 },
+                isVoid: ((Element) -> Bool)? = nil
             ) throws(SplitError) -> (left: Node, right: Node) {
-                let total = node.metrics().weight()
-                if targetWeight == 0 && bias == .right { return (emptyLeaf, node) }
-                if targetWeight >= total && bias == .left { return (node, emptyLeaf) }
-                if targetWeight == 0 && total > 0 && bias == nil { return (emptyLeaf, node) }
-                if targetWeight >= total && bias == nil { return (node, emptyLeaf) }
                 switch node.storage {
                 case .leaf(let data, let m):
-                    if targetWeight == 0 { return (emptyLeaf, node) }
-                    if targetWeight >= m.weight() { return (node, emptyLeaf) }
+                    let leafWeight = m.weight()
+                    // Under a left bias, a leaf whose split may leave an empty piece decides what lies at
+                    // weight 0 (zero-width text), as inside it.
+                    if targetWeight == 0 && (bias != .left || (leafWeight > 0 && isVoid == nil)) {
+                        return (emptyLeaf, node)
+                    } else if targetWeight >= leafWeight {
+                        return (node, emptyLeaf)
+                    }
+
                     let splitRes = try splitLeafFn.call(leaf: data, weight: targetWeight)
+                    // An empty left piece, as when a wide grapheme straddles the weight or ASCII starts
+                    // at weight 0, leaves no leaf that would sit between the leaves a join must see.
+                    if let isVoid {
+                        assert(!isVoid(splitRes.right))
+                        if isVoid(splitRes.left) {
+                            return (emptyLeaf, node)
+                        }
+                    }
                     let leftNode = Node.newLeaf(splitRes.left, weight: weightOf(splitRes.left))
                     let rightNode = Node.newLeaf(splitRes.right, weight: weightOf(splitRes.right))
                     return (leftNode, rightNode)
@@ -592,17 +603,19 @@ public enum NativeZigRope: Sendable {
                             bias: bias,
                             emptyLeaf: emptyLeaf,
                             splitLeafFn: splitLeafFn,
-                            weightOf: weightOf
+                            weightOf: weightOf,
+                            isVoid: isVoid
                         )
                         return (sub.left, joinBalanced(left: sub.right, right: right))
-                    } else if targetWeight > leftWeight || (targetWeight == leftWeight && bias == .left) {
+                    } else if targetWeight > leftWeight || bias == .left {
                         let sub = try splitAtWeight(
                             right,
                             targetWeight: targetWeight - leftWeight,
                             bias: bias,
                             emptyLeaf: emptyLeaf,
                             splitLeafFn: splitLeafFn,
-                            weightOf: weightOf
+                            weightOf: weightOf,
+                            isVoid: isVoid
                         )
                         return (joinBalanced(left: left, right: sub.left), sub.right)
                     } else {
@@ -828,25 +841,38 @@ public enum NativeZigRope: Sendable {
         // parity: native/src/rope.zig#Rope.splitByWeight [status=implemented hash=bac72ddec25d]
         public mutating func splitByWeight(
             _ weight: UInt32,
-            splitLeafFn: Node.LeafSplitFn
+            bias: Node.Bias? = nil,
+            splitLeafFn: Node.LeafSplitFn,
+            isVoid: ((Element) -> Bool)? = nil
         ) throws(SplitError) -> Rope<Element> {
-            var acc: UInt32 = 0
-            for idx in 0..<items.count {
-                let w = weightOf(items[idx])
-                if weight <= acc {
-                    return split(at: UInt32(idx))
-                }
-                if weight < acc &+ w {
-                    let splitRes = try splitLeafFn.call(leaf: items[idx], weight: weight - acc)
-                    let leftPrefix = Array(items[0..<idx]) + [splitRes.left]
-                    let rightSuffix = [splitRes.right] + Array(items[(idx + 1)...])
-                    items = leftPrefix
-                    generation &+= 1
-                    return Rope<Element>(items: rightSuffix, config: config, weightOf: weightOf)
-                }
-                acc &+= w
+            guard let first = items.first, let tree = buildTree() else {
+                return Rope<Element>(items: [], config: config, weightOf: weightOf)
             }
-            return Rope<Element>(items: [], config: config, weightOf: weightOf)
+            let emptyLeaf = Node(.leaf(data: first, metrics: Metrics(count: 0, depth: 1, weight: 0)))
+            let parts = try Node.splitAtWeight(
+                tree,
+                targetWeight: weight,
+                bias: bias,
+                emptyLeaf: emptyLeaf,
+                splitLeafFn: splitLeafFn,
+                weightOf: weightOf,
+                isVoid: isVoid
+            )
+            var leftItems: [Element] = []
+            var rightItems: [Element] = []
+            var idx: UInt32 = 0
+            parts.left.walk(currentIndex: &idx) { elem, _ in
+                leftItems.append(elem)
+                return Node.WalkerResult(keepWalking: true)
+            }
+            idx = 0
+            parts.right.walk(currentIndex: &idx) { elem, _ in
+                rightItems.append(elem)
+                return Node.WalkerResult(keepWalking: true)
+            }
+            items = leftItems
+            generation &+= 1
+            return Rope<Element>(items: rightItems, config: config, weightOf: weightOf)
         }
 
         // parity: native/src/rope.zig#Rope.replaceRangeByWeight [status=implemented hash=922c62c83f71]
@@ -857,18 +883,17 @@ public enum NativeZigRope: Sendable {
             startBias: Node.Bias = .left,
             endBias: Node.Bias = .right,
             replacement: [Element],
-            splitLeafFn: Node.LeafSplitFn
+            splitLeafFn: Node.LeafSplitFn,
+            isVoid: ((Element) -> Bool)? = nil
         ) throws(SplitError) -> JoinSpan {
-            _ = (startBias, endBias)
             let lo = min(start, end)
             let hi = max(start, end)
-            var tail = try splitByWeight(hi, splitLeafFn: splitLeafFn)
-            _ = try splitByWeight(lo, splitLeafFn: splitLeafFn)
+            var afterStart = try splitByWeight(lo, bias: startBias, splitLeafFn: splitLeafFn, isVoid: isVoid)
+            let tail = try afterStart.splitByWeight(hi - lo, bias: endBias, splitLeafFn: splitLeafFn, isVoid: isVoid)
             let joinStart = totalWeight()
             items.append(contentsOf: replacement)
             let joinEnd = totalWeight()
             items.append(contentsOf: tail.toArray())
-            tail.clear()
             generation &+= 1
             return JoinSpan(start: joinStart, end: joinEnd)
         }
@@ -879,16 +904,19 @@ public enum NativeZigRope: Sendable {
             weight: UInt32,
             bias: Node.Bias = .right,
             elements: [Element],
-            splitLeafFn: Node.LeafSplitFn
+            splitLeafFn: Node.LeafSplitFn,
+            isVoid: ((Element) -> Bool)? = nil
         ) throws(SplitError) -> JoinSpan {
-            try replaceRangeByWeight(
-                start: weight,
-                end: weight,
-                startBias: bias,
-                endBias: bias,
-                replacement: elements,
-                splitLeafFn: splitLeafFn
-            )
+            if elements.isEmpty {
+                return JoinSpan(start: weight, end: weight)
+            }
+            let tail = try splitByWeight(weight, bias: bias, splitLeafFn: splitLeafFn, isVoid: isVoid)
+            let joinStart = totalWeight()
+            items.append(contentsOf: elements)
+            let joinEnd = totalWeight()
+            items.append(contentsOf: tail.toArray())
+            generation &+= 1
+            return JoinSpan(start: joinStart, end: joinEnd)
         }
 
         // parity: native/src/rope.zig#Rope.findByWeight [status=implemented hash=08a808fd04a7]
@@ -1237,7 +1265,7 @@ public enum NativeZigTextBuffer: Sendable {
         }
     }
 
-    // parity: native/src/text-buffer.zig#UnifiedTextBuffer [status=implemented hash=7bb0298c5fe1]
+    // parity: native/src/text-buffer.zig#UnifiedTextBuffer [status=implemented hash=1ca10fe52d65]
     public final class UnifiedTextBuffer: @unchecked Sendable {
         public struct Defaults: Equatable, Hashable, Sendable {
             public var fg: RGBA?
@@ -2013,35 +2041,59 @@ public enum NativeZigTextBuffer: Sendable {
             byteAtCell(weight: weight, wholeGrapheme: false)
         }
 
-        // parity: native/src/text-buffer.zig#UnifiedTextBuffer.byteAtCell [status=implemented hash=096160338e01]
+        // parity: native/src/text-buffer.zig#UnifiedTextBuffer.byteAtCell [status=implemented hash=1b42fa5f10ba]
         public func byteAtCell(weight: UInt32, wholeGrapheme: Bool) -> UInt32 {
             let bytes = Array(core.getPlainText().utf8)
             var curWeight: UInt32 = 0
             var bytePos = 0
             let tw = tabWidth()
             let wm = widthMethod()
-            while bytePos < bytes.count && curWeight < weight {
+            while bytePos < bytes.count {
                 if bytes[bytePos] == 0x0A {
+                    if curWeight == weight {
+                        return UInt32(bytePos)
+                    }
                     curWeight &+= 1
                     bytePos += 1
                     continue
                 }
                 let lineEnd = bytes[bytePos...].firstIndex(of: 0x0A) ?? bytes.count
                 let lineSlice = Array(bytes[bytePos..<lineEnd])
-                let spans = segmentGraphemeClusters(lineSlice, tabWidth: tw, controlDisplay: controlDisplayMode, widthMethod: wm)
-                for span in spans {
-                    let w = max(1, span.width)
-                    if curWeight &+ w > weight {
-                        return UInt32(wholeGrapheme ? (bytePos + span.byteEnd) : (bytePos + span.byteStart))
-                    }
-                    curWeight &+= w
-                    if curWeight == weight {
-                        return UInt32(bytePos + span.byteEnd)
-                    }
+                let asciiOnly = isAsciiOnly(lineSlice)
+                let lineWeight = calculateTextWidth(
+                    lineSlice,
+                    tabWidth: tw,
+                    controlDisplay: controlDisplayMode,
+                    isASCIIOnly: asciiOnly,
+                    widthMethod: wm
+                )
+                if weight < curWeight &+ lineWeight {
+                    let targetCol = weight - curWeight
+                    let split = wholeGrapheme
+                        ? findGraphemePosByWidth(
+                            lineSlice,
+                            maxColumns: targetCol,
+                            tabWidth: tw,
+                            controlDisplay: controlDisplayMode,
+                            isASCIIOnly: asciiOnly,
+                            includeStartBefore: false,
+                            widthMethod: wm
+                        )
+                        : findPosByWidth(
+                            lineSlice,
+                            maxColumns: targetCol,
+                            tabWidth: tw,
+                            controlDisplay: controlDisplayMode,
+                            isASCIIOnly: asciiOnly,
+                            includeStartBefore: false,
+                            widthMethod: wm
+                        )
+                    return UInt32(bytePos) &+ split.byteOffset
                 }
+                curWeight &+= lineWeight
                 bytePos = lineEnd
             }
-            return UInt32(bytePos)
+            return UInt32(bytes.count)
         }
 
         // parity: native/src/text-buffer.zig#UnifiedTextBuffer.convertUtf16 [status=implemented hash=756ec870dd2b]
@@ -2090,9 +2142,9 @@ public enum NativeZigTextBuffer: Sendable {
                     let absEnd = pos + span.byteEnd
                     if absStart >= clamped { return curWeight }
                     if absEnd > clamped {
-                        return roundDown ? curWeight : (curWeight &+ max(1, span.width))
+                        return roundDown ? curWeight : (curWeight &+ span.width)
                     }
-                    curWeight &+= max(1, span.width)
+                    curWeight &+= span.width
                 }
                 pos = lineEnd
             }
@@ -3365,7 +3417,7 @@ public enum NativeZigEditBuffer: Sendable {
         }
     }
 
-    // parity: native/src/edit-buffer.zig#EditBuffer [status=implemented hash=734a0c2b566f]
+    // parity: native/src/edit-buffer.zig#EditBuffer [status=implemented hash=6ebf3e04b64c]
     public final class EditBuffer: @unchecked Sendable {
         public struct InitOptions: Equatable, Hashable, Sendable {
             public var widthMethod: TextWidthMethod
@@ -3622,11 +3674,42 @@ public enum NativeZigEditBuffer: Sendable {
             )
             var cur: UInt32 = 0
             for span in spans {
-                let next = cur &+ max(1, span.width)
+                if span.width == 0 { continue }
+                let next = cur &+ span.width
                 if col < next { return cur }
                 cur = next
             }
             return cur
+        }
+
+        /// Splits a text chunk at display-column `weight` matching `edit-buffer.zig#EditBuffer.splitChunkAtWeight`.
+        /// At weight 0 only leading zero-width text goes left (short-circuited when `isASCIIOnly`).
+        public func splitChunkAtWeight(
+            _ bytes: [UInt8],
+            weight: UInt32,
+            isASCIIOnly: Bool? = nil
+        ) -> (left: [UInt8], right: [UInt8]) {
+            let ascii = isASCIIOnly ?? isAsciiOnly(bytes)
+            let tw = textBuffer.tabWidth()
+            let cd = textBuffer.controlDisplay()
+            let wm = textBuffer.widthMethod()
+            let chunkWeight = calculateTextWidth(bytes, tabWidth: tw, controlDisplay: cd, isASCIIOnly: ascii, widthMethod: wm)
+            if weight == 0 && ascii {
+                return ([], bytes)
+            } else if weight >= chunkWeight {
+                return (bytes, [])
+            }
+            let split = findPosByWidth(
+                bytes,
+                maxColumns: weight,
+                tabWidth: tw,
+                controlDisplay: cd,
+                isASCIIOnly: ascii,
+                includeStartBefore: false,
+                widthMethod: wm
+            )
+            let idx = min(Int(split.byteOffset), bytes.count)
+            return (Array(bytes[0..<idx]), Array(bytes[idx...]))
         }
 
         // parity: native/src/edit-buffer.zig#EditBuffer.unsnappedColumn [status=implemented hash=d25e04c25f2e]

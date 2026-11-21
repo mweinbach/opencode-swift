@@ -882,7 +882,7 @@ struct CodemodeTests {
             Issue.record("Expected TimeoutExceeded, got \(timeoutRes)")
         }
 
-        // 3. CoreCodemode.Tool.check with outer bindings and no fetch
+        // 3. CoreCodemode.Tool.check with outer bindings: fetch is always available; Bun/path only when services are supplied
         let inv = CoreCodemode.Tool.Inventory(tools: [
             "double": CoreCodemode.Tool.ToolRegistration(
                 name: "double",
@@ -897,7 +897,7 @@ struct CodemodeTests {
         ])
         let checkRes = try await CoreCodemode.Tool.check(
             inventory: inv,
-            code: "return { doubled: await tools.double({ n: base }), hasFetch: typeof fetch };",
+            code: "return { doubled: await tools.double({ n: base }), hasFetch: typeof fetch, hasBun: typeof Bun };",
             bindings: ["base": .int(21)],
             executeTool: { _, reg, input in try await reg.execute(input, CodemodeTestHelper.makeToolContext()) }
         )
@@ -906,7 +906,8 @@ struct CodemodeTests {
             return
         }
         #expect(chkDict["doubled"] == .int(42))
-        #expect(chkDict["hasFetch"] == .string("undefined"))
+        #expect(chkDict["hasFetch"] == .string("function"))
+        #expect(chkDict["hasBun"] == .string("undefined"))
     }
 
     @Test("CoreCodemode.Fetch rejects redirect loops exceeding MAX_REDIRECTS")

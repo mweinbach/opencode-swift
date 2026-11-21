@@ -1429,8 +1429,24 @@ public enum EffectClient {
         public typealias ExperimentalJobCancelOutput = ClientEmptyResponse
         // parity: client/src/effect/api/api.ts#ExperimentalJobCancelOperation [status=implemented hash=219488dbb8af]
         public typealias ExperimentalJobCancelOperation = @Sendable (ExperimentalJobCancelInput) async throws -> Void
-        /// `job` offers `list` and `cancel`.
-        // parity: client/src/effect/api/api.ts#ExperimentalApi [status=implemented hash=e85ab6ec7928]
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineListOutput [status=implemented hash=bc6f6827f4bf]
+        public typealias ExperimentalMachineListOutput = [OpenCodeProtocol.MachineInfo]
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineListOperation [status=implemented hash=b54b6da7ca42]
+        public typealias ExperimentalMachineListOperation = @Sendable () async throws -> ExperimentalMachineListOutput
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineAddInput [status=implemented hash=ac8a28465c1a]
+        public typealias ExperimentalMachineAddInput = PromiseInputTypes.ExperimentalMachineAddInput
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineAddOutput [status=implemented hash=024a64b97c97]
+        public typealias ExperimentalMachineAddOutput = OpenCodeProtocol.MachineInvite
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineAddOperation [status=implemented hash=05a3df8ed28a]
+        public typealias ExperimentalMachineAddOperation = @Sendable (ExperimentalMachineAddInput) async throws -> ExperimentalMachineAddOutput
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineRemoveInput [status=implemented hash=d276e36f3e45]
+        public typealias ExperimentalMachineRemoveInput = PromiseInputTypes.ExperimentalMachineRemoveInput
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineRemoveOutput [status=implemented hash=4ebab59ae2a7]
+        public typealias ExperimentalMachineRemoveOutput = ClientEmptyResponse
+        // parity: client/src/effect/api/api.ts#ExperimentalMachineRemoveOperation [status=implemented hash=c3227f98a864]
+        public typealias ExperimentalMachineRemoveOperation = @Sendable (ExperimentalMachineRemoveInput) async throws -> Void
+        /// `job` offers `list` and `cancel`; `machine` offers `list`, `add`, and `remove`.
+        // parity: client/src/effect/api/api.ts#ExperimentalApi [status=implemented hash=56312de05698]
         public typealias ExperimentalApi = ExperimentalClientAPI
         // parity: client/src/effect/api/api.ts#ShellListInput [status=implemented hash=0f4202e34c0b]
         public typealias ShellListInput = PromiseInputTypes.ShellListInput
