@@ -1248,10 +1248,43 @@ public enum CodemodeEngine {
         }
     }
 
-    // MARK: - Static Tool Call Scanner (src/codemode/scan.ts)
+    // MARK: - Static Tool Call & Program Scanner (src/codemode/scan.ts)
 
-    // parity: codemode/src/codemode/scan.ts#scanTools [status=implemented hash=5b538093f5cf]
+    public struct GlobalUse: Equatable, Hashable, Sendable {
+        public let member: String?
+        /// First non-forwarding member used on a call's result. `nil` means the value escaped or was used dynamically.
+        public let resultMembers: [String?]
+
+        public init(member: String? = nil, resultMembers: [String?]) {
+            self.member = member
+            self.resultMembers = resultMembers
+        }
+    }
+
+    public struct ProgramScan: Equatable, Sendable {
+        public let tools: [String]
+        public let globals: [String: [GlobalUse]]
+        public let modules: Set<String>
+
+        public init(tools: [String], globals: [String: [GlobalUse]], modules: Set<String>) {
+            self.tools = tools
+            self.globals = globals
+            self.modules = modules
+        }
+    }
+
+    // parity: codemode/src/codemode/scan.ts#scanTools [status=implemented hash=c811e0a3a67e]
     public static func scanTools(_ code: String) -> Result<[String], CodemodeLanguage.Diagnostic> {
+        scanProgram(code, globals: []).map(\.tools)
+    }
+
+    /// Scans static tool calls, references to the given globals, and literal module loads.
+    // parity: codemode/src/codemode/scan.ts#scanProgram [status=implemented hash=ab704b3058a5]
+    public static func scanProgram(
+        _ code: String,
+        globals: [String] = [],
+        forwardingMembers: [String] = []
+    ) -> Result<ProgramScan, CodemodeLanguage.Diagnostic> {
         if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .failure(CodemodeLanguage.Diagnostic(kind: "ParseError", message: "Code cannot be empty."))
         }
@@ -1262,11 +1295,62 @@ public enum CodemodeEngine {
         case .ok(let p, _): program = p
         }
 
-        var foundOrder: [String] = []
-        var foundSet = Set<String>()
-        var scopes: [Set<String>] = [collectStmtNames(program.body, includeVar: true)]
+        enum Ancestor {
+            case memberObject(memberName: String?, propLoc: CodemodeLanguage.SourceLocation?, loc: CodemodeLanguage.SourceLocation?)
+            case callCallee(loc: CodemodeLanguage.SourceLocation?)
+            case awaitArgument(loc: CodemodeLanguage.SourceLocation?)
+            case chainExpression(loc: CodemodeLanguage.SourceLocation?)
+            case expressionStmt
+            case varDeclaratorInit(idName: String?)
+            case other(loc: CodemodeLanguage.SourceLocation?)
+        }
 
-        func isShadowed() -> Bool { scopes.contains { $0.contains("tools") } }
+        struct ScopeFrame {
+            let id: Int
+            let names: Set<String>
+        }
+
+        enum PendingUse {
+            case direct(member: String?, resultMembers: [String?])
+            case binding(member: String?, scopeID: Int, name: String)
+        }
+
+        let globalsSet = Set(globals)
+        let forwardingSet = Set(forwardingMembers)
+
+        var toolsOrder: [String] = []
+        var toolsSet = Set<String>()
+        var modules = Set<String>()
+        var referencedOrder: [String] = []
+        var referencedPending: [String: [PendingUse]] = [:]
+        var localUses: [Int: [String: [String?]]] = [:]
+        var nextScopeID = 1
+        var scopes: [ScopeFrame] = [ScopeFrame(id: 0, names: collectStmtNames(program.body, includeVar: true))]
+        var ancestors: [Ancestor] = []
+
+        func pushScope(_ names: Set<String>) {
+            let id = nextScopeID
+            nextScopeID += 1
+            scopes.append(ScopeFrame(id: id, names: names))
+        }
+
+        func addLocalUse(scopeID: Int, name: String, member: String?) {
+            var locals = localUses[scopeID] ?? [:]
+            var uses = locals[name] ?? []
+            if !uses.contains(member) {
+                uses.append(member)
+            }
+            locals[name] = uses
+            localUses[scopeID] = locals
+        }
+
+        func appendGlobalUse(_ globalName: String, _ use: PendingUse) {
+            if referencedPending[globalName] == nil {
+                referencedOrder.append(globalName)
+            }
+            referencedPending[globalName, default: []].append(use)
+        }
+
         func fail(_ loc: CodemodeLanguage.SourceLocation?, _ msg: String) -> CodemodeLanguage.Diagnostic {
             CodemodeLanguage.Diagnostic(
                 kind: "UnsupportedSyntax",
@@ -1275,125 +1359,253 @@ public enum CodemodeEngine {
             )
         }
 
-        func extractStaticToolChain(_ expr: CodemodeLanguage.Expression) -> (ok: Bool, path: String?, reason: String?, loc: CodemodeLanguage.SourceLocation?)? {
-            // Check if `expr` is rooted at unshadowed identifier `tools`
-            var segments: [String] = []
-            var cur = expr
-            while true {
-                switch cur {
-                case .chain(let inner, _):
-                    cur = inner
-                case .member(let obj, let prop, _, let loc):
-                    switch prop {
-                    case .identifier(let s, _):
-                        segments.append(s)
-                        cur = obj
-                    case .string(let s, _):
-                        segments.append(s.toHostString())
-                        cur = obj
-                    case .computed(.literalString(let s, _), _):
-                        segments.append(s.toHostString())
-                        cur = obj
-                    default:
-                        if isRootedAtTools(obj) {
-                            return (false, nil, "Automation code must reference tools statically (e.g. tools.slack.read_thread), not with dynamic bracket expressions.", loc)
-                        }
-                        return nil
-                    }
-                case .identifier("tools", _):
-                    guard !isShadowed() else { return nil }
-                    if segments.isEmpty {
-                        return (false, nil, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.", cur.location)
-                    }
-                    return (true, segments.reversed().joined(separator: "."), nil, cur.location)
-                default:
-                    return nil
-                }
+        func staticMemberName(_ prop: CodemodeLanguage.PropertyKeyExpr) -> String? {
+            switch prop {
+            case .identifier(let s, _): return s
+            case .string(let s, _): return s.toHostString()
+            case .computed(.literalString(let s, _), _): return s.toHostString()
+            default: return nil
             }
         }
 
-        func isRootedAtTools(_ expr: CodemodeLanguage.Expression) -> Bool {
-            switch expr {
-            case .identifier("tools", _): return !isShadowed()
-            case .member(let obj, _, _, _): return isRootedAtTools(obj)
-            case .chain(let inner, _): return isRootedAtTools(inner)
-            default: return false
+        func valueUse(from start: Int) -> (parent: Ancestor?, index: Int) {
+            var idx = start
+            while idx >= 0 {
+                switch ancestors[idx] {
+                case .awaitArgument, .chainExpression:
+                    idx -= 1
+                    continue
+                default:
+                    return (ancestors[idx], idx)
+                }
+            }
+            return (nil, idx)
+        }
+
+        func resultMember(from index: Int) -> String? {
+            let use = valueUse(from: index)
+            guard case .memberObject(let name, _, _) = use.parent, let name else { return nil }
+            if !forwardingSet.contains(name) { return name }
+            if use.index >= 1, case .callCallee = ancestors[use.index - 1] {
+                return resultMember(from: use.index - 2)
+            }
+            return nil
+        }
+
+        func readStaticToolCall(nodeLoc: CodemodeLanguage.SourceLocation?) -> (ok: Bool, path: String?, reason: String?, loc: CodemodeLanguage.SourceLocation?) {
+            var segments: [String] = []
+            var currentLoc = nodeLoc
+            var idx = ancestors.count - 1
+            scanLoop: while idx >= 0 {
+                switch ancestors[idx] {
+                case .chainExpression(let cLoc):
+                    currentLoc = cLoc ?? currentLoc
+                    idx -= 1
+                case .memberObject(let mName, let propLoc, let mLoc):
+                    guard let mName else {
+                        return (
+                            false,
+                            nil,
+                            "Automation code must reference tools statically (e.g. tools.slack.read_thread), not with dynamic bracket expressions.",
+                            propLoc ?? mLoc
+                        )
+                    }
+                    segments.append(mName)
+                    currentLoc = mLoc ?? currentLoc
+                    idx -= 1
+                default:
+                    break scanLoop
+                }
+            }
+            let callParent: Ancestor? = idx >= 0 ? ancestors[idx] : nil
+            if segments.isEmpty {
+                return (false, nil, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.", currentLoc)
+            }
+            guard case .callCallee = callParent else {
+                return (false, nil, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.", currentLoc)
+            }
+            return (true, segments.joined(separator: "."), nil, currentLoc)
+        }
+
+        func handleIdentifierReference(_ name: String, loc: CodemodeLanguage.SourceLocation?) -> CodemodeLanguage.Diagnostic? {
+            guard !globals.isEmpty || name == "tools" else { return nil }
+            let scope = scopes.last { $0.names.contains(name) }
+            if let scope, !globals.isEmpty {
+                addLocalUse(scopeID: scope.id, name: name, member: resultMember(from: ancestors.count - 1))
+            }
+            if scope == nil && name == "tools" {
+                let chain = readStaticToolCall(nodeLoc: loc)
+                if !chain.ok {
+                    return fail(chain.loc, chain.reason ?? "Invalid tool call.")
+                }
+                if let path = chain.path, toolsSet.insert(path).inserted {
+                    toolsOrder.append(path)
+                }
+                return nil
+            }
+            if scope == nil && globalsSet.contains(name) {
+                let property = ancestors.last
+                let member: String?
+                let isMemberObject: Bool
+                if case .memberObject(let mName, _, _) = property {
+                    member = mName
+                    isMemberObject = true
+                } else {
+                    member = nil
+                    isMemberObject = false
+                }
+                let call: Ancestor? = ancestors.count >= 2 ? ancestors[ancestors.count - 2] : nil
+                guard let member, isMemberObject, case .callCallee = call else {
+                    appendGlobalUse(name, .direct(member: member, resultMembers: [nil]))
+                    return nil
+                }
+                let result = valueUse(from: ancestors.count - 3)
+                if case .expressionStmt = result.parent {
+                    appendGlobalUse(name, .direct(member: member, resultMembers: []))
+                    return nil
+                }
+                if case .varDeclaratorInit(let idName?) = result.parent,
+                   let binding = scopes.last(where: { $0.names.contains(idName) })
+                {
+                    appendGlobalUse(name, .binding(member: member, scopeID: binding.id, name: idName))
+                    return nil
+                }
+                appendGlobalUse(name, .direct(member: member, resultMembers: [resultMember(from: result.index)]))
+            }
+            return nil
+        }
+
+        func visitPatternExpressions(_ pattern: CodemodeLanguage.Pattern, isAssignmentTarget: Bool) -> CodemodeLanguage.Diagnostic? {
+            switch pattern {
+            case .identifier(let name, let loc):
+                if isAssignmentTarget {
+                    return handleIdentifierReference(name, loc: loc)
+                }
+                return nil
+            case .array(let elements, let rest, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                for el in elements {
+                    if let el, let err = visitPatternExpressions(el, isAssignmentTarget: isAssignmentTarget) { return err }
+                }
+                if let rest, let err = visitPatternExpressions(rest, isAssignmentTarget: isAssignmentTarget) { return err }
+                return nil
+            case .object(let props, let rest, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                for prop in props {
+                    if case .computed(let ce, _) = prop.key, let err = visitExpr(ce) { return err }
+                    if let err = visitPatternExpressions(prop.value, isAssignmentTarget: isAssignmentTarget) { return err }
+                }
+                if let rest, let err = visitPatternExpressions(rest, isAssignmentTarget: isAssignmentTarget) { return err }
+                return nil
+            case .assignment(let left, let right, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                if let err = visitPatternExpressions(left, isAssignmentTarget: isAssignmentTarget) { return err }
+                return visitExpr(right)
+            case .member(let obj, let prop, let loc):
+                ancestors.append(.memberObject(memberName: staticMemberName(prop), propLoc: prop.location, loc: loc))
+                let objErr = visitExpr(obj)
+                ancestors.removeLast()
+                if let objErr { return objErr }
+                if case .computed(let ce, _) = prop {
+                    ancestors.append(.other(loc: loc))
+                    let propErr = visitExpr(ce)
+                    ancestors.removeLast()
+                    if let propErr { return propErr }
+                }
+                return nil
+            case .superMember(let prop, let loc):
+                if case .computed(let ce, _) = prop {
+                    ancestors.append(.other(loc: loc))
+                    defer { ancestors.removeLast() }
+                    return visitExpr(ce)
+                }
+                return nil
             }
         }
 
         func visitExpr(_ expr: CodemodeLanguage.Expression) -> CodemodeLanguage.Diagnostic? {
             switch expr {
+            case .identifier(let name, let loc):
+                return handleIdentifierReference(name, loc: loc)
+            case .member(let obj, let prop, _, let loc):
+                ancestors.append(.memberObject(memberName: staticMemberName(prop), propLoc: prop.location, loc: loc))
+                let objErr = visitExpr(obj)
+                ancestors.removeLast()
+                if let objErr { return objErr }
+                if case .computed(let ce, _) = prop {
+                    ancestors.append(.other(loc: loc))
+                    let propErr = visitExpr(ce)
+                    ancestors.removeLast()
+                    if let propErr { return propErr }
+                }
+                return nil
             case .call(let callee, let args, _, let loc):
-                if case .identifier("require", _) = callee {
-                    if let first = args.first, case .expr(let srcExpr) = first {
-                        if case .literalString(let s, _) = srcExpr {
-                            if CodemodeLanguage.moduleName(s.toHostString()) == "tools" {
-                                return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
-                            }
-                        } else {
+                if case .identifier("require", _) = callee, let first = args.first {
+                    if case .expr(.literalString(let s, _)) = first {
+                        let mod = CodemodeLanguage.moduleName(s.toHostString())
+                        if mod == "tools" {
                             return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                         }
+                        modules.insert(mod)
+                    } else {
+                        return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                     }
                 }
-                if let chain = extractStaticToolChain(callee) {
-                    if !chain.ok { return fail(chain.loc, chain.reason ?? "Invalid tool call.") }
-                    if let path = chain.path, foundSet.insert(path).inserted { foundOrder.append(path) }
-                } else {
-                    if let err = visitExpr(callee) { return err }
-                }
+                ancestors.append(.callCallee(loc: loc))
+                let calleeErr = visitExpr(callee)
+                ancestors.removeLast()
+                if let calleeErr { return calleeErr }
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for a in args {
                     if case .expr(let e) = a, let err = visitExpr(e) { return err }
                     if case .spread(let e, _) = a, let err = visitExpr(e) { return err }
                 }
                 return nil
-            case .identifier("tools", let loc):
-                if !isShadowed() {
-                    return fail(loc, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.")
-                }
-                return nil
-            case .member(let obj, let prop, _, let loc):
-                if isRootedAtTools(expr) {
-                    if case .computed(let ce, _) = prop, !(ce.isStringLiteral) {
-                        return fail(loc, "Automation code must reference tools statically (e.g. tools.slack.read_thread), not with dynamic bracket expressions.")
-                    }
-                    return fail(loc, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.")
-                }
-                if let err = visitExpr(obj) { return err }
-                if case .computed(let ce, _) = prop, let err = visitExpr(ce) { return err }
-                return nil
+            case .awaitExpr(let arg, let loc):
+                ancestors.append(.awaitArgument(loc: loc))
+                defer { ancestors.removeLast() }
+                return visitExpr(arg)
+            case .chain(let inner, let loc):
+                ancestors.append(.chainExpression(loc: loc))
+                defer { ancestors.removeLast() }
+                return visitExpr(inner)
             case .importExpr(let src, let loc):
                 if case .literalString(let s, _) = src {
-                    if CodemodeLanguage.moduleName(s.toHostString()) == "tools" {
+                    let mod = CodemodeLanguage.moduleName(s.toHostString())
+                    if mod == "tools" {
                         return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                     }
+                    modules.insert(mod)
                 } else {
                     return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                 }
-                return nil
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                return visitExpr(src)
             case .function(let fn):
-                var fnScope = Set<String>()
-                if let n = fn.name { fnScope.insert(n) }
-                for p in fn.params { for n in CodemodeLanguage.collectPatternNames(p) { fnScope.insert(n) } }
-                if case .block(let stmts) = fn.body { fnScope.formUnion(collectStmtNames(stmts, includeVar: true)) }
-                scopes.append(fnScope)
-                defer { scopes.removeLast() }
-                switch fn.body {
-                case .block(let stmts): return visitStmts(stmts)
-                case .expression(let e): return visitExpr(e)
-                }
-            case .array(let els, _):
+                return visitFunctionPayload(fn)
+            case .array(let els, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for el in els {
                     if case .expr(let e) = el, let err = visitExpr(e) { return err }
                     if case .spread(let e, _) = el, let err = visitExpr(e) { return err }
                 }
                 return nil
-            case .object(let props, _):
+            case .object(let props, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for p in props {
                     switch p {
                     case .property(let k, let v, _, _):
                         if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
                         if let err = visitExpr(v) { return err }
-                    case .spread(let e, _): if let err = visitExpr(e) { return err }
+                    case .spread(let e, _):
+                        if let err = visitExpr(e) { return err }
                     case .accessor(_, let k, let fn, _):
                         if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
                         if let err = visitFunctionPayload(fn) { return err }
@@ -1402,40 +1614,65 @@ public enum CodemodeEngine {
                 return nil
             case .classExpr(let cls):
                 return visitClass(cls)
-            case .superMember(let prop, _):
-                if case .computed(let ce, _) = prop { return visitExpr(ce) }
+            case .superMember(let prop, let loc):
+                if case .computed(let ce, _) = prop {
+                    ancestors.append(.other(loc: loc))
+                    defer { ancestors.removeLast() }
+                    return visitExpr(ce)
+                }
                 return nil
-            case .superCall(let args, _, _):
+            case .superCall(let args, _, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for a in args {
                     if case .expr(let e) = a, let err = visitExpr(e) { return err }
                     if case .spread(let e, _) = a, let err = visitExpr(e) { return err }
                 }
                 return nil
-            case .templateLiteral(_, let es, _):
+            case .templateLiteral(_, let es, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for e in es { if let err = visitExpr(e) { return err } }
                 return nil
-            case .taggedTemplate(let tag, _, let es, _):
+            case .taggedTemplate(let tag, _, let es, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 if let err = visitExpr(tag) { return err }
                 for e in es { if let err = visitExpr(e) { return err } }
                 return nil
-            case .newExpr(let callee, let args, _):
+            case .newExpr(let callee, let args, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 if let err = visitExpr(callee) { return err }
                 for a in args {
                     if case .expr(let e) = a, let err = visitExpr(e) { return err }
                     if case .spread(let e, _) = a, let err = visitExpr(e) { return err }
                 }
                 return nil
-            case .unary(_, let a, _), .update(_, let a, _, _), .awaitExpr(let a, _), .chain(let a, _):
+            case .unary(_, let a, let loc), .update(_, let a, _, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitExpr(a)
-            case .yieldExpr(let a, _, _):
+            case .yieldExpr(let a, _, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return a.flatMap(visitExpr)
-            case .binary(_, let l, let r, _), .logical(_, let l, let r, _):
+            case .binary(_, let l, let r, let loc), .logical(_, let l, let r, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitExpr(l) ?? visitExpr(r)
-            case .conditional(let t, let c, let a, _):
+            case .conditional(let t, let c, let a, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitExpr(t) ?? visitExpr(c) ?? visitExpr(a)
-            case .assignment(_, _, let r, _):
+            case .assignment(_, let left, let r, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                if let err = visitPatternExpressions(left, isAssignmentTarget: true) { return err }
                 return visitExpr(r)
-            case .sequence(let es, _):
+            case .sequence(let es, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 for e in es { if let err = visitExpr(e) { return err } }
                 return nil
             default:
@@ -1448,8 +1685,15 @@ public enum CodemodeEngine {
             if let n = fn.name { fnScope.insert(n) }
             for p in fn.params { for n in CodemodeLanguage.collectPatternNames(p) { fnScope.insert(n) } }
             if case .block(let stmts) = fn.body { fnScope.formUnion(collectStmtNames(stmts, includeVar: true)) }
-            scopes.append(fnScope)
-            defer { scopes.removeLast() }
+            pushScope(fnScope)
+            ancestors.append(.other(loc: fn.loc))
+            defer {
+                ancestors.removeLast()
+                scopes.removeLast()
+            }
+            for p in fn.params {
+                if let err = visitPatternExpressions(p, isAssignmentTarget: false) { return err }
+            }
             switch fn.body {
             case .block(let stmts): return visitStmts(stmts)
             case .expression(let e): return visitExpr(e)
@@ -1458,9 +1702,18 @@ public enum CodemodeEngine {
 
         // A class body: its name binding, `extends`, member keys, methods, and field initializers.
         func visitClass(_ cls: CodemodeLanguage.ClassPayload) -> CodemodeLanguage.Diagnostic? {
-            scopes.append(cls.name.map { [$0] } ?? [])
-            defer { scopes.removeLast() }
-            if let superClass = cls.superClass, let err = visitExpr(superClass) { return err }
+            if let superClass = cls.superClass {
+                ancestors.append(.other(loc: cls.loc))
+                let err = visitExpr(superClass)
+                ancestors.removeLast()
+                if let err { return err }
+            }
+            pushScope(cls.name.map { [$0] } ?? [])
+            ancestors.append(.other(loc: cls.loc))
+            defer {
+                ancestors.removeLast()
+                scopes.removeLast()
+            }
             if let err = visitFunctionPayload(cls.constructor) { return err }
             for member in cls.members {
                 if case .computed(let ce, _) = member.key, let err = visitExpr(ce) { return err }
@@ -1480,76 +1733,136 @@ public enum CodemodeEngine {
         func visitStmt(_ stmt: CodemodeLanguage.Statement) -> CodemodeLanguage.Diagnostic? {
             switch stmt {
             case .importDecl(_, let source, let loc):
-                if CodemodeLanguage.moduleName(source) == "tools" {
+                let mod = CodemodeLanguage.moduleName(source)
+                if mod == "tools" {
                     return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
                 }
+                modules.insert(mod)
                 return nil
-            case .expression(let e, _), .throwStmt(let e, _):
+            case .expression(let e, _):
+                ancestors.append(.expressionStmt)
+                defer { ancestors.removeLast() }
                 return visitExpr(e)
-            case .returnStmt(let e, _):
+            case .throwStmt(let e, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
+                return visitExpr(e)
+            case .returnStmt(let e, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return e.flatMap(visitExpr)
             case .variable(_, let decls, _):
-                for d in decls { if let ie = d.initializer, let err = visitExpr(ie) { return err } }
+                for d in decls {
+                    if let err = visitPatternExpressions(d.id, isAssignmentTarget: false) { return err }
+                    if let ie = d.initializer {
+                        let idName: String? = if case .identifier(let n, _) = d.id { n } else { nil }
+                        ancestors.append(.varDeclaratorInit(idName: idName))
+                        let err = visitExpr(ie)
+                        ancestors.removeLast()
+                        if let err { return err }
+                    }
+                }
                 return nil
-            case .block(let inner, _):
-                scopes.append(collectStmtNames(inner, includeVar: false))
-                defer { scopes.removeLast() }
+            case .block(let inner, let loc):
+                pushScope(collectStmtNames(inner, includeVar: false))
+                ancestors.append(.other(loc: loc))
+                defer {
+                    ancestors.removeLast()
+                    scopes.removeLast()
+                }
                 return visitStmts(inner)
             case .functionDecl(let fn):
-                var fnScope = Set<String>()
-                if let n = fn.name { fnScope.insert(n) }
-                for p in fn.params { for n in CodemodeLanguage.collectPatternNames(p) { fnScope.insert(n) } }
-                if case .block(let stmts) = fn.body { fnScope.formUnion(collectStmtNames(stmts, includeVar: true)) }
-                scopes.append(fnScope)
-                defer { scopes.removeLast() }
-                if case .block(let stmts) = fn.body { return visitStmts(stmts) }
-                return nil
-            case .ifStmt(let t, let c, let a, _):
+                return visitFunctionPayload(fn)
+            case .ifStmt(let t, let c, let a, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitExpr(t) ?? visitStmt(c) ?? a.flatMap(visitStmt)
-            case .whileStmt(let t, let b, _):
+            case .whileStmt(let t, let b, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitExpr(t) ?? visitStmt(b)
-            case .doWhileStmt(let b, let t, _):
+            case .doWhileStmt(let b, let t, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitStmt(b) ?? visitExpr(t)
-            case .forStmt(let ini, let t, let u, let b, _):
+            case .forStmt(let ini, let t, let u, let b, let loc):
                 var fs = Set<String>()
                 if case .variable(let k, let ds, _) = ini, k != .var {
                     for d in ds { for n in CodemodeLanguage.collectPatternNames(d.id) { fs.insert(n) } }
                 }
-                scopes.append(fs)
-                defer { scopes.removeLast() }
+                pushScope(fs)
+                ancestors.append(.other(loc: loc))
+                defer {
+                    ancestors.removeLast()
+                    scopes.removeLast()
+                }
                 if case .variable(_, let ds, _) = ini {
-                    for d in ds { if let ie = d.initializer, let err = visitExpr(ie) { return err } }
-                } else if case .expression(let e) = ini, let err = visitExpr(e) { return err }
+                    for d in ds {
+                        if let err = visitPatternExpressions(d.id, isAssignmentTarget: false) { return err }
+                        if let ie = d.initializer {
+                            let idName: String? = if case .identifier(let n, _) = d.id { n } else { nil }
+                            ancestors.append(.varDeclaratorInit(idName: idName))
+                            let err = visitExpr(ie)
+                            ancestors.removeLast()
+                            if let err { return err }
+                        }
+                    }
+                } else if case .expression(let e) = ini, let err = visitExpr(e) {
+                    return err
+                }
                 if let t, let err = visitExpr(t) { return err }
                 if let u, let err = visitExpr(u) { return err }
                 return visitStmt(b)
-            case .forInStmt(let l, let r, let b, _), .forOfStmt(let l, let r, let b, _, _):
+            case .forInStmt(let l, let r, let b, let loc), .forOfStmt(let l, let r, let b, _, let loc):
                 var fs = Set<String>()
                 if case .variable(let k, let p, _) = l, k != .var {
                     for n in CodemodeLanguage.collectPatternNames(p) { fs.insert(n) }
                 }
-                scopes.append(fs)
-                defer { scopes.removeLast() }
+                pushScope(fs)
+                ancestors.append(.other(loc: loc))
+                defer {
+                    ancestors.removeLast()
+                    scopes.removeLast()
+                }
+                switch l {
+                case .variable(_, let p, _):
+                    if let err = visitPatternExpressions(p, isAssignmentTarget: false) { return err }
+                case .pattern(let p):
+                    if let err = visitPatternExpressions(p, isAssignmentTarget: true) { return err }
+                }
                 return visitExpr(r) ?? visitStmt(b)
-            case .switchStmt(let d, let cases, _):
+            case .switchStmt(let d, let cases, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 if let err = visitExpr(d) { return err }
+                let caseStmts = cases.flatMap(\.consequent)
+                pushScope(collectStmtNames(caseStmts, includeVar: false))
+                defer { scopes.removeLast() }
                 for c in cases {
                     if let t = c.test, let err = visitExpr(t) { return err }
                     if let err = visitStmts(c.consequent) { return err }
                 }
                 return nil
-            case .tryStmt(let blk, let handler, let fin, _):
+            case .tryStmt(let blk, let handler, let fin, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 if let err = visitStmts(blk) { return err }
                 if let handler {
                     var cs = Set<String>()
                     if let p = handler.param { for n in CodemodeLanguage.collectPatternNames(p) { cs.insert(n) } }
-                    scopes.append(cs)
+                    pushScope(cs)
+                    if let p = handler.param, let err = visitPatternExpressions(p, isAssignmentTarget: false) {
+                        scopes.removeLast()
+                        return err
+                    }
                     let err = visitStmts(handler.body)
                     scopes.removeLast()
                     if let err { return err }
                 }
                 return fin.flatMap(visitStmts)
-            case .labeled(_, let b, _):
+            case .labeled(_, let b, let loc):
+                ancestors.append(.other(loc: loc))
+                defer { ancestors.removeLast() }
                 return visitStmt(b)
             case .classDecl(let cls):
                 return visitClass(cls)
@@ -1561,13 +1874,34 @@ public enum CodemodeEngine {
         if let err = visitStmts(program.body) {
             return .failure(err)
         }
-        return .success(foundOrder)
+
+        var resolvedGlobals: [String: [GlobalUse]] = [:]
+        for globalName in referencedOrder {
+            guard let pendingList = referencedPending[globalName] else { continue }
+            resolvedGlobals[globalName] = pendingList.map { pending in
+                switch pending {
+                case .direct(let member, let members):
+                    return GlobalUse(member: member, resultMembers: members)
+                case .binding(let member, let scopeID, let name):
+                    return GlobalUse(member: member, resultMembers: localUses[scopeID]?[name] ?? [])
+                }
+            }
+        }
+
+        return .success(ProgramScan(tools: toolsOrder, globals: resolvedGlobals, modules: modules))
     }
 
     private static func collectStmtNames(_ stmts: [CodemodeLanguage.Statement], includeVar: Bool) -> Set<String> {
         var names = Set<String>()
         for stmt in stmts {
             switch stmt {
+            case .importDecl(let specifiers, _, _):
+                for spec in specifiers {
+                    switch spec {
+                    case .defaultImport(let local), .namespaceImport(let local), .namedImport(_, let local):
+                        names.insert(local)
+                    }
+                }
             case .functionDecl(let fn): if let n = fn.name { names.insert(n) }
             case .classDecl(let cls): if let n = cls.name { names.insert(n) }
             case .variable(let kind, let decls, _) where includeVar || kind != .var:
@@ -1575,7 +1909,47 @@ public enum CodemodeEngine {
             default: break
             }
         }
+        if includeVar {
+            collectNestedVars(stmts, into: &names)
+        }
         return names
+    }
+
+    private static func collectNestedVars(_ stmts: [CodemodeLanguage.Statement], into names: inout Set<String>) {
+        func walk(_ stmt: CodemodeLanguage.Statement) {
+            switch stmt {
+            case .functionDecl, .classDecl:
+                return
+            case .variable(let kind, let decls, _) where kind == .var:
+                for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
+            case .block(let inner, _):
+                for s in inner { walk(s) }
+            case .ifStmt(_, let c, let a, _):
+                walk(c)
+                if let a { walk(a) }
+            case .whileStmt(_, let b, _), .doWhileStmt(let b, _, _), .labeled(_, let b, _):
+                walk(b)
+            case .forStmt(let ini, _, _, let b, _):
+                if case .variable(let kind, let decls, _) = ini, kind == .var {
+                    for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
+                }
+                walk(b)
+            case .forInStmt(let l, _, let b, _), .forOfStmt(let l, _, let b, _, _):
+                if case .variable(let kind, let p, _) = l, kind == .var {
+                    for n in CodemodeLanguage.collectPatternNames(p) { names.insert(n) }
+                }
+                walk(b)
+            case .switchStmt(_, let cases, _):
+                for c in cases { for s in c.consequent { walk(s) } }
+            case .tryStmt(let blk, let handler, let fin, _):
+                for s in blk { walk(s) }
+                if let handler { for s in handler.body { walk(s) } }
+                if let fin { for s in fin { walk(s) } }
+            default:
+                break
+            }
+        }
+        for s in stmts { walk(s) }
     }
 
     // MARK: - CodeMode Runtime & Formatting (src/codemode/codemode.ts)
@@ -1618,23 +1992,28 @@ public enum CodemodeEngine {
     // parity: codemode/src/codemode/codemode.ts#SnapshotHeader [status=implemented hash=ef64402c2c5c]
     public typealias SnapshotHeader = CodemodeLanguage.Header
 
-    // parity: codemode/src/codemode/codemode.ts#SnapshotError [status=implemented hash=75e512c824a9]
+    // parity: codemode/src/codemode/codemode.ts#SnapshotError [status=implemented hash=e01f98b476b6]
     public typealias SnapshotError = CodemodeLanguage.SnapshotError
 
-    // parity: codemode/src/codemode/codemode.ts#SuspendError [status=implemented hash=7d9909c4d067]
+    // parity: codemode/src/codemode/codemode.ts#SuspendError [status=implemented hash=7600df8fe0a1]
     public typealias SuspendError = CodemodeLanguage.SuspendError
 
-    // parity: codemode/src/codemode/codemode.ts#fromBytes [status=implemented hash=75e512c824a9]
+    // parity: codemode/src/codemode/codemode.ts#fromBytes [status=implemented hash=e01f98b476b6]
     public static func fromBytes(_ bytes: [UInt8]) throws -> Snapshot {
         try CodemodeLanguage.fromBytes(bytes)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#toBytes [status=implemented hash=75e512c824a9]
+    // parity: codemode/src/codemode/codemode.ts#toBytes [status=implemented hash=e01f98b476b6]
     public static func toBytes(_ snapshot: Snapshot) throws -> [UInt8] {
         try CodemodeLanguage.toBytes(snapshot)
     }
 
-    // parity: codemode/src/codemode/codemode.ts#scanTools [status=implemented hash=75e512c824a9]
+    // parity: codemode/src/codemode/codemode.ts#scanProgram [status=implemented hash=e01f98b476b6]
+    public static let scanCodeModeProgram: @Sendable (String, [String], [String]) -> Result<ProgramScan, CodemodeLanguage.Diagnostic> = { code, globals, forwardingMembers in
+        scanProgram(code, globals: globals, forwardingMembers: forwardingMembers)
+    }
+
+    // parity: codemode/src/codemode/codemode.ts#scanTools [status=implemented hash=e01f98b476b6]
     public static let scanCodeModeTools: @Sendable (String) -> Result<[String], CodemodeLanguage.Diagnostic> = scanTools
 
     // parity: codemode/src/codemode/codemode.ts#RunOptions [status=implemented hash=e17ea202c38d]
