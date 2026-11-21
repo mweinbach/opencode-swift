@@ -394,8 +394,15 @@ public final class TextBuffer {
     /// Converts a document display-cell offset (1 per `\n`) to a UTF-8 byte offset in `_rope`.
     /// When `roundDown` is `true`, an offset inside a wide grapheme rounds to that grapheme's start byte;
     /// when `false`, it includes any grapheme starting strictly before `offset`.
-    internal func utf8Offset(forDocumentCellOffset targetOffset: Int, roundDown: Bool = true) -> Int {
-        if targetOffset <= 0 { return 0 }
+    /// When `skipZeroWidth` is `true`, advances past zero-width graphemes at `targetOffset` (matching
+    /// upstream `UnifiedTextBuffer.byteAtCell` / `.left` bias away from line start).
+    internal func utf8Offset(
+        forDocumentCellOffset targetOffset: Int,
+        roundDown: Bool = true,
+        skipZeroWidth: Bool = false
+    ) -> Int {
+        if targetOffset < 0 { return 0 }
+        if targetOffset == 0 && !skipZeroWidth { return 0 }
         var cell = 0
         var byteOffset = 0
         let text = _rope.text
@@ -407,6 +414,10 @@ public final class TextBuffer {
                 w = _TextEngineMetrics.graphemeWidth(ch, tabWidth: _tabWidth, widthMethod: _widthMethod)
             }
             if cell == targetOffset {
+                if w == 0 && skipZeroWidth {
+                    byteOffset += ch.utf8.count
+                    continue
+                }
                 return byteOffset
             }
             if cell + w > targetOffset {

@@ -265,6 +265,11 @@ public extension Renderable {
         isFreed() ? .nan : (layoutNode.style.aspectRatio ?? .nan)
     }
 
+    // parity: core/src/Renderable.ts#Renderable.getBoxSizing [status=implemented hash=4319aff4cf36]
+    func getBoxSizing() -> BoxSizing {
+        isFreed() ? .borderBox : layoutNode.style.boxSizing
+    }
+
     // parity: core/src/Renderable.ts#Renderable.getJustifyContent [status=implemented hash=77159ea3ac4c]
     func getJustifyContent() -> Justify {
         isFreed() ? .flexStart : layoutNode.style.justifyContent

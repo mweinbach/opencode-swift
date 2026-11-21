@@ -350,7 +350,7 @@ public struct BaseRenderableOptions: Equatable, Hashable, Sendable {
     }
 }
 
-// parity: core/src/Renderable.ts#LayoutOptions [status=implemented hash=adedc96073b9]
+// parity: core/src/Renderable.ts#LayoutOptions [status=implemented hash=1358469f3b88]
 public struct LayoutOptions: Equatable, Hashable, Sendable {
     public var id: String?
     public var width: FlexValue?
@@ -394,6 +394,7 @@ public struct LayoutOptions: Equatable, Hashable, Sendable {
     public var overflow: Overflow?
     public var display: Display?
     public var aspectRatio: Float?
+    public var boxSizing: BoxSizing?
     public var enableLayout: Bool?
 
     public init(
@@ -439,6 +440,7 @@ public struct LayoutOptions: Equatable, Hashable, Sendable {
         overflow: Overflow? = nil,
         display: Display? = nil,
         aspectRatio: Float? = nil,
+        boxSizing: BoxSizing? = nil,
         enableLayout: Bool? = nil
     ) {
         self.id = id
@@ -483,6 +485,7 @@ public struct LayoutOptions: Equatable, Hashable, Sendable {
         self.overflow = overflow
         self.display = display
         self.aspectRatio = aspectRatio
+        self.boxSizing = boxSizing
         self.enableLayout = enableLayout
     }
 }
@@ -532,6 +535,7 @@ public struct RenderableOptions {
     public var overflow: Overflow?
     public var display: Display?
     public var aspectRatio: Float?
+    public var boxSizing: BoxSizing?
     public var zIndex: Int?
     public var visible: Bool?
     public var opacity: Double?
@@ -603,6 +607,7 @@ public struct RenderableOptions {
         overflow: Overflow? = nil,
         display: Display? = nil,
         aspectRatio: Float? = nil,
+        boxSizing: BoxSizing? = nil,
         zIndex: Int? = nil,
         visible: Bool? = nil,
         opacity: Double? = nil,
@@ -670,6 +675,7 @@ public struct RenderableOptions {
         self.overflow = overflow
         self.display = display
         self.aspectRatio = aspectRatio
+        self.boxSizing = boxSizing
         self.zIndex = zIndex
         self.visible = visible
         self.opacity = opacity
@@ -935,7 +941,7 @@ open class BaseRenderable: @unchecked Sendable {
 // MARK: - Renderable
 
 /// Core layout-backed, event-handling, composable terminal UI node matching `core/src/Renderable.ts#Renderable`.
-// parity: core/src/Renderable.ts#Renderable [status=adapted hash=f81cec58be12]
+// parity: core/src/Renderable.ts#Renderable [status=adapted hash=2d7cde06f4c9]
 open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, ScrollChainNode, @unchecked Sendable {
     /// Looks up a live `Renderable` by its hit-grid numeric ID.
     public static func renderable(forNumber num: UInt32) -> Renderable? {
@@ -1112,6 +1118,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
         if let position = options.position { style.positionType = position }
         if let overflow = options.overflow { style.overflow = overflow }
         if let aspectRatio = options.aspectRatio { style.aspectRatio = aspectRatio }
+        if let boxSizing = options.boxSizing { style.boxSizing = boxSizing }
 
         if let top = options.top { style.position.top = top }
         if let right = options.right { style.position.right = right }
@@ -1372,7 +1379,7 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
         }
     }
 
-    // parity: core/src/Renderable.ts#Renderable.flexBasis [status=implemented hash=f51fdb6ab59e]
+    // parity: core/src/Renderable.ts#Renderable.flexBasis [status=implemented hash=ce248f49e2f4]
     public var flexBasis: FlexValue {
         get { layoutNode.style.flexBasis }
         set {
@@ -1492,6 +1499,22 @@ open class Renderable: BaseRenderable, SelectableRenderable, ViewportObject, Scr
             layoutNode.style.aspectRatio = newValue
             requestRender()
         }
+    }
+
+    // parity: core/src/Renderable.ts#Renderable.boxSizing [status=implemented hash=3a79a79392e1]
+    public var boxSizing: BoxSizing {
+        get { layoutNode.style.boxSizing }
+        set {
+            guard !_isDestroyed else { return }
+            layoutNode.style.boxSizing = newValue
+            requestRender()
+        }
+    }
+
+    /// Parses a string or `nil` box-sizing option (`"content-box"` / `"border-box"` / `nil` -> `.borderBox`)
+    /// matching `core/src/Renderable.ts#Renderable.boxSizing` setter semantics.
+    public func setBoxSizing(_ value: String?) {
+        boxSizing = parseBoxSizing(value)
     }
 
     // parity: core/src/Renderable.ts#Renderable.top [status=implemented hash=d856240b900d]
@@ -2558,7 +2581,18 @@ public func setRenderableProp(_ node: Renderable, name: String, value: Any?, pre
         else if let i = value as? Int { node.flexShrink = Float(i) }
         else { node.flexShrink = 1 }
     case "flexBasis":
-        node.flexBasis = coerceFlexValue(value, defaultValue: .auto)
+        if let s = value as? String {
+            if isFlexBasisType(.string(s)) {
+                node.flexBasis = FlexValue.parse(s)
+            }
+        } else {
+            node.flexBasis = coerceFlexValue(value, defaultValue: .undefined)
+        }
+    case "boxSizing":
+        if let b = value as? BoxSizing { node.boxSizing = b }
+        else if let bs = value as? BoxSizingString { node.boxSizing = parseBoxSizing(bs.rawValue) }
+        else if let s = value as? String { node.boxSizing = parseBoxSizing(s) }
+        else { node.boxSizing = .borderBox }
     case "flexDirection":
         if let d = value as? FlexDirection { node.flexDirection = d }
         else if let s = value as? String { node.flexDirection = parseFlexDirection(s) }
