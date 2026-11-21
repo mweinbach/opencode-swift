@@ -995,8 +995,13 @@ extension CodemodeLanguage {
         private struct State: Sendable {
             var status: PromiseStatus = .pending
             var observed: Bool = false
+            var hasAttachedHostWork: Bool = false
             var hostCallKey: String? = nil
+            var rawRejection: (any Error)? = nil
+            var task: Task<PromiseOutcome, Never>? = nil
+            var abortController: AbortController? = nil
             var reactions: [PromiseReaction] = []
+            var settlementObservers: [@Sendable () -> Void] = []
             var nextWaiterId: Int = 1
             var waiters: [Int: CheckedContinuation<PromiseOutcome, Never>] = [:]
         }
@@ -1007,13 +1012,19 @@ extension CodemodeLanguage {
         /// Creation order, which orders unhandled-rejection warnings.
         public let id: Int
 
-        public init(proto: Obj?, status: PromiseStatus = .pending, task: Task<PromiseOutcome, Never>? = nil, hostCallKey: String? = nil) {
+        public init(
+            proto: Obj?,
+            status: PromiseStatus = .pending,
+            task: Task<PromiseOutcome, Never>? = nil,
+            hostCallKey: String? = nil,
+            rawRejection: (any Error)? = nil
+        ) {
             let scheduler = ProgramScheduler.current
             self.scheduler = scheduler
             self.id = scheduler?.newPromiseId() ?? 0
-            self.pState = Mutex(State(status: status, observed: false, hostCallKey: hostCallKey))
+            self.pState = Mutex(State(status: status, observed: false, hostCallKey: hostCallKey, rawRejection: rawRejection))
             super.init(proto: proto)
-            if case .rejected(let reason) = status {
+            if case .rejected(let reason) = status, !(rawRejection is Interruption) {
                 scheduler?.noteUnhandled(self, reason)
             }
             if let task {
@@ -1036,6 +1047,10 @@ extension CodemodeLanguage {
             pState.withLock { $0.status }
         }
 
+        public var rawRejection: (any Error)? {
+            pState.withLock { $0.rawRejection }
+        }
+
         public var isPending: Bool {
             if case .pending = status { return true }
             return false
@@ -1053,9 +1068,47 @@ extension CodemodeLanguage {
             pState.withLock { $0.hostCallKey }
         }
 
+        public var hasAttachedHostWork: Bool {
+            pState.withLock { $0.hasAttachedHostWork }
+        }
+
+        public func attachAbortController(_ controller: AbortController) {
+            pState.withLock { $0.abortController = controller }
+        }
+
+        /// Registers an internal settlement observer without marking the promise observed by program code.
+        public func addSettlementObserver(_ observer: @escaping @Sendable () -> Void) {
+            let alreadySettled = pState.withLock { s -> Bool in
+                if case .pending = s.status {
+                    s.settlementObservers.append(observer)
+                    return false
+                }
+                return true
+            }
+            if alreadySettled { observer() }
+        }
+
+        /// Marks this pending host promise as active host work in `scheduler` if it is not already attached to a task.
+        public func registerExternalHostWorkIfNeeded(in scheduler: ProgramScheduler) {
+            let needsRegistration = pState.withLock { s -> Bool in
+                guard case .pending = s.status, !s.hasAttachedHostWork else { return false }
+                s.hasAttachedHostWork = true
+                return true
+            }
+            guard needsRegistration else { return }
+            let seq = scheduler.beginHostWork()
+            addSettlementObserver { [weak scheduler] in
+                scheduler?.deliver(seq: seq) {}
+            }
+        }
+
         /// Settles with the outcome of host work running outside the job loop: the outcome is delivered through the
         /// run's inbox, so it lands between jobs like upstream host completions.
         public func attachTask(_ task: Task<PromiseOutcome, Never>) {
+            pState.withLock { s in
+                s.task = task
+                s.hasAttachedHostWork = true
+            }
             guard let scheduler else {
                 Task { [weak self] in
                     let outcome = await task.value
@@ -1069,6 +1122,20 @@ extension CodemodeLanguage {
                 let promise = self
                 scheduler.deliver(seq: seq) { promise?.settle(outcome) }
             }
+        }
+
+        /// Settles with a host call whose rejection may carry an unmaterialized `HostFailure`, `PendingThrow`, or `Interruption`.
+        public func attachHostTask(_ task: Task<(outcome: PromiseOutcome, rawError: (any Error)?), Never>) {
+            let bridged = Task<PromiseOutcome, Never> {
+                let pair = await task.value
+                if let raw = pair.rawError {
+                    self.pState.withLock { s in
+                        if case .pending = s.status { s.rawRejection = raw }
+                    }
+                }
+                return pair.outcome
+            }
+            attachTask(bridged)
         }
 
         /// Adds a reaction (upstream `VmScheduler.then`): queued now if settled, else when it settles. Marks the
@@ -1097,9 +1164,10 @@ extension CodemodeLanguage {
             }
         }
 
-        public func settle(_ outcome: PromiseOutcome) {
-            let taken = pState.withLock { s -> (reactions: [PromiseReaction], waiters: [CheckedContinuation<PromiseOutcome, Never>], handled: Bool)? in
+        public func settle(_ outcome: PromiseOutcome, rawError: (any Error)? = nil) {
+            let taken = pState.withLock { s -> (reactions: [PromiseReaction], waiters: [CheckedContinuation<PromiseOutcome, Never>], observers: [@Sendable () -> Void], handled: Bool, suppressUnhandled: Bool)? in
                 guard case .pending = s.status else { return nil }
+                if let rawError { s.rawRejection = rawError }
                 switch outcome {
                 case .fulfilled(let v): s.status = .fulfilled(v)
                 case .rejected(let r): s.status = .rejected(r)
@@ -1108,11 +1176,18 @@ extension CodemodeLanguage {
                 s.reactions = []
                 let list = Array(s.waiters.values)
                 s.waiters.removeAll()
-                return (reactions, list, s.observed)
+                let observers = s.settlementObservers
+                s.settlementObservers.removeAll()
+                s.task = nil
+                return (reactions, list, observers, s.observed, s.rawRejection is Interruption)
             }
+            Contract.promiseControllers.remove(self)
             guard let taken else { return }
-            if case .rejected(let reason) = outcome, !taken.handled {
+            if case .rejected(let reason) = outcome, !taken.handled, !taken.suppressUnhandled {
                 scheduler?.noteUnhandled(self, reason)
+            }
+            for obs in taken.observers {
+                obs()
             }
             for cont in taken.waiters {
                 cont.resume(returning: outcome)
@@ -1126,16 +1201,26 @@ extension CodemodeLanguage {
             settle(.fulfilled(value))
         }
 
-        public func reject(_ reason: Value) {
-            settle(.rejected(reason))
+        public func reject(_ reason: Value, rawError: (any Error)? = nil) {
+            settle(.rejected(reason), rawError: rawError)
         }
 
         public func cancelTask() {
-            let toResume = pState.withLock { s -> [CheckedContinuation<PromiseOutcome, Never>] in
+            let (toResume, task, controller) = pState.withLock { s -> ([CheckedContinuation<PromiseOutcome, Never>], Task<PromiseOutcome, Never>?, AbortController?) in
                 let list = Array(s.waiters.values)
                 s.waiters.removeAll()
-                return list
+                let t = s.task
+                s.task = nil
+                let c = s.abortController
+                s.abortController = nil
+                return (list, t, c)
             }
+            controller?.abort()
+            if let synced = Contract.promiseControllers.get(self)?() {
+                synced.abort()
+            }
+            Contract.promiseControllers.remove(self)
+            task?.cancel()
             for cont in toResume {
                 cont.resume(returning: .rejected(.string("Cancelled")))
             }
@@ -4085,11 +4170,8 @@ extension CodemodeLanguage {
             return .object(created)
         }
         if let hf = thrown as? HostFailure {
-            let pt = PendingThrow(type: .error, message: hf.message, kind: hf.kind, suggestions: hf.suggestions.isEmpty ? nil : hf.suggestions)
             let trace = if let site, site.location != nil { stackFrame(site) } else { "" }
             let created = createErrorValue(builtins.Error, message: JSString(hf.message), trace: trace)
-            created.failure = pt
-            pt.value = created
             return .object(created)
         }
         let diag = normalizeError(thrown)
@@ -4297,15 +4379,34 @@ extension CodemodeLanguage {
 
     // MARK: - Host Functions & Host Boundary (src/language/host-function.ts, host.ts, runtime/extensions.ts)
 
+    /// Structured host error carrying an optional JavaScript error name (e.g. `"Error"`, `"TypeError"`).
+    public struct HostError: Error, Sendable, CustomStringConvertible {
+        public let name: String
+        public let message: String
+
+        public init(_ message: String, name: String = "Error") {
+            self.name = name
+            self.message = message
+        }
+
+        public var description: String { message }
+    }
+
     public enum Host {
-        // parity: psychoscript/src/host-function.ts#Call [status=implemented hash=43b05791ffbd]
+        // parity: psychoscript/src/host-function.ts#Call [status=implemented hash=805892fe7fb2]
         public struct Call: Sendable {
             public let key: String
             public let suspending: @Sendable () -> Bool
+            public let signal: AbortSignal
 
-            public init(key: String, suspending: @escaping @Sendable () -> Bool = { false }) {
+            public init(
+                key: String,
+                suspending: @escaping @Sendable () -> Bool = { false },
+                signal: AbortSignal = AbortSignal()
+            ) {
                 self.key = key
                 self.suspending = suspending
+                self.signal = signal
             }
         }
 
@@ -4313,101 +4414,62 @@ extension CodemodeLanguage {
         public struct DurableCall: Sendable {
             public let key: String
             public let suspending: @Sendable () -> Bool
+            public let signal: AbortSignal
             public let args: [Value]
 
-            public init(key: String, args: [Value], suspending: @escaping @Sendable () -> Bool = { false }) {
+            public init(
+                key: String,
+                args: [Value],
+                suspending: @escaping @Sendable () -> Bool = { false },
+                signal: AbortSignal = AbortSignal()
+            ) {
                 self.key = key
                 self.args = args
                 self.suspending = suspending
+                self.signal = signal
             }
         }
 
-        // parity: psychoscript/src/host-function.ts#Snapshot [status=implemented hash=d8607566a4b1]
-        public struct Snapshot: Sendable {
-            public let encode: @Sendable (Value) throws -> JSONValue
-            public let decode: @Sendable (JSONValue) throws -> Value
+        // parity: psychoscript/src/host-function.ts#Snapshot [status=implemented hash=013523a19867]
+        public typealias Snapshot = Contract.Snapshot
 
-            public init(
-                encode: @escaping @Sendable (Value) throws -> JSONValue,
-                decode: @escaping @Sendable (JSONValue) throws -> Value
-            ) {
-                self.encode = encode
-                self.decode = decode
-            }
-        }
+        // parity: psychoscript/src/host-function.ts#Type [status=implemented hash=013523a19867]
+        public typealias CallType = Contract.CallType
 
-        // parity: psychoscript/src/host-function.ts#Type [status=implemented hash=8aa5f1d97099]
-        public enum CallType: String, Equatable, Hashable, Sendable, Codable {
-            case sync
-            case async
-            case syncThenable = "sync-thenable"
-        }
-
-        // parity: psychoscript/src/host-function.ts#Options [status=implemented hash=e22db77005cd]
+        // parity: psychoscript/src/host-function.ts#Options [status=implemented hash=d9b9747fd829]
         public struct Options: Sendable {
             public let type: CallType
             public let idempotent: Bool
             public let snapshot: Snapshot?
             public let constructible: Bool
             public let takesFunctions: Bool
+            public let name: String?
+            public let length: Int?
 
             public init(
                 type: CallType = .sync,
                 idempotent: Bool = false,
                 snapshot: Snapshot? = nil,
                 constructible: Bool = false,
-                takesFunctions: Bool = false
+                takesFunctions: Bool = false,
+                name: String? = nil,
+                length: Int? = nil
             ) {
                 self.type = type
                 self.idempotent = type == .async && idempotent
                 self.snapshot = snapshot
                 self.constructible = constructible
                 self.takesFunctions = takesFunctions
+                self.name = name
+                self.length = length
             }
         }
 
-        // parity: psychoscript/src/host-function.ts#Fn [status=implemented hash=e98235681c42]
-        public final class Fn: Sendable {
-            public let run: @Sendable ([Value], Call, Builtins) async throws -> Value
-            public let type: CallType
-            public let idempotent: Bool
-            public let snapshot: Snapshot?
-            public let constructible: Bool
-            public let takesFunctions: Bool
+        // parity: psychoscript/src/host-function.ts#Fn [status=implemented hash=6e0f5b70b88a]
+        public typealias Fn = Contract.Fn
 
-            public init(
-                run: @escaping @Sendable ([Value], Call, Builtins) async throws -> Value,
-                type: CallType = .sync,
-                idempotent: Bool = false,
-                snapshot: Snapshot? = nil,
-                constructible: Bool = false,
-                takesFunctions: Bool = false
-            ) {
-                self.run = run
-                self.type = type
-                self.idempotent = idempotent
-                self.snapshot = snapshot
-                self.constructible = constructible
-                self.takesFunctions = takesFunctions
-            }
-        }
-
-        // parity: psychoscript/src/host-function.ts#DurableFn [status=implemented hash=ab9390817ddb]
-        public final class DurableFn: Sendable {
-            public let start: @Sendable ([Value], Call) async throws -> JSONValue
-            public let wait: @Sendable (JSONValue, DurableCall, Builtins) async throws -> Value
-            public let cancel: @Sendable (JSONValue, DurableCall) async throws -> Void
-
-            public init(
-                start: @escaping @Sendable ([Value], Call) async throws -> JSONValue,
-                wait: @escaping @Sendable (JSONValue, DurableCall, Builtins) async throws -> Value,
-                cancel: @escaping @Sendable (JSONValue, DurableCall) async throws -> Void
-            ) {
-                self.start = start
-                self.wait = wait
-                self.cancel = cancel
-            }
-        }
+        // parity: psychoscript/src/host-function.ts#DurableFn [status=implemented hash=6e0f5b70b88a]
+        public typealias DurableFn = Contract.DurableFn
 
         public enum ResolvedTarget: Sendable {
             case fn(Fn)
@@ -4415,21 +4477,10 @@ extension CodemodeLanguage {
             case failure(HostFailure)
         }
 
-        // parity: psychoscript/src/host-function.ts#Namespace [status=implemented hash=d6d3cc3d2e47]
-        public final class Namespace: Sendable {
-            public let keys: @Sendable ([String]) throws -> [String]
-            public let resolve: @Sendable ([String]) -> ResolvedTarget
+        // parity: psychoscript/src/host-function.ts#Namespace [status=implemented hash=6e0f5b70b88a]
+        public typealias Namespace = Contract.Namespace
 
-            public init(
-                keys: @escaping @Sendable ([String]) throws -> [String],
-                resolve: @escaping @Sendable ([String]) -> ResolvedTarget
-            ) {
-                self.keys = keys
-                self.resolve = resolve
-            }
-        }
-
-        // parity: psychoscript/src/host-function.ts#fn [status=implemented hash=95180b8368c9]
+        // parity: psychoscript/src/host-function.ts#fn [status=implemented hash=97d45b5aa07a]
         public static func fn(
             _ run: @escaping @Sendable ([Value], Call, Builtins) async throws -> Value,
             options: Options = Options()
@@ -4440,11 +4491,51 @@ extension CodemodeLanguage {
                 idempotent: options.idempotent,
                 snapshot: options.snapshot,
                 constructible: options.constructible,
-                takesFunctions: options.takesFunctions
+                takesFunctions: options.takesFunctions,
+                sourceName: options.name,
+                sourceLength: options.length
             )
         }
 
-        // parity: psychoscript/src/host-function.ts#durableFn [status=implemented hash=e74967b76b2d]
+        /// Overload for Promise-based host functions returning `HostReturn` (values, Promises, or `HostWork`).
+        public static func fnReturn(
+            _ run: @escaping @Sendable ([Value], Call, Builtins) async throws -> HostReturn,
+            options: Options = Options()
+        ) -> Fn {
+            Fn(
+                runReturn: { args, contractCall, builtins in
+                    try await run(args, contractCall.hostCall, builtins)
+                },
+                type: options.type,
+                idempotent: options.idempotent,
+                snapshot: options.snapshot,
+                constructible: options.constructible,
+                takesFunctions: options.takesFunctions,
+                sourceName: options.name,
+                sourceLength: options.length
+            )
+        }
+
+        /// Creates a plain host function suitable for `HostGlobalValue.plainFn` or embedding in returned objects.
+        public static func plainFn(
+            name: String = "",
+            length: Int = 0,
+            _ run: @escaping @Sendable ([Value], Builtins) async throws -> HostReturn
+        ) -> PlainHostFn {
+            PlainHostFn(name: name, length: length, run)
+        }
+
+        /// Creates a `Value` embedding a plain host function inside an object/array returned from a host function.
+        public static func plainValue(
+            builtins: Builtins,
+            name: String = "",
+            length: Int = 0,
+            _ run: @escaping @Sendable ([Value], Builtins) async throws -> HostReturn
+        ) -> Value {
+            .object(PlainHostFnObj(proto: builtins.Function, plainFn: PlainHostFn(name: name, length: length, run)))
+        }
+
+        // parity: psychoscript/src/host-function.ts#durableFn [status=implemented hash=a7094672e63c]
         public static func durableFn(
             start: @escaping @Sendable ([Value], Call) async throws -> JSONValue,
             wait: @escaping @Sendable (JSONValue, DurableCall, Builtins) async throws -> Value,
@@ -4453,7 +4544,7 @@ extension CodemodeLanguage {
             DurableFn(start: start, wait: wait, cancel: cancel)
         }
 
-        // parity: psychoscript/src/host-function.ts#namespace [status=implemented hash=64d87709c204]
+        // parity: psychoscript/src/host-function.ts#namespace [status=implemented hash=9a40cc45ad66]
         public static func namespace(
             keys: @escaping @Sendable ([String]) throws -> [String],
             resolve: @escaping @Sendable ([String]) -> ResolvedTarget
@@ -4479,6 +4570,7 @@ extension CodemodeLanguage {
         case fn(Host.Fn)
         case durableFn(Host.DurableFn)
         case namespace(Host.Namespace)
+        case plainFn(PlainHostFn)
         case object([String: HostGlobalValue])
         case literal(JSONValue)
         case value(Value)
@@ -4536,7 +4628,7 @@ extension CodemodeLanguage {
 
         private struct State: Sendable {
             var runId: String
-            var nextId: Int = 1
+            var nextId: Int = 0
             var queued: [HostCall] = []
             var running: [Int: HostCall] = [:]
             var activeCalls: [HostCall] = []
@@ -4734,12 +4826,13 @@ extension CodemodeLanguage {
         native(builtins, NativeOptions(name: "get \(name)", call: { _, _, _, _ in .bool(read()) }))
     }
 
-    // parity: psychoscript/src/runtime/extensions.ts#hostGlobals [status=adapted hash=0af33be61f23]
+    // parity: psychoscript/src/runtime/extensions.ts#hostGlobals [status=adapted hash=3ad6ad593d21]
     public static func hostGlobals(
         builtins: Builtins,
         hostCalls: HostCalls,
         globals: [String: HostGlobalValue],
-        translate: Translate = Translate()
+        translate: Translate = Translate(),
+        adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)? = nil
     ) -> [(String, Value)] {
         func buildValue(name: String, item: HostGlobalValue) -> Value {
             switch item {
@@ -4762,7 +4855,9 @@ extension CodemodeLanguage {
                 }
                 return .object(obj)
             case .fn(let hostFn):
-                return .object(wrapHostFn(name: name, hostFn: hostFn, builtins: builtins, hostCalls: hostCalls, translate: translate))
+                return .object(wrapHostFn(name: name, hostFn: hostFn, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt))
+            case .plainFn(let plainFn):
+                return .object(wrapPlainHostFn(name: name, plainFn: plainFn, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt))
             case .durableFn(let durable):
                 return .object(wrapDurableFn(name: name, durable: durable, builtins: builtins, hostCalls: hostCalls))
             }
@@ -4772,55 +4867,442 @@ extension CodemodeLanguage {
         }
     }
 
+    /// Computes the program-visible `name` and `length` for a wrapped host function (v0.2.1):
+    /// a `Host.fn` keeps its source function's own `name` and `length` (falling back to the trailing
+    /// label segment when anonymous); a plain host function keeps its own `name` verbatim (even `""`).
+    internal static func hostFunctionDisplay(label: String, hostFn: Host.Fn) -> (name: String, length: Int) {
+        let fallback: String
+        if let dot = label.lastIndex(of: ".") {
+            fallback = String(label[label.index(after: dot)...])
+        } else {
+            fallback = label
+        }
+        let displayName: String
+        if hostFn.isPlainSource {
+            displayName = hostFn.sourceName ?? ""
+        } else if let own = hostFn.sourceName, !own.isEmpty {
+            displayName = own
+        } else {
+            displayName = fallback
+        }
+        let displayLength = max(0, hostFn.sourceLength ?? 0)
+        return (displayName, displayLength)
+    }
+
+    internal static func labelLeafName(_ label: String) -> String {
+        if let dot = label.lastIndex(of: ".") {
+            return String(label[label.index(after: dot)...])
+        }
+        return label
+    }
+
+    /// Wraps a plain host function as a `sync` host function that takes functions and runs `adapt` on its return value.
+    internal static func wrapPlainHostFn(
+        name: String,
+        plainFn: PlainHostFn,
+        builtins: Builtins,
+        hostCalls: HostCalls,
+        translate: Translate,
+        adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)?
+    ) -> Native {
+        let fn = Contract.Fn(
+            runReturn: { args, call, builtins in
+                let raw = try await plainFn.run(args, builtins)
+                return adapt?(raw, call) ?? raw
+            },
+            type: .sync,
+            idempotent: false,
+            snapshot: nil,
+            constructible: false,
+            takesFunctions: true,
+            sourceName: plainFn.name,
+            sourceLength: plainFn.length,
+            isPlainSource: true
+        )
+        return wrapHostFn(name: name, hostFn: fn, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt)
+    }
+
+    /// Walks a value returned by a host function, wrapping any embedded `PlainHostFnObj` using the run's `adapt` hook.
+    internal static func adaptReturnedHostValues(
+        _ value: Value,
+        label: String,
+        builtins: Builtins,
+        hostCalls: HostCalls,
+        translate: Translate,
+        adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)?,
+        seen: inout Set<ObjectIdentifier>
+    ) -> Value {
+        guard case .object(let obj) = value else { return value }
+        if let plainObj = obj as? PlainHostFnObj {
+            return .object(wrapPlainHostFn(
+                name: label,
+                plainFn: plainObj.plainFn,
+                builtins: builtins,
+                hostCalls: hostCalls,
+                translate: translate,
+                adapt: adapt
+            ))
+        }
+        guard seen.insert(ObjectIdentifier(obj)).inserted else { return value }
+        if let arr = obj as? Arr {
+            var changed = false
+            var items = arr.items
+            for idx in items.indices {
+                let adapted = adaptReturnedHostValues(
+                    items[idx],
+                    label: "\(label)[\(idx)]",
+                    builtins: builtins,
+                    hostCalls: hostCalls,
+                    translate: translate,
+                    adapt: adapt,
+                    seen: &seen
+                )
+                if case .object(let a) = adapted, case .object(let b) = items[idx], a !== b {
+                    items[idx] = adapted
+                    changed = true
+                }
+            }
+            if changed { arr.items = items }
+            return value
+        }
+        if type(of: obj) == Obj.self {
+            for key in keys(obj) {
+                let raw = peek(obj, .string(key))
+                let adapted = adaptReturnedHostValues(
+                    raw,
+                    label: "\(label).\(key.toHostString())",
+                    builtins: builtins,
+                    hostCalls: hostCalls,
+                    translate: translate,
+                    adapt: adapt,
+                    seen: &seen
+                )
+                if case .object(let a) = adapted, case .object(let b) = raw, a !== b {
+                    define(obj, key, adapted)
+                }
+            }
+        }
+        return value
+    }
+
+    /// Maps an error from host work or a host function into the program-facing error and optional unmaterialized raw error.
+    internal static func mapHostError(
+        _ error: any Error,
+        site: AstNode?,
+        builtins: Builtins
+    ) -> (thrown: any Error, raw: (any Error)?) {
+        if error is Contract.Interrupted || error is Interruption {
+            let intr = Interruption("interrupted")
+            return (intr, intr)
+        }
+        if let defect = error as? Contract.HostDefect {
+            let located = locate(defect.error, node: site)
+            return (located, located)
+        }
+        if let hf = error as? HostFailure {
+            return (hf, hf)
+        }
+        if let pt = error as? PendingThrow {
+            return (pt, pt)
+        }
+        if let t = error as? Throw {
+            return (t, nil)
+        }
+        if let he = error as? HostError {
+            let errType = ErrorType(rawValue: he.name) ?? .error
+            let errObj = createErrorValue(builtins.errorProto(errType), message: JSString(he.message))
+            return (Throw(.object(errObj)), nil)
+        }
+        let errObj = createErrorValue(builtins.errorProto(errorType(error)), message: JSString(errorMessage(error)))
+        return (Throw(.object(errObj)), nil)
+    }
+
+    /// Runs `HostWork` to settlement inside `eval`, registering its abort/stop handle so aborting or
+    /// ending the run stops it and awaits its cleanup before finishing.
+    internal static func settleHostWork(
+        _ work: Contract.HostWork,
+        label: String,
+        site: AstNode?,
+        builtins: Builtins,
+        hostCalls: HostCalls,
+        translate: Translate,
+        adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)?,
+        eval: Evaluator,
+        controller: AbortController,
+        asPending: Bool
+    ) async throws -> Value {
+        let context = eval.runContext
+        if asPending {
+            let promise = PromiseObj(proto: builtins.Promise)
+            promise.attachAbortController(controller)
+            let token = eval.registerHostWork(controller: controller)
+            let task = Task<(outcome: PromiseOutcome, rawError: (any Error)?), Never> {
+                defer { eval.finishHostWork(token) }
+                let settled = await work.run(context: context, signal: controller.signal)
+                switch settled {
+                case .ok(.value(let v)):
+                    var seen = Set<ObjectIdentifier>()
+                    let adapted = adaptReturnedHostValues(v, label: label, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt, seen: &seen)
+                    return (.fulfilled(adapted), nil)
+                case .ok(.promise(let p)):
+                    return (.fulfilled(.object(p)), nil)
+                case .ok(.work(let inner)):
+                    let innerSettled = await inner.run(context: context, signal: controller.signal)
+                    switch innerSettled {
+                    case .ok(.value(let v)):
+                        var seen = Set<ObjectIdentifier>()
+                        let adapted = adaptReturnedHostValues(v, label: label, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt, seen: &seen)
+                        return (.fulfilled(adapted), nil)
+                    case .ok(.promise(let p)):
+                        return (.fulfilled(.object(p)), nil)
+                    case .ok:
+                        return (.fulfilled(.undefined), nil)
+                    case .error(let err):
+                        let mapped = mapHostError(err, site: site, builtins: builtins)
+                        if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                        return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
+                    }
+                case .ok(.effect):
+                    let err = typeError("\(label) produced an Effect, which the program cannot hold.")
+                    return (.rejected(materialize(builtins, err, site: site)), err)
+                case .error(let err):
+                    let mapped = mapHostError(err, site: site, builtins: builtins)
+                    if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                    return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
+                }
+            }
+            promise.attachHostTask(task)
+            eval.trackPromise(promise)
+            eval.trackHostWorkTask(token, task: Task { _ = await task.value })
+            return .object(promise)
+        }
+
+        // Blocking call (sync or sync-thenable returning HostWork): waits for settlement.
+        let token = eval.registerHostWork(controller: controller)
+        let workTask = Task<Contract.Settled, Never> {
+            defer { eval.finishHostWork(token) }
+            return await work.run(context: context, signal: controller.signal)
+        }
+        eval.trackHostWorkTask(token, task: Task { _ = await workTask.value })
+        let settled = await workTask.value
+        switch settled {
+        case .ok(.value(let v)):
+            var seen = Set<ObjectIdentifier>()
+            return adaptReturnedHostValues(v, label: label, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt, seen: &seen)
+        case .ok(.promise(let p)):
+            Contract.promiseControllers.set(p) { controller }
+            p.attachAbortController(controller)
+            eval.trackPromise(p)
+            return .object(p)
+        case .ok(.work(let inner)):
+            return try await settleHostWork(
+                inner,
+                label: label,
+                site: site,
+                builtins: builtins,
+                hostCalls: hostCalls,
+                translate: translate,
+                adapt: adapt,
+                eval: eval,
+                controller: AbortController(),
+                asPending: true
+            )
+        case .ok(.effect):
+            throw typeError("\(label) produced an Effect, which the program cannot hold.")
+        case .error(let err):
+            throw mapHostError(err, site: site, builtins: builtins).thrown
+        }
+    }
+
     internal static func wrapHostFn(
         name: String,
         hostFn: Host.Fn,
         builtins: Builtins,
         hostCalls: HostCalls,
-        translate: Translate
+        translate: Translate,
+        adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)? = nil
     ) -> Native {
-        let invoke: NativeCall = { _, args, _, eval in
+        let invoke: NativeCall = { _, args, site, eval in
+            let effectiveAdapt = adapt ?? eval.adapt
             let preparedArgs = try await prepareHostArgs(args, name: name, translate: translate, takesFunctions: hostFn.takesFunctions, eval: eval)
             let key = hostCalls.nextKey()
-            let callInfo = Host.Call(key: key)
-            let record = HostCall(key: key, label: name, path: name, status: .running)
+            let controller = AbortController()
+            let suspendingFn: @Sendable () -> Bool = { [weak eval] in eval?.isSuspending ?? false }
+            let hostCallInfo = Host.Call(key: key, suspending: suspendingFn, signal: controller.signal)
+            let contractCallInfo = Contract.Call(key: key, suspending: suspendingFn, signal: controller.signal, context: eval.runContext)
+            let record = HostCall(
+                key: key,
+                label: name,
+                path: name,
+                status: .running,
+                blocking: hostFn.type != .async,
+                idempotent: hostFn.idempotent,
+                abortController: controller
+            )
             hostCalls.registerCall(record)
 
             switch hostFn.type {
             case .async:
                 let promise = PromiseObj(proto: builtins.Promise, hostCallKey: key)
-                let task = Task<PromiseOutcome, Never> {
-                    defer { hostCalls.removeCall(key: key) }
+                promise.attachAbortController(controller)
+                let abortToken = eval.registerAbortController(controller)
+                let task = Task<(outcome: PromiseOutcome, rawError: (any Error)?), Never> {
+                    defer {
+                        eval.unregisterAbortController(abortToken)
+                        hostCalls.removeCall(key: key)
+                    }
                     do {
-                        let value = try await hostFn.run(preparedArgs, callInfo, builtins)
-                        return .fulfilled(value)
+                        let ret: HostReturn
+                        if let runReturn = hostFn.runReturn {
+                            let raw = try await runReturn(preparedArgs, contractCallInfo, builtins)
+                            ret = effectiveAdapt?(raw, contractCallInfo) ?? raw
+                        } else {
+                            let val = try await hostFn.run(preparedArgs, hostCallInfo, builtins)
+                            ret = .value(val)
+                        }
+                        switch ret {
+                        case .value(let v):
+                            var seen = Set<ObjectIdentifier>()
+                            let adapted = adaptReturnedHostValues(v, label: name, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: effectiveAdapt, seen: &seen)
+                            return (.fulfilled(adapted), nil)
+                        case .promise(let p):
+                            Contract.promiseControllers.set(p) { controller }
+                            p.attachAbortController(controller)
+                            switch await p.awaitOutcome() {
+                            case .fulfilled(let v):
+                                var seen = Set<ObjectIdentifier>()
+                                let adapted = adaptReturnedHostValues(v, label: name, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: effectiveAdapt, seen: &seen)
+                                return (.fulfilled(adapted), nil)
+                            case .rejected(let r):
+                                return (.rejected(r), p.rawRejection)
+                            }
+                        case .work(let w):
+                            let hwToken = eval.registerHostWork(controller: controller)
+                            let workTask = Task<Contract.Settled, Never> {
+                                defer { eval.finishHostWork(hwToken) }
+                                return await w.run(context: eval.runContext, signal: controller.signal)
+                            }
+                            eval.trackHostWorkTask(hwToken, task: Task { _ = await workTask.value })
+                            switch await workTask.value {
+                            case .ok(.value(let v)):
+                                var seen = Set<ObjectIdentifier>()
+                                let adapted = adaptReturnedHostValues(v, label: name, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: effectiveAdapt, seen: &seen)
+                                return (.fulfilled(adapted), nil)
+                            case .ok(.promise(let p)):
+                                return (.fulfilled(.object(p)), nil)
+                            case .ok(.work(let inner)):
+                                let innerSettled = await inner.run(context: eval.runContext, signal: controller.signal)
+                                switch innerSettled {
+                                case .ok(.value(let v)):
+                                    var seen = Set<ObjectIdentifier>()
+                                    let adapted = adaptReturnedHostValues(v, label: name, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: effectiveAdapt, seen: &seen)
+                                    return (.fulfilled(adapted), nil)
+                                case .ok(.promise(let p)):
+                                    return (.fulfilled(.object(p)), nil)
+                                case .ok:
+                                    return (.fulfilled(.undefined), nil)
+                                case .error(let err):
+                                    let mapped = mapHostError(err, site: site, builtins: builtins)
+                                    if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                                    return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
+                                }
+                            case .ok(.effect):
+                                let err = typeError("\(name) produced an Effect, which the program cannot hold.")
+                                return (.rejected(materialize(builtins, err, site: site)), err)
+                            case .error(let err):
+                                let mapped = mapHostError(err, site: site, builtins: builtins)
+                                if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                                return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
+                            }
+                        case .effect:
+                            let err = typeError("\(name) produced an Effect, which the program cannot hold.")
+                            return (.rejected(materialize(builtins, err, site: site)), err)
+                        }
                     } catch {
-                        return .rejected(materialize(builtins, error))
+                        let mapped = mapHostError(error, site: site, builtins: builtins)
+                        if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                        return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
                     }
                 }
-                promise.attachTask(task)
+                promise.attachHostTask(task)
                 eval.trackPromise(promise)
                 return .object(promise)
-            case .sync:
-                defer { hostCalls.removeCall(key: key) }
-                return try await hostFn.run(preparedArgs, callInfo, builtins)
-            case .syncThenable:
-                defer { hostCalls.removeCall(key: key) }
-                let result = try await hostFn.run(preparedArgs, callInfo, builtins)
-                return promiseLike(builtins, value: result)
+            case .sync, .syncThenable:
+                let abortToken = eval.registerAbortController(controller)
+                var keepControllerAlive = false
+                defer {
+                    if !keepControllerAlive { eval.unregisterAbortController(abortToken) }
+                    hostCalls.removeCall(key: key)
+                }
+                let ret: HostReturn
+                do {
+                    if let runReturn = hostFn.runReturn {
+                        let raw = try await runReturn(preparedArgs, contractCallInfo, builtins)
+                        ret = effectiveAdapt?(raw, contractCallInfo) ?? raw
+                    } else {
+                        let val = try await hostFn.run(preparedArgs, hostCallInfo, builtins)
+                        ret = .value(val)
+                    }
+                } catch {
+                    throw mapHostError(error, site: site, builtins: builtins).thrown
+                }
+
+                let finalVal: Value
+                switch ret {
+                case .value(let v):
+                    if case .object(let p as PromiseObj) = v {
+                        keepControllerAlive = true
+                        Contract.promiseControllers.set(p) { controller }
+                        p.attachAbortController(controller)
+                        p.registerExternalHostWorkIfNeeded(in: eval.scheduler)
+                        eval.trackPromise(p)
+                        return .object(p)
+                    }
+                    var seen = Set<ObjectIdentifier>()
+                    finalVal = adaptReturnedHostValues(v, label: name, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: effectiveAdapt, seen: &seen)
+                case .promise(let p):
+                    keepControllerAlive = true
+                    Contract.promiseControllers.set(p) { controller }
+                    p.attachAbortController(controller)
+                    p.registerExternalHostWorkIfNeeded(in: eval.scheduler)
+                    eval.trackPromise(p)
+                    return .object(p)
+                case .work(let w):
+                    let settledVal = try await settleHostWork(
+                        w,
+                        label: name,
+                        site: site,
+                        builtins: builtins,
+                        hostCalls: hostCalls,
+                        translate: translate,
+                        adapt: effectiveAdapt,
+                        eval: eval,
+                        controller: controller,
+                        asPending: false
+                    )
+                    if case .object(let p as PromiseObj) = settledVal {
+                        keepControllerAlive = true
+                        return .object(p)
+                    }
+                    finalVal = settledVal
+                case .effect:
+                    throw typeError("\(name) produced an Effect, which the program cannot hold.")
+                }
+                return hostFn.type == .syncThenable ? promiseLike(builtins, value: finalVal) : finalVal
             }
         }
         let construct: NativeConstruct?
         if hostFn.constructible {
             construct = { args, _, eval in
-                try await invoke(.undefined, args, nil, eval)
+                try await invoke(.undefined, args, EvalFrames.current?.site, eval)
             }
         } else {
             construct = nil
         }
+        let display = hostFunctionDisplay(label: name, hostFn: hostFn)
         return Native(
             proto: builtins.Function,
-            options: NativeOptions(name: name, length: 0, call: invoke, construct: construct)
+            options: NativeOptions(name: display.name, length: display.length, call: invoke, construct: construct)
         )
     }
 
@@ -4832,25 +5314,111 @@ extension CodemodeLanguage {
     ) -> Native {
         Native(
             proto: builtins.Function,
-            options: NativeOptions(name: name, length: 0, call: { _, args, _, eval in
+            options: NativeOptions(name: labelLeafName(name), length: 0, call: { _, args, site, eval in
                 let key = hostCalls.nextKey()
-                let callInfo = Host.Call(key: key)
-                let durableCall = Host.DurableCall(key: key, args: args)
-                let record = HostCall(key: key, label: name, path: name, status: .running)
+                let waitController = AbortController()
+                let suspendingFn: @Sendable () -> Bool = { [weak eval] in eval?.isSuspending ?? false }
+                let startCallInfo = Host.Call(key: key, suspending: suspendingFn, signal: AbortSignal())
+                let startContractCall = Contract.Call(key: key, suspending: suspendingFn, signal: AbortSignal(), context: eval.runContext)
+                let durableCall = Host.DurableCall(key: key, args: args, suspending: suspendingFn, signal: waitController.signal)
+                let contractDurableCall = Contract.DurableCall(key: key, args: args, suspending: suspendingFn, signal: waitController.signal, context: eval.runContext)
+                let record = HostCall(
+                    key: key,
+                    label: name,
+                    path: name,
+                    status: .running,
+                    blocking: false,
+                    abortController: waitController
+                )
                 hostCalls.registerCall(record)
                 let promise = PromiseObj(proto: builtins.Promise, hostCallKey: key)
-                let task = Task<PromiseOutcome, Never> {
-                    defer { hostCalls.removeCall(key: key) }
+                promise.attachAbortController(waitController)
+                let abortToken = eval.registerAbortController(waitController)
+                let resumedData = eval.takeResumedDurableData(forKey: key)
+                let startToken = eval.registerDurableStart()
+                let task = Task<(outcome: PromiseOutcome, rawError: (any Error)?), Never> {
+                    defer {
+                        eval.unregisterAbortController(abortToken)
+                        hostCalls.removeCall(key: key)
+                    }
                     do {
-                        let startData = try await durable.start(args, callInfo)
-                        record.status = .started
-                        let value = try await durable.wait(startData, durableCall, builtins)
-                        return .fulfilled(value)
+                        let startData: JSONValue
+                        do {
+                            defer { eval.finishDurableStart(startToken) }
+                            if let existing = resumedData {
+                                startData = existing
+                            } else if let startWork = durable.startWork {
+                                let w = startWork(args, startContractCall)
+                                switch await w.run(context: eval.runContext, signal: nil) {
+                                case .ok(.value(let v)):
+                                    startData = (try? toJsonValue(v, dropFunctions: true)) ?? .null
+                                case .ok:
+                                    startData = .null
+                                case .error(let err):
+                                    throw err
+                                }
+                            } else {
+                                startData = try await durable.start(args, startCallInfo)
+                            }
+                            record.status = .started
+                            record.durableData = startData
+                            let cancelHook: @Sendable () async -> Void = { [weak eval] in
+                                guard let eval else { return }
+                                let cancelCtrl = AbortController()
+                                if let cancelWork = durable.cancelWork {
+                                    let cw = cancelWork(
+                                        startData,
+                                        Contract.DurableCall(key: key, args: args, suspending: { false }, signal: cancelCtrl.signal, context: eval.runContext)
+                                    )
+                                    _ = await cw.run(context: eval.runContext, signal: cancelCtrl.signal)
+                                } else {
+                                    try? await durable.cancel(
+                                        startData,
+                                        Host.DurableCall(key: key, args: args, suspending: { false }, signal: cancelCtrl.signal)
+                                    )
+                                }
+                            }
+                            _ = eval.registerStartedDurable(key: key, path: name, data: startData, cancel: cancelHook)
+                        }
+                        if waitController.signal.aborted {
+                            return (.rejected(.undefined), Interruption("interrupted"))
+                        }
+                        let value: Value
+                        if let waitWork = durable.waitWork {
+                            let w = waitWork(startData, contractDurableCall, builtins)
+                            let hwToken = eval.registerHostWork(controller: waitController)
+                            let wt = Task<Contract.Settled, Never> {
+                                defer { eval.finishHostWork(hwToken) }
+                                return await w.run(context: eval.runContext, signal: waitController.signal)
+                            }
+                            eval.trackHostWorkTask(hwToken, task: Task { _ = await wt.value })
+                            switch await wt.value {
+                            case .ok(.value(let v)): value = v
+                            case .ok(.promise(let p)): value = .object(p)
+                            case .ok: value = .undefined
+                            case .error(let err):
+                                if !waitController.signal.aborted { eval.unregisterStartedDurable(key: key) }
+                                throw err
+                            }
+                        } else {
+                            do {
+                                value = try await durable.wait(startData, durableCall, builtins)
+                            } catch {
+                                if !waitController.signal.aborted { eval.unregisterStartedDurable(key: key) }
+                                throw error
+                            }
+                        }
+                        eval.unregisterStartedDurable(key: key)
+                        var seen = Set<ObjectIdentifier>()
+                        let adapted = adaptReturnedHostValues(value, label: name, builtins: builtins, hostCalls: hostCalls, translate: eval.translate, adapt: eval.adapt, seen: &seen)
+                        return (.fulfilled(adapted), nil)
                     } catch {
-                        return .rejected(materialize(builtins, error))
+                        let mapped = mapHostError(error, site: site, builtins: builtins)
+                        if mapped.raw is Interruption { return (.rejected(.undefined), mapped.raw) }
+                        return (.rejected(materialize(builtins, mapped.thrown, site: site)), mapped.raw)
                     }
                 }
-                promise.attachTask(task)
+                promise.attachHostTask(task)
                 eval.trackPromise(promise)
                 return .object(promise)
             })
@@ -4960,14 +5528,21 @@ extension CodemodeLanguage {
 
     // parity: psychoscript/src/scheduler.ts#HostCall [status=implemented hash=edc8260ce92a]
     public final class HostCall: Sendable {
-        private let statusBox: Mutex<HostCallStatus>
+        private struct MutableState: Sendable {
+            var status: HostCallStatus
+            var durableData: JSONValue? = nil
+        }
+
+        private let stateBox: Mutex<MutableState>
         public let id: Int
         public let key: String
         public let label: String
         public let path: String?
         public let blocking: Bool
+        public let idempotent: Bool
         public let holdsFunctions: Bool
         public let resolving: Resolving?
+        public let abortController: AbortController?
 
         public init(
             id: Int = 0,
@@ -4976,22 +5551,31 @@ extension CodemodeLanguage {
             path: String? = nil,
             status: HostCallStatus = .queued,
             blocking: Bool = false,
+            idempotent: Bool = false,
             holdsFunctions: Bool = false,
-            resolving: Resolving? = nil
+            resolving: Resolving? = nil,
+            abortController: AbortController? = nil
         ) {
             self.id = id
             self.key = key
             self.label = label
             self.path = path
             self.blocking = blocking
+            self.idempotent = idempotent
             self.holdsFunctions = holdsFunctions
             self.resolving = resolving
-            self.statusBox = Mutex(status)
+            self.abortController = abortController
+            self.stateBox = Mutex(MutableState(status: status))
         }
 
         public var status: HostCallStatus {
-            get { statusBox.withLock { $0 } }
-            set { statusBox.withLock { $0 = newValue } }
+            get { stateBox.withLock { $0.status } }
+            set { stateBox.withLock { $0.status = newValue } }
+        }
+
+        public var durableData: JSONValue? {
+            get { stateBox.withLock { $0.durableData } }
+            set { stateBox.withLock { $0.durableData = newValue } }
         }
     }
 
@@ -9697,17 +10281,26 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/snapshot/codec.ts#HostBridge [status=implemented hash=3078509a13e8]
+    // parity: psychoscript/src/snapshot/codec.ts#HostBridge [status=implemented hash=251232287797]
     public struct HostBridge: Sendable {
         public let encode: @Sendable (String, Value) throws -> JSONValue
         public let decode: @Sendable (String, JSONValue) throws -> Value
+        /// Whether a host call's result is still pending: a Promise or `HostWork`.
+        public let isPending: @Sendable (HostReturn) -> Bool
 
         public init(
             encode: @escaping @Sendable (String, Value) throws -> JSONValue = { _, v in try toJsonValue(v, dropFunctions: true) ?? .null },
-            decode: @escaping @Sendable (String, JSONValue) throws -> Value = { _, j in try fromJson(createBuiltins(), j) }
+            decode: @escaping @Sendable (String, JSONValue) throws -> Value = { _, j in try fromJson(createBuiltins(), j) },
+            isPending: @escaping @Sendable (HostReturn) -> Bool = { ret in
+                switch ret {
+                case .promise, .work: return true
+                case .value, .effect: return false
+                }
+            }
         ) {
             self.encode = encode
             self.decode = decode
+            self.isPending = isPending
         }
     }
 
@@ -9722,14 +10315,21 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/snapshot/codec.ts#DecodeEnv [status=implemented hash=09396e15b307]
+    // parity: psychoscript/src/snapshot/codec.ts#DecodeEnv [status=implemented hash=a48af744cc84]
     public struct DecodeEnv: Sendable {
         public let builtins: Builtins
         public let bridge: HostBridge
+        /// Produces an Effect-free `Interruption`.
+        public let interruption: @Sendable () -> Interruption
 
-        public init(builtins: Builtins, bridge: HostBridge = HostBridge()) {
+        public init(
+            builtins: Builtins,
+            bridge: HostBridge = HostBridge(),
+            interruption: @escaping @Sendable () -> Interruption = { Interruption() }
+        ) {
             self.builtins = builtins
             self.bridge = bridge
+            self.interruption = interruption
         }
     }
 
@@ -9950,7 +10550,15 @@ extension CodemodeLanguage {
             budget: SnapshotBudgetInfo(activeMs: options.activeMs),
             metadata: options.metadata
         )
-        let snap = Snapshot(format: FORMAT, header: hdr, roots: [.null, .null, .null], records: [])
+        let durableRecords: [SnapshotRecord] = vm.interpreter.evaluator.startedDurableSnapshots().map { item in
+            [
+                "t": .string("DurableCall"),
+                "key": .string(item.key),
+                "path": .string(item.path),
+                "data": item.data,
+            ]
+        }
+        let snap = Snapshot(format: FORMAT, header: hdr, roots: [.null, .null, .null], records: durableRecords)
         return (snap, [])
     }
 
@@ -10108,6 +10716,24 @@ extension CodemodeLanguage {
     /// Real confined JavaScript-subset AST evaluator with bounded steps, call depth,
     /// wall-clock timeout, async/await, Promise concurrency, generators, and host bridges.
     public final class Evaluator: Sendable {
+        public struct StartedDurableInfo: Sendable {
+            public let key: String
+            public let path: String
+            public let data: JSONValue
+        }
+
+        private struct StartedDurableEntry: Sendable {
+            let key: String
+            let path: String
+            let data: JSONValue
+            let cancel: @Sendable () async -> Void
+        }
+
+        private struct HostWorkEntry: Sendable {
+            let controller: AbortController
+            var task: Task<Void, Never>? = nil
+        }
+
         private struct RuntimeState: Sendable {
             var steps: Int = 0
             var callDepth: Int = 0
@@ -10115,6 +10741,15 @@ extension CodemodeLanguage {
             var logs: [String] = []
             var warnings: [Diagnostic] = []
             var yieldBuffer: [Value]? = nil
+            var nextToken: Int = 1
+            var abortControllers: [Int: AbortController] = [:]
+            var hostWorks: [Int: HostWorkEntry] = [:]
+            var durableStarts: Set<Int> = []
+            var durableStartWaiters: [CheckedContinuation<Void, Never>] = []
+            var startedDurables: [Int: StartedDurableEntry] = [:]
+            var resumedDurables: [String: JSONValue] = [:]
+            var suspending: Bool = false
+            var aborted: Bool = false
         }
 
         public let builtins: Builtins
@@ -10122,13 +10757,16 @@ extension CodemodeLanguage {
         public let globalEnv: LexEnv
         public let modules: [String: String]
         public let translate: Translate
+        public let adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)?
+        public let runContext: (any Sendable)?
+        public let abortSignal: AbortSignal?
         public let maxSteps: Int
         public let maxCallDepth: Int
         public let deadlineMs: Double?
         public let timeoutMs: Int?
         /// The run's job loop: every program step runs on it, one at a time (see `CodemodeScheduler.swift`).
         public let scheduler = ProgramScheduler()
-        private let state = Mutex<RuntimeState>(RuntimeState())
+        private let state: Mutex<RuntimeState>
 
         public init(
             builtins: Builtins,
@@ -10137,17 +10775,156 @@ extension CodemodeLanguage {
             translate: Translate = Translate(),
             maxSteps: Int = Int.max,
             maxCallDepth: Int = MAX_CALL_DEPTH,
-            timeoutMs: Int? = nil
+            timeoutMs: Int? = nil,
+            adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)? = nil,
+            runContext: (any Sendable)? = nil,
+            abortSignal: AbortSignal? = nil,
+            resumedDurables: [String: JSONValue] = [:]
         ) {
             self.builtins = builtins
             self.hostCalls = hostCalls
             self.globalEnv = LexEnv(parent: nil, isFunctionScope: true)
             self.modules = modules
             self.translate = translate
+            self.adapt = adapt
+            self.runContext = runContext
+            self.abortSignal = abortSignal
             self.maxSteps = maxSteps
             self.maxCallDepth = maxCallDepth
             self.timeoutMs = timeoutMs
             self.deadlineMs = timeoutMs.map { CodemodeLanguage.currentEpochMs() + Double($0) }
+            self.state = Mutex(RuntimeState(resumedDurables: resumedDurables))
+        }
+
+        public var isSuspending: Bool {
+            state.withLock { $0.suspending }
+        }
+
+        public var isAborted: Bool {
+            state.withLock { $0.aborted } || (abortSignal?.aborted ?? false)
+        }
+
+        public func markSuspending() {
+            let controllers = state.withLock { s -> [AbortController] in
+                s.suspending = true
+                return Array(s.abortControllers.values) + s.hostWorks.values.map(\.controller)
+            }
+            for c in controllers { c.abort() }
+            scheduler.wakeUp()
+        }
+
+        public func markAborted() {
+            let controllers = state.withLock { s -> [AbortController] in
+                s.aborted = true
+                return Array(s.abortControllers.values) + s.hostWorks.values.map(\.controller)
+            }
+            for c in controllers { c.abort() }
+            scheduler.wakeUp()
+        }
+
+        public func registerAbortController(_ controller: AbortController) -> Int {
+            let alreadyStopped = state.withLock { s -> (Bool, Int) in
+                let token = s.nextToken
+                s.nextToken += 1
+                s.abortControllers[token] = controller
+                return (s.aborted || s.suspending, token)
+            }
+            if alreadyStopped.0 { controller.abort() }
+            return alreadyStopped.1
+        }
+
+        public func unregisterAbortController(_ token: Int) {
+            _ = state.withLock { $0.abortControllers.removeValue(forKey: token) }
+        }
+
+        public func registerHostWork(controller: AbortController) -> Int {
+            let (alreadyStopped, token) = state.withLock { s -> (Bool, Int) in
+                let token = s.nextToken
+                s.nextToken += 1
+                s.hostWorks[token] = HostWorkEntry(controller: controller)
+                return (s.aborted || s.suspending, token)
+            }
+            if alreadyStopped { controller.abort() }
+            return token
+        }
+
+        public func trackHostWorkTask(_ token: Int, task: Task<Void, Never>) {
+            state.withLock { s in
+                s.hostWorks[token]?.task = task
+            }
+        }
+
+        public func finishHostWork(_ token: Int) {
+            _ = state.withLock { $0.hostWorks.removeValue(forKey: token) }
+        }
+
+        public func registerDurableStart() -> Int {
+            state.withLock { s in
+                let token = s.nextToken
+                s.nextToken += 1
+                s.durableStarts.insert(token)
+                return token
+            }
+        }
+
+        public func finishDurableStart(_ token: Int) {
+            let waiters = state.withLock { s -> [CheckedContinuation<Void, Never>] in
+                s.durableStarts.remove(token)
+                guard s.durableStarts.isEmpty else { return [] }
+                let list = s.durableStartWaiters
+                s.durableStartWaiters.removeAll()
+                return list
+            }
+            for w in waiters { w.resume() }
+        }
+
+        private func awaitDurableStarts() async {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                let ready = state.withLock { s -> Bool in
+                    if s.durableStarts.isEmpty { return true }
+                    s.durableStartWaiters.append(cont)
+                    return false
+                }
+                if ready { cont.resume() }
+            }
+        }
+
+        public func registerStartedDurable(
+            key: String,
+            path: String,
+            data: JSONValue,
+            cancel: @escaping @Sendable () async -> Void
+        ) -> Int {
+            state.withLock { s in
+                let token = s.nextToken
+                s.nextToken += 1
+                s.startedDurables[token] = StartedDurableEntry(key: key, path: path, data: data, cancel: cancel)
+                return token
+            }
+        }
+
+        public func unregisterStartedDurable(_ token: Int) {
+            _ = state.withLock { $0.startedDurables.removeValue(forKey: token) }
+        }
+
+        public func unregisterStartedDurable(key: String) {
+            state.withLock { s in
+                for (token, entry) in s.startedDurables where entry.key == key {
+                    s.startedDurables.removeValue(forKey: token)
+                }
+            }
+        }
+
+        public func startedDurableSnapshots() -> [StartedDurableInfo] {
+            state.withLock { s in
+                s.startedDurables.keys.sorted().compactMap { token in
+                    s.startedDurables[token].map { StartedDurableInfo(key: $0.key, path: $0.path, data: $0.data) }
+                }
+            }
+        }
+
+        public func takeResumedDurableData(forKey key: String) -> JSONValue? {
+            state.withLock { $0.resumedDurables.removeValue(forKey: key) }
         }
 
         public func appendLog(_ line: String) {
@@ -10179,16 +10956,62 @@ extension CodemodeLanguage {
         }
 
         public func cancelPendingWork() -> Int {
-            let tracked = state.withLock { s -> [PromiseObj] in
+            let (tracked, controllers) = state.withLock { s -> ([PromiseObj], [AbortController]) in
                 let list = s.pendingPromises
                 s.pendingPromises.removeAll()
-                return list
+                let ctrls = Array(s.abortControllers.values) + s.hostWorks.values.map(\.controller)
+                s.abortControllers.removeAll()
+                return (list, ctrls)
             }
+            for c in controllers { c.abort() }
             var interruptedCount = 0
             for p in tracked {
                 if case .pending = p.status {
                     p.cancelTask()
                     interruptedCount += 1
+                }
+            }
+            return interruptedCount
+        }
+
+        /// Stops all pending host work: aborts every active call's `signal`, cancels tracked promises,
+        /// awaits `HostWork` cleanup tasks (plain Promises that ignore their signal are NOT waited for),
+        /// and cancels any `.started` durable calls unless `suspending` is true.
+        @discardableResult
+        public func cancelPendingWorkAsync(suspending: Bool = false) async -> Int {
+            var interruptedCount = 0
+            while true {
+                let (tracked, controllers, hostWorkTasks) = state.withLock { s -> ([PromiseObj], [AbortController], [Task<Void, Never>]) in
+                    let list = s.pendingPromises
+                    s.pendingPromises.removeAll()
+                    let ctrls = Array(s.abortControllers.values) + s.hostWorks.values.map(\.controller)
+                    s.abortControllers.removeAll()
+                    let hwTasks = s.hostWorks.values.compactMap(\.task)
+                    s.hostWorks.removeAll()
+                    return (list, ctrls, hwTasks)
+                }
+                for c in controllers { c.abort() }
+                for p in tracked {
+                    if case .pending = p.status {
+                        p.cancelTask()
+                        interruptedCount += 1
+                    }
+                }
+                for t in hostWorkTasks {
+                    await t.value
+                }
+                let hasMore = state.withLock { !$0.hostWorks.isEmpty }
+                if !hasMore { break }
+            }
+            if !suspending && !state.withLock({ $0.suspending }) {
+                await awaitDurableStarts()
+                let durableCancels = state.withLock { s -> [@Sendable () async -> Void] in
+                    let cancels = s.startedDurables.keys.sorted().compactMap { s.startedDurables[$0]?.cancel }
+                    s.startedDurables.removeAll()
+                    return cancels
+                }
+                for cancel in durableCancels {
+                    await cancel()
                 }
             }
             return interruptedCount
@@ -10210,10 +11033,18 @@ extension CodemodeLanguage {
             state.withLock { $0.callDepth -= 1 }
         }
 
-        public func checkLimits(at loc: SourceLocation? = nil) throws {
-            if Task.isCancelled {
+        public func checkAborted() throws {
+            let (susp, abr) = state.withLock { ($0.suspending, $0.aborted) }
+            if susp {
+                throw Interruption("suspended")
+            }
+            if abr || abortSignal?.aborted == true || Task.isCancelled {
                 throw Interruption("cancelled")
             }
+        }
+
+        public func checkLimits(at loc: SourceLocation? = nil) throws {
+            try checkAborted()
             let currentSteps = state.withLock { s -> Int in
                 s.steps += 1
                 return s.steps
@@ -10258,7 +11089,8 @@ extension CodemodeLanguage {
                 builtins: builtins,
                 hostCalls: hostCalls,
                 globals: hostGlobalsMap,
-                translate: translate
+                translate: translate,
+                adapt: adapt
             )
             for (name, val) in hostList {
                 globalEnv.declare(name, value: val, isConst: true)
@@ -10546,6 +11378,8 @@ extension CodemodeLanguage {
                             for s in handler.body {
                                 if let v = try await evalStatement(s, env: catchEnv, thisValue: thisValue) { last = v }
                             }
+                        } catch let intr as Interruption {
+                            throw intr
                         } catch {
                             caught = error
                         }
@@ -11199,10 +12033,10 @@ extension CodemodeLanguage {
                 switch target {
                 case .failure(let hf):
                     // Return rejected promise for missing async tool
-                    let p = PromiseObj(proto: builtins.Promise, status: .rejected(materialize(builtins, hf)))
+                    let p = PromiseObj(proto: builtins.Promise, status: .rejected(materialize(builtins, hf)), rawRejection: hf)
                     return .object(p)
                 case .fn(let hostFn):
-                    let wrapped = wrapHostFn(name: label, hostFn: hostFn, builtins: builtins, hostCalls: hostCalls, translate: translate)
+                    let wrapped = wrapHostFn(name: label, hostFn: hostFn, builtins: builtins, hostCalls: hostCalls, translate: translate, adapt: adapt)
                     return try await wrapped.callFn(thisValue, args, site, self)
                 case .durable(let durable):
                     let wrapped = wrapDurableFn(name: label, durable: durable, builtins: builtins, hostCalls: hostCalls)
@@ -11939,7 +12773,11 @@ extension CodemodeLanguage {
             translate: Translate = Translate(),
             maxSteps: Int = Int.max,
             maxCallDepth: Int = MAX_CALL_DEPTH,
-            timeoutMs: Int? = nil
+            timeoutMs: Int? = nil,
+            adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)? = nil,
+            runContext: (any Sendable)? = nil,
+            abortSignal: AbortSignal? = nil,
+            resumedDurables: [String: JSONValue] = [:]
         ) {
             self.builtins = builtins
             self.hostCalls = hostCalls
@@ -11951,7 +12789,11 @@ extension CodemodeLanguage {
                 translate: translate,
                 maxSteps: maxSteps,
                 maxCallDepth: maxCallDepth,
-                timeoutMs: timeoutMs
+                timeoutMs: timeoutMs,
+                adapt: adapt,
+                runContext: runContext,
+                abortSignal: abortSignal,
+                resumedDurables: resumedDurables
             )
             self.prelude = Prelude()
             self.intrinsics = IntrinsicNames(
@@ -12049,6 +12891,9 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime/driver.ts#SUSPENDED [status=implemented hash=caf2ce43eeb3]
     public static let SUSPENDED = RuntimeSymbol("psychoscript.suspended")
 
+    // parity: psychoscript/src/runtime/driver.ts#CANCELLED [status=implemented hash=e0ef42f80bc4]
+    public static let CANCELLED = RuntimeSymbol("psychoscript.cancelled")
+
     // parity: psychoscript/src/runtime/driver.ts#parking [status=implemented hash=bf9374c02386]
     /// For tests: `onPark` is called each time a run has nothing to do but wait on host calls in flight.
     public enum Parking {
@@ -12059,33 +12904,39 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/driver.ts#Driver [status=adapted hash=630aab946fed]
+    // parity: psychoscript/src/runtime/driver.ts#Driver [status=adapted hash=0731a7a91123]
     public final class Driver: Sendable {
         public enum RunOutcome: Sendable {
             case completed(Completion)
             case suspended
+            case cancelled
         }
 
         private struct State: Sendable {
             var suspending: Bool = false
+            var cancelled: Bool = false
+            var interrupted: Bool = false
             var stopping: Bool = false
             var detachedIds: Set<Int> = []
         }
 
         public let vm: Vm
+        public let context: (any Sendable)?
         private let state = Mutex(State())
 
-        public init(vm: Vm) {
+        public init(vm: Vm, context: (any Sendable)? = nil) {
             self.vm = vm
+            self.context = context
         }
 
-        /// Runs the VM loop until completion or suspension (`detach()`).
-        // parity: psychoscript/src/runtime/driver.ts#Driver.run [status=implemented hash=6400a0537222]
-        public func run() async -> RunOutcome {
+        /// Runs the VM loop until completion, suspension (`detach()`), or cancellation (`cancel()`).
+        // parity: psychoscript/src/runtime/driver.ts#Driver.run [status=implemented hash=9f94c166f801]
+        public func run() async throws -> RunOutcome {
             while true {
-                if state.withLock({ $0.suspending }) {
-                    return .suspended
-                }
+                let flags = state.withLock { ($0.interrupted, $0.suspending, $0.cancelled) }
+                if flags.0 { throw Contract.Interrupted() }
+                if flags.1 { return .suspended }
+                if flags.2 { return .cancelled }
                 let stop = vm.run()
                 switch stop {
                 case .slice:
@@ -12095,24 +12946,30 @@ extension CodemodeLanguage {
                     if vm.hostCalls.handOver().isEmpty {
                         Parking.onPark?()
                     }
-                    if state.withLock({ $0.suspending }) {
-                        return .suspended
-                    }
+                    let afterFlags = state.withLock { ($0.interrupted, $0.suspending, $0.cancelled) }
+                    if afterFlags.0 { throw Contract.Interrupted() }
+                    if afterFlags.1 { return .suspended }
+                    if afterFlags.2 { return .cancelled }
                     return .completed(.error(PendingThrow(
                         type: .error,
                         message: "The program is waiting on a promise that can never settle: nothing else is running, so nothing can resolve it. There are no timers or sleep, so don't wait or poll inside a program."
                     )))
                 case .done(let completion):
+                    if case .error(let err) = completion, err is Interruption || err is Contract.Interrupted {
+                        throw Contract.Interrupted()
+                    }
                     return .completed(completion)
                 }
             }
         }
 
         /// Lists running host calls that prevent suspending the execution.
+        /// Idempotent async calls and durable calls in `.started` do not block suspend.
         // parity: psychoscript/src/runtime/driver.ts#Driver.blocking [status=implemented hash=fec5cdc22d8d]
         public func blocking() -> [(key: String, path: String)] {
             vm.calls().compactMap { call in
-                guard call.holdsFunctions || (call.status != .queued && call.status != .started) else { return nil }
+                let blocks = call.holdsFunctions || (call.status != .queued && call.status != .started && !call.idempotent)
+                guard blocks else { return nil }
                 return (key: call.key, path: call.path ?? call.label)
             }
         }
@@ -12126,25 +12983,35 @@ extension CodemodeLanguage {
         }
 
         /// Marks the driver as suspending and detaches currently tracked calls.
-        // parity: psychoscript/src/runtime/driver.ts#Driver.detach [status=implemented hash=e8d0b2fc9c31]
+        // parity: psychoscript/src/runtime/driver.ts#Driver.detach [status=implemented hash=44403e2ab4b8]
         public func detach() {
             let activeIds = vm.calls().map(\.id)
             state.withLock { s in
                 s.suspending = true
                 for id in activeIds { s.detachedIds.insert(id) }
             }
+            vm.interpreter.evaluator.markSuspending()
         }
 
-        /// Interrupts all pending non-detached work owned by this driver.
-        // parity: psychoscript/src/runtime/driver.ts#Driver.interrupt [status=implemented hash=06ebdd1b0d8d]
+        /// Stops the run: `run()` returns `.cancelled` at its next step.
+        // parity: psychoscript/src/runtime/driver.ts#Driver.cancel [status=implemented hash=eba8618ab70e]
+        public func cancel() {
+            state.withLock { s in
+                s.cancelled = true
+            }
+            vm.interpreter.evaluator.markAborted()
+        }
+
+        /// Stops host work still running, aborting each call and waiting for `HostWork` cleanup;
+        /// a durable call's work is cancelled unless the run was suspended.
+        // parity: psychoscript/src/runtime/driver.ts#Driver.interrupt [status=implemented hash=9ab93d7ea60f]
         @discardableResult
-        public func interrupt() -> Int {
+        public func interrupt() async -> Int {
             let wasSuspending = state.withLock { s -> Bool in
                 s.stopping = true
                 return s.suspending
             }
-            if wasSuspending { return 0 }
-            return vm.interpreter.evaluator.cancelPendingWork()
+            return await vm.interpreter.evaluator.cancelPendingWorkAsync(suspending: wasSuspending)
         }
 
         /// Resumes queued host calls after restoring from a suspended snapshot.
@@ -12158,7 +13025,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#SuspendError [status=implemented hash=ba85b002a90b]
+    // parity: psychoscript/src/runtime/execute.ts#SuspendError [status=implemented hash=e7ca1003f7a9]
     public final class SuspendError: Error, Sendable, CustomStringConvertible {
         public struct RunningCall: Equatable, Hashable, Sendable, Codable {
             public let key: String
@@ -12170,6 +13037,8 @@ extension CodemodeLanguage {
             }
         }
 
+        public let _tag: String = "SuspendError"
+        public let name: String = "SuspendError"
         public let message: String
         public let running: [RunningCall]
 
@@ -12179,6 +13048,100 @@ extension CodemodeLanguage {
         }
 
         public var description: String { message }
+    }
+
+    /// How one run is started: `signal` interrupts it (throwing `Contract.Interrupted`); `context` goes to host calls.
+    // parity: psychoscript/src/runtime/execute.ts#RunOptions [status=implemented hash=2667305dca09]
+    public struct ExecuteRunOptions: Sendable {
+        public let signal: AbortSignal?
+        public let context: (any Sendable)?
+
+        public init(signal: AbortSignal? = nil, context: (any Sendable)? = nil) {
+            self.signal = signal
+            self.context = context
+        }
+    }
+
+    /// Validates `maxBytes` for `program.suspend`, throwing a `RangeError` for negative values.
+    // parity: psychoscript/src/runtime/execute.ts#checkMaxBytes [status=implemented hash=8995f729c7e8]
+    public static func checkMaxBytes(_ maxBytes: Int?) throws {
+        if let maxBytes, maxBytes < 0 {
+            throw rangeError("maxBytes must be a safe integer greater than or equal to 0.")
+        }
+    }
+
+    /// A managed single-use program run produced by `makeProgram`: enforces run-once semantics and
+    /// coordinates `suspend` waiting for `run` to start.
+    public final class ManagedProgram: Sendable {
+        private struct State: Sendable {
+            var claimed: Bool = false
+            var started: Swift.Result<Running, any Error>? = nil
+            var startWaiters: [CheckedContinuation<Running, any Error>] = []
+        }
+
+        private let startFn: @Sendable () throws -> Running
+        private let state = Mutex(State())
+
+        public init(start: @escaping @Sendable () throws -> Running) {
+            self.startFn = start
+        }
+
+        public func run(_ options: ExecuteRunOptions? = nil) async throws -> Outcome {
+            let alreadyClaimed = state.withLock { s -> Bool in
+                if s.claimed { return true }
+                s.claimed = true
+                return false
+            }
+            if alreadyClaimed {
+                throw HostError("A program runs once; make another with runtime.program or runtime.resume.")
+            }
+            let running: Running
+            do {
+                running = try startFn()
+            } catch {
+                let waiters = state.withLock { s -> [CheckedContinuation<Running, any Error>] in
+                    s.started = .failure(SuspendError(message: "The program didn't start."))
+                    let list = s.startWaiters
+                    s.startWaiters.removeAll()
+                    return list
+                }
+                for w in waiters {
+                    w.resume(throwing: SuspendError(message: "The program didn't start."))
+                }
+                throw error
+            }
+            let waiters = state.withLock { s -> [CheckedContinuation<Running, any Error>] in
+                s.started = .success(running)
+                let list = s.startWaiters
+                s.startWaiters.removeAll()
+                return list
+            }
+            for w in waiters {
+                w.resume(returning: running)
+            }
+            return try await running.run(options)
+        }
+
+        public func suspend(_ maxBytes: Int? = nil) async throws -> Outcome {
+            try checkMaxBytes(maxBytes)
+            let running: Running = try await withCheckedThrowingContinuation { cont in
+                let resolved = state.withLock { s -> Swift.Result<Running, any Error>? in
+                    if let started = s.started { return started }
+                    s.startWaiters.append(cont)
+                    return nil
+                }
+                if let resolved {
+                    cont.resume(with: resolved)
+                }
+            }
+            return try await running.suspend(maxBytes: maxBytes)
+        }
+    }
+
+    /// A program's one run: `start` makes it when `run()` is called, and `suspend` waits for it.
+    // parity: psychoscript/src/runtime/execute.ts#makeProgram [status=implemented hash=a84e85eb6c9a]
+    public static func makeProgram(_ start: @escaping @Sendable () throws -> Running) -> ManagedProgram {
+        ManagedProgram(start: start)
     }
 
     // parity: psychoscript/src/runtime/execute.ts#Result [status=implemented hash=f234ed8b0673]
@@ -12236,23 +13199,27 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#Setup [status=implemented hash=78d972d49546]
+    // parity: psychoscript/src/runtime/execute.ts#Setup [status=implemented hash=f34076232dc2]
     public struct Setup: Sendable {
         public let limits: ExecuteLimits
         public let translate: Translate
         public let globals: (@Sendable (Run) -> [String: HostGlobalValue])?
         public let modules: [String: String]
+        /// Turns what a plain host function returned into a value, a Promise, or `HostWork` (used by `EffectRuntime`).
+        public let adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)?
 
         public init(
             limits: ExecuteLimits = ExecuteLimits(),
             translate: Translate = Translate(),
             globals: (@Sendable (Run) -> [String: HostGlobalValue])? = nil,
-            modules: [String: String] = [:]
+            modules: [String: String] = [:],
+            adapt: (@Sendable (HostReturn, Contract.Call) -> HostReturn)? = nil
         ) {
             self.limits = limits
             self.translate = translate
             self.globals = globals
             self.modules = modules
+            self.adapt = adapt
         }
     }
 
@@ -12261,7 +13228,7 @@ extension CodemodeLanguage {
         case error(Diagnostic)
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#parseProgram [status=implemented hash=e8c658ebab5f]
+    // parity: psychoscript/src/runtime/execute.ts#parseProgram [status=implemented hash=d7a11593dc01]
     public static func parseProgram(_ code: String) -> ParseProgramResult {
         do {
             var parser = try Parser(code)
@@ -12274,7 +13241,7 @@ extension CodemodeLanguage {
         }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#finishExecution [status=implemented hash=aa72945246ca]
+    // parity: psychoscript/src/runtime/execute.ts#finishExecution [status=implemented hash=8f7803f97142]
     public static func finishExecution(_ outcome: Outcome) -> Result {
         switch outcome {
         case .result(let r): return r
@@ -12295,75 +13262,154 @@ extension CodemodeLanguage {
         roundTripBox.withLock { $0 = enabled }
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#Running [status=adapted hash=c3d5edd140dd]
+    // parity: psychoscript/src/runtime/execute.ts#Running [status=adapted hash=d303f4b560eb]
     public final class Running: Sendable {
+        private struct LifecycleState: Sendable {
+            var vm: Vm? = nil
+            var run: Run? = nil
+            var driver: Driver? = nil
+            var startedAtMs: Double = 0
+            var started: Bool = false
+            var finished: Bool = false
+            var suspended: Suspended? = nil
+            var doneOutcome: Swift.Result<Outcome, any Error>? = nil
+            var startedWaiters: [CheckedContinuation<Void, Never>] = []
+            var doneWaiters: [CheckedContinuation<Outcome, any Error>] = []
+        }
+
         private let setup: Setup
         private let code: String
         private let bindings: [String: Json]?
         private let runId: String
+        private let initialMetadata: Json
         private let activeBefore: Int
-        private let vmBox = Mutex<Vm?>(nil)
-        private let runBox = Mutex<Run?>(nil)
+        private let resumedDurables: [String: JSONValue]
+        private let lifecycle = Mutex(LifecycleState())
 
         public init(
             setup: Setup,
             code: String,
             bindings: [String: Json]? = nil,
             runId: String = OpenCodeUtil.uuid(),
-            activeBefore: Int = 0
+            activeBefore: Int = 0,
+            initialMetadata: Json = .null,
+            resumedDurables: [String: JSONValue] = [:]
         ) {
             self.setup = setup
             self.code = code
             self.bindings = bindings
             self.runId = runId
             self.activeBefore = activeBefore
+            self.initialMetadata = initialMetadata
+            self.resumedDurables = resumedDurables
         }
 
-        // parity: psychoscript/src/runtime/execute.ts#Running.run [status=implemented hash=a9edcffd3eac]
-        public func run() async -> Outcome {
+        private func markStarted() {
+            let waiters = lifecycle.withLock { s -> [CheckedContinuation<Void, Never>] in
+                if s.started { return [] }
+                s.started = true
+                let list = s.startedWaiters
+                s.startedWaiters.removeAll()
+                return list
+            }
+            for w in waiters { w.resume() }
+        }
+
+        private func finishLifecycle(_ result: Swift.Result<Outcome, any Error>) {
+            let (startWaiters, doneWaiters) = lifecycle.withLock { s -> ([CheckedContinuation<Void, Never>], [CheckedContinuation<Outcome, any Error>]) in
+                s.finished = true
+                s.started = true
+                s.doneOutcome = result
+                let sw = s.startedWaiters
+                s.startedWaiters.removeAll()
+                let dw = s.doneWaiters
+                s.doneWaiters.removeAll()
+                return (sw, dw)
+            }
+            for w in startWaiters { w.resume() }
+            for w in doneWaiters { w.resume(with: result) }
+        }
+
+        /// Runs the program until it ends or is suspended; throws `Contract.Interrupted` when `options.signal` aborts
+        /// or a host call is interrupted.
+        // parity: psychoscript/src/runtime/execute.ts#Running.run [status=implemented hash=9f97b5f9e444]
+        public func run(_ options: ExecuteRunOptions? = nil) async throws -> Outcome {
+            if let sig = options?.signal, sig.aborted {
+                let err = Contract.Interrupted()
+                finishLifecycle(.failure(err))
+                throw err
+            }
             if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return .result(.failure(
+                let out: Outcome = .result(.failure(
                     error: Diagnostic(kind: "ParseError", message: "Code cannot be empty."),
                     logs: nil,
                     truncated: nil,
-                    metadata: .null
+                    metadata: initialMetadata
                 ))
+                finishLifecycle(.success(out))
+                return out
             }
             let parsed = parseProgram(code)
             let program: ProgramAST
             let source: Source
             switch parsed {
             case .error(let diag):
-                return .result(.failure(error: diag, logs: nil, truncated: nil, metadata: .null))
+                let out: Outcome = .result(.failure(error: diag, logs: nil, truncated: nil, metadata: initialMetadata))
+                finishLifecycle(.success(out))
+                return out
             case .ok(let p, let s):
                 program = p
                 source = s
             }
 
-            let runObj = Run(id: runId, metadata: .null)
+            let runObj = Run(id: runId, metadata: initialMetadata)
             let hostCalls = HostCalls(runId: runId)
             let effectiveTimeout: Int? = setup.limits.timeoutMs.map { max(1, $0 - activeBefore) }
+            let runSignal = options?.signal
             let interp = Interpreter(
                 builtins: createBuiltins(),
                 hostCalls: hostCalls,
                 modules: setup.modules,
                 translate: setup.translate,
                 maxSteps: setup.limits.maxSteps ?? Int.max,
-                timeoutMs: effectiveTimeout
+                timeoutMs: effectiveTimeout,
+                adapt: setup.adapt,
+                runContext: options?.context,
+                abortSignal: runSignal,
+                resumedDurables: resumedDurables
             )
             let vm = Vm(interpreter: interp)
             vm.registerSource(source)
-            vmBox.withLock { $0 = vm }
-            runBox.withLock { $0 = runObj }
+            let driver = Driver(vm: vm, context: options?.context)
+            lifecycle.withLock { s in
+                s.vm = vm
+                s.run = runObj
+                s.driver = driver
+                s.startedAtMs = CodemodeLanguage.currentEpochMs()
+            }
 
-            let result: Result
+            let abortListenerId = runSignal?.onAbort {
+                driver.cancel()
+            } ?? 0
+            defer {
+                if abortListenerId != 0 { runSignal?.removeEventListener(abortListenerId) }
+            }
+
+            if runSignal?.aborted == true {
+                _ = await driver.interrupt()
+                let err = Contract.Interrupted()
+                finishLifecycle(.failure(err))
+                throw err
+            }
+
             let scheduler = interp.evaluator.scheduler
             do {
                 let jsonVal: JSONValue = try await ProgramScheduler.$current.withValue(scheduler) {
                     let hostMap = setup.globals?(runObj) ?? [:]
                     try interp.evaluator.installBuiltins(hostGlobalsMap: hostMap, bindings: bindings)
                     interp.armProtector()
-                    let rawValue = try await runWithOptionalTimeout(timeoutMs: effectiveTimeout) {
+                    markStarted()
+                    let rawValue = try await runWithOptionalTimeout(timeoutMs: effectiveTimeout, abortSignal: runSignal) {
                         try await interp.evaluator.runProgram(program)
                     }
                     // A program getter's value crosses as data: it is read ahead in program code (see `withReads`).
@@ -12375,46 +13421,106 @@ extension CodemodeLanguage {
                     }
                     return copied
                 }
-                // Host work the program left running is interrupted, not awaited, and not reported (upstream).
-                _ = interp.evaluator.cancelPendingWork()
+                if let saved = lifecycle.withLock({ $0.suspended }) {
+                    _ = await driver.interrupt()
+                    let out: Outcome = .suspended(saved)
+                    finishLifecycle(.success(out))
+                    return out
+                }
+                if runSignal?.aborted == true {
+                    _ = await driver.interrupt()
+                    let err = Contract.Interrupted()
+                    finishLifecycle(.failure(err))
+                    throw err
+                }
+                // Host work the program left running is interrupted (waiting for HostWork/durable cancel cleanup).
+                _ = await driver.interrupt()
                 let warnings = scheduler.diagnostics() + vm.diagnostics()
                 let logs = interp.logs
-                result = .success(
+                let rawResult: Result = .success(
                     value: jsonVal,
                     warnings: warnings.isEmpty ? nil : warnings,
                     logs: logs.isEmpty ? nil : logs,
                     truncated: nil,
                     metadata: runObj.metadata
                 )
+                let finalResult = setup.limits.maxOutputBytes.map { boundOutput(rawResult, maxOutputBytes: $0) } ?? rawResult
+                let out: Outcome = .result(finalResult)
+                finishLifecycle(.success(out))
+                return out
             } catch {
-                _ = interp.evaluator.cancelPendingWork()
-                let diag: Diagnostic
-                if let intr = error as? Interruption, intr.reason == "timeout", let limit = setup.limits.timeoutMs {
-                    diag = Diagnostic(kind: "TimeoutExceeded", message: "Execution timed out after \(limit)ms.")
-                } else {
-                    diag = normalizeError(error)
+                if let saved = lifecycle.withLock({ $0.suspended }) {
+                    _ = await driver.interrupt()
+                    let out: Outcome = .suspended(saved)
+                    finishLifecycle(.success(out))
+                    return out
                 }
+                _ = await driver.interrupt()
+                if let intr = error as? Interruption {
+                    if intr.reason == "suspended", let saved = lifecycle.withLock({ $0.suspended }) {
+                        let out: Outcome = .suspended(saved)
+                        finishLifecycle(.success(out))
+                        return out
+                    }
+                    if intr.reason == "timeout", let limit = setup.limits.timeoutMs {
+                        let diag = Diagnostic(kind: "TimeoutExceeded", message: "Execution timed out after \(limit)ms.")
+                        let logs = interp.logs
+                        let rawResult: Result = .failure(
+                            error: diag,
+                            logs: logs.isEmpty ? nil : logs,
+                            truncated: nil,
+                            metadata: runObj.metadata
+                        )
+                        let finalResult = setup.limits.maxOutputBytes.map { boundOutput(rawResult, maxOutputBytes: $0) } ?? rawResult
+                        let out: Outcome = .result(finalResult)
+                        finishLifecycle(.success(out))
+                        return out
+                    }
+                    let interrupted = Contract.Interrupted()
+                    finishLifecycle(.failure(interrupted))
+                    throw interrupted
+                }
+                if error is Contract.Interrupted {
+                    finishLifecycle(.failure(error))
+                    throw error
+                }
+                let diag = normalizeError(error)
                 let logs = interp.logs
-                result = .failure(
+                let rawResult: Result = .failure(
                     error: diag,
                     logs: logs.isEmpty ? nil : logs,
                     truncated: nil,
                     metadata: runObj.metadata
                 )
+                let finalResult = setup.limits.maxOutputBytes.map { boundOutput(rawResult, maxOutputBytes: $0) } ?? rawResult
+                let out: Outcome = .result(finalResult)
+                finishLifecycle(.success(out))
+                return out
             }
-
-            if let maxBytes = setup.limits.maxOutputBytes {
-                return .result(boundOutput(result, maxOutputBytes: maxBytes))
-            }
-            return .result(result)
         }
 
-        // parity: psychoscript/src/runtime/execute.ts#Running.suspend [status=implemented hash=6b9ea6f8675c]
-        public func suspend(maxBytes: Int? = nil) throws -> Outcome {
-            guard let vm = vmBox.withLock({ $0 }), let runObj = runBox.withLock({ $0 }) else {
+        /// Saves the run's state and stops it, at once: `run` then returns the same `.suspended`.
+        /// Throws `SuspendError`, leaving the run running, while a non-idempotent/non-started host call is in progress
+        /// or when the state exceeds `maxBytes`. Before the run has started, waits for it to start.
+        // parity: psychoscript/src/runtime/execute.ts#Running.suspend [status=implemented hash=b174928d5939]
+        public func suspend(maxBytes: Int? = nil) async throws -> Outcome {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                let ready = lifecycle.withLock { s -> Bool in
+                    if s.started || s.finished { return true }
+                    s.startedWaiters.append(cont)
+                    return false
+                }
+                if ready { cont.resume() }
+            }
+            let (isFinished, vmOpt, runOpt, driverOpt, startedAtMs) = lifecycle.withLock {
+                ($0.finished, $0.vm, $0.run, $0.driver, $0.startedAtMs)
+            }
+            if isFinished {
+                return try await awaitDone()
+            }
+            guard let vm = vmOpt, let runObj = runOpt, let driver = driverOpt else {
                 throw SuspendError(message: "The program didn't start.")
             }
-            let driver = Driver(vm: vm)
             let running = driver.blocking()
             if !running.isEmpty {
                 let names = running.map(\.path).joined(separator: ", ")
@@ -12423,39 +13529,85 @@ extension CodemodeLanguage {
                     running: running.map { SuspendError.RunningCall(key: $0.key, path: $0.path) }
                 )
             }
-            let captured = try vm.capture(CaptureOptions(
-                limits: SnapshotLimitsInfo(timeoutMs: setup.limits.timeoutMs, maxOutputBytes: setup.limits.maxOutputBytes),
-                activeMs: activeBefore,
-                metadata: runObj.metadata
-            ))
+            // Idempotent calls in flight are saved as queued so they run again on resume under the same key.
+            let idempotent = vm.calls().filter { $0.status == .running && $0.idempotent }
+            for call in idempotent { call.status = .queued }
+            let restoreRunning = {
+                for call in idempotent { call.status = .running }
+            }
+            let elapsed = max(0, Int((CodemodeLanguage.currentEpochMs() - startedAtMs).rounded()))
+            let snapshot: Snapshot
+            do {
+                let captured = try vm.capture(CaptureOptions(
+                    limits: SnapshotLimitsInfo(timeoutMs: setup.limits.timeoutMs, maxOutputBytes: setup.limits.maxOutputBytes),
+                    activeMs: activeBefore + elapsed,
+                    metadata: runObj.metadata
+                ))
+                snapshot = captured.snapshot
+            } catch {
+                restoreRunning()
+                throw SuspendError(message: "The run's state couldn't be saved: \(error)")
+            }
             if let maxBytes {
-                let bytes = try toBytes(captured.snapshot)
+                let bytes: [UInt8]
+                do {
+                    bytes = try toBytes(snapshot)
+                } catch {
+                    restoreRunning()
+                    throw SuspendError(message: "The run's state couldn't be saved: \(error)")
+                }
                 if bytes.count > maxBytes {
+                    restoreRunning()
                     throw SuspendError(message: "The run's state takes \(bytes.count) bytes, more than the \(maxBytes)-byte limit, so it couldn't be suspended.")
                 }
             }
-            return .suspended(Suspended(state: captured.snapshot))
+            let saved = Suspended(state: snapshot)
+            lifecycle.withLock { s in
+                s.finished = true
+                s.suspended = saved
+            }
+            driver.detach()
+            return try await awaitDone()
+        }
+
+        private func awaitDone() async throws -> Outcome {
+            try await withCheckedThrowingContinuation { cont in
+                let done = lifecycle.withLock { s -> Swift.Result<Outcome, any Error>? in
+                    if let out = s.doneOutcome { return out }
+                    s.doneWaiters.append(cont)
+                    return nil
+                }
+                if let done { cont.resume(with: done) }
+            }
         }
     }
 
     private static func runWithOptionalTimeout<T: Sendable>(
         timeoutMs: Int?,
+        abortSignal: AbortSignal? = nil,
         operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
-        guard let timeoutMs else {
+        if timeoutMs == nil && abortSignal == nil {
             return try await operation()
         }
         return try await withThrowingTaskGroup(of: T.self) { group in
             group.addTask {
                 try await operation()
             }
-            group.addTask {
-                try await Task.sleep(for: .milliseconds(timeoutMs))
-                // The same interruption the job loop's deadline check raises; reported as TimeoutExceeded.
-                throw Interruption("timeout")
+            if let timeoutMs {
+                group.addTask {
+                    try await Task.sleep(for: .milliseconds(timeoutMs))
+                    throw Interruption("timeout")
+                }
+            }
+            if let abortSignal {
+                group.addTask {
+                    await abortSignal.waitUntilAborted()
+                    throw Interruption("cancelled")
+                }
             }
             guard let first = try await group.next() else {
-                throw Interruption("timeout")
+                throw Interruption(abortSignal?.aborted == true ? "cancelled" : "timeout")
             }
             group.cancelAll()
             return first
@@ -12564,30 +13716,92 @@ extension CodemodeLanguage {
         Running(setup: setup, code: code, bindings: bindings, runId: runId)
     }
 
-    // parity: psychoscript/src/runtime/execute.ts#resumeProgram [status=implemented hash=d017a3de6242]
-    public static func resumeProgram(setup: Setup, saved: Snapshot) throws -> Running {
-        let checked = try validate(saved)
-        guard checked.header.build == buildId() else {
-            throw SnapshotError("Snapshot belongs to another build.")
+    private static func resolveGlobalItem(in globals: [String: HostGlobalValue], path: [String]) -> HostGlobalValue? {
+        guard let first = path.first else { return nil }
+        var current: HostGlobalValue? = globals[first]
+        for idx in 1..<path.count {
+            let segment = path[idx]
+            switch current {
+            case .object(let dict)?:
+                current = dict[segment]
+            case .namespace(let ns)?:
+                switch ns.resolve(Array(path[idx...])) {
+                case .durable(let d): return .durableFn(d)
+                case .fn(let f): return .fn(f)
+                case .failure: return nil
+                }
+            default:
+                return nil
+            }
         }
-        let code = checked.header.sources.first?.code ?? ""
-        let resumedSetup = Setup(
-            limits: ExecuteLimits(
-                timeoutMs: checked.header.limits.timeoutMs,
-                maxOutputBytes: checked.header.limits.maxOutputBytes,
-                maxSteps: setup.limits.maxSteps
-            ),
-            translate: setup.translate,
-            globals: setup.globals,
-            modules: setup.modules
-        )
-        return Running(
-            setup: resumedSetup,
-            code: code,
-            bindings: nil,
-            runId: checked.header.runId,
-            activeBefore: checked.header.budget.activeMs
-        )
+        return current
+    }
+
+    // parity: psychoscript/src/runtime/execute.ts#resumeProgram [status=implemented hash=0ad356ffc83c]
+    public static func resumeProgram(setup: Setup, saved: Snapshot) throws -> Running {
+        do {
+            let checked = try validate(saved)
+            guard checked.header.build == buildId() else {
+                throw SnapshotError("Snapshot belongs to another build.")
+            }
+            let code = checked.header.sources.first?.code ?? ""
+            let resumedSetup = Setup(
+                limits: ExecuteLimits(
+                    timeoutMs: checked.header.limits.timeoutMs,
+                    maxOutputBytes: checked.header.limits.maxOutputBytes,
+                    maxSteps: setup.limits.maxSteps
+                ),
+                translate: setup.translate,
+                globals: setup.globals,
+                modules: setup.modules,
+                adapt: setup.adapt
+            )
+            var resumedDurables: [String: JSONValue] = [:]
+            let durableRecords = checked.records.filter { $0["t"] == .string("DurableCall") }
+            if !durableRecords.isEmpty {
+                let probeRun = Run(id: checked.header.runId, metadata: checked.header.metadata)
+                let globalsMap = resumedSetup.globals?(probeRun) ?? [:]
+                for record in durableRecords {
+                    guard case .string(let key)? = record["key"],
+                          case .string(let pathStr)? = record["path"],
+                          let data = record["data"] else {
+                        continue
+                    }
+                    let segments = pathStr.split(separator: ".").map(String.init)
+                    guard case .durableFn? = resolveGlobalItem(in: globalsMap, path: segments) else {
+                        throw SnapshotError(
+                            "The pending durable call \(key) (\(pathStr)) cannot resume because that function is no longer a durable function in this runtime."
+                        )
+                    }
+                    resumedDurables[key] = data
+                }
+            }
+            return Running(
+                setup: resumedSetup,
+                code: code,
+                bindings: nil,
+                runId: checked.header.runId,
+                activeBefore: checked.header.budget.activeMs,
+                initialMetadata: checked.header.metadata,
+                resumedDurables: resumedDurables
+            )
+        } catch let se as SnapshotError {
+            throw se
+        } catch {
+            throw SnapshotError(String(describing: error))
+        }
+    }
+
+    /// Restores a saved run from serialized snapshot bytes (`Uint8Array`), throwing `SnapshotError` if invalid.
+    public static func resumeProgram(setup: Setup, savedBytes: [UInt8]) throws -> Running {
+        do {
+            let snapshot = try fromBytes(savedBytes)
+            return try resumeProgram(setup: setup, saved: snapshot)
+        } catch let se as SnapshotError {
+            throw se
+        } catch {
+            throw SnapshotError(String(describing: error))
+        }
     }
 
     // MARK: - Top-Level Language Runtime API (src/language/runtime.ts)
@@ -12607,105 +13821,125 @@ extension CodemodeLanguage {
     // parity: psychoscript/src/runtime.ts#Suspended [status=implemented hash=0fa9789cd012]
     public typealias RuntimeSuspended = Suspended
 
-    // parity: psychoscript/src/runtime.ts#Limits [status=implemented hash=0d7dd5af1236]
-    public typealias Limits = ExecuteLimits
+    /// How one run is stopped: aborting `signal` makes it throw an `AbortError`.
+    // parity: psychoscript/src/runtime.ts#RunOptions [status=implemented hash=a1cd79315f03]
+    public struct RunOptions: Sendable {
+        public let signal: AbortSignal?
 
-    // parity: psychoscript/src/runtime.ts#Translate [status=implemented hash=69a2bee33650]
-    public struct Translate: Equatable, Hashable, Sendable, Codable {
-        public enum FunctionPolicy: String, Equatable, Hashable, Sendable, Codable {
-            case error
-            case drop
-        }
-        public enum PromisePolicy: String, Equatable, Hashable, Sendable, Codable {
-            case error
-            case `await`
-        }
-
-        public let functions: FunctionPolicy
-        public let promises: PromisePolicy
-
-        public init(functions: FunctionPolicy = .error, promises: PromisePolicy = .error) {
-            self.functions = functions
-            self.promises = promises
+        public init(signal: AbortSignal? = nil) {
+            self.signal = signal
         }
     }
 
-    // parity: psychoscript/src/runtime.ts#Globals [status=implemented hash=a53794fae07b]
-    public typealias Globals = [String: HostGlobalValue]
-
-    // parity: psychoscript/src/runtime.ts#Options [status=implemented hash=711bf87070b1]
-    public struct RuntimeOptions: Sendable {
-        public let globals: (@Sendable (Run) -> Globals)?
-        public let modules: [String: String]
-        public let limits: Limits
-        public let translate: Translate
-
-        public init(
-            globals: (@Sendable (Run) -> Globals)? = nil,
-            modules: [String: String] = [:],
-            limits: Limits = Limits(),
-            translate: Translate = Translate()
-        ) {
-            self.globals = globals
-            self.modules = modules
-            self.limits = limits
-            self.translate = translate
-        }
-    }
-
-    // parity: psychoscript/src/runtime.ts#ProgramOptions [status=implemented hash=f61a9d8217cf]
-    public struct ProgramOptions: Sendable {
+    /// Options for `Runtime.execute`.
+    // parity: psychoscript/src/runtime.ts#ExecuteOptions [status=implemented hash=11e501894fcc]
+    public struct ExecuteOptions: Sendable {
         public let bindings: [String: Json]?
         public let runId: String?
+        public let signal: AbortSignal?
 
-        public init(bindings: [String: Json]? = nil, runId: String? = nil) {
+        public init(
+            bindings: [String: Json]? = nil,
+            runId: String? = nil,
+            signal: AbortSignal? = nil
+        ) {
             self.bindings = bindings
             self.runId = runId
+            self.signal = signal
         }
     }
 
-    // parity: psychoscript/src/runtime.ts#SuspendOptions [status=implemented hash=4d826935ccbe]
-    public struct SuspendOptions: Equatable, Hashable, Sendable, Codable {
-        public let maxBytes: Int?
-
-        public init(maxBytes: Int? = nil) {
-            self.maxBytes = maxBytes
+    /// Maps `Contract.Interrupted` to `AbortError` whose `cause` is `signal?.reason`.
+    private static func aborting<A: Sendable>(
+        signal: AbortSignal?,
+        _ operation: () async throws -> A
+    ) async throws -> A {
+        do {
+            return try await operation()
+        } catch is Contract.Interrupted {
+            throw AbortError("The run was aborted.", cause: signal?.reason)
         }
     }
 
-    // parity: psychoscript/src/runtime.ts#Services [status=implemented hash=c07e941bb3e4]
-    public struct Services: Sendable {
-        public init() {}
-    }
-
-    // parity: psychoscript/src/runtime.ts#Program [status=implemented hash=a26101024aed]
+    // parity: psychoscript/src/runtime.ts#Program [status=implemented hash=bb926016ef34]
     public struct Program: Sendable {
-        public let run: @Sendable () async throws -> Outcome
-        public let suspend: @Sendable (SuspendOptions?) throws -> Outcome
+        private let runFn: @Sendable (RunOptions?) async throws -> Outcome
+        private let suspendFn: @Sendable (SuspendOptions?) async throws -> Outcome
+
+        public init(
+            run: @escaping @Sendable (RunOptions?) async throws -> Outcome,
+            suspend: @escaping @Sendable (SuspendOptions?) async throws -> Outcome
+        ) {
+            self.runFn = run
+            self.suspendFn = suspend
+        }
 
         public init(
             run: @escaping @Sendable () async throws -> Outcome,
             suspend: @escaping @Sendable (SuspendOptions?) throws -> Outcome
         ) {
-            self.run = run
-            self.suspend = suspend
+            self.runFn = { _ in try await run() }
+            self.suspendFn = { opts in try suspend(opts) }
+        }
+
+        public func run(_ options: RunOptions? = nil) async throws -> Outcome {
+            try await runFn(options)
+        }
+
+        public func suspend(_ options: SuspendOptions? = nil) async throws -> Outcome {
+            try await suspendFn(options)
         }
     }
 
-    // parity: psychoscript/src/runtime.ts#Runtime [status=implemented hash=39fdf7de6941]
+    // parity: psychoscript/src/runtime.ts#Runtime [status=implemented hash=d543c360c6ae]
     public struct Runtime: Sendable {
-        public let execute: @Sendable (String, ProgramOptions?) async -> Result
-        public let program: @Sendable (String, ProgramOptions?) -> Program
-        public let resume: @Sendable (Snapshot) -> Program
+        private let executeThrowingFn: @Sendable (String, ExecuteOptions?) async throws -> Result
+        private let programFn: @Sendable (String, ProgramOptions?) -> Program
+        private let resumeSnapshotFn: @Sendable (Snapshot) -> Program
+        private let resumeBytesFn: @Sendable ([UInt8]) -> Program
 
         public init(
-            execute: @escaping @Sendable (String, ProgramOptions?) async -> Result,
+            execute: @escaping @Sendable (String, ExecuteOptions?) async throws -> Result,
             program: @escaping @Sendable (String, ProgramOptions?) -> Program,
-            resume: @escaping @Sendable (Snapshot) -> Program
+            resumeSnapshot: @escaping @Sendable (Snapshot) -> Program,
+            resumeBytes: @escaping @Sendable ([UInt8]) -> Program
         ) {
-            self.execute = execute
-            self.program = program
-            self.resume = resume
+            self.executeThrowingFn = execute
+            self.programFn = program
+            self.resumeSnapshotFn = resumeSnapshot
+            self.resumeBytesFn = resumeBytes
+        }
+
+        /// Runs a program to its end; throws `AbortError` when `options.signal` aborts.
+        public func execute(_ code: String, _ options: ExecuteOptions) async throws -> Result {
+            try await executeThrowingFn(code, options)
+        }
+
+        /// Runs a program to its end (non-aborting convenience overload compatible with v0.1 callers).
+        public func execute(_ code: String, _ options: ProgramOptions? = nil) async -> Result {
+            do {
+                let execOpts = ExecuteOptions(bindings: options?.bindings, runId: options?.runId)
+                return try await executeThrowingFn(code, execOpts)
+            } catch {
+                return .failure(
+                    error: normalizeError(error),
+                    logs: nil,
+                    truncated: nil,
+                    metadata: .null
+                )
+            }
+        }
+
+        public func program(_ code: String, _ options: ProgramOptions? = nil) -> Program {
+            programFn(code, options)
+        }
+
+        public func resume(_ state: Snapshot) -> Program {
+            resumeSnapshotFn(state)
+        }
+
+        public func resume(_ bytes: [UInt8]) -> Program {
+            resumeBytesFn(bytes)
         }
     }
 
@@ -12719,50 +13953,48 @@ extension CodemodeLanguage {
         return value
     }
 
-    // parity: psychoscript/src/runtime.ts#make [status=implemented hash=e0770818ccd3]
+    // parity: psychoscript/src/runtime.ts#make [status=implemented hash=306564d41835]
     public static func makeRuntime(_ options: RuntimeOptions = RuntimeOptions()) throws -> Runtime {
-        let timeoutMs = try validateLimit("timeoutMs", options.limits.timeoutMs, minimum: 1)
-        let maxOutputBytes = try validateLimit("maxOutputBytes", options.limits.maxOutputBytes, minimum: 0)
-        let maxSteps = try validateLimit("maxSteps", options.limits.maxSteps, minimum: 1)
-        let setup = Setup(
-            limits: ExecuteLimits(timeoutMs: timeoutMs, maxOutputBytes: maxOutputBytes, maxSteps: maxSteps),
-            translate: options.translate,
-            globals: options.globals,
-            modules: options.modules
-        )
-        let makeProgram: @Sendable (String, ProgramOptions?) -> Program = { code, progOpts in
-            let running = startProgram(
-                setup: setup,
-                code: code,
-                bindings: progOpts?.bindings,
-                runId: progOpts?.runId ?? OpenCodeUtil.uuid()
-            )
-            return Program(
-                run: { await running.run() },
-                suspend: { opts in try running.suspend(maxBytes: opts?.maxBytes) }
+        let setup = try makeSetup(options)
+        let startManaged: @Sendable (String, ProgramOptions?) -> ManagedProgram = { code, progOpts in
+            makeProgram {
+                startProgram(
+                    setup: setup,
+                    code: code,
+                    bindings: progOpts?.bindings,
+                    runId: progOpts?.runId ?? OpenCodeUtil.uuid()
+                )
+            }
+        }
+        let wrapManaged: @Sendable (ManagedProgram) -> Program = { managed in
+            Program(
+                run: { runOpts in
+                    try await aborting(signal: runOpts?.signal) {
+                        try await managed.run(ExecuteRunOptions(signal: runOpts?.signal))
+                    }
+                },
+                suspend: { suspendOpts in
+                    try checkMaxBytes(suspendOpts?.maxBytes)
+                    return try await managed.suspend(suspendOpts?.maxBytes)
+                }
             )
         }
         return Runtime(
-            execute: { code, progOpts in
-                let outcome = (try? await makeProgram(code, progOpts).run()) ?? .result(.failure(
-                    error: Diagnostic(kind: "ExecutionFailure", message: "Execution failed."),
-                    logs: nil,
-                    truncated: nil,
-                    metadata: .null
-                ))
+            execute: { code, execOpts in
+                let progOpts = ProgramOptions(bindings: execOpts?.bindings, runId: execOpts?.runId)
+                let outcome = try await aborting(signal: execOpts?.signal) {
+                    try await startManaged(code, progOpts).run(ExecuteRunOptions(signal: execOpts?.signal))
+                }
                 return finishExecution(outcome)
             },
-            program: makeProgram,
-            resume: { snap in
-                Program(
-                    run: {
-                        let running = try resumeProgram(setup: setup, saved: snap)
-                        return await running.run()
-                    },
-                    suspend: { _ in
-                        throw SuspendError(message: "The program didn't start.")
-                    }
-                )
+            program: { code, progOpts in
+                wrapManaged(startManaged(code, progOpts))
+            },
+            resumeSnapshot: { snap in
+                wrapManaged(makeProgram { try resumeProgram(setup: setup, saved: snap) })
+            },
+            resumeBytes: { bytes in
+                wrapManaged(makeProgram { try resumeProgram(setup: setup, savedBytes: bytes) })
             }
         )
     }

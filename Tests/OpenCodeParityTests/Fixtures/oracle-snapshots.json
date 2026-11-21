@@ -1,7 +1,7 @@
 {
   "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
   "generatedAt": "2026-11-20T22:42:13.071Z",
-  "vectorCount": 1572,
+  "vectorCount": 1588,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -26552,6 +26552,391 @@
           true,
           false,
           true
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 promise: host fn name and length preservation",
+      "args": [
+        "const b = box(\"k\"); return [double.name, double.length, math2.add.name, math2.add.length, namedFn.name, namedFn.length, namedFn(1, 2, 3), declaredFn.name, declaredFn.length, declaredFn(4), plainGreet.name, plainGreet.length, plainGreet(\"world\"), b.read.name, b.read.length, b.read(), b.anon.name, b.anon.length, b.anon(1, 2)]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "double",
+          1,
+          "add",
+          1,
+          "original",
+          2,
+          3,
+          "customAdd",
+          1,
+          5,
+          "plainGreet",
+          1,
+          "hi:world",
+          "read",
+          0,
+          "box:k",
+          "",
+          2,
+          [
+            1,
+            2
+          ]
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 promise: sync host fn returning promise, sync-thenable, and caught throw",
+      "args": [
+        "let msg = \"\"; try { boom() } catch (e) { msg = e.message } let refMsg = \"\"; try { await refuse() } catch (e) { refMsg = e.message } const b = await box(\"z\"); return [double(21), await later(1), msg, refMsg, b.read()]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          42,
+          2,
+          "boom",
+          "no",
+          "box:z"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 promise: uncaught async Host.fail rejection preserves kind, message, suggestions",
+      "args": [
+        "await refuse()"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "Refused",
+          "message": "no",
+          "suggestions": [
+            "retry"
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 promise: uncaught host Error throw",
+      "args": [
+        "boom()"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: boom"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: host fn name and length preserved through psychoscript/effect wrapper",
+      "args": [
+        "const f = fsBox.file(\"a\"); return [effectNamed.name, effectNamed.length, effectNamed(1, 2, 3), effectDeclared.name, effectDeclared.length, double.name, double.length, math2.add.name, math2.add.length, fsBox.read.name, fsBox.read.length, f.text.name, f.text.length, f.size.name, f.size.length]",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "original",
+          2,
+          3,
+          "named",
+          1,
+          "double",
+          1,
+          "add",
+          1,
+          "read",
+          1,
+          "text",
+          0,
+          "size",
+          0
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: services reach async Effect host functions",
+      "args": [
+        "return [await effectNext(), await effectNext()]",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          1,
+          2
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: plain host functions in results and globals run Effects with services",
+      "args": [
+        "const a = await fsBox.file(\"a\").text(); const f = fsBox.file(\"a\"); const syncVals = [f.text(), f.text(), f.size()]; const b = (await fsBox.file(\"b\")).text(); const c = fsBox.read(\"c\"); const g = new fsBox.Glob(\"*.ts\").scan(); return { a, syncVals, b, c, g }",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": {
+          "a": "a:1",
+          "syncVals": [
+            "a:2",
+            "a:3",
+            3
+          ],
+          "b": "b:4",
+          "c": "c:5",
+          "g": [
+            "*.ts"
+          ]
+        },
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: plain host function returning failing Effect caught in try/catch",
+      "args": [
+        "let m1 = \"\"; try { fsBox.file(\"missing\").text() } catch (e) { m1 = e.message } let m2 = \"\"; try { fsBox.read(\"missing\") } catch (e) { m2 = e.message } return [m1, m2]",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "no missing",
+          "no missing"
+        ],
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: plain host function returning failing Effect uncaught maps HostFailure",
+      "args": [
+        "await fsBox.file(\"missing\").text()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "NotFound",
+          "message": "no missing"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: Effect HostFailure caught and uncaught",
+      "args": [
+        "try { effectFail() } catch (e) { return e.message }",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": "no such thing",
+        "logs": [],
+        "warnings": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: uncaught Effect HostFailure has no location and keeps suggestions",
+      "args": [
+        "\neffectFail()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "NotFound",
+          "message": "no such thing",
+          "suggestions": [
+            "try another"
+          ]
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: Effect typed failure becomes ExecutionFailure without location",
+      "args": [
+        "effectTypedFail()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: tagged"
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: Effect defect attaches call location",
+      "args": [
+        "\neffectDie()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: kaboom (line 2, col 1)",
+          "location": {
+            "line": 2,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: Effect.sync throw attaches call location",
+      "args": [
+        "\neffectThrown()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: thrown (line 2, col 1)",
+          "location": {
+            "line": 2,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 effect: plain host function returning defect Effect attaches call location",
+      "args": [
+        "\nfsBox.file(\"die\").text()",
+        {
+          "mode": "effect"
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": false,
+        "error": {
+          "kind": "ExecutionFailure",
+          "message": "Error: plain-boom (line 2, col 1)",
+          "location": {
+            "line": 2,
+            "column": 1
+          }
+        },
+        "logs": []
+      }
+    },
+    {
+      "fn": "psychoscript/src/runtime.ts#execute",
+      "name": "v0.2 promise: bound host fn preserves name and length descriptors",
+      "args": [
+        "const bound = namedFn.bind(null, 1); return [bound.name, bound.length, Object.getOwnPropertyDescriptor(namedFn, \"name\"), Object.getOwnPropertyDescriptor(namedFn, \"length\")]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "ok": true,
+        "value": [
+          "bound original",
+          1,
+          {
+            "value": "original",
+            "writable": false,
+            "enumerable": false,
+            "configurable": true
+          },
+          {
+            "value": 2,
+            "writable": false,
+            "enumerable": false,
+            "configurable": true
+          }
         ],
         "logs": [],
         "warnings": []

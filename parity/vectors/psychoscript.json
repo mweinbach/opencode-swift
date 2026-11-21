@@ -2232,6 +2232,113 @@
         "args": [
           "const bad = [[\"\\\\p{RGI_Emoji_ZWJ_Sequence}\", \"u\"], [\"\\\\P{RGI_Emoji_ZWJ_Sequence}\", \"v\"], [\"\\\\P{RGI_Emoji}\", \"v\"], [\"[^\\\\p{RGI_Emoji_ZWJ_Sequence}]\", \"v\"], [\"[^\\\\p{RGI_Emoji}]\", \"v\"], [\"[^\\\\p{RGI_Emoji_ZWJ_Sequence}--\\\\p{RGI_Emoji_ZWJ_Sequence}]\", \"v\"], [\"[^\\\\p{RGI_Emoji_ZWJ_Sequence}&&\\\\q{ab}]\", \"v\"]]; const errs = bad.map(([p, f]) => { try { new RegExp(p, f); return \"ok\" } catch (e) { return e.name } }); return [errs, /^[^\\p{RGI_Emoji_ZWJ_Sequence}&&\\p{ASCII}]$/v.test(\"a\"), /^[^[a-z]--\\p{RGI_Emoji_ZWJ_Sequence}]$/v.test(\"a\"), /^[^[a-z]--\\p{RGI_Emoji_ZWJ_Sequence}]$/v.test(\"A\")]"
         ]
+      },
+      {
+        "name": "v0.2 promise: host fn name and length preservation",
+        "args": [
+          "const b = box(\"k\"); return [double.name, double.length, math2.add.name, math2.add.length, namedFn.name, namedFn.length, namedFn(1, 2, 3), declaredFn.name, declaredFn.length, declaredFn(4), plainGreet.name, plainGreet.length, plainGreet(\"world\"), b.read.name, b.read.length, b.read(), b.anon.name, b.anon.length, b.anon(1, 2)]"
+        ]
+      },
+      {
+        "name": "v0.2 promise: sync host fn returning promise, sync-thenable, and caught throw",
+        "args": [
+          "let msg = \"\"; try { boom() } catch (e) { msg = e.message } let refMsg = \"\"; try { await refuse() } catch (e) { refMsg = e.message } const b = await box(\"z\"); return [double(21), await later(1), msg, refMsg, b.read()]"
+        ]
+      },
+      {
+        "name": "v0.2 promise: uncaught async Host.fail rejection preserves kind, message, suggestions",
+        "args": [
+          "await refuse()"
+        ]
+      },
+      {
+        "name": "v0.2 promise: uncaught host Error throw",
+        "args": [
+          "boom()"
+        ]
+      },
+      {
+        "name": "v0.2 effect: host fn name and length preserved through psychoscript/effect wrapper",
+        "args": [
+          "const f = fsBox.file(\"a\"); return [effectNamed.name, effectNamed.length, effectNamed(1, 2, 3), effectDeclared.name, effectDeclared.length, double.name, double.length, math2.add.name, math2.add.length, fsBox.read.name, fsBox.read.length, f.text.name, f.text.length, f.size.name, f.size.length]",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: services reach async Effect host functions",
+        "args": [
+          "return [await effectNext(), await effectNext()]",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: plain host functions in results and globals run Effects with services",
+        "args": [
+          "const a = await fsBox.file(\"a\").text(); const f = fsBox.file(\"a\"); const syncVals = [f.text(), f.text(), f.size()]; const b = (await fsBox.file(\"b\")).text(); const c = fsBox.read(\"c\"); const g = new fsBox.Glob(\"*.ts\").scan(); return { a, syncVals, b, c, g }",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: plain host function returning failing Effect caught in try/catch",
+        "args": [
+          "let m1 = \"\"; try { fsBox.file(\"missing\").text() } catch (e) { m1 = e.message } let m2 = \"\"; try { fsBox.read(\"missing\") } catch (e) { m2 = e.message } return [m1, m2]",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: plain host function returning failing Effect uncaught maps HostFailure",
+        "args": [
+          "await fsBox.file(\"missing\").text()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: Effect HostFailure caught and uncaught",
+        "args": [
+          "try { effectFail() } catch (e) { return e.message }",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: uncaught Effect HostFailure has no location and keeps suggestions",
+        "args": [
+          "\neffectFail()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: Effect typed failure becomes ExecutionFailure without location",
+        "args": [
+          "effectTypedFail()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: Effect defect attaches call location",
+        "args": [
+          "\neffectDie()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: Effect.sync throw attaches call location",
+        "args": [
+          "\neffectThrown()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 effect: plain host function returning defect Effect attaches call location",
+        "args": [
+          "\nfsBox.file(\"die\").text()",
+          { "mode": "effect" }
+        ]
+      },
+      {
+        "name": "v0.2 promise: bound host fn preserves name and length descriptors",
+        "args": [
+          "const bound = namedFn.bind(null, 1); return [bound.name, bound.length, Object.getOwnPropertyDescriptor(namedFn, \"name\"), Object.getOwnPropertyDescriptor(namedFn, \"length\")]"
+        ]
       }
     ]
   }
