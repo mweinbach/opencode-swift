@@ -2029,31 +2029,47 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
 
         guard let dir = dirHandle, let ioEv = ioEvent else { return }
 
-        // Allocate a DWORD-aligned 64 KiB buffer for ReadDirectoryChangesW.
-        var buffer = [UInt32](repeating: 0, count: 16_384)
-        var overlapped = OVERLAPPED()
-        overlapped.hEvent = ioEv
+        // Allocate stable DWORD-aligned heap memory for overlapped ReadDirectoryChangesW I/O.
+        // Passing a Swift local Array or inout OVERLAPPED to async Win32 I/O is undefined behavior
+        // because the kernel writes to both addresses asynchronously after ReadDirectoryChangesW returns.
+        let bufferByteCount = 64 * 1024
+        let rawBuffer = UnsafeMutableRawPointer.allocate(
+            byteCount: bufferByteCount,
+            alignment: MemoryLayout<DWORD>.alignment
+        )
+        let overlappedPtr = UnsafeMutablePointer<OVERLAPPED>.allocate(capacity: 1)
+        overlappedPtr.initialize(to: OVERLAPPED())
         var ioPending = false
+        defer {
+            if ioPending {
+                _ = CancelIoEx(dir, overlappedPtr)
+                var ignoredBytes: DWORD = 0
+                _ = GetOverlappedResult(dir, overlappedPtr, &ignoredBytes, true)
+                ioPending = false
+            }
+            overlappedPtr.deinitialize(count: 1)
+            overlappedPtr.deallocate()
+            rawBuffer.deallocate()
+        }
+
         var flushDeadlineMs: UInt64?
 
         while !isStopRequested() {
             if !ioPending {
                 _ = ResetEvent(ioEv)
-                overlapped = OVERLAPPED()
-                overlapped.hEvent = ioEv
+                overlappedPtr.pointee = OVERLAPPED()
+                overlappedPtr.pointee.hEvent = ioEv
 
-                let issued = buffer.withUnsafeMutableBytes { rawBuf in
-                    ReadDirectoryChangesW(
-                        dir,
-                        rawBuf.baseAddress,
-                        DWORD(rawBuf.count),
-                        recursive,
-                        Self.notifyFilter,
-                        nil,
-                        &overlapped,
-                        nil
-                    )
-                }
+                let issued = ReadDirectoryChangesW(
+                    dir,
+                    rawBuffer,
+                    DWORD(bufferByteCount),
+                    recursive,
+                    Self.notifyFilter,
+                    nil,
+                    overlappedPtr,
+                    nil
+                )
                 if !issued {
                     let err = GetLastError()
                     if err != DWORD(ERROR_IO_PENDING) {
@@ -2082,9 +2098,10 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
 
             if waitResult == DWORD(WAIT_OBJECT_0) {
                 if ioPending {
-                    _ = CancelIoEx(dir, &overlapped)
+                    _ = CancelIoEx(dir, overlappedPtr)
                     var ignoredBytes: DWORD = 0
-                    _ = GetOverlappedResult(dir, &overlapped, &ignoredBytes, true)
+                    _ = GetOverlappedResult(dir, overlappedPtr, &ignoredBytes, true)
+                    ioPending = false
                 }
                 break
             }
@@ -2092,10 +2109,12 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
             if waitResult == DWORD(WAIT_OBJECT_0) + 1 {
                 ioPending = false
                 var bytesTransferred: DWORD = 0
-                if GetOverlappedResult(dir, &overlapped, &bytesTransferred, false),
+                if GetOverlappedResult(dir, overlappedPtr, &bytesTransferred, false),
                    bytesTransferred > 0
                 {
-                    let pushed = parseNotifyBuffer(buffer, byteCount: Int(bytesTransferred))
+                    let validCount = min(Int(bytesTransferred), bufferByteCount)
+                    let notifyBytes = UnsafeRawBufferPointer(start: rawBuffer, count: validCount)
+                    let pushed = parseNotifyBuffer(notifyBytes)
                     if pushed {
                         if coalesceIntervalMs <= 0 {
                             flushCoalescer()
@@ -2136,63 +2155,62 @@ private final class WindowsDirectoryWatcherDriver: NativeWatcherDriver, @uncheck
         emitBatch(batch)
     }
 
-    private func parseNotifyBuffer(_ buffer: [UInt32], byteCount: Int) -> Bool {
+    private func parseNotifyBuffer(_ rawBuf: UnsafeRawBufferPointer) -> Bool {
         var pushedAny = false
         guard let nameFieldOffset = MemoryLayout<FILE_NOTIFY_INFORMATION>.offset(of: \.FileName) else {
             return false
         }
 
-        buffer.withUnsafeBytes { rawBuf in
-            var offset = 0
-            while offset + nameFieldOffset <= byteCount {
-                let info = rawBuf.loadUnaligned(fromByteOffset: offset, as: FILE_NOTIFY_INFORMATION.self)
-                let nameBytes = Int(info.FileNameLength)
-                let nameStart = offset + nameFieldOffset
-                guard nameStart + nameBytes <= byteCount else { break }
+        let byteCount = rawBuf.count
+        var offset = 0
+        while offset + nameFieldOffset <= byteCount {
+            let info = rawBuf.loadUnaligned(fromByteOffset: offset, as: FILE_NOTIFY_INFORMATION.self)
+            let nameBytes = Int(info.FileNameLength)
+            let nameStart = offset + nameFieldOffset
+            guard nameStart + nameBytes <= byteCount else { break }
 
-                let codeUnitCount = nameBytes / MemoryLayout<WCHAR>.size
-                var utf16: [UInt16] = []
-                utf16.reserveCapacity(codeUnitCount)
-                for i in 0..<codeUnitCount {
-                    utf16.append(rawBuf.loadUnaligned(fromByteOffset: nameStart + i * 2, as: UInt16.self))
-                }
-                let rawRel = NativeFileWatcher.normalizeSlashes(String(decoding: utf16, as: UTF16.self))
-                let rawFull = NativeFileWatcher.joinPath(canonicalRoot, rawRel)
+            let codeUnitCount = nameBytes / MemoryLayout<WCHAR>.size
+            var utf16: [UInt16] = []
+            utf16.reserveCapacity(codeUnitCount)
+            for i in 0..<codeUnitCount {
+                utf16.append(rawBuf.loadUnaligned(fromByteOffset: nameStart + i * 2, as: UInt16.self))
+            }
+            let rawRel = NativeFileWatcher.normalizeSlashes(String(decoding: utf16, as: UTF16.self))
+            let rawFull = NativeFileWatcher.joinPath(canonicalRoot, rawRel)
 
-                if let mapped = NativeFileWatcher.remapEventPath(
-                    rawFull,
-                    canonicalRoot: canonicalRoot,
-                    requestedRoot: requestedRoot
-                ), !mapped.relativePath.isEmpty {
-                    if (recursive || !mapped.relativePath.contains("/"))
-                        && !ignoreFilter.shouldIgnore(
-                            relativePath: mapped.relativePath,
-                            reportedPath: mapped.reportedPath,
-                            canonicalPath: rawFull
+            if let mapped = NativeFileWatcher.remapEventPath(
+                rawFull,
+                canonicalRoot: canonicalRoot,
+                requestedRoot: requestedRoot
+            ), !mapped.relativePath.isEmpty {
+                if (recursive || !mapped.relativePath.contains("/"))
+                    && !ignoreFilter.shouldIgnore(
+                        relativePath: mapped.relativePath,
+                        reportedPath: mapped.reportedPath,
+                        canonicalPath: rawFull
+                    )
+                {
+                    let kind: NativeFileEventKind?
+                    switch info.Action {
+                    case DWORD(FILE_ACTION_ADDED): kind = .created
+                    case DWORD(FILE_ACTION_REMOVED): kind = .deleted
+                    case DWORD(FILE_ACTION_MODIFIED): kind = .modified
+                    case DWORD(FILE_ACTION_RENAMED_OLD_NAME): kind = .deleted
+                    case DWORD(FILE_ACTION_RENAMED_NEW_NAME): kind = .renamed
+                    default: kind = nil
+                    }
+                    if let kind {
+                        let isDir = Self.queryIsDirectory(rawFull)
+                        coalescer.push(
+                            NativeFileEvent(path: mapped.reportedPath, kind: kind, isDirectory: isDir)
                         )
-                    {
-                        let kind: NativeFileEventKind?
-                        switch info.Action {
-                        case DWORD(FILE_ACTION_ADDED): kind = .created
-                        case DWORD(FILE_ACTION_REMOVED): kind = .deleted
-                        case DWORD(FILE_ACTION_MODIFIED): kind = .modified
-                        case DWORD(FILE_ACTION_RENAMED_OLD_NAME): kind = .deleted
-                        case DWORD(FILE_ACTION_RENAMED_NEW_NAME): kind = .renamed
-                        default: kind = nil
-                        }
-                        if let kind {
-                            let isDir = Self.queryIsDirectory(rawFull)
-                            coalescer.push(
-                                NativeFileEvent(path: mapped.reportedPath, kind: kind, isDirectory: isDir)
-                            )
-                            pushedAny = true
-                        }
+                        pushedAny = true
                     }
                 }
-
-                if info.NextEntryOffset == 0 { break }
-                offset += Int(info.NextEntryOffset)
             }
+
+            if info.NextEntryOffset == 0 { break }
+            offset += Int(info.NextEntryOffset)
         }
         return pushedAny
     }

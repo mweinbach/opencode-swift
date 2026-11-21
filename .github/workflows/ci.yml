@@ -10,7 +10,7 @@ jobs:
   swift-testing-matrix:
     name: Swift Testing (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -43,16 +43,36 @@ jobs:
         with:
           swift-version: swift-6.2.4-release
           swift-build: 6.2.4-RELEASE
+      - name: Restore Windows SwiftPM build cache
+        if: matrix.os == 'windows-2022'
+        id: win-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .build
+            Packages/OpenTUI/.build
+          key: windows-swift-6.2.4-build-${{ hashFiles('Package.swift', 'Packages/OpenTUI/Package.swift', 'Packages/OpenTunnel/Package.swift', 'Sources/**/*.swift', 'Tests/**/*.swift', 'Packages/OpenTUI/Sources/**/*.swift', 'Packages/OpenTUI/Tests/**/*.swift') }}
+          restore-keys: |
+            windows-swift-6.2.4-build-
       - name: Ensure modern sqlite3.dll on PATH (Windows)
         if: matrix.os == 'windows-2022'
         shell: pwsh
         run: |
-          $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python" -Filter "sqlite3.dll" -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -like "*\x64\DLLs\sqlite3.dll" } |
+          $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python\*\x64\DLLs\sqlite3.dll" -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending |
             Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python" -Filter "sqlite3.dll" -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like "*\x64\DLLs\sqlite3.dll" } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+          }
           if ($dll) {
             Write-Host "Using SQLite DLL: $($dll.FullName)"
+            $pyExe = Join-Path (Split-Path $dll.DirectoryName -Parent) "python.exe"
+            if (Test-Path $pyExe) {
+              & $pyExe -c "import sqlite3; print('SQLite version:', sqlite3.sqlite_version)"
+            }
             $dll.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           } else {
             Write-Host "No hostedtoolcache Python x64 sqlite3.dll found; relying on system sqlite3/winsqlite3"
@@ -62,17 +82,51 @@ jobs:
       - name: Test swift-opencode (Swift Testing)
         if: matrix.os != 'windows-2022'
         run: ./scripts/test.sh .
+      - name: Build swift-opencode tests (Windows)
+        if: matrix.os == 'windows-2022'
+        id: build-win
+        run: swift build --build-tests
       - name: Test swift-opencode (Swift Testing, Windows)
         if: matrix.os == 'windows-2022'
-        run: swift test --disable-xctest --enable-swift-testing --no-parallel
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          swift test --disable-xctest --enable-swift-testing --no-parallel
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Host "::error::swift test exited with code $code"
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue |
+              Select-Object -First 5 |
+              Format-List TimeCreated, ProviderName, Id, Message
+            exit $code
+          }
       - name: Test Packages/OpenTUI (Swift Testing)
         if: matrix.os != 'windows-2022'
         run: ./scripts/test.sh Packages/OpenTUI
       - name: Test Packages/OpenTUI (Swift Testing, Windows)
         if: matrix.os == 'windows-2022'
-        run: swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            Write-Host "::error::OpenTUI swift test exited with code $code"
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue |
+              Select-Object -First 5 |
+              Format-List TimeCreated, ProviderName, Id, Message
+            exit $code
+          }
       - name: Build opencode CLI
         run: swift build --product opencode
+      - name: Save Windows SwiftPM build cache
+        if: always() && matrix.os == 'windows-2022' && steps.build-win.outcome == 'success' && steps.win-cache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .build
+            Packages/OpenTUI/.build
+          key: ${{ steps.win-cache-restore.outputs.cache-primary-key }}
 
   upstream-parity-audit:
     name: Live Upstream Parity & Drift Check
