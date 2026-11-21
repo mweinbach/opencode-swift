@@ -26,4 +26,34 @@ if [[ "$(uname -s)" == "Darwin" ]] && command -v xcode-select >/dev/null 2>&1; t
   fi
 fi
 
+if [[ "${CI:-}" == "true" ]] && [[ "$(uname -s)" == "Darwin" ]] && [[ "${TEST_WATCHDOG_SECONDS:-540}" -gt 0 ]]; then
+  WATCHDOG_SECS="${TEST_WATCHDOG_SECONDS:-540}"
+  (cd "${TARGET_DIR}" && swift test "${EXTRA_FLAGS[@]}" "$@") &
+  TEST_PID=$!
+  (
+    HELPER_ELAPSED=0
+    while kill -0 "${TEST_PID}" 2>/dev/null; do
+      sleep 5
+      HELPER_PID="$(pgrep -f "swiftpm-testing-helper" 2>/dev/null | head -n 1 || true)"
+      if [[ -n "${HELPER_PID}" ]]; then
+        HELPER_ELAPSED=$((HELPER_ELAPSED + 5))
+        if [[ "${HELPER_ELAPSED}" -ge "${WATCHDOG_SECS}" ]]; then
+          echo "::error::swiftpm-testing-helper (pid ${HELPER_PID}) exceeded ${WATCHDOG_SECS}s — sampling call stacks before terminating" >&2
+          sample "${HELPER_PID}" 2 -file /dev/stdout 2>&1 | head -n 400 >&2 || true
+          kill -KILL "${HELPER_PID}" "${TEST_PID}" 2>/dev/null || true
+          exit 0
+        fi
+      fi
+    done
+  ) &
+  WATCHDOG_PID=$!
+  set +e
+  wait "${TEST_PID}"
+  TEST_STATUS=$?
+  set -e
+  kill "${WATCHDOG_PID}" 2>/dev/null || true
+  wait "${WATCHDOG_PID}" 2>/dev/null || true
+  exit "${TEST_STATUS}"
+fi
+
 (cd "${TARGET_DIR}" && swift test "${EXTRA_FLAGS[@]}" "$@")

@@ -11,6 +11,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(WinSDK)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodeCore
@@ -327,9 +329,19 @@ enum CronAndConsoleWatchHelper {
         return digest
     }
 
-    /// Real POSIX TCP loopback server implementing RFC 6455 WebSocket upgrade/framing alongside HTTP responses.
+    /// Real POSIX / Winsock2 TCP loopback server implementing RFC 6455 WebSocket upgrade/framing alongside HTTP responses.
     /// Allows testing `URLSessionWebSocketTransport` + `URLSessionHTTPTransport` over real loopback sockets.
     final class LoopbackConsoleServer: @unchecked Sendable {
+        #if canImport(WinSDK)
+        typealias NativeSocket = SOCKET
+        private static let winsockReady: Bool = {
+            var data = WSADATA()
+            return WSAStartup(WORD(0x0202), &data) == 0
+        }()
+        #else
+        typealias NativeSocket = Int32
+        #endif
+
         struct HTTPRequestRecord: Sendable {
             let method: String
             let path: String
@@ -338,7 +350,7 @@ enum CronAndConsoleWatchHelper {
         }
 
         struct WSConnectionContext: @unchecked Sendable {
-            let fd: Int32
+            let fd: NativeSocket
             let path: String
             let headers: [String: String]
 
@@ -377,9 +389,18 @@ enum CronAndConsoleWatchHelper {
 
             /// Reads the next masked client text/binary frame (answers pings automatically; returns nil on close/EOF).
             func readClientText(timeoutSeconds: Int = 5) -> String? {
-                #if !os(WASI) && !os(Windows)
+                #if os(macOS) || os(Linux) || os(Windows)
+                #if canImport(WinSDK)
+                var timeoutMs: DWORD = DWORD(timeoutSeconds * 1000)
+                _ = withUnsafePointer(to: &timeoutMs) { ptr in
+                    ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<DWORD>.size) { cPtr in
+                        WinSDK.setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, cPtr, Int32(MemoryLayout<DWORD>.size))
+                    }
+                }
+                #else
                 var tv = timeval(tv_sec: timeoutSeconds, tv_usec: 0)
                 _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+                #endif
                 while true {
                     guard let h = LoopbackConsoleServer.readExact(fd: fd, count: 2) else { return nil }
                     let opcode = h[0] & 0x0F
@@ -426,7 +447,7 @@ enum CronAndConsoleWatchHelper {
             case reject(status: Int, body: String)
         }
 
-        private let listenFD: Int32
+        private let listenFD: NativeSocket
         public let port: UInt16
         public var baseURL: String { "http://127.0.0.1:\(port)" }
         private let stopped = Mutex(false)
@@ -439,7 +460,42 @@ enum CronAndConsoleWatchHelper {
         ) throws {
             self.onUpgrade = onUpgrade
             self.onHTTP = onHTTP
-            #if os(macOS) || os(Linux)
+            #if os(macOS) || os(Linux) || os(Windows)
+            #if canImport(WinSDK)
+            _ = Self.winsockReady
+            let fd = WinSDK.socket(AF_INET, SOCK_STREAM, 0)
+            guard fd != INVALID_SOCKET else { throw PlatformError.ioFailure("socket() failed") }
+            var one: Int32 = 1
+            _ = withUnsafePointer(to: &one) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: MemoryLayout<Int32>.size) { cPtr in
+                    WinSDK.setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, cPtr, Int32(MemoryLayout<Int32>.size))
+                }
+            }
+            var addr = sockaddr_in()
+            addr.sin_family = ADDRESS_FAMILY(AF_INET)
+            _ = "127.0.0.1".withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
+            addr.sin_port = 0
+            let bindRes = withUnsafePointer(to: &addr) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                    WinSDK.bind(fd, sa, Int32(MemoryLayout<sockaddr_in>.size))
+                }
+            }
+            guard bindRes == 0 else {
+                _ = WinSDK.closesocket(fd)
+                throw PlatformError.ioFailure("bind() failed")
+            }
+            guard WinSDK.listen(fd, 16) == 0 else {
+                _ = WinSDK.closesocket(fd)
+                throw PlatformError.ioFailure("listen() failed")
+            }
+            var bound = sockaddr_in()
+            var boundLen = Int32(MemoryLayout<sockaddr_in>.size)
+            _ = withUnsafeMutablePointer(to: &bound) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                    WinSDK.getsockname(fd, sa, &boundLen)
+                }
+            }
+            #else
             #if canImport(Darwin)
             let fd = Darwin.socket(AF_INET, SOCK_STREAM, 0)
             #elseif canImport(Glibc)
@@ -474,6 +530,7 @@ enum CronAndConsoleWatchHelper {
                     getsockname(fd, sa, &boundLen)
                 }
             }
+            #endif
             self.listenFD = fd
             self.port = UInt16(bigEndian: bound.sin_port)
             Thread.detachNewThread { [self] in
@@ -491,7 +548,10 @@ enum CronAndConsoleWatchHelper {
                 return false
             }
             if !already {
-                #if os(macOS) || os(Linux)
+                #if canImport(WinSDK)
+                _ = WinSDK.shutdown(listenFD, SD_BOTH)
+                _ = WinSDK.closesocket(listenFD)
+                #elseif os(macOS) || os(Linux)
                 _ = shutdown(listenFD, Int32(SHUT_RDWR))
                 _ = close(listenFD)
                 #endif
@@ -499,9 +559,18 @@ enum CronAndConsoleWatchHelper {
         }
 
         private func acceptLoop() {
-            #if os(macOS) || os(Linux)
+            #if os(macOS) || os(Linux) || os(Windows)
             while !stopped.withLock({ $0 }) {
                 var clientAddr = sockaddr_storage()
+                #if canImport(WinSDK)
+                var clientLen = Int32(MemoryLayout<sockaddr_storage>.size)
+                let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
+                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                        WinSDK.accept(listenFD, sa, &clientLen)
+                    }
+                }
+                if clientFD == INVALID_SOCKET { break }
+                #else
                 var clientLen = socklen_t(MemoryLayout<sockaddr_storage>.size)
                 let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
                     ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
@@ -513,6 +582,7 @@ enum CronAndConsoleWatchHelper {
                 var noSigPipe: Int32 = 1
                 _ = setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
                 #endif
+                #endif
                 Thread.detachNewThread { [self] in
                     self.handleClient(fd: clientFD)
                 }
@@ -520,14 +590,25 @@ enum CronAndConsoleWatchHelper {
             #endif
         }
 
-        private func handleClient(fd: Int32) {
-            #if os(macOS) || os(Linux)
+        private func handleClient(fd: NativeSocket) {
+            #if os(macOS) || os(Linux) || os(Windows)
+            #if canImport(WinSDK)
+            defer { _ = WinSDK.closesocket(fd) }
+            #else
             defer { _ = close(fd) }
+            #endif
             var headerBytes: [UInt8] = []
             var buf = [UInt8](repeating: 0, count: 1)
             let crlfcrlf: [UInt8] = [13, 10, 13, 10]
             while headerBytes.count < 32_768 {
-                let n = recv(fd, &buf, 1, 0)
+                let n: Int = buf.withUnsafeMutableBytes { raw in
+                    guard let base = raw.baseAddress else { return -1 }
+                    #if canImport(WinSDK)
+                    return Int(WinSDK.recv(fd, base.assumingMemoryBound(to: CChar.self), 1, 0))
+                    #else
+                    return recv(fd, base, 1, 0)
+                    #endif
+                }
                 if n <= 0 { return }
                 headerBytes.append(buf[0])
                 if headerBytes.count >= 4 && Array(headerBytes.suffix(4)) == crlfcrlf {
@@ -584,14 +665,19 @@ enum CronAndConsoleWatchHelper {
             #endif
         }
 
-        private static func readExact(fd: Int32, count: Int) -> [UInt8]? {
-            #if os(macOS) || os(Linux)
+        private static func readExact(fd: NativeSocket, count: Int) -> [UInt8]? {
+            #if os(macOS) || os(Linux) || os(Windows)
             var out = [UInt8](repeating: 0, count: count)
             var offset = 0
             while offset < count {
                 let n = out.withUnsafeMutableBytes { raw -> Int in
                     let base = raw.baseAddress!.advanced(by: offset)
+                    #if canImport(WinSDK)
+                    let remaining = Int32(min(count - offset, Int(Int32.max)))
+                    return Int(WinSDK.recv(fd, base.assumingMemoryBound(to: CChar.self), remaining, 0))
+                    #else
                     return recv(fd, base, count - offset, 0)
+                    #endif
                 }
                 if n <= 0 { return nil }
                 offset += n
@@ -602,13 +688,16 @@ enum CronAndConsoleWatchHelper {
             #endif
         }
 
-        private static func writeAll(fd: Int32, bytes: [UInt8]) {
-            #if os(macOS) || os(Linux)
+        private static func writeAll(fd: NativeSocket, bytes: [UInt8]) {
+            #if os(macOS) || os(Linux) || os(Windows)
             var offset = 0
             while offset < bytes.count {
                 let n = bytes.withUnsafeBytes { raw -> Int in
                     let base = raw.baseAddress!.advanced(by: offset)
-                    #if canImport(Darwin)
+                    #if canImport(WinSDK)
+                    let remaining = Int32(min(bytes.count - offset, Int(Int32.max)))
+                    return Int(WinSDK.send(fd, base.assumingMemoryBound(to: CChar.self), remaining, 0))
+                    #elseif canImport(Darwin)
                     return send(fd, base, bytes.count - offset, 0)
                     #else
                     return send(fd, base, bytes.count - offset, Int32(MSG_NOSIGNAL))

@@ -9,6 +9,9 @@ import CRT
 #elseif canImport(WASILibc)
 import WASILibc
 #endif
+#if canImport(WinSDK)
+import WinSDK
+#endif
 import Foundation
 import OpenCodePlatform
 import OpenCodeSchema
@@ -360,11 +363,12 @@ public enum TUIUtil {
 
     private static func ancestorDirectories(_ cwd: String) -> [String] {
         var dirs: [String] = []
+        var seen = Set<String>()
         var current = URL(fileURLWithPath: cwd).standardized.path
-        while true {
+        while !current.isEmpty && seen.insert(current).inserted {
             dirs.append(current)
             let parent = URL(fileURLWithPath: current).deletingLastPathComponent().standardized.path
-            if parent == current { break }
+            if parent.isEmpty || parent == current { break }
             current = parent
         }
         return dirs.reversed()
@@ -1903,7 +1907,7 @@ public enum TUIUtil {
             throw error
         }
         do {
-            try await replaceFile(fm, source: tempURL, target: url)
+            try await replaceFile(fm, source: tempURL, target: url, sourcePath: tempPath, targetPath: filePath)
         } catch {
             try? fm.removeItem(at: tempURL)
             throw error
@@ -1912,15 +1916,47 @@ public enum TUIUtil {
 
     /// Windows refuses to rename onto a file that is open, as it briefly is while another TUI reloads it, so a
     /// permission or busy failure retries up to 20 times, 10 ms apart.
-    private static func replaceFile(_ fm: FileManager, source: URL, target: URL) async throws {
+    private static func replaceFile(
+        _ fm: FileManager,
+        source: URL,
+        target: URL,
+        sourcePath: String,
+        targetPath: String
+    ) async throws {
         var attempt = 0
         while true {
             do {
+                #if os(Windows)
+                _ = (fm, source, target)
+                let srcWide = Array(sourcePath.utf16) + [0]
+                let dstWide = Array(targetPath.utf16) + [0]
+                let ok = srcWide.withUnsafeBufferPointer { sPtr in
+                    dstWide.withUnsafeBufferPointer { dPtr in
+                        MoveFileExW(
+                            sPtr.baseAddress,
+                            dPtr.baseAddress,
+                            DWORD(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)
+                        )
+                    }
+                }
+                if !ok {
+                    let err = GetLastError()
+                    if err == DWORD(ERROR_ACCESS_DENIED)
+                        || err == DWORD(ERROR_SHARING_VIOLATION)
+                        || err == DWORD(ERROR_LOCK_VIOLATION)
+                    {
+                        throw NSError(domain: NSPOSIXErrorDomain, code: 16, userInfo: nil)
+                    }
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(err), userInfo: nil)
+                }
+                #else
+                _ = (sourcePath, targetPath)
                 if fm.fileExists(atPath: target.path) {
                     _ = try fm.replaceItemAt(target, withItemAt: source)
                 } else {
                     try fm.moveItem(at: source, to: target)
                 }
+                #endif
                 return
             } catch {
                 guard attempt < 20, isTransientReplaceError(error) else { throw error }

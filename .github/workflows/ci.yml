@@ -10,6 +10,7 @@ jobs:
   swift-testing-matrix:
     name: Swift Testing (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -42,11 +43,33 @@ jobs:
         with:
           swift-version: swift-6.2.4-release
           swift-build: 6.2.4-RELEASE
+      - name: Ensure modern sqlite3.dll on PATH (Windows)
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path "C:\hostedtoolcache\windows\Python" -Filter "sqlite3.dll" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*\x64\DLLs\sqlite3.dll" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if ($dll) {
+            Write-Host "Using SQLite DLL: $($dll.FullName)"
+            $dll.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          } else {
+            Write-Host "No hostedtoolcache Python x64 sqlite3.dll found; relying on system sqlite3/winsqlite3"
+          }
       - name: Verify Swift version
         run: swift --version
       - name: Test swift-opencode (Swift Testing)
+        if: matrix.os != 'windows-2022'
+        run: ./scripts/test.sh .
+      - name: Test swift-opencode (Swift Testing, Windows)
+        if: matrix.os == 'windows-2022'
         run: swift test --disable-xctest --enable-swift-testing --no-parallel
       - name: Test Packages/OpenTUI (Swift Testing)
+        if: matrix.os != 'windows-2022'
+        run: ./scripts/test.sh Packages/OpenTUI
+      - name: Test Packages/OpenTUI (Swift Testing, Windows)
+        if: matrix.os == 'windows-2022'
         run: swift test --package-path Packages/OpenTUI --disable-xctest --enable-swift-testing --no-parallel
       - name: Build opencode CLI
         run: swift build --product opencode
@@ -54,6 +77,7 @@ jobs:
   upstream-parity-audit:
     name: Live Upstream Parity & Drift Check
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode with Swift 6.2 on macOS

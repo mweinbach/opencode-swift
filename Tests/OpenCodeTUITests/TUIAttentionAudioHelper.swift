@@ -112,21 +112,16 @@ enum TUIAttentionAudioTestHelper {
             state.withLock { $0.cancelledCount }
         }
 
-        func waitUntilStarted(count: Int = 1) async {
+        @discardableResult
+        func waitUntilStarted(count: Int = 1, timeoutMs: Int = 5_000) async -> Bool {
+            let deadline = ContinuousClock.now + .milliseconds(timeoutMs)
             while state.withLock({ $0.startedCount < count }) {
-                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                    let alreadySatisfied = state.withLock { s -> Bool in
-                        if s.startedCount >= count {
-                            return true
-                        }
-                        s.startWaiters.append(cont)
-                        return false
-                    }
-                    if alreadySatisfied {
-                        cont.resume()
-                    }
+                if ContinuousClock.now >= deadline {
+                    return false
                 }
+                try? await Task.sleep(for: .milliseconds(5))
             }
+            return true
         }
 
         func release() {

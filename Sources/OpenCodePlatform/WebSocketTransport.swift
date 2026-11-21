@@ -8,6 +8,8 @@ import FoundationNetworking
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif canImport(WinSDK)
+import WinSDK
 #endif
 import Synchronization
 import OpenCodeUtil
@@ -143,7 +145,7 @@ public final class URLSessionWebSocketTransport: WebSocketTransport, Sendable {
         throw WebSocketTransportError.unsupportedPlatform(.wasi)
         #elseif canImport(Darwin)
         return try await connectDarwin(url: url, headers: headers, protocols: protocols)
-        #elseif canImport(Glibc) || canImport(Musl)
+        #elseif canImport(Glibc) || canImport(Musl) || canImport(WinSDK)
         return try await connectPOSIX(url: url, headers: headers, protocols: protocols)
         #else
         _ = (url, headers, protocols)
@@ -213,7 +215,7 @@ public final class URLSessionWebSocketTransport: WebSocketTransport, Sendable {
     }
     #endif
 
-    #if !canImport(Darwin) && (canImport(Glibc) || canImport(Musl))
+    #if !canImport(Darwin) && (canImport(Glibc) || canImport(Musl) || canImport(WinSDK))
     private func connectPOSIX(
         url: String,
         headers: [String: String],
@@ -563,15 +565,59 @@ private final class DarwinWebSocketConnection: WebSocketConnection, @unchecked S
 }
 #endif
 
-// MARK: - Linux / Non-Darwin POSIX RFC 6455 Client WebSocket Implementation
+// MARK: - Linux / Windows Native RFC 6455 Client WebSocket Implementation
 
-#if !canImport(Darwin) && (canImport(Glibc) || canImport(Musl))
+#if !canImport(Darwin) && (canImport(Glibc) || canImport(Musl) || canImport(WinSDK))
 private enum POSIXSocketLibC {
-    @inline(__always) static func close(_ fd: Int32) -> Int32 {
+    #if canImport(WinSDK)
+    typealias NativeSocket = SOCKET
+    static let invalidSocket: NativeSocket = INVALID_SOCKET
+
+    private static let winsockReady: Bool = {
+        var data = WSADATA()
+        return WSAStartup(WORD(0x0202), &data) == 0
+    }()
+
+    @inline(__always) static func ensureInitialized() {
+        _ = winsockReady
+    }
+
+    @inline(__always) static func close(_ fd: NativeSocket) -> Int32 {
+        WinSDK.closesocket(fd)
+    }
+
+    @inline(__always) static func shutdownBoth(_ fd: NativeSocket) {
+        _ = WinSDK.shutdown(fd, SD_BOTH)
+    }
+
+    @inline(__always) static func send(_ fd: NativeSocket, _ buf: UnsafeRawPointer, _ n: Int) -> Int {
+        let count = Int32(min(n, Int(Int32.max)))
+        return Int(WinSDK.send(fd, buf.assumingMemoryBound(to: CChar.self), count, 0))
+    }
+
+    @inline(__always) static func recv(_ fd: NativeSocket, _ buf: UnsafeMutableRawPointer, _ n: Int) -> Int {
+        let count = Int32(min(n, Int(Int32.max)))
+        return Int(WinSDK.recv(fd, buf.assumingMemoryBound(to: CChar.self), count, 0))
+    }
+    #else
+    typealias NativeSocket = Int32
+    static let invalidSocket: NativeSocket = -1
+
+    @inline(__always) static func ensureInitialized() {}
+
+    @inline(__always) static func close(_ fd: NativeSocket) -> Int32 {
         #if canImport(Glibc)
         return Glibc.close(fd)
         #else
         return Musl.close(fd)
+        #endif
+    }
+
+    @inline(__always) static func shutdownBoth(_ fd: NativeSocket) {
+        #if canImport(Glibc)
+        _ = Glibc.shutdown(fd, Int32(SHUT_RDWR))
+        #else
+        _ = Musl.shutdown(fd, Int32(SHUT_RDWR))
         #endif
     }
 
@@ -583,26 +629,27 @@ private enum POSIXSocketLibC {
         #endif
     }
 
-    @inline(__always) static func send(_ fd: Int32, _ buf: UnsafeRawPointer!, _ n: Int, _ flags: Int32) -> Int {
+    @inline(__always) static func send(_ fd: NativeSocket, _ buf: UnsafeRawPointer, _ n: Int) -> Int {
         #if canImport(Glibc)
-        return Glibc.send(fd, buf, n, flags)
+        return Glibc.send(fd, buf, n, Int32(MSG_NOSIGNAL))
         #else
-        return Musl.send(fd, buf, n, flags)
+        return Musl.send(fd, buf, n, Int32(MSG_NOSIGNAL))
         #endif
     }
 
-    @inline(__always) static func recv(_ fd: Int32, _ buf: UnsafeMutableRawPointer!, _ n: Int, _ flags: Int32) -> Int {
+    @inline(__always) static func recv(_ fd: NativeSocket, _ buf: UnsafeMutableRawPointer, _ n: Int) -> Int {
         #if canImport(Glibc)
-        return Glibc.recv(fd, buf, n, flags)
+        return Glibc.recv(fd, buf, n, 0)
         #else
-        return Musl.recv(fd, buf, n, flags)
+        return Musl.recv(fd, buf, n, 0)
         #endif
     }
+    #endif
 }
 
 private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendable {
     let messages: AsyncThrowingStream<WebSocketMessage, any Error>
-    private let fd: Int32
+    private let fd: POSIXSocketLibC.NativeSocket
     private let closed = Mutex(false)
     private let writeLock = Mutex(())
     private let readTask = Mutex<Task<Void, Never>?>(nil)
@@ -613,6 +660,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         path: String,
         headers: [String: String]
     ) async throws -> POSIXClientWebSocketConnection {
+        POSIXSocketLibC.ensureInitialized()
         let fd = try openTCP(host: host, port: port)
         do {
             var keyBytes: [UInt8] = []
@@ -676,7 +724,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         }
     }
 
-    private init(fd: Int32, initialBuffer: [UInt8]) {
+    private init(fd: POSIXSocketLibC.NativeSocket, initialBuffer: [UInt8]) {
         self.fd = fd
         let (stream, continuation) = AsyncThrowingStream<WebSocketMessage, any Error>.makeStream()
         self.messages = stream
@@ -760,7 +808,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         var payload: [UInt8] = [UInt8((code >> 8) & 0xFF), UInt8(code & 0xFF)]
         payload.append(contentsOf: reason.utf8)
         _ = writeMaskedFrame(opcode: 0x8, payload: payload)
-        _ = shutdown(fd, Int32(SHUT_RDWR))
+        POSIXSocketLibC.shutdownBoth(fd)
         _ = POSIXSocketLibC.close(fd)
     }
 
@@ -799,7 +847,30 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         let payload: [UInt8]
     }
 
-    private static func openTCP(host: String, port: Int) throws -> Int32 {
+    private static func openTCP(host: String, port: Int) throws -> POSIXSocketLibC.NativeSocket {
+        #if canImport(WinSDK)
+        var hints = ADDRINFOA()
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_family = AF_UNSPEC
+        var res: UnsafeMutablePointer<ADDRINFOA>?
+        let rc = getaddrinfo(host, String(port), &hints, &res)
+        guard rc == 0, let first = res else {
+            throw WebSocketTransportError.networkFailure("DNS resolution failed for \(host):\(port)")
+        }
+        defer { freeaddrinfo(first) }
+        var cur: UnsafeMutablePointer<ADDRINFOA>? = first
+        while let addr = cur {
+            let fd = WinSDK.socket(addr.pointee.ai_family, addr.pointee.ai_socktype, addr.pointee.ai_protocol)
+            if fd != INVALID_SOCKET {
+                if WinSDK.connect(fd, addr.pointee.ai_addr, Int32(addr.pointee.ai_addrlen)) == 0 {
+                    return fd
+                }
+                _ = POSIXSocketLibC.close(fd)
+            }
+            cur = addr.pointee.ai_next
+        }
+        throw WebSocketTransportError.networkFailure("Unable to connect to \(host):\(port)")
+        #else
         var hints = addrinfo()
         hints.ai_socktype = Int32(SOCK_STREAM.rawValue)
         hints.ai_family = AF_UNSPEC
@@ -821,14 +892,15 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
             cur = addr.pointee.ai_next
         }
         throw WebSocketTransportError.networkFailure("Unable to connect to \(host):\(port)")
+        #endif
     }
 
-    private static func writeAll(fd: Int32, bytes: [UInt8]) -> Bool {
+    private static func writeAll(fd: POSIXSocketLibC.NativeSocket, bytes: [UInt8]) -> Bool {
         bytes.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return true }
             var sent = 0
             while sent < raw.count {
-                let n = POSIXSocketLibC.send(fd, base.advanced(by: sent), raw.count - sent, Int32(MSG_NOSIGNAL))
+                let n = POSIXSocketLibC.send(fd, base.advanced(by: sent), raw.count - sent)
                 if n <= 0 { return false }
                 sent += n
             }
@@ -836,16 +908,17 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         }
     }
 
-    private static func readChunk(fd: Int32, maxBytes: Int) -> [UInt8]? {
+    private static func readChunk(fd: POSIXSocketLibC.NativeSocket, maxBytes: Int) -> [UInt8]? {
         var buf = [UInt8](repeating: 0, count: maxBytes)
-        let n = buf.withUnsafeMutableBytes { raw in
-            POSIXSocketLibC.recv(fd, raw.baseAddress, maxBytes, 0)
+        let n = buf.withUnsafeMutableBytes { raw -> Int in
+            guard let base = raw.baseAddress else { return -1 }
+            return POSIXSocketLibC.recv(fd, base, maxBytes)
         }
         if n <= 0 { return nil }
         return Array(buf.prefix(n))
     }
 
-    private static func ensureBytes(fd: Int32, buffer: inout [UInt8], count: Int) -> Bool {
+    private static func ensureBytes(fd: POSIXSocketLibC.NativeSocket, buffer: inout [UInt8], count: Int) -> Bool {
         while buffer.count < count {
             guard let chunk = readChunk(fd: fd, maxBytes: 8192), !chunk.isEmpty else { return false }
             buffer.append(contentsOf: chunk)
@@ -853,7 +926,7 @@ private final class POSIXClientWebSocketConnection: WebSocketConnection, Sendabl
         return true
     }
 
-    private static func readFrame(fd: Int32, buffer: inout [UInt8]) -> RawFrame? {
+    private static func readFrame(fd: POSIXSocketLibC.NativeSocket, buffer: inout [UInt8]) -> RawFrame? {
         guard ensureBytes(fd: fd, buffer: &buffer, count: 2) else { return nil }
         let b0 = buffer[0]
         let b1 = buffer[1]
