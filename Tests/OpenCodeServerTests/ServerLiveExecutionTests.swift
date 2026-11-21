@@ -222,24 +222,23 @@ struct ServerLiveExecutionTests {
                 if case .object(let obj) = entry, case .string(let name) = obj["name"] { return name }
                 return nil
             }
-            #expect(toolNames.contains("read"))
-            #expect(toolNames.contains("edit"))
             // core/src/tool/model-policy.ts: local builds default `full_codemode` on, so Code Mode's `execute`
-            // is offered and glob/grep are hidden (programs search through shell and `fetch`). This fixture's
-            // model isn't in the available catalog, so the built-ins stay direct as for any unresolved model.
+            // holds read/edit/write/shell for every model and glob/grep are hidden.
             #expect(toolNames.contains("execute"))
+            #expect(!toolNames.contains("read"))
+            #expect(!toolNames.contains("edit"))
             #expect(!toolNames.contains("grep"))
             #expect(!toolNames.contains("glob"))
         } else {
             Issue.record("Expected built-in tools array in first Anthropic request")
         }
 
-        // Second request must carry reloaded history including real `read` tool output
+        // Second request must carry reloaded history including rewritten `execute` call and real `read` tool output
         let req2 = requests[1]
         let req2BodyText = LiveExecutionFixture.utf8(req2.body ?? [])
         #expect(req2BodyText.contains("toolu_read_notes_1"))
-        #expect(req2BodyText.contains("1: Alpha line"))
-        #expect(req2BodyText.contains("2: Beta line"))
+        #expect(req2BodyText.contains("Alpha line"))
+        #expect(req2BodyText.contains("Beta line"))
 
         // 2. Verify persisted SQLite messages in chronological order via GET /api/session/:id/message?order=asc
         let messages = try await harness.client.message.list(
@@ -265,12 +264,12 @@ struct ServerLiveExecutionTests {
                 case .reasoning(let r):
                     if r.text.contains("Let me read notes.txt") { sawReasoning = true }
                 case .tool(let t):
-                    if t.name == "read", case .completed(let done) = t.state {
+                    if (t.name == "read" || t.name == "execute"), case .completed(let done) = t.state {
                         let rendered = done.content.compactMap { item -> String? in
                             if case .text(let s) = item { return s }
                             return nil
                         }.joined(separator: "\n")
-                        if rendered.contains("1: Alpha line") && rendered.contains("2: Beta line") {
+                        if rendered.contains("Alpha line") && rendered.contains("Beta line") {
                             sawCompletedReadTool = true
                         }
                     }
@@ -517,8 +516,19 @@ struct ServerLiveExecutionTests {
         }
         #expect(assistantSteps.count == 2)
         let writeToolFailed = assistantSteps[0].content.contains { part in
-            if case .tool(let t) = part, t.name == "write", case .error = t.state {
+            guard case .tool(let t) = part else { return false }
+            if t.name == "write", case .error = t.state {
                 return true
+            }
+            if t.name == "execute" {
+                switch t.state {
+                case .error:
+                    return true
+                case .completed(let completed):
+                    return completed.metadata?["error"] == .bool(true)
+                default:
+                    return false
+                }
             }
             return false
         }

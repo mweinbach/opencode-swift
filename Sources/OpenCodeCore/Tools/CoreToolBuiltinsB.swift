@@ -1268,7 +1268,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/automation.ts#IDInput [status=implemented hash=99237fcbd627]
+        // parity: core/src/tool/plugin/automation.ts#IDInput [status=implemented hash=131ab2358dc2]
         public struct IDInput: Equatable, Hashable, Sendable, Codable {
             public let id: AutomationSchema.ID
 
@@ -1316,13 +1316,13 @@ extension CoreTool {
                 case .subagent(let agent): targetDesc = "subagent \(agent.rawValue)"
                 }
                 actionStr = "prompt \(targetDesc): \"\(CoreConfigJSONC.encodeJSONStringContents(clip(p.prompt)))\""
+            case .shell(let s):
+                actionStr = "shell: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(s.command)))\""
             case .code(let c):
                 let firstLine = c.code.split(separator: "\n")
                     .map { $0.trimmingCharacters(in: .whitespaces) }
                     .first(where: { !$0.isEmpty }) ?? ""
                 actionStr = "code: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(firstLine)))\""
-            case .shell(let s):
-                actionStr = "shell: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(s.command)))\""
             }
             var parts = ["\(view.id.rawValue) \"\(view.name)\": \(triggerStr) (\(view.tz))", view.status.rawValue]
             if let next = view.nextDueAt { parts.append("next \(next)") }
@@ -1370,11 +1370,18 @@ extension CoreTool {
             return info
         }
 
-        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=d7c6fac31ebf]
+        // parity: core/src/tool/plugin/automation.ts#Plugin [status=adapted hash=2df9ecf11028]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.automation") { editor, env in
+            guard env.automationsEnabled else { return }
+
+            editor.namespace(ToolSchema.Namespace(
+                name: "automation",
+                description: "Schedule recurring or one-off jobs (cron jobs, timers, reminders). Each one runs a prompt or Code Mode action at a time, every interval, on a cron or when a connected MCP server pushes an event. Use these when the user asks you to schedule, remind, repeat or check back on something, instead of waiting, sleeping or polling."
+            ))
+
             editor.add(RegisteredTool(
-                name: "automation_create",
-                description: "Run a prompt or Code Mode action on a timer or a connected MCP server's push event.",
+                name: "create",
+                description: "Create an automation that runs a prompt, a Code Mode script, or a shell command once at a set time, on an interval, on a cron, or when an MCP server sends an event.",
                 inputSchema: [
                     "type": .string("object"),
                     "properties": .object([
@@ -1386,12 +1393,12 @@ extension CoreTool {
                     "required": .array([.string("name"), .string("trigger"), .string("action")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "automation", codemode: true)
             ) { rawInput, context in
                 guard let automations = env.automation else {
                     throw AISchema.ToolFailure(message: "Automation service is not configured")
                 }
-                let req = try decodeToolJSON(AutomationSchema.Request.self, from: rawInput, toolName: "automation_create")
+                let req = try decodeToolJSON(AutomationSchema.Request.self, from: rawInput, toolName: "automation.create")
                 let caller = try await resolveCaller(env: env, automations: automations, context: context)
                 do {
                     let info = try await automations.create(
@@ -1424,11 +1431,11 @@ extension CoreTool {
             })
 
             editor.add(RegisteredTool(
-                name: "automation_list",
+                name: "list",
                 description: "List this project's automations with their status and next run, and the current time.",
                 inputSchema: ["type": .string("object"), "properties": .object([:])],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "automation", codemode: true)
             ) { _, context in
                 guard let automations = env.automation else {
                     throw AISchema.ToolFailure(message: "Automation service is not configured")
@@ -1453,20 +1460,25 @@ extension CoreTool {
             })
 
             editor.add(RegisteredTool(
-                name: "automation_pause",
+                name: "pause",
                 description: "Pause an automation. It keeps its settings and does not run until resumed.",
                 inputSchema: [
                     "type": .string("object"),
-                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "properties": .object([
+                        "id": .object([
+                            "type": .string("string"),
+                            "description": .string("Automation id from automation.list."),
+                        ]),
+                    ]),
                     "required": .array([.string("id")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "automation", codemode: true)
             ) { rawInput, context in
                 guard let automations = env.automation else {
                     throw AISchema.ToolFailure(message: "Automation service is not configured")
                 }
-                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_pause")
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation.pause")
                 let caller = try await resolveCaller(env: env, automations: automations, context: context)
                 do {
                     _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
@@ -1484,20 +1496,25 @@ extension CoreTool {
             })
 
             editor.add(RegisteredTool(
-                name: "automation_resume",
-                description: "Resume a paused automation.",
+                name: "resume",
+                description: "Resume a paused automation. A missed `at` runs once; repeating timers resume at their next slot. Event watches request replay from their saved cursor.",
                 inputSchema: [
                     "type": .string("object"),
-                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "properties": .object([
+                        "id": .object([
+                            "type": .string("string"),
+                            "description": .string("Automation id from automation.list."),
+                        ]),
+                    ]),
                     "required": .array([.string("id")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "automation", codemode: true)
             ) { rawInput, context in
                 guard let automations = env.automation else {
                     throw AISchema.ToolFailure(message: "Automation service is not configured")
                 }
-                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_resume")
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation.resume")
                 let caller = try await resolveCaller(env: env, automations: automations, context: context)
                 do {
                     _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
@@ -1515,20 +1532,25 @@ extension CoreTool {
             })
 
             editor.add(RegisteredTool(
-                name: "automation_delete",
+                name: "delete",
                 description: "Delete an automation for good.",
                 inputSchema: [
                     "type": .string("object"),
-                    "properties": .object(["id": .object(["type": .string("string")])]),
+                    "properties": .object([
+                        "id": .object([
+                            "type": .string("string"),
+                            "description": .string("Automation id from automation.list."),
+                        ]),
+                    ]),
                     "required": .array([.string("id")]),
                 ],
                 outputSchema: ["type": .string("object")],
-                options: ToolSchema.Options(namespace: "opencode", codemode: true)
+                options: ToolSchema.Options(namespace: "automation", codemode: true)
             ) { rawInput, context in
                 guard let automations = env.automation else {
                     throw AISchema.ToolFailure(message: "Automation service is not configured")
                 }
-                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation_delete")
+                let input = try decodeToolJSON(IDInput.self, from: rawInput, toolName: "automation.delete")
                 let caller = try await resolveCaller(env: env, automations: automations, context: context)
                 do {
                     _ = try await requireOwned(id: input.id, automations: automations, projectID: caller.projectID)
@@ -1682,7 +1704,7 @@ extension CoreTool {
             )
         }
 
-        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=f7b8b31a99c8]
+        // parity: core/src/tool/plugin/image-generate.ts#Plugin [status=adapted hash=55994f70e58a]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.image-generate") { editor, env in
             // Input images and the saved image go through the target's own environment; every target here resolves on
             // this server's environment, so that is `env.fileSystem`.
@@ -1804,7 +1826,7 @@ extension CoreTool {
                         agent: inv.agent,
                         action: "edit",
                         resources: [target.resource],
-                        save: ["*"],
+                        save: [CoreFilesystem.FileAccess.always(target)],
                         source: inv.source
                     ))
                 }
@@ -1844,6 +1866,25 @@ extension CoreTool {
                 let detectedMime = CoreFilesystem.Mime.detectMedia(bytes) ?? firstImage.mime
                 let ext = mimeExtensions[detectedMime] ?? ".png"
                 let finalFile = stem + ext
+                if let target, finalFile != target.absolute.rawValue {
+                    let actual = try await env.fileAccess.resolve(
+                        CoreFilesystem.FileAccess.ResolveInput(path: finalFile, kind: .file, base: target.place)
+                    )
+                    let replaces = (try? await env.fileSystem.stat(at: actual.absolute.rawValue)) != nil
+                    let req = CorePermission.AssertInput(
+                        sessionID: inv.sessionID,
+                        agent: inv.agent,
+                        action: "edit",
+                        resources: [actual.resource],
+                        save: replaces ? [CoreFilesystem.FileAccess.always(actual)] : nil,
+                        source: inv.source
+                    )
+                    if replaces {
+                        try await env.permission.assert(req)
+                    } else {
+                        try await env.permission.assertNotDenied(req)
+                    }
+                }
                 try await env.fileSystem.writeFile(bytes, to: finalFile, createDirectories: true)
 
                 let out = Output(id: jobID, path: finalFile, model: refString)
@@ -2140,7 +2181,7 @@ extension CoreTool {
             return nil
         }
 
-        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=beafff62f683]
+        // parity: core/src/tool/plugin/opencode.ts#Plugin [status=adapted hash=61e98c86189a]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools") { editor, env in
             editor.namespace(ToolSchema.Namespace(
                 name: "opencode",
@@ -2337,7 +2378,7 @@ extension CoreTool {
                     agent: inv.agent,
                     action: "edit",
                     resources: [target.resource],
-                    save: ["*"],
+                    save: [CoreFilesystem.FileAccess.always(target)],
                     source: inv.source
                 ))
                 guard let worktreeService = env.worktree else {
@@ -2366,7 +2407,7 @@ extension CoreTool {
 
             editor.add(RegisteredTool(
                 name: "models",
-                description: "Search the models available to use. Use this to turn a model name the user mentions into an exact reference for a tool that takes a model. Check your own provider first.",
+                description: "Search the models available to use. Use this to turn a model name the user mentions into an exact reference for a tool that takes a model. Check your own provider first. Prefer the standard offering unless the user explicitly requests another tier. Use the listed pricing to compare costs when available; missing pricing does not mean free.",
                 inputSchema: [
                     "type": .string("object"),
                     "properties": .object([
@@ -2508,6 +2549,12 @@ extension CoreTool {
     ) async -> CoreFilesystem.LocationWatcherPolicy.Registration {
         var resolving = environment
         resolving.fullCodeMode = await environment.flags.enabled(.fullCodemode)
+        resolving.machinesEnabled = await environment.flags.enabled(.machines)
+        resolving.sqliteFts = await environment.flags.enabled(.sqliteFts)
+        if let config = environment.config {
+            let entries = await config.entries()
+            resolving.automationsEnabled = CoreConfig.latest(entries, \.automations) ?? true
+        }
         resolving.videoGenerate = await VideoGenerateTool.enabled(environment)
         let resolved = resolving
         let plugins: [ToolPluginDescriptor] = [
@@ -2528,6 +2575,8 @@ extension CoreTool {
             AutomationTools.Plugin,
             ImageGenerateTool.Plugin,
             VideoGenerateTool.Plugin,
+            MachineTools.Plugin,
+            SessionSearchTools.Plugin,
             McpEventTools.Plugin,
             McpResourceTools.Plugin,
             OpenCodeTools.Plugin,

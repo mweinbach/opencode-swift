@@ -1097,11 +1097,12 @@ public enum CoreConfigVariable {
 // MARK: - Config Normalization & V1 -> V2 Migration (`core/src/config/normalize.ts`)
 
 public enum CoreConfigNormalize {
-    // parity: core/src/config/normalize.ts#Diagnostic [status=implemented hash=57e190f9a686]
+    // parity: core/src/config/normalize.ts#Diagnostic [status=implemented hash=07f1728d7172]
     public struct Diagnostic: Equatable, Hashable, Sendable, Codable {
         public enum Kind: String, Equatable, Hashable, Sendable, Codable {
             case conflict
             case invalid
+            case removed
             case unsupported
         }
 
@@ -1130,6 +1131,7 @@ public enum CoreConfigNormalize {
         "primary_tools",
         "continue_loop_on_deny",
     ]
+    private static let removedExperimental: [String] = ["automations", "schedules"]
     private static let nativeAtomicKeys: [String] = [
         "$schema",
         "shell",
@@ -1148,8 +1150,8 @@ public enum CoreConfigNormalize {
     ]
 
     /// Normalizes raw parsed JSON/JSONC configuration, migrating V1 keys into canonical V2 shape
-    /// and collecting conflict/invalid/unsupported diagnostics.
-    // parity: core/src/config/normalize.ts#normalize [status=implemented hash=0627772edd35]
+    /// and collecting conflict/invalid/removed/unsupported diagnostics.
+    // parity: core/src/config/normalize.ts#normalize [status=implemented hash=32d6e21123ae]
     public static func normalize(_ input: JSONValue) -> Result {
         guard case .object(let obj) = input else {
             return .rejected(diagnostics: [
@@ -1444,7 +1446,14 @@ public enum CoreConfigNormalize {
                 for key in unsupportedExperimental where expObj[key] != nil {
                     diagnostics.append(Diagnostic(kind: .unsupported, path: ["experimental", key], message: "omitted unsupported legacy setting"))
                 }
-                for (k, v) in expObj where k != "policies" && !unsupportedExperimental.contains(k) {
+                for key in removedExperimental where expObj[key] != nil {
+                    diagnostics.append(Diagnostic(
+                        kind: .removed,
+                        path: ["experimental", key],
+                        message: "Use the top-level automations setting. Automations are enabled by default."
+                    ))
+                }
+                for (k, v) in expObj where k != "policies" && !unsupportedExperimental.contains(k) && !removedExperimental.contains(k) {
                     expOut[k] = v
                 }
                 encoded["experimental"] = .object(expOut)
@@ -1620,6 +1629,27 @@ public enum CoreConfigDiscovery {
             return json
         }
         return String(decoding: encoded, as: UTF8.self)
+    }
+
+    /// The project's personal config dir under the global config dir, layered above the repo's own `.opencode` dirs.
+    // parity: core/src/config/discovery.ts#overlay [status=implemented hash=1671c71ed177]
+    public static func overlay(
+        projectID: ProjectID,
+        options: CoreConfig.Options? = nil,
+        global: Global.Interface? = nil,
+        fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
+        environment: any EnvironmentProviding = SystemEnvironment.shared,
+        platform: PlatformOS = Platform.current
+    ) async -> DirectoryCandidate? {
+        if options?.global == false || options?.project == false || projectID == .global {
+            return nil
+        }
+        let fsUtil = FSUtil.Service(fileSystem: fileSystem)
+        let globalPaths = global ?? Global.make(environment: environment, os: platform)
+        let directory = SchemaPrimitive.AbsolutePath(
+            rawValue: joinPath(joinPath(globalPaths.config, "project"), projectID.rawValue)
+        )
+        return DirectoryCandidate(path: directory, present: await fsUtil.isDir(directory.rawValue))
     }
 
     /// Discovers all eligible config sources across system, global, explicit, and ancestor project directories.
@@ -2137,6 +2167,9 @@ public enum CoreConfig {
 
         private let directory: String
         private let options: Options?
+        private let projectID: ProjectID?
+        private let channel: String
+        private let flagOverrides: String?
         private let globalPaths: Global.Interface
         private let fileSystem: any OpenCodeFileSystem
         private let environment: any EnvironmentProviding
@@ -2159,6 +2192,9 @@ public enum CoreConfig {
         public init(
             directory: String,
             options: Options? = nil,
+            projectID: ProjectID? = nil,
+            channel: String = "local",
+            flagOverrides: String? = nil,
             globalPaths: Global.Interface? = nil,
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             environment: any EnvironmentProviding = SystemEnvironment.shared,
@@ -2177,8 +2213,12 @@ public enum CoreConfig {
         ) async {
             let resolvedGlobal = globalPaths ?? Global.make(environment: environment, os: platform)
             let resolvedLocation = location ?? OpenCodeLocation(directory: directory)
+            let resolvedOverrides = flagOverrides ?? CoreFlagResolve.Overrides.fromEnvironment(environment)
             self.directory = directory
             self.options = options
+            self.projectID = projectID
+            self.channel = channel
+            self.flagOverrides = resolvedOverrides
             self.globalPaths = resolvedGlobal
             self.fileSystem = fileSystem
             self.environment = environment
@@ -2207,6 +2247,9 @@ public enum CoreConfig {
                 sources: discovered,
                 directory: directory,
                 options: options,
+                projectID: projectID,
+                channel: channel,
+                flagOverrides: resolvedOverrides,
                 globalPaths: resolvedGlobal,
                 integrations: [],
                 credentials: credentials,
@@ -2214,9 +2257,10 @@ public enum CoreConfig {
                 processes: processes,
                 fileSystem: fileSystem,
                 environment: environment,
+                platform: platform,
                 log: log
             )
-            self.state = Mutex(State(sources: discovered, entries: loaded.entries, isInput: loaded.isInput))
+            self.state = Mutex(State(sources: loaded.sources, entries: loaded.entries, isInput: loaded.isInput))
 
             // Start eager bus subscriptions (`Credential.Event.Switched`, `WellKnown.Event.Updated`) and the
             // periodic 10-minute `WellKnown` manifest/remote-config refresh timer scoped to this service lifecycle.
@@ -2313,7 +2357,7 @@ public enum CoreConfig {
             if watcher != nil {
                 state.withLock { $0.reloadInProgress = true }
                 await reloadLock.acquire()
-                await reconcileWatchesLocked(discovered)
+                await reconcileWatchesLocked(loaded.sources)
                 let needsReload = state.withLock { s -> Bool in
                     s.reloadInProgress = false
                     let pending = s.pendingReloadAfterCurrent && !s.closed
@@ -2537,6 +2581,9 @@ public enum CoreConfig {
                 sources: discovered,
                 directory: directory,
                 options: options,
+                projectID: projectID,
+                channel: channel,
+                flagOverrides: flagOverrides,
                 globalPaths: globalPaths,
                 integrations: orderedIntegrations,
                 credentials: credentials,
@@ -2544,6 +2591,7 @@ public enum CoreConfig {
                 processes: processes,
                 fileSystem: fileSystem,
                 environment: environment,
+                platform: platform,
                 log: log
             )
             let stillOpen: Bool = state.withLock { s in
@@ -2553,14 +2601,14 @@ public enum CoreConfig {
                 return true
             }
             guard stillOpen else { return }
-            await reconcileWatchesLocked(discovered)
+            await reconcileWatchesLocked(next.sources)
 
             let changed: Bool = state.withLock { s in
                 guard !s.closed else { return false }
-                let compatibilityChanged = s.sources.claude != discovered.claude || s.sources.agents != discovered.agents
+                let compatibilityChanged = s.sources.claude != next.sources.claude || s.sources.agents != next.sources.agents
                 let diff = s.entries != next.entries || compatibilityChanged
                 if diff {
-                    s.sources = discovered
+                    s.sources = next.sources
                     s.entries = next.entries
                 }
                 return diff
@@ -2780,7 +2828,8 @@ public enum CoreConfig {
                 isRejected = false
             }
             for diagnostic in diagnostics {
-                let level: OpenCodeLogLevel = (isRejected || diagnostic.kind == .invalid) ? .warn : .debug
+                let warn = isRejected || diagnostic.kind == .invalid || diagnostic.kind == .removed
+                let level: OpenCodeLogLevel = warn ? .warn : .debug
                 let pathStr = diagnostic.path.first == "$" ? "$" : "$." + diagnostic.path.joined(separator: ".")
                 await emitLog(
                     log,
@@ -3068,6 +3117,9 @@ public enum CoreConfig {
             sources: CoreConfigDiscovery.Sources,
             directory: String,
             options: Options?,
+            projectID: ProjectID?,
+            channel: String,
+            flagOverrides: String?,
             globalPaths: Global.Interface,
             integrations: [CoreConfigIntegration.Document],
             credentials: (any CoreProvider.Credential.Interface)?,
@@ -3075,8 +3127,9 @@ public enum CoreConfig {
             processes: (any AppProcess.Interface)?,
             fileSystem: any OpenCodeFileSystem,
             environment: any EnvironmentProviding,
+            platform: PlatformOS,
             log: (any LogSink)?
-        ) async -> (entries: [CoreConfigEntry], isInput: @Sendable (String) -> Bool) {
+        ) async -> (entries: [CoreConfigEntry], sources: CoreConfigDiscovery.Sources, isInput: @Sendable (String) -> Bool) {
             var references: Set<String> = []
             let home = globalPaths.home
 
@@ -3276,23 +3329,74 @@ public enum CoreConfig {
                 }
             }
 
-            var result: [CoreConfigEntry] = []
-            result.append(contentsOf: managedPolicies)
-            result.append(contentsOf: integrationEntries)
-            result.append(contentsOf: wellKnownEntries)
-            result.append(contentsOf: globalEntries)
-            result.append(contentsOf: explicitDocs)
-            result.append(contentsOf: directDocs)
-            result.append(contentsOf: projectEntries)
-            result.append(contentsOf: contentDocs)
-            result.append(contentsOf: managedSettings)
+            var below: [CoreConfigEntry] = []
+            below.append(contentsOf: managedPolicies)
+            below.append(contentsOf: integrationEntries)
+            below.append(contentsOf: wellKnownEntries)
+            below.append(contentsOf: globalEntries)
+            below.append(contentsOf: explicitDocs)
+            below.append(contentsOf: directDocs)
+            below.append(contentsOf: projectEntries)
+            var above: [CoreConfigEntry] = []
+            above.append(contentsOf: contentDocs)
+            above.append(contentsOf: managedSettings)
 
+            // Config can't read the Flag service, which reads Config, so it resolves project_overlay from everything
+            // but the overlay itself.
+            let overlayCandidate: CoreConfigDiscovery.DirectoryCandidate?
+            if let projectID,
+               CoreFlagResolve.resolve(CoreFlagResolve.ResolveInput(
+                   entries: below + above,
+                   channel: channel,
+                   overrides: flagOverrides
+               ))[.projectOverlay]?.enabled == true
+            {
+                overlayCandidate = await CoreConfigDiscovery.overlay(
+                    projectID: projectID,
+                    options: options,
+                    global: globalPaths,
+                    fileSystem: fileSystem,
+                    environment: environment,
+                    platform: platform
+                )
+            } else {
+                overlayCandidate = nil
+            }
+            let effectiveSources: CoreConfigDiscovery.Sources
+            if let overlayCandidate {
+                effectiveSources = CoreConfigDiscovery.Sources(
+                    system: sources.system,
+                    preferences: sources.preferences,
+                    global: sources.global,
+                    explicit: sources.explicit,
+                    direct: sources.direct,
+                    project: sources.project + [overlayCandidate],
+                    claude: sources.claude,
+                    agents: sources.agents
+                )
+            } else {
+                effectiveSources = sources
+            }
+            let overlayEntries: [CoreConfigEntry] = if let overlayCandidate, overlayCandidate.present {
+                await loadDirectory(
+                    overlayCandidate.path,
+                    references: &references,
+                    home: home,
+                    fileSystem: fileSystem,
+                    environment: environment,
+                    log: log
+                )
+            } else {
+                []
+            }
+
+            let result = below + overlayEntries + above
             let isInput = await CoreConfigWatch.inputs(
-                sources: sources,
+                sources: effectiveSources,
                 references: references,
                 fileSystem: fileSystem
             )
-            return (result, isInput)
+            return (result, effectiveSources, isInput)
         }
     }
 
@@ -3401,7 +3505,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#layer [status=implemented hash=880f93656adb]
+    // parity: core/src/config.ts#layer [status=implemented hash=248fd09be94d]
     public static func layer(_ options: Options? = nil) -> LayerNode.ExecutableLayer {
         LayerNode.ExecutableLayer { deps, scope in
             let fsUtil = deps.get(FSUtil.Service.serviceKey, as: FSUtil.Service.self)
@@ -3411,6 +3515,9 @@ public enum CoreConfig {
             let bus = deps.get(CoreBus.Service.serviceKey, as: (any CoreBus.Interface).self)
             let credentials = deps.get(CoreProvider.Credential.Service.serviceKey, as: (any CoreProvider.Credential.Interface).self)
             let wellKnown = deps.get(CoreIntegration.WellKnown.Service.serviceKey, as: (any CoreIntegration.WellKnown.Interface).self)
+            let appSvc = deps.get(CoreSubsystems.App.Service.serviceKey, as: CoreSubsystems.App.Service.self)
+            let channel = appSvc?.info.channel ?? deps.get("@opencode/App.channel", as: String.self) ?? "local"
+            let flagOverrides = deps.get(CoreFlagResolve.Overrides.key, as: String.self)
             let logSink: (any LogSink)? = deps.get("@opencode/LogSink", as: (any LogSink).self)
                 ?? deps.get(Observability.Service.serviceKey, as: Observability.Service.self).map(ObservabilityLogAdapter.init)
             #if os(macOS)
@@ -3428,6 +3535,9 @@ public enum CoreConfig {
             let service = await Service(
                 directory: directory,
                 options: options,
+                projectID: locationSvc?.info.project.id,
+                channel: channel,
+                flagOverrides: flagOverrides,
                 globalPaths: globalSvc?.paths,
                 fileSystem: fsUtil?.fileSystem ?? LocalFileSystem.shared,
                 watcher: watcher,
@@ -3445,7 +3555,7 @@ public enum CoreConfig {
         }
     }
 
-    // parity: core/src/config.ts#configured [status=implemented hash=667800e459ad]
+    // parity: core/src/config.ts#configured [status=implemented hash=0fb121ea33d6]
     public static func configured(_ options: Options? = nil) -> LayerNode.Provider {
         AppNode.makeLocationNode(
             Service.serviceKey,
@@ -3459,6 +3569,7 @@ public enum CoreConfig {
                 CoreProvider.Credential.node,
                 CoreIntegration.WellKnown.node,
                 AppProcess.node,
+                CoreSubsystems.App.node,
             ]
         )
     }

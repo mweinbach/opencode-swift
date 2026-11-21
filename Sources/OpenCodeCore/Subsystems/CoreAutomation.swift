@@ -546,21 +546,48 @@ public enum CoreAutomation {
         private static let maxOutputBytes = 32 * 1024
         private static let codeLimits = CodemodeEngine.ExecutionLimits(
             timeoutMs: TIMEOUT_MS,
-            maxToolCalls: 20,
             maxOutputBytes: maxOutputBytes
         )
 
+        /// Tools that must not receive an unattended grant from an automation.
         private static let forbiddenTools: Set<String> = [
-            "shell",
-            "opencode.automation_create",
-            "opencode.automation_pause",
-            "opencode.automation_resume",
-            "opencode.automation_delete",
+            "automation.create",
+            "automation.pause",
+            "automation.resume",
+            "automation.delete",
             "opencode.session.move",
-            "opencode.session.rename",
-            "opencode.worktree_create",
-            "opencode.worktree_remove",
         ]
+
+        private static let bunFileReadMembers: Set<String> = [
+            "name",
+            "type",
+            "size",
+            "lastModified",
+            "text",
+            "json",
+            "bytes",
+            "arrayBuffer",
+            "exists",
+            "stat",
+        ]
+
+        public struct ProgramScan: Equatable, Sendable {
+            public let tools: [String]
+            public let actions: [String]
+
+            public init(tools: [String], actions: [String]) {
+                self.tools = tools
+                self.actions = actions
+            }
+        }
+
+        private struct ScanCacheState: Sendable {
+            var order: [String] = []
+            var entries: [String: Result<ProgramScan, InvalidError>] = [:]
+        }
+
+        // Script text is immutable. Only cache the static scan, never tool registrations or permission decisions.
+        private static let scanCache = Mutex(ScanCacheState())
 
         // parity: core/src/automation/code.ts#boundedOutput [status=implemented hash=b02642b74eb8]
         public static func boundedOutput(_ text: String) -> String {
@@ -609,25 +636,601 @@ public enum CoreAutomation {
             case failure(error: String, output: String?, invalid: Bool)
         }
 
+        /// Extracts statically referenced `tools.<path>` calls, global extensions (`fetch`, `Bun`), and module imports
+        /// via the Code Mode AST scanner, rejecting dynamic access, parse errors, and forbidden unattended tools.
+        public static func scan(_ code: String) -> Result<ProgramScan, InvalidError> {
+            if let cached = scanCache.withLock({ $0.entries[code] }) {
+                return cached
+            }
+            let scanned = scanProgram(code)
+            scanCache.withLock { cache in
+                if cache.entries[code] == nil {
+                    if cache.order.count >= 16, let oldest = cache.order.first {
+                        cache.order.removeFirst()
+                        cache.entries.removeValue(forKey: oldest)
+                    }
+                    cache.order.append(code)
+                }
+                cache.entries[code] = scanned
+            }
+            return scanned
+        }
+
         /// Extracts statically referenced `tools.<path>` calls via the Code Mode AST scanner
         /// and rejects dynamic access, parse errors, and forbidden unattended tools.
         public static func scanForbiddenTools(in code: String) -> Result<[String], InvalidError> {
-            switch CodemodeEngine.scanTools(code) {
-            case .failure(let diagnostic):
-                return .failure(InvalidError(reason: diagnostic.message))
-            case .success(let paths):
-                if let forbidden = paths.first(where: { forbiddenTools.contains($0) }) {
-                    return .failure(InvalidError(reason: "Tool \(forbidden) cannot be used inside an automation"))
+            scan(code).map(\.tools)
+        }
+
+        private final class ResultMemberSet {
+            var members: [String?] = []
+            func add(_ member: String?) {
+                if !members.contains(where: { $0 == member }) {
+                    members.append(member)
                 }
-                return .success(paths)
             }
         }
 
-        private static func qualifiedToolName(_ tool: CoreTool.RegisteredTool) -> String {
-            if let ns = tool.options?.namespace, !ns.isEmpty {
-                return "\(ns).\(tool.name)"
+        private struct GlobalUse {
+            let member: String?
+            let resultMembers: ResultMemberSet
+        }
+
+        private final class ScopeBox {
+            let names: Set<String>
+            var localUses: [String: ResultMemberSet] = [:]
+            init(_ names: Set<String>) { self.names = names }
+            func uses(for name: String) -> ResultMemberSet {
+                if let existing = localUses[name] { return existing }
+                let created = ResultMemberSet()
+                localUses[name] = created
+                return created
             }
-            return tool.name
+        }
+
+        private static func scanProgram(_ code: String) -> Result<ProgramScan, InvalidError> {
+            if code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return .failure(InvalidError(reason: "Code cannot be empty."))
+            }
+            let parsed = CodemodeLanguage.parseProgram(code)
+            let program: CodemodeLanguage.ProgramAST
+            switch parsed {
+            case .error(let diag):
+                return .failure(InvalidError(reason: diag.message))
+            case .ok(let p, _):
+                program = p
+            }
+
+            let trackedGlobals: Set<String> = ["fetch", "Bun"]
+            let forwardingMembers: Set<String> = ["slice"]
+
+            var toolsOrder: [String] = []
+            var toolsSet = Set<String>()
+            var modules = Set<String>()
+            var globalUses: [String: [GlobalUse]] = [:]
+            var scopes: [ScopeBox] = [ScopeBox(collectStmtNames(program.body, includeVar: true))]
+
+            func findScope(_ name: String) -> ScopeBox? {
+                for box in scopes.reversed() where box.names.contains(name) {
+                    return box
+                }
+                return nil
+            }
+
+            func fail(_ loc: CodemodeLanguage.SourceLocation?, _ msg: String) -> InvalidError {
+                InvalidError(reason: "\(msg)\(CodemodeLanguage.formatLocation(loc))")
+            }
+
+            func propertyName(_ prop: CodemodeLanguage.PropertyKeyExpr) -> String? {
+                switch prop {
+                case .identifier(let s, _): return s
+                case .string(let s, _): return s.toHostString()
+                case .computed(.literalString(let s, _), _): return s.toHostString()
+                default: return nil
+                }
+            }
+
+            func isRootedAtTools(_ expr: CodemodeLanguage.Expression) -> Bool {
+                switch expr {
+                case .identifier("tools", _): return findScope("tools") == nil
+                case .member(let obj, _, _, _): return isRootedAtTools(obj)
+                case .chain(let inner, _): return isRootedAtTools(inner)
+                default: return false
+                }
+            }
+
+            func extractStaticToolChain(_ expr: CodemodeLanguage.Expression) -> (ok: Bool, path: String?, reason: String?, loc: CodemodeLanguage.SourceLocation?)? {
+                var segments: [String] = []
+                var cur = expr
+                while true {
+                    switch cur {
+                    case .chain(let inner, _):
+                        cur = inner
+                    case .member(let obj, let prop, _, let loc):
+                        if let name = propertyName(prop) {
+                            segments.append(name)
+                            cur = obj
+                        } else if isRootedAtTools(obj) {
+                            return (false, nil, "Automation code must reference tools statically (e.g. tools.slack.read_thread), not with dynamic bracket expressions.", loc)
+                        } else {
+                            return nil
+                        }
+                    case .identifier("tools", _):
+                        guard findScope("tools") == nil else { return nil }
+                        if segments.isEmpty {
+                            return (false, nil, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.", cur.location)
+                        }
+                        return (true, segments.reversed().joined(separator: "."), nil, cur.location)
+                    default:
+                        return nil
+                    }
+                }
+            }
+
+            /// Extracts a `globalName.<member>(...)` call (unwrapping `await` / optional chains) when unshadowed.
+            func matchTrackedGlobalCall(_ expr: CodemodeLanguage.Expression) -> (global: String, member: String, args: [CodemodeLanguage.CallArgument])? {
+                var cur = expr
+                while true {
+                    switch cur {
+                    case .awaitExpr(let inner, _), .chain(let inner, _):
+                        cur = inner
+                    case .call(let callee, let args, _, _):
+                        var calleeCur = callee
+                        if case .chain(let inner, _) = calleeCur { calleeCur = inner }
+                        guard case .member(let obj, let prop, _, _) = calleeCur,
+                              case .identifier(let globalName, _) = obj,
+                              trackedGlobals.contains(globalName),
+                              findScope(globalName) == nil,
+                              let member = propertyName(prop)
+                        else { return nil }
+                        return (globalName, member, args)
+                    default:
+                        return nil
+                    }
+                }
+            }
+
+            /// Unwraps a member access chain on top of a value, skipping `await`, optional chain, and forwarding calls
+            /// like `.slice(...)`, returning the innermost receiver expression and the first non-forwarding member name.
+            func unwrapMemberChain(_ expr: CodemodeLanguage.Expression) -> (receiver: CodemodeLanguage.Expression, member: String?, extraArgs: [CodemodeLanguage.CallArgument], computedProp: CodemodeLanguage.Expression?)? {
+                guard case .member(let obj, let prop, _, _) = expr else { return nil }
+                let mName = propertyName(prop)
+                let computedExpr: CodemodeLanguage.Expression? = if case .computed(let ce, _) = prop { ce } else { nil }
+                // Check if `obj` itself is a forwarding call like `inner.slice(...)`
+                var unwrappedObj = obj
+                while true {
+                    if case .awaitExpr(let a, _) = unwrappedObj { unwrappedObj = a; continue }
+                    if case .chain(let c, _) = unwrappedObj { unwrappedObj = c; continue }
+                    break
+                }
+                if case .call(let callee, let args, _, _) = unwrappedObj {
+                    var unwrappedCallee = callee
+                    if case .chain(let c, _) = unwrappedCallee { unwrappedCallee = c }
+                    if case .member(let innerObj, let innerProp, _, _) = unwrappedCallee,
+                       let innerName = propertyName(innerProp),
+                       forwardingMembers.contains(innerName)
+                    {
+                        var deeper = innerObj
+                        while true {
+                            if case .awaitExpr(let a, _) = deeper { deeper = a; continue }
+                            if case .chain(let c, _) = deeper { deeper = c; continue }
+                            break
+                        }
+                        return (deeper, mName, args, computedExpr)
+                    }
+                }
+                return (unwrappedObj, mName, [], computedExpr)
+            }
+
+            func visitCallArgs(_ args: [CodemodeLanguage.CallArgument]) -> InvalidError? {
+                for a in args {
+                    if case .expr(let e) = a, let err = visitExpr(e) { return err }
+                    if case .spread(let e, _) = a, let err = visitExpr(e) { return err }
+                }
+                return nil
+            }
+
+            func visitExpr(_ expr: CodemodeLanguage.Expression, resultHint: ResultMemberSet? = nil, discardResult: Bool = false) -> InvalidError? {
+                switch expr {
+                case .call(let callee, let args, _, let loc):
+                    if case .identifier("require", _) = callee {
+                        if let first = args.first, case .expr(let srcExpr) = first {
+                            if case .literalString(let s, _) = srcExpr {
+                                let name = CodemodeLanguage.moduleName(s.toHostString())
+                                if name == "tools" {
+                                    return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
+                                }
+                                modules.insert(name)
+                            } else {
+                                return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
+                            }
+                        }
+                    }
+                    // Tracked global method call: e.g. `Bun.file(...)`, `Bun.write(...)`
+                    if let matched = matchTrackedGlobalCall(expr) {
+                        let set: ResultMemberSet
+                        if let resultHint {
+                            set = resultHint
+                        } else if discardResult {
+                            set = ResultMemberSet()
+                        } else {
+                            let s = ResultMemberSet()
+                            s.add(nil)
+                            set = s
+                        }
+                        globalUses[matched.global, default: []].append(GlobalUse(member: matched.member, resultMembers: set))
+                        return visitCallArgs(matched.args)
+                    }
+                    // Check if callee is `trackedGlobalCall.<member>` (or `.slice(...).<member>`) or `localVar.<member>`
+                    if let chain = extractStaticToolChain(callee) {
+                        if !chain.ok { return fail(chain.loc, chain.reason ?? "Invalid tool call.") }
+                        if let path = chain.path, toolsSet.insert(path).inserted { toolsOrder.append(path) }
+                    } else {
+                        if let err = visitExpr(callee) { return err }
+                    }
+                    return visitCallArgs(args)
+
+                case .identifier(let name, let loc):
+                    if let scope = findScope(name) {
+                        scope.uses(for: name).add(nil)
+                        return nil
+                    }
+                    if name == "tools" {
+                        return fail(loc, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.")
+                    }
+                    if trackedGlobals.contains(name) {
+                        let set = ResultMemberSet()
+                        set.add(nil)
+                        globalUses[name, default: []].append(GlobalUse(member: nil, resultMembers: set))
+                    }
+                    return nil
+
+                case .member(let obj, let prop, _, let loc):
+                    if isRootedAtTools(expr) {
+                        if case .computed = prop, propertyName(prop) == nil {
+                            return fail(loc, "Automation code must reference tools statically (e.g. tools.slack.read_thread), not with dynamic bracket expressions.")
+                        }
+                        return fail(loc, "Automation code must call tools directly as tools.<name>(...), not alias or pass the tools object.")
+                    }
+                    // Direct property read on tracked global (not a call): e.g. `Bun.file` or `new Bun.Glob(...)`
+                    if case .identifier(let globalName, _) = obj,
+                       trackedGlobals.contains(globalName),
+                       findScope(globalName) == nil
+                    {
+                        let mName = propertyName(prop)
+                        let set = ResultMemberSet()
+                        set.add(nil)
+                        globalUses[globalName, default: []].append(GlobalUse(member: mName, resultMembers: set))
+                        if case .computed(let ce, _) = prop, let err = visitExpr(ce) { return err }
+                        return nil
+                    }
+                    // Member access on a tracked global call or local variable (with optional `.slice(...)` forwarding)
+                    if let unwrapped = unwrapMemberChain(expr) {
+                        if let matched = matchTrackedGlobalCall(unwrapped.receiver) {
+                            let set = ResultMemberSet()
+                            set.add(unwrapped.member)
+                            globalUses[matched.global, default: []].append(GlobalUse(member: matched.member, resultMembers: set))
+                            if let err = visitCallArgs(matched.args) { return err }
+                            if let err = visitCallArgs(unwrapped.extraArgs) { return err }
+                            if let ce = unwrapped.computedProp, let err = visitExpr(ce) { return err }
+                            return nil
+                        }
+                        if case .identifier(let localName, _) = unwrapped.receiver,
+                           let scope = findScope(localName)
+                        {
+                            scope.uses(for: localName).add(unwrapped.member)
+                            if let err = visitCallArgs(unwrapped.extraArgs) { return err }
+                            if let ce = unwrapped.computedProp, let err = visitExpr(ce) { return err }
+                            return nil
+                        }
+                    }
+                    if let err = visitExpr(obj) { return err }
+                    if case .computed(let ce, _) = prop, let err = visitExpr(ce) { return err }
+                    return nil
+
+                case .importExpr(let src, let loc):
+                    if case .literalString(let s, _) = src {
+                        let name = CodemodeLanguage.moduleName(s.toHostString())
+                        if name == "tools" {
+                            return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
+                        }
+                        modules.insert(name)
+                    } else {
+                        return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
+                    }
+                    return nil
+
+                case .awaitExpr(let inner, _), .chain(let inner, _):
+                    return visitExpr(inner, resultHint: resultHint, discardResult: discardResult)
+
+                case .function(let fn):
+                    return visitFunctionPayload(fn)
+
+                case .array(let els, _):
+                    for el in els {
+                        if case .expr(let e) = el, let err = visitExpr(e) { return err }
+                        if case .spread(let e, _) = el, let err = visitExpr(e) { return err }
+                    }
+                    return nil
+
+                case .object(let props, _):
+                    for p in props {
+                        switch p {
+                        case .property(let k, let v, _, _):
+                            if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
+                            if let err = visitExpr(v) { return err }
+                        case .spread(let e, _):
+                            if let err = visitExpr(e) { return err }
+                        case .accessor(_, let k, let fn, _):
+                            if case .computed(let ce, _) = k, let err = visitExpr(ce) { return err }
+                            if let err = visitFunctionPayload(fn) { return err }
+                        }
+                    }
+                    return nil
+
+                case .classExpr(let cls):
+                    return visitClass(cls)
+
+                case .superMember(let prop, _):
+                    if case .computed(let ce, _) = prop { return visitExpr(ce) }
+                    return nil
+
+                case .superCall(let args, _, _):
+                    return visitCallArgs(args)
+
+                case .templateLiteral(_, let es, _):
+                    for e in es { if let err = visitExpr(e) { return err } }
+                    return nil
+
+                case .taggedTemplate(let tag, _, let es, _):
+                    if let err = visitExpr(tag) { return err }
+                    for e in es { if let err = visitExpr(e) { return err } }
+                    return nil
+
+                case .newExpr(let callee, let args, _):
+                    if let err = visitExpr(callee) { return err }
+                    return visitCallArgs(args)
+
+                case .unary(_, let a, _), .update(_, let a, _, _):
+                    return visitExpr(a)
+
+                case .yieldExpr(let a, _, _):
+                    return a.flatMap { visitExpr($0) }
+
+                case .binary(_, let l, let r, _), .logical(_, let l, let r, _):
+                    return visitExpr(l) ?? visitExpr(r)
+
+                case .conditional(let t, let c, let a, _):
+                    return visitExpr(t) ?? visitExpr(c) ?? visitExpr(a)
+
+                case .assignment(_, _, let r, _):
+                    return visitExpr(r)
+
+                case .sequence(let es, _):
+                    for e in es { if let err = visitExpr(e) { return err } }
+                    return nil
+
+                default:
+                    return nil
+                }
+            }
+
+            func visitFunctionPayload(_ fn: CodemodeLanguage.FunctionPayload) -> InvalidError? {
+                var fnScope = Set<String>()
+                if let n = fn.name { fnScope.insert(n) }
+                for p in fn.params { for n in CodemodeLanguage.collectPatternNames(p) { fnScope.insert(n) } }
+                if case .block(let stmts) = fn.body { fnScope.formUnion(collectStmtNames(stmts, includeVar: true)) }
+                scopes.append(ScopeBox(fnScope))
+                defer { scopes.removeLast() }
+                switch fn.body {
+                case .block(let stmts): return visitStmts(stmts)
+                case .expression(let e): return visitExpr(e)
+                }
+            }
+
+            func visitClass(_ cls: CodemodeLanguage.ClassPayload) -> InvalidError? {
+                scopes.append(ScopeBox(cls.name.map { [$0] } ?? []))
+                defer { scopes.removeLast() }
+                if let superClass = cls.superClass, let err = visitExpr(superClass) { return err }
+                if let err = visitFunctionPayload(cls.constructor) { return err }
+                for member in cls.members {
+                    if case .computed(let ce, _) = member.key, let err = visitExpr(ce) { return err }
+                    if let fn = member.function, let err = visitFunctionPayload(fn) { return err }
+                    if let value = member.value, let err = visitExpr(value) { return err }
+                }
+                return nil
+            }
+
+            func visitDeclarators(_ decls: [CodemodeLanguage.VariableDeclarator]) -> InvalidError? {
+                for d in decls {
+                    guard let ie = d.initializer else { continue }
+                    if case .identifier(let localName, _) = d.id,
+                       let scope = findScope(localName)
+                    {
+                        if let err = visitExpr(ie, resultHint: scope.uses(for: localName)) { return err }
+                    } else if let err = visitExpr(ie) {
+                        return err
+                    }
+                }
+                return nil
+            }
+
+            func visitStmts(_ stmts: [CodemodeLanguage.Statement]) -> InvalidError? {
+                for stmt in stmts {
+                    if let err = visitStmt(stmt) { return err }
+                }
+                return nil
+            }
+
+            func visitStmt(_ stmt: CodemodeLanguage.Statement) -> InvalidError? {
+                switch stmt {
+                case .importDecl(_, let source, let loc):
+                    let name = CodemodeLanguage.moduleName(source)
+                    if name == "tools" {
+                        return fail(loc, "Automation code must call tools directly as tools.<name>(...), not import or require them.")
+                    }
+                    modules.insert(name)
+                    return nil
+                case .expression(let e, _):
+                    return visitExpr(e, discardResult: true)
+                case .throwStmt(let e, _):
+                    return visitExpr(e)
+                case .returnStmt(let e, _):
+                    return e.flatMap { visitExpr($0) }
+                case .variable(_, let decls, _):
+                    return visitDeclarators(decls)
+                case .block(let inner, _):
+                    scopes.append(ScopeBox(collectStmtNames(inner, includeVar: false)))
+                    defer { scopes.removeLast() }
+                    return visitStmts(inner)
+                case .functionDecl(let fn):
+                    return visitFunctionPayload(fn)
+                case .ifStmt(let t, let c, let a, _):
+                    return visitExpr(t) ?? visitStmt(c) ?? a.flatMap(visitStmt)
+                case .whileStmt(let t, let b, _):
+                    return visitExpr(t) ?? visitStmt(b)
+                case .doWhileStmt(let b, let t, _):
+                    return visitStmt(b) ?? visitExpr(t)
+                case .forStmt(let ini, let t, let u, let b, _):
+                    var fs = Set<String>()
+                    if case .variable(let k, let ds, _) = ini, k != .var {
+                        for d in ds { for n in CodemodeLanguage.collectPatternNames(d.id) { fs.insert(n) } }
+                    }
+                    scopes.append(ScopeBox(fs))
+                    defer { scopes.removeLast() }
+                    if case .variable(_, let ds, _) = ini, let err = visitDeclarators(ds) { return err }
+                    else if case .expression(let e) = ini, let err = visitExpr(e, discardResult: true) { return err }
+                    if let t, let err = visitExpr(t) { return err }
+                    if let u, let err = visitExpr(u, discardResult: true) { return err }
+                    return visitStmt(b)
+                case .forInStmt(let l, let r, let b, _), .forOfStmt(let l, let r, let b, _, _):
+                    var fs = Set<String>()
+                    if case .variable(let k, let p, _) = l, k != .var {
+                        for n in CodemodeLanguage.collectPatternNames(p) { fs.insert(n) }
+                    }
+                    scopes.append(ScopeBox(fs))
+                    defer { scopes.removeLast() }
+                    return visitExpr(r) ?? visitStmt(b)
+                case .switchStmt(let d, let cases, _):
+                    if let err = visitExpr(d) { return err }
+                    for c in cases {
+                        if let t = c.test, let err = visitExpr(t) { return err }
+                        if let err = visitStmts(c.consequent) { return err }
+                    }
+                    return nil
+                case .tryStmt(let blk, let handler, let fin, _):
+                    if let err = visitStmts(blk) { return err }
+                    if let handler {
+                        var cs = Set<String>()
+                        if let p = handler.param { for n in CodemodeLanguage.collectPatternNames(p) { cs.insert(n) } }
+                        scopes.append(ScopeBox(cs))
+                        let err = visitStmts(handler.body)
+                        scopes.removeLast()
+                        if let err { return err }
+                    }
+                    return fin.flatMap(visitStmts)
+                case .labeled(_, let b, _):
+                    return visitStmt(b)
+                case .classDecl(let cls):
+                    return visitClass(cls)
+                case .empty, .breakStmt, .continueStmt:
+                    return nil
+                }
+            }
+
+            if let err = visitStmts(program.body) {
+                return .failure(err)
+            }
+            if let forbidden = toolsOrder.first(where: { forbiddenTools.contains($0) }) {
+                return .failure(InvalidError(reason: "Tool \(forbidden) cannot be used inside an automation"))
+            }
+
+            var actions: [String] = []
+            func addAction(_ name: String) {
+                if !actions.contains(name) { actions.append(name) }
+            }
+            if globalUses["fetch"] != nil {
+                addAction("webfetch")
+            }
+            // Approve referenced file access even if the flag is off, so enabling it later doesn't grant it unattended.
+            let bun = globalUses["Bun"] ?? []
+            if modules.contains("bun") || bun.contains(where: { $0.member == nil }) {
+                addAction("read")
+                addAction("edit")
+                addAction("external_directory")
+            }
+            for use in bun {
+                if use.member == "file" || use.member == "Glob" {
+                    addAction("read")
+                }
+                if use.member == "write" || (use.member == "file" && use.resultMembers.members.contains(where: { !bunFileReadMembers.contains($0 ?? "") })) {
+                    addAction("edit")
+                }
+                if use.member == "file" || use.member == "Glob" || use.member == "write" {
+                    addAction("external_directory")
+                }
+            }
+            return .success(ProgramScan(tools: toolsOrder, actions: actions))
+        }
+
+        private static func collectStmtNames(_ stmts: [CodemodeLanguage.Statement], includeVar: Bool) -> Set<String> {
+            var names = Set<String>()
+            func walkVar(_ stmt: CodemodeLanguage.Statement) {
+                switch stmt {
+                case .functionDecl, .classDecl:
+                    return
+                case .variable(let kind, let decls, _) where kind == .var:
+                    for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
+                case .block(let inner, _):
+                    for s in inner { walkVar(s) }
+                case .ifStmt(_, let c, let a, _):
+                    walkVar(c)
+                    if let a { walkVar(a) }
+                case .whileStmt(_, let b, _), .doWhileStmt(let b, _, _), .labeled(_, let b, _):
+                    walkVar(b)
+                case .forStmt(let ini, _, _, let b, _):
+                    if case .variable(let kind, let decls, _) = ini, kind == .var {
+                        for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
+                    }
+                    walkVar(b)
+                case .forInStmt(let l, _, let b, _), .forOfStmt(let l, _, let b, _, _):
+                    if case .variable(let kind, let p, _) = l, kind == .var {
+                        for n in CodemodeLanguage.collectPatternNames(p) { names.insert(n) }
+                    }
+                    walkVar(b)
+                case .switchStmt(_, let cases, _):
+                    for c in cases { for s in c.consequent { walkVar(s) } }
+                case .tryStmt(let blk, let handler, let fin, _):
+                    for s in blk { walkVar(s) }
+                    if let handler { for s in handler.body { walkVar(s) } }
+                    if let fin { for s in fin { walkVar(s) } }
+                default:
+                    break
+                }
+            }
+            for stmt in stmts {
+                switch stmt {
+                case .importDecl(let specs, _, _):
+                    for spec in specs {
+                        switch spec {
+                        case .defaultImport(let local), .namespaceImport(let local), .namedImport(_, let local):
+                            names.insert(local)
+                        }
+                    }
+                case .functionDecl(let fn):
+                    if let n = fn.name { names.insert(n) }
+                case .classDecl(let cls):
+                    if let n = cls.name { names.insert(n) }
+                case .variable(let kind, let decls, _) where includeVar || kind != .var:
+                    for d in decls { for n in CodemodeLanguage.collectPatternNames(d.id) { names.insert(n) } }
+                default:
+                    break
+                }
+            }
+            if includeVar {
+                for stmt in stmts { walkVar(stmt) }
+            }
+            return names
         }
 
         private static func scopedRules(_ rules: PermissionSchema.Ruleset, action: String) -> PermissionSchema.Ruleset {
@@ -643,26 +1246,28 @@ public enum CoreAutomation {
             return out
         }
 
-        private static func resolveCodeTools(
-            paths: [String],
+        private static func resolveCapabilities(
+            scanned: ProgramScan,
             tools: any CoreTool.Interface
         ) async -> Result<(matched: [String: CoreTool.RegisteredTool], actions: [String]), InvalidError> {
-            if paths.isEmpty { return .success(([:], [])) }
-            let registered = await tools.list()
             var matched: [String: CoreTool.RegisteredTool] = [:]
             var actions: [String] = []
             var seenActions = Set<String>()
-            for path in paths {
-                guard let found = registered.first(where: {
-                    CoreTool.Runtime.defaultCodeMode($0.options) && qualifiedToolName($0) == path
-                }) else {
-                    return .failure(InvalidError(reason: "Unknown Code Mode tool: \(path)"))
+            if !scanned.tools.isEmpty {
+                let selected = await tools.codeModeTools(scanned.tools)
+                for path in scanned.tools {
+                    guard let found = selected[path] else {
+                        return .failure(InvalidError(reason: "Unknown Code Mode tool: \(path)"))
+                    }
+                    matched[found.id] = found
+                    let action = found.options?.permission ?? found.id
+                    if seenActions.insert(action).inserted {
+                        actions.append(action)
+                    }
                 }
-                matched[found.id] = found
-                let action = found.options?.permission ?? found.id
-                if seenActions.insert(action).inserted {
-                    actions.append(action)
-                }
+            }
+            for action in scanned.actions where seenActions.insert(action).inserted {
+                actions.append(action)
             }
             return .success((matched, actions))
         }
@@ -674,7 +1279,7 @@ public enum CoreAutomation {
             }
         }
 
-        // parity: core/src/automation/code.ts#authorize [status=implemented hash=ad02f29390f5]
+        // parity: core/src/automation/code.ts#authorize [status=implemented hash=dd62d2d31c55]
         public static func authorize(
             owner: SessionSchema.Info,
             name: String,
@@ -686,13 +1291,13 @@ public enum CoreAutomation {
             tools: any CoreTool.Interface,
             awaitPluginActivation: @Sendable () async -> Void = {}
         ) async throws -> [String] {
-            let paths = try scanForbiddenTools(in: action.code).get()
+            let scanned = try scan(action.code).get()
             await awaitPluginActivation()
             let selected = await agents.select(owner.agent.map(AgentSchema.ID.init(rawValue:)))
             if let invocation, !Author.matchesAuthor(ownerSessionID: owner.id, agent: selected.info, invocation: invocation) {
                 throw InvalidError(reason: "Create the automation with the session's current agent")
             }
-            let resolved = try await resolveCodeTools(paths: paths, tools: tools).get()
+            let resolved = try await resolveCapabilities(scanned: scanned, tools: tools).get()
             let rules = CorePermission.merge(selected.info?.permissions ?? [], convertSessionPermissions(owner.permissions))
 
             let encoder = JSONEncoder()
@@ -702,7 +1307,7 @@ public enum CoreAutomation {
                 "trigger": triggerValue,
                 "unattended": .bool(true),
                 "code": .string(action.code),
-                "tools": .array(paths.map(JSONValue.string)),
+                "tools": .array(scanned.tools.map(JSONValue.string)),
             ]
 
             func makeRequest(_ item: String, includeMetadata: Bool) -> CorePermission.AssertInput {
@@ -735,7 +1340,7 @@ public enum CoreAutomation {
             for item in toAsk {
                 try await permission.assert(makeRequest(item, includeMetadata: true))
             }
-            return paths
+            return scanned.tools
         }
 
         /// Lightweight synchronous permission check for standalone/unit tests without full Location services.
@@ -746,16 +1351,16 @@ public enum CoreAutomation {
             invocation: Author.Invocation? = nil,
             permissions: PermissionSchema.Ruleset = []
         ) throws -> [String] {
-            let paths = try scanForbiddenTools(in: action.code).get()
+            let scanned = try scan(action.code).get()
             if let invocation, !Author.matchesAuthor(ownerSessionID: ownerSessionID, agent: agent, invocation: invocation) {
                 throw InvalidError(reason: "Create the automation with the session's current agent")
             }
-            for item in ["execute"] + paths {
+            for item in ["execute"] + scanned.tools + scanned.actions {
                 if CoreSkill.evaluatePermission(action: item, resource: "*", permissions: permissions) == .deny {
                     throw InvalidError(reason: "Permission denied for automation action: \(item)")
                 }
             }
-            return paths
+            return scanned.tools
         }
 
         /// Executes a Code Mode automation under the permissions authorized at creation with `TIMEOUT_MS` budget.
@@ -766,6 +1371,9 @@ public enum CoreAutomation {
             agents: any CoreAgent.Agent.Interface,
             permission: any CorePermission.Interface,
             tools: any CoreTool.Interface,
+            services: CoreCodemode.Tool.Services? = nil,
+            fullCodeMode: Bool = false,
+            httpTransport: (any HTTPTransport)? = nil,
             awaitPluginActivation: @escaping @Sendable () async -> Void = {},
             sleep: @escaping @Sendable (Int64) async throws -> Void = { ms in
                 try await Task.sleep(for: .milliseconds(max(0, ms)))
@@ -797,6 +1405,9 @@ public enum CoreAutomation {
                     agents: agents,
                     permission: permission,
                     tools: tools,
+                    services: services,
+                    fullCodeMode: fullCodeMode,
+                    httpTransport: httpTransport,
                     awaitPluginActivation: awaitPluginActivation
                 )
                 race.resolve(outcome)
@@ -842,6 +1453,9 @@ public enum CoreAutomation {
             agents: any CoreAgent.Agent.Interface,
             permission: any CorePermission.Interface,
             tools: any CoreTool.Interface,
+            services: CoreCodemode.Tool.Services?,
+            fullCodeMode: Bool,
+            httpTransport: (any HTTPTransport)?,
             awaitPluginActivation: @Sendable () async -> Void
         ) async -> Outcome {
             await awaitPluginActivation()
@@ -853,25 +1467,25 @@ public enum CoreAutomation {
                 return .failure(error: "Agent not found: \(selected.id.rawValue)", output: nil, invalid: false)
             }
 
-            let paths: [String]
-            switch scanForbiddenTools(in: action.code) {
+            let scanned: ProgramScan
+            switch scan(action.code) {
             case .failure(let err):
                 return .failure(error: err.reason, output: nil, invalid: true)
-            case .success(let scanned):
-                paths = scanned
+            case .success(let value):
+                scanned = value
             }
 
             let matchedTools: [String: CoreTool.RegisteredTool]
-            let toolActions: [String]
-            switch await resolveCodeTools(paths: paths, tools: tools) {
+            let capabilityActions: [String]
+            switch await resolveCapabilities(scanned: scanned, tools: tools) {
             case .failure(let err):
                 return .failure(error: err.reason, output: nil, invalid: true)
             case .success(let resolved):
                 matchedTools = resolved.matched
-                toolActions = resolved.actions
+                capabilityActions = resolved.actions
             }
 
-            let actions = ["execute"] + toolActions
+            let actions = ["execute"] + capabilityActions
             let rules = CorePermission.merge(agentInfo.permissions, convertSessionPermissions(owner.permissions))
             let unattended: PermissionSchema.Ruleset = actions.flatMap { item in
                 [PermissionSchema.Rule(action: item, resource: "*", effect: .allow)] + scopedRules(rules, action: item)
@@ -935,20 +1549,108 @@ public enum CoreAutomation {
 
                 let execResult: CodemodeEngine.ExecutionResult
                 do {
-                    execResult = try await CoreCodemode.Tool.check(
-                        inventory: inventory,
-                        code: action.code,
-                        bindings: bindings,
-                        limits: codeLimits
-                    ) { _, reg, callInput in
-                        let ctx = ToolSchema.Context(
+                    let useExtensions = httpTransport != nil || (fullCodeMode && services != nil)
+                    if useExtensions {
+                        let permHook = CoreCodemode.PermissionHook(
+                            assertAllowed: { req in
+                                try await permission.assert(CorePermission.AssertInput(
+                                    sessionID: req.sessionID,
+                                    agent: req.agent,
+                                    action: req.action,
+                                    resources: req.resources,
+                                    save: nil,
+                                    metadata: req.metadata.isEmpty ? nil : req.metadata,
+                                    source: .tool(messageID: req.messageID, id: req.callID.rawValue)
+                                ))
+                            },
+                            assertNotDenied: { req in
+                                try await permission.assertNotDenied(CorePermission.AssertInput(
+                                    sessionID: req.sessionID,
+                                    agent: req.agent,
+                                    action: req.action,
+                                    resources: req.resources,
+                                    save: nil,
+                                    metadata: req.metadata.isEmpty ? nil : req.metadata,
+                                    source: .tool(messageID: req.messageID, id: req.callID.rawValue)
+                                ))
+                            }
+                        )
+                        let execContext = ToolSchema.Context(
                             sessionID: owner.id,
                             agent: selected.id,
                             messageID: input.messageID,
-                            id: ToolSchema.CallID(rawValue: "call_\(uuid())"),
+                            id: ToolSchema.CallID(rawValue: "call_\(input.messageID)_execute"),
                             progress: { _ in }
                         )
-                        return try await reg.execute(callInput, ctx)
+                        let transport = httpTransport ?? URLSessionHTTPTransport.shared
+                        let execSvc = CoreCodemode.Execution.Service(
+                            context: execContext,
+                            permission: permHook,
+                            transport: transport
+                        )
+                        var extensions: [CodemodeEngine.Extension.Definition] = [
+                            CoreCodemode.Fetch.makeExtension(transport: transport, execution: execSvc),
+                        ]
+                        if fullCodeMode, let services {
+                            extensions.append(CoreCodemode.Path.makeExtension(directory: services.location.directory))
+                            extensions.append(CoreCodemode.Bun.makeExtension(services: services.bun, execution: execSvc))
+                        }
+                        var toolsTree: CodemodeEngine.Tools = [:]
+                        for (id, reg) in registrations {
+                            let qName = CoreCodemode.Tool.qualifiedName(reg)
+                            let def = CoreCodemode.Tool.codemodeDefinition(reg)
+                            let toolDef = CodemodeEngine.Tool.make(CodemodeEngine.Tool.Options(
+                                description: def.description,
+                                input: def.input,
+                                freeform: reg.freeform != nil,
+                                output: def.output ?? ["type": .array([.string("string"), .string("null")])],
+                                execute: { callInput, _ in
+                                    let ctx = ToolSchema.Context(
+                                        sessionID: owner.id,
+                                        agent: selected.id,
+                                        messageID: input.messageID,
+                                        id: ToolSchema.CallID(rawValue: "call_\(uuid())"),
+                                        progress: { _ in },
+                                        codemode: true
+                                    )
+                                    let executed = try await reg.execute(callInput, ctx)
+                                    if let out = executed.output { return out }
+                                    switch executed.content {
+                                    case .text(let s): return s.isEmpty ? .null : .string(s)
+                                    case .parts(let parts):
+                                        let joined = parts.compactMap { if case .text(let tc) = $0 { return tc.text } else { return nil } }.joined(separator: "\n")
+                                        return joined.isEmpty ? .null : .string(joined)
+                                    case nil: return .null
+                                    }
+                                }
+                            ))
+                            _ = id
+                            toolsTree[qName] = .tool(toolDef)
+                        }
+                        let rt = try CodemodeEngine.make(CodemodeEngine.Options(
+                            tools: toolsTree,
+                            hooks: CodemodeEngine.ToolRuntime.Hooks(),
+                            extensions: extensions,
+                            limits: codeLimits
+                        ))
+                        execResult = await rt.execute(action.code, bindings, nil)
+                    } else {
+                        execResult = try await CoreCodemode.Tool.check(
+                            inventory: inventory,
+                            code: action.code,
+                            bindings: bindings,
+                            limits: codeLimits
+                        ) { _, reg, callInput in
+                            let ctx = ToolSchema.Context(
+                                sessionID: owner.id,
+                                agent: selected.id,
+                                messageID: input.messageID,
+                                id: ToolSchema.CallID(rawValue: "call_\(uuid())"),
+                                progress: { _ in },
+                                codemode: true
+                            )
+                            return try await reg.execute(callInput, ctx)
+                        }
                     }
                 } catch {
                     return .failure(error: String(describing: error), output: nil, invalid: false)
@@ -981,13 +1683,13 @@ public enum CoreAutomation {
             }
         }
 
-        // parity: core/src/automation/code.ts#run [status=implemented hash=ba45a744e8a5]
+        // parity: core/src/automation/code.ts#run [status=implemented hash=955ceabe9c88]
         public static func run(
             action: AutomationSchema.CodeAction,
             input: RunInput,
             executor: (@Sendable (AutomationSchema.CodeAction, RunInput) async throws -> (value: JSONValue, logs: [String]))? = nil
         ) async -> Outcome {
-            if case .failure(let err) = scanForbiddenTools(in: action.code) {
+            if case .failure(let err) = scan(action.code) {
                 return .failure(error: err.reason, output: nil, invalid: true)
             }
             guard let executor else {
@@ -1063,14 +1765,14 @@ public enum CoreAutomation {
         public var description: String { message }
     }
 
-    // parity: core/src/automation.ts#DisabledError [status=implemented hash=5df8f5b2c928]
+    // parity: core/src/automation.ts#DisabledError [status=implemented hash=7be6cf234ea8]
     public struct DisabledError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
         public static let tag = "Automation.DisabledError"
 
         public init() {}
 
-        // parity: core/src/automation.ts#DisabledError.message [status=implemented hash=2723ae33bd57]
-        public var message: String { "Automations are disabled; set experimental.automations in config" }
+        // parity: core/src/automation.ts#DisabledError.message [status=implemented hash=edbff23deb53]
+        public var message: String { "Automations are disabled. Set automations to true in config to enable them." }
         public var description: String { message }
     }
 
@@ -1085,7 +1787,7 @@ public enum CoreAutomation {
         }
     }
 
-    /// Per-directory location services resolved for an automation (flags, MCP events, lifecycle, agents, permissions, tools).
+    /// Per-directory location services resolved for an automation (flags, MCP events, lifecycle, agents, permissions, tools, shell).
     public struct LocationContext: Sendable {
         public let enabled: Bool
         public let mcpEventsEnabled: Bool
@@ -1096,6 +1798,13 @@ public enum CoreAutomation {
         public let agents: (any CoreAgent.Agent.Interface)?
         public let permission: (any CorePermission.Interface)?
         public let tools: (any CoreTool.Interface)?
+        public let shell: (any CoreShell.Interface)?
+        public let shellSelect: (any CoreShell.Select.Interface)?
+        public let fileAccess: (any CoreFilesystem.FileAccess.Interface)?
+        public let environment: (any CoreLocation.Environment.Interface)?
+        public let codeModeServices: CoreCodemode.Tool.Services?
+        public let fullCodeMode: Bool
+        public let httpTransport: (any HTTPTransport)?
         public let awaitPluginActivation: @Sendable () async -> Void
         public let subagentDepthLimit: Int
         public let mcpEventsOverride: (@Sendable (String) async throws -> (any CoreMCP.Client.Events)?)?
@@ -1110,6 +1819,13 @@ public enum CoreAutomation {
             agents: (any CoreAgent.Agent.Interface)? = nil,
             permission: (any CorePermission.Interface)? = nil,
             tools: (any CoreTool.Interface)? = nil,
+            shell: (any CoreShell.Interface)? = nil,
+            shellSelect: (any CoreShell.Select.Interface)? = nil,
+            fileAccess: (any CoreFilesystem.FileAccess.Interface)? = nil,
+            environment: (any CoreLocation.Environment.Interface)? = nil,
+            codeModeServices: CoreCodemode.Tool.Services? = nil,
+            fullCodeMode: Bool = false,
+            httpTransport: (any HTTPTransport)? = nil,
             awaitPluginActivation: @escaping @Sendable () async -> Void = {},
             subagentDepthLimit: Int = 1,
             mcpEventsOverride: (@Sendable (String) async throws -> (any CoreMCP.Client.Events)?)? = nil
@@ -1123,13 +1839,20 @@ public enum CoreAutomation {
             self.agents = agents
             self.permission = permission
             self.tools = tools
+            self.shell = shell
+            self.shellSelect = shellSelect
+            self.fileAccess = fileAccess
+            self.environment = environment
+            self.codeModeServices = codeModeServices
+            self.fullCodeMode = fullCodeMode
+            self.httpTransport = httpTransport
             self.awaitPluginActivation = awaitPluginActivation
             self.subagentDepthLimit = subagentDepthLimit
             self.mcpEventsOverride = mcpEventsOverride
         }
     }
 
-    // parity: core/src/automation.ts#Interface [status=implemented hash=4621e25d9c1f]
+    // parity: core/src/automation.ts#Interface [status=implemented hash=6ea2a32e86f1]
     public protocol Interface: Sendable {
         func create(_ input: AutomationSchema.CreateInput, projectID: ProjectID, directory: String, invocation: Author.Invocation?) async throws -> AutomationSchema.Info
         func list(_ input: ListInput?) async throws -> [AutomationSchema.Info]
@@ -1137,6 +1860,7 @@ public enum CoreAutomation {
         func pause(_ id: AutomationSchema.ID) async throws -> AutomationSchema.Info
         func resume(_ id: AutomationSchema.ID) async throws -> AutomationSchema.Info
         func remove(_ id: AutomationSchema.ID) async throws
+        /// Whether automations are enabled in the config of `directory`.
         func enabled(directory: String) async -> Bool
         func tick() async throws
         /// Long-running application loop (`Automation.Service.run` upstream): claims leader lease, rewakes pending
@@ -1419,6 +2143,7 @@ public enum CoreAutomation {
         }
 
         private let db: any SQLiteDatabase
+        private let fileSystem: any OpenCodeFileSystem
         private let clock: @Sendable () -> Int64
         private let sleep: @Sendable (Int64) async throws -> Void
         private let isEnabledCheck: @Sendable (String) async -> Bool
@@ -1443,6 +2168,7 @@ public enum CoreAutomation {
 
         public init(
             database: any SQLiteDatabase,
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             clock: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
             sleep: @escaping @Sendable (Int64) async throws -> Void = { ms in
                 try await Task.sleep(for: .milliseconds(max(0, ms)))
@@ -1458,6 +2184,7 @@ public enum CoreAutomation {
             leaseOwner: String? = nil
         ) throws {
             self.db = database
+            self.fileSystem = fileSystem
             self.clock = clock
             self.sleep = sleep
             self.isEnabledCheck = isEnabled
@@ -1474,6 +2201,7 @@ public enum CoreAutomation {
         }
 
         public static func inMemory(
+            fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             clock: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() },
             sleep: @escaping @Sendable (Int64) async throws -> Void = { ms in
                 try await Task.sleep(for: .milliseconds(max(0, ms)))
@@ -1490,6 +2218,7 @@ public enum CoreAutomation {
         ) throws -> Service {
             try Service(
                 database: SQLiteDatabaseFactory.open(path: ":memory:"),
+                fileSystem: fileSystem,
                 clock: clock,
                 sleep: sleep,
                 isEnabled: isEnabled,
@@ -1685,6 +2414,37 @@ public enum CoreAutomation {
                     }
                 }
                 action = .prompt(AutomationSchema.PromptAction(prompt: p.prompt, to: target))
+            case .shell(let s):
+                let shellAction = AutomationSchema.ShellAction(command: s.command)
+                if sessions != nil {
+                    guard let owner else {
+                        throw InvalidError(reason: "A shell action needs a session")
+                    }
+                    if let agents = location.agents, let permission = location.permission {
+                        let env = location.environment ?? CoreLocation.Environment.local(fileSystem: fileSystem)
+                        let access = location.fileAccess ?? CoreFilesystem.FileAccess.Service(
+                            directory: owner.location.directory,
+                            fileSystem: fileSystem,
+                            permission: permission,
+                            environment: env
+                        )
+                        let select = location.shellSelect ?? CoreShell.Select.Service()
+                        try await CoreAutomationShell.authorize(
+                            owner: owner,
+                            name: input.name,
+                            trigger: storedTrigger,
+                            action: shellAction,
+                            invocation: invocation,
+                            agents: agents,
+                            shellSelect: select,
+                            environment: env,
+                            fileAccess: access,
+                            permission: permission,
+                            awaitPluginActivation: location.awaitPluginActivation
+                        )
+                    }
+                }
+                action = .shell(shellAction)
             case .code(let c):
                 let codeAction = AutomationSchema.CodeAction(code: c.code, args: c.args)
                 if sessions != nil {
@@ -1704,14 +2464,12 @@ public enum CoreAutomation {
                             awaitPluginActivation: location.awaitPluginActivation
                         )
                     } else {
-                        _ = try Code.scanForbiddenTools(in: c.code).get()
+                        _ = try Code.scan(c.code).get()
                     }
                 } else {
-                    _ = try Code.scanForbiddenTools(in: c.code).get()
+                    _ = try Code.scan(c.code).get()
                 }
                 action = .code(codeAction)
-            case .shell(let s):
-                action = .shell(AutomationSchema.ShellAction(command: s.command))
             }
 
             let id = AutomationSchema.ID.create()
@@ -2445,6 +3203,9 @@ public enum CoreAutomation {
                     lastOutput: Self.deliverySummary(sessionID: target, subagent: subagentID)
                 )
 
+            case .shell(let shellAction):
+                try await runShell(row: row, action: shellAction, now: now, event: event)
+
             case .code(let codeAction):
                 let owner: SessionSchema.Info?
                 if let sessions {
@@ -2481,6 +3242,9 @@ public enum CoreAutomation {
                             agents: agents,
                             permission: permission,
                             tools: tools,
+                            services: location.codeModeServices,
+                            fullCodeMode: location.fullCodeMode,
+                            httpTransport: location.httpTransport,
                             awaitPluginActivation: location.awaitPluginActivation
                         )
                     } else {
@@ -2536,13 +3300,111 @@ public enum CoreAutomation {
                         codeFailed(row: row, now: now, error: msg, output: output, invalid: isInvalid)
                     }
                 }
-            case .shell(let shellAction):
-                var patch = advancePatch(row: row, ended: clock(), done: false, event: event)
-                patch.lastOutcome = .some(.failed)
-                patch.lastOutput = .some("Shell automation action '\(shellAction.command)' requires core shell automation runner")
-                patch.retryAt = .some(nil)
-                patch.timeUpdated = clock()
-                settle(row, patch)
+            }
+        }
+
+        private func runShell(
+            row: Row,
+            action: AutomationSchema.ShellAction,
+            now: Int64,
+            event: Event.Message?
+        ) async throws {
+            let runNumber = row.runCount + 1
+            let owner: SessionSchema.Info
+            if let sessions {
+                guard let ownerID = row.sessionID, let found = existingSession(sessions, ownerID) else {
+                    pauseWith(row: row, now: now, reason: "The session that authorized this command no longer exists")
+                    return
+                }
+                owner = found
+            } else {
+                let fallbackID = row.sessionID ?? SessionID.create()
+                owner = SessionSchema.Info(
+                    id: fallbackID,
+                    projectID: row.projectID,
+                    cost: 0,
+                    tokens: SessionSchema.TokenUsage(input: 0, output: 0, reasoning: 0, cache: SessionSchema.TokenUsage.Cache(read: 0, write: 0)),
+                    time: SessionSchema.Info.Time(created: row.timeCreated, updated: row.timeUpdated),
+                    location: OpenCodeLocation(directory: row.directory)
+                )
+            }
+            let isDir = (try? await fileSystem.stat(at: row.directory).type == .directory) ?? false
+            guard isDir else {
+                pauseWith(row: row, now: now, reason: "Directory no longer exists: \(row.directory)")
+                return
+            }
+
+            let location: LocationContext
+            do {
+                location = try await settings(directory: row.directory)
+            } catch is CoreFilesystem.DirectoryNotFoundError {
+                pauseWith(row: row, now: now, reason: "Directory no longer exists: \(row.directory)")
+                return
+            }
+
+            let shellService = location.shell ?? CoreShell.Service(
+                directory: row.directory,
+                projectID: row.projectID,
+                fileSystem: fileSystem
+            )
+            let shellSelect = location.shellSelect ?? CoreShell.Select.Service()
+
+            let started: Result<@Sendable () async -> CoreShell.ResultHelper.Result, any Swift.Error>
+            do {
+                let wait = try await CoreAutomationShell.start(
+                    owner: owner,
+                    action: action,
+                    directory: row.directory,
+                    shell: shellService,
+                    shellSelect: shellSelect,
+                    awaitPluginActivation: location.awaitPluginActivation
+                )
+                started = .success(wait)
+            } catch {
+                started = .failure(error)
+            }
+
+            // Advance on launch, so the next timer slot or event can start before this command exits.
+            var launchPatch = advancePatch(row: row, ended: now, done: false, event: event)
+            launchPatch.runCount = runNumber
+            launchPatch.lastRunAt = .some(now)
+            launchPatch.retryAt = .some(nil)
+            launchPatch.timeUpdated = now
+            settle(row, launchPatch, evenIfPaused: true)
+
+            let recordOutcome: @Sendable (AutomationSchema.Outcome, String) -> Void = { [db, clock] outcome, outputText in
+                _ = try? db.execute(
+                    """
+                    UPDATE automation
+                    SET last_outcome = ?, last_output = ?, time_updated = ?
+                    WHERE id = ? AND run_count = ? AND status != 'paused'
+                    """,
+                    parameters: [
+                        .text(outcome.rawValue),
+                        .text(Code.boundedOutput(outputText)),
+                        .integer(clock()),
+                        .text(row.id.rawValue),
+                        .integer(Int64(runNumber)),
+                    ]
+                )
+            }
+
+            switch started {
+            case .failure(let error):
+                recordOutcome(.failed, String(describing: error))
+            case .success(let waitForResult):
+                Task<Void, Never> {
+                    let result = await waitForResult()
+                    let captured = CoreShell.ResultHelper.output(result)
+                    let exitText: String
+                    if let exit = captured.exit {
+                        exitText = exit.rounded() == exit ? String(Int64(exit)) : String(exit)
+                    } else {
+                        exitText = "unknown"
+                    }
+                    let outcome: AutomationSchema.Outcome = captured.exit == 0 ? .fired : .failed
+                    recordOutcome(outcome, "Exit code: \(exitText)\n\(captured.output)")
+                }
             }
         }
 
@@ -3042,22 +3904,23 @@ public enum CoreAutomation {
         }
     }
 
-    // parity: core/src/automation.ts#node [status=implemented hash=21af71532f3c]
+    // parity: core/src/automation.ts#node [status=implemented hash=58ebab9304c2]
     public static let node: LayerNode.Provider = AppNode.makeGlobalNode(
         Service.serviceKey,
         LayerNode.ExecutableLayer { deps, _ in
             let db = deps.get(CoreDatabaseStore.Service.serviceKey, as: CoreDatabaseStore.Service.self)?.db
+            let fs = deps.get(FSUtil.Service.serviceKey, as: (any FSUtil.Interface).self)?.fileSystem ?? LocalFileSystem.shared
             let sessions = deps.get(CoreSession.Service.serviceKey, as: CoreSession.Service.self)
             let execution = deps.get(CoreSessionExecution.Service.serviceKey, as: (any CoreSessionExecution.Interface).self)
             let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self)
             let svc: Service
             if let db {
-                svc = try Service(database: db, sessions: sessions, execution: execution, bus: bus)
+                svc = try Service(database: db, fileSystem: fs, sessions: sessions, execution: execution, bus: bus)
             } else {
-                svc = try Service.inMemory(sessions: sessions, execution: execution, bus: bus)
+                svc = try Service.inMemory(fileSystem: fs, sessions: sessions, execution: execution, bus: bus)
             }
             return LayerNode.Output([Service.serviceKey: svc])
         },
-        []
+        [FSUtil.node]
     )
 }

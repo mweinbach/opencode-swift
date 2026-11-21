@@ -1,7 +1,7 @@
 {
-  "upstreamCommit": "85951cb08614dfe6443905552cae49d59d2d6615",
-  "generatedAt": "2026-11-20T22:42:13.071Z",
-  "vectorCount": 1588,
+  "upstreamCommit": "375f654e6dc62a3224ca3663fa335d8b57584797",
+  "generatedAt": "2026-11-21T19:35:52.639Z",
+  "vectorCount": 1622,
   "cases": [
     {
       "fn": "util/src/activity-calendar.ts#activityCalendar",
@@ -5249,6 +5249,281 @@
       "expectedValue": false
     },
     {
+      "fn": "ai/src/protocols/shared.ts#flattenToolRequest",
+      "name": "sanitizes undeclared dotted calls and preserves declared dotted name",
+      "args": [
+        {
+          "tools": [
+            {
+              "type": "tool",
+              "name": "custom.declared"
+            },
+            {
+              "type": "namespace",
+              "name": "fs",
+              "tools": [
+                {
+                  "type": "tool",
+                  "name": "read"
+                }
+              ]
+            }
+          ],
+          "messages": [
+            {
+              "role": "assistant",
+              "parts": [
+                {
+                  "type": "tool-call",
+                  "id": "c1",
+                  "name": "a.b.c"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "c2",
+                  "name": "custom.declared"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "c3",
+                  "name": "read",
+                  "namespace": "fs"
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "parts": [
+                {
+                  "type": "tool-result",
+                  "id": "c1",
+                  "name": "a.b.c"
+                },
+                {
+                  "type": "tool-result",
+                  "id": "c2",
+                  "name": "custom.declared"
+                },
+                {
+                  "type": "tool-result",
+                  "id": "c3",
+                  "name": "read",
+                  "namespace": "fs"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "messages": [
+          {
+            "parts": [
+              {
+                "id": "c1",
+                "name": "a_b_c",
+                "namespace": null,
+                "type": "tool-call"
+              },
+              {
+                "id": "c2",
+                "name": "custom.declared",
+                "namespace": null,
+                "type": "tool-call"
+              },
+              {
+                "id": "c3",
+                "name": "fs_read",
+                "namespace": null,
+                "type": "tool-call"
+              }
+            ],
+            "role": "assistant"
+          },
+          {
+            "parts": [
+              {
+                "id": "c1",
+                "name": "a_b_c",
+                "namespace": null,
+                "type": "tool-result"
+              },
+              {
+                "id": "c2",
+                "name": "custom.declared",
+                "namespace": null,
+                "type": "tool-result"
+              },
+              {
+                "id": "c3",
+                "name": "fs_read",
+                "namespace": null,
+                "type": "tool-result"
+              }
+            ],
+            "role": "tool"
+          }
+        ],
+        "tools": [
+          "custom.declared",
+          "fs_read"
+        ]
+      }
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#flattenToolRequest",
+      "name": "empty undeclared tool name falls back to underscore and emoji surrogate uses utf16",
+      "args": [
+        {
+          "tools": [],
+          "messages": [
+            {
+              "role": "assistant",
+              "parts": [
+                {
+                  "type": "tool-call",
+                  "id": "c1",
+                  "name": ""
+                },
+                {
+                  "type": "tool-call",
+                  "id": "c2",
+                  "name": "a😀b"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "c3",
+                  "name": "pkg/sub:fn 1"
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "parts": [
+                {
+                  "type": "tool-result",
+                  "id": "c1",
+                  "name": ""
+                },
+                {
+                  "type": "tool-result",
+                  "id": "c2",
+                  "name": "a😀b"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "messages": [
+          {
+            "parts": [
+              {
+                "id": "c1",
+                "name": "_",
+                "namespace": null,
+                "type": "tool-call"
+              },
+              {
+                "id": "c2",
+                "name": "a__b",
+                "namespace": null,
+                "type": "tool-call"
+              },
+              {
+                "id": "c3",
+                "name": "pkg_sub_fn_1",
+                "namespace": null,
+                "type": "tool-call"
+              }
+            ],
+            "role": "assistant"
+          },
+          {
+            "parts": [
+              {
+                "id": "c1",
+                "name": "_",
+                "namespace": null,
+                "type": "tool-result"
+              },
+              {
+                "id": "c2",
+                "name": "a__b",
+                "namespace": null,
+                "type": "tool-result"
+              }
+            ],
+            "role": "tool"
+          }
+        ],
+        "tools": []
+      }
+    },
+    {
+      "fn": "ai/src/protocols/shared.ts#flattenToolRequest",
+      "name": "undeclared namespaced call flattens and sanitizes",
+      "args": [
+        {
+          "tools": [
+            {
+              "type": "tool",
+              "name": "shell"
+            }
+          ],
+          "messages": [
+            {
+              "role": "assistant",
+              "parts": [
+                {
+                  "type": "tool-call",
+                  "id": "c1",
+                  "name": "op.run",
+                  "namespace": "mcp.gh"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "c2",
+                  "name": "shell"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": {
+        "messages": [
+          {
+            "parts": [
+              {
+                "id": "c1",
+                "name": "mcp_gh_op_run",
+                "namespace": null,
+                "type": "tool-call"
+              },
+              {
+                "id": "c2",
+                "name": "shell",
+                "namespace": null,
+                "type": "tool-call"
+              }
+            ],
+            "role": "assistant"
+          }
+        ],
+        "tools": [
+          "shell"
+        ]
+      }
+    },
+    {
       "fn": "util/src/artifact.ts#artifactMime",
       "name": "png uppercase",
       "args": [
@@ -7614,6 +7889,196 @@
       "expectedValue": null
     },
     {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "https with custom port and trailing slash",
+      "args": [
+        "https://override.example.com:8443/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://override.example.com:8443"
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "http loopback with port",
+      "args": [
+        "http://127.0.0.1:4096"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "http://127.0.0.1:4096"
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "uppercase scheme host and default https port",
+      "args": [
+        "HTTPS://EXAMPLE.COM:443/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "https://example.com"
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "default http port with path and trailing slashes",
+      "args": [
+        "http://example.com:80/base///"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "http://example.com/base"
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "ipv6 loopback url",
+      "args": [
+        "http://[::1]:4096/"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": "http://[::1]:4096"
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "non-http protocol throws",
+      "args": [
+        "ftp://example.com"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "credentials rejected",
+      "args": [
+        "https://user:pass@example.com"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "query string rejected",
+      "args": [
+        "https://example.com?a=1"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "fragment rejected",
+      "args": [
+        "https://example.com#frag"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#parseServerURL",
+      "name": "invalid url throws",
+      "args": [
+        "not a url"
+      ],
+      "compare": "expect_error",
+      "expectedOk": false,
+      "expectedValue": null
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "localhost",
+      "args": [
+        "localhost"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "subdomain of localhost",
+      "args": [
+        "api.localhost"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "ipv4 loopback",
+      "args": [
+        "127.0.0.1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "ipv4 loopback range",
+      "args": [
+        "127.0.1.5"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "bracketed ipv6 loopback",
+      "args": [
+        "[::1]"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "unbracketed ipv6 loopback is false",
+      "args": [
+        "::1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "lan address is false",
+      "args": [
+        "10.0.0.8"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "public domain is false",
+      "args": [
+        "example.com"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "cli/src/services/service-urls.ts#isLoopback",
+      "name": "suffix mismatch is false",
+      "args": [
+        "notlocalhost"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
       "fn": "core/src/util/wildcard.ts#match",
       "name": "exact ascii match",
       "args": [
@@ -8563,10 +9028,6 @@
           "enabled": true,
           "source": "default"
         },
-        "automations": {
-          "enabled": true,
-          "source": "default"
-        },
         "console_watches": {
           "enabled": true,
           "source": "default"
@@ -8591,12 +9052,16 @@
           "enabled": true,
           "source": "default"
         },
+        "project_overlay": {
+          "enabled": true,
+          "source": "default"
+        },
         "recommended_api": {
           "enabled": true,
           "source": "default"
         },
         "sqlite_fts": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "todo": {
@@ -8625,10 +9090,6 @@
           "enabled": false,
           "source": "default"
         },
-        "automations": {
-          "enabled": false,
-          "source": "default"
-        },
         "console_watches": {
           "enabled": false,
           "source": "default"
@@ -8650,6 +9111,10 @@
           "source": "default"
         },
         "media_blob": {
+          "enabled": false,
+          "source": "default"
+        },
+        "project_overlay": {
           "enabled": false,
           "source": "default"
         },
@@ -8678,7 +9143,7 @@
         {
           "entries": [],
           "channel": "latest",
-          "overrides": "automations,todo,-media_blob"
+          "overrides": "project_overlay,todo,-media_blob"
         }
       ],
       "compare": "exact",
@@ -8687,10 +9152,6 @@
         "artifacts": {
           "enabled": false,
           "source": "default"
-        },
-        "automations": {
-          "enabled": true,
-          "source": "env"
         },
         "console_watches": {
           "enabled": false,
@@ -8714,6 +9175,10 @@
         },
         "media_blob": {
           "enabled": false,
+          "source": "env"
+        },
+        "project_overlay": {
+          "enabled": true,
           "source": "env"
         },
         "recommended_api": {
@@ -8751,10 +9216,6 @@
           "enabled": false,
           "source": "env"
         },
-        "automations": {
-          "enabled": true,
-          "source": "env"
-        },
         "console_watches": {
           "enabled": true,
           "source": "env"
@@ -8779,13 +9240,17 @@
           "enabled": true,
           "source": "env"
         },
+        "project_overlay": {
+          "enabled": true,
+          "source": "env"
+        },
         "recommended_api": {
           "enabled": true,
           "source": "env"
         },
         "sqlite_fts": {
-          "enabled": false,
-          "source": "default"
+          "enabled": true,
+          "source": "env"
         },
         "todo": {
           "enabled": false,
@@ -8799,63 +9264,69 @@
     },
     {
       "fn": "core/src/flag.ts#resolve",
-      "name": "env legacy alias schedules maps to automations",
+      "name": "sqlite_fts and project_overlay follow dev default and release opt-in",
       "args": [
         {
-          "entries": [],
-          "channel": "latest",
-          "overrides": "schedules"
+          "entries": [
+            {
+              "experimental": {
+                "sqlite_fts": false,
+                "project_overlay": true
+              }
+            }
+          ],
+          "channel": "dev"
         }
       ],
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": {
         "artifacts": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
-        "automations": {
-          "enabled": true,
-          "source": "env"
-        },
         "console_watches": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "full_codemode": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "home_memory": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "machines": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "mcp_events": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "media_blob": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
+        "project_overlay": {
+          "enabled": true,
+          "source": "config"
+        },
         "recommended_api": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         },
         "sqlite_fts": {
           "enabled": false,
-          "source": "default"
+          "source": "config"
         },
         "todo": {
           "enabled": false,
           "source": "default"
         },
         "video_generate": {
-          "enabled": false,
+          "enabled": true,
           "source": "default"
         }
       }
@@ -8888,10 +9359,6 @@
           "enabled": false,
           "source": "config"
         },
-        "automations": {
-          "enabled": true,
-          "source": "config"
-        },
         "console_watches": {
           "enabled": true,
           "source": "config"
@@ -8916,13 +9383,17 @@
           "enabled": true,
           "source": "config"
         },
+        "project_overlay": {
+          "enabled": true,
+          "source": "config"
+        },
         "recommended_api": {
           "enabled": true,
           "source": "config"
         },
         "sqlite_fts": {
-          "enabled": false,
-          "source": "default"
+          "enabled": true,
+          "source": "config"
         },
         "todo": {
           "enabled": true,
@@ -8942,13 +9413,13 @@
           "entries": [
             {
               "experimental": {
-                "automations": true,
+                "project_overlay": true,
                 "media_blob": false
               }
             }
           ],
           "channel": "latest",
-          "overrides": "-automations,media_blob"
+          "overrides": "-project_overlay,media_blob"
         }
       ],
       "compare": "exact",
@@ -8957,10 +9428,6 @@
         "artifacts": {
           "enabled": false,
           "source": "default"
-        },
-        "automations": {
-          "enabled": false,
-          "source": "env"
         },
         "console_watches": {
           "enabled": false,
@@ -8984,6 +9451,10 @@
         },
         "media_blob": {
           "enabled": true,
+          "source": "env"
+        },
+        "project_overlay": {
+          "enabled": false,
           "source": "env"
         },
         "recommended_api": {
@@ -10166,7 +10637,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001VFijbgA5DdhC63"
+      "expectedValue": "bcfe56800001SSYEOeWLKyfL07"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10177,7 +10648,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002l4NNcd7oeF31hI"
+      "expectedValue": "bcfe56800002K04MoFH5DB0sKT"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10188,7 +10659,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffe7eTHZeMV3TG1wQ"
+      "expectedValue": "4301a97feffeJpyKkU2tRoP62L"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10199,7 +10670,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdLi555OPKz304Ux"
+      "expectedValue": "4301a97feffdJXqWLYo7divtRy"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10207,7 +10678,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1fb1fc361001H9hKRJyIOfKzBJ"
+      "expectedValue": "1ff9b869f001yQpAqQIJekC9yT"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10215,7 +10686,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e04e03c9effdyyAUyICZuChfxa"
+      "expectedValue": "e00647960ffdtghDpH1Twudg4W"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10223,7 +10694,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "4f4a9aa0-1a9a-4b8a-ba19-ef1f8e1338fa"
+      "expectedValue": "14817edf-b164-43f0-ba84-4bb7a6db3981"
     },
     {
       "fn": "jsonc-parser#modifyAndApply",
@@ -37957,6 +38428,199 @@
       "name": "trailing slash rejected",
       "args": [
         "ws://localhost:4096/api/experimental/client-mcp/?ticket=t1"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "valid GET websocket upgrade",
+      "args": [
+        {
+          "method": "GET",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "mixed-case header values and multi-token connection",
+      "args": [
+        {
+          "method": "GET",
+          "headers": {
+            "upgrade": "WebSocket",
+            "connection": "keep-alive, Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "POST rejected",
+      "args": [
+        {
+          "method": "POST",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "missing connection rejected",
+      "args": [
+        {
+          "method": "GET",
+          "headers": {
+            "upgrade": "websocket"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "missing upgrade rejected",
+      "args": [
+        {
+          "method": "GET",
+          "headers": {
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isWebSocketUpgrade",
+      "name": "non-websocket upgrade rejected",
+      "args": [
+        {
+          "method": "GET",
+          "headers": {
+            "upgrade": "h2c",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "exact machine link path with websocket upgrade",
+      "args": [
+        {
+          "method": "GET",
+          "url": "/api/experimental/machine/link",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "machine link path with query string",
+      "args": [
+        {
+          "method": "GET",
+          "url": "/api/experimental/machine/link?v=1",
+          "headers": {
+            "upgrade": "WebSocket",
+            "connection": "keep-alive, upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "dot segment traversal not normalized",
+      "args": [
+        {
+          "method": "GET",
+          "url": "/api/experimental/x/../machine/link",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "leading double slash rejected",
+      "args": [
+        {
+          "method": "GET",
+          "url": "//host/api/experimental/machine/link",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "non-upgrade request on link path rejected",
+      "args": [
+        {
+          "method": "GET",
+          "url": "/api/experimental/machine/link",
+          "headers": {}
+        }
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "protocol/src/groups/machine.ts#isMachineLinkUpgrade",
+      "name": "other machine route rejected",
+      "args": [
+        {
+          "method": "GET",
+          "url": "/api/experimental/machine",
+          "headers": {
+            "upgrade": "websocket",
+            "connection": "Upgrade"
+          }
+        }
       ],
       "compare": "exact",
       "expectedOk": true,

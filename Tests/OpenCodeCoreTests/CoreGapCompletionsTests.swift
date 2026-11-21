@@ -561,7 +561,7 @@ struct CoreGapCompletionsTests {
         let autoID = CoreAutomation.ID.create()
         #expect(CoreAutomation.NotFoundError(automationID: autoID).message == "Automation not found: \(autoID.rawValue)")
         #expect(CoreAutomation.InvalidError(reason: "bad cron").message == "bad cron")
-        #expect(CoreAutomation.DisabledError().message.contains("experimental.automations"))
+        #expect(CoreAutomation.DisabledError().message == "Automations are disabled. Set automations to true in config to enable them.")
 
         let absDir = SchemaPrimitive.AbsolutePath(rawValue: "/missing")
         #expect(CoreFilesystem.DirectoryNotFoundError(directory: absDir).message == "Directory not found: /missing")

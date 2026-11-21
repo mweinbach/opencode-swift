@@ -441,7 +441,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/video-generate.ts#Plugin [status=adapted hash=eaad93d40b58]
+        // parity: core/src/tool/plugin/video-generate.ts#Plugin [status=adapted hash=3965bd6ac4e0]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.video-generate") { editor, env in
             // `registerAllBuiltins` resolves the flag and model availability; upstream reloads on `model.updated`.
             guard env.videoGenerate,
@@ -502,7 +502,7 @@ extension CoreTool {
                             agent: inv.agent,
                             action: "edit",
                             resources: [target.resource],
-                            save: ["*"],
+                            save: [CoreFilesystem.FileAccess.always(target)],
                             source: inv.source
                         ))
                     }

@@ -36,6 +36,7 @@ extension CoreTool {
         public let session: CoreSession.Service?
         public let sessionMove: CoreSessionMove.Service?
         public let sessionStore: CoreSessionStore.Service?
+        public let sessionSearch: (any SessionSearch.Interface)?
         public let skill: (any CoreSkill.Interface)?
         public let automation: (any CoreAutomation.Interface)?
         public let mcp: (any CoreMCP.Registry.Interface)?
@@ -48,6 +49,12 @@ extension CoreTool {
         /// Upstream `flags.resolve(loaded.entries).full_codemode.enabled`, resolved once per registration pass by
         /// `registerAllBuiltins` so the synchronous registrations can read it.
         public var fullCodeMode: Bool = false
+        /// Whether the `machines` flag is enabled (`MachineTools.Plugin` registers only then).
+        public var machinesEnabled: Bool = false
+        /// Whether the `sqlite_fts` flag is enabled (`SessionSearchTools.Plugin` registers only then).
+        public var sqliteFts: Bool = false
+        /// Whether automations are enabled in config (`AutomationTools.Plugin` registers only then).
+        public var automationsEnabled: Bool = true
         /// Whether the `video_generate` flag is on and some video model is available (`VideoGenerateTool` registers
         /// only then). Resolved by `registerAllBuiltins`.
         public var videoGenerate: Bool = false
@@ -81,6 +88,7 @@ extension CoreTool {
             session: CoreSession.Service? = nil,
             sessionMove: CoreSessionMove.Service? = nil,
             sessionStore: CoreSessionStore.Service? = nil,
+            sessionSearch: (any SessionSearch.Interface)? = nil,
             skill: (any CoreSkill.Interface)? = nil,
             automation: (any CoreAutomation.Interface)? = nil,
             mcp: (any CoreMCP.Registry.Interface)? = nil,
@@ -153,6 +161,7 @@ extension CoreTool {
             self.session = session
             self.sessionMove = sessionMove
             self.sessionStore = sessionStore
+            self.sessionSearch = sessionSearch
             self.skill = skill
             self.automation = automation
             self.mcp = mcp
@@ -877,7 +886,7 @@ extension CoreTool {
             }
         }
 
-        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=6ef30bacb9d5]
+        // parity: core/src/tool/plugin/patch.ts#Plugin [status=adapted hash=4a68fd40de12]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.patch") { editor, env in
             // Which editing tools a model sees (patch vs edit/write) is `ModelPolicy.modelTools`, not a session hook.
             editor.add(RegisteredTool(
@@ -1029,14 +1038,25 @@ extension CoreTool {
                         }
 
                         let previewDiffs = prepared.map { Self.makeDiff($0) }
+                        var allTargets: [CoreFilesystem.FileAccess.Target] = []
                         var allResources: [String] = []
                         var seenRes: Set<String> = []
                         for change in prepared {
-                            let r1 = change.primaryTarget.resource
-                            if seenRes.insert(r1).inserted { allResources.append(r1) }
-                            if case .update(_, let move?, _, _, _) = change, seenRes.insert(move.resource).inserted {
-                                allResources.append(move.resource)
+                            let primary = change.primaryTarget
+                            allTargets.append(primary)
+                            if seenRes.insert(primary.resource).inserted { allResources.append(primary.resource) }
+                            if case .update(_, let move?, _, _, _) = change {
+                                allTargets.append(move)
+                                if seenRes.insert(move.resource).inserted {
+                                    allResources.append(move.resource)
+                                }
                             }
+                        }
+                        var savePatterns: [String] = []
+                        var seenSave: Set<String> = []
+                        for target in allTargets {
+                            let pattern = CoreFilesystem.FileAccess.always(target)
+                            if seenSave.insert(pattern).inserted { savePatterns.append(pattern) }
                         }
 
                         let inv = CorePermission.invocation(context)
@@ -1054,7 +1074,7 @@ extension CoreTool {
                             agent: inv.agent,
                             action: "edit",
                             resources: allResources,
-                            save: ["*"],
+                            save: savePatterns,
                             metadata: permMeta,
                             source: inv.source
                         ))
@@ -1574,14 +1594,29 @@ extension CoreTool {
             await onCompleted(payload)
         }
 
-        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=5240fe810411]
+        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=886a8bba5686]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.shell") { editor, env in
             // With full_codemode, shell is allowed in Code Mode and pinned so the catalog always lists it.
             editor.add(RegisteredTool(
                 name: name,
                 description: description(),
                 inputSchema: inputSchema,
-                outputSchema: ["type": .string("object")],
+                outputSchema: [
+                    "type": .string("object"),
+                    "properties": .object([
+                        "output": .object(["type": .string("string")]),
+                        "exitCode": .object(["type": .array([.string("number"), .string("null")])]),
+                        "signal": .object(["type": .string("string")]),
+                        "outputPath": .object(["type": .string("string")]),
+                        "shellID": .object(["type": .string("string")]),
+                        "pid": .object(["type": .string("integer")]),
+                        "killed": .object([
+                            "type": .string("string"),
+                            "description": .string("Why the command ended without an exit code, when the reason is known: the machine's worker restarted or lost the process, or the local process daemon stopped"),
+                        ]),
+                        "wallTimeSeconds": .object(["type": .string("number")]),
+                    ]),
+                ],
                 options: env.fullCodeMode ? ToolSchema.Options(codemode: true, pinned: true) : ToolSchema.Options(codemode: false),
                 codemode: env.fullCodeMode
                     ? CodeModeOverrides(description: description(codeMode: true), input: codeModeInputSchema)
@@ -1631,34 +1666,28 @@ extension CoreTool {
                             )
                         }
                         invocation.cwd = target.absolute.rawValue
-                        let local = target.environment.id == env.environment.id
                         invocation.env["AGENT"] = "1"
                         invocation.env["OPENCODE"] = "1"
                         invocation.env["AI_AGENT"] = "opencode"
                         invocation.env["OPENCODE_SESSION_ID"] = context.sessionID.rawValue
 
-                        let parsed = try CoreShell.Parse.scan(
-                            command: invocation.command,
-                            shell: invocation.shell,
-                            cwd: target.absolute.rawValue,
-                            home: local ? .server : .unknown
-                        )
-                        var externalTargets = [target]
-                        for dir in parsed.directories {
-                            let dirTarget = try await env.fileAccess.resolve(
-                                CoreFilesystem.FileAccess.ResolveInput(path: dir, kind: .directory, base: target.place)
+                        let requests = try await CoreShellPermissions.requests(
+                            access: env.fileAccess,
+                            input: CoreShellPermissions.RequestInput(
+                                command: invocation.command,
+                                program: invocation.shell,
+                                target: target,
+                                local: target.environment.id == env.environment.id
                             )
-                            externalTargets.append(dirTarget)
-                        }
-                        try await env.fileAccess.authorizeExternal(externalTargets, context: context, metadata: nil)
-                        if !parsed.commands.isEmpty {
-                            let inv = CorePermission.invocation(context)
+                        )
+                        let inv = CorePermission.invocation(context)
+                        for request in requests {
                             try await env.permission.assert(CorePermission.AssertInput(
                                 sessionID: inv.sessionID,
                                 agent: inv.agent,
-                                action: name,
-                                resources: parsed.commands.map(\.resource),
-                                save: parsed.commands.map(\.save),
+                                action: request.action,
+                                resources: request.resources,
+                                save: request.save,
                                 source: inv.source
                             ))
                         }
@@ -1670,7 +1699,10 @@ extension CoreTool {
                                 path: target.absolute.rawValue
                             )
                         } catch is CoreLocation.Environment.Files.NotFound {
-                            throw AISchema.ToolFailure(message: "Working directory does not exist: \(target.absolute.rawValue)")
+                            let message = target.machine.map {
+                                "Working directory does not exist on \($0.rawValue): \(target.absolute.rawValue)"
+                            } ?? "Working directory does not exist: \(target.absolute.rawValue)"
+                            throw AISchema.ToolFailure(message: message)
                         }
                         guard workdirType == .directory else {
                             throw AISchema.ToolFailure(message: "Working directory is not a directory: \(target.absolute.rawValue)")
@@ -1700,6 +1732,7 @@ extension CoreTool {
                     "wallTimeSeconds": .double(wall),
                 ]
                 if let sig = summary.signal { outObj["signal"] = .string(sig) }
+                if let killed = summary.killed { outObj["killed"] = .string(killed) }
                 if summary.truncated { outObj["outputPath"] = .string(res.info.file) }
 
                 var messages: [ToolSchema.Content] = []

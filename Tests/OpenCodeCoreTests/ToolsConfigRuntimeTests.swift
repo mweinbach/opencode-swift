@@ -864,11 +864,12 @@ struct CoreConfigFlagPolicyTests {
         #expect(r2[.sqliteFts] == CoreFlag.State(enabled: true, source: .env))
         #expect(r2[.fullCodemode] == CoreFlag.State(enabled: true, source: .env))
 
-        // 3. Local channel enables regular flags (including sqlite_fts & project_overlay) by default, keeps optInOnly off
+        // 3. Local channel enables regular flags (including sqlite_fts and project_overlay) by default, keeps optInOnly (.todo) off
         let r4 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [], channel: "local", overrides: nil))
         #expect(r4[.artifacts] == CoreFlag.State(enabled: true, source: .default))
         #expect(r4[.fullCodemode] == CoreFlag.State(enabled: true, source: .default))
         #expect(r4[.sqliteFts] == CoreFlag.State(enabled: true, source: .default))
+        #expect(r4[.projectOverlay] == CoreFlag.State(enabled: true, source: .default))
         #expect(r4[.todo] == CoreFlag.State(enabled: false, source: .default))
     }
 

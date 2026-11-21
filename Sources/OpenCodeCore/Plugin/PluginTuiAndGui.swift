@@ -2220,8 +2220,19 @@ public enum PluginGui {
         }
     }
 
+    /// How `Composer.send` delivers an attached part now:
+    /// - `send`: the session is idle, so the part starts its next step.
+    /// - `steer`: the session is working, and the part reaches it at its next step.
+    /// - `queue`: the session is working, and the part waits until it goes idle.
+    // parity: plugin/src/gui/host-apis.ts#ComposerDelivery [status=implemented hash=f3c33eb094fb]
+    public enum ComposerDelivery: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
+        case send
+        case steer
+        case queue
+    }
+
     /// Session screen prompt composer controller.
-    // parity: plugin/src/gui/host-apis.ts#Composer [status=adapted hash=9889379b7a3b]
+    // parity: plugin/src/gui/host-apis.ts#Composer [status=adapted hash=82d97e98a5dc]
     public struct Composer: Sendable {
         public enum Attachment: Equatable, Hashable, Sendable, Codable {
             case file(ComposerFile)
@@ -2239,6 +2250,8 @@ public enum PluginGui {
         public let quotable: @Sendable () -> Bool
         public let focus: @Sendable (String?, ComposerFocusOptions?) -> Void
         public let detach: @Sendable (String) -> Void
+        public let delivery: @Sendable () -> ComposerDelivery?
+        public let send: @Sendable (String) -> Void
         public let focused: @Sendable () -> Bool
 
         public init(
@@ -2252,6 +2265,8 @@ public enum PluginGui {
             quotable: @escaping @Sendable () -> Bool = { true },
             focus: @escaping @Sendable (String?, ComposerFocusOptions?) -> Void = { _, _ in },
             detach: @escaping @Sendable (String) -> Void = { _ in },
+            delivery: @escaping @Sendable () -> ComposerDelivery? = { nil },
+            send: @escaping @Sendable (String) -> Void = { _ in },
             focused: @escaping @Sendable () -> Bool = { false }
         ) {
             self.text = text
@@ -2264,6 +2279,8 @@ public enum PluginGui {
             self.quotable = quotable
             self.focus = focus
             self.detach = detach
+            self.delivery = delivery
+            self.send = send
             self.focused = focused
         }
     }
@@ -4481,14 +4498,15 @@ public enum PluginGui {
     /// `open` takes an HTTP(S) page without embedded credentials; a `file://` URL opens as a scoped preview only on the
     /// built-in local server inside the session's workspace, and other `file://` URLs are refused (use `openFile`).
     /// `openFile` shows a workspace file: local tabs display `file:` addresses, remote tabs `workspace:` addresses.
-    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=f39ce7dedf8f]
+    // parity: plugin/src/gui/browser.ts#Browser [status=implemented hash=9ea045fe01b7]
     public struct Browser: Sendable {
         public static let contract = Contract<Browser>.define("browser")
 
         /// Experimental tab handles: may change without compatibility guarantees.
         public struct Experimental: Sendable {
-            /// Opens a new tab and returns an opaque handle for this plugin instance. Throws if the pane is unavailable
-            /// or the session is not on screen.
+            /// Opens a new tab and returns an opaque handle for this plugin instance. Resolves once the tab exists,
+            /// also while its page still loads or after its load failed, which the tab itself shows. Throws if the pane
+            /// is unavailable, the session is not on screen, or the address opened no page (as a download does).
             public let open: @Sendable (SessionRef, String) async throws -> ExperimentalBrowserTab
             /// Requests closure of a tab this instance opened. True if closed now; false for unknown, foreign, revoked
             /// or already closed handles, or if `beforeunload` asks for confirmation.
@@ -5632,15 +5650,23 @@ public enum PluginGui {
         }
     }
 
-    /// Desktop API extended with `forceFocus` for built-in plugins.
-    // parity: plugin/src/gui/builtin.ts#BuiltinDesktop [status=implemented hash=da867bbf1c4c]
+    /// Desktop API extended with `forceFocus` and `dragOut` for built-in plugins.
+    // parity: plugin/src/gui/builtin.ts#BuiltinDesktop [status=implemented hash=8d01f730af45]
     public struct BuiltinDesktop: Sendable {
         public let base: Desktop
         public let forceFocus: @Sendable (Bool) async -> Void
+        /// Hands a file row's drag to the system so the file drops into other apps as the file itself (Windows desktop
+        /// only; returns false elsewhere).
+        public let dragOut: @Sendable (_ event: JSONValue, _ path: String) -> Bool
 
-        public init(base: Desktop, forceFocus: @escaping @Sendable (Bool) async -> Void = { _ in }) {
+        public init(
+            base: Desktop,
+            forceFocus: @escaping @Sendable (Bool) async -> Void = { _ in },
+            dragOut: @escaping @Sendable (_ event: JSONValue, _ path: String) -> Bool = { _, _ in false }
+        ) {
             self.base = base
             self.forceFocus = forceFocus
+            self.dragOut = dragOut
         }
     }
 

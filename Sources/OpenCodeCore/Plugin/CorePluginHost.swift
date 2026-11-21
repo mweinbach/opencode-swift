@@ -3567,12 +3567,14 @@ public enum CorePlugin {
         public typealias InternalPlugin = PluginEffect.Plugin
 
         /// LayerNode group of core services required by internal plugins (the video tool needs blob storage and video
-        /// generation; read tools no longer need a separate read-filesystem service).
-        // parity: core/src/plugin/internal.ts#requirements [status=adapted hash=4cb34939f250]
+        /// generation; machine and session-search tools need `Machines.node` and `SessionSearch.node`).
+        // parity: core/src/plugin/internal.ts#requirements [status=adapted hash=e63761f33e0f]
         public static let requirements: LayerNode.Graph = LayerNode.group([
             Host.requirements,
             CoreBlobStore.node,
             CoreIntegration.VideoGeneration.node,
+            Machines.node,
+            SessionSearch.node,
         ])
 
         /// Protected plugin IDs that repository config `remove` operations cannot disable.
@@ -3749,11 +3751,12 @@ public enum CorePlugin {
             return Resolution(plugins: uniquePlugins, failures: allFailures, pending: pending)
         }
 
-        /// The supervisor's update policy across reloads: which check interval it is in, and when each `@latest`
-        /// plugin last updated on its own.
+        /// The supervisor's update policy across reloads: which check interval it is in, and when each outdated
+        /// plugin was last considered for updating on its own.
         public actor Updates {
-            /// The check interval in which each `@latest` plugin last updated on its own. One attempt per interval, so an
-            /// update that doesn't take, or a new version that fails to load, isn't retried on every reload.
+            /// The check interval in which each outdated plugin was last considered for updating on its own. Once per
+            /// interval, so an update that doesn't take, or a new version that fails to load, isn't retried on every
+            /// reload.
             private var attempted: [String: Int] = [:]
             public private(set) var cycle = 0
 
@@ -3764,15 +3767,20 @@ public enum CorePlugin {
                 cycle = next
             }
 
-            /// Only a plugin written as `name@latest` updates on its own; the update reloads it. Recorded first: the
-            /// update itself triggers reloads, which check again while it runs.
-            public func autoUpdate(checked: [(target: String, available: Bool)], updates: any Update.Interface) async {
-                let due = checked.filter { $0.available && $0.target.hasSuffix("@latest") && attempted[$0.target] != cycle }
+            /// Only plugins that name what to follow (`@latest`, a range, or a Git branch) update on their own; the
+            /// update reloads them. Recorded first: the update itself triggers reloads, which check again while it runs.
+            public func autoUpdate(
+                checked: [(target: String, available: Bool)],
+                updates: any Update.Interface,
+                follows: @escaping @Sendable (String) async throws -> Bool = { NpmSpec.classifyFollows($0) == .always }
+            ) async {
+                let due = checked.filter { $0.available && attempted[$0.target] != cycle }
                 for entry in due { attempted[entry.target] = cycle }
                 await withTaskGroup(of: Void.self) { group in
                     for entry in due {
                         group.addTask {
-                            // A failed update is logged upstream and left for the next interval.
+                            // A failed check or update is logged upstream and left for the next interval.
+                            guard (try? await follows(entry.target)) == true else { return }
                             try? await updates.update(entry.target)
                         }
                     }
@@ -3803,7 +3811,7 @@ public enum CorePlugin {
 
         /// Supervisor runtime layer descriptor. The reload loop that drives `Updates` and `rejectFailedVersions` runs
         /// in the host runtime; this node only names the supervisor in the location graph.
-        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=14fdb8bbf751]
+        // parity: core/src/plugin/supervisor.ts#layer [status=adapted hash=b9d3da5ddae0]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: "plugin-supervisor",
             value: "plugin-supervisor"
@@ -6960,16 +6968,17 @@ public enum CorePlugin {
                         else {
                             return event
                         }
-                        let exitCode: Int
+                        let exitCode: Int?
                         let outputText: String
                         if case .object(let outObj)? = result.output,
                            case .string(let txt) = outObj["output"]
                         {
                             outputText = txt
-                            switch outObj["exit"] {
+                            let rawExit = outObj["exitCode"] ?? outObj["exit"]
+                            switch rawExit {
                             case .int(let n)?: exitCode = Int(n)
                             case .double(let d)?: exitCode = Int(d)
-                            default: exitCode = -1
+                            default: exitCode = nil
                             }
                         } else {
                             return event
@@ -7590,8 +7599,8 @@ public enum CorePlugin {
         }
 
         /// Detects a watchable GitHub PR URL (`gh pr create`) or pushed branch (`git push`) from shell output.
-        // parity: core/src/plugin/provider/opencode-watches.ts#shellTarget [status=implemented hash=2ccd5aed80f7]
-        public static func shellTarget(command: String, exitCode: Int, output: String) -> WatchTarget? {
+        // parity: core/src/plugin/provider/opencode-watches.ts#shellTarget [status=implemented hash=d1337e98429f]
+        public static func shellTarget(command: String, exitCode: Int?, output: String) -> WatchTarget? {
             guard exitCode == 0 else { return nil }
             func matchesRegex(_ text: String, pattern: String) -> Bool {
                 guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return false }

@@ -313,6 +313,24 @@ public enum SessionSearchIndex {
         return code == 5 || code == 6
     }
 
+    /// True when an error is a generic `SQLITE_ERROR` (code 1: syntax error, unknown function/option/table), or a
+    /// driver without SQL support (the WASI fallback).
+    // parity: core/src/session/search-index.ts#isQueryError [status=implemented hash=8fd22ca7b698]
+    public static func isQueryError(_ error: any Swift.Error) -> Bool {
+        if let sqliteError = error as? SQLiteError, case .unsupportedSQL = sqliteError {
+            return true
+        }
+        return primaryCode(error) == 1
+    }
+
+    /// Applies the same extra-letter ASCII folds that `sourceView` indexes into `session_search`.
+    // parity: core/src/session/search-index.ts#foldText [status=implemented hash=d2a80f480f24]
+    public static func foldText(_ value: String) -> String {
+        folds.reduce(value) { text, pair in
+            text.replacingOccurrences(of: pair.0, with: pair.1)
+        }
+    }
+
     /// A state this version wrote and can read.
     // parity: core/src/session/search-index.ts#current [status=implemented hash=75f0059af12b]
     public static func current(_ state: StoredState?) -> State? {
@@ -620,8 +638,7 @@ public enum SessionSearchIndex {
             try body()
             return nil
         } catch let error as SQLiteError {
-            if case .unsupportedSQL = error { return error.description }
-            guard primaryCode(error) == 1 else { throw error }
+            guard isQueryError(error) else { throw error }
             return sqliteMessage(error) ?? error.description
         }
     }

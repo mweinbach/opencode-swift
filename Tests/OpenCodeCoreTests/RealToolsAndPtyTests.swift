@@ -74,7 +74,7 @@ struct RealToolsAndPtyTests {
             _ = try await call(snap, name: "skill", input: .object(["id": .string("swift-port")]))
         }
         await #expect(throws: AISchema.ToolFailure.self) {
-            _ = try await call(snap, name: "opencode_automation_list", input: .object([:]))
+            _ = try await call(snap, name: "automation_list", input: .object([:]))
         }
         await #expect(throws: AISchema.ToolFailure.self) {
             _ = try await call(snap, name: "opencode_list_mcp_resources", input: .object([:]))
@@ -376,7 +376,7 @@ struct RealToolsAndPtyTests {
         let snap = await reg.snapshot()
 
         // Create
-        let created = try await call(snap, name: "opencode_automation_create", input: .object([
+        let created = try await call(snap, name: "automation_create", input: .object([
             "name": .string("Nightly Audit"),
             "trigger": .object(["type": .string("every"), "every": .string("5 minutes")]),
             "action": .object([
@@ -395,7 +395,7 @@ struct RealToolsAndPtyTests {
         #expect(ToolsConfigRuntimeHelper.firstText(from: created).contains("Created:"))
 
         // List
-        let listed = try await call(snap, name: "opencode_automation_list", input: .object([:]), sessionID: sid)
+        let listed = try await call(snap, name: "automation_list", input: .object([:]), sessionID: sid)
         if case .object(let listObj) = listed.output, case .array(let items) = listObj["automations"] {
             #expect(items.count == 1)
         } else {
@@ -403,7 +403,7 @@ struct RealToolsAndPtyTests {
         }
 
         // Pause
-        let paused = try await call(snap, name: "opencode_automation_pause", input: .object([
+        let paused = try await call(snap, name: "automation_pause", input: .object([
             "id": .string(autoID.rawValue),
         ]), sessionID: sid)
         if case .object(let pauseObj) = paused.output {
@@ -412,7 +412,7 @@ struct RealToolsAndPtyTests {
         #expect(try await autoService.get(autoID).status == .paused)
 
         // Resume
-        let resumed = try await call(snap, name: "opencode_automation_resume", input: .object([
+        let resumed = try await call(snap, name: "automation_resume", input: .object([
             "id": .string(autoID.rawValue),
         ]), sessionID: sid)
         if case .object(let resumeObj) = resumed.output {
@@ -421,7 +421,7 @@ struct RealToolsAndPtyTests {
         #expect(try await autoService.get(autoID).status == .active)
 
         // Delete
-        let deleted = try await call(snap, name: "opencode_automation_delete", input: .object([
+        let deleted = try await call(snap, name: "automation_delete", input: .object([
             "id": .string(autoID.rawValue),
         ]), sessionID: sid)
         #expect(deleted.output == .object(["id": .string(autoID.rawValue), "removed": .bool(true)]))

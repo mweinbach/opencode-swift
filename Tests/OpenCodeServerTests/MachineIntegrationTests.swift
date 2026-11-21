@@ -517,12 +517,18 @@ struct MachineIntegrationTests {
         #expect(located.environment.id == CoreLocation.Environment.ID.make(parsed.machine))
         #expect(located.absolute.rawValue == "/work/a.txt")
 
-        // Non-machine strings rejected by MachinePath.parse resolve locally.
-        for nonMachine in ["C:/Windows/win.ini", "local:/etc/hosts", "https://example.com/a", "gpu:relative", "Gpu:/work", "gpu://host/share"] {
+        // Non-machine strings rejected by MachinePath.parse resolve locally (unknown machine prefixes stay local).
+        for nonMachine in ["C:/Windows/win.ini", "local:/etc/hosts", "https://example.com/a", "other:relative", "Gpu:/work", "gpu://host/share"] {
             #expect(MachinePath.parse(nonMachine) == nil)
             let localPlace = try await access.locate(nonMachine, base: nil as CoreFilesystem.FileAccess.Place?)
             #expect(localPlace.environment.id == CoreLocation.Environment.localID)
         }
+
+        // Relative path prefixed with a known machine fails with MachinePath.NotAbsolute rather than resolving locally.
+        let relMachine = await #expect(throws: CoreLocation.Environment.Files.Failed.self) {
+            _ = try await access.locate("gpu:relative", base: nil as CoreFilesystem.FileAccess.Place?)
+        }
+        #expect(relMachine?.cause as? MachinePath.NotAbsolute == MachinePath.NotAbsolute(machine: "gpu"))
 
         // Invalid ~other path wraps MachinePath.NotAbsolute (the single error type from MachineJoinPathSQL.swift).
         let notAbs = await #expect(throws: CoreLocation.Environment.Files.Failed.self) {
