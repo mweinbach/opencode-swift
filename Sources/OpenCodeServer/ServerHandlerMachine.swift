@@ -480,6 +480,10 @@ public enum ServerMachine {
         private let stallTimeout: Duration
         private let waiting = Mutex<[SocketFrame]>([])
 
+        var describe: (@Sendable () -> MachineDriver.ConnectionInfo)? {
+            { MachineDriver.ConnectionInfo(kind: .websocket) }
+        }
+
         init(reader: any SocketReader, transport: any Transport, stallTimeout: Duration) {
             self.reader = reader
             self.transport = transport
@@ -676,10 +680,11 @@ public enum ServerMachine {
                     closingTimeout: closingTimeout
                 ) { transport in
                     let linkCarrier = carrier(reader: transport, transport: transport)
-                    let established: MachineLink.Established
+                    let served: MachineLink.Served
                     do {
+                        // The place is held until the handshake and hello have ended.
                         defer { releaseHandshake() }
-                        established = try await MachineLink.accept(
+                        served = try await MachineLink.serve(
                             linkCarrier,
                             identity: ctx.runtime.machineIdentity,
                             machines: ctx.runtime.machines
@@ -689,58 +694,14 @@ public enum ServerMachine {
                         transport.drop()
                         throw error
                     }
+                    defer { served.close() }
 
                     let keepaliveTask = Task {
                         await keepalive(transport, interval: pingInterval)
                     }
                     defer { keepaliveTask.cancel() }
 
-                    let firstFrame = try await linkCarrier.receive()
-                    let plain = try established.receive.decrypt(firstFrame)
-                    let decoded = try JSONDecoder().decode(MachineWire.FromWorker.self, from: Data(plain))
-                    guard case .hello(let hello) = decoded, hello.name == established.machine else {
-                        throw MachineLink.Refused()
-                    }
-
-                    let (outbox, outboxCont) = AsyncStream<MachineWire.ToWorker>.makeStream()
-                    let (inbound, inboundCont) = AsyncStream<MachineWire.FromWorker>.makeStream()
-
-                    let writer = Task {
-                        let encoder = JSONEncoder()
-                        for await message in outbox {
-                            if Task.isCancelled { break }
-                            guard let msgPlain = try? encoder.encode(message),
-                                  let cipher = try? established.send.encrypt(Array(msgPlain))
-                            else {
-                                break
-                            }
-                            await linkCarrier.send(cipher)
-                        }
-                    }
-
-                    let reader = Task {
-                        let decoder = JSONDecoder()
-                        defer { inboundCont.finish() }
-                        while !Task.isCancelled {
-                            guard let frame = try? await linkCarrier.receive(),
-                                  let msgPlain = try? established.receive.decrypt(frame),
-                                  let msgDecoded = try? decoder.decode(MachineWire.FromWorker.self, from: Data(msgPlain))
-                            else {
-                                break
-                            }
-                            inboundCont.yield(msgDecoded)
-                        }
-                    }
-
-                    let connection = MachineDriver.Connection(
-                        hello: hello,
-                        send: { message in outboxCont.yield(message) },
-                        messages: inbound
-                    )
-                    try? await ctx.runtime.machines.connect(connection)
-                    outboxCont.finish()
-                    reader.cancel()
-                    writer.cancel()
+                    try? await ctx.runtime.machines.connect(served.machine, served.connection)
                 }
             } catch {
                 // A WebSocket handshake refused, a refused link, and a machine removed since it: one quiet close.
@@ -776,7 +737,13 @@ public enum ServerMachine {
                         paired: info.paired,
                         os: info.os,
                         arch: info.arch,
-                        connection: nil
+                        connection: info.connection.map { connection in
+                            OpenCodeProtocol.MachineInfo.Connection(
+                                kind: connection.kind == .iroh ? .iroh : .websocket,
+                                path: connection.path.map { $0 == .direct ? .direct : .relayed },
+                                rtt: connection.rtt
+                            )
+                        }
                     )
                 }
                 return ServerHTTPResponse.json(ServerDataWrapper(data: items))
@@ -793,7 +760,10 @@ public enum ServerMachine {
                     throw InvalidRequestError(message: invalid.message, kind: "invalid_name", field: "name")
                 }
 
-                let joinReach = payload.reach.map { MachineJoin.Reach.url($0.url) }
+                var joinReach = payload.reach.map { MachineJoin.Reach.url($0.url) }
+                if let irohAvailable, await irohAvailable() {
+                    joinReach.append(.iroh)
+                }
                 let join: String
                 do {
                     join = try await ctx.runtime.machines.invite(
@@ -809,13 +779,11 @@ public enum ServerMachine {
                 guard let decoded = MachineJoin.decode(join) else {
                     throw UnknownError(message: "Server produced an unreadable join string")
                 }
-                var responseReach: [MachineInvite.ReachEntry] = decoded.reach.map { entry in
+                let responseReach: [MachineInvite.ReachEntry] = decoded.reach.map { entry in
                     switch entry {
                     case .url(let url): return .url(url)
+                    case .iroh: return .iroh
                     }
-                }
-                if let irohAvailable, await irohAvailable() {
-                    responseReach.append(.iroh)
                 }
                 let invite = MachineInvite(
                     name: id,
