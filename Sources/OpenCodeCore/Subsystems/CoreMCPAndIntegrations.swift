@@ -854,7 +854,7 @@ public enum CoreMCP {
             }
             guard (200..<300).contains(status) else {
                 let errBody = String(decoding: response.body, as: UTF8.self)
-                throw Client.ConnectError(server: server, message: "HTTP \(status): \(errBody)", answered: true)
+                throw Client.HTTPStatusError(server: server, status: status, body: errBody)
             }
 
             let contentType = response.head.headers.first { $0.key.lowercased() == "content-type" }?.value.lowercased() ?? "application/json"
@@ -1015,6 +1015,116 @@ public enum CoreMCP {
 
     public enum Client {
         public static let latestProtocolVersion = "2026-07-28"
+        public static let legacyProtocolVersion = "2025-11-25"
+        public static let defaultStartupTimeoutMs: Int = 30_000
+        public static let probeTimeoutMs: Int = 5_000
+
+        /// Version negotiation strategy derived from `McpSchema.WireProtocol` and startup timeout.
+        public enum VersionNegotiation: Equatable, Hashable, Sendable {
+            /// Plain `initialize` handshake with no discover probe.
+            case legacy
+            /// Auto-negotiate with a fast probe cap (`min(5_000, startupMs)`).
+            case auto(probeTimeoutMs: Int)
+            /// Pin a specific protocol revision (e.g. `"2026-07-28"`).
+            case pin(String)
+        }
+
+        /// Internal HTTP status failure surfaced by `StreamableHTTPTransport` so `connect` can retry
+        /// 400/404 when `?codemode=false` was appended and classify transient failures.
+        public struct HTTPStatusError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
+            public let server: String
+            public let status: Int
+            public let body: String
+
+            public init(server: String, status: Int, body: String) {
+                self.server = server
+                self.status = status
+                self.body = body
+            }
+
+            public var description: String { "HTTP \(status): \(body)" }
+        }
+
+        /// Raised when a handshake or auto-negotiation probe exceeds its timeout budget.
+        public struct RequestTimeoutError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
+            public let timeoutMs: Int
+
+            public init(timeoutMs: Int) {
+                self.timeoutMs = timeoutMs
+            }
+
+            public var description: String { "MCP request timed out after \(timeoutMs)ms" }
+        }
+
+        /// Computes the SDK version negotiation configuration for `wireProtocol` and `startupMs`.
+        public static func negotiation(
+            protocol wireProtocol: McpSchema.WireProtocol,
+            startupMs: Int = defaultStartupTimeoutMs,
+            probeTimeoutMs: Int = Client.probeTimeoutMs
+        ) -> VersionNegotiation {
+            switch wireProtocol {
+            case .legacy:
+                return .legacy
+            case .auto:
+                return .auto(probeTimeoutMs: min(max(1, probeTimeoutMs), max(1, startupMs)))
+            case .rev20260728:
+                return .pin(McpSchema.WireProtocol.rev20260728.rawValue)
+            }
+        }
+
+        /// Servers known to reject unknown query parameters (and have no bundled Code Mode of their own),
+        /// so appending `?codemode=false` would only waste a failed request.
+        public static func rejectsUnknownQuery(_ url: URL) -> Bool {
+            guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
+            if host.hasSuffix(".googleapis.com") { return true }
+            if matchesZohoMcpHost(host) { return true }
+            if host == "localhost" || host == "[::1]" || host == "::1" { return true }
+            return isIPv4LoopbackHost(host)
+        }
+
+        private static func matchesZohoMcpHost(_ host: String) -> Bool {
+            // Matches /(^|\.)zohomcp\.[a-z.]+$/
+            let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+            guard let idx = labels.firstIndex(of: "zohomcp"), idx + 1 < labels.count else {
+                return false
+            }
+            let suffix = labels[(idx + 1)...].joined(separator: ".")
+            guard !suffix.isEmpty else { return false }
+            return suffix.utf8.allSatisfy { b in
+                (b >= 0x61 && b <= 0x7A) || b == 0x2E
+            }
+        }
+
+        private static func isIPv4LoopbackHost(_ host: String) -> Bool {
+            let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+            guard parts.count == 4, parts[0] == "127" else { return false }
+            return parts.dropFirst().allSatisfy { part in
+                !part.isEmpty && part.utf8.allSatisfy { $0 >= 0x30 && $0 <= 0x39 }
+            }
+        }
+
+        /// Computes the effective connect URL for a remote server, appending `?codemode=false` when appropriate.
+        public static func connectURL(for remote: McpSchema.RemoteConfig) -> (url: String, addedCodemode: Bool) {
+            guard remote.codemode != false,
+                  var components = URLComponents(string: remote.url),
+                  let parsed = components.url,
+                  !rejectsUnknownQuery(parsed) else {
+                return (remote.url, false)
+            }
+            let items = components.queryItems ?? []
+            if items.contains(where: { $0.name == "codemode" }) {
+                return (remote.url, false)
+            }
+            components.queryItems = items + [URLQueryItem(name: "codemode", value: "false")]
+            guard let updated = components.url?.absoluteString else {
+                return (remote.url, false)
+            }
+            return (updated, true)
+        }
+
+        private static func isTransientHTTPStatus(_ status: Int) -> Bool {
+            status == 408 || status == 429 || (status >= 500 && status != 501)
+        }
 
         // parity: core/src/mcp/client.ts#EventType [status=implemented hash=cdd68afbdad3]
         public struct EventType: Equatable, Hashable, Sendable, Codable {
@@ -1427,6 +1537,7 @@ public enum CoreMCP {
             public let http: (any HTTPTransport)?
             public let spawner: (any ProcessSpawner)?
             public let bearerTokenProvider: (@Sendable () async throws -> String?)?
+            public let probeTimeoutMs: Int
 
             public init(
                 server: String,
@@ -1439,7 +1550,8 @@ public enum CoreMCP {
                 transportOverride: (any Transport)? = nil,
                 http: (any HTTPTransport)? = nil,
                 spawner: (any ProcessSpawner)? = nil,
-                bearerTokenProvider: (@Sendable () async throws -> String?)? = nil
+                bearerTokenProvider: (@Sendable () async throws -> String?)? = nil,
+                probeTimeoutMs: Int = Client.probeTimeoutMs
             ) {
                 self.server = server
                 self.config = config
@@ -1452,6 +1564,7 @@ public enum CoreMCP {
                 self.http = http
                 self.spawner = spawner
                 self.bearerTokenProvider = bearerTokenProvider
+                self.probeTimeoutMs = probeTimeoutMs
             }
         }
 
@@ -1495,28 +1608,87 @@ public enum CoreMCP {
             public var title: String? { state.withLock { $0.title } }
             public var instructions: String? { state.withLock { $0.instructions } }
 
-            public func performHandshake(clientInfo: (name: String, version: String)) async throws {
-                try await transport.start()
-                let initParams: JSONValue = .object([
-                    "protocolVersion": .string(Client.latestProtocolVersion),
-                    "capabilities": .object([:]),
-                    "clientInfo": .object([
-                        "name": .string(clientInfo.name),
-                        "version": .string(clientInfo.version),
-                    ]),
-                ])
-                let result = try await sendRequest(method: "initialize", params: initParams)
-                if case .object(let obj) = result {
-                    state.withLock { s in
-                        if case .string(let ver) = obj["protocolVersion"] { s.protocolVersion = ver }
-                        if case .string(let instr) = obj["instructions"] { s.instructions = instr }
-                        if case .object(let info) = obj["serverInfo"] {
-                            if case .string(let t) = info["title"] { s.title = t }
-                            else if case .string(let n) = info["name"] { s.title = n }
+            public func performHandshake(
+                clientInfo: (name: String, version: String),
+                negotiation: VersionNegotiation = .legacy,
+                timeoutMs: Int? = nil
+            ) async throws {
+                let effectiveTimeoutMs: Int?
+                switch negotiation {
+                case .auto(let probeMs):
+                    effectiveTimeoutMs = timeoutMs.map { min($0, probeMs) } ?? probeMs
+                case .legacy, .pin:
+                    effectiveTimeoutMs = timeoutMs
+                }
+
+                let requestedVersion: String
+                switch negotiation {
+                case .legacy:
+                    requestedVersion = Client.legacyProtocolVersion
+                case .auto:
+                    requestedVersion = Client.latestProtocolVersion
+                case .pin(let pinned):
+                    requestedVersion = pinned
+                }
+
+                let runHandshake: @Sendable () async throws -> Void = { [self] in
+                    try await self.transport.start()
+                    let initParams: JSONValue = .object([
+                        "protocolVersion": .string(requestedVersion),
+                        "capabilities": .object([:]),
+                        "clientInfo": .object([
+                            "name": .string(clientInfo.name),
+                            "version": .string(clientInfo.version),
+                        ]),
+                    ])
+                    let result = try await self.sendRequest(method: "initialize", params: initParams)
+                    var negotiatedVersion: String?
+                    if case .object(let obj) = result {
+                        self.state.withLock { s in
+                            if case .string(let ver) = obj["protocolVersion"] {
+                                s.protocolVersion = ver
+                                negotiatedVersion = ver
+                            }
+                            if case .string(let instr) = obj["instructions"] { s.instructions = instr }
+                            if case .object(let info) = obj["serverInfo"] {
+                                if case .string(let t) = info["title"] { s.title = t }
+                                else if case .string(let n) = info["name"] { s.title = n }
+                            }
                         }
                     }
+                    if case .pin(let pinned) = negotiation,
+                       let negotiatedVersion,
+                       negotiatedVersion != pinned {
+                        throw ConnectError(
+                            server: self.server,
+                            message: "Unsupported protocol version \(pinned); the server supports \(negotiatedVersion). Set \"protocol\" for this server to one of those or to \"legacy\".",
+                            answered: true
+                        )
+                    }
+                    try await self.sendNotification(method: "notifications/initialized", params: nil)
                 }
-                try await sendNotification(method: "notifications/initialized", params: nil)
+
+                guard let ms = effectiveTimeoutMs else {
+                    try await runHandshake()
+                    return
+                }
+
+                do {
+                    try await withThrowingTaskGroup(of: Void.self) { group in
+                        group.addTask {
+                            try await runHandshake()
+                        }
+                        group.addTask {
+                            try await Task.sleep(for: .milliseconds(max(1, ms)))
+                            throw RequestTimeoutError(timeoutMs: ms)
+                        }
+                        _ = try await group.next()
+                        group.cancelAll()
+                    }
+                } catch {
+                    try? await transport.close()
+                    throw error
+                }
             }
 
             public func sendRequest(method: String, params: JSONValue?) async throws -> JSONValue {
@@ -1693,51 +1865,159 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#connect [status=implemented hash=726c9b4addf5]
+        // parity: core/src/mcp/client.ts#connect [status=implemented hash=742b9e59ac48]
         public static func connect(_ options: ConnectOptions) async throws -> LiveConnection {
-            let transport: any Transport
+            let resolvedProtocol: McpSchema.WireProtocol
+            let startupMs: Int
+            switch options.config {
+            case .local(let local):
+                resolvedProtocol = local.wireProtocol ?? .auto
+                startupMs = local.timeout?.startup?.rawValue ?? defaultStartupTimeoutMs
+            case .remote(let remote):
+                resolvedProtocol = remote.wireProtocol ?? .auto
+                startupMs = remote.timeout?.startup?.rawValue ?? defaultStartupTimeoutMs
+            }
+
+            let mapError: @Sendable (any Swift.Error) -> any Swift.Error = { error in
+                if let err = error as? NeedsAuthError { return err }
+                if let err = error as? ConnectError { return err }
+                if let err = error as? HTTPStatusError {
+                    return ConnectError(
+                        server: options.server,
+                        message: err.description,
+                        answered: !isTransientHTTPStatus(err.status)
+                    )
+                }
+                if let err = error as? RequestTimeoutError {
+                    return ConnectError(server: options.server, message: err.description, answered: false)
+                }
+                return ConnectError(server: options.server, message: String(describing: error), answered: false)
+            }
+
+            let initializeTransport: @Sendable (any Transport, McpSchema.WireProtocol, Int) async throws -> LiveConnection = {
+                transport, proto, timeoutBudgetMs in
+                let conn = LiveConnection(server: options.server, transport: transport)
+                do {
+                    try await conn.performHandshake(
+                        clientInfo: options.clientInfo,
+                        negotiation: negotiation(protocol: proto, startupMs: startupMs, probeTimeoutMs: options.probeTimeoutMs),
+                        timeoutMs: timeoutBudgetMs
+                    )
+                    return conn
+                } catch {
+                    try? await transport.close()
+                    throw error
+                }
+            }
+
             if let override = options.transportOverride {
-                transport = override
-            } else {
-                switch options.config {
-                case .local(let local):
-                    guard let command = local.command.first else {
-                        throw ConnectError(server: options.server, message: "MCP local server command is empty", answered: false)
-                    }
-                    let cwd = Stdio.resolveCwd(directory: options.directory, cwd: local.cwd)
-                    transport = Stdio.make(
+                do {
+                    return try await initializeTransport(override, resolvedProtocol, startupMs)
+                } catch {
+                    throw mapError(error)
+                }
+            }
+
+            switch options.config {
+            case .local(let local):
+                guard let command = local.command.first else {
+                    throw ConnectError(server: options.server, message: "MCP local server command is empty", answered: false)
+                }
+                let cwd = Stdio.resolveCwd(directory: options.directory, cwd: local.cwd)
+                var env: [String: String] = command == "opencode" ? ["BUN_BE_BUN": "1"] : [:]
+                if let configuredEnv = local.environment {
+                    for (k, v) in configuredEnv { env[k] = v }
+                }
+                let resolvedEnv = env
+                let spawn: @Sendable (McpSchema.WireProtocol) async throws -> LiveConnection = { proto in
+                    let transport = Stdio.make(
                         Stdio.Options(
                             server: options.server,
                             command: command,
                             args: Array(local.command.dropFirst()),
                             cwd: cwd,
-                            environment: local.environment ?? [:]
+                            environment: resolvedEnv
                         ),
                         spawner: options.spawner ?? CrossSpawnSpawner.HostProcessSpawner.shared
                     )
-                case .remote(let remote):
-                    guard let http = options.http else {
-                        throw ConnectError(server: options.server, message: "HTTP transport required for remote MCP server \(remote.url)", answered: false)
+                    return try await initializeTransport(transport, proto, startupMs)
+                }
+                do {
+                    return try await spawn(resolvedProtocol)
+                } catch {
+                    // Some legacy stdio servers exit on the auto probe's unknown request (e.g. Python SDK 1.3),
+                    // so respawn for legacy initialize. A shared connection (roots == false) cannot be legacy.
+                    if resolvedProtocol == .auto && options.roots {
+                        let shouldRetryLegacy: Bool
+                        if error is RequestTimeoutError || error is PlatformError || error is JSONRPCErrorObject {
+                            shouldRetryLegacy = true
+                        } else if let connectErr = error as? ConnectError, connectErr.answered == true {
+                            shouldRetryLegacy = true
+                        } else {
+                            shouldRetryLegacy = false
+                        }
+                        if shouldRetryLegacy {
+                            do {
+                                return try await spawn(.legacy)
+                            } catch {
+                                throw mapError(error)
+                            }
+                        }
                     }
-                    transport = StreamableHTTPTransport(
+                    throw mapError(error)
+                }
+
+            case .remote(let remote):
+                guard let http = options.http else {
+                    throw ConnectError(server: options.server, message: "HTTP transport required for remote MCP server \(remote.url)", answered: false)
+                }
+                let (initialURL, addedCodemode) = connectURL(for: remote)
+                let deadline = ContinuousClock.now + .milliseconds(startupMs)
+
+                let openHTTP: @Sendable (String, McpSchema.WireProtocol, Int) async throws -> LiveConnection = {
+                    targetURL, proto, timeoutBudgetMs in
+                    let transport = StreamableHTTPTransport(
                         server: options.server,
-                        url: remote.url,
+                        url: targetURL,
                         headers: remote.headers ?? [:],
                         http: http,
                         bearerTokenProvider: options.bearerTokenProvider
                     )
+                    return try await initializeTransport(transport, proto, timeoutBudgetMs)
                 }
-            }
-            let conn = LiveConnection(server: options.server, transport: transport)
-            do {
-                try await conn.performHandshake(clientInfo: options.clientInfo)
-                return conn
-            } catch let err as NeedsAuthError {
-                throw err
-            } catch let err as ConnectError {
-                throw err
-            } catch {
-                throw ConnectError(server: options.server, message: String(describing: error), answered: false)
+
+                let remainingMs: @Sendable () -> Int = {
+                    let delta = ContinuousClock.now.duration(to: deadline)
+                    let secs = delta.components.seconds
+                    let attos = delta.components.attoseconds
+                    let totalMs = secs * 1_000 + (attos / 1_000_000_000_000_000)
+                    return Int(totalMs)
+                }
+
+                let negotiate: @Sendable (String) async throws -> LiveConnection = { targetURL in
+                    do {
+                        return try await openHTTP(targetURL, resolvedProtocol, max(1, remainingMs()))
+                    } catch is RequestTimeoutError where resolvedProtocol == .auto {
+                        let left = remainingMs()
+                        guard left > 0 else {
+                            throw RequestTimeoutError(timeoutMs: startupMs)
+                        }
+                        return try await openHTTP(targetURL, .legacy, left)
+                    }
+                }
+
+                do {
+                    return try await negotiate(initialURL)
+                } catch let httpErr as HTTPStatusError where addedCodemode && (httpErr.status == 400 || httpErr.status == 404) {
+                    // Servers that reject unknown query params get one retry at the configured URL.
+                    do {
+                        return try await negotiate(remote.url)
+                    } catch {
+                        throw mapError(error)
+                    }
+                } catch {
+                    throw mapError(error)
+                }
             }
         }
     }
@@ -2740,7 +3020,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/index.ts#layer [status=implemented hash=bf4afebf074b]
+        // parity: core/src/mcp/index.ts#layer [status=implemented hash=6374564cca12]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let loc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)

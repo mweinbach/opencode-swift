@@ -93,32 +93,19 @@ struct CoreToolModelPolicyTests {
         #expect(unresolved.hidden == ["websearch"])
     }
 
-    @Test("full Code Mode hides search tools and keeps a weak model's built-ins direct")
+    @Test("full Code Mode hides search tools and places built-ins in Code Mode for all models")
     func fullCodeMode() {
         let weak = CoreTool.ModelPolicy.modelTools(model: CoreToolsSyncFixture.model(id: "llama-4"), websearch: true, fullCodeMode: true)
         #expect(weak.hidden == ["glob", "grep", "webfetch", "patch"])
-        #expect(weak.direct == ["read", "write", "edit", "shell", "websearch"])
+        #expect(weak.direct.isEmpty)
 
         let strong = CoreTool.ModelPolicy.modelTools(model: CoreToolsSyncFixture.model(id: "gpt-5.1"), websearch: false, fullCodeMode: true)
         #expect(strong.direct.isEmpty)
         #expect(strong.hidden == ["glob", "grep", "webfetch", "websearch", "edit", "write"])
 
-        // Anthropic is recognized by provider, canonical provider, id or family.
-        let viaFamily = CoreTool.ModelPolicy.modelTools(
-            model: CoreToolsSyncFixture.model(id: "house-model", family: "Claude"),
-            websearch: true,
-            fullCodeMode: true
-        )
-        #expect(viaFamily.direct.isEmpty)
-        let viaCanonical = CoreTool.ModelPolicy.modelTools(
-            model: CoreToolsSyncFixture.model(id: "house-model", providerID: "bedrock", canonical: "anthropic"),
-            websearch: true,
-            fullCodeMode: true
-        )
-        #expect(viaCanonical.direct.isEmpty)
-
         let unresolved = CoreTool.ModelPolicy.modelTools(model: nil, websearch: true, fullCodeMode: true)
-        #expect(unresolved.direct == ["read", "write", "edit", "patch", "shell", "websearch"])
+        #expect(unresolved.direct.isEmpty)
+        #expect(unresolved.hidden == ["glob", "grep", "webfetch"])
     }
 }
 

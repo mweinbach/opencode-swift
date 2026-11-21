@@ -116,17 +116,17 @@ struct SchemaDomainTests {
 
     // MARK: - Config & Feature Flags
 
-    @Test("ConfigFlagSchema registry, optInOnly, wildcard, and aliases match upstream")
+    @Test("ConfigFlagSchema registry, optInOnly, and wildcard match upstream")
     func configFeatureFlags() {
         #expect(ConfigFlagSchema.wildcard == "all")
         #expect(ConfigFlagSchema.Key.allCases.count == 12)
         #expect(ConfigFlagSchema.registry.count == 12)
-        #expect(ConfigFlagSchema.optInOnly == [.todo, .sqliteFts])
+        #expect(ConfigFlagSchema.optInOnly == [.todo])
         #expect(ConfigFlagSchema.Key(rawValue: "recommended_api") == .recommendedApi)
         #expect(ConfigFlagSchema.Key(rawValue: "machines") == .machines)
         #expect(ConfigFlagSchema.Key(rawValue: "home_memory") == .homeMemory)
+        #expect(ConfigFlagSchema.Key(rawValue: "project_overlay") == .projectOverlay)
         #expect(ConfigFlagSchema.registry[.fullCodemode] == "Enable the full Code Mode work in progress.")
-        #expect(ConfigFlagSchema.aliases["schedules"] == .automations)
         for key in ConfigFlagSchema.Key.allCases {
             #expect(ConfigFlagSchema.registry[key] != nil)
             #expect(key.rawValue != "all_flags")
@@ -220,9 +220,10 @@ struct SchemaDomainTests {
               "settings": { "timeout": 900000, "chunkTimeout": false, "customFlag": true }
             }
           },
+          "automations": true,
           "experimental": {
             "all_flags": true,
-            "automations": true,
+            "project_overlay": true,
             "location_idle_timeout": false,
             "image_generate": { "model": "google/imagen-4" }
           }
@@ -244,7 +245,8 @@ struct SchemaDomainTests {
         #expect(decoded.providers?["console-anthropic"]?.settings?.timeout == .milliseconds(900_000))
         #expect(decoded.providers?["console-anthropic"]?.settings?.chunkTimeout == .disabled)
         #expect(decoded.providers?["console-anthropic"]?.settings?.extra["customFlag"] == .bool(true))
-        #expect(decoded.experimental?.flagValue(for: .automations) == true)
+        #expect(decoded.automations == true)
+        #expect(decoded.experimental?.flagValue(for: .projectOverlay) == true)
         #expect(decoded.experimental?.locationIdleTimeout == .disabled)
 
         // Config.Patch encodes explicit null for shell

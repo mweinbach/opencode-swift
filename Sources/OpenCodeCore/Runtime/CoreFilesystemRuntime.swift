@@ -220,7 +220,7 @@ public enum CoreFilesystem {
         /// A resolved target. `environment` is where the target lives: tools act on the target through it rather than
         /// through a captured Environment. Equality, hashing and coding identify the environment by its `id`; a decoded
         /// target binds the host environment when its id is `local` and an unavailable placeholder otherwise.
-        // parity: core/src/file-access.ts#Target [status=implemented hash=4cb7d1ddd831]
+        // parity: core/src/file-access.ts#Target [status=implemented hash=4a6d63a52e88]
         public struct Target: Equatable, Hashable, Sendable, Codable {
             public let absolute: SchemaPrimitive.AbsolutePath
             /// Location-relative for internal paths, absolute for external paths.
@@ -228,17 +228,21 @@ public enum CoreFilesystem {
             public let externalDirectory: ExternalDirectoryAuthorization?
             /// Where the target lives.
             public let environment: any CoreLocation.Environment.Interface
+            /// The machine the file is on, when it is not on this server.
+            public let machine: CoreLocation.Environment.ID?
 
             public init(
                 absolute: SchemaPrimitive.AbsolutePath,
                 resource: String,
                 externalDirectory: ExternalDirectoryAuthorization? = nil,
-                environment: any CoreLocation.Environment.Interface = CoreLocation.Environment.host
+                environment: any CoreLocation.Environment.Interface = CoreLocation.Environment.host,
+                machine: CoreLocation.Environment.ID? = nil
             ) {
                 self.absolute = absolute
                 self.resource = resource
                 self.externalDirectory = externalDirectory
                 self.environment = environment
+                self.machine = machine
             }
 
             /// The target's place: its absolute path and the id of its environment.
@@ -247,7 +251,7 @@ public enum CoreFilesystem {
             }
 
             private enum CodingKeys: String, CodingKey {
-                case absolute, resource, externalDirectory, environment
+                case absolute, resource, externalDirectory, environment, machine
             }
 
             public init(from decoder: any Decoder) throws {
@@ -263,6 +267,7 @@ public enum CoreFilesystem {
                         id: id,
                         driver: CoreLocation.Environment.Driver(spawner: CoreLocation.Environment.unavailableSpawner)
                     )
+                self.machine = try container.decodeIfPresent(CoreLocation.Environment.ID.self, forKey: .machine)
             }
 
             public func encode(to encoder: any Encoder) throws {
@@ -271,6 +276,7 @@ public enum CoreFilesystem {
                 try container.encode(resource, forKey: .resource)
                 try container.encodeIfPresent(externalDirectory, forKey: .externalDirectory)
                 try container.encode(Place.EnvironmentRef(id: environment.id), forKey: .environment)
+                try container.encodeIfPresent(machine, forKey: .machine)
             }
 
             public static func == (lhs: Target, rhs: Target) -> Bool {
@@ -278,6 +284,7 @@ public enum CoreFilesystem {
                     && lhs.resource == rhs.resource
                     && lhs.externalDirectory == rhs.externalDirectory
                     && lhs.environment.id == rhs.environment.id
+                    && lhs.machine == rhs.machine
             }
 
             public func hash(into hasher: inout Hasher) {
@@ -285,7 +292,39 @@ public enum CoreFilesystem {
                 hasher.combine(resource)
                 hasher.combine(externalDirectory)
                 hasher.combine(environment.id)
+                hasher.combine(machine)
             }
+        }
+
+        public struct PermissionRequest: Equatable, Hashable, Sendable {
+            public let action: String
+            public let resources: [String]
+            public let save: [String]?
+
+            public init(action: String, resources: [String], save: [String]? = nil) {
+                self.action = action
+                self.resources = resources
+                self.save = save
+            }
+        }
+
+        /// Builds a deduplicated `external_directory` permission request for `targets`, or `nil` if all are internal.
+        // parity: core/src/file-access.ts#externalDirectoryRequest [status=implemented hash=aa17936e7453]
+        public static func externalDirectoryRequest(_ targets: [Target]) -> PermissionRequest? {
+            var seen: Set<String> = []
+            var externals: [ExternalDirectoryAuthorization] = []
+            for target in targets {
+                guard let ext = target.externalDirectory else { continue }
+                if seen.insert(ext.resource).inserted {
+                    externals.append(ext)
+                }
+            }
+            guard !externals.isEmpty else { return nil }
+            return PermissionRequest(
+                action: "external_directory",
+                resources: externals.map(\.resource),
+                save: externals.map(\.save)
+            )
         }
 
         /// Identifies a target's file: the same path in two environments is two files. The id's length (UTF-16 code
@@ -302,6 +341,12 @@ public enum CoreFilesystem {
 
         public static func key(_ place: Place) -> String {
             key(absolute: place.absolute.rawValue, environment: place.environment.id)
+        }
+
+        /// The rule "always" saves for a file action: every file on the target's machine.
+        // parity: core/src/file-access.ts#always [status=implemented hash=83f15bfee6fc]
+        public static func always(_ target: Target) -> String {
+            target.machine.map { "\($0.rawValue):*" } ?? "*"
         }
 
         // parity: core/src/file-access.ts#Invocation [status=implemented hash=80b0595e56a1]
@@ -445,6 +490,26 @@ public enum CoreFilesystem {
                 // Only text the model typed can name a machine: text derived from a target is a plain path on that
                 // target's machine, and a shell there does not understand `gpu:`.
                 let parsed = base == nil && enabled ? MachinePath.parse(text) : nil
+                // A machine path is absolute or starts with ~/, so `gpu:work` is no machine path and would quietly be this
+                // server's folder. Only a name that is a machine here is refused: another name stays a local folder, as before.
+                if base == nil && enabled {
+                    let scalars = text.unicodeScalars
+                    if let colon = scalars.firstIndex(of: ":"), colon > scalars.startIndex {
+                        let name = String(Substring(scalars[..<colon]))
+                        let rest = Substring(scalars[scalars.index(after: colon)...])
+                        if Machines.Name.isValid(name),
+                           !rest.hasPrefix("/"),
+                           !rest.hasPrefix("~"),
+                           let machines,
+                           await machines.list().contains(where: { $0.id == name })
+                        {
+                            throw CoreLocation.Environment.Files.Failed(
+                                path: text,
+                                cause: MachinePath.NotAbsolute(machine: name)
+                            )
+                        }
+                    }
+                }
                 let id = parsed.map { CoreLocation.Environment.ID.make($0.machine) } ?? base?.environment.id ?? environment.id
                 if parsed == nil && id == environment.id {
                     return Place(
@@ -563,7 +628,8 @@ public enum CoreFilesystem {
                         resource: glob,
                         save: glob
                     ),
-                    environment: machineEnvironment
+                    environment: machineEnvironment,
+                    machine: place.environment.id
                 )
             }
 
@@ -572,22 +638,14 @@ public enum CoreFilesystem {
                 context: Invocation,
                 metadata: [String: JSONValue]? = nil
             ) async throws {
-                var seen: Set<String> = []
-                var externals: [ExternalDirectoryAuthorization] = []
-                for target in targets {
-                    guard let ext = target.externalDirectory else { continue }
-                    if seen.insert(ext.resource).inserted {
-                        externals.append(ext)
-                    }
-                }
-                if externals.isEmpty { return }
+                guard let request = FileAccess.externalDirectoryRequest(targets) else { return }
                 let inv = CorePermission.invocation(context)
                 try await permission.assert(CorePermission.AssertInput(
                     sessionID: inv.sessionID,
                     agent: inv.agent,
-                    action: "external_directory",
-                    resources: externals.map(\.resource),
-                    save: externals.map(\.save),
+                    action: request.action,
+                    resources: request.resources,
+                    save: request.save,
                     metadata: metadata,
                     source: inv.source
                 ))
@@ -625,7 +683,7 @@ public enum CoreFilesystem {
                     agent: inv.agent,
                     action: "read",
                     resources: [target.resource],
-                    save: ["*"],
+                    save: [FileAccess.always(target)],
                     source: inv.source
                 ))
                 return target

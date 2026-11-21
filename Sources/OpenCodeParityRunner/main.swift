@@ -1026,13 +1026,16 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
                     allFlags: e["all_flags"]?.boolValue,
                     todo: e["todo"]?.boolValue,
                     mediaBlob: e["media_blob"]?.boolValue,
-                    automations: e["automations"]?.boolValue,
                     artifacts: e["artifacts"]?.boolValue,
                     videoGenerate: e["video_generate"]?.boolValue.map { .enabled($0) },
                     consoleWatches: e["console_watches"]?.boolValue,
                     mcpEvents: e["mcp_events"]?.boolValue,
+                    recommendedApi: e["recommended_api"]?.boolValue,
                     fullCodemode: e["full_codemode"]?.boolValue,
-                    schedules: e["schedules"]?.boolValue
+                    machines: e["machines"]?.boolValue,
+                    homeMemory: e["home_memory"]?.boolValue,
+                    projectOverlay: e["project_overlay"]?.boolValue,
+                    sqliteFts: e["sqlite_fts"]?.boolValue
                 )
             }
             return .document(ConfigSchema.Document(info: ConfigSchema.Info(experimental: exp)))

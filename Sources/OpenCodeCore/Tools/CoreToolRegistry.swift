@@ -251,12 +251,13 @@ public enum CoreTool {
     // parity: core/src/tool.ts#NormalizedResult [status=implemented hash=806052d1ab85]
     public typealias NormalizedResult = CoreToolOutput.NormalizedResult
 
-    // parity: core/src/tool.ts#CheckInput [status=adapted hash=b508f8164bc8]
+    // parity: core/src/tool.ts#CheckInput [status=adapted hash=eb776cdb9f64]
     public struct CheckInput: Sendable {
         public let code: String
         public let tools: [String]
         public let bindings: [String: JSONValue]
         public let permissions: PermissionSchema.Ruleset
+        public let services: CoreCodemode.Tool.Services?
         public let context: ToolSchema.Context
 
         public init(
@@ -264,12 +265,14 @@ public enum CoreTool {
             tools: [String],
             bindings: [String: JSONValue] = [:],
             permissions: PermissionSchema.Ruleset = [],
+            services: CoreCodemode.Tool.Services? = nil,
             context: ToolSchema.Context
         ) {
             self.code = code
             self.tools = tools
             self.bindings = bindings
             self.permissions = permissions
+            self.services = services
             self.context = context
         }
     }
@@ -412,20 +415,25 @@ public enum CoreTool {
         }
     }
 
-    // parity: core/src/tool.ts#Snapshot [status=adapted hash=d7ce31a23629]
+    // parity: core/src/tool.ts#Snapshot [status=adapted hash=754098e77649]
     public struct Snapshot: Sendable {
         public let definitions: [AISchema.ToolDefinition]
         /// The catalog of tools placed inside Code Mode, present exactly when the snapshot offers `execute`.
         public let codeModeCatalog: CoreCodemode.Catalog.Inventory?
+        /// The expression a Code Mode program calls a tool by (`tools.opencode.session.search`), when `name` is the
+        /// path or registry ID of one of this snapshot's Code Mode tools.
+        public let codeModeExpression: (@Sendable (String) -> String?)?
         private let executeImpl: @Sendable (ExecuteCallInput) async throws -> NormalizedResult
 
         public init(
             definitions: [AISchema.ToolDefinition],
             codeModeCatalog: CoreCodemode.Catalog.Inventory? = nil,
+            codeModeExpression: (@Sendable (String) -> String?)? = nil,
             execute: @escaping @Sendable (ExecuteCallInput) async throws -> NormalizedResult
         ) {
             self.definitions = definitions
             self.codeModeCatalog = codeModeCatalog
+            self.codeModeExpression = codeModeExpression
             self.executeImpl = execute
         }
 
@@ -485,11 +493,12 @@ public enum CoreTool {
         }
     }
 
-    // parity: core/src/tool.ts#Interface [status=adapted hash=382bd626b20c]
+    // parity: core/src/tool.ts#Interface [status=adapted hash=a78d48179b2f]
     public protocol Interface: Sendable {
         func transform(_ fn: @escaping @Sendable (Editor) -> Void) async -> CoreFilesystem.LocationWatcherPolicy.Registration
         func reload() async
         func list() async -> [RegisteredTool]
+        func codeModeTools(_ paths: [String]) async -> [String: RegisteredTool]
         func snapshot(permissions: PermissionSchema.Ruleset?, options: SnapshotOptions?) async -> Snapshot
         func check(_ input: CheckInput) async -> CheckResult
     }
@@ -549,6 +558,10 @@ public enum CoreTool {
             state.withLock { Array($0.tools.values).sorted { $0.id < $1.id } }
         }
 
+        public func codeModeTools(_ paths: [String]) async -> [String: RegisteredTool] {
+            state.withLock { Self.resolveCodeModeTools(registered: $0.tools, paths: paths) }
+        }
+
         public func registrationErrors() async -> [RegistrationError] {
             state.withLock { $0.errors }
         }
@@ -597,8 +610,27 @@ public enum CoreTool {
                 : nil
             let executeTool = codemode?.tool
             let definitions = directDefs + (executeTool.map { [Runtime.definition($0)] } ?? [])
+            let codeModeExpression: (@Sendable (String) -> String?)?
+            if codemode != nil {
+                codeModeExpression = { (name: String) -> String? in
+                    let found: RegisteredTool?
+                    if let byID = codemodeEntries[name] {
+                        found = byID
+                    } else {
+                        found = codemodeEntries.values.first { Self.qualifiedName($0) == name }
+                    }
+                    guard let found else { return nil }
+                    return CodemodeEngine.ToolRuntime.toolExpression(Self.qualifiedName(found))
+                }
+            } else {
+                codeModeExpression = nil
+            }
 
-            return Snapshot(definitions: definitions, codeModeCatalog: codemode?.catalog) { call in
+            return Snapshot(
+                definitions: definitions,
+                codeModeCatalog: codemode?.catalog,
+                codeModeExpression: codeModeExpression
+            ) { call in
                 let tool: RegisteredTool
                 if call.name == "execute", let executeTool {
                     tool = executeTool
@@ -690,17 +722,40 @@ public enum CoreTool {
             if Self.whollyDisabled(action: "execute", rules: input.permissions) {
                 return CheckResult(ok: false, error: "Code Mode is disabled for this agent", availableTools: [])
             }
-            let allowedSet = Set(input.tools)
             let visible: [String] = state.withLock { s in
-                s.tools.compactMap { name, tool -> String? in
-                    guard Runtime.defaultCodeMode(tool.options) else { return nil }
-                    guard allowedSet.contains(name) || allowedSet.contains(tool.name) else { return nil }
-                    let action = tool.options?.permission ?? name
-                    if Self.whollyDisabled(action: action, rules: input.permissions) { return nil }
-                    return name
-                }.sorted()
+                Self.resolveCodeModeTools(registered: s.tools, paths: input.tools)
+                    .values
+                    .compactMap { tool -> String? in
+                        let action = tool.options?.permission ?? tool.id
+                        if Self.whollyDisabled(action: action, rules: input.permissions) { return nil }
+                        return tool.id
+                    }
+                    .sorted()
             }
             return CheckResult(ok: true, error: nil, availableTools: visible)
+        }
+
+        internal static func qualifiedName(_ tool: RegisteredTool) -> String {
+            let normalized = Runtime.normalizedName(tool.name)
+            guard let ns = tool.options?.namespace, !ns.isEmpty else { return normalized }
+            return "\(ns).\(normalized)"
+        }
+
+        internal static func resolveCodeModeTools(
+            registered: [String: RegisteredTool],
+            paths: [String]
+        ) -> [String: RegisteredTool] {
+            var resolved: [String: RegisteredTool] = [:]
+            for path in paths {
+                let id = path.replacingOccurrences(of: ".", with: "_")
+                if let tool = registered[id],
+                   Runtime.defaultCodeMode(tool.options),
+                   qualifiedName(tool) == path
+                {
+                    resolved[path] = tool
+                }
+            }
+            return resolved
         }
 
         fileprivate static func whollyDisabled(action: String, rules: PermissionSchema.Ruleset) -> Bool {
@@ -948,5 +1003,10 @@ extension CoreTool.Interface {
     /// A snapshot with no per-request policy or Code Mode services.
     public func snapshot(permissions: PermissionSchema.Ruleset? = nil) async -> CoreTool.Snapshot {
         await snapshot(permissions: permissions, options: nil)
+    }
+
+    public func codeModeTools(_ paths: [String]) async -> [String: CoreTool.RegisteredTool] {
+        _ = paths
+        return [:]
     }
 }

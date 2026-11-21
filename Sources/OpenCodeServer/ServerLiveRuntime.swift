@@ -5685,6 +5685,7 @@ public enum ServerLiveRuntime {
                 return CoreSessionModelRequest.ToolSnapshot(
                     definitions: entries,
                     codeModeCatalog: snap.codeModeCatalog,
+                    codeModeExpression: snap.codeModeExpression,
                     execute: { toolInput in
                         do {
                             let normalized = try await snap.execute(CoreTool.ExecuteCallInput(

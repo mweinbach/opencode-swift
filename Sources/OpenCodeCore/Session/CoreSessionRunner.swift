@@ -1093,17 +1093,22 @@ public enum CoreSessionModelRequest {
         public let definitions: [AISchema.ToolEntry]
         /// The Code Mode catalog (`Tool.Snapshot.codeModeCatalog`), present exactly when `execute` is offered.
         public let codeModeCatalog: CoreCodemode.Catalog.Inventory?
+        /// The expression a Code Mode program calls a tool by (`tools.opencode.session.search`), when `name` is the
+        /// path or registry ID of one of this snapshot's Code Mode tools.
+        public let codeModeExpression: (@Sendable (String) -> String?)?
         public let execute: @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult
 
         public init(
             definitions: [AISchema.ToolEntry] = [],
             codeModeCatalog: CoreCodemode.Catalog.Inventory? = nil,
+            codeModeExpression: (@Sendable (String) -> String?)? = nil,
             execute: @escaping @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult = { input in
                 throw ToolSchema.ToolError(message: "Unknown tool: \(input.call.name)")
             }
         ) {
             self.definitions = definitions
             self.codeModeCatalog = codeModeCatalog
+            self.codeModeExpression = codeModeExpression
             self.execute = execute
         }
     }
@@ -1144,20 +1149,25 @@ public enum CoreSessionModelRequest {
         case questionCancelled(String)
     }
 
-    // parity: core/src/session/model-request.ts#Prepared [status=implemented hash=41ff1a3baa75]
+    // parity: core/src/session/model-request.ts#Prepared [status=implemented hash=a6455ccdb8f2]
     public struct Prepared: Sendable {
         public let request: AISchema.LLMRequest
         public let options: AIRoute.StreamOptions
         public let executeTool: @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult
+        /// When `name` isn't a tool this request advertised but is one of its Code Mode tools, the expression a
+        /// program calls it by, so the call can be recorded and run as the `execute` program it should have been.
+        public let codeModeExpression: (@Sendable (String) -> String?)?
 
         public init(
             request: AISchema.LLMRequest,
             options: AIRoute.StreamOptions = AIRoute.StreamOptions(),
-            executeTool: @escaping @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult
+            executeTool: @escaping @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult,
+            codeModeExpression: (@Sendable (String) -> String?)? = nil
         ) {
             self.request = request
             self.options = options
             self.executeTool = executeTool
+            self.codeModeExpression = codeModeExpression
         }
     }
 
@@ -1220,7 +1230,7 @@ public enum CoreSessionModelRequest {
         return min(requested, max(outputTokenMin, room))
     }
 
-    // parity: core/src/session/model-request.ts#baseTranscript [status=implemented hash=b672fd421df5]
+    // parity: core/src/session/model-request.ts#baseTranscript [status=implemented hash=a425e79835dc]
     public static func baseTranscript(
         agent: AgentProfile,
         model: CoreSessionRunnerModel.Resolved,
@@ -1436,10 +1446,22 @@ public enum CoreSessionModelRequest {
             let fallbackExecute: @Sendable (ToolExecutionInput) async throws -> NormalizedToolResult = { toolInput in
                 throw ToolSchema.ToolError(message: "Unknown tool: \(toolInput.call.name)")
             }
+            let advertisedNames = Set(tools.compactMap { entry -> String? in
+                if case .tool(let def) = entry { return def.name }
+                return nil
+            })
+            let upstreamExpression = input.tools?.codeModeExpression
+            let codeModeExpression: @Sendable (String) -> String? = { name in
+                if advertisedNames.contains(name) || !advertisedNames.contains("execute") {
+                    return nil
+                }
+                return upstreamExpression?(name)
+            }
             return Prepared(
                 request: req,
                 options: AIRoute.StreamOptions(webSocket: ws),
-                executeTool: input.tools?.execute ?? fallbackExecute
+                executeTool: input.tools?.execute ?? fallbackExecute,
+                codeModeExpression: codeModeExpression
             )
         }
 
@@ -1460,7 +1482,7 @@ public enum CoreSessionModelRequest {
         }
     }
 
-    // parity: core/src/session/model-request.ts#layer [status=adapted hash=a574d32085f5]
+    // parity: core/src/session/model-request.ts#layer [status=adapted hash=91a689b106a9]
     public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
         let transport = deps.get(CoreSessionModelTransport.Service.serviceKey, as: (any CoreSessionModelTransport.Interface).self)
             ?? CoreSessionModelTransport.Service()
@@ -2749,12 +2771,20 @@ public enum CoreSessionStep {
             )
 
             var toolTasks: [(call: AISchema.ToolCall, cancel: CancelToken, task: Task<Void, Never>)] = []
+            var programs: [String: String] = [:]
             var streamError: (any Error)? = nil
 
             do {
                 let stream = llm.stream(input.prepared.request, options: input.prepared.options)
-                for try await event in stream {
+                for try await streamed in stream {
                     try Task.checkCancellation()
+                    guard let event = CoreSessionStep.asProgram(
+                        streamed,
+                        programs: &programs,
+                        expressionFor: input.prepared.codeModeExpression
+                    ) else {
+                        continue
+                    }
                     if publisher.record().providerFailed { continue }
                     try await publisher.publish(event)
                     if case .toolCall(let call) = event, call.providerExecuted != true {
@@ -2855,7 +2885,66 @@ public enum CoreSessionStep {
         }
     }
 
-    // parity: core/src/session/runner/step.ts#make [status=implemented hash=3dcc13de793c]
+    /// Weaker models sometimes call a Code Mode tool at the top level. Rewrite that call into the `execute` program it
+    /// should have been, so it is recorded, run and replayed as one. Its input streams as JSON rather than code, so the
+    /// deltas are held back until the call completes.
+    public static func asProgram(
+        _ event: AISchema.LLMEvent,
+        programs: inout [String: String],
+        expressionFor: (@Sendable (String) -> String?)?
+    ) -> AISchema.LLMEvent? {
+        guard let expressionFor else { return event }
+        switch event {
+        case .toolInputStart(let start) where start.providerExecuted != true:
+            guard let expression = expressionFor(start.name) else { return event }
+            programs[start.id] = expression
+            return .toolInputStart(AISchema.ToolInputStart(
+                id: start.id,
+                name: "execute",
+                namespace: nil,
+                providerExecuted: start.providerExecuted,
+                providerMetadata: start.providerMetadata
+            ))
+        case .toolInputDelta(let delta):
+            return programs[delta.id] != nil ? nil : event
+        case .toolInputEnd(let end):
+            guard programs[end.id] != nil else { return event }
+            return .toolInputEnd(AISchema.ToolInputEnd(
+                id: end.id,
+                name: "execute",
+                namespace: nil,
+                providerMetadata: end.providerMetadata
+            ))
+        case .toolInputError(let err):
+            guard programs.removeValue(forKey: err.id) != nil else { return event }
+            return .toolInputError(AISchema.ToolInputError(
+                id: err.id,
+                name: "execute",
+                namespace: nil,
+                raw: err.raw
+            ))
+        case .toolCall(let call) where call.providerExecuted != true:
+            guard let expression = programs.removeValue(forKey: call.id) ?? expressionFor(call.name) else {
+                return event
+            }
+            let inputValue: JSONValue = call.input == .null ? .object([:]) : call.input
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            let encodedInput = (try? encoder.encode(inputValue)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+            return .toolCall(AISchema.ToolCall(
+                id: call.id,
+                name: "execute",
+                namespace: nil,
+                input: .object(["code": .string("return await \(expression)(\(encodedInput))")]),
+                providerExecuted: call.providerExecuted,
+                providerMetadata: call.providerMetadata
+            ))
+        default:
+            return event
+        }
+    }
+
+    // parity: core/src/session/runner/step.ts#make [status=implemented hash=4ae5bbbc857d]
     public static func make(bus: CoreBus.Service, llm: any AIRoute.Interface) -> Runner {
         Runner(bus: bus, llm: llm)
     }

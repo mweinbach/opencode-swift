@@ -1430,6 +1430,7 @@ public enum PluginEffect {
         public let get: @Sendable (SessionID) async throws -> SessionSchema.Info
         public let create: @Sendable (_ title: String?, _ agent: AgentSchema.ID?, _ model: ModelSchema.Ref?) async throws -> SessionSchema.Info
         public let update: @Sendable (SessionID, SessionSchema.PermissionRuleset?) async throws -> Void
+        public let archive: (@Sendable (SessionID, Bool) async throws -> Void)?
         public let remove: @Sendable (SessionID) async throws -> Void
         public let prompt: @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void
         public let synthetic: @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void
@@ -1449,6 +1450,7 @@ public enum PluginEffect {
                 throw ToolSchema.ToolError(message: "Session creation unavailable")
             },
             update: @escaping @Sendable (SessionID, SessionSchema.PermissionRuleset?) async throws -> Void = { _, _ in },
+            archive: (@Sendable (SessionID, Bool) async throws -> Void)? = nil,
             remove: @escaping @Sendable (SessionID) async throws -> Void = { _ in },
             prompt: @escaping @Sendable (SessionID, PromptInputSchema.Prompt, SessionInboxSchema.Delivery) async throws -> Void = { _, _, _ in },
             synthetic: @escaping @Sendable (SessionID, String, String?, [String: JSONValue]?, Bool) async throws -> Void = { _, _, _, _, _ in },
@@ -1461,6 +1463,7 @@ public enum PluginEffect {
             self.get = get
             self.create = create
             self.update = update
+            self.archive = archive
             self.remove = remove
             self.prompt = prompt
             self.synthetic = synthetic

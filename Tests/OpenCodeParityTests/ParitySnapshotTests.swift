@@ -540,13 +540,16 @@ struct ParitySnapshotTests {
                         allFlags: e["all_flags"]?.bool,
                         todo: e["todo"]?.bool,
                         mediaBlob: e["media_blob"]?.bool,
-                        automations: e["automations"]?.bool,
                         artifacts: e["artifacts"]?.bool,
                         videoGenerate: e["video_generate"]?.bool.map { .enabled($0) },
                         consoleWatches: e["console_watches"]?.bool,
                         mcpEvents: e["mcp_events"]?.bool,
+                        recommendedApi: e["recommended_api"]?.bool,
                         fullCodemode: e["full_codemode"]?.bool,
-                        schedules: e["schedules"]?.bool
+                        machines: e["machines"]?.bool,
+                        homeMemory: e["home_memory"]?.bool,
+                        projectOverlay: e["project_overlay"]?.bool,
+                        sqliteFts: e["sqlite_fts"]?.bool
                     )
                 }
                 return .document(ConfigSchema.Document(info: ConfigSchema.Info(experimental: exp)))

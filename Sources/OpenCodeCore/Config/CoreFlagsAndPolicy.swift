@@ -8,22 +8,8 @@ public enum CoreFlag {
     // parity: core/src/flag.ts#Key [status=implemented hash=6423dea34cf1]
     public typealias Key = ConfigFlagSchema.Key
 
-    // parity: core/src/flag.ts#State [status=implemented hash=76568226cd8d]
-    public struct State: Equatable, Hashable, Sendable, Codable {
-        public enum Source: String, Equatable, Hashable, Sendable, Codable {
-            case env
-            case config
-            case `default`
-        }
-
-        public let enabled: Bool
-        public let source: Source
-
-        public init(enabled: Bool, source: Source) {
-            self.enabled = enabled
-            self.source = source
-        }
-    }
+    // parity: core/src/flag.ts#State [status=implemented hash=f52bfe50b484]
+    public typealias State = CoreFlagResolve.State
 
     // parity: core/src/flag.ts#Interface [status=adapted hash=90a82d2b0ae9]
     public protocol Interface: Sendable {
@@ -32,89 +18,16 @@ public enum CoreFlag {
         func enabled(_ key: Key) async -> Bool
     }
 
-    /// Context reference for `OPENCODE_FLAGS` override strings (e.g. `"automations,-media_blob"` or `"all,-media_blob"`).
-    // parity: core/src/flag.ts#Overrides [status=adapted hash=4a9e8375ed88]
-    public enum Overrides {
-        public static let key = "@opencode/Flag/Overrides"
-        @TaskLocal public static var current: String? = nil
+    /// Context reference for `OPENCODE_FLAGS` override strings (e.g. `"artifacts,-media_blob"` or `"all,-media_blob"`).
+    // parity: core/src/flag.ts#Overrides [status=adapted hash=70cdd02aeabc]
+    public typealias Overrides = CoreFlagResolve.Overrides
 
-        public static func fromEnvironment(_ environment: any EnvironmentProviding = SystemEnvironment.shared) -> String? {
-            current ?? environment.variable("OPENCODE_FLAGS")
-        }
-    }
+    public typealias ResolveInput = CoreFlagResolve.ResolveInput
 
-    public struct ResolveInput: Equatable, Sendable {
-        public let entries: [CoreConfigEntry]
-        public let channel: String
-        public let overrides: String?
-
-        public init(entries: [CoreConfigEntry], channel: String, overrides: String? = nil) {
-            self.entries = entries
-            self.channel = channel
-            self.overrides = overrides
-        }
-    }
-
-    private static func onByDefault(channel: String) -> Bool {
-        channel == "local" || channel == "dev"
-    }
-
-    /// Resolves every feature flag using exact precedence:
-    /// `OPENCODE_FLAGS` (`key` / `-key` / alias / `all`) -> `experimental.<key>` (latest `experimental` doc)
-    /// -> `experimental.all_flags: true` (latest doc setting `all_flags`) -> channel default (`local`/`dev`).
-    /// Opt-in-only flags (`todo`, `sqlite_fts`) skip both `all` wildcards and default to `false` on every channel.
-    // parity: core/src/flag.ts#resolve [status=implemented hash=a825939df6d4]
+    /// Resolves every feature flag using `CoreFlagResolve.resolve`.
+    // parity: core/src/flag.ts#resolve [status=implemented hash=d49342623f3c]
     public static func resolve(_ input: ResolveInput) -> [Key: State] {
-        var envMap: [String: Bool] = [:]
-        if let rawOverrides = input.overrides {
-            for part in rawOverrides.split(separator: ",") {
-                let item = part.trimmingCharacters(in: .whitespacesAndNewlines)
-                if item.isEmpty { continue }
-                if item.hasPrefix("-") {
-                    let name = String(item.dropFirst())
-                    if !name.isEmpty { envMap[name] = false }
-                } else {
-                    envMap[item] = true
-                }
-            }
-        }
-        let allEnv = envMap[ConfigFlagSchema.wildcard] == true
-        let experimental = CoreConfig.latest(input.entries, \.experimental)
-        let allFlags: Bool = {
-            for entry in input.entries.reversed() {
-                if let val = entry.info?.experimental?.allFlags {
-                    return val
-                }
-            }
-            return false
-        }()
-
-        var result: [Key: State] = [:]
-        for key in Key.allCases {
-            let optInOnly = ConfigFlagSchema.optInOnly.contains(key)
-            let aliasName = ConfigFlagSchema.aliases.first(where: { $0.value == key })?.key
-
-            let envOverride: Bool? =
-                envMap[key.rawValue]
-                ?? aliasName.flatMap { envMap[$0] }
-                ?? (allEnv && !optInOnly ? true : nil)
-
-            let aliasConfigValue: Bool? = aliasName == "schedules" ? experimental?.schedules : nil
-            // A flag that takes settings is on when given them (`flagValue` reads a settings object as `true`).
-            let configured: Bool? =
-                experimental?.flagValue(for: key)
-                ?? aliasConfigValue
-                ?? (allFlags && !optInOnly ? true : nil)
-
-            if let envOverride {
-                result[key] = State(enabled: envOverride, source: .env)
-            } else if let configured {
-                result[key] = State(enabled: configured, source: .config)
-            } else {
-                result[key] = State(enabled: !optInOnly && onByDefault(channel: input.channel), source: .default)
-            }
-        }
-        return result
+        CoreFlagResolve.resolve(input)
     }
 
     // parity: core/src/flag.ts#Service [status=adapted hash=ece99ea74cd2]

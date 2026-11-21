@@ -1618,8 +1618,11 @@ public final class ServerAppRuntime: Sendable {
             resolveLocationFileSystem: restartResolveFS
         )
 
+        let sessionSearch = SessionSearch.Service(db: db)
+
         let automation = try CoreAutomation.Service(
             database: db,
+            fileSystem: fileSystem,
             isEnabled: { dir in
                 guard let locations = locationsBox.value else { return false }
                 let ref = LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
@@ -1627,7 +1630,8 @@ public final class ServerAppRuntime: Sendable {
                       let bundle = ServerLocationBundle.from(out) else {
                     return false
                 }
-                return await bundle.flag.enabled(.automations)
+                let entries = await bundle.config.entries()
+                return CoreConfig.latest(entries, \.automations) ?? true
             },
             sessions: session,
             execution: sessionExecution,
@@ -1646,8 +1650,9 @@ public final class ServerAppRuntime: Sendable {
                 let entries = await bundle.config.entries()
                 let tz = entries.compactMap { $0.info?.timezone }.last
                 let depthLimit = entries.compactMap { $0.info?.experimental?.subagentDepth?.rawValue }.last ?? 1
-                let enabled = await bundle.flag.enabled(.automations)
+                let enabled = CoreConfig.latest(entries, \.automations) ?? true
                 let mcpEventsEnabled = await bundle.flag.enabled(.mcpEvents)
+                let fullCodeMode = await bundle.flag.enabled(.fullCodemode)
                 return CoreAutomation.LocationContext(
                     enabled: enabled,
                     mcpEventsEnabled: mcpEventsEnabled,
@@ -1658,6 +1663,9 @@ public final class ServerAppRuntime: Sendable {
                     agents: bundle.agent,
                     permission: bundle.permission,
                     tools: bundle.tool,
+                    shell: bundle.shell,
+                    fullCodeMode: fullCodeMode,
+                    httpTransport: httpTransport,
                     awaitPluginActivation: { await bundle.plugin.awaitActivation() },
                     subagentDepthLimit: depthLimit
                 )
@@ -1999,6 +2007,7 @@ public final class ServerAppRuntime: Sendable {
                 session: session,
                 sessionMove: sessionMove,
                 sessionStore: sessionStore,
+                sessionSearch: sessionSearch,
                 skill: skillService,
                 automation: automation,
                 mcp: mcpService,

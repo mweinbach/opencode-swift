@@ -115,9 +115,9 @@
     "cases": [
       { "name": "local channel defaults on except optInOnly", "args": [{ "entries": [], "channel": "local" }] },
       { "name": "release channel defaults all off", "args": [{ "entries": [], "channel": "latest" }] },
-      { "name": "env overrides enable and disable", "args": [{ "entries": [], "channel": "latest", "overrides": "automations,todo,-media_blob" }] },
+      { "name": "env overrides enable and disable", "args": [{ "entries": [], "channel": "latest", "overrides": "project_overlay,todo,-media_blob" }] },
       { "name": "env wildcard all skips optInOnly and honors negative", "args": [{ "entries": [], "channel": "latest", "overrides": "all,-artifacts" }] },
-      { "name": "env legacy alias schedules maps to automations", "args": [{ "entries": [], "channel": "latest", "overrides": "schedules" }] },
+      { "name": "sqlite_fts and project_overlay follow dev default and release opt-in", "args": [{ "entries": [{ "experimental": { "sqlite_fts": false, "project_overlay": true } }], "channel": "dev" }] },
       {
         "name": "config experimental and all_flags precedence",
         "args": [
@@ -134,9 +134,9 @@
         "name": "env overrides beat config",
         "args": [
           {
-            "entries": [{ "experimental": { "automations": true, "media_blob": false } }],
+            "entries": [{ "experimental": { "project_overlay": true, "media_blob": false } }],
             "channel": "latest",
-            "overrides": "-automations,media_blob"
+            "overrides": "-project_overlay,media_blob"
           }
         ]
       }

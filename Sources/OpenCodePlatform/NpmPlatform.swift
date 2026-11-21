@@ -172,12 +172,59 @@ public enum NpmPlatform {
         }
     }
 
+    /// Pure static half of upstream `Npm.follows`: determines whether `pkg` names a mutable target to auto-update
+    /// (`@latest`, a semver range, or a git `semver:` range). For a git spec with a named `#ref` that is neither a
+    /// commit hash nor a `semver:` range, returns `gitRef` so the caller can check whether the remote lists it as a
+    /// branch.
+    public static func staticFollows(_ pkg: String) -> (follows: Bool, gitRef: String?) {
+        guard let parsed = NpmSpec.parse(pkg) else { return (false, nil) }
+        switch parsed {
+        case .registry(let name, let spec, let mutable):
+            // npm parses a bare name as the range `*`; only a written `@latest` or range follows.
+            guard pkg != name else { return (false, nil) }
+            if spec == "latest" { return (true, nil) }
+            guard mutable else { return (false, nil) }
+            return (isSemverRangeSpec(spec), nil)
+        case .git(_, _, let mutable):
+            guard mutable else { return (false, nil) }
+            guard let hashIndex = pkg.firstIndex(of: "#") else { return (false, nil) }
+            let rawRef = String(pkg[pkg.index(after: hashIndex)...])
+            guard !rawRef.isEmpty else { return (false, nil) }
+            if rawRef.hasPrefix("semver:") {
+                return (true, nil)
+            }
+            return (false, rawRef)
+        }
+    }
+
+    private static func isSemverRangeSpec(_ spec: String) -> Bool {
+        let trimmed = spec.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if trimmed == "*" || trimmed.lowercased() == "x" { return true }
+        let rangePrefixes = ["^", "~", ">", "<", "="]
+        if rangePrefixes.contains(where: { trimmed.hasPrefix($0) }) { return true }
+        if trimmed.contains("||") || trimmed.contains(" - ") || trimmed.contains(" ") { return true }
+        // Wildcard or partial numeric range like `1`, `1.2`, `1.x`, `1.2.X`, `1.*`
+        let stripped = trimmed.hasPrefix("v") ? String(trimmed.dropFirst()) : trimmed
+        let parts = stripped.split(separator: ".", omittingEmptySubsequences: false)
+        guard !parts.isEmpty && parts.count <= 3 else { return false }
+        let isPartRange: (Substring) -> Bool = { part in
+            part == "*" || part == "x" || part == "X" || (!part.isEmpty && part.utf8.allSatisfy { $0 >= 0x30 && $0 <= 0x39 })
+        }
+        guard parts.allSatisfy(isPartRange) else { return false }
+        return parts.count < 3 || parts.contains(where: { $0 == "*" || $0 == "x" || $0 == "X" })
+    }
+
     // parity: util/src/npm.ts#Interface [status=implemented hash=9d3c71267af9]
     public protocol Interface: Sendable {
         func add(_ pkg: String) async throws -> NpmSpec.Package
         func resolve(_ pkg: String) async -> NpmSpec.Package
         func check(_ pkg: String) async throws -> Bool
         func update(_ pkg: String) async throws -> NpmSpec.Package
+        /// Whether newer versions should install on their own because the package names what to follow: `name@latest`,
+        /// a version range, a Git `semver:` range, or a Git ref the remote lists as a branch. A bare name or
+        /// repository, other dist-tags, Git tags and commits stay on what's installed.
+        func follows(_ pkg: String) async throws -> Bool
         /// Stop using the newest installed version when it is `version`, so the previous one is current again. Its
         /// files stay until they expire, for anything still running it. False when it isn't the newest or there is
         /// no previous one.
@@ -192,6 +239,7 @@ public enum NpmPlatform {
         private let fsUtil: FSUtil.Service
         private let flock: EffectFlock.Service
         private let installer: Installer?
+        private let gitRefIsBranch: (@Sendable (_ pkg: String, _ ref: String) async throws -> Bool)?
         private let nowMs: @Sendable () -> Int64
 
         public init(
@@ -199,6 +247,7 @@ public enum NpmPlatform {
             fsUtil: FSUtil.Service = FSUtil.Service(),
             flock: EffectFlock.Service? = nil,
             installer: Installer? = nil,
+            gitRefIsBranch: (@Sendable (_ pkg: String, _ ref: String) async throws -> Bool)? = nil,
             nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() }
         ) {
             self.cacheRoot = cacheRoot
@@ -212,7 +261,19 @@ public enum NpmPlatform {
                 // Preserve pure in-memory testability when using virtual filesystems without an injected installer.
                 self.installer = nil
             }
+            self.gitRefIsBranch = gitRefIsBranch
             self.nowMs = nowMs
+        }
+
+        public func follows(_ pkg: String) async throws -> Bool {
+            let staticResult = NpmPlatform.staticFollows(pkg)
+            guard let ref = staticResult.gitRef else {
+                return staticResult.follows
+            }
+            if let gitRefIsBranch {
+                return try await gitRefIsBranch(pkg, ref)
+            }
+            return false
         }
 
         private func packageDir(for pkg: String) -> String {
@@ -359,4 +420,10 @@ public enum NpmPlatform {
         },
         [FSUtil.node, Global.node, LayerNodePlatform.filesystem, EffectFlock.node]
     )
+}
+
+public extension NpmPlatform.Interface {
+    func follows(_ pkg: String) async throws -> Bool {
+        NpmPlatform.staticFollows(pkg).follows
+    }
 }

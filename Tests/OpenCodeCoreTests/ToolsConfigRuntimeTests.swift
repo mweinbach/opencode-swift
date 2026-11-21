@@ -844,15 +844,15 @@ struct CoreConfigFlagPolicyTests {
             info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(allFlags: true, mediaBlob: false))
         ))
         let doc2 = CoreConfigEntry.document(ConfigSchema.Document(
-            info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(automations: false))
+            info: ConfigSchema.Info(experimental: ConfigExperimentalSchema.Info(projectOverlay: false))
         ))
 
-        // 1. Release channel: all_flags turns on non-optInOnly flags, latest experimental doc overrides automations, optInOnly stays off
+        // 1. Release channel: all_flags turns on non-optInOnly flags, latest experimental doc overrides project_overlay, optInOnly stays off
         let r1 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [doc1, doc2], channel: "release", overrides: nil))
         #expect(r1[.artifacts] == CoreFlag.State(enabled: true, source: .config))
-        #expect(r1[.automations] == CoreFlag.State(enabled: false, source: .config))
+        #expect(r1[.projectOverlay] == CoreFlag.State(enabled: false, source: .config))
         #expect(r1[.todo] == CoreFlag.State(enabled: false, source: .default))
-        #expect(r1[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r1[.sqliteFts] == CoreFlag.State(enabled: true, source: .config))
         #expect(r1[.fullCodemode] == CoreFlag.State(enabled: true, source: .config))
 
         // 2. OPENCODE_FLAGS=all,-media_blob,todo overrides everything; optInOnly requires explicit key
@@ -860,18 +860,16 @@ struct CoreConfigFlagPolicyTests {
         #expect(r2[.artifacts] == CoreFlag.State(enabled: true, source: .env))
         #expect(r2[.mediaBlob] == CoreFlag.State(enabled: false, source: .env))
         #expect(r2[.todo] == CoreFlag.State(enabled: true, source: .env))
-        #expect(r2[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r2[.sqliteFts] == CoreFlag.State(enabled: true, source: .env))
         #expect(r2[.fullCodemode] == CoreFlag.State(enabled: true, source: .env))
 
-        // 3. Legacy alias 'schedules' maps to .automations
-        let r3 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [], channel: "release", overrides: "schedules"))
-        #expect(r3[.automations] == CoreFlag.State(enabled: true, source: .env))
-
-        // 4. Local channel enables regular flags by default, keeps optInOnly off
+        // 3. Local channel enables regular flags (including sqlite_fts and project_overlay) by default, keeps optInOnly (.todo) off
         let r4 = CoreFlag.resolve(CoreFlag.ResolveInput(entries: [], channel: "local", overrides: nil))
         #expect(r4[.artifacts] == CoreFlag.State(enabled: true, source: .default))
         #expect(r4[.fullCodemode] == CoreFlag.State(enabled: true, source: .default))
-        #expect(r4[.sqliteFts] == CoreFlag.State(enabled: false, source: .default))
+        #expect(r4[.sqliteFts] == CoreFlag.State(enabled: true, source: .default))
+        #expect(r4[.projectOverlay] == CoreFlag.State(enabled: true, source: .default))
+        #expect(r4[.todo] == CoreFlag.State(enabled: false, source: .default))
     }
 
     @Test("markdown frontmatter sanitization, skill file parsing, and managed policy org messages")

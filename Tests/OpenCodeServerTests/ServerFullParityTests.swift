@@ -435,13 +435,13 @@ struct ServerFullParityTests {
         ]
         let snap = await bundle.tool.snapshot(permissions: allowAll)
 
-        // 1. Execute `opencode_automation_create` built-in tool directly -> proves real `automation` + `session` are wired
+        // 1. Execute `automation_create` built-in tool directly -> proves real `automation` + `session` are wired
         let autoCreateResult = try await snap.execute(CoreTool.ExecuteCallInput(
             sessionID: session.id,
             agent: AgentSchema.ID(rawValue: "build"),
             messageID: "msg_tool_auto",
             callID: ToolSchema.CallID(rawValue: "call_auto_1"),
-            name: "opencode_automation_create",
+            name: "automation_create",
             input: .object([
                 "name": .string("Hourly Health Check"),
                 "trigger": .object(["type": .string("every"), "every": .string("1 hour")]),
