@@ -974,6 +974,8 @@ public enum CLIFramework {
         public struct Options: Sendable {
             public let description: String?
             public let aliases: [String]
+            /// Hidden commands still parse, but stay out of parent help, completions and typo suggestions.
+            public let hidden: Bool
             public let flags: [Flag.Definition]
             public let arguments: [Flag.ArgumentDefinition]
             public let globalFlags: [Flag.GlobalDefinition]
@@ -982,6 +984,7 @@ public enum CLIFramework {
             public init(
                 description: String? = nil,
                 aliases: [String] = [],
+                hidden: Bool = false,
                 flags: [Flag.Definition] = [],
                 arguments: [Flag.ArgumentDefinition] = [],
                 globalFlags: [Flag.GlobalDefinition] = [],
@@ -989,6 +992,7 @@ public enum CLIFramework {
             ) {
                 self.description = description
                 self.aliases = aliases
+                self.hidden = hidden
                 self.flags = flags
                 self.arguments = arguments
                 self.globalFlags = globalFlags
@@ -1001,6 +1005,7 @@ public enum CLIFramework {
             var name: String { get }
             var description: String? { get }
             var primaryAlias: String? { get }
+            var hidden: Bool { get }
             var flags: [Flag.Definition] { get }
             var arguments: [Flag.ArgumentDefinition] { get }
             var globalFlags: [Flag.GlobalDefinition] { get }
@@ -1019,6 +1024,7 @@ public enum CLIFramework {
             public let name: String
             public let description: String?
             public let primaryAlias: String?
+            public let hidden: Bool
             public let flags: [Flag.Definition]
             public let arguments: [Flag.ArgumentDefinition]
             public let globalFlags: [Flag.GlobalDefinition]
@@ -1030,6 +1036,7 @@ public enum CLIFramework {
                 name: String,
                 description: String? = nil,
                 primaryAlias: String? = nil,
+                hidden: Bool = false,
                 flags: [Flag.Definition] = [],
                 arguments: [Flag.ArgumentDefinition] = [],
                 globalFlags: [Flag.GlobalDefinition] = [],
@@ -1039,6 +1046,7 @@ public enum CLIFramework {
                 self.name = name
                 self.description = description
                 self.primaryAlias = primaryAlias
+                self.hidden = hidden
                 self.flags = flags
                 self.arguments = arguments
                 self.globalFlags = globalFlags
@@ -1052,7 +1060,7 @@ public enum CLIFramework {
             }
         }
 
-        // parity: cli/src/framework/spec.ts#make [status=implemented hash=7729684f0cbd]
+        // parity: cli/src/framework/spec.ts#make [status=implemented hash=0bab1b86ba8d]
         public static func make(_ name: String, options: Options = Options()) -> CommandNode {
             let primary = options.aliases.first
             let extraAliases: [CommandNode] = options.aliases.dropFirst().map { alias in
@@ -1060,6 +1068,7 @@ public enum CLIFramework {
                     name: alias,
                     description: options.description,
                     primaryAlias: nil,
+                    hidden: options.hidden,
                     flags: options.flags,
                     arguments: options.arguments,
                     globalFlags: options.globalFlags,
@@ -1071,6 +1080,7 @@ public enum CLIFramework {
                 name: name,
                 description: options.description,
                 primaryAlias: primary,
+                hidden: options.hidden,
                 flags: options.flags,
                 arguments: options.arguments,
                 globalFlags: options.globalFlags,
@@ -1083,6 +1093,17 @@ public enum CLIFramework {
     // MARK: Parsed Input, Handler Registry & Execution Runtime (`packages/cli/src/framework/runtime.ts`)
 
     public enum Runtime {
+        /// Mirrors Effect CLI's `CliError.ShowHelp`: prints command help and optional validation errors with exit code 1.
+        public struct ShowHelpError: Error, Equatable, Sendable {
+            public let commandPath: [String]
+            public let errors: [String]
+
+            public init(commandPath: [String] = [], errors: [String] = []) {
+                self.commandPath = commandPath
+                self.errors = errors
+            }
+        }
+
         /// Parsed invocation payload handed to command handlers.
         // parity: cli/src/framework/runtime.ts#Input [status=adapted hash=89f37cb5e32d]
         public struct Input: Equatable, Sendable {
@@ -1340,8 +1361,30 @@ public enum CLIFramework {
             }
 
             let handlerFn = await matchedHandler!.load()
-            try await CLIContext.$current.withValue(context) {
-                try await handlerFn(parsed, context)
+            do {
+                try await CLIContext.$current.withValue(context) {
+                    try await handlerFn(parsed, context)
+                }
+            } catch let helpError as ShowHelpError {
+                var targetNode = commands
+                var targetGlobals = rootGlobals
+                var resolvedPath: [String] = []
+                for segment in helpError.commandPath {
+                    if segment == commands.name && resolvedPath.isEmpty { continue }
+                    if let next = findSubcommand(named: segment, in: targetNode) {
+                        targetNode = next
+                        resolvedPath.append(next.name)
+                        targetGlobals.append(contentsOf: next.globalFlags)
+                    }
+                }
+                context.io.writeStdout(
+                    renderHelp(rootName: commands.name, path: resolvedPath, node: targetNode, globals: targetGlobals)
+                        + context.io.eol
+                )
+                for msg in helpError.errors {
+                    context.io.writeStderr(msg + context.io.eol)
+                }
+                context.exitCode.value = 1
             }
         }
 
@@ -1598,8 +1641,9 @@ public enum CLIFramework {
             globals: [Flag.GlobalDefinition]
         ) -> String {
             let fullCommand = ([rootName] + path).joined(separator: " ")
+            let visibleCommands = node.orderedCommands.filter { !$0.hidden }
             var usageParts: [String] = [fullCommand]
-            if !node.orderedCommands.isEmpty {
+            if !visibleCommands.isEmpty {
                 usageParts.append("<command>")
             }
             let allFlags = deduplicatedFlags(node.flags + globals.map(\.flag)).filter { !$0.hidden }
@@ -1634,10 +1678,10 @@ public enum CLIFramework {
                 }
             }
 
-            if !node.orderedCommands.isEmpty {
+            if !visibleCommands.isEmpty {
                 lines.append("")
                 lines.append("COMMANDS")
-                let cmdLabels = node.orderedCommands.map { child -> (String, String) in
+                let cmdLabels = visibleCommands.map { child -> (String, String) in
                     let label = child.primaryAlias.map { "\(child.name), \($0)" } ?? child.name
                     return (label, child.description ?? "")
                 }

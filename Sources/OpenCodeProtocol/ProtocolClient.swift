@@ -105,16 +105,17 @@ public let deprecatedClientPaths: Set<String> = [
 ]
 
 /// Endpoints omitted from generated Promise-based clients (WebSocket upgrades and legacy aliases).
-// parity: protocol/src/client.ts#promiseOmitEndpoints [status=implemented hash=93f8de395e52]
+// parity: protocol/src/client.ts#promiseOmitEndpoints [status=implemented hash=1ed613cf97bf]
 public let promiseOmitEndpoints: Set<String> = [
     "pty.connect",
     "persistentPty.connect",
     "mcp.client",
+    "machine.link",
     "generate.textLegacy",
 ]
 
 /// Endpoints omitted from generated Effect-based clients (raw byte streams, WebSockets, and legacy aliases).
-// parity: protocol/src/client.ts#effectOmitEndpoints [status=implemented hash=d557cf0c10f9]
+// parity: protocol/src/client.ts#effectOmitEndpoints [status=implemented hash=e15573ca0970]
 public let effectOmitEndpoints: Set<String> = [
     "fs.read",
     "fs.write",
@@ -124,5 +125,6 @@ public let effectOmitEndpoints: Set<String> = [
     "pty.connect",
     "persistentPty.connect",
     "mcp.client",
+    "machine.link",
     "generate.textLegacy",
 ]

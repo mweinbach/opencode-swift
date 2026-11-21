@@ -92,18 +92,14 @@ public enum CoreFlag {
         var result: [Key: State] = [:]
         for key in Key.allCases {
             let optInOnly = ConfigFlagSchema.optInOnly.contains(key)
-            let aliasName = ConfigFlagSchema.aliases.first(where: { $0.value == key })?.key
 
             let envOverride: Bool? =
                 envMap[key.rawValue]
-                ?? aliasName.flatMap { envMap[$0] }
                 ?? (allEnv && !optInOnly ? true : nil)
 
-            let aliasConfigValue: Bool? = aliasName == "schedules" ? experimental?.schedules : nil
             // A flag that takes settings is on when given them (`flagValue` reads a settings object as `true`).
             let configured: Bool? =
                 experimental?.flagValue(for: key)
-                ?? aliasConfigValue
                 ?? (allFlags && !optInOnly ? true : nil)
 
             if let envOverride {

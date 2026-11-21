@@ -14,7 +14,6 @@ public enum ConfigFlagSchema {
     public enum Key: String, CaseIterable, Equatable, Hashable, Sendable, Codable {
         case todo
         case mediaBlob = "media_blob"
-        case automations
         case artifacts
         case videoGenerate = "video_generate"
         case consoleWatches = "console_watches"
@@ -23,18 +22,17 @@ public enum ConfigFlagSchema {
         case fullCodemode = "full_codemode"
         case machines
         case homeMemory = "home_memory"
+        case projectOverlay = "project_overlay"
         case sqliteFts = "sqlite_fts"
     }
 
     /// Registry mapping each feature flag key to its human-readable description.
-    // parity: schema/src/config/flag.ts#registry [status=implemented hash=8327827f3a53]
+    // parity: schema/src/config/flag.ts#registry [status=implemented hash=373aeab8b7b3]
     public static let registry: [Key: String] = [
         .todo:
             "Enable the experimental todowrite tool. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=todo or experimental.todo: true.",
         .mediaBlob:
             "Store new session media once in a deduplicated blob table instead of inline in every message row.",
-        .automations:
-            "Run a prompt or Code Mode action on a timer, or on a connected MCP server's push event when mcp_events is enabled.",
         .artifacts:
             "Enable experimental artifacts backed by pluggable providers.",
         .videoGenerate:
@@ -51,19 +49,15 @@ public enum ConfigFlagSchema {
             "Let a tool path name a machine, as in gpu:/work/train.py, and act on that machine's files and processes.",
         .homeMemory:
             "Give sessions in the home folder a persistent memory/, docs/ and scripts/ workspace the agent can use freely, tidied by a daily maintenance session that reads the day's home-folder conversations.",
+        .projectOverlay:
+            "Load a personal config dir for each project from ~/.config/opencode/project/<project-id>/, read like an extra .opencode dir that ranks above the repo's own, and let home memory keep the skills it builds for the user there.",
         .sqliteFts:
-            "Build an SQLite full-text index of session titles and message text, once, in the background. It covers every session in the database and starts while any loaded location enables it; SQLite keeps it current from then on, also after this is turned off. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=sqlite_fts or experimental.sqlite_fts: true.",
+            "Build an SQLite full-text index of session titles and message text in the background, and enable the opencode.session.search and opencode.session.read tools. The index covers every session in the database and starts while any loaded location enables it; SQLite keeps it current from then on, also after this is turned off.",
     ]
 
     /// Flags that require explicit opt-in across every build channel (skipped by `all` and `all_flags`).
-    // parity: schema/src/config/flag.ts#optInOnly [status=implemented hash=f25eeb087d38]
-    public static let optInOnly: Set<Key> = [.todo, .sqliteFts]
-
-    /// Legacy flag names mapped to their canonical flag key.
-    // parity: schema/src/config/flag.ts#aliases [status=implemented hash=a1e88a23b334]
-    public static let aliases: [String: Key] = [
-        "schedules": .automations,
-    ]
+    // parity: schema/src/config/flag.ts#optInOnly [status=implemented hash=7103d28f5926]
+    public static let optInOnly: Set<Key> = [.todo]
 }
 
 // MARK: - src/config/model.ts
@@ -959,14 +953,13 @@ public enum ConfigExperimentalSchema {
         }
     }
 
-    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=152d9fcbbdaf]
+    // parity: schema/src/config/experimental.ts#Info [status=implemented hash=8face96d42da]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let portableShellScanner: Bool?
         public let codemodeVM: Bool?
         public let allFlags: Bool?
         public let todo: Bool?
         public let mediaBlob: Bool?
-        public let automations: Bool?
         public let artifacts: Bool?
         public let videoGenerate: VideoGenerate?
         public let consoleWatches: Bool?
@@ -975,8 +968,8 @@ public enum ConfigExperimentalSchema {
         public let fullCodemode: Bool?
         public let machines: Bool?
         public let homeMemory: Bool?
+        public let projectOverlay: Bool?
         public let sqliteFts: Bool?
-        public let schedules: Bool?
         /// Write each assistant part as its own session_part row instead of rewriting the whole message on every
         /// event. Defaults to true; set false to fall back to whole-message writes.
         public let partRows: Bool?
@@ -991,7 +984,6 @@ public enum ConfigExperimentalSchema {
             allFlags: Bool? = nil,
             todo: Bool? = nil,
             mediaBlob: Bool? = nil,
-            automations: Bool? = nil,
             artifacts: Bool? = nil,
             videoGenerate: VideoGenerate? = nil,
             consoleWatches: Bool? = nil,
@@ -1000,8 +992,8 @@ public enum ConfigExperimentalSchema {
             fullCodemode: Bool? = nil,
             machines: Bool? = nil,
             homeMemory: Bool? = nil,
+            projectOverlay: Bool? = nil,
             sqliteFts: Bool? = nil,
-            schedules: Bool? = nil,
             partRows: Bool? = nil,
             imageGenerate: ImageGenerate? = nil,
             subagentDepth: SchemaPrimitive.NonNegativeInt? = nil,
@@ -1013,7 +1005,6 @@ public enum ConfigExperimentalSchema {
             self.allFlags = allFlags
             self.todo = todo
             self.mediaBlob = mediaBlob
-            self.automations = automations
             self.artifacts = artifacts
             self.videoGenerate = videoGenerate
             self.consoleWatches = consoleWatches
@@ -1022,8 +1013,8 @@ public enum ConfigExperimentalSchema {
             self.fullCodemode = fullCodemode
             self.machines = machines
             self.homeMemory = homeMemory
+            self.projectOverlay = projectOverlay
             self.sqliteFts = sqliteFts
-            self.schedules = schedules
             self.partRows = partRows
             self.imageGenerate = imageGenerate
             self.subagentDepth = subagentDepth
@@ -1035,7 +1026,6 @@ public enum ConfigExperimentalSchema {
             switch key {
             case .todo: return todo
             case .mediaBlob: return mediaBlob
-            case .automations: return automations
             case .artifacts: return artifacts
             case .videoGenerate: return videoGenerate?.isEnabled
             case .consoleWatches: return consoleWatches
@@ -1044,6 +1034,7 @@ public enum ConfigExperimentalSchema {
             case .fullCodemode: return fullCodemode
             case .machines: return machines
             case .homeMemory: return homeMemory
+            case .projectOverlay: return projectOverlay
             case .sqliteFts: return sqliteFts
             }
         }
@@ -1054,7 +1045,6 @@ public enum ConfigExperimentalSchema {
             case allFlags = "all_flags"
             case todo
             case mediaBlob = "media_blob"
-            case automations
             case artifacts
             case videoGenerate = "video_generate"
             case consoleWatches = "console_watches"
@@ -1063,8 +1053,8 @@ public enum ConfigExperimentalSchema {
             case fullCodemode = "full_codemode"
             case machines
             case homeMemory = "home_memory"
+            case projectOverlay = "project_overlay"
             case sqliteFts = "sqlite_fts"
-            case schedules
             case partRows = "part_rows"
             case imageGenerate = "image_generate"
             case subagentDepth = "subagent_depth"
@@ -1717,7 +1707,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Info [status=implemented hash=6b308ec1c563]
+    // parity: schema/src/config.ts#Info [status=implemented hash=6d5ac906dbee]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let schema: String?
         public let shell: String?
@@ -1728,6 +1718,9 @@ public enum ConfigSchema {
         public let enterprise: Enterprise?
         public let username: String?
         public let timezone: String?
+        /// Run prompts, shell commands or Code Mode actions on a timer, on a cron schedule, or on push events from
+        /// connected MCP servers. Defaults to true; set false to disable. MCP events still require experimental.mcp_events.
+        public let automations: Bool?
         public let permissions: PermissionSchema.Ruleset?
         public let policies: [ConfigPolicySchema.Info]?
         public let agents: [String: ConfigAgentSchema.Info]?
@@ -1760,6 +1753,7 @@ public enum ConfigSchema {
             enterprise: Enterprise? = nil,
             username: String? = nil,
             timezone: String? = nil,
+            automations: Bool? = nil,
             permissions: PermissionSchema.Ruleset? = nil,
             policies: [ConfigPolicySchema.Info]? = nil,
             agents: [String: ConfigAgentSchema.Info]? = nil,
@@ -1791,6 +1785,7 @@ public enum ConfigSchema {
             self.enterprise = enterprise
             self.username = username
             self.timezone = timezone
+            self.automations = automations
             self.permissions = permissions
             self.policies = policies
             self.agents = agents
@@ -1824,6 +1819,7 @@ public enum ConfigSchema {
             case enterprise
             case username
             case timezone
+            case automations
             case permissions
             case policies
             case agents

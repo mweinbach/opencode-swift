@@ -295,5 +295,81 @@
       { "name": "cohere max_tokens exclusion", "args": ["max_tokens must be less than 4096: too many tokens"] },
       { "name": "normal error false", "args": ["Invalid API key provided"] }
     ]
+  },
+  {
+    "fn": "ai/src/protocols/shared.ts#flattenToolRequest",
+    "cases": [
+      {
+        "name": "sanitizes undeclared dotted calls and preserves declared dotted name",
+        "args": [
+          {
+            "tools": [
+              { "type": "tool", "name": "custom.declared" },
+              { "type": "namespace", "name": "fs", "tools": [{ "type": "tool", "name": "read" }] }
+            ],
+            "messages": [
+              {
+                "role": "assistant",
+                "parts": [
+                  { "type": "tool-call", "id": "c1", "name": "a.b.c" },
+                  { "type": "tool-call", "id": "c2", "name": "custom.declared" },
+                  { "type": "tool-call", "id": "c3", "name": "read", "namespace": "fs" }
+                ]
+              },
+              {
+                "role": "tool",
+                "parts": [
+                  { "type": "tool-result", "id": "c1", "name": "a.b.c" },
+                  { "type": "tool-result", "id": "c2", "name": "custom.declared" },
+                  { "type": "tool-result", "id": "c3", "name": "read", "namespace": "fs" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "empty undeclared tool name falls back to underscore and emoji surrogate uses utf16",
+        "args": [
+          {
+            "tools": [],
+            "messages": [
+              {
+                "role": "assistant",
+                "parts": [
+                  { "type": "tool-call", "id": "c1", "name": "" },
+                  { "type": "tool-call", "id": "c2", "name": "a😀b" },
+                  { "type": "tool-call", "id": "c3", "name": "pkg/sub:fn 1" }
+                ]
+              },
+              {
+                "role": "tool",
+                "parts": [
+                  { "type": "tool-result", "id": "c1", "name": "" },
+                  { "type": "tool-result", "id": "c2", "name": "a😀b" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "undeclared namespaced call flattens and sanitizes",
+        "args": [
+          {
+            "tools": [{ "type": "tool", "name": "shell" }],
+            "messages": [
+              {
+                "role": "assistant",
+                "parts": [
+                  { "type": "tool-call", "id": "c1", "name": "op.run", "namespace": "mcp.gh" },
+                  { "type": "tool-call", "id": "c2", "name": "shell" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]

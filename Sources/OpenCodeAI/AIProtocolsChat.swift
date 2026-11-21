@@ -5064,11 +5064,8 @@ public enum AIProtocols {
         }
 
         private static func scrubToolName(_ name: String) -> String {
-            let cleaned = String(name.map { ch in
-                let ok = (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || (ch >= "0" && ch <= "9") || ch == "_" || ch == "-"
-                return ok ? ch : "_"
-            }.prefix(64))
-            return cleaned.isEmpty ? "_" : cleaned
+            // Converse rejects replayed names over 64 characters; flattenToolRequest already fixed invalid characters.
+            String(name.prefix(64))
         }
 
         private static func effortFields(modelID: String, effort: String) -> [String: JSONValue] {

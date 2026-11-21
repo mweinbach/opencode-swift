@@ -361,6 +361,14 @@ public enum Machines {
     }
 }
 
+public extension Machines.Interface {
+    /// Removes machine `id` and returns `true` if it existed, or `false` if no such machine was known.
+    /// `remove` already reports whether the machine existed (upstream `machines.ts#remove`).
+    func removeIfPresent(_ id: String) async throws -> Bool {
+        try await remove(id)
+    }
+}
+
 // MARK: - Session Error Mapping Conformances (`core/src/session/to-session-error.ts`)
 
 extension MachineDriver.NotSent: CoreSessionErrorMapping.MachineFailure {

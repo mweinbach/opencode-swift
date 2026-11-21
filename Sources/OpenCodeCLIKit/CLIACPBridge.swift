@@ -1672,7 +1672,7 @@ extension CLIACP {
             }
         }
 
-        // parity: cli/src/acp/permission.ts#withCompletedDiffs [status=implemented hash=6b4dc4f57328]
+        // parity: cli/src/acp/permission.ts#withCompletedDiffs [status=implemented hash=91c2d0007dbe]
         public static func withCompletedDiffs(
             _ update: SessionUpdate,
             source: ToolMapper.DiffSource?,
@@ -1680,6 +1680,9 @@ extension CLIACP {
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared
         ) async -> SessionUpdate {
             guard let source, case .toolCallUpdate(var tu) = update else { return update }
+            // A script lists each change it made, some without a diff, and the same file more than once; rebuilding them
+            // from the file on disk would show its final text for every change.
+            if ToolMapper.canonicalName(source.toolName) == "execute" { return update }
             let files = decodeFileDiffs(source.metadata?["files"])
             guard !files.isEmpty else { return update }
             let hunks = ToolMapper.canonicalName(source.toolName) == "patch" ? ToolMapper.patchHunks(source.input) : []

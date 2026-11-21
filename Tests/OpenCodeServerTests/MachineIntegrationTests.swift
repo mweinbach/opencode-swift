@@ -14,20 +14,29 @@ struct MachineIntegrationTests {
 
     // MARK: 1. Worker joins through server Noise link endpoint and hello is served
 
-    @Test("Worker joins through /api/machine/link using Noise XX, hello is served, and reconnect works")
+    @Test("Worker joins through /api/experimental/machine/link using Noise XX, hello is served, and reconnect works")
     func workerJoinsThroughServerNoiseLink() async throws {
         let fs = InMemoryFileSystem(initialFiles: ["/workspace/README.md": Helper.utf8Bytes("ok\n")])
+        let env = DictionaryEnvironment(variables: ["OPENCODE_FLAGS": "machines"])
         let runtime = try await ServerAppRuntime.make(
             options: ServerOptions(password: "top-secret-password"),
             fileSystem: fs,
+            environment: env,
             defaultDirectory: "/workspace"
         )
         let router = ServerRouter(runtime: runtime)
         defer { Task { await runtime.close() } }
 
-        // Endpoint is exempt from HTTP password auth because Noise XX + join secret / paired key authenticates it.
-        let nonUpgrade = await router.handle(ServerHTTPRequest(method: "GET", url: MACHINE_LINK_PATH))
-        #expect(nonUpgrade.statusCode == 426)
+        // Only a WebSocket upgrade is exempt from server password; plain GET requires auth (401),
+        // and authenticated plain GET answers 404 like an unknown route.
+        let unauthPlain = await router.handle(ServerHTTPRequest(method: "GET", url: MACHINE_LINK_PATH))
+        #expect(unauthPlain.statusCode == 401)
+        let authPlain = await router.handle(ServerHTTPRequest(
+            method: "GET",
+            url: MACHINE_LINK_PATH,
+            headers: ["authorization": "Bearer top-secret-password"]
+        ))
+        #expect(authPlain.statusCode == 404)
 
         // Add machine and generate a one-time join string.
         let id = try await runtime.machines.add("gpu")
@@ -402,12 +411,12 @@ struct MachineIntegrationTests {
         }
         #expect(started)
 
-        // Verify /api/machine/link is exempt from password auth at the ServerProcess HTTP dispatch layer too.
+        // Verify non-upgrade /api/experimental/machine/link requires password auth (401) at ServerProcess dispatch layer.
         let linkCheck = try await server.transport.send(HTTPRequest(
             method: "GET",
             url: "\(server.address.urlString)\(MACHINE_LINK_PATH)"
         ))
-        #expect(linkCheck.head.statusCode == 426)
+        #expect(linkCheck.head.statusCode == 401)
 
         // Create a real session so Automation.run can deliver the due prompt to it.
         let targetSession = try await server.router.runtime.session.create(CoreSession.CreateInput(

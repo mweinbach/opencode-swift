@@ -665,6 +665,7 @@ public enum ServerErrorResponse {
         case .videoNotFound(let e): return encodeProtocolError(e)
         case .blobNotFound(let e): return encodeProtocolError(e)
         case .artifactNotFound(let e): return encodeProtocolError(e)
+        case .machineNotFound(let e): return encodeProtocolError(e)
         case .vcsInitNotSupported(let e): return encodeProtocolError(e)
         case .worktree(let e): return encodeProtocolError(e)
         }
@@ -1627,7 +1628,8 @@ public final class ServerAppRuntime: Sendable {
                       let bundle = ServerLocationBundle.from(out) else {
                     return false
                 }
-                return await bundle.flag.enabled(.automations)
+                let entries = await bundle.config.entries()
+                return entries.compactMap { $0.info?.automations }.last ?? true
             },
             sessions: session,
             execution: sessionExecution,
@@ -1646,7 +1648,7 @@ public final class ServerAppRuntime: Sendable {
                 let entries = await bundle.config.entries()
                 let tz = entries.compactMap { $0.info?.timezone }.last
                 let depthLimit = entries.compactMap { $0.info?.experimental?.subagentDepth?.rawValue }.last ?? 1
-                let enabled = await bundle.flag.enabled(.automations)
+                let enabled = entries.compactMap { $0.info?.automations }.last ?? true
                 let mcpEventsEnabled = await bundle.flag.enabled(.mcpEvents)
                 return CoreAutomation.LocationContext(
                     enabled: enabled,
