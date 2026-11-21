@@ -95,9 +95,9 @@ enum MachineIntegrationHelper {
             clientSocketBox.withLock { $0 = clientWS }
 
             let carrier = ServerWebSocketCarrier(socket: clientWS)
-            let established: MachineLink.Established
+            let connected: MachineLink.Connected
             do {
-                established = try await MachineLink.dial(
+                connected = try await MachineLink.connect(
                     carrier,
                     options: MachineLink.DialOptions(home: homeKey, identity: identity, secret: secret)
                 )
@@ -109,58 +109,33 @@ enum MachineIntegrationHelper {
             }
 
             let hello = MachineWire.Hello(
-                name: established.machine,
                 os: os,
                 arch: arch,
                 home: home,
                 instance: instance,
                 processes: []
             )
-            // Send the encrypted Hello before returning so the server serves it immediately.
-            let helloPlain = try JSONEncoder().encode(MachineWire.FromWorker.hello(hello))
-            let helloCipher = try established.send.encrypt(Array(helloPlain))
-            try await clientWS.send(.binary(helloCipher))
-
-            let (outbox, outboxCont) = AsyncStream<MachineWire.FromWorker>.makeStream()
+            // Send the framed, encrypted Hello before returning so the server serves it immediately.
+            connected.send(.hello(hello))
 
             let workerTask = Task { [self] in
-                defer { carrier.stop() }
-                let writer = Task {
-                    let encoder = JSONEncoder()
-                    for await msg in outbox {
-                        if Task.isCancelled { break }
-                        guard let plain = try? encoder.encode(msg),
-                              let cipher = try? established.send.encrypt(Array(plain))
-                        else { break }
-                        do {
-                            try await clientWS.send(.binary(cipher))
-                        } catch {
-                            break
-                        }
-                    }
+                defer {
+                    connected.close()
+                    carrier.stop()
                 }
-                let decoder = JSONDecoder()
-                while !Task.isCancelled {
-                    guard let frame = try? await carrier.receive(),
-                          let plain = try? established.receive.decrypt(frame),
-                          let msg = try? decoder.decode(MachineWire.ToWorker.self, from: Data(plain))
-                    else {
-                        break
-                    }
-                    await self.handle(msg, reply: { outboxCont.yield($0) })
+                for await msg in connected.messages {
+                    if Task.isCancelled { break }
+                    await self.handle(msg, reply: { connected.send($0) })
                 }
-                outboxCont.finish()
-                writer.cancel()
             }
             workerTaskBox.withLock { $0 = workerTask }
-            return established.machine
+            return connected.machine
         }
 
         /// Connects the in-process worker directly to `machines.connect` (for fast driver/tool tests without
         /// repeating the Noise handshake).
         func connectDirectly(to machines: any Machines.Interface) {
             let hello = MachineWire.Hello(
-                name: name,
                 os: os,
                 arch: arch,
                 home: home,
@@ -189,8 +164,9 @@ enum MachineIntegrationHelper {
                 send: { toWorkerCont.yield($0) },
                 messages: fromWorker
             )
+            let machineName = name
             let connectTask = Task {
-                _ = try? await machines.connect(connection)
+                _ = try? await machines.connect(machineName, connection)
             }
             directConnectTaskBox.withLock { $0 = connectTask }
         }
@@ -237,7 +213,7 @@ enum MachineIntegrationHelper {
             case .fs(let call):
                 let outcome = await handleFS(call.call)
                 reply(.fs(MachineWire.FileReply(req: call.req, outcome: outcome)))
-            case .start(let id, let argv, let cwd, let env):
+            case .start(let id, let argv, let cwd, let env, _):
                 let run = RecordedRun(id: id, argv: argv, cwd: cwd, env: env)
                 runsBox.withLock { $0.append(run) }
                 let pid = nextPID.withLock { n -> Int in
@@ -247,9 +223,11 @@ enum MachineIntegrationHelper {
                 reply(.started(id: id, pid: pid))
                 let result = await onRun(run)
                 if !result.output.isEmpty {
-                    reply(.output(id: id, offset: 0, data: result.output))
+                    reply(.output(id: id, offset: 0, stream: .stdout, data: result.output))
                 }
                 reply(.exit(MachineWire.Exit(id: id, bytes: result.output.count, code: result.exitCode)))
+            case .stdin(let id, let req, _):
+                reply(.stdin(id: id, req: req, outcome: .ok))
             case .attach, .kill, .release:
                 break
             }

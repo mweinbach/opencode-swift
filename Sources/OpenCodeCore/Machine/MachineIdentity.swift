@@ -34,10 +34,12 @@ public enum MachineIdentity {
         public var description: String { message }
     }
 
-    // parity: core/src/machine/identity.ts#Interface [status=implemented hash=9378ee785765]
+    // parity: core/src/machine/identity.ts#Interface [status=implemented hash=47379ac8f1f9]
     public protocol Interface: Sendable {
         func publicKey() async throws(InvalidKey) -> [UInt8]
         func sign(_ bytes: [UInt8]) async throws(InvalidKey) -> [UInt8]
+        /// The raw 32-byte seed, for the home's Iroh endpoint, whose endpoint id is then the home's public key.
+        func seed() async throws(InvalidKey) -> [UInt8]
     }
 
     /// An Ed25519 key that can sign: the home's, or a worker's on its side of the link.
@@ -92,12 +94,17 @@ public enum MachineIdentity {
     public final class Service: Interface, Sendable {
         public static let serviceKey = "@opencode/Identity"
 
+        private struct Loaded: Sendable {
+            let key: Key
+            let seed: [UInt8]
+        }
+
         public let file: String
         private let fileSystem: any OpenCodeFileSystem
         private let modeReader: ModeReader
         private let platform: PlatformOS
         // Success only: a failed load is tried again next call, so a fixed file works without a restart.
-        private let loaded = Mutex<Key?>(nil)
+        private let loaded = Mutex<Loaded?>(nil)
 
         public init(
             state: String,
@@ -112,20 +119,24 @@ public enum MachineIdentity {
         }
 
         public func publicKey() async throws(InvalidKey) -> [UInt8] {
-            try await identity().publicKey
+            try await identity().key.publicKey
         }
 
         public func sign(_ bytes: [UInt8]) async throws(InvalidKey) -> [UInt8] {
-            try await identity().sign(bytes)
+            try await identity().key.sign(bytes)
         }
 
-        private func identity() async throws(InvalidKey) -> Key {
-            if let key = loaded.withLock({ $0 }) { return key }
-            let key = try await load()
-            return loaded.withLock { current in
+        public func seed() async throws(InvalidKey) -> [UInt8] {
+            try await identity().seed
+        }
+
+        private func identity() async throws(InvalidKey) -> Loaded {
+            if let loaded = loaded.withLock({ $0 }) { return loaded }
+            let loaded = try await load()
+            return self.loaded.withLock { current in
                 if let current { return current }
-                current = key
-                return key
+                current = loaded
+                return loaded
             }
         }
 
@@ -148,7 +159,7 @@ public enum MachineIdentity {
             return seed
         }
 
-        private func load() async throws(InvalidKey) -> Key {
+        private func load() async throws(InvalidKey) -> Loaded {
             let seed: [UInt8]
             do {
                 seed = try await fileSystem.readFile(at: file)
@@ -174,7 +185,7 @@ public enum MachineIdentity {
                     )
                 }
             }
-            return MachineIdentity.fromSeed(seed)
+            return Loaded(key: MachineIdentity.fromSeed(seed), seed: seed)
         }
     }
 

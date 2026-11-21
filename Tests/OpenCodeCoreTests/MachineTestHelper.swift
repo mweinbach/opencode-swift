@@ -29,6 +29,7 @@ enum MachineTestHelper {
     }
 
     static func bytes(_ text: String) -> [UInt8] { Array(text.utf8) }
+    static func utf8(_ bytes: [UInt8]) -> String { String(decoding: bytes, as: UTF8.self) }
 
     static func encode<T: Encodable>(_ value: T) throws -> String {
         let encoder = JSONEncoder()
@@ -58,10 +59,15 @@ enum MachineTestHelper {
 
     /// A home identity with a fixed seed.
     struct FixedIdentity: MachineIdentity.Interface {
+        let rawSeed: [UInt8]
         let key: MachineIdentity.Key
-        init(seed: [UInt8]) { key = MachineIdentity.fromSeed(seed) }
+        init(seed: [UInt8]) {
+            self.rawSeed = seed
+            self.key = MachineIdentity.fromSeed(seed)
+        }
         func publicKey() async throws(MachineIdentity.InvalidKey) -> [UInt8] { key.publicKey }
         func sign(_ bytes: [UInt8]) async throws(MachineIdentity.InvalidKey) -> [UInt8] { key.sign(bytes) }
+        func seed() async throws(MachineIdentity.InvalidKey) -> [UInt8] { rawSeed }
     }
 
     /// A one-way queue of messages whose `take` honours cancellation.
@@ -76,6 +82,7 @@ enum MachineTestHelper {
 
         func put(_ message: [UInt8]) {
             let waiter = state.withLock { s -> CheckedContinuation<[UInt8]?, Never>? in
+                if s.closed { return nil }
                 if let waiter = s.waiter {
                     s.waiter = nil
                     return waiter
@@ -116,35 +123,68 @@ enum MachineTestHelper {
         }
     }
 
-    /// One end of an in-memory carrier pair, recording what it sent.
+    /// Replaces a message on its way, or drops it when returning `nil`. `index` counts per direction.
+    typealias Tamper = @Sendable ([UInt8], Int) -> [UInt8]?
+
+    /// One end of an in-memory carrier pair, recording what it sent and how many reads are waiting.
     final class Pipe: MachineLink.Carrier, Sendable {
         private let inbox: Channel
         private let outbox: Channel
         private let log = Mutex<[[UInt8]]>([])
+        private let waitingReads = Mutex(0)
+        private let tamper: Tamper?
+        let describe: (@Sendable () -> MachineDriver.ConnectionInfo)?
 
-        init(inbox: Channel, outbox: Channel) {
+        init(
+            inbox: Channel,
+            outbox: Channel,
+            tamper: Tamper? = nil,
+            describe: (@Sendable () -> MachineDriver.ConnectionInfo)? = nil
+        ) {
             self.inbox = inbox
             self.outbox = outbox
+            self.tamper = tamper
+            self.describe = describe
         }
 
         var sent: [[UInt8]] { log.withLock { $0 } }
+        var readsWaiting: Int { waitingReads.withLock { $0 } }
 
         func send(_ message: [UInt8]) async {
-            log.withLock { $0.append(message) }
-            outbox.put(message)
+            let index = log.withLock { s -> Int in
+                let i = s.count
+                s.append(message)
+                return i
+            }
+            let delivered = tamper?(message, index) ?? (tamper == nil ? message : nil)
+            if let delivered {
+                outbox.put(delivered)
+            }
         }
 
         func receive() async throws -> [UInt8] {
+            waitingReads.withLock { $0 += 1 }
+            defer { waitingReads.withLock { $0 -= 1 } }
             guard let next = await inbox.take() else { throw MachineLink.Closed() }
             return next
         }
 
-        func close() { outbox.close() }
+        func close() {
+            inbox.close()
+            outbox.close()
+        }
 
-        static func pair() -> (Pipe, Pipe) {
+        static func pair(
+            toHome: Tamper? = nil,
+            toWorker: Tamper? = nil,
+            homeDescribe: (@Sendable () -> MachineDriver.ConnectionInfo)? = nil
+        ) -> (home: Pipe, worker: Pipe) {
             let toA = Channel()
             let toB = Channel()
-            return (Pipe(inbox: toA, outbox: toB), Pipe(inbox: toB, outbox: toA))
+            return (
+                home: Pipe(inbox: toA, outbox: toB, tamper: toWorker, describe: homeDescribe),
+                worker: Pipe(inbox: toB, outbox: toA, tamper: toHome)
+            )
         }
     }
 
@@ -165,14 +205,18 @@ enum MachineTestHelper {
         private let received = MachineMutexBox<[MachineWire.ToWorker]>([])
         private let continuation: AsyncStream<MachineWire.FromWorker>.Continuation
 
-        init(hello: MachineWire.Hello) {
+        init(
+            hello: MachineWire.Hello,
+            describe: (@Sendable () -> MachineDriver.ConnectionInfo)? = nil
+        ) {
             let (stream, continuation) = AsyncStream<MachineWire.FromWorker>.makeStream()
             self.continuation = continuation
             let received = self.received
             connection = MachineDriver.Connection(
                 hello: hello,
                 send: { message in received.mutate { $0.append(message) } },
-                messages: stream
+                messages: stream,
+                describe: describe
             )
         }
 
@@ -191,8 +235,8 @@ enum MachineTestHelper {
         }
     }
 
-    static func hello(name: String = "gpu", instance: String = "one", processes: [MachineWire.HelloProcess] = []) -> MachineWire.Hello {
-        MachineWire.Hello(name: name, os: "linux", arch: "x64", home: "/home/me", instance: MachineWire.Instance(instance), processes: processes)
+    static func hello(instance: String = "one", processes: [MachineWire.HelloProcess] = []) -> MachineWire.Hello {
+        MachineWire.Hello(os: "linux", arch: "x64", home: "/home/me", instance: MachineWire.Instance(instance), processes: processes)
     }
 
     /// Waits until the async `condition` holds.
@@ -211,6 +255,296 @@ enum MachineTestHelper {
             try? await Task.sleep(for: .milliseconds(1))
         }
         return condition()
+    }
+
+    // MARK: - Iroh Mock Fixtures (for testing MachineIroh.carrier & MachineIroh.listen without a native binding)
+
+    struct UnusedStreamError: Error {}
+
+    final class ChunkedRecvStream: MachineIrohBinding.RecvStream, Sendable {
+        private let chunks: Mutex<[[UInt8]]>
+
+        init(_ chunks: [[UInt8]]) {
+            self.chunks = Mutex(chunks)
+        }
+
+        func read(_ maxBytes: Int) async throws -> [UInt8] {
+            chunks.withLock { list in
+                list.isEmpty ? [] : list.removeFirst()
+            }
+        }
+    }
+
+    final class RecordingSendStream: MachineIrohBinding.SendStream, Sendable {
+        private let writtenBox = Mutex<[[UInt8]]>([])
+        private let failNext: Mutex<Bool>
+        private let delay: Duration?
+
+        init(fail: Bool = false, delay: Duration? = nil) {
+            self.failNext = Mutex(fail)
+            self.delay = delay
+        }
+
+        var written: [[UInt8]] { writtenBox.withLock { $0 } }
+
+        func writeAll(_ bytes: [UInt8]) async throws {
+            if let delay {
+                try await Task.sleep(for: delay)
+            }
+            if failNext.withLock({ $0 }) {
+                throw UnusedStreamError()
+            }
+            writtenBox.withLock { $0.append(bytes) }
+        }
+    }
+
+    struct StaticBiStream: MachineIrohBinding.BiStream, Sendable {
+        let recv: any MachineIrohBinding.RecvStream
+        let send: any MachineIrohBinding.SendStream
+    }
+
+    final class InMemoryByteQueue: Sendable {
+        private struct State {
+            var buffer: [UInt8] = []
+            var waiter: CheckedContinuation<[UInt8], Never>?
+            var closed = false
+        }
+
+        private let state = Mutex(State())
+
+        func write(_ bytes: [UInt8]) {
+            guard !bytes.isEmpty else { return }
+            let waiter = state.withLock { s -> CheckedContinuation<[UInt8], Never>? in
+                if s.closed { return nil }
+                if let waiter = s.waiter {
+                    s.waiter = nil
+                    return waiter
+                }
+                s.buffer.append(contentsOf: bytes)
+                return nil
+            }
+            waiter?.resume(returning: bytes)
+        }
+
+        func close() {
+            let waiter = state.withLock { s -> CheckedContinuation<[UInt8], Never>? in
+                s.closed = true
+                defer { s.waiter = nil }
+                return s.waiter
+            }
+            waiter?.resume(returning: [])
+        }
+
+        func read(_ maxBytes: Int) async -> [UInt8] {
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { (continuation: CheckedContinuation<[UInt8], Never>) in
+                    let immediate: [UInt8]? = state.withLock { s in
+                        if !s.buffer.isEmpty {
+                            let count = min(maxBytes, s.buffer.count)
+                            let slice = Array(s.buffer[0..<count])
+                            s.buffer.removeFirst(count)
+                            return slice
+                        }
+                        if s.closed || Task.isCancelled { return [] }
+                        s.waiter = continuation
+                        return nil
+                    }
+                    if let immediate { continuation.resume(returning: immediate) }
+                }
+            } onCancel: {
+                let waiter = state.withLock { s -> CheckedContinuation<[UInt8], Never>? in
+                    defer { s.waiter = nil }
+                    return s.waiter
+                }
+                waiter?.resume(returning: [])
+            }
+        }
+    }
+
+    final class InMemoryRecvStream: MachineIrohBinding.RecvStream, Sendable {
+        private let queue: InMemoryByteQueue
+        init(_ queue: InMemoryByteQueue) { self.queue = queue }
+        func read(_ maxBytes: Int) async throws -> [UInt8] { await queue.read(maxBytes) }
+    }
+
+    final class InMemorySendStream: MachineIrohBinding.SendStream, Sendable {
+        private let queue: InMemoryByteQueue
+        init(_ queue: InMemoryByteQueue) { self.queue = queue }
+        func writeAll(_ bytes: [UInt8]) async throws { queue.write(bytes) }
+    }
+
+    final class MockIrohConnection: MachineIrohBinding.Connection, Sendable {
+        let serverStream: StaticBiStream
+        let clientStream: StaticBiStream
+        private let toServer: InMemoryByteQueue
+        private let toClient: InMemoryByteQueue
+        private let pathInfos: Mutex<[MachineIrohBinding.PathInfo]>
+        private let closedCodeBox = Mutex<UInt64?>(nil)
+
+        init(paths: [MachineIrohBinding.PathInfo]) {
+            let toServer = InMemoryByteQueue()
+            let toClient = InMemoryByteQueue()
+            self.toServer = toServer
+            self.toClient = toClient
+            self.serverStream = StaticBiStream(recv: InMemoryRecvStream(toServer), send: InMemorySendStream(toClient))
+            self.clientStream = StaticBiStream(recv: InMemoryRecvStream(toClient), send: InMemorySendStream(toServer))
+            self.pathInfos = Mutex(paths)
+        }
+
+        var closedCode: UInt64? { closedCodeBox.withLock { $0 } }
+
+        func setPaths(_ paths: [MachineIrohBinding.PathInfo]) {
+            pathInfos.withLock { $0 = paths }
+        }
+
+        func acceptBi() async throws -> any MachineIrohBinding.BiStream {
+            serverStream
+        }
+
+        func paths() -> [MachineIrohBinding.PathInfo] {
+            pathInfos.withLock { $0 }
+        }
+
+        func close(code: UInt64, reason: [UInt8]) {
+            closedCodeBox.withLock { if $0 == nil { $0 = code } }
+            toServer.close()
+            toClient.close()
+        }
+    }
+
+    final class MockIrohAccepting: MachineIrohBinding.Accepting, Sendable {
+        let connection: MockIrohConnection
+        init(connection: MockIrohConnection) { self.connection = connection }
+        func connect() async throws -> any MachineIrohBinding.Connection { connection }
+    }
+
+    final class MockIrohIncoming: MachineIrohBinding.Incoming, Sendable {
+        let connection: MockIrohConnection
+        private let refusedBox = Mutex(false)
+
+        init(paths: [MachineIrohBinding.PathInfo]) {
+            self.connection = MockIrohConnection(paths: paths)
+        }
+
+        var refused: Bool { refusedBox.withLock { $0 } }
+
+        func accept() async throws -> any MachineIrohBinding.Accepting {
+            MockIrohAccepting(connection: connection)
+        }
+
+        func refuse() async {
+            refusedBox.withLock { $0 = true }
+            connection.close(code: 0, reason: [])
+        }
+    }
+
+    final class MockIrohEndpoint: MachineIrohBinding.Endpoint, Sendable {
+        private struct State {
+            var queue: [MockIrohIncoming] = []
+            var waiter: CheckedContinuation<(any MachineIrohBinding.Incoming)?, Never>?
+            var closed = false
+        }
+
+        private let state = Mutex(State())
+        let boundAddress: String
+
+        init(boundAddress: String) {
+            self.boundAddress = boundAddress
+        }
+
+        var isClosed: Bool { state.withLock { $0.closed } }
+
+        func enqueue(_ incoming: MockIrohIncoming) {
+            let waiter = state.withLock { s -> CheckedContinuation<(any MachineIrohBinding.Incoming)?, Never>? in
+                if s.closed { return nil }
+                if let waiter = s.waiter {
+                    s.waiter = nil
+                    return waiter
+                }
+                s.queue.append(incoming)
+                return nil
+            }
+            waiter?.resume(returning: incoming)
+        }
+
+        func acceptNext() async throws -> (any MachineIrohBinding.Incoming)? {
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { (continuation: CheckedContinuation<(any MachineIrohBinding.Incoming)?, Never>) in
+                    let immediate: (any MachineIrohBinding.Incoming)?? = state.withLock { s in
+                        if !s.queue.isEmpty { return .some(s.queue.removeFirst()) }
+                        if s.closed || Task.isCancelled { return .some(nil) }
+                        s.waiter = continuation
+                        return nil
+                    }
+                    if let immediate { continuation.resume(returning: immediate) }
+                }
+            } onCancel: {
+                let waiter = state.withLock { s -> CheckedContinuation<(any MachineIrohBinding.Incoming)?, Never>? in
+                    defer { s.waiter = nil }
+                    return s.waiter
+                }
+                waiter?.resume(returning: nil)
+            }
+        }
+
+        func boundSockets() -> [String] { [boundAddress] }
+
+        func close() async {
+            let waiter = state.withLock { s -> CheckedContinuation<(any MachineIrohBinding.Incoming)?, Never>? in
+                s.closed = true
+                defer { s.waiter = nil }
+                return s.waiter
+            }
+            waiter?.resume(returning: nil)
+        }
+    }
+
+    final class MockIrohBuilder: MachineIrohBinding.EndpointBuilder, Sendable {
+        struct Recorded: Equatable, Sendable {
+            var usedMinimal = false
+            var usedN0 = false
+            var bindAddress: String?
+            var secretKey: [UInt8]?
+            var alpns: [[UInt8]] = []
+        }
+
+        private let recordedBox = Mutex(Recorded())
+        private let onBind: @Sendable (MockIrohEndpoint) -> Void
+
+        init(onBind: @escaping @Sendable (MockIrohEndpoint) -> Void) {
+            self.onBind = onBind
+        }
+
+        var recorded: Recorded { recordedBox.withLock { $0 } }
+
+        func applyMinimal() { recordedBox.withLock { $0.usedMinimal = true } }
+        func applyN0() { recordedBox.withLock { $0.usedN0 = true } }
+        func bindAddr(_ address: String) { recordedBox.withLock { $0.bindAddress = address } }
+        func secretKey(_ key: [UInt8]) { recordedBox.withLock { $0.secretKey = key } }
+        func alpns(_ alpns: [[UInt8]]) { recordedBox.withLock { $0.alpns = alpns } }
+
+        func bind() async throws -> any MachineIrohBinding.Endpoint {
+            let addr = recordedBox.withLock { $0.bindAddress ?? "0.0.0.0:4433" }
+            let endpoint = MockIrohEndpoint(boundAddress: addr)
+            onBind(endpoint)
+            return endpoint
+        }
+    }
+
+    final class MockIrohBinding: MachineIrohBinding.Binding, Sendable {
+        private let latestBuilderBox = Mutex<MockIrohBuilder?>(nil)
+        private let latestEndpointBox = Mutex<MockIrohEndpoint?>(nil)
+
+        var latestBuilder: MockIrohBuilder? { latestBuilderBox.withLock { $0 } }
+        var latestEndpoint: MockIrohEndpoint? { latestEndpointBox.withLock { $0 } }
+
+        func makeEndpointBuilder() -> any MachineIrohBinding.EndpointBuilder {
+            let builder = MockIrohBuilder { [self] endpoint in
+                self.latestEndpointBox.withLock { $0 = endpoint }
+            }
+            latestBuilderBox.withLock { $0 = builder }
+            return builder
+        }
     }
 }
 

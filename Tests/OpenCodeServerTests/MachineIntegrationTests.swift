@@ -62,6 +62,7 @@ struct MachineIntegrationTests {
         #expect(gpuInfo.paired == true)
         #expect(gpuInfo.os == "linux")
         #expect(gpuInfo.arch == "arm64")
+        #expect(gpuInfo.connection == MachineDriver.ConnectionInfo(kind: .websocket))
         #expect(try await runtime.machines.home("gpu") == "/home/gpu")
 
         // The machine's environment reports its own ID (not "local").
@@ -329,12 +330,13 @@ struct MachineIntegrationTests {
         let nonAbsErr = try #require(await #expect(throws: ToolSchema.ToolError.self) {
             _ = try await execTool("read", ["path": .string("gpu:~other/x")])
         })
-        #expect(nonAbsErr.message == "A gpu path must be absolute or start with ~/, as in gpu:/work/file.")
+        let expectedNotAbs = "Machine paths are absolute or start with ~/: write gpu:/… or gpu:~/… (for a local folder with that name, start with ./)"
+        #expect(nonAbsErr.message == expectedNotAbs)
         #expect(
             CoreSessionErrorMapping.toSessionError(nonAbsErr)
                 == SessionErrorSchema.Error(
                     type: "tool.execution",
-                    message: "A gpu path must be absolute or start with ~/, as in gpu:/work/file."
+                    message: expectedNotAbs
                 )
         )
 

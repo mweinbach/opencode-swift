@@ -215,4 +215,82 @@ struct MachineNoiseTests {
         let reader = try pair()
         #expect(failure { () throws(MachineNoise.Failure) in try reader.responder.read([UInt8](repeating: 0, count: 65_536)) } == .tooLong)
     }
+
+    @Test("a rekey sets k to REKEY(k) and keeps the nonce, and a receiver that skips it fails")
+    func rekey() throws {
+        let vector = vectors[0]
+        func fixedTransport() throws -> (initiator: MachineNoise.Transport, responder: MachineNoise.Transport) {
+            let initiator = try MachineNoise.handshake(.init(
+                initiator: true,
+                prologue: hex(vector.prologue),
+                static: try MachineNoise.keyPair(hex(vector.initStatic)),
+                ephemeral: try MachineNoise.keyPair(hex(vector.initEphemeral))
+            ))
+            let responder = try MachineNoise.handshake(.init(
+                initiator: false,
+                prologue: hex(vector.prologue),
+                static: try MachineNoise.keyPair(hex(vector.respStatic)),
+                ephemeral: try MachineNoise.keyPair(hex(vector.respEphemeral))
+            ))
+            _ = try responder.read(try initiator.write(text("one")))
+            _ = try initiator.read(try responder.write(text("two")))
+            _ = try responder.read(try initiator.write(text("three")))
+            return (try initiator.split(), try responder.split())
+        }
+
+        // Recompute the Noise XX key schedule directly via MachineCrypto primitives.
+        func hkdf(_ ck: [UInt8], _ ikm: [UInt8]) -> ([UInt8], [UInt8]) {
+            let temp = MachineCrypto.hmacSHA256(key: ck, data: ikm)
+            let first = MachineCrypto.hmacSHA256(key: temp, data: [1])
+            return (first, MachineCrypto.hmacSHA256(key: temp, data: first + [2]))
+        }
+        let initStatic = try MachineNoise.keyPair(hex(vector.initStatic))
+        let initEph = try MachineNoise.keyPair(hex(vector.initEphemeral))
+        let respStatic = try MachineNoise.keyPair(hex(vector.respStatic))
+        let respEph = try MachineNoise.keyPair(hex(vector.respEphemeral))
+        var ck = Array("Noise_XX_25519_AESGCM_SHA256".utf8)
+        ck += [UInt8](repeating: 0, count: 32 - ck.count)
+        for shared in [
+            MachineCrypto.x25519(scalar: initEph.privateKey, point: respEph.publicKey),
+            MachineCrypto.x25519(scalar: initEph.privateKey, point: respStatic.publicKey),
+            MachineCrypto.x25519(scalar: initStatic.privateKey, point: respEph.publicKey),
+        ] {
+            ck = hkdf(ck, shared).0
+        }
+        let (initiatorKey, responderKey) = hkdf(ck, [])
+
+        func seal(_ key: [UInt8], _ n: UInt64, _ plaintext: [UInt8]) -> [UInt8] {
+            var nonce = [UInt8](repeating: 0, count: 12)
+            for i in 0..<8 { nonce[4 + i] = UInt8(truncatingIfNeeded: n >> UInt64(56 - 8 * i)) }
+            return MachineCrypto.aes256GCMSeal(key: key, nonce: nonce, aad: [], plaintext: plaintext)
+        }
+        func rekeyKey(_ key: [UInt8]) -> [UInt8] {
+            Array(seal(key, UInt64.max, [UInt8](repeating: 0, count: 32)).prefix(32))
+        }
+
+        for (initiatorSends, key) in [(true, initiatorKey), (false, responderKey)] {
+            let sides = try fixedTransport()
+            let skipping = try fixedTransport()
+            let sender = initiatorSends ? sides.initiator.send : sides.responder.send
+            let receiver = initiatorSends ? sides.responder.receive : sides.initiator.receive
+            let skippingReceiver = initiatorSends ? skipping.responder.receive : skipping.initiator.receive
+
+            var sealed: [[UInt8]] = []
+            for n in 0..<3 {
+                sealed.append(try sender.encrypt(text("message \(n)")))
+                sender.rekey()
+            }
+            #expect(sealed == [
+                seal(key, 0, text("message 0")),
+                seal(rekeyKey(key), 1, text("message 1")),
+                seal(rekeyKey(rekeyKey(key)), 2, text("message 2")),
+            ])
+            for (n, message) in sealed.enumerated() {
+                #expect(try receiver.decrypt(message) == text("message \(n)"))
+                receiver.rekey()
+            }
+            #expect(try skippingReceiver.decrypt(sealed[0]) == text("message 0"))
+            #expect(failure { () throws(MachineNoise.Failure) in try skippingReceiver.decrypt(sealed[1]) } == .badMessage)
+        }
+    }
 }
