@@ -355,14 +355,16 @@ public let holdLocation: @Sendable (
 
 // MARK: - 5. Experimental & Persistent PTY Group Handler (server/src/handlers/persistent-pty.ts)
 
-/// Handlers for `server.experimental` composing media, blob, job, artifacts, automation, and persistentPty routes.
-// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=011631c57760]
+/// Handlers for `server.experimental` composing media, blob, job, machine, artifacts, automation, and persistentPty routes.
+// parity: server/src/handlers/persistent-pty.ts#PersistentPtyHandler [status=implemented hash=b839836ef1f1]
 public let PersistentPtyHandler: ServerHandlerGroup = {
     let artifact = makeArtifact()
     let job = makeJob()
     let mediaGet = makeMediaGet()
     let blobGet = makeBlobGet()
     let automation = makeAutomation()
+    let machine = ServerMachine.makeMachine()
+    let machineLink = ServerMachine.makeMachineLink()
 
     @Sendable func mapUnavailableError(_ error: any Error) -> any Error {
         if let e = error as? CorePty.Persistent.UnavailableError {
@@ -390,6 +392,11 @@ public let PersistentPtyHandler: ServerHandlerGroup = {
             // Jobs
             ServerRoute(method: .get, pathTemplate: "/api/experimental/job", endpointName: "job.list", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.job.list", handler: job.list),
             ServerRoute(method: .post, pathTemplate: "/api/experimental/job/:id/cancel", endpointName: "job.cancel", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.job.cancel", handler: job.cancel),
+            // Machines
+            ServerRoute(method: .get, pathTemplate: MACHINE_LINK_PATH, endpointName: "machine.link", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.machine.link", handler: machineLink),
+            ServerRoute(method: .get, pathTemplate: "/api/experimental/machine", endpointName: "machine.list", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.machine.list", handler: machine.list),
+            ServerRoute(method: .post, pathTemplate: "/api/experimental/machine", endpointName: "machine.add", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.machine.add", handler: machine.add),
+            ServerRoute(method: .delete, pathTemplate: "/api/experimental/machine/:name", endpointName: "machine.remove", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.machine.remove", handler: machine.remove),
             // Artifacts
             ServerRoute(method: .get, pathTemplate: "/api/experimental/artifacts/providers", endpointName: "artifacts.providers", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.artifacts.providers", handler: artifact.providers),
             ServerRoute(method: .get, pathTemplate: "/api/experimental/artifacts", endpointName: "artifacts.list", groupIdentifier: "server.experimental", openAPIIdentifier: "experimental.artifacts.list", handler: artifact.list),
@@ -1425,7 +1432,7 @@ public enum ServerMachineLink {
     }
 }
 
-/// Handlers for `server.server` (`GET /api/info`, `POST /api/pair`, `GET /auth/connect/:code`, `GET /api/machine/link`).
+/// Handlers for `server.server` (`GET /api/info`, `POST /api/pair`, `GET /auth/connect/:code`).
 // parity: server/src/handlers/server.ts#ServerHandler [status=implemented hash=d694cd8def2c]
 public let ServerHandler = ServerHandlerGroup(
     groupIdentifier: "server.server",
@@ -1489,23 +1496,6 @@ public let ServerHandler = ServerHandlerGroup(
                     sameSite: "Lax",
                     maxAgeSeconds: ServerAuth.SESSION_TTL_SECONDS
                 )
-        },
-        ServerRoute(
-            method: .get,
-            pathTemplate: MACHINE_LINK_PATH,
-            endpointName: "server.machine.link",
-            groupIdentifier: "server.server"
-        ) { ctx in
-            guard let upgrade = ctx.request.upgradeWebSocket else {
-                return ServerHTTPResponse.empty(statusCode: 426)
-            }
-            let socket = try await upgrade()
-            await ServerMachineLink.serve(
-                socket: socket,
-                identity: ctx.runtime.machineIdentity,
-                machines: ctx.runtime.machines
-            )
-            return ServerHTTPResponse(statusCode: 101, webSocketUpgraded: true)
         },
     ]
 )

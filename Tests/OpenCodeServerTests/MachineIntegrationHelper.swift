@@ -75,7 +75,7 @@ enum MachineIntegrationHelper {
             runsBox.withLock { $0 }
         }
 
-        /// Dials the server's `/api/machine/link` WebSocket route through `router`, completing the Noise XX
+        /// Dials the server's `/api/experimental/machine/link` WebSocket route through `router`, completing the Noise XX
         /// handshake and serving encrypted `MachineWire` frames in the background until `disconnect()` is called.
         @discardableResult
         func dial(
@@ -87,7 +87,7 @@ enum MachineIntegrationHelper {
             let request = ServerHTTPRequest(
                 method: "GET",
                 url: MACHINE_LINK_PATH,
-                headers: ["upgrade": "websocket"],
+                headers: ["upgrade": "websocket", "connection": "Upgrade"],
                 upgradeWebSocket: { serverWS }
             )
             let serverTask = Task { await router.handle(request) }

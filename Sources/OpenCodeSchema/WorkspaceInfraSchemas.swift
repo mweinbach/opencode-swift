@@ -2645,10 +2645,41 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#Action [status=implemented hash=f5dba061b39a]
+    // parity: schema/src/automation.ts#ShellAction [status=implemented hash=8157c5bb98e9]
+    public struct ShellAction: Equatable, Hashable, Sendable, Codable {
+        public let command: String
+
+        public init(command: String) {
+            self.command = command
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try SchemaPrimitive.decodeRequiredLiteral("shell", from: container, forKey: .type)
+            let command = try container.decode(String.self, forKey: .command)
+            guard !command.isEmpty else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "command must be non-empty")
+            }
+            self.command = command
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("shell", forKey: .type)
+            try container.encode(command, forKey: .command)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case command
+        }
+    }
+
+    // parity: schema/src/automation.ts#Action [status=implemented hash=980f34069faf]
     public enum Action: Equatable, Hashable, Sendable, Codable {
         case prompt(PromptAction)
         case code(CodeAction)
+        case shell(ShellAction)
 
         enum TagKeys: String, CodingKey {
             case type
@@ -2660,6 +2691,7 @@ public enum AutomationSchema {
             switch type {
             case "prompt": self = .prompt(try PromptAction(from: decoder))
             case "code": self = .code(try CodeAction(from: decoder))
+            case "shell": self = .shell(try ShellAction(from: decoder))
             default:
                 throw DecodingError.dataCorruptedError(
                     forKey: .type,
@@ -2673,6 +2705,7 @@ public enum AutomationSchema {
             switch self {
             case .prompt(let v): try v.encode(to: encoder)
             case .code(let v): try v.encode(to: encoder)
+            case .shell(let v): try v.encode(to: encoder)
             }
         }
     }
@@ -2801,7 +2834,8 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#CodeActionInput [status=implemented hash=841317cb7d02]
+    /// Code Mode JavaScript run on each trigger with no model (32 KB output cap).
+    // parity: schema/src/automation.ts#CodeActionInput [status=implemented hash=1a3dcbb0068e]
     public struct CodeActionInput: Equatable, Hashable, Sendable, Codable {
         public let code: String
         public let args: JSONValue?
@@ -2846,10 +2880,42 @@ public enum AutomationSchema {
         }
     }
 
-    // parity: schema/src/automation.ts#ActionInput [status=implemented hash=84521d07cd2c]
+    /// Fixed shell command run on each trigger without a model.
+    // parity: schema/src/automation.ts#ShellActionInput [status=implemented hash=195fd4ec264e]
+    public struct ShellActionInput: Equatable, Hashable, Sendable, Codable {
+        public let command: String
+
+        public init(command: String) {
+            self.command = command
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            try SchemaPrimitive.decodeRequiredLiteral("shell", from: container, forKey: .type)
+            let command = try container.decode(String.self, forKey: .command)
+            guard !command.isEmpty else {
+                throw DecodingError.dataCorruptedError(forKey: .command, in: container, debugDescription: "command must be non-empty")
+            }
+            self.command = command
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("shell", forKey: .type)
+            try container.encode(command, forKey: .command)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case command
+        }
+    }
+
+    // parity: schema/src/automation.ts#ActionInput [status=implemented hash=fb5016ba3d76]
     public enum ActionInput: Equatable, Hashable, Sendable, Codable {
         case prompt(PromptActionInput)
         case code(CodeActionInput)
+        case shell(ShellActionInput)
 
         enum TagKeys: String, CodingKey {
             case type
@@ -2861,6 +2927,7 @@ public enum AutomationSchema {
             switch type {
             case "prompt": self = .prompt(try PromptActionInput(from: decoder))
             case "code": self = .code(try CodeActionInput(from: decoder))
+            case "shell": self = .shell(try ShellActionInput(from: decoder))
             default:
                 throw DecodingError.dataCorruptedError(
                     forKey: .type,
@@ -2874,11 +2941,13 @@ public enum AutomationSchema {
             switch self {
             case .prompt(let v): try v.encode(to: encoder)
             case .code(let v): try v.encode(to: encoder)
+            case .shell(let v): try v.encode(to: encoder)
             }
         }
     }
 
-    // parity: schema/src/automation.ts#Request [status=implemented hash=5a4ea53201e2]
+    /// Automation request payload: prompt, Code Mode, or shell command action with schedule trigger.
+    // parity: schema/src/automation.ts#Request [status=implemented hash=d6ccf5c43bfb]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let trigger: Trigger

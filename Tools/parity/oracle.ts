@@ -563,6 +563,7 @@ const protocolServerMod = await import(path.join(UPSTREAM_DIR, "packages/protoco
 const protocolPtyMod = await import(path.join(UPSTREAM_DIR, "packages/protocol/src/groups/pty.ts"))
 const protocolPersistentPtyMod = await import(path.join(UPSTREAM_DIR, "packages/protocol/src/groups/persistent-pty.ts"))
 const protocolMcpMod = await import(path.join(UPSTREAM_DIR, "packages/protocol/src/groups/mcp.ts"))
+const protocolMachineMod = await import(path.join(UPSTREAM_DIR, "packages/protocol/src/groups/machine.ts"))
 
 // packages/theme & packages/tui
 const themeColorMod = await import(path.join(UPSTREAM_DIR, "packages/theme/src/tui/color.ts"))
@@ -610,6 +611,7 @@ const serverRequestSiteMod = await import(path.join(UPSTREAM_DIR, "packages/serv
 const cliDatabasePathMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/database-path.ts"))
 const cliUpdaterActionMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/services/updater-action.ts"))
 const cliServiceConfigMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/services/service-config.ts"))
+const cliServiceUrlsMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/services/service-urls.ts"))
 const cliNodeTargetMod = await import(path.join(UPSTREAM_DIR, "packages/cli/src/node/target.ts"))
 
 // packages/latex
@@ -1107,6 +1109,58 @@ function invoke(fn: string, args: unknown[]): unknown {
     }
     case "ai/src/provider-error.ts#isContextOverflow":
       return aiProviderErrorMod.isContextOverflow(args[0] as string)
+    case "ai/src/protocols/shared.ts#flattenToolRequest": {
+      type RawTool =
+        | { type: "tool"; name: string }
+        | { type: "namespace"; name: string; tools: RawTool[] }
+      type RawPart = { type: "tool-call" | "tool-result"; id: string; name: string; namespace?: string | null }
+      type RawMsg = { role: "assistant" | "tool"; parts: RawPart[] }
+      const raw = args[0] as { tools: RawTool[]; messages: RawMsg[] }
+      const mapTool = (t: RawTool): Record<string, unknown> =>
+        t.type === "namespace"
+          ? { type: "namespace", name: t.name, tools: t.tools.map(mapTool) }
+          : { name: t.name, description: "", inputSchema: {} }
+      const req = {
+        model: { id: "gpt-5", provider: "openai" },
+        system: [],
+        tools: raw.tools.map(mapTool),
+        messages: raw.messages.map((m) => ({
+          role: m.role,
+          content: m.parts.map((p) =>
+            p.type === "tool-call"
+              ? {
+                  type: "tool-call",
+                  id: p.id,
+                  name: p.name,
+                  ...(p.namespace != null ? { namespace: p.namespace } : {}),
+                  input: {},
+                }
+              : {
+                  type: "tool-result",
+                  id: p.id,
+                  name: p.name,
+                  ...(p.namespace != null ? { namespace: p.namespace } : {}),
+                  result: { type: "text", text: "ok" },
+                },
+          ),
+        })),
+      }
+      const flattened = aiSharedMod.flattenToolRequest(req)
+      return {
+        tools: flattened.tools.map((t: { name: string }) => t.name),
+        messages: flattened.request.messages.map(
+          (m: { role: string; content: Array<{ type: string; id: string; name: string; namespace?: string }> }) => ({
+            role: m.role,
+            parts: m.content.map((p) => ({
+              type: p.type,
+              id: p.id,
+              name: p.name,
+              namespace: p.namespace ?? null,
+            })),
+          }),
+        ),
+      }
+    }
 
     // MARK: - packages/core
     case "core/src/util/wildcard.ts#match":
@@ -1217,6 +1271,14 @@ function invoke(fn: string, args: unknown[]): unknown {
       return protocolPersistentPtyMod.hasPersistentPtyConnectTicketURL(new URL(args[0] as string))
     case "protocol/src/groups/mcp.ts#hasMcpClientTicketURL":
       return protocolMcpMod.hasMcpClientTicketURL(new URL(args[0] as string))
+    case "protocol/src/groups/machine.ts#isWebSocketUpgrade": {
+      const req = args[0] as { method: string; headers: Record<string, string> }
+      return protocolMachineMod.isWebSocketUpgrade(req)
+    }
+    case "protocol/src/groups/machine.ts#isMachineLinkUpgrade": {
+      const req = args[0] as { method: string; url: string; headers: Record<string, string> }
+      return protocolMachineMod.isMachineLinkUpgrade(req)
+    }
 
     // MARK: - packages/cli
     case "cli/src/database-path.ts#databasePath": {
@@ -1258,6 +1320,10 @@ function invoke(fn: string, args: unknown[]): unknown {
       )
     case "cli/src/node/target.ts#nodeTarget":
       return cliNodeTargetMod.nodeTarget(args[0] as string, args[1] as string)
+    case "cli/src/services/service-urls.ts#parseServerURL":
+      return cliServiceUrlsMod.parseServerURL(args[0] as string)
+    case "cli/src/services/service-urls.ts#isLoopback":
+      return cliServiceUrlsMod.isLoopback(args[0] as string)
 
     // MARK: - packages/latex
     case "latex/src/render.ts#renderLatexToString":

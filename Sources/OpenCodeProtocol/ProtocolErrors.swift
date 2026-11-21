@@ -1383,6 +1383,38 @@ public struct ArtifactNotFoundError: ProtocolError {
     }
 }
 
+// parity: protocol/src/errors.ts#MachineNotFoundError [status=implemented hash=a0957670f383]
+public struct MachineNotFoundError: ProtocolError {
+    public static let tag = "MachineNotFoundError"
+    public static let httpStatusCode = 404
+
+    public let machine: String
+    public let message: String
+
+    public init(machine: String, message: String) {
+        self.machine = machine
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case _tag, machine, message
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        try validateErrorTag(Self.tag, in: c, key: ._tag)
+        self.machine = try c.decode(String.self, forKey: .machine)
+        self.message = try c.decode(String.self, forKey: .message)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(Self.tag, forKey: ._tag)
+        try c.encode(machine, forKey: .machine)
+        try c.encode(message, forKey: .message)
+    }
+}
+
 /// Discriminated union of all protocol tagged HTTP API errors for polymorphic wire decoding.
 public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable {
     case locationNotFound(LocationNotFoundError)
@@ -1425,6 +1457,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
     case videoNotFound(VideoNotFoundError)
     case blobNotFound(BlobNotFoundError)
     case artifactNotFound(ArtifactNotFoundError)
+    case machineNotFound(MachineNotFoundError)
     case vcsInitNotSupported(VcsInitNotSupportedError)
     case worktree(WorktreeError)
 
@@ -1470,6 +1503,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         case .videoNotFound: VideoNotFoundError.tag
         case .blobNotFound: BlobNotFoundError.tag
         case .artifactNotFound: ArtifactNotFoundError.tag
+        case .machineNotFound: MachineNotFoundError.tag
         case .vcsInitNotSupported: VcsInitNotSupportedError.tag
         case .worktree: WorktreeError.tag
         }
@@ -1517,6 +1551,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         case .videoNotFound: VideoNotFoundError.httpStatusCode
         case .blobNotFound: BlobNotFoundError.httpStatusCode
         case .artifactNotFound: ArtifactNotFoundError.httpStatusCode
+        case .machineNotFound: MachineNotFoundError.httpStatusCode
         case .vcsInitNotSupported: VcsInitNotSupportedError.httpStatusCode
         case .worktree: WorktreeError.httpStatusCode
         }
@@ -1564,6 +1599,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         case .videoNotFound(let e): e.message
         case .blobNotFound(let e): e.message
         case .artifactNotFound(let e): e.message
+        case .machineNotFound(let e): e.message
         case .vcsInitNotSupported(let e): e.message
         case .worktree(let e): e.message
         }
@@ -1617,6 +1653,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         case VideoNotFoundError.tag: self = .videoNotFound(try VideoNotFoundError(from: decoder))
         case BlobNotFoundError.tag: self = .blobNotFound(try BlobNotFoundError(from: decoder))
         case ArtifactNotFoundError.tag: self = .artifactNotFound(try ArtifactNotFoundError(from: decoder))
+        case MachineNotFoundError.tag: self = .machineNotFound(try MachineNotFoundError(from: decoder))
         case VcsInitNotSupportedError.tag: self = .vcsInitNotSupported(try VcsInitNotSupportedError(from: decoder))
         case WorktreeError.tag: self = .worktree(try WorktreeError(from: decoder))
         default:
@@ -1670,6 +1707,7 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         case .videoNotFound(let e): try e.encode(to: encoder)
         case .blobNotFound(let e): try e.encode(to: encoder)
         case .artifactNotFound(let e): try e.encode(to: encoder)
+        case .machineNotFound(let e): try e.encode(to: encoder)
         case .vcsInitNotSupported(let e): try e.encode(to: encoder)
         case .worktree(let e): try e.encode(to: encoder)
         }
@@ -1717,5 +1755,6 @@ public enum ProtocolErrorEnvelope: Error, Equatable, Hashable, Sendable, Codable
         ProtocolErrorRef(VideoNotFoundError.self),
         ProtocolErrorRef(BlobNotFoundError.self),
         ProtocolErrorRef(ArtifactNotFoundError.self),
+        ProtocolErrorRef(MachineNotFoundError.self),
     ]
 }

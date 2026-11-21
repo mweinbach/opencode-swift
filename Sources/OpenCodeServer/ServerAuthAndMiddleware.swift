@@ -973,15 +973,8 @@ private func authorizedSessionCookie(
     return ServerAuth.verifySession(token, config: config, nowMs: nowMs)
 }
 
-/// WebSocket endpoint path where remote machine workers dial in to authenticate via Noise XX (`MachineLink.accept`).
-public let MACHINE_LINK_PATH = "/api/machine/link"
-
-public func isMachineLinkURL(_ urlString: String) -> Bool {
-    ServerParsedURL(urlString).pathname == MACHINE_LINK_PATH
-}
-
-/// Authorization middleware checking route exemptions (pairing connect, machine Noise link, ticketed PTY/MCP WebSockets) and auth credentials.
-// parity: server/src/middleware/authorization.ts#authorizationLayer [status=implemented hash=c1b59186de32]
+/// Authorization middleware checking route exemptions (pairing connect, machine link WebSocket upgrade, ticketed PTY/MCP WebSockets) and auth credentials.
+// parity: server/src/middleware/authorization.ts#authorizationLayer [status=implemented hash=9ec5973f293a]
 public let authorizationLayer: @Sendable (
     ServerAuth.Info,
     String,
@@ -992,8 +985,14 @@ public let authorizationLayer: @Sendable (
     if ((routePath == PTY_CONNECT_PATH
         || routePath == PERSISTENT_PTY_CONNECT_PATH
         || routePath == MCP_CLIENT_PATH) && hasTicket)
-        || routePath == PAIRING_CONNECT_PATH
-        || routePath == MACHINE_LINK_PATH {
+        || routePath == PAIRING_CONNECT_PATH {
+        return nil
+    }
+    // A machine's link takes no server password: a worker holding it could call the whole API. Only a WebSocket
+    // upgrade to the route selected passes here, and that is safe because the socket carries nothing until the
+    // link's own handshake has proved a paired key or a valid join secret. Any other request to the route is
+    // checked like the rest, and with machines off the handler answers the upgrade as an unknown route.
+    if routePath == MACHINE_LINK_PATH && isWebSocketUpgrade(method: request.method, headers: request.headers) {
         return nil
     }
     if authorizedRequest(request, config: config) {
@@ -1425,7 +1424,7 @@ public enum ServerProcess {
     ]
 
     /// Starts the real HTTP/1.1 + SSE + WebSocket TCP server process with startup/ready/stopping lifecycle dispatch.
-    // parity: server/src/process.ts#start [status=adapted hash=d786fa4dc2d5]
+    // parity: server/src/process.ts#start [status=adapted hash=93334a6638da]
     public static func start(
         options: ServerOptions,
         lifecycle: (any Lifecycle)? = nil,
@@ -1445,6 +1444,8 @@ public enum ServerProcess {
         let hostname = options.hostname ?? "127.0.0.1"
         let status = ServiceStatus.make(initial: .starting)
         let routerBox = Mutex<ServerRouter?>(nil)
+        // Off until the routes are up, which is when the flag can be read.
+        let machinesFlagBox = Mutex<@Sendable () async -> Bool>({ false })
         let corsOpts = CorsOptions(cors: options.cors)
         let authInfo = ServerAuth.Info(password: password, username: "opencode")
         let version = options.app?.version ?? "unknown"
@@ -1454,6 +1455,7 @@ public enum ServerProcess {
         let baseDispatch: ServerHTTPHandler = { request in
             let currentState = status.current
             let readyRouter = routerBox.withLock { $0 }
+            let machinesFlag = machinesFlagBox.withLock { $0 }
             let isReady = currentState == .ready && readyRouter != nil
             let fullURL = request.url
 
@@ -1469,11 +1471,19 @@ public enum ServerProcess {
                 )
             }
 
+            let machineLinkExempt: Bool
+            if isReady && isMachineLinkUpgrade(method: request.method, url: fullURL, headers: request.headers) {
+                // With machines off the link's path is an unknown route, and gets this 401 like one.
+                machineLinkExempt = await machinesFlag()
+            } else {
+                machineLinkExempt = false
+            }
             let ticketExempt = isReady
                 && (hasPtyConnectTicketURL(fullURL)
                     || hasPersistentPtyConnectTicketURL(fullURL)
-                    || hasMcpClientTicketURL(fullURL))
-            if !isPairingConnectURL(fullURL) && !isMachineLinkURL(fullURL) && !ticketExempt && !authorizedRequest(request, config: authInfo) {
+                    || hasMcpClientTicketURL(fullURL)
+                    || machineLinkExempt)
+            if !isPairingConnectURL(fullURL) && !ticketExempt && !authorizedRequest(request, config: authInfo) {
                 return unauthorizedResponse(request)
             }
 
@@ -1530,6 +1540,7 @@ public enum ServerProcess {
                 for run in runs { run.cancel() }
                 for run in runs { await run.value }
             }
+            machinesFlagBox.withLock { $0 = ServerMachine.machinesEnabled(runtime: runtime) }
             routerBox.withLock { $0 = router }
             status.ready()
             return RunningServer(

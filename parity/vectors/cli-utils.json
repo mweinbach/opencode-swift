@@ -103,5 +103,34 @@
       { "name": "unsupported platform throws", "args": ["freebsd", "x64"], "compare": "expect_error" },
       { "name": "unsupported arch throws", "args": ["linux", "riscv64"], "compare": "expect_error" }
     ]
+  },
+  {
+    "fn": "cli/src/services/service-urls.ts#parseServerURL",
+    "cases": [
+      { "name": "https with custom port and trailing slash", "args": ["https://override.example.com:8443/"] },
+      { "name": "http loopback with port", "args": ["http://127.0.0.1:4096"] },
+      { "name": "uppercase scheme host and default https port", "args": ["HTTPS://EXAMPLE.COM:443/"] },
+      { "name": "default http port with path and trailing slashes", "args": ["http://example.com:80/base///"] },
+      { "name": "ipv6 loopback url", "args": ["http://[::1]:4096/"] },
+      { "name": "non-http protocol throws", "args": ["ftp://example.com"], "compare": "expect_error" },
+      { "name": "credentials rejected", "args": ["https://user:pass@example.com"], "compare": "expect_error" },
+      { "name": "query string rejected", "args": ["https://example.com?a=1"], "compare": "expect_error" },
+      { "name": "fragment rejected", "args": ["https://example.com#frag"], "compare": "expect_error" },
+      { "name": "invalid url throws", "args": ["not a url"], "compare": "expect_error" }
+    ]
+  },
+  {
+    "fn": "cli/src/services/service-urls.ts#isLoopback",
+    "cases": [
+      { "name": "localhost", "args": ["localhost"] },
+      { "name": "subdomain of localhost", "args": ["api.localhost"] },
+      { "name": "ipv4 loopback", "args": ["127.0.0.1"] },
+      { "name": "ipv4 loopback range", "args": ["127.0.1.5"] },
+      { "name": "bracketed ipv6 loopback", "args": ["[::1]"] },
+      { "name": "unbracketed ipv6 loopback is false", "args": ["::1"] },
+      { "name": "lan address is false", "args": ["10.0.0.8"] },
+      { "name": "public domain is false", "args": ["example.com"] },
+      { "name": "suffix mismatch is false", "args": ["notlocalhost"] }
+    ]
   }
 ]

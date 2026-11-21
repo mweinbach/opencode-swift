@@ -55,6 +55,60 @@ public enum NpmPlatform {
     /// Injectable package installer hook invoked to populate a versioned generation directory.
     public typealias Installer = @Sendable (_ pkg: String, _ generationDir: String, _ update: Bool) async throws -> Void
 
+    /// Injectable resolver that checks whether a named Git ref is a branch (`true`) or tag/other (`false`) on the remote.
+    public typealias GitRefResolver = @Sendable (_ pkg: String, _ repoURL: String, _ ref: String, _ root: String) async throws -> Bool
+
+    /// Default Git remote ref resolver using `git ls-remote --heads <repoURL> refs/heads/<ref>` via `ProcessSpawner`.
+    public static func defaultGitRefResolver(
+        spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
+    ) -> GitRefResolver {
+        { pkg, repoURL, ref, root in
+            #if os(macOS) || os(Linux) || os(Windows)
+            let output: ProcessOutput
+            do {
+                output = try await spawner.run(
+                    ProcessSpec(
+                        executable: "git",
+                        arguments: ["ls-remote", "--heads", repoURL, "refs/heads/\(ref)"],
+                        workingDirectory: nil
+                    )
+                )
+            } catch {
+                throw NpmSpec.InstallFailedError(
+                    add: [pkg],
+                    dir: root,
+                    causeMessage: String(describing: error)
+                )
+            }
+            guard output.exitCode == 0 else {
+                let stderr = String(decoding: output.stderr, as: UTF8.self)
+                throw NpmSpec.InstallFailedError(
+                    add: [pkg],
+                    dir: root,
+                    causeMessage: "git ls-remote exited with status \(output.exitCode)",
+                    causeStderr: stderr.isEmpty ? nil : stderr
+                )
+            }
+            let stdout = String(decoding: output.stdout, as: UTF8.self)
+            let target = "refs/heads/\(ref)"
+            for line in stdout.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+                let fields = line.split(whereSeparator: { $0 == "\t" || $0 == " " })
+                if fields.count >= 2 && fields[1] == target {
+                    return true
+                }
+            }
+            return false
+            #else
+            _ = (spawner, repoURL, ref)
+            throw NpmSpec.InstallFailedError(
+                add: [pkg],
+                dir: root,
+                causeMessage: "Git ref resolution is unsupported on \(Platform.current.os.rawValue)"
+            )
+            #endif
+        }
+    }
+
     /// Default subprocess-backed package installer running `bun add` (falling back to `npm install --prefix`)
     /// via `ProcessSpawner` on desktop OSes (macOS, Linux, Windows).
     public static func defaultProcessInstaller(
@@ -172,12 +226,16 @@ public enum NpmPlatform {
         }
     }
 
-    // parity: util/src/npm.ts#Interface [status=implemented hash=9d3c71267af9]
+    // parity: util/src/npm.ts#Interface [status=implemented hash=6d7380cfd396]
     public protocol Interface: Sendable {
         func add(_ pkg: String) async throws -> NpmSpec.Package
         func resolve(_ pkg: String) async -> NpmSpec.Package
         func check(_ pkg: String) async throws -> Bool
         func update(_ pkg: String) async throws -> NpmSpec.Package
+        /// Whether newer versions should install on their own because the package names what to follow: `name@latest`, a
+        /// version range, a Git `semver:` range, or a Git ref the remote lists as a branch. A bare name or repository, other
+        /// dist-tags, Git tags and commits stay on what's installed.
+        func follows(_ pkg: String) async throws -> Bool
         /// Stop using the newest installed version when it is `version`, so the previous one is current again. Its
         /// files stay until they expire, for anything still running it. False when it isn't the newest or there is
         /// no previous one.
@@ -192,6 +250,7 @@ public enum NpmPlatform {
         private let fsUtil: FSUtil.Service
         private let flock: EffectFlock.Service
         private let installer: Installer?
+        private let gitRefResolver: GitRefResolver
         private let nowMs: @Sendable () -> Int64
 
         public init(
@@ -199,6 +258,7 @@ public enum NpmPlatform {
             fsUtil: FSUtil.Service = FSUtil.Service(),
             flock: EffectFlock.Service? = nil,
             installer: Installer? = nil,
+            gitRefResolver: GitRefResolver? = nil,
             nowMs: @escaping @Sendable () -> Int64 = { Flock.currentEpochMs() }
         ) {
             self.cacheRoot = cacheRoot
@@ -212,6 +272,7 @@ public enum NpmPlatform {
                 // Preserve pure in-memory testability when using virtual filesystems without an injected installer.
                 self.installer = nil
             }
+            self.gitRefResolver = gitRefResolver ?? NpmPlatform.defaultGitRefResolver()
             self.nowMs = nowMs
         }
 
@@ -312,6 +373,24 @@ public enum NpmPlatform {
             try await install(pkg, update: true)
         }
 
+        public func follows(_ pkg: String) async throws -> Bool {
+            switch NpmSpec.classifyFollows(pkg) {
+            case .always:
+                return true
+            case .never:
+                return false
+            case .gitRef(let repoURL, let ref):
+                let root = packageDir(for: pkg)
+                do {
+                    return try await gitRefResolver(pkg, repoURL, ref, root)
+                } catch let err as NpmSpec.InstallFailedError {
+                    throw err
+                } catch {
+                    throw NpmSpec.InstallFailedError(add: [pkg], dir: root, causeMessage: String(describing: error))
+                }
+            }
+        }
+
         public func reject(_ pkg: String, version: String) async throws -> Bool {
             let dir = packageDir(for: pkg)
             let pkgName = parsedPackageName(for: pkg)
@@ -348,12 +427,16 @@ public enum NpmPlatform {
             let installer: Installer? = spawner.map {
                 NpmPlatform.defaultProcessInstaller(spawner: $0, fileSystem: fsUtil.fileSystem)
             }
+            let gitRefResolver: GitRefResolver? = spawner.map {
+                NpmPlatform.defaultGitRefResolver(spawner: $0)
+            }
             return LayerNode.Output([
                 Service.serviceKey: Service(
                     cacheRoot: global.cache,
                     fsUtil: fsUtil,
                     flock: flock,
-                    installer: installer
+                    installer: installer,
+                    gitRefResolver: gitRefResolver
                 ),
             ])
         },

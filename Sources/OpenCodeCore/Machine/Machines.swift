@@ -220,8 +220,13 @@ public enum Machines {
         }
 
         public func remove(_ id: String) async throws {
-            try await locks.withLock(id) { () throws -> Void in
-                guard self.state.withLock({ $0.instances[id] }) != nil else { return }
+            _ = try await removeIfPresent(id)
+        }
+
+        /// Atomic remove returning `true` if a machine named `id` existed, `false` otherwise.
+        public func removeIfPresent(_ id: String) async throws -> Bool {
+            try await locks.withLock(id) { () throws -> Bool in
+                guard self.state.withLock({ $0.instances[id] }) != nil else { return false }
                 _ = try self.db.execute("DELETE FROM machine WHERE id = ?", parameters: [.text(id)])
                 let machine = self.state.withLock { s -> (any MachineDriver.Interface)? in
                     s.invitations.removeValue(forKey: id)
@@ -229,6 +234,7 @@ public enum Machines {
                     return s.instances.removeValue(forKey: id)
                 }
                 machine?.close(NotFound(machine: id))
+                return true
             }
         }
 
@@ -334,6 +340,19 @@ public enum Machines {
     public struct MachineDependencyMissing: Error, Equatable, Sendable, CustomStringConvertible {
         public let service: String
         public var description: String { "\(service) is missing a dependency" }
+    }
+}
+
+public extension Machines.Interface {
+    /// Removes machine `id` and returns `true` if it existed, or `false` if no such machine was known.
+    func removeIfPresent(_ id: String) async throws -> Bool {
+        if let service = self as? Machines.Service {
+            return try await service.removeIfPresent(id)
+        }
+        let existed = await list().contains(where: { $0.id == id })
+        guard existed else { return false }
+        try await remove(id)
+        return true
     }
 }
 

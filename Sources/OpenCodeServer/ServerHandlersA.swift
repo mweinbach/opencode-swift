@@ -468,7 +468,8 @@ private func checkAutomationEnabled(runtime: ServerAppRuntime, directory: String
     let ref = LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: directory))
     do {
         let loc = try await runtime.resolveLocation(ref)
-        return await loc.flag.enabled(.automations)
+        let entries = await loc.config.entries()
+        return entries.compactMap { $0.info?.automations }.last ?? true
     } catch is LocationNotFoundError {
         return true
     } catch {

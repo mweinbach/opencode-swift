@@ -1321,6 +1321,8 @@ extension CoreTool {
                     .map { $0.trimmingCharacters(in: .whitespaces) }
                     .first(where: { !$0.isEmpty }) ?? ""
                 actionStr = "code: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(firstLine)))\""
+            case .shell(let s):
+                actionStr = "shell: \"\(CoreConfigJSONC.encodeJSONStringContents(clip(s.command)))\""
             }
             var parts = ["\(view.id.rawValue) \"\(view.name)\": \(triggerStr) (\(view.tz))", view.status.rawValue]
             if let next = view.nextDueAt { parts.append("next \(next)") }

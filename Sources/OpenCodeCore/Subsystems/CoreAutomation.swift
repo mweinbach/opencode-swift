@@ -1710,6 +1710,8 @@ public enum CoreAutomation {
                     _ = try Code.scanForbiddenTools(in: c.code).get()
                 }
                 action = .code(codeAction)
+            case .shell(let s):
+                action = .shell(AutomationSchema.ShellAction(command: s.command))
             }
 
             let id = AutomationSchema.ID.create()
@@ -2534,6 +2536,13 @@ public enum CoreAutomation {
                         codeFailed(row: row, now: now, error: msg, output: output, invalid: isInvalid)
                     }
                 }
+            case .shell(let shellAction):
+                var patch = advancePatch(row: row, ended: clock(), done: false, event: event)
+                patch.lastOutcome = .some(.failed)
+                patch.lastOutput = .some("Shell automation action '\(shellAction.command)' requires core shell automation runner")
+                patch.retryAt = .some(nil)
+                patch.timeUpdated = clock()
+                settle(row, patch)
             }
         }
 

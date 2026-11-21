@@ -2693,6 +2693,103 @@ public enum TUIRoutes {
         TUIUtil.executeCallSummary(call)
     }
 
+    public struct ScriptChangeCounts: Equatable, Hashable, Sendable {
+        public let additions: String
+        public let deletions: String
+        public let unit: String
+
+        public init(additions: String, deletions: String, unit: String) {
+            self.additions = additions
+            self.deletions = deletions
+            self.unit = unit
+        }
+    }
+
+    /// The line counts a change shows without its diff: "+2 lines", "-40 lines", "+5 -1 lines".
+    /// Returns `nil` where they are unknown or zero, so a change without counts shows only its path.
+    // parity: tui/src/routes/session/index.tsx#changeCounts [status=implemented hash=4b9085ed2b6f]
+    public static func changeCounts(additions: Int? = nil, deletions: Int? = nil) -> ScriptChangeCounts? {
+        let adds = additions ?? 0
+        let dels = deletions ?? 0
+        if adds == 0 && dels == 0 { return nil }
+        return ScriptChangeCounts(
+            additions: adds > 0 ? "+\(adds)" : "",
+            deletions: dels > 0 ? "-\(dels)" : "",
+            unit: adds + dels == 1 ? " line" : " lines"
+        )
+    }
+
+    public static func changeCounts(_ file: ParsedScriptChange) -> ScriptChangeCounts? {
+        changeCounts(additions: file.additions, deletions: file.deletions)
+    }
+
+    public struct ParsedScriptChange: Equatable, Hashable, Sendable {
+        public let type: String
+        public let relativePath: String
+        public let filePath: String
+        public let patch: String
+        public let additions: Int?
+        public let deletions: Int?
+        public let movePath: String?
+
+        public init(
+            type: String,
+            relativePath: String,
+            filePath: String,
+            patch: String,
+            additions: Int? = nil,
+            deletions: Int? = nil,
+            movePath: String? = nil
+        ) {
+            self.type = type
+            self.relativePath = relativePath
+            self.filePath = filePath
+            self.patch = patch
+            self.additions = additions
+            self.deletions = deletions
+            self.movePath = movePath
+        }
+    }
+
+    /// A script's changes, like a patch's files, but a change may have no patch and, where nothing could be derived
+    /// without reading the file, no counts.
+    // parity: tui/src/routes/session/index.tsx#parseScriptChanges [status=implemented hash=2eb126afa9df]
+    public static func parseScriptChanges(_ value: JSONValue?) -> [ParsedScriptChange] {
+        guard case .array(let items) = value else { return [] }
+        return items.compactMap { item in
+            guard case .object(let dict) = item else { return nil }
+            let status: String? = if case .string(let s) = dict["status"], !s.isEmpty { s } else { nil }
+            let type: String? = switch status {
+            case "added": "add"
+            case "deleted": "delete"
+            case "modified": "update"
+            default: nil
+            }
+            let relativePath: String? = if case .string(let s) = dict["file"], !s.isEmpty { s } else { nil }
+            guard let type, let relativePath else { return nil }
+            let patch: String = if case .string(let s) = dict["patch"] { s } else { "" }
+            let additions: Int? = switch dict["additions"] {
+            case .int(let i): Int(i)
+            case .double(let d) where d.isFinite: Int(d)
+            default: nil
+            }
+            let deletions: Int? = switch dict["deletions"] {
+            case .int(let i): Int(i)
+            case .double(let d) where d.isFinite: Int(d)
+            default: nil
+            }
+            return ParsedScriptChange(
+                type: type,
+                relativePath: relativePath,
+                filePath: relativePath,
+                patch: patch,
+                additions: additions,
+                deletions: deletions,
+                movePath: nil
+            )
+        }
+    }
+
     public struct ParsedApplyPatchFile: Equatable, Hashable, Sendable {
         public let type: String
         public let relativePath: String

@@ -964,6 +964,80 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
     case "ai/src/provider-error.ts#isContextOverflow":
         return .bool(AIErrorClassifier.isContextOverflow(try requireString(args, 0)))
 
+    case "ai/src/protocols/shared.ts#flattenToolRequest":
+        guard let obj = args.first?.objectValue,
+              let rawTools = obj["tools"]?.arrayValue,
+              let rawMsgs = obj["messages"]?.arrayValue else {
+            throw DispatchError.invalidArguments("Expected { tools, messages } for flattenToolRequest")
+        }
+        func decodeToolEntry(_ val: JSONValue) throws -> AIProtocolUtils.ToolEntry {
+            guard let o = val.objectValue, let type = o["type"]?.stringValue, let name = o["name"]?.stringValue else {
+                throw DispatchError.invalidArguments("Invalid tool entry")
+            }
+            if type == "namespace" {
+                let children = try (o["tools"]?.arrayValue ?? []).map(decodeToolEntry)
+                return .namespace(name: name, description: nil, tools: children)
+            }
+            return .tool(AIProtocolUtils.ToolDefinition(name: name, description: "", inputSchema: [:]))
+        }
+        let tools = try rawTools.map(decodeToolEntry)
+        let messages: [AIProtocolUtils.Message] = try rawMsgs.map { msgVal in
+            guard let mo = msgVal.objectValue,
+                  let roleStr = mo["role"]?.stringValue,
+                  let partsArr = mo["parts"]?.arrayValue else {
+                throw DispatchError.invalidArguments("Invalid message")
+            }
+            let role: AIProtocolUtils.MessageRole = roleStr == "tool" ? .tool : .assistant
+            let parts: [AIProtocolUtils.ContentPart] = try partsArr.map { pv in
+                guard let po = pv.objectValue,
+                      let pt = po["type"]?.stringValue,
+                      let pid = po["id"]?.stringValue,
+                      let pname = po["name"]?.stringValue else {
+                    throw DispatchError.invalidArguments("Invalid message part")
+                }
+                let ns = po["namespace"]?.stringValue
+                if pt == "tool-result" {
+                    return .toolResult(AIProtocolUtils.ToolResultPart(id: pid, name: pname, namespace: ns, result: .text("ok")))
+                }
+                return .toolCall(AIProtocolUtils.ToolCallPart(id: pid, name: pname, namespace: ns, input: .object([:])))
+            }
+            return AIProtocolUtils.Message(role: role, content: parts)
+        }
+        let req = AIProtocolUtils.LLMRequest(
+            model: AIProtocolUtils.ModelDescriptor(id: "gpt-5", provider: "openai"),
+            messages: messages,
+            tools: tools
+        )
+        let flattened = AIProtocolUtils.ProviderShared.flattenToolRequest(req)
+        return .object([
+            "tools": .array(flattened.tools.map { .string($0.name) }),
+            "messages": .array(flattened.request.messages.map { m in
+                .object([
+                    "role": .string(m.role.rawValue),
+                    "parts": .array(m.content.compactMap { part -> JSONValue? in
+                        switch part {
+                        case .toolCall(let c):
+                            return .object([
+                                "type": .string("tool-call"),
+                                "id": .string(c.id),
+                                "name": .string(c.name),
+                                "namespace": c.namespace.map { .string($0) } ?? .null,
+                            ])
+                        case .toolResult(let r):
+                            return .object([
+                                "type": .string("tool-result"),
+                                "id": .string(r.id),
+                                "name": .string(r.name),
+                                "namespace": r.namespace.map { .string($0) } ?? .null,
+                            ])
+                        default:
+                            return nil
+                        }
+                    }),
+                ])
+            }),
+        ])
+
     // MARK: - packages/core
     case "core/src/util/wildcard.ts#match":
         let input = try requireString(args, 0)
@@ -1026,13 +1100,13 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
                     allFlags: e["all_flags"]?.boolValue,
                     todo: e["todo"]?.boolValue,
                     mediaBlob: e["media_blob"]?.boolValue,
-                    automations: e["automations"]?.boolValue,
                     artifacts: e["artifacts"]?.boolValue,
                     videoGenerate: e["video_generate"]?.boolValue.map { .enabled($0) },
                     consoleWatches: e["console_watches"]?.boolValue,
                     mcpEvents: e["mcp_events"]?.boolValue,
                     fullCodemode: e["full_codemode"]?.boolValue,
-                    schedules: e["schedules"]?.boolValue
+                    projectOverlay: e["project_overlay"]?.boolValue,
+                    sqliteFts: e["sqlite_fts"]?.boolValue
                 )
             }
             return .document(ConfigSchema.Document(info: ConfigSchema.Info(experimental: exp)))
@@ -1159,6 +1233,23 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
     case "protocol/src/groups/mcp.ts#hasMcpClientTicketURL":
         return .bool(hasMcpClientTicketURL(try requireString(args, 0)))
 
+    case "protocol/src/groups/machine.ts#isWebSocketUpgrade":
+        guard let obj = args.first?.objectValue,
+              let method = obj["method"]?.stringValue,
+              let headersVal = obj["headers"] else {
+            throw DispatchError.invalidArguments("Expected { method, headers }")
+        }
+        return .bool(isWebSocketUpgrade(method: method, headers: try decodeStringMap(headersVal)))
+
+    case "protocol/src/groups/machine.ts#isMachineLinkUpgrade":
+        guard let obj = args.first?.objectValue,
+              let method = obj["method"]?.stringValue,
+              let url = obj["url"]?.stringValue,
+              let headersVal = obj["headers"] else {
+            throw DispatchError.invalidArguments("Expected { method, url, headers }")
+        }
+        return .bool(isMachineLinkUpgrade(method: method, url: url, headers: try decodeStringMap(headersVal)))
+
     // MARK: - packages/cli
     case "cli/src/database-path.ts#databasePath":
         let data = try requireString(args, 0)
@@ -1216,6 +1307,12 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
             "fffFfiAsset": .string(t.fffFfiAsset),
             "opencodePtyAsset": .string(t.opencodePtyAsset),
         ])
+
+    case "cli/src/services/service-urls.ts#parseServerURL":
+        return .string(try CLIServiceURLs.parseServerURL(try requireString(args, 0)))
+
+    case "cli/src/services/service-urls.ts#isLoopback":
+        return .bool(CLIServiceURLs.isLoopback(try requireString(args, 0)))
 
     // MARK: - packages/latex
     case "latex/src/render.ts#renderLatexToString":
