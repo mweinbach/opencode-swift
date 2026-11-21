@@ -91,13 +91,21 @@ jobs:
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
-          swift test --disable-xctest --enable-swift-testing --no-parallel
+          swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel
           $code = $LASTEXITCODE
           if ($code -ne 0) {
             Write-Host "::error::swift test exited with code $code"
-            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000,1001; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue |
-              Select-Object -First 5 |
-              Format-List TimeCreated, ProviderName, Id, Message
+            $exe = ".build\debug\swift-opencodePackageTests.xctest"
+            if (Test-Path $exe) {
+              foreach ($probe in @("liveEmbeddedSDKWorkflow", "SQLite", "NativeFileWatcher", "WindowsNamedPipe", "OpenCodePlatformTests", "OpenCodeUtilTests")) {
+                Write-Host "=== Direct .xctest probe: $probe ==="
+                $proc = Start-Process -FilePath $exe -ArgumentList "--testing-library", "swift-testing", "--no-parallel", "--filter", $probe -NoNewWindow -Wait -PassThru
+                Write-Host ("probe $probe exit code: {0} (0x{1:X8})" -f $proc.ExitCode, ($proc.ExitCode -band 0xFFFFFFFF))
+              }
+              Write-Host "=== Probing all non-OpenCodeApp tests ==="
+              swift test --skip-build --disable-xctest --enable-swift-testing --no-parallel --skip "OpenCodeApp"
+              Write-Host "non-OpenCodeApp exit code: $LASTEXITCODE"
+            }
             exit $code
           }
       - name: Test Packages/OpenTUI (Swift Testing)

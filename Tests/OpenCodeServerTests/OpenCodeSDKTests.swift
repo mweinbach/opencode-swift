@@ -179,15 +179,15 @@ struct OpenCodeSDKTests {
 
         let transport = OwnedFetch.make(
             bufferedHandler: { request, signal in
-                if request.url.hasSuffix("/first") {
-                    firstStarted.resolve(())
-                } else {
-                    secondStarted.resolve(())
-                }
                 let gate = SDKTestHelper.AsyncGate<Void>()
                 _ = signal.onAbort {
                     seen.append(signal.reason.map { String(describing: $0) } ?? "none")
                     gate.resolve(())
+                }
+                if request.url.hasSuffix("/first") {
+                    firstStarted.resolve(())
+                } else {
+                    secondStarted.resolve(())
                 }
                 await gate.wait()
                 return HTTPResponse(head: HTTPResponseHead(statusCode: 200), body: Array("aborted".utf8))
