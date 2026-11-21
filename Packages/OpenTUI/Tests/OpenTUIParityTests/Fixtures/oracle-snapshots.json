@@ -1,7 +1,7 @@
 {
-  "upstreamCommit": "2738bc4b836e9db8bab1df8a7f1d5a5583ee51f1",
-  "generatedAt": "2026-11-20T19:20:58.638Z",
-  "vectorCount": 383,
+  "upstreamCommit": "79c1159c2711af90dbf9ba1b0e04223a6afc4b7e",
+  "generatedAt": "2026-11-21T18:58:50.446Z",
+  "vectorCount": 410,
   "cases": [
     {
       "fn": "core/src/ansi.ts#ANSI",
@@ -7390,13 +7390,233 @@
     },
     {
       "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
-      "name": "percent rejected",
+      "name": "percent accepted",
       "args": [
         "50%"
       ],
       "compare": "exact",
       "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "negative fractional percent",
+      "args": [
+        "-12.5%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "explicit plus percent",
+      "args": [
+        "+50%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "scientific percent",
+      "args": [
+        "5e1%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "trailing dot percent",
+      "args": [
+        "5.%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "leading dot percent",
+      "args": [
+        ".5%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "whitespace around percent number",
+      "args": [
+        " 50 %"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "max float32 percent",
+      "args": [
+        "340282346638528859811704183484516925440%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "above max float32 percent rejected",
+      "args": [
+        "340282350000000000000000000000000000000%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
       "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "min float32 percent",
+      "args": [
+        "-340282346638528859811704183484516925440%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "below min float32 percent rejected",
+      "args": [
+        "-340282350000000000000000000000000000000%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "bare percent rejected",
+      "args": [
+        "%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "whitespace percent rejected",
+      "args": [
+        "   %"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "hex percent rejected",
+      "args": [
+        "0x10%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "hex zero percent accepted",
+      "args": [
+        "0x0%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "signed hex zero percent rejected",
+      "args": [
+        "+0x0%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "plain number string rejected",
+      "args": [
+        "50"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "trailing unit percent rejected",
+      "args": [
+        "50px%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "Infinity percent rejected",
+      "args": [
+        "Infinity%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "negative Infinity percent rejected",
+      "args": [
+        "-Infinity%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "NaN percent rejected",
+      "args": [
+        "NaN%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "1e39 percent rejected",
+      "args": [
+        "1000000000000000000000000000000000000000%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": false
+    },
+    {
+      "fn": "core/src/lib/renderable.validations.ts#isFlexBasisType",
+      "name": "underflow zero percent accepted",
+      "args": [
+        "1e-400%"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": true
     },
     {
       "fn": "core/src/lib/renderable.validations.ts#isSizeType",
@@ -8083,6 +8303,56 @@
       "compare": "exact",
       "expectedOk": true,
       "expectedValue": 1
+    },
+    {
+      "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+      "name": "uppercase content-box",
+      "args": [
+        "CONTENT-BOX"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+      "name": "mixed case content-box",
+      "args": [
+        "Content-Box"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 1
+    },
+    {
+      "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+      "name": "uppercase border-box",
+      "args": [
+        "BORDER-BOX"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+      "name": "invalid fallback",
+      "args": [
+        "padding-box"
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
+    },
+    {
+      "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",
+      "name": "empty fallback",
+      "args": [
+        ""
+      ],
+      "compare": "exact",
+      "expectedOk": true,
+      "expectedValue": 0
     },
     {
       "fn": "core/src/lib/yoga.options.ts#parseBoxSizing",

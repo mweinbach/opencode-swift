@@ -89,6 +89,15 @@ public enum RenderableValidationError: Error, Equatable, Hashable, Sendable, Cus
     }
 }
 
+/// Returns `true` iff `v` is an ECMAScript `StrWhiteSpace` (`WhiteSpace | LineTerminator`) scalar.
+private func isJSWhitespaceScalar(_ v: UInt32) -> Bool {
+    v == 0x09 || v == 0x0A || v == 0x0B || v == 0x0C || v == 0x0D ||
+    v == 0x20 || v == 0xA0 || v == 0x1680 ||
+    (v >= 0x2000 && v <= 0x200A) ||
+    v == 0x2028 || v == 0x2029 || v == 0x202F || v == 0x205F ||
+    v == 0x3000 || v == 0xFEFF
+}
+
 /// Returns `true` iff ECMAScript `parseFloat(s)` produces a non-NaN number.
 private func jsParseFloatSucceeds(_ s: Substring) -> Bool {
     let scalars = s.unicodeScalars
@@ -96,14 +105,7 @@ private func jsParseFloatSucceeds(_ s: Substring) -> Bool {
 
     // Skip leading ECMAScript StrWhiteSpace (WhiteSpace | LineTerminator).
     while i < scalars.endIndex {
-        let v = scalars[i].value
-        let isJSWhitespace =
-            v == 0x09 || v == 0x0A || v == 0x0B || v == 0x0C || v == 0x0D ||
-            v == 0x20 || v == 0xA0 || v == 0x1680 ||
-            (v >= 0x2000 && v <= 0x200A) ||
-            v == 0x2028 || v == 0x2029 || v == 0x202F || v == 0x205F ||
-            v == 0x3000 || v == 0xFEFF
-        if !isJSWhitespace { break }
+        if !isJSWhitespaceScalar(scalars[i].value) { break }
         scalars.formIndex(after: &i)
     }
 
@@ -136,6 +138,92 @@ private func jsParseFloatSucceeds(_ s: Substring) -> Bool {
     }
 
     return false
+}
+
+/// Exact ECMAScript parity for:
+/// `const percent = Number(value.slice(0, -1)); return percent === Number.parseFloat(value) && Math.abs(percent) <= 3.4028234663852886e38`
+private func jsFlexBasisPercentValid(_ numPart: Substring) -> Bool {
+    let scalars = numPart.unicodeScalars
+    var start = scalars.startIndex
+    var end = scalars.endIndex
+
+    while start < end && isJSWhitespaceScalar(scalars[start].value) {
+        scalars.formIndex(after: &start)
+    }
+    while end > start {
+        let prev = scalars.index(before: end)
+        if !isJSWhitespaceScalar(scalars[prev].value) { break }
+        end = prev
+    }
+
+    // Empty string before "%" has Number("") === 0 while parseFloat("%") === NaN.
+    guard start < end else { return false }
+
+    // Non-decimal unsigned JS integer literals (`0x0`, `0b0`, `0o0`) only match parseFloat (`0`) when all digits are '0'.
+    if scalars[start].value == 0x30 {
+        let next = scalars.index(after: start)
+        if next < end {
+            let prefix = scalars[next].value
+            if prefix == 0x78 || prefix == 0x58 || prefix == 0x62 || prefix == 0x42 || prefix == 0x6F || prefix == 0x4F {
+                let digitsStart = scalars.index(after: next)
+                guard digitsStart < end else { return false }
+                var cur = digitsStart
+                while cur < end {
+                    if scalars[cur].value != 0x30 { return false }
+                    scalars.formIndex(after: &cur)
+                }
+                return true
+            }
+        }
+    }
+
+    // Validate exact ECMAScript StrDecimalLiteral (excluding Infinity, which exceeds f32 max).
+    var i = start
+    if scalars[i].value == 0x2B || scalars[i].value == 0x2D { // '+' or '-'
+        scalars.formIndex(after: &i)
+        guard i < end else { return false }
+    }
+
+    var hasDigits = false
+    while i < end && scalars[i].value >= 0x30 && scalars[i].value <= 0x39 {
+        hasDigits = true
+        scalars.formIndex(after: &i)
+    }
+
+    if i < end && scalars[i].value == 0x2E { // '.'
+        scalars.formIndex(after: &i)
+        var hasFractionDigits = false
+        while i < end && scalars[i].value >= 0x30 && scalars[i].value <= 0x39 {
+            hasFractionDigits = true
+            scalars.formIndex(after: &i)
+        }
+        guard hasDigits || hasFractionDigits else { return false }
+    } else {
+        guard hasDigits else { return false }
+    }
+
+    if i < end && (scalars[i].value == 0x65 || scalars[i].value == 0x45) { // 'e' or 'E'
+        scalars.formIndex(after: &i)
+        guard i < end else { return false }
+        if scalars[i].value == 0x2B || scalars[i].value == 0x2D {
+            scalars.formIndex(after: &i)
+            guard i < end else { return false }
+        }
+        var hasExpDigits = false
+        while i < end && scalars[i].value >= 0x30 && scalars[i].value <= 0x39 {
+            hasExpDigits = true
+            scalars.formIndex(after: &i)
+        }
+        guard hasExpDigits else { return false }
+    }
+
+    guard i == end else { return false }
+
+    let literal = numPart[start..<end]
+    guard let percent = Double(literal), percent.isFinite else {
+        return false
+    }
+    return abs(percent) <= 3.4028234663852886e38
 }
 
 // parity: core/src/lib/renderable.validations.ts#validateOptions [status=implemented hash=1ea650758432]
@@ -215,18 +303,15 @@ public func isDimensionType(_ value: LayoutOptionValue) -> Bool {
     isPositionType(value)
 }
 
-// parity: core/src/lib/renderable.validations.ts#isFlexBasisType [status=implemented hash=11b469616a88]
+// parity: core/src/lib/renderable.validations.ts#isFlexBasisType [status=implemented hash=a7d430d45fa2]
 public func isFlexBasisType(_ value: LayoutOptionValue) -> Bool {
-    switch value {
-    case .undefined:
-        return true
-    case .null:
-        return false
-    case let .string(s):
-        return s == "auto"
-    case let .number(n):
-        return !n.isNaN
+    if case let .string(str) = value, str.hasSuffix("%") {
+        return jsFlexBasisPercentValid(str.dropLast())
     }
+    if case .undefined = value {
+        return true
+    }
+    return isPositionType(value)
 }
 
 // parity: core/src/lib/renderable.validations.ts#isSizeType [status=implemented hash=9f3a2886d4f3]

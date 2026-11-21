@@ -303,6 +303,14 @@ public final class ScrollBoxContent: ScrollBoxSizedPart, @unchecked Sendable {
         }
     }
 
+    public var boxSizing: BoxSizing {
+        get { box.contentLayoutNode.style.boxSizing }
+        set {
+            box.contentLayoutNode.style.boxSizing = newValue
+            box.requestRender()
+        }
+    }
+
     public var justifyContent: Justify {
         get { box.contentLayoutNode.style.justifyContent }
         set {
@@ -479,6 +487,7 @@ public final class ScrollBoxContent: ScrollBoxSizedPart, @unchecked Sendable {
         if let v = r.rowGap { box.contentLayoutNode.style.gap.row = v }
         if let v = r.columnGap { box.contentLayoutNode.style.gap.column = v }
         if let v = r.aspectRatio { box.contentLayoutNode.style.aspectRatio = v }
+        if let v = r.boxSizing { box.contentLayoutNode.style.boxSizing = v }
         box.requestRender()
     }
 }
@@ -840,6 +849,7 @@ public struct ScrollBoxOptions {
         gap: FlexValue? = nil,
         rowGap: FlexValue? = nil,
         columnGap: FlexValue? = nil,
+        boxSizing: BoxSizing? = nil,
         zIndex: Int? = nil,
         visible: Bool? = nil,
         opacity: Double? = nil,
@@ -902,6 +912,7 @@ public struct ScrollBoxOptions {
             rowGap: rowGap,
             columnGap: columnGap,
             overflow: .hidden,
+            boxSizing: boxSizing,
             zIndex: zIndex,
             visible: visible,
             opacity: opacity,

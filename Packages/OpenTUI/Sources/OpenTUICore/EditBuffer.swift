@@ -353,7 +353,13 @@ public final class EditBuffer {
         guard !text.isEmpty else { return }
         let normalized = _TextEngineMetrics.normalizeLineEndings(text)
         pushUndo()
-        let insertByte = textBuffer.utf8Offset(forDocumentCellOffset: _cursor.offset, roundDown: true)
+        // At a line start an edit lands before zero-width text (`.right` bias);
+        // elsewhere it lands after zero-width text (`.left` bias), matching `edit-buffer.zig`.
+        let insertByte = textBuffer.utf8Offset(
+            forDocumentCellOffset: _cursor.offset,
+            roundDown: true,
+            skipZeroWidth: _cursor.col > 0
+        )
         let newRope = textBuffer._rope.inserting(normalized, atUTF8: insertByte)
         textBuffer.replaceRope(newRope)
         spliceMarks(startByte: insertByte, deletedBytes: 0, insertedBytes: normalized.utf8.count)
@@ -396,12 +402,32 @@ public final class EditBuffer {
         deleteChar()
     }
 
+    /// Matches `edit-buffer.zig#EditBuffer.replaceByWeight`: a range takes zero-width pieces at its
+    /// start only from a line start (`col == 0`), and at its end unless it ends at a line start before EOF.
+    private func editRangeByteBounds(startOffset: Int, endOffset: Int) -> (startByte: Int, endByte: Int) {
+        let docLen = textBuffer.documentCellLength
+        let startPos = textBuffer.offsetToPosition(startOffset)
+        let endPos = textBuffer.offsetToPosition(endOffset)
+        let startSkipZW = (startPos?.col ?? 0) > 0
+        let endSkipZW = !((endPos?.col ?? 0) == 0 && endOffset < docLen)
+        let startByte = textBuffer.utf8Offset(
+            forDocumentCellOffset: startOffset,
+            roundDown: true,
+            skipZeroWidth: startSkipZW
+        )
+        let endByte = textBuffer.utf8Offset(
+            forDocumentCellOffset: endOffset,
+            roundDown: true,
+            skipZeroWidth: endSkipZW
+        )
+        return (startByte, endByte)
+    }
+
     private func deleteForwardRaw() {
         let docLen = textBuffer.documentCellLength
         guard _cursor.offset < docLen else { return }
-        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: _cursor.offset, roundDown: true)
         let nextOffset = nextCursorStop(from: _cursor.offset)
-        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: nextOffset, roundDown: true)
+        let (startByte, endByte) = editRangeByteBounds(startOffset: _cursor.offset, endOffset: nextOffset)
         guard startByte < endByte else { return }
         pushUndo()
         let newRope = textBuffer._rope.deleting(utf8Range: startByte..<endByte)
@@ -412,9 +438,8 @@ public final class EditBuffer {
 
     private func deleteBackwardRaw() {
         guard _cursor.offset > 0 else { return }
-        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: _cursor.offset, roundDown: true)
         let prevOffset = prevCursorStop(from: _cursor.offset)
-        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: prevOffset, roundDown: true)
+        let (startByte, endByte) = editRangeByteBounds(startOffset: prevOffset, endOffset: _cursor.offset)
         guard startByte < endByte else { return }
         pushUndo()
         let newRope = textBuffer._rope.deleting(utf8Range: startByte..<endByte)
@@ -435,8 +460,7 @@ public final class EditBuffer {
         let lo = max(0, min(startOffset, endOffset))
         let hi = max(startOffset, endOffset)
         guard lo < hi else { return }
-        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: lo, roundDown: true)
-        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: hi, roundDown: true)
+        let (startByte, endByte) = editRangeByteBounds(startOffset: lo, endOffset: hi)
         guard startByte < endByte else { return }
         pushUndo()
         let newRope = textBuffer._rope.deleting(utf8Range: startByte..<endByte)
@@ -450,8 +474,7 @@ public final class EditBuffer {
         let normalized = _TextEngineMetrics.normalizeLineEndings(text)
         let lo = max(0, min(startOffset, endOffset))
         let hi = max(startOffset, endOffset)
-        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: lo, roundDown: true)
-        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: hi, roundDown: true)
+        let (startByte, endByte) = editRangeByteBounds(startOffset: lo, endOffset: hi)
         pushUndo()
         let newRope = textBuffer._rope.replacing(utf8Range: startByte..<endByte, with: normalized)
         textBuffer.replaceRope(newRope)
@@ -816,8 +839,8 @@ public final class EditBuffer {
     ) -> UInt32 {
         assertAlive()
         guard _marks.count < 65_536 && _nextMarkId < UInt32.max else { return 0 }
-        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: start, roundDown: true)
-        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: end, roundDown: true)
+        let startByte = textBuffer.utf8Offset(forDocumentCellOffset: start, roundDown: true, skipZeroWidth: true)
+        let endByte = textBuffer.utf8Offset(forDocumentCellOffset: end, roundDown: true, skipZeroWidth: true)
         let id = _nextMarkId
         _nextMarkId += 1
         let mark = StoredEditMark(

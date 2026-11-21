@@ -30,6 +30,11 @@
     "cases": [
       { "name": "border-box", "args": ["border-box"] },
       { "name": "content-box", "args": ["content-box"] },
+      { "name": "uppercase content-box", "args": ["CONTENT-BOX"] },
+      { "name": "mixed case content-box", "args": ["Content-Box"] },
+      { "name": "uppercase border-box", "args": ["BORDER-BOX"] },
+      { "name": "invalid fallback", "args": ["padding-box"] },
+      { "name": "empty fallback", "args": [""] },
       { "name": "null default", "args": [null] }
     ]
   },

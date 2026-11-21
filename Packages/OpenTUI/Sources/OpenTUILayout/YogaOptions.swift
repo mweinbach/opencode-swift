@@ -312,14 +312,9 @@ public func parseAlignContent(_ value: String?) -> Align {
     parseAlignment(value, fallback: .flexStart)
 }
 
-// parity: core/src/lib/yoga.options.ts#parseBoxSizing [status=implemented hash=1c00885a654f]
+// parity: core/src/lib/yoga.options.ts#parseBoxSizing [status=implemented hash=9746003d0aba]
 public func parseBoxSizing(_ value: String?) -> BoxSizing {
-    guard let value else { return .borderBox }
-    switch value.lowercased() {
-    case "border-box": return .borderBox
-    case "content-box": return .contentBox
-    default: return .borderBox
-    }
+    value?.lowercased() == "content-box" ? .contentBox : .borderBox
 }
 
 // parity: core/src/lib/yoga.options.ts#parseDimension [status=implemented hash=f3f38617dae0]
