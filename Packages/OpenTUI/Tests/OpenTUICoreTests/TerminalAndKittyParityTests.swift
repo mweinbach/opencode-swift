@@ -51,6 +51,18 @@ private func waitUntil(
 
 private struct ForcedBodyFailure: Error {}
 
+private final class AtomicFlag: Sendable {
+    private let state = Mutex(false)
+
+    var value: Bool {
+        state.withLock { $0 }
+    }
+
+    func set() {
+        state.withLock { $0 = true }
+    }
+}
+
 private final class MarkerTextRenderable: Renderable, @unchecked Sendable {
     var label: String
 
@@ -224,7 +236,7 @@ struct KittyKeyboardProtocolParityTests {
         // Enabled case
         do {
             let driver = InMemorySSHTransportDriver()
-            let ready = Mutex(false)
+            let ready = AtomicFlag()
             let server = try createCliSSHServer(
                 config: SSHServerConfig(auth: .open, hostKey: .pem(hostKey.privatePem), startupBanner: false),
                 rendererConfig: SSHCliRendererConfig(
@@ -241,7 +253,7 @@ struct KittyKeyboardProtocolParityTests {
                 cli.root.add(MarkerTextRenderable(ctx: cli, label: "SSH-KITTY-ON"))
                 cli.renderOnce(force: true)
                 await adapter.flushOutput()
-                ready.withLock { $0 = true }
+                ready.set()
                 cli.destroy()
             }
 
@@ -253,7 +265,7 @@ struct KittyKeyboardProtocolParityTests {
             sess.requestPty(term: "xterm-256color", cols: 60, rows: 16)
             let channel = try #require(sess.requestShell())
 
-            #expect(await waitUntil { ready.withLock { $0 } && channel.isClosed })
+            #expect(await waitUntil { ready.value && channel.isClosed })
             let out = channel.writtenText
             #expect(out.contains("\u{1B}[>5u"))
             #expect(out.contains("SSH-KITTY-ON"))
@@ -264,7 +276,7 @@ struct KittyKeyboardProtocolParityTests {
         // Disabled case (useKittyKeyboard: nil)
         do {
             let driver = InMemorySSHTransportDriver()
-            let ready = Mutex(false)
+            let ready = AtomicFlag()
             let server = try createCliSSHServer(
                 config: SSHServerConfig(auth: .open, hostKey: .pem(hostKey.privatePem), startupBanner: false),
                 rendererConfig: SSHCliRendererConfig(
@@ -281,7 +293,7 @@ struct KittyKeyboardProtocolParityTests {
                 cli.root.add(MarkerTextRenderable(ctx: cli, label: "SSH-KITTY-OFF"))
                 cli.renderOnce(force: true)
                 await adapter.flushOutput()
-                ready.withLock { $0 = true }
+                ready.set()
                 cli.destroy()
             }
 
@@ -293,7 +305,7 @@ struct KittyKeyboardProtocolParityTests {
             sess.requestPty(term: "xterm-256color", cols: 60, rows: 16)
             let channel = try #require(sess.requestShell())
 
-            #expect(await waitUntil { ready.withLock { $0 } && channel.isClosed })
+            #expect(await waitUntil { ready.value && channel.isClosed })
             let out = channel.writtenText
             #expect(out.contains("SSH-KITTY-OFF"))
             #expect(!out.contains("\u{1B}[>"))
