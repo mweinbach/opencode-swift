@@ -112,6 +112,23 @@ public enum CoreShell {
             }
         }
 
+        // parity: core/src/shell/parse.ts#OpaqueError [status=implemented hash=67578ec46cd9]
+        public struct OpaqueError: Swift.Error, Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
+            public static let tag = "ShellParse.OpaqueError"
+            public let reason: String
+
+            public init(reason: String) {
+                self.reason = reason
+            }
+
+            // parity: core/src/shell/parse.ts#OpaqueError.message [status=implemented hash=a476648a3022]
+            public var message: String {
+                "Portable shell scanner cannot analyze command: \(reason)"
+            }
+
+            public var description: String { message }
+        }
+
         private static let arity: [String: Int] = [
             "cat": 1, "cd": 1, "chmod": 1, "chown": 1, "cp": 1, "echo": 1, "env": 1, "export": 1,
             "grep": 1, "kill": 1, "killall": 1, "ln": 1, "ls": 1, "mkdir": 1, "mv": 1, "ps": 1,
@@ -152,7 +169,7 @@ public enum CoreShell {
         }
 
         /// Scans a shell command into permission resources, save patterns, and directory operands (`cd ...`).
-        // parity: core/src/shell/parse.ts#scan [status=adapted hash=afeb3f81e4e6]
+        // parity: core/src/shell/parse.ts#scan [status=adapted hash=bab0a80b7ee9]
         public static func scan(command: String, shell: String, cwd: String, home: Home = .server) throws -> Result {
             let resolvedHome: String?
             switch home {
@@ -174,17 +191,11 @@ public enum CoreShell {
                 sawSubstitution = detailed.sawCommandSubstitution
             }
             if sawSubstitution {
-                throw AppProcess.AppProcessError(
-                    command: command,
-                    causeMessage: "Portable shell scanner cannot analyze command: \(Scan.OpaqueReason.commandSubstitution.rawValue)"
-                )
+                throw OpaqueError(reason: Scan.OpaqueReason.commandSubstitution.rawValue)
             }
             switch scanned {
             case .opaque(let reason):
-                throw AppProcess.AppProcessError(
-                    command: command,
-                    causeMessage: "Portable shell scanner cannot analyze command: \(reason.rawValue)"
-                )
+                throw OpaqueError(reason: reason.rawValue)
             case .scanned(let items):
                 var commands: [CommandPermission] = []
                 var directories: [String] = []
@@ -924,26 +935,625 @@ public enum CoreShell {
         }
     }
 
-    // parity: core/src/shell.ts#DaemonInterface [status=adapted hash=73fc9b9b26d7]
+    /// Inputs to create a command on a `CommandHost`.
+    public struct CommandCreate: Equatable, Sendable {
+        public let program: String
+        public let args: [String]
+        public let cwd: String
+        /// The command's whole environment.
+        public let env: [String: String]
+        public let projectID: String
+        public let outputPath: String
+        public let metadata: ProcessDaemon.PipeMetadata
+
+        public init(
+            program: String,
+            args: [String],
+            cwd: String,
+            env: [String: String],
+            projectID: String,
+            outputPath: String,
+            metadata: ProcessDaemon.PipeMetadata = [:]
+        ) {
+            self.program = program
+            self.args = args
+            self.cwd = cwd
+            self.env = env
+            self.projectID = projectID
+            self.outputPath = outputPath
+            self.metadata = metadata
+        }
+    }
+
+    /// Snapshot of a command running or exited on a `CommandHost`.
+    public struct CommandInfo: Equatable, Sendable {
+        public let pid: UInt32?
+        public let cwd: String
+        public let lifecycle: ProcessDaemon.TerminalLifecycle
+        public let outputPath: String
+        public let outputLines: UInt64
+        public let outputError: String?
+        /// What `create` was given or `store` last kept.
+        public let metadata: ProcessDaemon.PipeMetadata?
+        public let startedAt: UInt64
+        public let exitedAt: UInt64?
+
+        public init(
+            pid: UInt32?,
+            cwd: String,
+            lifecycle: ProcessDaemon.TerminalLifecycle,
+            outputPath: String,
+            outputLines: UInt64,
+            outputError: String?,
+            metadata: ProcessDaemon.PipeMetadata?,
+            startedAt: UInt64,
+            exitedAt: UInt64?
+        ) {
+            self.pid = pid
+            self.cwd = cwd
+            self.lifecycle = lifecycle
+            self.outputPath = outputPath
+            self.outputLines = outputLines
+            self.outputError = outputError
+            self.metadata = metadata
+            self.startedAt = startedAt
+            self.exitedAt = exitedAt
+        }
+    }
+
+    /// Exit summary reported by a `CommandProcess`.
+    public struct CommandExit: Equatable, Hashable, Sendable, Codable {
+        public let exitCode: UInt32?
+        public let signal: String?
+        public let outputLines: UInt64
+        public let outputError: String?
+        public let exitedAt: UInt64
+
+        public init(
+            exitCode: UInt32?,
+            signal: String?,
+            outputLines: UInt64,
+            outputError: String?,
+            exitedAt: UInt64
+        ) {
+            self.exitCode = exitCode
+            self.signal = signal
+            self.outputLines = outputLines
+            self.outputError = outputError
+            self.exitedAt = exitedAt
+        }
+    }
+
+    /// A handle to one command running on a `CommandHost`.
+    public protocol CommandProcess: Sendable {
+        var info: CommandInfo { get }
+        func store(_ metadata: ProcessDaemon.PipeMetadata) async throws
+        func wait() async throws -> CommandExit
+        func signal(_ signal: CorePty.PersistentDaemon.Signal) async throws
+        func remove() async throws
+    }
+
+    /// Keeps commands running outside the server and finds them again after it restarts.
+    public protocol CommandHost: Sendable {
+        func create(_ input: CommandCreate) async throws -> any CommandProcess
+        func list() async throws -> [any CommandProcess]
+        /// Why a command was killed, said of one whose process the host no longer has.
+        var lost: String { get }
+    }
+
+    /// One Location's command creation request passed to `CommandRuns.create`.
+    public struct RunCreateInput: Sendable {
+        public let info: ShellSchema.Info
+        public let args: [String]
+        public let env: [String: String]
+        public let timeout: Int
+        public let toolCall: ToolCall?
+        public let waited: Bool
+
+        public init(
+            info: ShellSchema.Info,
+            args: [String],
+            env: [String: String],
+            timeout: Int,
+            toolCall: ToolCall?,
+            waited: Bool
+        ) {
+            self.info = info
+            self.args = args
+            self.env = env
+            self.timeout = timeout
+            self.toolCall = toolCall
+            self.waited = waited
+        }
+    }
+
+    /// One command tracked by a `CommandHost` for a Location.
+    public struct DaemonRunSnapshot: Equatable, Sendable {
+        public let info: ShellSchema.Info
+        public let toolCall: ToolCall?
+        public let timeoutDeadline: Int64?
+        public let stopReason: StopReason?
+        public let outputLines: UInt64?
+        public let outputError: String?
+        public let killed: String?
+
+        public init(
+            info: ShellSchema.Info,
+            toolCall: ToolCall? = nil,
+            timeoutDeadline: Int64? = nil,
+            stopReason: StopReason? = nil,
+            outputLines: UInt64? = nil,
+            outputError: String? = nil,
+            killed: String? = nil
+        ) {
+            self.info = info
+            self.toolCall = toolCall
+            self.timeoutDeadline = timeoutDeadline
+            self.stopReason = stopReason
+            self.outputLines = outputLines
+            self.outputError = outputError
+            self.killed = killed
+        }
+    }
+
+    /// One Location's commands on a `CommandHost`, as `Daemon.at` hands them to its `Shell`.
+    public protocol CommandRuns: Sendable {
+        func get(_ id: ShellSchema.ID) -> DaemonRunSnapshot?
+        func list() -> [DaemonRunSnapshot]
+        func create(_ input: RunCreateInput) async throws -> ShellSchema.Info
+        func timeout(_ id: ShellSchema.ID, durationMs: Int) async
+        func stop(_ id: ShellSchema.ID, reason: StopReason) async
+        func remove(_ id: ShellSchema.ID) async
+    }
+
+    /// Default `CommandHost` backed by `CorePty.Persistent.Interface`.
+    public struct PersistentPtyCommandHost: CommandHost, Sendable {
+        public let lost: String = "Command was killed: the process daemon stopped"
+        private let pty: any CorePty.Persistent.Interface
+
+        public init(pty: any CorePty.Persistent.Interface) {
+            self.pty = pty
+        }
+
+        private struct PipeProcess: CommandProcess, Sendable {
+            let pipeID: UInt64
+            let info: CommandInfo
+            let pty: any CorePty.Persistent.Interface
+
+            func store(_ metadata: ProcessDaemon.PipeMetadata) async throws {
+                try await pty.setPipeMetadata(pipeID, metadata: metadata)
+            }
+
+            func wait() async throws -> CommandExit {
+                let exit = try await pty.waitPipe(pipeID)
+                return CommandExit(
+                    exitCode: exit.exitCode,
+                    signal: exit.signal,
+                    outputLines: exit.outputLines,
+                    outputError: exit.outputError,
+                    exitedAt: exit.exitedAt
+                )
+            }
+
+            func signal(_ signal: CorePty.PersistentDaemon.Signal) async throws {
+                try await pty.signalPipe(pipeID, signal: signal)
+            }
+
+            func remove() async throws {
+                try await pty.terminatePipe(pipeID)
+            }
+        }
+
+        private func wrap(_ pipe: CorePty.Persistent.PipeInfo) -> any CommandProcess {
+            PipeProcess(
+                pipeID: pipe.id,
+                info: CommandInfo(
+                    pid: pipe.pid,
+                    cwd: pipe.cwd,
+                    lifecycle: pipe.lifecycle,
+                    outputPath: pipe.outputPath,
+                    outputLines: pipe.outputLines,
+                    outputError: pipe.outputError,
+                    metadata: pipe.metadata,
+                    startedAt: pipe.startedAt,
+                    exitedAt: pipe.exitedAt
+                ),
+                pty: pty
+            )
+        }
+
+        public func create(_ input: CommandCreate) async throws -> any CommandProcess {
+            let pipe = try await pty.createPipe(CorePty.Persistent.CreatePipeInput(
+                program: input.program,
+                args: input.args,
+                cwd: input.cwd,
+                env: input.env,
+                groupID: input.projectID,
+                outputPath: input.outputPath,
+                metadata: input.metadata
+            ))
+            return wrap(pipe)
+        }
+
+        public func list() async throws -> [any CommandProcess] {
+            try await pty.listPipes().map(wrap)
+        }
+    }
+
+    // parity: core/src/shell.ts#DaemonInterface [status=adapted hash=dfc29654d69c]
     public protocol DaemonInterface: Sendable {
+        /// A Location's daemon commands. The first call for a Location in this server takes its commands back from the
+        /// daemon. Creating one fails with `Persistent.UnavailableError` only when the daemon could not be reached or
+        /// started: spawning instead is safe.
+        func at(_ location: any CoreLocation.Location.Interface) async -> (any CommandRuns)?
+        /// Runs `task` until it ends or the server stops, outliving the caller's Location (e.g. a job's completion notice).
         func watch(_ task: @escaping @Sendable () async -> Void) async
         func handoffPrepared() -> Bool
+    }
+
+    /// Location-scoped command runs backed by a `CommandHost`.
+    private final class HostCommandRuns: CommandRuns, Sendable {
+        private final class RunEntry: @unchecked Sendable {
+            var info: ShellSchema.Info
+            let process: any CommandProcess
+            var toolCall: ToolCall?
+            var timeoutDeadline: Int64?
+            var stopReason: StopReason?
+            var outputLines: UInt64?
+            var outputError: String?
+            var killed: String?
+            var waitTask: Task<Void, Never>?
+
+            init(
+                info: ShellSchema.Info,
+                process: any CommandProcess,
+                toolCall: ToolCall? = nil,
+                timeoutDeadline: Int64? = nil,
+                stopReason: StopReason? = nil,
+                outputLines: UInt64? = nil,
+                outputError: String? = nil,
+                killed: String? = nil
+            ) {
+                self.info = info
+                self.process = process
+                self.toolCall = toolCall
+                self.timeoutDeadline = timeoutDeadline
+                self.stopReason = stopReason
+                self.outputLines = outputLines
+                self.outputError = outputError
+                self.killed = killed
+            }
+
+            func snapshot() -> DaemonRunSnapshot {
+                DaemonRunSnapshot(
+                    info: info,
+                    toolCall: toolCall,
+                    timeoutDeadline: timeoutDeadline,
+                    stopReason: stopReason,
+                    outputLines: outputLines,
+                    outputError: outputError,
+                    killed: killed
+                )
+            }
+        }
+
+        private let host: any CommandHost
+        private let location: LocationSchema.Info
+        private let state = Mutex<[ShellSchema.ID: RunEntry]>([:])
+
+        init(host: any CommandHost, location: LocationSchema.Info) {
+            self.host = host
+            self.location = location
+        }
+
+        private static func toDaemonJSON(_ value: JSONValue) -> ProcessDaemon.JSONValue {
+            switch value {
+            case .null: return .null
+            case .bool(let b): return .bool(b)
+            case .int(let i): return .integer(i)
+            case .double(let d): return .number(d)
+            case .string(let s): return .string(s)
+            case .array(let arr): return .array(arr.map(toDaemonJSON))
+            case .object(let obj): return .object(obj.mapValues(toDaemonJSON))
+            }
+        }
+
+        private static func fromDaemonJSON(_ value: ProcessDaemon.JSONValue) -> JSONValue {
+            switch value {
+            case .null: return .null
+            case .bool(let b): return .bool(b)
+            case .integer(let i): return .int(i)
+            case .number(let d): return .double(d)
+            case .string(let s): return .string(s)
+            case .array(let arr): return .array(arr.map(fromDaemonJSON))
+            case .object(let obj): return .object(obj.mapValues(fromDaemonJSON))
+            }
+        }
+
+        private func persisted(_ info: ShellSchema.Info, toolCall: ToolCall?, timeoutDeadline: Int64?, stopReason: StopReason?) -> ProcessDaemon.PipeMetadata {
+            var meta: ProcessDaemon.PipeMetadata = [
+                "id": .string(info.id.rawValue),
+                "command": .string(info.command),
+                "shell": .string(info.shell),
+                "directory": .string(location.directory.rawValue),
+                "metadata": .object(info.metadata.mapValues(Self.toDaemonJSON)),
+            ]
+            if let ws = location.workspaceID { meta["workspaceID"] = .string(ws.rawValue) }
+            if let toolCall {
+                meta["toolCall"] = .object([
+                    "sessionID": .string(toolCall.sessionID),
+                    "assistantMessageID": .string(toolCall.assistantMessageID),
+                    "callID": .string(toolCall.callID),
+                ])
+            }
+            if let timeoutDeadline { meta["timeoutDeadline"] = .integer(timeoutDeadline) }
+            if let stopReason { meta["stopReason"] = .string(stopReason.rawValue) }
+            return meta
+        }
+
+        func recover() async {
+            guard let processes = try? await host.list() else { return }
+            for handle in processes {
+                let proc = handle.info
+                guard let meta = proc.metadata,
+                      case .string(let idStr)? = meta["id"],
+                      let id = ShellSchema.ID(rawValue: idStr),
+                      case .string(let command)? = meta["command"],
+                      case .string(let shell)? = meta["shell"],
+                      case .string(let dir)? = meta["directory"],
+                      dir == location.directory.rawValue
+                else { continue }
+                let storedWorkspace: String? = if case .string(let ws)? = meta["workspaceID"] { ws } else { nil }
+                if storedWorkspace != location.workspaceID?.rawValue { continue }
+                if state.withLock({ $0[id] != nil }) { continue }
+
+                let storedMetadata: ShellSchema.Metadata = if case .object(let m)? = meta["metadata"] {
+                    m.mapValues(Self.fromDaemonJSON)
+                } else {
+                    [:]
+                }
+                let storedToolCall: ToolCall? = if case .object(let tc)? = meta["toolCall"],
+                    case .string(let sid)? = tc["sessionID"],
+                    case .string(let mid)? = tc["assistantMessageID"],
+                    case .string(let cid)? = tc["callID"]
+                {
+                    ToolCall(sessionID: sid, assistantMessageID: mid, callID: cid)
+                } else {
+                    nil
+                }
+                let stopReason: StopReason? = if case .string(let sr)? = meta["stopReason"] { StopReason(rawValue: sr) } else { nil }
+                let timeoutDeadline: Int64? = if case .integer(let td)? = meta["timeoutDeadline"] { td } else { nil }
+
+                let status: ShellSchema.Status
+                let exitVal: Double?
+                let signalVal: String?
+                let running: Bool
+                switch proc.lifecycle {
+                case .running:
+                    status = .running
+                    exitVal = nil
+                    signalVal = nil
+                    running = true
+                case .exited(let code, let sig):
+                    status = stopReason == .timeout ? .timeout : (stopReason == .killed ? .killed : .exited)
+                    exitVal = code.map { Double($0) }
+                    signalVal = sig
+                    running = false
+                case .failed:
+                    status = .killed
+                    exitVal = nil
+                    signalVal = nil
+                    running = false
+                }
+                let info = ShellSchema.Info(
+                    id: id,
+                    status: status,
+                    command: command,
+                    cwd: proc.cwd,
+                    shell: shell,
+                    file: proc.outputPath,
+                    pid: proc.pid.flatMap { SchemaPrimitive.NonNegativeInt(rawValue: Int($0)) },
+                    exit: exitVal,
+                    signal: signalVal,
+                    metadata: storedMetadata,
+                    time: ShellSchema.Time(
+                        started: Double(proc.startedAt),
+                        completed: running ? nil : Double(proc.exitedAt ?? proc.startedAt)
+                    )
+                )
+                let entry = RunEntry(
+                    info: info,
+                    process: handle,
+                    toolCall: storedToolCall,
+                    timeoutDeadline: timeoutDeadline,
+                    stopReason: stopReason,
+                    outputLines: running ? nil : proc.outputLines,
+                    outputError: running ? nil : proc.outputError
+                )
+                state.withLock { $0[id] = entry }
+                if running {
+                    attach(entry)
+                }
+            }
+        }
+
+        private func attach(_ entry: RunEntry) {
+            let hostLost = host.lost
+            let task = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let exit = try await entry.process.wait()
+                    self.state.withLock { _ in
+                        entry.outputLines = exit.outputLines
+                        entry.outputError = exit.outputError
+                        let status: ShellSchema.Status
+                        if entry.stopReason == .timeout {
+                            status = .timeout
+                        } else if entry.stopReason == .killed {
+                            status = .killed
+                        } else {
+                            status = .exited
+                        }
+                        entry.info = ShellSchema.Info(
+                            id: entry.info.id,
+                            status: status,
+                            command: entry.info.command,
+                            cwd: entry.info.cwd,
+                            shell: entry.info.shell,
+                            file: entry.info.file,
+                            pid: entry.info.pid,
+                            exit: exit.exitCode.map { Double($0) },
+                            signal: exit.signal,
+                            metadata: entry.info.metadata,
+                            time: ShellSchema.Time(started: entry.info.time.started, completed: Double(exit.exitedAt))
+                        )
+                    }
+                } catch {
+                    let now = Double(Flock.currentEpochMs())
+                    self.state.withLock { _ in
+                        entry.killed = hostLost
+                        entry.info = ShellSchema.Info(
+                            id: entry.info.id,
+                            status: .killed,
+                            command: entry.info.command,
+                            cwd: entry.info.cwd,
+                            shell: entry.info.shell,
+                            file: entry.info.file,
+                            pid: entry.info.pid,
+                            exit: nil,
+                            signal: nil,
+                            metadata: entry.info.metadata,
+                            time: ShellSchema.Time(started: entry.info.time.started, completed: now)
+                        )
+                    }
+                }
+            }
+            state.withLock { _ in entry.waitTask = task }
+        }
+
+        func get(_ id: ShellSchema.ID) -> DaemonRunSnapshot? {
+            state.withLock { $0[id]?.snapshot() }
+        }
+
+        func list() -> [DaemonRunSnapshot] {
+            state.withLock { $0.values.map { $0.snapshot() } }
+        }
+
+        func create(_ input: RunCreateInput) async throws -> ShellSchema.Info {
+            let timeoutDeadline: Int64? = (!input.waited && input.timeout > 0)
+                ? Int64(input.info.time.started) + Int64(input.timeout)
+                : nil
+            let metadata = persisted(input.info, toolCall: input.toolCall, timeoutDeadline: timeoutDeadline, stopReason: nil)
+            let created = try await host.create(CommandCreate(
+                program: input.info.shell,
+                args: input.args,
+                cwd: input.info.cwd,
+                env: input.env,
+                projectID: location.project.id.rawValue,
+                outputPath: input.info.file,
+                metadata: metadata
+            ))
+            let updatedInfo = ShellSchema.Info(
+                id: input.info.id,
+                status: input.info.status,
+                command: input.info.command,
+                cwd: input.info.cwd,
+                shell: input.info.shell,
+                file: input.info.file,
+                pid: created.info.pid.flatMap { SchemaPrimitive.NonNegativeInt(rawValue: Int($0)) } ?? input.info.pid,
+                exit: input.info.exit,
+                signal: input.info.signal,
+                metadata: input.info.metadata,
+                time: ShellSchema.Time(started: Double(created.info.startedAt), completed: input.info.time.completed)
+            )
+            let entry = RunEntry(
+                info: updatedInfo,
+                process: created,
+                toolCall: input.toolCall,
+                timeoutDeadline: timeoutDeadline
+            )
+            state.withLock { $0[updatedInfo.id] = entry }
+            attach(entry)
+            return updatedInfo
+        }
+
+        func timeout(_ id: ShellSchema.ID, durationMs: Int) async {
+            let updated: (any CommandProcess, ProcessDaemon.PipeMetadata)? = state.withLock { map in
+                guard let entry = map[id] else { return nil }
+                entry.timeoutDeadline = durationMs > 0 ? Flock.currentEpochMs() + Int64(durationMs) : nil
+                return (entry.process, persisted(entry.info, toolCall: entry.toolCall, timeoutDeadline: entry.timeoutDeadline, stopReason: entry.stopReason))
+            }
+            if let (process, meta) = updated {
+                try? await process.store(meta)
+            }
+        }
+
+        func stop(_ id: ShellSchema.ID, reason: StopReason) async {
+            let target: (any CommandProcess, ProcessDaemon.PipeMetadata)? = state.withLock { map in
+                guard let entry = map[id], entry.stopReason == nil else { return nil }
+                entry.stopReason = reason
+                entry.timeoutDeadline = nil
+                return (entry.process, persisted(entry.info, toolCall: entry.toolCall, timeoutDeadline: nil, stopReason: reason))
+            }
+            guard let (process, meta) = target else { return }
+            try? await process.store(meta)
+            try? await process.signal(.term)
+        }
+
+        func remove(_ id: ShellSchema.ID) async {
+            let removed = state.withLock { $0.removeValue(forKey: id) }
+            guard let entry = removed else { return }
+            entry.waitTask?.cancel()
+            try? await entry.process.remove()
+        }
     }
 
     // parity: core/src/shell.ts#Daemon [status=adapted hash=32670c6dddf1]
     public final class Daemon: DaemonInterface, Sendable {
         public static let serviceKey = "@opencode/Shell/Daemon"
 
+        private let host: (any CommandHost)?
+        private let handoffProvider: (@Sendable () -> Bool)?
         private let handoffFlag = Mutex(false)
+        private let places = Mutex<[String: HostCommandRuns]>([:])
 
-        public init() {}
+        public init() {
+            self.host = nil
+            self.handoffProvider = nil
+        }
+
+        public init(persistentPty: any CorePty.Persistent.Interface) {
+            self.host = PersistentPtyCommandHost(pty: persistentPty)
+            self.handoffProvider = { persistentPty.handoffPrepared() }
+        }
+
+        public init(host: any CommandHost, handoffPrepared: (@Sendable () -> Bool)? = nil) {
+            self.host = host
+            self.handoffProvider = handoffPrepared
+        }
+
+        public func at(_ location: any CoreLocation.Location.Interface) async -> (any CommandRuns)? {
+            guard let host else { return nil }
+            let key = "\(location.info.directory.rawValue)|\(location.info.workspaceID?.rawValue ?? "")"
+            let (runs, needsRecover): (HostCommandRuns, Bool) = places.withLock { map in
+                if let existing = map[key] { return (existing, false) }
+                let created = HostCommandRuns(host: host, location: location.info)
+                map[key] = created
+                return (created, true)
+            }
+            if needsRecover {
+                await runs.recover()
+            }
+            return runs
+        }
 
         public func setHandoffPrepared(_ value: Bool) {
             handoffFlag.withLock { $0 = value }
         }
 
         public func handoffPrepared() -> Bool {
-            handoffFlag.withLock { $0 }
+            if let handoffProvider { return handoffProvider() }
+            return handoffFlag.withLock { $0 }
         }
 
         public func watch(_ task: @escaping @Sendable () async -> Void) async {
@@ -1021,7 +1631,18 @@ public enum CoreShell {
             self.processes = processes
             self.shellSelect = shellSelect
             self.daemon = daemon
-            self.environment = environment ?? CoreLocation.Environment.local(fileSystem: fileSystem)
+            if let environment {
+                self.environment = environment
+            } else if let workspaceID {
+                // A workspace runs ripgrep through its own spawner. Nothing of the server's reaches it otherwise.
+                self.environment = CoreLocation.Environment.make(
+                    CoreLocation.Environment.ID.make(workspaceID.rawValue),
+                    CoreLocation.Environment.makeLocalDriver(fileSystem: fileSystem),
+                    facts: CoreLocation.Environment.Facts(searchable: true)
+                )
+            } else {
+                self.environment = CoreLocation.Environment.local(fileSystem: fileSystem)
+            }
             self.workspaceID = workspaceID
         }
 
@@ -1030,24 +1651,22 @@ public enum CoreShell {
             before: (@Sendable (inout CreateBeforeInvocation) async throws -> Void)? = nil
         ) async throws -> ShellSchema.Info {
             let target = input.environment ?? environment
-            // Local only on this server's own machine: the Location's environment, by id, outside a workspace. A
-            // command anywhere else takes none of this machine's variables, keeps its cwd as given and is spawned
-            // from the server.
-            let local = workspaceID == nil && target.id == environment.id
-            // A command anywhere else has none of this server's shell paths, and the driver runs only argv, cwd and
-            // env. `sh -c` is the contract every POSIX worker can meet. Only a command outside this Location's
-            // environment takes it: a workspace session keeps its own shell.
+            let workingDirectory = CoreLocation.Environment.workingDirectory(directory: directory, environment: environment)
+            // A command anywhere else takes none of this server's variables, keeps its cwd as given and is spawned
+            // through its environment.
+            let hostsServer = target.hostsServer == true
+            // An environment that names its shell runs every command under it, and the command is parsed as that shell.
             let resolvedShell: String
-            if target.id != environment.id {
-                resolvedShell = "sh"
+            if let envShell = target.shell {
+                resolvedShell = envShell
             } else if let s = input.shell {
                 resolvedShell = s
             } else {
-                resolvedShell = await shellSelect.resolve(Select.ResolveInput(priority: .compat))
+                resolvedShell = await shellSelect.resolve(Select.ResolveInput(priority: .config))
             }
             var invocation = CreateBeforeInvocation(
                 command: input.command,
-                cwd: input.cwd ?? directory,
+                cwd: input.cwd ?? workingDirectory.absolute.rawValue,
                 shell: resolvedShell,
                 timeout: input.timeout ?? 0,
                 env: [:]
@@ -1055,9 +1674,12 @@ public enum CoreShell {
             if let before {
                 try await before(&invocation)
             }
-            // Absolute for local commands, so the command reports the same cwd wherever it runs.
-            if local {
-                invocation.cwd = CoreConfigDiscovery.resolvePath(base: directory, relative: invocation.cwd)
+            // Absolute for the server's own commands, so the command reports the same cwd wherever it runs.
+            if hostsServer {
+                invocation.cwd = CoreConfigDiscovery.resolvePath(
+                    base: workingDirectory.absolute.rawValue,
+                    relative: invocation.cwd
+                )
             }
 
             let id = ShellSchema.ID.create()
@@ -1073,12 +1695,14 @@ public enum CoreShell {
             let procService = self.processes
             let fs = self.fileSystem
             let finalInvocation = invocation
-            let remote: (any CoreLocation.Environment.Interface)? = target.id == environment.id ? nil : target
+            let remote: (any CoreLocation.Environment.Interface)? = (!hostsServer || target.id != environment.id) ? target : nil
             let spec = ProcessSpec(
                 executable: finalInvocation.shell,
                 arguments: Select.args(finalInvocation.shell, command: finalInvocation.command),
                 workingDirectory: finalInvocation.cwd,
-                environment: finalInvocation.env.isEmpty ? nil : finalInvocation.env
+                environment: hostsServer
+                    ? (finalInvocation.env.isEmpty ? nil : finalInvocation.env)
+                    : finalInvocation.env
             )
 
             // Two-phase spawners (like `MachineDriver`) report start failures (`NotSent`, `Unknown`, `StartFailed`)

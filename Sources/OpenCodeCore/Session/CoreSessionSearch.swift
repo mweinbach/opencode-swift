@@ -159,58 +159,60 @@ public enum SessionSearch {
         }
     }
 
-    // parity: core/src/session/search.ts#SearchOutput [status=implemented hash=2f54ae368623]
+    // parity: core/src/session/search.ts#SearchOutput [status=implemented hash=82e9072fd137]
     public struct SearchOutput: Equatable, Hashable, Sendable, Codable {
+        public let next: Int?
         public let results: [SearchResult]?
         public let sessions: [SessionSummary]?
-        public let next: Int?
 
         public init(
             results: [SearchResult]? = nil,
             sessions: [SessionSummary]? = nil,
             next: Int? = nil
         ) {
+            self.next = next
             self.results = results
             self.sessions = sessions
-            self.next = next
         }
 
         private enum CodingKeys: String, CodingKey {
+            case next
             case results
             case sessions
-            case next
         }
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.next = try container.decodeIfPresent(Int.self, forKey: .next)
             self.results = try container.decodeIfPresent([SearchResult].self, forKey: .results)
             self.sessions = try container.decodeIfPresent([SessionSummary].self, forKey: .sessions)
-            self.next = try container.decodeIfPresent(Int.self, forKey: .next)
         }
 
         public func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encodeIfPresent(results, forKey: .results)
+            // Cursor precedes the result arrays so it survives truncation at the tool output limit.
             if let sessions {
-                try container.encode(sessions, forKey: .sessions)
                 if let next {
                     try container.encode(next, forKey: .next)
                 } else {
                     try container.encodeNil(forKey: .next)
                 }
+                try container.encodeIfPresent(results, forKey: .results)
+                try container.encode(sessions, forKey: .sessions)
             } else {
                 try container.encodeIfPresent(next, forKey: .next)
+                try container.encodeIfPresent(results, forKey: .results)
             }
         }
     }
 
-    // parity: core/src/session/search.ts#CallDetail [status=implemented hash=773f98c0bbeb]
+    // parity: core/src/session/search.ts#CallDetail [status=implemented hash=e3c312017b04]
     public struct CallDetail: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let status: String
+        public let error: String?
         public let input: String?
         public let output: String?
-        public let error: String?
 
         public init(
             name: String,
@@ -221,9 +223,35 @@ public enum SessionSearch {
         ) {
             self.name = name
             self.status = status
+            self.error = error
             self.input = input
             self.output = output
-            self.error = error
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case status
+            case error
+            case input
+            case output
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.name = try container.decode(String.self, forKey: .name)
+            self.status = try container.decode(String.self, forKey: .status)
+            self.error = try container.decodeIfPresent(String.self, forKey: .error)
+            self.input = try container.decodeIfPresent(String.self, forKey: .input)
+            self.output = try container.decodeIfPresent(String.self, forKey: .output)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(name, forKey: .name)
+            try container.encode(status, forKey: .status)
+            try container.encodeIfPresent(error, forKey: .error)
+            try container.encodeIfPresent(input, forKey: .input)
+            try container.encodeIfPresent(output, forKey: .output)
         }
     }
 

@@ -510,12 +510,13 @@ struct CoreToolBuiltinsTests {
         let shellText = ToolsConfigRuntimeHelper.firstText(from: shellRes)
         #expect(shellText.contains("ran:echo hi"))
 
-        // Opaque shell command substitution rejected
-        await #expect(throws: AISchema.ToolFailure.self) {
-            _ = try await call(harness.snapshot, name: "shell", input: .object([
-                "command": .string("echo $(id)"),
-            ]))
-        }
+        // Opaque shell command substitution runs under allow-all rules (with no shell deny rule),
+        // asking for external_directory("*") and exact shell command without saving.
+        let opaqueRes = try await call(harness.snapshot, name: "shell", input: .object([
+            "command": .string("echo $(id)"),
+        ]))
+        let opaqueText = ToolsConfigRuntimeHelper.firstText(from: opaqueRes)
+        #expect(opaqueText.contains("ran:echo $(id)"))
 
         // Tool registry override, update, disposal restoring earlier definition, namespace, and CodeMode check
         let reg = CoreTool.Service()
@@ -1045,10 +1046,12 @@ struct CoreRuntimeTests {
         #expect(parsed.commands[1].save == "git status *")
         #expect(parsed.commands[2].save == "npm run test")
 
-        // Opaque command substitution rejected
-        #expect(throws: AppProcess.AppProcessError.self) {
+        // Opaque command substitution rejected with OpaqueError
+        let opaque = #expect(throws: CoreShell.Parse.OpaqueError.self) {
             _ = try CoreShell.Parse.scan(command: "echo $(whoami)", shell: "/bin/sh", cwd: "/workspace")
         }
+        #expect(opaque?.reason == "command-substitution")
+        #expect(opaque?.message == "Portable shell scanner cannot analyze command: command-substitution")
 
         // ShellSelect args formatting
         #expect(CoreShell.Select.args("/bin/zsh", command: "echo *") == ["+o", "nomatch", "-c", "echo *"])

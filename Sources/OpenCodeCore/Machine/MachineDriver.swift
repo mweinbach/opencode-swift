@@ -377,7 +377,7 @@ public enum MachineDriver {
     }
 
     /// A machine reached through a worker that dials in: its environment, and where the worker's connections arrive.
-    // parity: core/src/machine/driver.ts#make [status=adapted hash=6ddd7e9c7fe8]
+    // parity: core/src/machine/driver.ts#make [status=adapted hash=249624f46959]
     public static func make(_ id: String) -> any Interface {
         Machine(id: id)
     }
@@ -500,7 +500,10 @@ public enum MachineDriver {
             CoreLocation.Environment.Service(
                 id: CoreLocation.Environment.ID.make(id),
                 files: Files(machine: self),
-                spawner: Spawner(machine: self)
+                spawner: Spawner(machine: self),
+                // A worker is a POSIX machine with none of this server's shell paths, and its driver runs only argv, cwd
+                // and env: `sh -c` is the contract every worker can meet.
+                facts: CoreLocation.Environment.Facts(path: .posix, shell: "sh")
             )
         }
 
